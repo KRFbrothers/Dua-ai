@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import {
   Card,
   CubeMark,
@@ -10,6 +10,7 @@ import {
   Toggle,
   TopBar,
 } from "@/components/Chrome";
+import { readCustomLlm, type CustomLlm } from "@/lib/custom-llm";
 import { LOCALES, t, type CopyKey } from "@/lib/i18n";
 import type { Artwork } from "@/lib/gallery";
 import { artworkSvg, svgDataUrl } from "@/lib/gallery";
@@ -221,11 +222,13 @@ export function ProfilePane({
 
 export function SettingsHome({
   prefs,
+  customDetail,
   onBack,
   onChange,
   onOpen,
 }: {
   prefs: Preferences;
+  customDetail: string;
   onBack: () => void;
   onChange: (patch: Partial<Preferences>) => void;
   onOpen: (screen: string) => void;
@@ -247,6 +250,7 @@ export function SettingsHome({
         </Card>
         <p className="mt-5 mb-2 px-1 text-[11px] tracking-[0.16em] text-[var(--faint)] uppercase">App preferences</p>
         <Card>
+          <Row title="Your LLM" detail={customDetail} onClick={() => onOpen("llm")} />
           <Row title="Profile" detail={prefs.displayName} onClick={() => onOpen("profile")} />
           <Row title="Comparison mode" detail={prefs.comparison ? "On" : "Off"} onClick={() => onOpen("comparison")} />
           <Row title="Data controls" onClick={() => onOpen("privacy")} />
@@ -265,6 +269,82 @@ export function SettingsHome({
         </Card>
       </div>
     </div>
+  );
+}
+
+export function YourLlmScreen({
+  initial,
+  onBack,
+  onSave,
+}: {
+  initial: CustomLlm | null;
+  onBack: () => void;
+  onSave: (value: CustomLlm | null) => void;
+}) {
+  const [label, setLabel] = useState(initial?.label ?? "");
+  const [model, setModel] = useState(initial?.model ?? "");
+  const [baseUrl, setBaseUrl] = useState(initial?.baseUrl ?? "");
+  const [apiKey, setApiKey] = useState(initial?.apiKey ?? "");
+  const [error, setError] = useState<string | null>(null);
+
+  function save(event: FormEvent) {
+    event.preventDefault();
+    const parsed = readCustomLlm({ label, model, baseUrl, apiKey });
+    if (!parsed) {
+      setError("Add a model name and an https address. A computer on this machine can use http://127.0.0.1.");
+      return;
+    }
+    onSave(parsed);
+  }
+
+  return (
+    <form className="scrollbar-thin min-h-0 flex-1 overflow-y-auto pb-6" onSubmit={save}>
+      <TopBar title="Your LLM" onBack={onBack} />
+      <div className="px-4">
+        <p className="mb-4 text-sm text-[var(--muted)]">
+          Any chat service that speaks the OpenAI style works here. Groq, OpenRouter, OpenAI, and a local server such as Ollama all use the same form.
+        </p>
+        <Field label="Name" value={label} onChange={setLabel} placeholder="My LLM" />
+        <Field label="Model name" value={model} onChange={setModel} placeholder="llama-3.3-70b" />
+        <Field label="Address" value={baseUrl} onChange={setBaseUrl} placeholder="https://api.groq.com/openai/v1" />
+        <Field label="API key" value={apiKey} onChange={setApiKey} placeholder="Optional for a local server" secret />
+        {error ? <p className="mb-3 text-sm text-[var(--danger)]">{error}</p> : null}
+        <PrimaryButton type="submit">Save and use</PrimaryButton>
+        {initial ? (
+          <button type="button" onClick={() => onSave(null)} className="mt-3 w-full py-2 text-sm text-[var(--danger)]">
+            Remove
+          </button>
+        ) : null}
+      </div>
+    </form>
+  );
+}
+
+function Field({
+  label,
+  value,
+  onChange,
+  placeholder,
+  secret = false,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+  secret?: boolean;
+}) {
+  return (
+    <label className="mb-3 block">
+      <span className="mb-1 block text-xs text-[var(--muted)]">{label}</span>
+      <input
+        value={value}
+        type={secret ? "password" : "text"}
+        autoComplete="off"
+        placeholder={placeholder}
+        onChange={(event) => onChange(event.target.value)}
+        className="w-full rounded-2xl bg-[var(--card)] px-4 py-3 outline-none"
+      />
+    </label>
   );
 }
 

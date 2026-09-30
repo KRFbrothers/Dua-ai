@@ -169,7 +169,7 @@ export function Sheet({
 
 export function Toast({ text }: { text: string }) {
   return (
-    <div className="pointer-events-none absolute inset-x-4 bottom-24 z-50 rounded-2xl bg-[var(--card)] px-4 py-3 text-center text-sm shadow-lg">
+    <div className="pointer-events-none absolute inset-x-4 bottom-24 z-20 rounded-2xl bg-[var(--card)] px-4 py-3 text-center text-sm shadow-lg">
       {text}
     </div>
   );

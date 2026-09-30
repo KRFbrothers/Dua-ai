@@ -171,9 +171,9 @@ export function ChatPane({
 
       {modelOpen ? (
         <div className="absolute inset-0 z-30 flex items-end bg-black/50" onClick={onToggleModels}>
-          <div className="w-full rounded-t-[1.6rem] bg-[var(--bg-elev)] p-4" onClick={(event) => event.stopPropagation()}>
+          <div className="max-h-full w-full overflow-y-auto rounded-t-[1.6rem] bg-[var(--bg-elev)] p-4" onClick={(event) => event.stopPropagation()}>
             <p className="mb-3 text-center text-sm text-[var(--muted)]">Model</p>
-            <div className="space-y-2">
+            <div className="space-y-2 pb-2">
               {models.map((item) => (
                 <button
                   key={item.id}

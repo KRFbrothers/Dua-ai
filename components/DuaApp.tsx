@@ -23,7 +23,9 @@ import {
   Splash,
   UpdateScreen,
   VoicePane,
+  YourLlmScreen,
 } from "@/components/MoreScreens";
+import { CUSTOM_MODEL_ID, loadCustomLlm, saveCustomLlm, type CustomLlm } from "@/lib/custom-llm";
 import { titleFromMessage } from "@/lib/demo";
 import { loadGallery, saveGallery, type Artwork } from "@/lib/gallery";
 import { direction, t } from "@/lib/i18n";
@@ -69,6 +71,7 @@ type Screen =
   | "comparison"
   | "capabilities"
   | "font"
+  | "llm"
   | "signout"
   | "delete";
 
@@ -83,6 +86,7 @@ export function DuaApp() {
   const [prefs, setPrefs] = useState<Preferences>(defaultPreferences);
   const [workspace, setWorkspace] = useState<WorkspaceState | null>(null);
   const [models, setModels] = useState<ModelInfo[]>([]);
+  const [customLlm, setCustomLlm] = useState<CustomLlm | null>(null);
   const [draft, setDraft] = useState("");
   const [streaming, setStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -110,6 +114,7 @@ export function DuaApp() {
     setPrefs(storedPrefs);
     setWorkspace(storedWorkspace);
     setGallery(loadGallery());
+    setCustomLlm(loadCustomLlm());
     setScreen(storedPrefs.onboarded ? "chat" : "splash");
     setReady(true);
     if (!storedPrefs.onboarded) {
@@ -149,8 +154,27 @@ export function DuaApp() {
 
   const conversations = workspace?.conversations ?? [];
   const active = conversations.find((item) => item.id === workspace?.activeId) ?? null;
+  const modelChoices = useMemo(() => {
+    const customEntry: ModelInfo = customLlm
+      ? {
+          id: CUSTOM_MODEL_ID,
+          label: customLlm.label,
+          provider: "openai",
+          description: customLlm.model,
+          available: true,
+        }
+      : {
+          id: CUSTOM_MODEL_ID,
+          label: "Your LLM",
+          provider: "openai",
+          description: "Add a model in Settings.",
+          available: false,
+          unavailableReason: "Open Settings and add Your LLM.",
+        };
+    return [...models.filter((item) => item.id !== CUSTOM_MODEL_ID), customEntry];
+  }, [models, customLlm]);
   const modelId = active?.modelId ?? workspace?.draftModelId ?? DEMO_MODEL_ID;
-  const model = models.find((item) => item.id === modelId);
+  const model = modelChoices.find((item) => item.id === modelId);
 
   const theme = resolvedTheme(prefs.theme);
   const fontClass = prefs.font === "rounded" ? "font-rounded" : prefs.font === "mono" ? "font-mono-ui" : "";
@@ -189,7 +213,7 @@ export function DuaApp() {
   }
 
   async function send(content: string, historyMessages: ChatMessage[], conversationId: string, imageName?: string) {
-    const selected = models.find((item) => item.id === modelId);
+    const selected = modelChoices.find((item) => item.id === modelId);
     if (selected && !selected.available) {
       setError(selected.unavailableReason ?? "Choose an available model.");
       return;
@@ -255,6 +279,7 @@ export function DuaApp() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           model: modelId,
+          custom: modelId === CUSTOM_MODEL_ID ? customLlm : undefined,
           systemPrompt: workspace?.draftSystemPrompt || DEFAULT_SYSTEM_PROMPT,
           temperature: workspace?.draftTemperature || DEFAULT_TEMPERATURE,
           messages: [...historyMessages, userMessage].map((message) => ({
@@ -454,6 +479,8 @@ export function DuaApp() {
     window.localStorage.removeItem("dua.conversations.v1");
     window.localStorage.removeItem("dua.prefs.v1");
     window.localStorage.removeItem("dua.gallery.v1");
+    saveCustomLlm(null);
+    setCustomLlm(null);
     setPrefs(defaultPreferences());
     setWorkspace({
       conversations: [],
@@ -490,7 +517,7 @@ export function DuaApp() {
         <ChatPane
           conversation={active}
           model={model}
-          models={models}
+          models={modelChoices}
           draft={draft}
           streaming={streaming}
           error={error}
@@ -578,9 +605,34 @@ export function DuaApp() {
       {screen === "settings" ? (
         <SettingsHome
           prefs={prefs}
+          customDetail={customLlm ? customLlm.label : "Add any model"}
           onBack={back}
           onChange={patchPrefs}
           onOpen={(next) => push(next as Screen)}
+        />
+      ) : null}
+      {screen === "llm" ? (
+        <YourLlmScreen
+          initial={customLlm}
+          onBack={back}
+          onSave={(value) => {
+            setCustomLlm(value);
+            saveCustomLlm(value);
+            patchWorkspace((current) => {
+              const nextModel = value ? CUSTOM_MODEL_ID : DEMO_MODEL_ID;
+              return {
+                ...current,
+                draftModelId: value ? CUSTOM_MODEL_ID : current.draftModelId === CUSTOM_MODEL_ID ? DEMO_MODEL_ID : current.draftModelId,
+                conversations: current.conversations.map((item) =>
+                  item.modelId === CUSTOM_MODEL_ID || (value && item.id === current.activeId)
+                    ? { ...item, modelId: nextModel }
+                    : item,
+                ),
+              };
+            });
+            setToast(value ? `${value.label} is ready` : "Your LLM removed");
+            back();
+          }}
         />
       ) : null}
       {screen === "appearance" ? <AppearanceScreen prefs={prefs} onBack={back} onChange={patchPrefs} /> : null}

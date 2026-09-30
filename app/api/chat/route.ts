@@ -1,3 +1,4 @@
+import { CUSTOM_MODEL_ID, readCustomLlm } from "@/lib/custom-llm";
 import { findModel } from "@/lib/models";
 import {
   anthropicStream,
@@ -25,10 +26,26 @@ export async function POST(request: Request) {
     messages?: unknown;
     systemPrompt?: unknown;
     temperature?: unknown;
+    custom?: unknown;
   };
 
   const modelId = typeof record.model === "string" ? record.model : "dua-demo";
-  const model = findModel(modelId);
+  const custom = modelId === CUSTOM_MODEL_ID ? readCustomLlm(record.custom) : null;
+  if (modelId === CUSTOM_MODEL_ID && !custom) {
+    return Response.json(
+      { error: "Add a model name and an https address in Your LLM." },
+      { status: 400 },
+    );
+  }
+  const model = custom
+    ? {
+        id: CUSTOM_MODEL_ID,
+        label: custom.label,
+        provider: "openai" as const,
+        description: custom.model,
+        available: true,
+      }
+    : findModel(modelId);
   if (!model) {
     return Response.json({ error: "Unknown model." }, { status: 400 });
   }
@@ -56,7 +73,15 @@ export async function POST(request: Request) {
     }
     if (model.provider === "openai") {
       return sseResponse(
-        await openAIStream({ model: model.id, turns, systemPrompt, temperature, signal: request.signal }),
+        await openAIStream({
+          model: custom?.model ?? model.id,
+          turns,
+          systemPrompt,
+          temperature,
+          signal: request.signal,
+          apiKey: custom?.apiKey,
+          baseUrl: custom?.baseUrl,
+        }),
       );
     }
     if (model.provider === "anthropic") {

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { allowedBaseUrl, readCustomLlm } from "../lib/custom-llm.ts";
 import { buildDemoReply, chunkText, titleFromMessage } from "../lib/demo.ts";
 import { listModels } from "../lib/models.ts";
 import { clampTemperature, readAnthropicEvent, readGeminiEvent, readOpenAIEvent, sanitizeTurns } from "../lib/stream.ts";
@@ -62,6 +63,18 @@ test("hosted models stay unavailable without keys and demo stays available", () 
   assert.equal(models.find((model) => model.id === "gpt-4o-mini")?.available, false);
   const unlocked = listModels({ OPENAI_API_KEY: "sk-test", ANTHROPIC_API_KEY: "a", GEMINI_API_KEY: "g" });
   assert.equal(unlocked.every((model) => model.available), true);
+});
+
+test("a custom LLM accepts https and local addresses only", () => {
+  assert.equal(allowedBaseUrl("https://api.openai.com/v1"), "https://api.openai.com/v1");
+  assert.equal(allowedBaseUrl("http://127.0.0.1:11434/v1"), "http://127.0.0.1:11434/v1");
+  assert.equal(allowedBaseUrl("http://example.com/v1"), null);
+  assert.equal(
+    readCustomLlm({ label: "Groq", model: "llama-3.3-70b", baseUrl: "https://api.groq.com/openai/v1", apiKey: "gsk" })
+      ?.model,
+    "llama-3.3-70b",
+  );
+  assert.equal(readCustomLlm({ model: "x", baseUrl: "not a url" }), null);
 });
 
 test("markdown export includes both sides of a chat", () => {

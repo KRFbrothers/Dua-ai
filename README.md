@@ -1,6 +1,6 @@
 # Dua
 
-Dua is a mobile-style chat workspace. Conversations, settings, and the image gallery stay in this browser. A built-in demo model answers without credentials. OpenAI, Anthropic, and Gemini models appear in the model menu when their API keys are set.
+Dua is a mobile-style chat workspace. Conversations, settings, and the image gallery stay in this browser. A built-in demo model answers without credentials. OpenAI, Anthropic, and Gemini models appear in the model menu when their API keys are set. Settings also has Your LLM, which stores an OpenAI-style address, model name, and optional key in this browser.
 
 The interface includes onboarding, chat with streaming replies, search, profile, appearance and language settings, voice, and local image previews.
 
@@ -33,7 +33,7 @@ Copy `.env.example` to `.env.local` and set any keys you have:
 | `ANTHROPIC_API_KEY` | Claude Sonnet 4.5 |
 | `GEMINI_API_KEY` | Gemini 2.5 Flash |
 
-`Dua Demo` remains available with no keys.
+`Dua Demo` remains available with no keys. For any other OpenAI-style service, open Settings, choose Your LLM, and enter the address plus model name. The key stays in this browser and is sent only with that chat request. Public addresses must use https. A server on this computer can use `http://127.0.0.1`.
 
 ## In the app
 

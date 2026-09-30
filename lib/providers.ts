@@ -174,13 +174,16 @@ export async function openAIStream(options: {
   systemPrompt: string;
   temperature: number;
   signal: AbortSignal;
+  apiKey?: string;
+  baseUrl?: string;
 }): Promise<ReadableStream<Uint8Array>> {
-  const base = (process.env.OPENAI_BASE_URL || "https://api.openai.com/v1").replace(/\/$/, "");
+  const base = (options.baseUrl || process.env.OPENAI_BASE_URL || "https://api.openai.com/v1").replace(/\/$/, "");
+  const apiKey = options.apiKey ?? process.env.OPENAI_API_KEY ?? "";
   const response = await fetch(`${base}/chat/completions`, {
     method: "POST",
     signal: options.signal,
     headers: {
-      Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+      ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
