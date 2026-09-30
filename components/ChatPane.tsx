@@ -96,7 +96,7 @@ export function ChatPane({
                   key={suggestion}
                   type="button"
                   onClick={() => onDraft(suggestion)}
-                  className="rounded-2xl bg-[var(--card)] px-4 py-3 text-left text-sm text-[var(--muted)]"
+                  className="rounded-lg bg-[var(--card)] px-4 py-3 text-left text-sm text-[var(--text)]"
                 >
                   {suggestion}
                 </button>
@@ -156,7 +156,7 @@ export function ChatPane({
               type="submit"
               disabled={!draft.trim()}
               aria-label="Send"
-              className="grid h-10 w-10 place-items-center rounded-full bg-[var(--accent)] text-white disabled:opacity-40"
+              className="m3-filled grid h-10 w-10 place-items-center rounded-full disabled:opacity-40"
             >
               ↑
             </button>
@@ -201,7 +201,7 @@ export function ChatPane({
           <aside className="h-full w-[82%] overflow-y-auto bg-[var(--bg)] p-4" onClick={(event) => event.stopPropagation()}>
             <div className="mb-4 flex items-center justify-between">
               <p className="text-lg font-semibold">Chats</p>
-              <button type="button" onClick={onNew} className="rounded-full bg-[var(--accent)] px-3 py-1.5 text-sm text-white">
+              <button type="button" onClick={onNew} className="m3-filled rounded-full px-4 py-1.5 text-sm font-medium">
                 New
               </button>
             </div>

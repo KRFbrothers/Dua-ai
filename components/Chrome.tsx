@@ -24,10 +24,10 @@ export function PhoneFrame({
   dir?: "ltr" | "rtl";
 }) {
   return (
-    <div className="min-h-dvh bg-black text-[var(--text)] md:grid md:place-items-center md:py-6">
+    <div className="min-h-dvh bg-[#0e0d11] text-[var(--text)] md:grid md:place-items-center md:py-6">
       <div
         dir={dir}
-        className={`relative mx-auto flex h-dvh w-full max-w-[430px] flex-col overflow-hidden bg-[var(--bg)] md:h-[min(920px,calc(100dvh-3rem))] md:rounded-[2.2rem] md:border md:border-white/10 md:shadow-[var(--shadow)] ${className}`}
+        className={`relative mx-auto flex h-dvh w-full max-w-[430px] flex-col overflow-hidden bg-[var(--bg)] md:h-[min(920px,calc(100dvh-3rem))] md:rounded-[1.75rem] md:border md:border-[var(--line)] ${className}`}
       >
         <StatusBar />
         {children}
@@ -94,7 +94,7 @@ export function TabBar({
     { id: "profile" as const, label: labels.profile, icon: "☰" },
   ];
   return (
-    <nav className="grid shrink-0 grid-cols-3 border-t border-[var(--line)] bg-[color-mix(in_srgb,var(--bg)_92%,white)] px-2 pb-[max(0.4rem,env(safe-area-inset-bottom))] pt-1">
+    <nav className="grid h-20 shrink-0 grid-cols-3 bg-[var(--card)] px-2 pb-[max(0.35rem,env(safe-area-inset-bottom))]">
       {items.map((item) => {
         const active = tab === item.id;
         return (
@@ -102,9 +102,13 @@ export function TabBar({
             key={item.id}
             type="button"
             onClick={() => onChange(item.id)}
-            className={`flex flex-col items-center gap-0.5 py-1.5 text-[11px] ${active ? "text-[var(--accent-2)]" : "text-[var(--muted)]"}`}
+            className={`flex flex-col items-center justify-center gap-1 text-[12px] font-medium tracking-wide ${active ? "text-[var(--text)]" : "text-[var(--muted)]"}`}
           >
-            <span className="text-base leading-none">{item.icon}</span>
+            <span
+              className={`grid h-8 w-16 place-items-center rounded-2xl text-base leading-none ${active ? "bg-[var(--indicator)] text-[var(--text)]" : ""}`}
+            >
+              {item.icon}
+            </span>
             {item.label}
           </button>
         );
@@ -129,11 +133,13 @@ export function Toggle({
       aria-checked={checked}
       aria-label={label}
       onClick={() => onChange(!checked)}
-      className={`relative h-7 w-12 rounded-full transition ${checked ? "bg-[var(--accent)]" : "bg-[var(--card-2)]"}`}
+      className={`relative h-8 w-[3.25rem] rounded-full transition ${checked ? "bg-[var(--accent)]" : "bg-[var(--card-2)]"}`}
     >
       <span
-        className={`absolute top-0.5 h-6 w-6 rounded-full bg-white transition ${checked ? "left-5" : "left-0.5"}`}
-      />
+        className={`absolute top-1 grid h-6 w-6 place-items-center rounded-full text-[10px] transition ${checked ? "left-6 bg-[var(--on-accent)] text-[var(--accent)]" : "left-1 bg-[var(--muted)] text-[var(--card)]"}`}
+      >
+        {checked ? "✓" : ""}
+      </span>
     </button>
   );
 }
@@ -199,12 +205,12 @@ export function Row({
 }
 
 export function Card({ children }: { children: ReactNode }) {
-  return <div className="overflow-hidden rounded-[1.3rem] bg-[var(--card)]">{children}</div>;
+  return <div className="overflow-hidden rounded-xl bg-[var(--card-2)]">{children}</div>;
 }
 
 export function Pill({ children }: { children: ReactNode }) {
   return (
-    <span className="rounded-full bg-[var(--card-2)] px-2 py-0.5 text-[10px] tracking-wide text-[var(--muted)] uppercase">
+    <span className="rounded-lg bg-[var(--indicator)] px-2 py-0.5 text-[11px] font-medium tracking-wide text-[var(--text)]">
       {children}
     </span>
   );
@@ -226,7 +232,7 @@ export function PrimaryButton({
       type={type}
       disabled={disabled}
       onClick={onClick}
-      className="w-full rounded-full bg-[var(--accent)] px-4 py-3 text-[15px] font-medium text-white disabled:opacity-40"
+      className="m3-filled w-full rounded-full px-6 py-3 text-[15px] font-medium tracking-wide"
     >
       {children}
     </button>

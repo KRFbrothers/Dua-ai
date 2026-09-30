@@ -188,7 +188,7 @@ export function ProfilePane({
       <p className="-mt-2 mb-3 text-center text-xs text-[var(--muted)]">Account</p>
       <Card>
         <div className="flex items-center gap-3 px-4 py-4">
-          <div className="grid h-12 w-12 place-items-center rounded-full bg-[var(--accent)] text-lg text-white">{initial}</div>
+          <div className="m3-filled grid h-12 w-12 place-items-center rounded-full text-lg">{initial}</div>
           <div>
             <p className="font-medium">{prefs.displayName}</p>
             <p className="text-xs text-[var(--muted)]">{prefs.email}</p>
@@ -236,7 +236,7 @@ export function SettingsHome({
       <div className="px-4">
         <Card>
           <div className="flex items-center gap-3 px-4 py-4">
-            <div className="grid h-11 w-11 place-items-center rounded-full bg-[var(--accent)] text-white">
+            <div className="grid h-11 w-11 place-items-center rounded-full m3-filled">
               {prefs.displayName.slice(0, 1)}
             </div>
             <div>
@@ -533,7 +533,7 @@ export function UpdateScreen({ onBack, onLater }: { onBack: () => void; onLater:
           </div>
           <div className="flex items-center justify-between px-4 py-3 text-sm">
             <span>New version</span>
-            <span className="rounded-full bg-[var(--accent)] px-2 py-0.5 text-xs text-white">2.2.0</span>
+            <span className="m3-filled rounded-lg px-2 py-0.5 text-xs font-medium">2.2.0</span>
           </div>
         </Card>
         <p className="mt-4 text-sm font-medium">What’s new</p>
@@ -606,7 +606,7 @@ export function ConfirmDialog({
           <button
             type="button"
             onClick={onConfirm}
-            className={`w-full rounded-full px-4 py-3 text-white ${danger ? "bg-[var(--danger)]" : "bg-[var(--accent)]"}`}
+            className={`w-full rounded-full px-4 py-3 font-medium ${danger ? "bg-[var(--danger)] text-[#601410]" : "m3-filled"}`}
           >
             {confirm}
           </button>
@@ -659,7 +659,7 @@ export function PreviewScreen({
         <button type="button" onClick={onRemove} className="flex-1 rounded-full bg-[var(--card)] py-3 text-sm">
           Remove
         </button>
-        <button type="button" onClick={onAdd} className="flex-1 rounded-full bg-[var(--accent)] py-3 text-sm text-white">
+        <button type="button" onClick={onAdd} className="flex-1 m3-filled rounded-full py-3 text-sm font-medium">
           Add to chat
         </button>
       </div>
@@ -724,7 +724,7 @@ export function VoicePane({
       <div className="flex flex-1 flex-col items-center px-6 pt-8 text-center">
         <div className="relative grid h-36 w-36 place-items-center">
           {phase === "listening" ? <span className="listening-ring absolute inset-0 rounded-full bg-[var(--accent)]" /> : null}
-          <span className="relative grid h-24 w-24 place-items-center rounded-full bg-[var(--accent)] text-white">●</span>
+          <span className="relative grid h-24 w-24 place-items-center rounded-full m3-filled">●</span>
         </div>
         <p className="mt-6 text-lg font-medium">
           {phase === "listening" ? "Listening…" : phase === "transcript" ? "Dua is answering" : "Tap to talk"}
@@ -748,7 +748,7 @@ export function VoicePane({
         <button type="button" onClick={onOpenSettings} className="text-xs text-[var(--muted)]">
           Voice settings
         </button>
-        <button type="button" aria-label="Microphone" onClick={onMic} className="grid h-16 w-16 place-items-center rounded-full bg-[var(--accent)] text-xl text-white">
+        <button type="button" aria-label="Microphone" onClick={onMic} className="m3-filled grid h-16 w-16 place-items-center rounded-full text-xl">
           ●
         </button>
         <span className="w-16" />
@@ -762,7 +762,7 @@ export function VoicePane({
               <button type="button" onClick={onDeny} className="flex-1 rounded-full bg-[var(--card)] py-3 text-sm">
                 Not now
               </button>
-              <button type="button" onClick={onAllow} className="flex-1 rounded-full bg-[var(--accent)] py-3 text-sm text-white">
+              <button type="button" onClick={onAllow} className="flex-1 m3-filled rounded-full py-3 text-sm font-medium">
                 Continue
               </button>
             </div>
@@ -841,14 +841,14 @@ export function ImaginePane({
           <p className="text-xs text-[var(--muted)]">{style}</p>
           <div className="mt-3 flex gap-2">
             {["Realistic", "Cinematic", "Watercolor"].map((item) => (
-              <button key={item} type="button" onClick={() => onStyle(item)} className={`rounded-full px-3 py-1 text-xs ${style === item ? "bg-[var(--accent)] text-white" : "bg-[var(--card)]"}`}>
+              <button key={item} type="button" onClick={() => onStyle(item)} className={`rounded-full px-3 py-1 text-xs ${style === item ? "m3-filled" : "bg-[var(--card)]"}`}>
                 {item}
               </button>
             ))}
           </div>
         </div>
         <div className="flex gap-2 px-4 pb-5">
-          <button type="button" onClick={onSave} className="flex-1 rounded-full bg-[var(--accent)] py-3 text-sm text-white">
+          <button type="button" onClick={onSave} className="flex-1 m3-filled rounded-full py-3 text-sm font-medium">
             Save
           </button>
           <button
@@ -883,7 +883,7 @@ export function ImaginePane({
         <p className="mt-4 text-xs tracking-[0.14em] text-[var(--faint)] uppercase">Style</p>
         <div className="mt-2 flex gap-2">
           {["Realistic", "Cinematic", "Watercolor"].map((item) => (
-            <button key={item} type="button" onClick={() => onStyle(item)} className={`rounded-full px-3 py-1.5 text-sm ${style === item ? "bg-[var(--accent)] text-white" : "bg-[var(--card)]"}`}>
+            <button key={item} type="button" onClick={() => onStyle(item)} className={`rounded-full px-3 py-1.5 text-sm ${style === item ? "m3-filled" : "bg-[var(--card)]"}`}>
               {item}
             </button>
           ))}
@@ -891,7 +891,7 @@ export function ImaginePane({
         <p className="mt-4 text-xs tracking-[0.14em] text-[var(--faint)] uppercase">Format</p>
         <div className="mt-2 flex gap-2">
           {(["square", "portrait", "wide"] as const).map((item) => (
-            <button key={item} type="button" onClick={() => onRatio(item)} className={`rounded-full px-3 py-1.5 text-sm capitalize ${ratio === item ? "bg-[var(--accent)] text-white" : "bg-[var(--card)]"}`}>
+            <button key={item} type="button" onClick={() => onRatio(item)} className={`rounded-full px-3 py-1.5 text-sm capitalize ${ratio === item ? "m3-filled" : "bg-[var(--card)]"}`}>
               {item}
             </button>
           ))}
