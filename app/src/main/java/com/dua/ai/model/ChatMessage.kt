@@ -1,0 +1,31 @@
+package com.dua.ai.model
+
+data class ChatMessage(
+    val id: String = System.currentTimeMillis().toString(),
+    val text: String,
+    val isUser: Boolean,
+    val timestamp: String = "Just now",
+    val model: String = "Dua 2.0 Flash",
+    val hasCode: Boolean = false,
+    val codeSnippet: String? = null,
+    val codeLanguage: String = "Kotlin",
+    val reaction: MessageReaction = MessageReaction.NONE
+)
+
+enum class MessageReaction {
+    NONE, LIKED, DISLIKED
+}
+
+data class PromptSuggestion(
+    val title: String,
+    val description: String,
+    val prompt: String,
+    val category: String
+)
+
+data class ChatSession(
+    val id: String,
+    val title: String,
+    val category: String = "General",
+    val timestamp: String = "Today"
+)
