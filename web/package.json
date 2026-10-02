@@ -1,0 +1,12 @@
+{
+  "name": "dua-chat",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node --env-file-if-exists=.env server.mjs",
+    "test": "node --test --test-isolation=none server.test.mjs netlify.test.mjs"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}
