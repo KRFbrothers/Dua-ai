@@ -52,7 +52,7 @@
 .chat-bubble{padding:14px 18px;border-radius:20px;max-width:88%;white-space:pre-wrap;overflow-wrap:anywhere;font-size:16px;line-height:25px;flex-shrink:0}
 .chat-bubble.user{align-self:flex-end;background:var(--secondary-container);color:var(--on-secondary-container)}
 .chat-bubble.assistant{align-self:flex-start;background:var(--surface-container)}
-.chat-error{position:absolute;bottom:172px;left:20px;right:20px;text-align:center;margin:0;font-size:14px;line-height:20px;color:var(--on-surface-variant)}
+.chat-error{position:absolute;bottom:172px;left:20px;right:20px;text-align:center;margin:0;font-size:14px;line-height:20px;color:var(--on-surface-variant);max-height:calc(100dvh - 280px);overflow:auto;overflow-wrap:anywhere}
 .model-option:has(input:disabled){opacity:.45;cursor:not-allowed}
 </style>
 </head>
@@ -143,20 +143,21 @@ loadConfiguration();
 composer.addEventListener('submit',async event=>{
  event.preventDefault();
  const text=message.value.trim();if(!text||busy)return;
- errorView.textContent='';
- if(!configured){await loadConfiguration();if(!configured){errorView.textContent=location.protocol==='file:'?'AI chat ke liye http://localhost:3000 kholein.':'Gemini API key server settings mein set karein.';return;}}
- if(text.length>8000){errorView.textContent='Message 8000 characters se chhota rakhein.';return;}
  busy=true;message.disabled=true;action.setAttribute('aria-disabled','true');
- document.querySelector('.empty').hidden=true;
- const userBubble=appendMessage('user',text);const pending=appendMessage('model','Dua is thinking…');
- const nextHistory=[...history.slice(-38),{role:'user',text}];
+ let userBubble,pending;
  try{
+  errorView.textContent='';
+  if(!configured){await loadConfiguration();if(!configured){errorView.textContent=location.protocol==='file:'?'AI chat ke liye http://localhost:3000 kholein.':'Gemini API key aur model server settings mein set karein.';return;}}
+  if(text.length>8000){errorView.textContent='Message 8000 characters se chhota rakhein.';return;}
+  document.querySelector('.empty').hidden=true;
+  userBubble=appendMessage('user',text);pending=appendMessage('model','Dua is thinking…');
+  const nextHistory=[...history.slice(-38),{role:'user',text}];
   const response=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:composer.dataset.model,messages:nextHistory})});
   const data=await response.json();if(!response.ok)throw new Error(data.error||'Reply nahi aa saka.');
   pending.textContent=data.text;history.push({role:'user',text},{role:'model',text:data.text});
   message.value='';
- }catch(e){pending.remove();userBubble.remove();errorView.textContent=e.message;}
- finally{busy=false;message.disabled=false;action.removeAttribute('aria-disabled');updateAction();messagesView.scrollTop=messagesView.scrollHeight;message.focus();if(!history.length)document.querySelector('.empty').hidden=false;}
+ }catch(e){pending?.remove();userBubble?.remove();errorView.textContent=e.message;}
+ finally{busy=false;message.disabled=false;action.removeAttribute('aria-disabled');updateAction();messagesView.scrollTop=messagesView.scrollHeight;message.focus();if(!history.length)document.querySelector('.empty').hidden=Boolean(errorView.textContent);}
 });
 message.addEventListener('keydown',event=>{if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing){event.preventDefault();composer.requestSubmit();}});
 </script>

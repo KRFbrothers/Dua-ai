@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "start": "node --env-file-if-exists=.env server.mjs",
-    "test": "node --test --test-isolation=none server.test.mjs netlify.test.mjs gemini-errors.test.mjs"
+    "test": "node --test --test-isolation=none server.test.mjs netlify.test.mjs gemini-errors.test.mjs send.test.mjs"
   },
   "engines": {
     "node": ">=24"

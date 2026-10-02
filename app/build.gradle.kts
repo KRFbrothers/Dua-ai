@@ -4,6 +4,12 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
+val duaApiBaseUrl = providers.gradleProperty("duaApiBaseUrl")
+    .orElse("https://celadon-halva-adafe4.netlify.app").get()
+require(duaApiBaseUrl.startsWith("https://") && !duaApiBaseUrl.contains('"')) {
+    "duaApiBaseUrl must be an HTTPS URL"
+}
+
 android {
     namespace = "com.dua.ai"
     compileSdk = 35
@@ -14,6 +20,7 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "1.0.0"
+        buildConfigField("String", "DUA_API_BASE_URL", "\"" + duaApiBaseUrl + "\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -36,6 +43,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 

@@ -7,15 +7,27 @@ import com.dua.ai.model.ChatSession
 import com.dua.ai.model.MessageReaction
 import com.dua.ai.model.PromptSuggestion
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.CancellationException
+import com.dua.ai.network.DuaApiClient
+import com.dua.ai.network.DuaApiException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 class ChatViewModel : ViewModel() {
+    private val api = DuaApiClient()
+    private var generation = 0
+    private val _error = MutableStateFlow<String?>(null)
+    val error: StateFlow<String?> = _error.asStateFlow()
+    private val _failedPrompt = MutableStateFlow<String?>(null)
+    val failedPrompt: StateFlow<String?> = _failedPrompt.asStateFlow()
+    fun consumeFailedPrompt() { _failedPrompt.value = null }
     private var replyJob: Job? = null
     private fun cancelReply() {
+        generation++
+        _error.value = null
+        _failedPrompt.value = null
         replyJob?.cancel()
         replyJob = null
         _isTyping.value = false
@@ -121,148 +133,44 @@ class ChatViewModel : ViewModel() {
 
     fun sendMessage(userText: String) {
         if (userText.isBlank() || _isTyping.value) return
+        _error.value = null
+        if (userText.length > 8000) {
+            _error.value = "Message 8000 characters se chhota rakhein."
+            return
+        }
         val responseModel = _selectedModel.value
-
-        val userMessage = ChatMessage(
-            text = userText.trim(),
-            isUser = true,
-            model = _selectedModel.value
-        )
-
+        if (responseModel !in listOf("Dua", "Gemini")) {
+            _error.value = "Dua ya Gemini select karein."
+            return
+        }
+        val userMessage = ChatMessage(text = userText.trim(), isUser = true, model = responseModel)
+        val requestHistory = _messages.value.takeLast(38) + userMessage
+        val currentGeneration = generation
         _messages.value = _messages.value + userMessage
         _isTyping.value = true
-
+        _failedPrompt.value = null
         replyJob = viewModelScope.launch {
-            delay(850) // Realistic low-latency response simulation
-
-            val (replyText, codeSnippet, codeLang) = generateResponse(userText, responseModel)
-
-            val botMessage = ChatMessage(
-                text = replyText,
-                isUser = false,
-                model = responseModel,
-                hasCode = codeSnippet != null,
-                codeSnippet = codeSnippet,
-                codeLanguage = codeLang
-            )
-
-            _messages.value = _messages.value + botMessage
-            _isTyping.value = false
-        }
-    }
-
-    private fun generateResponse(
-        prompt: String,
-        model: String
-    ): Triple<String, String?, String> {
-        val lower = prompt.lowercase()
-
-        return when {
-            lower.contains("compose") || lower.contains("card") || lower.contains("code") -> {
-                Triple(
-                    "Here is a clean, modern Jetpack Compose Card component following Material 3 guidelines and smooth elevation aesthetics:",
-                    """
-                    @Composable
-                    fun ModernDuaCard(
-                        title: String,
-                        subtitle: String,
-                        onClick: () -> Unit
-                    ) {
-                        Surface(
-                            shape = RoundedCornerShape(16.dp),
-                            color = MaterialTheme.colorScheme.surfaceVariant,
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { onClick() }
-                        ) {
-                            Column(modifier = Modifier.padding(16.dp)) {
-                                Text(
-                                    text = title,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(
-                                    text = subtitle,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
+            try {
+                val reply = api.reply(responseModel, requestHistory)
+                if (generation == currentGeneration) {
+                    _messages.value = _messages.value + ChatMessage(
+                        text = reply, isUser = false, model = responseModel
+                    )
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Exception) {
+                if (generation == currentGeneration) {
+                    _messages.value = _messages.value.filterNot { it.id == userMessage.id }
+                    _failedPrompt.value = userText
+                    _error.value = when (failure) {
+                        is DuaApiException, is IllegalArgumentException -> failure.message
+                        is java.net.SocketTimeoutException -> "Dua response timeout hua. Dobara try karein."
+                        else -> "Connection fail hua. Dobara try karein."
                     }
-                    """.trimIndent(),
-                    "Kotlin"
-                )
-            }
-            lower.contains("roadmap") || lower.contains("plan") || lower.contains("week") -> {
-                Triple(
-                    """
-                    Here is a structured 4-Week Roadmap for mastering **Modern Android & Compose**:
-
-                    ### Week 1: Kotlin & Coroutines Foundation
-                    - Kotlin syntax, extension functions, sealed interfaces
-                    - Coroutines, `CoroutineScope`, `Dispatchers.IO` & Flow primitives
-
-                    ### Week 2: Jetpack Compose Fundamentals
-                    - State hoisting, `remember`, `mutableStateOf`, `derivedStateOf`
-                    - Layouts (`Column`, `Row`, `LazyColumn`, `Box`, `Scaffold`)
-                    - Modifiers and Material 3 theming
-
-                    ### Week 3: Architecture & Navigation
-                    - Clean Architecture with MVVM + UI Layer (`StateFlow`)
-                    - Jetpack Navigation Compose with type-safe arguments
-
-                    ### Week 4: Production Polish
-                    - Animations (`AnimatedVisibility`, `animateColorAsState`)
-                    - Performance profiling and edge-to-edge support
-                    """.trimIndent(),
-                    null,
-                    ""
-                )
-            }
-            lower.contains("transformer") || lower.contains("neural") || lower.contains("ai") || lower.contains("explain") -> {
-                Triple(
-                    """
-                    **Transformer neural networks** process language through three core mechanisms:
-
-                    1. **Tokens & Embeddings**: Words and subwords are converted into high-dimensional numerical vectors representing semantic meaning.
-                    2. **Self-Attention Mechanism**: Unlike older sequential models (RNNs), transformers look at every word in context simultaneously. This allows the model to understand what *"it"* refers to in a complex sentence.
-                    3. **Next-Token Prediction**: The model calculates probability distributions over the entire vocabulary to predict the most coherent next token, one by one.
-                    """.trimIndent(),
-                    null,
-                    ""
-                )
-            }
-            lower.contains("idea") || lower.contains("startup") -> {
-                Triple(
-                    """
-                    Here are 3 high-impact AI product ideas:
-
-                    1. **Contextual Code Reviewer**: An IDE companion that watches git commits and drafts bullet-proof unit tests before you create a PR.
-                    2. **Personal Audio Digest**: An on-device assistant that aggregates your newsletters, GitHub alerts, and Slack summaries into a 3-minute morning audio brief.
-                    3. **Instant API Mock Server**: Paste any OpenAPI schema or JSON payload, and it spins up a live mock REST/GraphQL endpoint with intelligent synthetic data.
-                    """.trimIndent(),
-                    null,
-                    ""
-                )
-            }
-            else -> {
-                Triple(
-                    """
-                    Regarding **"$prompt"**:
-
-                    Here are key points to consider:
-
-                    - **Efficiency**: Prioritize lightweight solutions with minimal overhead.
-                    - **Modularity**: Break requirements down into reusable, isolated components.
-                    - **Scalability**: Ensure your architecture supports smooth future extensions.
-
-                    Would you like me to elaborate on any specific aspect or generate code examples?
-                    """.trimIndent(),
-                    null,
-                    ""
-                )
+                }
+            } finally {
+                if (generation == currentGeneration) _isTyping.value = false
             }
         }
     }

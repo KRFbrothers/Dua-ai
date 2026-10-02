@@ -69,6 +69,8 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel()) {
     val screen = Screen.valueOf(screenName)
     val messages by viewModel.messages.collectAsState()
     val typing by viewModel.isTyping.collectAsState()
+    val error by viewModel.error.collectAsState()
+    val failedPrompt by viewModel.failedPrompt.collectAsState()
     val listState = rememberLazyListState()
     val context = LocalContext.current
     fun navigate(next: Screen) { screenName = next.name }
@@ -84,7 +86,7 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel()) {
     fun send() {
         if (draft.isNotBlank() && !typing) {
             viewModel.sendMessage(draft)
-            draft = ""
+            if (draft.length <= 8000) draft = ""
         }
     }
     BackHandler(enabled = picker || screen != Screen.Home) {
@@ -92,6 +94,9 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel()) {
     }
     LaunchedEffect(messages.size, typing) {
         if (messages.isNotEmpty()) listState.animateScrollToItem(messages.lastIndex)
+    }
+    LaunchedEffect(failedPrompt) {
+        failedPrompt?.let { draft = it; viewModel.consumeFailedPrompt() }
     }
     MaterialTheme(colorScheme = darkColorScheme(
         primary = Primary, onPrimary = Color(0xFF381E72),
@@ -141,7 +146,7 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel()) {
                                 modifier = Modifier.align(Alignment.CenterEnd), onClick = {})
                         }
                         Box(Modifier.weight(1f).fillMaxWidth()) {
-                            if (messages.isEmpty()) {
+                            if (messages.isEmpty() && error == null) {
                                 Image(painterResource(R.drawable.dua_logo), "DUA logo",
                                     modifier = Modifier.align(Alignment.Center).size(width = 156.dp, height = 273.dp))
                             } else {
@@ -182,6 +187,11 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel()) {
                                     if (typing) item { Text("Dua is thinking…", color = Muted) }
                                 }
                             }
+                        }
+                        error?.let { message ->
+                            Text(message, color = Muted, fontSize = 14.sp, maxLines = 3,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp))
                         }
                         Surface(shape = RoundedCornerShape(28.dp), color = Container,
                             modifier = Modifier.fillMaxWidth().widthIn(max = 760.dp).padding(16.dp)) {
@@ -237,7 +247,7 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel()) {
                         })
                         Column {
                             Text(name, color = if (available) Ink else Muted.copy(alpha = .5f))
-                            Text(if (available) "Native preview · simulated replies" else "Coming soon", color = Muted, fontSize = 12.sp)
+                            Text(if (available) "Gemini" else "Coming soon", color = Muted, fontSize = 12.sp)
                         }
                     }
                 }
