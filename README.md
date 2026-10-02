@@ -19,3 +19,7 @@ Android replies and session history currently use simulated data; the web Gemini
 ## Validation
 
 With Node 24+, run `npm test` from `web/` to run the local and Netlify endpoint tests. Android requires its SDK and a separate clean build.
+
+## Native interface
+
+The Android Compose launcher now follows the current web design: I am Dua home, centered-logo chat, Material 3 composer, model sheet, Add to chat, Settings and Voice screens. Navigation preserves the current in-memory conversation and draft; New chat resets it. Native responses remain simulated. Other providers and AI voice/attachment sending remain planned features. No WebView or live website is required to render the Android interface.
