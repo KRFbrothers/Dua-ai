@@ -154,7 +154,7 @@ a{text-decoration:none;color:inherit}.round{cursor:pointer}.home-screen{width:10
 .chat-messages{position:absolute;top:92px;bottom:210px;left:max(20px,calc((100% - 760px)/2));right:max(20px,calc((100% - 760px)/2));overflow:auto;display:flex;flex-direction:column;gap:18px;padding:12px 4px}
 .chat-bubble{padding:14px 18px;border-radius:20px;max-width:88%;white-space:pre-wrap;overflow-wrap:anywhere;font-size:16px;line-height:25px;flex-shrink:0}
 .chat-bubble.user{align-self:flex-end;background:var(--secondary-container);color:var(--on-secondary-container)}
-.chat-bubble.model{align-self:flex-start;background:var(--surface-container)}
+.chat-bubble.assistant{align-self:flex-start;background:var(--surface-container)}
 .chat-error{position:absolute;bottom:172px;left:20px;right:20px;text-align:center;margin:0;font-size:14px;line-height:20px;color:var(--on-surface-variant)}
 .model-option:has(input:disabled){opacity:.45;cursor:not-allowed}
 </style>
@@ -237,7 +237,7 @@ const history=[];
 let busy=false;
 let configured=false;
 function appendMessage(role,text){
- const bubble=document.createElement('div');bubble.className='chat-bubble '+role;bubble.textContent=text;
+ const bubble=document.createElement('div');bubble.className='chat-bubble '+(role==='model'?'assistant':role);bubble.textContent=text;
  messagesView.append(bubble);messagesView.scrollTop=messagesView.scrollHeight;return bubble;
 }
 composer.dataset.model='Dua';
