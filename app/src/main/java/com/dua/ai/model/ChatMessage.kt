@@ -1,7 +1,9 @@
 package com.dua.ai.model
 
+import java.util.UUID
+
 data class ChatMessage(
-    val id: String = System.currentTimeMillis().toString(),
+    val id: String = UUID.randomUUID().toString(),
     val text: String,
     val isUser: Boolean,
     val timestamp: String = "Just now",
