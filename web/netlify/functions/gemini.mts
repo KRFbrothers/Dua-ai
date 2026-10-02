@@ -23,7 +23,23 @@ export default async function handler(req: Request) {
         contents: data.messages.map((m: { role: string; text: string }) => ({ role: m.role, parts: [{ text: m.text }] }))
       }), signal: AbortSignal.timeout(45000)
     });
-    if (!response.ok) return json({ error: response.status === 429 ? 'Gemini quota limit aa gayi. Baad mein try karein.' : 'Gemini key ya model configuration check karein.' }, response.status === 429 ? 429 : 502);
+    if (!response.ok) {
+      const status = response.status;
+      const hints: Record<number, string> = {
+        400: 'Gemini API key invalid hai ya request reject hui. Google AI Studio mein key check karein.',
+        401: 'Gemini API key valid nahi hai.',
+        403: 'Is key ko Gemini API access nahi hai. Google AI Studio project aur key restrictions check karein.',
+        404: 'Selected Gemini model available nahi hai. GEMINI_MODEL setting check karein.',
+        429: 'Gemini quota limit aa gayi. Google AI Studio mein quota aur billing check karein.'
+      };
+      let reason = '';
+      try {
+        const details = await response.json();
+        if (typeof details.error?.message === 'string') reason = details.error.message.split(key).join('[hidden]').replace(/AIza[\\w-]+/g, '[hidden]').slice(0, 1000);
+      } catch {}
+      const hint = hints[status] || 'Gemini service se response nahi aaya. Dobara try karein.';
+      return json({ error: hint + (reason ? ' ' + reason : ''), upstreamStatus: status }, status === 429 ? 429 : 502);
+    }
     const result = await response.json();
     const text = (result.candidates?.[0]?.content?.parts || []).filter((p: { thought?: boolean; text?: string }) => !p.thought && typeof p.text === 'string').map((p: { text: string }) => p.text).join('\n');
     return text ? json({ text }) : json({ error: 'Gemini ne text response nahi diya. Dobara try karein.' }, 422);
