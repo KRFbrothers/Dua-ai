@@ -6,6 +6,7 @@ import com.dua.ai.model.ChatMessage
 import com.dua.ai.model.ChatSession
 import com.dua.ai.model.MessageReaction
 import com.dua.ai.model.PromptSuggestion
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -13,11 +14,17 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 class ChatViewModel : ViewModel() {
+    private var replyJob: Job? = null
+    private fun cancelReply() {
+        replyJob?.cancel()
+        replyJob = null
+        _isTyping.value = false
+    }
 
     private val _messages = MutableStateFlow<List<ChatMessage>>(emptyList())
     val messages: StateFlow<List<ChatMessage>> = _messages.asStateFlow()
 
-    private val _selectedModel = MutableStateFlow("Dua 2.0 Flash")
+    private val _selectedModel = MutableStateFlow("Dua")
     val selectedModel: StateFlow<String> = _selectedModel.asStateFlow()
 
     private val _isTyping = MutableStateFlow(false)
@@ -72,10 +79,12 @@ class ChatViewModel : ViewModel() {
     }
 
     fun startNewChat() {
+        cancelReply()
         _messages.value = emptyList()
     }
 
     fun selectSession(session: ChatSession) {
+        cancelReply()
         _messages.value = listOf(
             ChatMessage(
                 text = "Show me details about: ${session.title}",
@@ -111,7 +120,8 @@ class ChatViewModel : ViewModel() {
     }
 
     fun sendMessage(userText: String) {
-        if (userText.isBlank()) return
+        if (userText.isBlank() || _isTyping.value) return
+        val responseModel = _selectedModel.value
 
         val userMessage = ChatMessage(
             text = userText.trim(),
@@ -122,15 +132,15 @@ class ChatViewModel : ViewModel() {
         _messages.value = _messages.value + userMessage
         _isTyping.value = true
 
-        viewModelScope.launch {
+        replyJob = viewModelScope.launch {
             delay(850) // Realistic low-latency response simulation
 
-            val (replyText, codeSnippet, codeLang) = generateResponse(userText, _selectedModel.value)
+            val (replyText, codeSnippet, codeLang) = generateResponse(userText, responseModel)
 
             val botMessage = ChatMessage(
                 text = replyText,
                 isUser = false,
-                model = _selectedModel.value,
+                model = responseModel,
                 hasCode = codeSnippet != null,
                 codeSnippet = codeSnippet,
                 codeLanguage = codeLang
