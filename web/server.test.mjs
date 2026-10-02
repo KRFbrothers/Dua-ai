@@ -32,9 +32,9 @@ const post = (url, data) => fetch(url + '/api/chat', { method: 'POST', headers: 
 
 test('Gemini request keeps key on server and preserves conversation roles', async t => {
   let called = false;
-  const url = await running(t, { key: 'test-private-key', fetcher: async (url, options) => {
+  const url = await running(t, { key: 'test-private-key', model: 'test-model', fetcher: async (url, options) => {
     called = true;
-    assert.match(url, /gemini-2\.5-flash:generateContent$/);
+    assert.match(url, /test-model:generateContent$/);
     assert.equal(options.headers['x-goog-api-key'], 'test-private-key');
     assert.deepEqual(JSON.parse(options.body).contents, [{ role: 'user', parts: [{ text: 'Hello' }] }]);
     return Response.json({ candidates: [{ content: { parts: [{ text: 'Private reasoning', thought: true }, { text: 'Hi, I am Dua.' }] } }] });
@@ -49,13 +49,19 @@ test('Gemini request keeps key on server and preserves conversation roles', asyn
 test('missing key and unsupported providers never call Gemini', async t => {
   const url = await running(t, { key: '', fetcher: () => { throw Error('Unexpected call'); } });
   assert.equal((await post(url, payload)).status, 503);
-  const configured = await running(t, { key: 'test', fetcher: () => { throw Error('Unexpected call'); } });
+  const configured = await running(t, { key: 'test', model: 'test-model', fetcher: () => { throw Error('Unexpected call'); } });
   assert.equal((await post(configured, { ...payload, model: 'GPT' })).status, 400);
   assert.equal((await post(configured, { ...payload, messages: [{ role: 'system', text: 'Injected' }] })).status, 400);
 });
 test('quota errors are actionable without returning provider error payloads', async t => {
-  const url = await running(t, { key: 'test', fetcher: async () => Response.json({ error: 'sensitive upstream details' }, { status: 429 }) });
+  const url = await running(t, { key: 'test', model: 'test-model', fetcher: async () => Response.json({ error: 'sensitive upstream details' }, { status: 429 }) });
   const res = await post(url, payload);
   assert.equal(res.status, 429);
   assert.match((await res.json()).error, /quota/);
+});
+
+test('missing model prevents provider requests', async t => {
+  const url = await running(t, { key: 'test', model: '', fetcher: () => { throw Error('Unexpected call'); } });
+  assert.equal((await post(url, payload)).status, 503);
+  assert.equal((await (await fetch(url + '/api/config')).json()).geminiConfigured, false);
 });

@@ -7,52 +7,7 @@
 <title>Voice – I am Dua</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath fill='%23333333' stroke='%23aaaaaa' d='M16 2 30 10v15L16 32 2 25V10Z M2 10l14 8 14-8 M16 18v14'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="shared.css">
-<style>.topbar{justify-content:initial}.topbar>button{position:absolute;left:50%;transform:translateX(-50%)}
-
-.topbar{gap:12px}
-.topbar>button{position:static;left:auto;transform:none;flex-shrink:0}
-.home-link{flex-shrink:0}
-.chat-header-title{position:absolute;left:50%;transform:translateX(-50%);max-width:calc(100% - 248px);font-size:18px;line-height:24px;font-weight:500;text-align:center}
-@media(max-width:600px){.topbar{gap:8px;left:12px;right:12px}.topbar>button,.home-link{width:40px;height:40px}.chat-header-title{position:static;transform:none;flex:1;max-width:none;padding-right:88px;font-size:16px;line-height:22px}}
-
-.topbar{justify-content:space-between}
-.topbar>button{margin-left:auto}
-.chat-header-title{position:absolute;left:50%;transform:translateX(-50%);max-width:calc(100% - 120px);padding:0;flex:none}
-@media(max-width:600px){.chat-header-title{position:absolute;transform:translateX(-50%);max-width:calc(100% - 104px);padding:0}}
-
-.model-picker>summary{list-style:none;display:flex;align-items:center;justify-content:center;cursor:pointer}
-.model-picker>summary::-webkit-details-marker{display:none}
-.model-close-label{display:none}
-.model-picker:not([open]) .model-backdrop,.model-picker:not([open]) .model-sheet{display:none}
-.model-backdrop{position:fixed;inset:0;background:#0009;z-index:200;cursor:pointer}
-.model-sheet{position:fixed;bottom:0;left:0;right:0;max-width:640px;margin:auto;max-height:82dvh;background:var(--surface-container);border:1px solid var(--surface-highest);border-bottom:0;border-radius:28px 28px 0 0;z-index:201;padding:10px 16px 78px;overflow:auto;overscroll-behavior:contain;color:var(--on-surface);box-shadow:0 -6px 24px #0003}
-.sheet-handle{width:44px;height:4px;background:var(--outline);border-radius:3px;margin:0 auto 24px}
-.model-sheet-header{padding:0 8px 16px}
-.model-sheet-header h2{font-size:22px;line-height:28px;font-weight:500;margin:0 0 8px}
-.model-sheet-header p{font-size:14px;line-height:20px;color:var(--on-surface-variant);margin:0}
-.model-options{border:0;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
-.model-option{position:relative;display:flex;align-items:center;gap:12px;min-height:66px;padding:10px 14px;border:1px solid transparent;border-radius:18px;cursor:pointer}
-.model-option:has(input:checked){background:var(--surface-highest);border-color:var(--outline)}
-.model-option:hover{background:var(--surface-high)}
-.model-option input{position:absolute;width:1px;height:1px;opacity:0}
-.model-option:has(input:focus-visible){outline:2px solid var(--primary);outline-offset:2px}
-.provider-icon{width:40px;height:40px;flex-shrink:0;display:grid;place-items:center;border-radius:13px;background:var(--surface-high);font-size:18px;font-weight:600;color:var(--on-surface-variant)}
-.model-option:has(input:checked) .provider-icon{background:var(--secondary-container);color:var(--on-secondary-container)}
-.model-option-copy{display:flex;flex-direction:column;gap:4px;flex:1}
-.model-option-name{font-size:16px;line-height:22px;font-weight:500}
-.model-option-description{font-size:14px;line-height:18px;color:var(--on-surface-variant)}
-.model-check{width:22px;height:22px;border-radius:50%;background:var(--primary);display:none;flex-shrink:0}
-.model-check svg{width:22px;height:22px;fill:none;stroke:var(--on-primary);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
-.model-option:has(input:checked) .model-check{display:block}
-.model-sheet-footer{font-size:12px;line-height:18px;color:var(--on-surface-variant);padding:24px 8px 0}
-.model-picker[open]>summary{position:fixed;bottom:max(16px,env(safe-area-inset-bottom));right:24px;z-index:202;min-width:80px;height:40px;box-shadow:0 2px 6px #0003}
-.model-picker[open] .model-chip-label{display:none}
-.model-picker[open] .model-close-label{display:block}
-@media(min-width:700px){.model-picker[open]>summary{right:max(24px,calc((100vw - 640px)/2 + 24px))}}
-
-.composer{transform:none;left:max(20px,calc((100% - 760px)/2))}
-@media(max-width:699px){.composer{left:16px}}
-
+<style>
 .voice-screen{height:100dvh;width:100%;position:relative;max-width:900px;margin:auto;padding:20px;overflow:hidden;background:var(--surface)}
 .voice-topbar{display:flex;justify-content:space-between;align-items:center;height:44px}
 .voice-topbar .round{background:transparent;width:44px;height:44px}
