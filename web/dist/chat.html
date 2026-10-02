@@ -184,7 +184,7 @@ let listening = false;
 function updateAction() {
   const hasText = message.value.trim().length > 0;
   cube.hidden = hasText;
-  arrow.hidden = !hasText;
+  arrow.toggleAttribute('hidden', !hasText);
   action.classList.toggle('voice-ready', !hasText);
   action.classList.toggle('listening', listening);
   const label = hasText ? 'Send message' : listening ? 'Stop voice mode' : 'Start voice mode';
