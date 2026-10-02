@@ -3,13 +3,13 @@ import assert from 'node:assert/strict';
 import handler from './netlify/functions/gemini.mts';
 
 test('Netlify configuration never returns the API key', async()=>{
- globalThis.Netlify={env:{get:name=>name==='GEMINI_API_KEY'?'private-test-key':undefined}};
+ globalThis.Netlify={env:{get:name=>name==='GEMINI_API_KEY'?'private-test-key':name==='GEMINI_MODEL'?'test-model':undefined}};
  const response=await handler(new Request('https://dua.example/api/config'));
- assert.deepEqual(await response.json(),{geminiConfigured:true,model:'gemini-2.5-flash'});
+ assert.deepEqual(await response.json(),{geminiConfigured:true,model:'test-model'});
 });
 test('Netlify Gemini endpoint handles message history without exposing secret or reasoning',async()=>{
  const originalFetch=globalThis.fetch;
- globalThis.Netlify={env:{get:name=>name==='GEMINI_API_KEY'?'private-test-key':undefined}};
+ globalThis.Netlify={env:{get:name=>name==='GEMINI_API_KEY'?'private-test-key':name==='GEMINI_MODEL'?'test-model':undefined}};
  globalThis.fetch=async(url,options)=>{
   assert.equal(options.headers['x-goog-api-key'],'private-test-key');
   assert.deepEqual(JSON.parse(options.body).contents,[{role:'user',parts:[{text:'Hello'}]}]);
