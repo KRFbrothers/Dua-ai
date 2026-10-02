@@ -2,6 +2,7 @@ import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import { handleGemini } from './gemini.mjs';
 
 const root = fileURLToPath(new URL('./dist/', import.meta.url));
 const types = { '.html': 'text/html; charset=utf-8', '.png': 'image/png', '.svg': 'image/svg+xml', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8' };
@@ -13,41 +14,21 @@ export function makeServer({ key = process.env.GEMINI_API_KEY, model = process.e
   return createServer(async (req, res) => {
     try {
       const url = new URL(req.url, 'http://localhost');
-      if (url.pathname === '/api/config' && req.method === 'GET') {
-        return json(res, 200, { geminiConfigured: Boolean(key), model });
-      }
-      if (url.pathname === '/api/chat' && req.method === 'POST') {
-        if (req.headers.origin && new URL(req.headers.origin).host !== req.headers.host) return json(res, 403, { error: 'Request origin is not allowed.' });
-        if (!key) return json(res, 503, { error: 'Gemini API key server par configure karein.' });
+      if (url.pathname === '/api/config' || url.pathname === '/api/chat') {
         let body = ''; let size = 0;
         for await (const chunk of req) {
           size += chunk.length;
           if (size > 262144) return json(res, 413, { error: 'Message history is too large.' });
           body += chunk.toString();
         }
-        let data;
-        try { data = JSON.parse(body); } catch { return json(res, 400, { error: 'Invalid request.' }); }
-        if (!['Dua', 'Gemini'].includes(data.model)) return json(res, 400, { error: 'Filhaal Gemini ya Dua select karein.' });
-        if (!Array.isArray(data.messages) || !data.messages.length || data.messages.length > 40 || data.messages.some(m => !['user', 'model'].includes(m.role) || typeof m.text !== 'string' || !m.text.trim() || m.text.length > 8000) || data.messages.at(-1).role !== 'user') {
-          return json(res, 400, { error: 'Invalid messages. Maximum message length: 8000 characters.' });
-        }
-        const upstream = await fetcher(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
-          body: JSON.stringify({
-            systemInstruction: { parts: [{ text: 'You are Dua, a helpful AI assistant powered by Gemini. Reply in the language the user uses. Be clear and concise.' }] },
-            contents: data.messages.map(m => ({ role: m.role, parts: [{ text: m.text }] }))
-          }),
-          signal: AbortSignal.timeout(45000)
+        const request = new Request('http://' + (req.headers.host || 'localhost') + req.url, {
+          method: req.method,
+          headers: req.headers,
+          ...(!['GET','HEAD'].includes(req.method) ? { body } : {})
         });
-        if (!upstream.ok) {
-          const error = upstream.status === 429 ? 'Gemini quota limit aa gayi. Thodi der baad try karein.' : [401,403].includes(upstream.status) ? 'Gemini API key ya access check karein.' : 'Gemini request fail hui. Model configuration check karke dobara try karein.';
-          return json(res, upstream.status === 429 ? 429 : 502, { error });
-        }
-        const result = await upstream.json();
-        const text = (result.candidates?.[0]?.content?.parts || []).filter(p => !p.thought && typeof p.text === 'string').map(p => p.text).join('\n');
-        if (!text) return json(res, 422, { error: 'Gemini ne text response nahi diya. Message badal kar try karein.' });
-        return json(res, 200, { text });
+        const response = await handleGemini(request, { key, model, fetcher });
+        res.writeHead(response.status, Object.fromEntries(response.headers));
+        return res.end(await response.text());
       }
       if (url.pathname.startsWith('/api/')) return json(res, 404, { error: 'Not found.' });
       if (!['GET','HEAD'].includes(req.method)) return json(res, 405, { error: 'Method not allowed.' });
