@@ -2,6 +2,7 @@ import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import { MAX_REQUEST_BYTES } from './attachments.mjs';
 import { handleGemini } from './gemini.mjs';
 
 const root = path.resolve(fileURLToPath(new URL('./dist/', import.meta.url)));
@@ -23,7 +24,7 @@ export function makeServer({ key = process.env.GEMINI_API_KEY, model = process.e
         const chunks = []; let size = 0;
         for await (const chunk of req) {
           size += chunk.length;
-          if (size > 262144) return json(res, 413, { error: 'Message history is too large.' });
+          if (size > MAX_REQUEST_BYTES) return json(res, 413, { error: 'Message history is too large.' });
           chunks.push(chunk);
         }
         const body = Buffer.concat(chunks).toString('utf8');
