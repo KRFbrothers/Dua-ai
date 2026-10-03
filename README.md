@@ -8,13 +8,13 @@ The browser app includes home, chat, settings, attachments, model selection and 
 
 The root `netlify.toml` publishes `web/dist` and deploys the Gemini function. Store `GEMINI_API_KEY` and `GEMINI_MODEL` in private Netlify configuration. Never commit API keys.
 
-Voice AI replies, attachment processing, history persistence and most settings remain unfinished; see web documentation for current limits.
+Voice AI replies, attachment processing, account/cloud sync and most settings remain unfinished; see [FEATURES.md](FEATURES.md) for the ordered implementation list.
 
 ## Android client
 
 Open the repository in Android Studio. The launcher is `com.dua.ai.MainActivity`. Build instructions are in [GRADLE.md](GRADLE.md).
 
-Android text replies use the same Gemini backend as web. Session history is still a planned feature; seeded session entries remain placeholders.
+Android text replies use the same Gemini backend as web. Local chat history saves separate conversations, drafts and selected models; Home can search, reopen and delete them. Account/cloud synchronization remains planned.
 
 ## Validation
 

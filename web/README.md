@@ -20,7 +20,7 @@ Run `npm test` for Node and Netlify endpoint tests with mocked Gemini responses.
 
 ## Mobile interface
 
-The default browser pages now follow the native Android mobile layout, including the responsive composer, model sheet, Settings detail pages, attachment selection cards and Voice cube. Chat calls the real `/api/chat` backend, clears accepted drafts and supports Stop with client-side request cancellation. Failed requests restore the draft. In-tab session storage preserves the current chat across navigation; this is not account-backed persistent history.
+The default browser pages now follow the native Android mobile layout, including the responsive composer, model sheet, Settings detail pages, attachment selection cards and Voice cube. Chat calls the real `/api/chat` backend, clears accepted drafts and supports Stop with client-side request cancellation. Failed requests restore the draft. Local browser storage now preserves multiple chats, drafts and selected models across visits. Home supports search, reopening and confirmed deletion. The previous in-tab chat migrates once; storage failures show a warning. This is device-local history, not account/cloud synchronization. See [../FEATURES.md](../FEATURES.md) for the remaining feature list.
 
 `/preview/` remains a separate design sandbox with simulated replies. Account, appearance, notification and permission samples remain explicitly labelled design states. Voice keeps browser speech input where supported; native Voice currently demonstrates animation without recording.
 
