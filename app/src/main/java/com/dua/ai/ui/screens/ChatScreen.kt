@@ -502,7 +502,7 @@ private fun AttachmentsScreen(onBack: () -> Unit, selected: List<String>, onSele
                 Text(if (selected.isEmpty()) "No files selected" else selected.joinToString("\n"), fontSize = 14.sp)
                 Text(if (loading) "Reading files…" else "3 files · 2 MB total · TXT 64 KB; sent with next message only", color = Muted, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
                 if (selected.isNotEmpty()) TextButton(enabled = !loading, onClick = { onClear(); notice = "" }) { Text("Clear selection") }
-                Text("Camera photos must fit the 2 MB limit. Larger photos can be resized and selected through Photos or Files.", color = Muted, fontSize = 12.sp)
+                Text("Photos up to 10 MiB each are resized when needed. Resized copies become JPEG, at most 2048 px on the longest side, with a white background and the first frame for animation. Originals stay unchanged.", color = Muted, fontSize = 12.sp)
                 if (notice.isNotBlank() || error.isNotBlank()) Text(error.ifBlank { notice }, color = Muted, fontSize = 12.sp)
             }
         }
