@@ -1,6 +1,10 @@
 package com.dua.ai.viewmodel
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
+import com.dua.ai.history.SavedChat
+import com.dua.ai.history.ChatHistoryCodec
+import java.util.UUID
 import androidx.lifecycle.viewModelScope
 import com.dua.ai.model.ChatMessage
 import com.dua.ai.model.ChatSession
@@ -15,7 +19,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-class ChatViewModel : ViewModel() {
+class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val api = DuaApiClient()
     private var generation = 0
     private val _error = MutableStateFlow<String?>(null)
@@ -45,15 +49,60 @@ class ChatViewModel : ViewModel() {
     private val _isDarkTheme = MutableStateFlow(true)
     val isDarkTheme: StateFlow<Boolean> = _isDarkTheme.asStateFlow()
 
-    private val _sessions = MutableStateFlow<List<ChatSession>>(
-        listOf(
-            ChatSession("1", "Building Compose UI for Android", "Coding", "Today"),
-            ChatSession("2", "5 High-Growth Startup Strategies", "Strategy", "Today"),
-            ChatSession("3", "Quantum Computing in 5 Minutes", "Science", "Yesterday"),
-            ChatSession("4", "Kotlin Coroutines vs Flow", "Coding", "Previous 7 Days")
-        )
-    )
-    val sessions: StateFlow<List<ChatSession>> = _sessions.asStateFlow()
+    private val preferences = application.getSharedPreferences("dua_chat_history", 0)
+    private var activeId = UUID.randomUUID().toString()
+    private val _savedChats = MutableStateFlow<List<SavedChat>>(emptyList())
+    val savedChats: StateFlow<List<SavedChat>> = _savedChats.asStateFlow()
+    private val _draft = MutableStateFlow("")
+    val draft: StateFlow<String> = _draft.asStateFlow()
+
+    init {
+        preferences.getString("history", null)?.let { raw ->
+            try {
+                val (id, records) = ChatHistoryCodec.decode(raw)
+                activeId = id
+                _savedChats.value = records
+                records.find { it.id == id }?.let {
+                    _messages.value = it.messages
+                    _selectedModel.value = it.model
+                    _draft.value = it.draft
+                }
+            } catch (_: Exception) {
+                preferences.edit().putString("unreadable_history_backup", raw).apply()
+                _error.value = "Saved chats could not be loaded. Stored data has not been deleted."
+            }
+        }
+    }
+
+    private fun saveHistory() {
+        val others = _savedChats.value.filterNot { it.id == activeId }
+        _savedChats.value = if (_messages.value.isEmpty() && _draft.value.isBlank()) others else
+            listOf(SavedChat(activeId, _selectedModel.value, _draft.value, _messages.value, System.currentTimeMillis())) + others
+        preferences.edit().putString("history", ChatHistoryCodec.encode(_savedChats.value, activeId)).apply()
+    }
+
+    fun updateDraft(value: String) { _draft.value = value; saveHistory() }
+
+    fun openChat(id: String) {
+        val chat = _savedChats.value.find { it.id == id } ?: return
+        cancelReply()
+        activeId = chat.id
+        _messages.value = chat.messages
+        _selectedModel.value = chat.model
+        _draft.value = chat.draft
+        saveHistory()
+    }
+
+    fun deleteChat(id: String) {
+        if (id == activeId) {
+            cancelReply()
+            activeId = UUID.randomUUID().toString()
+            _messages.value = emptyList()
+            _draft.value = ""
+        }
+        _savedChats.value = _savedChats.value.filterNot { it.id == id }
+        saveHistory()
+    }
 
     val promptSuggestions = listOf(
         PromptSuggestion(
@@ -87,7 +136,9 @@ class ChatViewModel : ViewModel() {
     }
 
     fun setModel(model: String) {
+        if (model !in listOf("Dua", "Gemini")) return
         _selectedModel.value = model
+        saveHistory()
     }
 
     /** Cancels the current request without removing the user's sent message. */
@@ -95,31 +146,15 @@ class ChatViewModel : ViewModel() {
         if (!_isTyping.value) return
         cancelReply()
         _error.value = "Response stopped."
+        saveHistory()
     }
 
     fun startNewChat() {
         cancelReply()
+        activeId = UUID.randomUUID().toString()
         _messages.value = emptyList()
-    }
-
-    fun selectSession(session: ChatSession) {
-        cancelReply()
-        _messages.value = listOf(
-            ChatMessage(
-                text = "Show me details about: ${session.title}",
-                isUser = true,
-                model = _selectedModel.value
-            ),
-            ChatMessage(
-                text = "Here is the summary of your previous session on **${session.title}**.\n\nYou explored best architectural practices, modular structures, and performant state hoisting.",
-                isUser = false,
-                model = _selectedModel.value
-            )
-        )
-    }
-
-    fun deleteSession(sessionId: String) {
-        _sessions.value = _sessions.value.filter { it.id != sessionId }
+        _draft.value = ""
+        saveHistory()
     }
 
     fun toggleReaction(messageId: String, isLike: Boolean) {
@@ -154,6 +189,8 @@ class ChatViewModel : ViewModel() {
         val requestHistory = _messages.value.takeLast(38) + userMessage
         val currentGeneration = generation
         _messages.value = _messages.value + userMessage
+        _draft.value = ""
+        saveHistory()
         _isTyping.value = true
         _failedPrompt.value = null
         replyJob = viewModelScope.launch {
@@ -169,6 +206,7 @@ class ChatViewModel : ViewModel() {
             } catch (failure: Exception) {
                 if (generation == currentGeneration) {
                     _messages.value = _messages.value.filterNot { it.id == userMessage.id }
+                    _draft.value = userText
                     _failedPrompt.value = userText
                     _error.value = when (failure) {
                         is DuaApiException, is IllegalArgumentException -> failure.message
@@ -177,7 +215,7 @@ class ChatViewModel : ViewModel() {
                     }
                 }
             } finally {
-                if (generation == currentGeneration) _isTyping.value = false
+                if (generation == currentGeneration) { _isTyping.value = false; saveHistory() }
             }
         }
     }
