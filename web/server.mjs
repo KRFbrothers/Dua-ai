@@ -12,6 +12,11 @@ function json(res, code, data) {
 }
 export function makeServer({ key = process.env.GEMINI_API_KEY, model = process.env.GEMINI_MODEL, fetcher = fetch } = {}) {
   return createServer(async (req, res) => {
+    const controller = new AbortController();
+    const onDisconnect = () => {
+      if (!res.writableEnded) controller.abort();
+    };
+    res.on?.('close', onDisconnect);
     try {
       const url = new URL(req.url, 'http://localhost');
       if (url.pathname === '/api/config' || url.pathname === '/api/chat') {
@@ -25,9 +30,11 @@ export function makeServer({ key = process.env.GEMINI_API_KEY, model = process.e
         const request = new Request('http://' + (req.headers.host || 'localhost') + req.url, {
           method: req.method,
           headers: req.headers,
+          signal: controller.signal,
           ...(!['GET','HEAD'].includes(req.method) ? { body } : {})
         });
         const response = await handleGemini(request, { key, model, fetcher });
+        if (res.destroyed) return;
         res.writeHead(response.status, Object.fromEntries(response.headers));
         return res.end(await response.text());
       }
@@ -42,7 +49,10 @@ export function makeServer({ key = process.env.GEMINI_API_KEY, model = process.e
       res.writeHead(200, { 'Content-Type': types[path.extname(file)], 'Cache-Control': 'no-cache', 'X-Content-Type-Options': 'nosniff' });
       res.end(req.method === 'HEAD' ? undefined : content);
     } catch (error) {
+      if (res.destroyed) return;
       json(res, error.name === 'TimeoutError' ? 504 : 500, { error: 'Connection fail hua. Dobara try karein.' });
+    } finally {
+      res.off?.('close', onDisconnect);
     }
   });
 }

@@ -39,12 +39,13 @@ export async function handleGemini(req, {key, model, fetcher = fetch}) {
     if (!data || typeof data !== 'object' || Array.isArray(data)) return json({ error: 'Invalid request.' }, 400);
     if (!['Dua', 'Gemini'].includes(data.model)) return json({ error: 'Dua ya Gemini select karein.' }, 400);
     if (!Array.isArray(data.messages) || !data.messages.length || data.messages.length > 40 || data.messages.some((m) => !m || typeof m !== 'object' || Array.isArray(m) || !['user', 'model'].includes(m.role) || typeof m.text !== 'string' || !m.text.trim() || (m.role === 'user' && m.text.length > 8000)) || data.messages.at(-1).role !== 'user') return json({ error: 'Invalid messages.' }, 400);
+    req.signal.throwIfAborted();
     const response = await fetcher(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
       method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: 'You are Dua, a helpful AI assistant powered by Gemini. Reply in the language the user uses. Be clear and concise.' }] },
         contents: data.messages.map((m) => ({ role: m.role, parts: [{ text: m.text }] }))
-      }), signal: AbortSignal.timeout(45000)
+      }), signal: AbortSignal.any([req.signal, AbortSignal.timeout(45000)])
     });
     if (!response.ok) {
       const status = response.status;
