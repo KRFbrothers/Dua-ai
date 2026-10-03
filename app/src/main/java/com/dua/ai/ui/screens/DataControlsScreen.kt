@@ -66,7 +66,7 @@ fun DataControlsScreen(viewModel: ChatViewModel, onBack: () -> Unit) {
             Column(Modifier.weight(1f)) { Text("Import chats", fontSize = 16.sp); Text("Restore a Dua JSON export as separate copies", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
         FilledTonalButton(enabled = !busy, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth().heightIn(min = 72.dp),
-            colors = ButtonDefaults.filledTonalButtonColors(containerColor = MaterialTheme.colorScheme.surface, contentColor = androidx.compose.ui.graphics.Color(0xFFFFB1C0)), onClick = { confirm = true }) {
+            colors = ButtonDefaults.filledTonalButtonColors(containerColor = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.error), onClick = { confirm = true }) {
             Icon(Icons.Default.DeleteOutline, null); Spacer(Modifier.width(16.dp))
             Column(Modifier.weight(1f)) { Text("Clear all chats", fontSize = 16.sp); Text("Remove local chats, drafts and pending files", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
