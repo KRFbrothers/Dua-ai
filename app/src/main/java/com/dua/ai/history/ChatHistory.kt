@@ -17,6 +17,19 @@ data class SavedChat(
 }
 
 object ChatHistoryCodec {
+    fun export(chats: List<SavedChat>, exportedAt: Long = System.currentTimeMillis()): String = JSONObject()
+        .put("format", "dua-chat-export").put("version", 1).put("exportedAt", exportedAt)
+        .put("chats", JSONArray().apply {
+            chats.sortedByDescending { it.updatedAt }.forEach { chat ->
+                put(JSONObject().put("id", chat.id).put("model", chat.model).put("draft", chat.draft)
+                    .put("updatedAt", chat.updatedAt).put("messages", JSONArray().apply {
+                        chat.messages.forEach { message -> put(JSONObject()
+                            .put("role", if (message.isUser) "user" else "model")
+                            .put("text", message.text).put("state", "complete")) }
+                    }))
+            }
+        }).toString(2)
+
     fun encode(chats: List<SavedChat>, activeId: String): String = JSONObject()
         .put("activeId", activeId).put("chats", JSONArray().apply {
             chats.forEach { chat -> put(JSONObject().put("id", chat.id).put("model", chat.model)
