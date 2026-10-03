@@ -39,9 +39,9 @@ fun HandsFreeScreen(viewModel: ChatViewModel, onBack: () -> Unit, onChat: () -> 
     val session = remember {
         HandsFreeSession(object : HandsFreeSession.Actions {
             override fun render(value: String) { phase = value }
-            override fun listen() { heardBusy = false; voice.start(); if (!voice.state.value.busy) notice = voice.state.value.status }
+            override fun listen() { heardBusy = true; voice.start(); if (!voice.state.value.busy) notice = voice.state.value.status }
             override fun send(text: String, version: Int) { token = version; thinkingSeen = true; viewModel.sendMessage(text) }
-            override fun speak(text: String) { spoke = false; speaker.toggle("hands-free-reply", text) }
+            override fun speak(text: String) { spoke = true; speaker.toggle("hands-free-reply", text) }
             override fun cancel() { voice.stop(); speaker.stop(); if (viewModel.isTyping.value) viewModel.stopReply() }
             override fun notice(text: String) { notice = text }
         })
@@ -63,24 +63,26 @@ fun HandsFreeScreen(viewModel: ChatViewModel, onBack: () -> Unit, onChat: () -> 
     }
     LaunchedEffect(input) {
         if (session.phase == "listening") {
-            if (input.busy) heardBusy = true
-            else if (heardBusy && input.transcript.isNotBlank() && input.status.startsWith("Review")) session.transcript(input.transcript)
-            else if (heardBusy || !voice.state.value.busy) session.stop(input.status)
+            val current = voice.state.value
+            if (current.busy) heardBusy = true
+            else if (heardBusy && current.transcript.isNotBlank() && current.status.startsWith("Review")) session.transcript(current.transcript)
+            else if (heardBusy || !current.busy) session.stop(current.status)
         }
     }
     LaunchedEffect(typing, messages, error, phase) {
-        if (session.phase == "thinking" && thinkingSeen && !typing) {
+        if (session.phase == "thinking" && thinkingSeen && !viewModel.isTyping.value) {
             thinkingSeen = false
-            val last = messages.lastOrNull()
-            if (error != null) session.stop("Reply failed. Open Chat to review and retry.")
+            val last = viewModel.messages.value.lastOrNull()
+            if (viewModel.error.value != null) session.stop("Reply failed. Open Chat to review and retry.")
             else if (last != null && !last.isUser && last.state == "complete") session.reply(last.text, token)
             else session.stop("Reply unavailable. Open Chat to retry.")
         }
     }
     LaunchedEffect(speech, phase) {
         if (session.phase == "speaking") {
-            if (speech.activeId != null) spoke = true
-            else if (spoke || speech.status.isNotBlank()) { if (speech.status.isNotBlank()) session.stop(speech.status) else session.spoken() }
+            val current = speaker.state.value
+            if (current.activeId != null) spoke = true
+            else if (spoke || current.status.isNotBlank()) { if (current.status.isNotBlank()) session.stop(current.status) else session.spoken() }
         }
     }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
