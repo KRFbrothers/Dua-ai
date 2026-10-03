@@ -1,3 +1,4 @@
+import { attachmentParts, MAX_REQUEST_BYTES } from './attachments.mjs';
 function retrySeconds(response, details) {
   const delays = [];
   const header = response.headers.get('retry-after');
@@ -33,18 +34,22 @@ export async function handleGemini(req, {key, model, fetcher = fetch}) {
   if (!model?.trim()) return json({ error: 'GEMINI_MODEL hosting settings mein set karein.' }, 503);
   try {
     const raw = await req.text();
-    if (new TextEncoder().encode(raw).length > 262144) return json({ error: 'Message history is too large.' }, 413);
+    if (new TextEncoder().encode(raw).length > MAX_REQUEST_BYTES) return json({ error: 'Message history is too large.' }, 413);
     let data;
     try { data = JSON.parse(raw); } catch { return json({ error: 'Invalid request.' }, 400); }
     if (!data || typeof data !== 'object' || Array.isArray(data)) return json({ error: 'Invalid request.' }, 400);
+    if (new TextEncoder().encode(JSON.stringify(data.messages)).length > 262144) return json({error:'Message history is too large.'},413);
     if (!['Dua', 'Gemini'].includes(data.model)) return json({ error: 'Dua ya Gemini select karein.' }, 400);
     if (!Array.isArray(data.messages) || !data.messages.length || data.messages.length > 40 || data.messages.some((m) => !m || typeof m !== 'object' || Array.isArray(m) || !['user', 'model'].includes(m.role) || typeof m.text !== 'string' || !m.text.trim() || (m.role === 'user' && m.text.length > 8000)) || data.messages.at(-1).role !== 'user') return json({ error: 'Invalid messages.' }, 400);
+    let parts;
+    try { parts = attachmentParts(data.attachments); }
+    catch (error) { return json({ error: error.message }, error.status || 400); }
     req.signal.throwIfAborted();
     const response = await fetcher(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
       method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: 'You are Dua, a helpful AI assistant powered by Gemini. Reply in the language the user uses. Be clear and concise.' }] },
-        contents: data.messages.map((m) => ({ role: m.role, parts: [{ text: m.text }] }))
+        contents: data.messages.map((m, index) => ({ role: m.role, parts: [{ text: m.text }, ...(index === data.messages.length - 1 ? parts : [])] }))
       }), signal: AbortSignal.any([req.signal, AbortSignal.timeout(45000)])
     });
     if (!response.ok) {
