@@ -95,9 +95,10 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel()) {
         lifecycle.addObserver(observer)
         onDispose { lifecycle.removeObserver(observer); speaker.close() }
     }
-    fun navigate(next: Screen) { speaker.stop(); screenName = next.name }
+    fun navigate(next: Screen) { if (viewModel.dataBusy.value) return; speaker.stop(); screenName = next.name }
     fun settings() { settingsReturn = screenName; navigate(Screen.Settings) }
     fun back() {
+        if (viewModel.dataBusy.value) return
         picker = false
         navigate(when (screen) {
             Screen.Settings -> Screen.valueOf(settingsReturn)
@@ -311,6 +312,7 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel()) {
                     Screen.Attachments -> AttachmentsScreen(onBack = ::back, selected = attachments.map { it.name },
                         onSelected = viewModel::selectAttachments, onCamera = viewModel::selectCameraFile,
                         onClear = viewModel::clearAttachments, loading = readingFiles, error = fileError)
+                    Screen.DataControls -> DataControlsScreen(viewModel, onBack = ::back)
                     Screen.Voice -> VoiceScreen(onBack = ::back, onSettings = ::settings, draft = draft, onUse = {
                         viewModel.updateDraft(it); navigate(Screen.Chat)
                     })
@@ -661,11 +663,6 @@ private fun SettingsDetail(screen: Screen, onBack: () -> Unit, onOpen: (Screen) 
                 DetailNote("Account integration is pending. Editing this name changes only the preview.")
                 DetailRow("Log out options", Icons.Default.Logout, onClick = { onOpen(Screen.Logout) })
             }
-            Screen.DataControls -> {
-                Text("Chat history", fontSize = 22.sp)
-                DetailRow("Clear all chats", Icons.Default.DeleteOutline, "Remove every conversation from history", onClick = { dialog = "clear" })
-                DetailNote(if (complete) "All chats cleared — preview only. Your actual conversations have not been changed." else "Review the confirmation before clearing your history.")
-            }
             Screen.Permissions -> {
                 DetailRow("Microphone", Icons.Default.Mic, "Voice integration pending", onClick = { onOpen(Screen.VoicePermission) })
                 DetailRow("Camera", Icons.Default.PhotoCamera, "Coming soon", onClick = { dialog = "Camera" })
@@ -747,16 +744,16 @@ private fun SettingsDetail(screen: Screen, onBack: () -> Unit, onOpen: (Screen) 
         Spacer(Modifier.height(16.dp))
     }
     if (dialog.isNotEmpty()) AlertDialog(onDismissRequest = { dialog = "" }, containerColor = Container,
-        title = { Text(when(dialog) { "name" -> "Edit display name"; "clear" -> "Clear all chats?"; "logout" -> "Log out of Dua?"; else -> "$dialog coming soon" }) },
+        title = { Text(when(dialog) { "name" -> "Edit display name"; "logout" -> "Log out of Dua?"; else -> "$dialog coming soon" }) },
         text = {
             if (dialog == "name") OutlinedTextField(value = editedName, onValueChange = { editedName = it.take(80) }, singleLine = true, label = { Text("Display name") })
-            else Text(when(dialog) { "clear" -> "This demonstrates the confirmation flow. Actual conversations will stay unchanged."; "logout" -> "This is a design preview; no account will be signed out."; else -> "This feature and its permission flow will be connected when ready." })
+            else Text(when(dialog) { "logout" -> "This is a design preview; no account will be signed out."; else -> "This feature and its permission flow will be connected when ready." })
         },
         confirmButton = { TextButton(enabled = dialog != "name" || editedName.isNotBlank(), onClick = {
-            if (dialog == "name") name = editedName.trim() else if (dialog == "clear" || dialog == "logout") complete = true
+            if (dialog == "name") name = editedName.trim() else if (dialog == "logout") complete = true
             dialog = ""
-        }) { Text(if (dialog == "name") "Save" else if (dialog == "clear") "Clear all · Preview" else if (dialog == "logout") "Log out · Preview" else "Got it") } },
-        dismissButton = { if (dialog in listOf("name", "clear", "logout")) TextButton(onClick = { dialog = "" }) { Text("Cancel") } })
+        }) { Text(if (dialog == "name") "Save" else if (dialog == "logout") "Log out · Preview" else "Got it") } },
+        dismissButton = { if (dialog in listOf("name", "logout")) TextButton(onClick = { dialog = "" }) { Text("Cancel") } })
 }
 
 @Composable
