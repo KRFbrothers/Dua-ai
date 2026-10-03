@@ -4,7 +4,7 @@ Updated 3 October 2026. Web and Android share the intended product behavior; pla
 
 | Order | Feature | Current state | Remaining work |
 | --- | --- | --- | --- |
-| 1 | Persistent chat history | Implemented: saved chats, search, reopen, draft/model recovery and confirmed deletion on web/Android | Physical Android restart verification; export/delete-all controls; account/cloud sync is separate |
+| 1 | Persistent chat history | Implemented: saved chats, search, reopen, draft/model recovery and confirmed deletion on web/Android | Physical Android restart/file-picker verification; import/restore; account/cloud sync is separate |
 | 2 | Attachment processing | Implemented inline JPEG/PNG/WebP/PDF/TXT input on web and Android, with validation and retry/Stop selection retention | Live Gemini and physical Android verification; larger files, DOCX and durable/provider file storage |
 | 3 | Camera/photos | Web image selection/capture and native full-photo camera output/photo picker feed attachment processing | Physical-device camera/picker verification; image resizing/compression for captures above 2 MiB |
 | 4 | AI voice conversation | Speech-to-draft input and user-triggered reply read aloud on web/Android; native mic permission and playback lifecycle cleanup | Physical speech/TTS/permission verification; hands-free conversational turns, provider-generated audio and interruption |
@@ -17,7 +17,7 @@ Updated 3 October 2026. Web and Android share the intended product behavior; pla
 | 11 | Computer mode/screen sharing/video | Coming soon/design states | Define supported desktop/device capabilities and implement permissions/session lifecycle |
 | 12 | Appearance/font settings | Design samples; launcher uses dark styling | Apply supported choices across screens and persist them consistently |
 | 13 | Notifications | Design sample | Browser/native permission flows, notification delivery and settings |
-| 14 | Data controls/privacy/sharing | Mostly design content; individual local chat deletion now works | Export, delete-all, account deletion, real sharing and retention settings |
+| 14 | Data controls/privacy/sharing | Local JSON export, confirmed delete-all and individual deletion now work on web/Android | Import/restore, account deletion, real sharing and cloud retention settings |
 | 15 | Microphone/camera permissions | Voice requests native microphone permission with denial/settings recovery; camera capture is delegated to the external camera app | Physical permission/recognizer verification; remaining Settings permission samples and other device capabilities |
 | 16 | Usage/account protection | IP burst limit added; endpoints are not authenticated | Account-based access policy and project-wide daily/spend budgeting |
 
@@ -62,3 +62,13 @@ Playback stops on backgrounding/navigation and when a new prompt is submitted. A
 This is device/browser text-to-speech for existing text replies, not a provider audio API or hands-free live conversation. The app stores no audio output; installed/network speech voices may process reply text through their service.
 
 Validation: 67 web tests and 26 Android JVM tests; debug APK assembly. Mobile Chromium with mocked speech output checked explicit playback, Stop, clean saved history and 48px controls at 320px width. Actual speaker output, installed voices/languages and Android audio-focus/background behavior still need physical-device verification.
+
+## Sixth implementation: local data controls
+
+Data controls now exports local chats and unsent drafts as JSON on both platforms, using the same `dua-chat-export` version-1 envelope with exportedAt and chats. Android uses the system CreateDocument picker; web requests a named JSON download. Models, message roles/text and timestamps are retained; no attachment bytes or audio are exported. Import/restore is not implemented yet.
+
+Clear all requires a confirmation. Web removes local records and current-tab pending attachments/voice handoff, keeps an empty history marker to block legacy migration, and increments a storage generation. Existing Chat tabs cancel pending replies/playback and return Home; stale saves cannot restore deleted history. Android cancels pending replies, persists an empty history before updating the visible list, removes the unreadable-history backup, clears the current draft/selection and attempts camera-cache cleanup. Failed storage writes report errors rather than displaying a successful deletion.
+
+This manages only the current browser/device. Previously exported files, other devices, provider-side records and OS backups are outside this control; Android backup policy remains unchanged. Pending attachment/voice session storage in other browser tabs is not globally erased. JSON exports are plain text and include unsent drafts.
+
+Validation: 76 web tests and 28 Android JVM tests passed; debug APK assembled. Mobile Chromium checked generated JSON contents including Hindi/emoji, cancel without deletion, confirmed deletion, empty Home and an open second Chat tab returning Home without resurrecting data. Physical Android document-provider writing, disk-failure recovery and restart after deletion remain unverified.
