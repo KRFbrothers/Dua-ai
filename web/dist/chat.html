@@ -93,8 +93,10 @@ let listening = false;
 let selectedFiles=[];try{const stored=JSON.parse(sessionStorage.getItem('dua-attachments')||'[]');if(Array.isArray(stored))selectedFiles=stored.filter(f=>f&&typeof f.name==='string');}catch{}
 let busy=false;let requestId=0;let controller=null;let pendingBubble=null;let configurationPromise=null;let configured=false;
 const stateKey='dua-chat-v1';
+let historyInvalidated=false;
 function savedMessageText(bubble){return typeof bubble.dataset.messageText==='string'?bubble.dataset.messageText:bubble.textContent;}
 function saveChatState(){
+ if(historyInvalidated)return;
  const snapshot={updatedAt:Date.now(),draft:message.value,model:document.querySelector('.composer').dataset.model||'Dua',messages:Array.from(document.querySelector('.chat-messages').children,b=>({role:b.classList.contains('user')?'user':'model',text:savedMessageText(b),state:b.dataset.state||'complete'}))};
  try{sessionStorage.setItem(stateKey,JSON.stringify(snapshot));DuaHistory.save(snapshot);}catch{document.querySelector('.history-warning').textContent='Chat could not be saved on this device. Storage may be full or unavailable.';}
 }
@@ -240,6 +242,15 @@ try{
  }
 }catch{document.querySelector('.history-warning').textContent='Saved chats could not be loaded. Existing stored data was preserved.';}
 
+window.addEventListener('storage',event=>{
+ if(event.key!==null&&event.key!=='dua-history-v2')return;
+ try{
+  const before=JSON.parse(event.oldValue||'null')?.generation||'legacy';
+  const after=JSON.parse(event.newValue||'null')?.generation||'legacy';
+  if(event.key!==null&&event.newValue!==null&&before===after)return;
+  historyInvalidated=true;reader.stop();if(busy)stopResponse();location.replace('index.html');
+ }catch{}
+});
 document.addEventListener('visibilitychange',()=>{if(document.hidden)reader.stop();});
 const fileCard=document.querySelector('.selected-files'),fileCopy=document.querySelector('.selected-file-copy');
 function showFiles(){fileCard.hidden=!selectedFiles.length;fileCopy.textContent=selectedFiles.map(f=>f.name).join(', ')+' · Ready to send';action.setAttribute('aria-disabled','false');updateAction();}
