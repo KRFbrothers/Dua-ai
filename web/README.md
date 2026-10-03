@@ -10,7 +10,7 @@ This folder contains the browser app created from the supplied references. The n
 4. Deploy from the repository. A drag-and-drop HTML ZIP does not deploy the Gemini functions.
 5. Open `/api/config` on the deployed origin to check configuration. It returns only whether both the key and model are configured, never its value.
 
-Gemini is available through Dua and Gemini in the model picker. Other providers remain unavailable. Voice mode provides browser speech input, not AI audio replies. Camera/screen sharing in voice mode are unavailable. Web search and Memory remain disabled/off and marked Coming soon. JPEG, PNG, WebP, PDF and UTF-8 TXT files can be sent to Gemini with the current message.
+Gemini is available through Dua and Gemini in the model picker. Other providers remain unavailable. Voice mode provides speech input, and completed Chat replies have an explicit Read aloud option using device/browser text-to-speech. Hands-free conversation and provider-generated audio remain pending. Camera/screen sharing in voice mode are unavailable. Web search and Memory remain disabled/off and marked Coming soon. JPEG, PNG, WebP, PDF and UTF-8 TXT files can be sent to Gemini with the current message.
 
 ## Local use
 
@@ -44,4 +44,10 @@ Large files, DOCX, video/audio, durable file storage and provider File API uploa
 
 Tap mic on Voice to recognize speech, edit the completed transcript and choose Use in chat. Both browser and Android append to the existing draft, capped at 8000 characters; Send remains explicit. Recognition never starts a Gemini request. Browser support and device speech services vary; unsupported/denied/service-error states provide retry or typed-chat guidance. Android offers app Settings after permission denial. Stop, backgrounding and exiting release recognition; a session times out after 30 seconds. The device/browser language is used.
 
-The app stores no raw audio. The selected speech service may use network/cloud processing. Only a transcript explicitly moved into Chat becomes part of locally saved drafts/history. AI audio replies remain pending. Browser flow was checked with mocked recognition; real microphone input and physical Android permission/lifecycle behavior still need device verification.
+The app stores no raw audio. The selected speech service may use network/cloud processing. Only a transcript explicitly moved into Chat becomes part of locally saved drafts/history. Hands-free conversation and provider-generated audio remain pending. Browser flow was checked with mocked recognition; real microphone input and physical Android permission/lifecycle behavior still need device verification.
+
+## Reply read aloud
+
+Select Read aloud on a completed AI reply; select it again or use Stop reading to stop. Web and native Android use their installed speech engine/voices in the device/browser language. Playback never starts automatically. Long replies play in bounded Unicode-safe chunks. Navigation, backgrounding and sending a new prompt stop playback. Android also stops on audio-focus loss and releases audio focus at completion. Unsupported/missing speech engines or language data show guidance.
+
+Audio is not stored by the app. Some installed/network speech voices may process the reply text remotely. No Gemini audio endpoint or additional provider key is used. Physical speaker output and native audio focus still need device verification; automated UI checks used mocked speech output.
