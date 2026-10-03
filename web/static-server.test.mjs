@@ -60,7 +60,7 @@ test('Hindi and emoji survive every possible network chunk boundary', async () =
 test('request size limit still rejects oversized bodies before calling provider', async () => {
   let called = false;
   const server = makeServer({ key: 'test-key', model: 'test-model', fetcher: async () => { called = true; } });
-  const response = await request(server, '/api/chat', { method: 'POST', chunks: [Buffer.alloc(262144), Buffer.from('x')] });
+  const response = await request(server, '/api/chat', { method: 'POST', chunks: [Buffer.alloc(3 * 1024 * 1024), Buffer.from('x')] });
   assert.equal(response.status, 413);
   assert.equal(called, false);
 });
