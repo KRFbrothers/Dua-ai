@@ -287,7 +287,7 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel()) {
                     }
                     Screen.Settings -> SettingsScreen(onBack = ::back, haptic = haptic, onHaptic = { haptic = it }, onOpen = { detail(it) })
                     Screen.Attachments -> AttachmentsScreen(onBack = ::back, selected = attachments.map { it.name },
-                        onSelected = viewModel::selectAttachments, onCamera = viewModel::selectCameraImage,
+                        onSelected = viewModel::selectAttachments, onCamera = viewModel::selectCameraFile,
                         onClear = viewModel::clearAttachments, loading = readingFiles, error = fileError)
                     Screen.Voice -> VoiceScreen(onBack = ::back, onSettings = ::settings)
                     else -> key(screen) { SettingsDetail(screen, onBack = ::back, onOpen = { detail(it, screen) }) }
@@ -419,14 +419,22 @@ private fun SettingsScreen(onBack: () -> Unit, haptic: Boolean, onHaptic: (Boole
 
 @Composable
 private fun AttachmentsScreen(onBack: () -> Unit, selected: List<String>, onSelected: (List<android.net.Uri>) -> Unit,
-    onCamera: (android.graphics.Bitmap) -> Unit, onClear: () -> Unit, loading: Boolean, error: String) {
+    onCamera: (java.io.File) -> Unit, onClear: () -> Unit, loading: Boolean, error: String) {
     val context = LocalContext.current
     var notice by rememberSaveable { mutableStateOf("") }
     val files = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         if (uris.isNotEmpty()) onSelected(uris)
     }
-    val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicturePreview()) { bitmap ->
-        if (bitmap != null) onCamera(bitmap)
+    val captures = remember(context) { com.dua.ai.attachments.CameraCaptureStore(context.cacheDir) }
+    var pendingCapture by rememberSaveable { mutableStateOf("") }
+    val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { captured ->
+        val name = pendingCapture
+        pendingCapture = ""
+        if (name.isNotEmpty()) {
+            val file = captures.find(name)
+            if (captured && file.exists() && file.length() > 0) { notice = ""; onCamera(file) }
+            else { captures.discard(name); notice = if (captured) "Camera did not save a photo. Try again." else "Capture cancelled. Previous selection kept." }
+        }
     }
     Box(Modifier.fillMaxWidth().padding(top = 8.dp), contentAlignment = Alignment.Center) {
         Surface(color = Muted.copy(alpha = .6f), shape = RoundedCornerShape(2.dp), modifier = Modifier.size(44.dp, 4.dp)) {}
@@ -437,11 +445,23 @@ private fun AttachmentsScreen(onBack: () -> Unit, selected: List<String>, onSele
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             listOf("Camera" to Icons.Default.PhotoCamera, "Photos" to Icons.Default.Photo, "Files" to Icons.Default.UploadFile).forEach { (title, icon) ->
                 Surface(color = Container, shape = RoundedCornerShape(20.dp), modifier = Modifier.weight(1f)) {
-                    Column(Modifier.fillMaxWidth().heightIn(min = 120.dp).clickable {
+                    Column(Modifier.fillMaxWidth().heightIn(min = 120.dp).clickable(enabled = !loading && pendingCapture.isEmpty()) {
                         try {
-                            when (title) { "Camera" -> camera.launch(null); "Photos" -> files.launch(arrayOf("image/jpeg", "image/png", "image/webp")); else -> files.launch(com.dua.ai.attachments.AttachmentReader.types) }
-                        } catch (_: android.content.ActivityNotFoundException) { notice = "No app available for this action" }
-                          catch (_: SecurityException) { notice = "Camera access is unavailable" }
+                            when (title) { "Camera" -> {
+                                val file = captures.create()
+                                pendingCapture = file.name
+                                camera.launch(androidx.core.content.FileProvider.getUriForFile(context, "${context.packageName}.camera", file))
+                            }; "Photos" -> files.launch(arrayOf("image/jpeg", "image/png", "image/webp")); else -> files.launch(com.dua.ai.attachments.AttachmentReader.types) }
+                        } catch (_: android.content.ActivityNotFoundException) {
+                            if (pendingCapture.isNotEmpty()) captures.discard(pendingCapture)
+                            pendingCapture = ""; notice = "No camera or file app available. Try Photos or Files."
+                        } catch (_: SecurityException) {
+                            if (pendingCapture.isNotEmpty()) captures.discard(pendingCapture)
+                            pendingCapture = ""; notice = "Camera access is unavailable. Try Photos or Files."
+                        } catch (_: java.io.IOException) {
+                            if (pendingCapture.isNotEmpty()) captures.discard(pendingCapture)
+                            pendingCapture = ""; notice = "Camera storage unavailable. Try Photos or Files."
+                        }
                     }.padding(vertical = 16.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                         Surface(color = Highest, shape = CircleShape) {
                             Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) { Icon(icon, null, tint = Muted) }
@@ -455,7 +475,8 @@ private fun AttachmentsScreen(onBack: () -> Unit, selected: List<String>, onSele
             Column(Modifier.padding(16.dp)) {
                 Text(if (selected.isEmpty()) "No files selected" else selected.joinToString("\n"), fontSize = 14.sp)
                 Text(if (loading) "Reading files…" else "3 files · 2 MB total · TXT 64 KB; sent with next message only", color = Muted, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
-                if (selected.isNotEmpty()) TextButton(onClick = { onClear() }) { Text("Clear selection") }
+                if (selected.isNotEmpty()) TextButton(enabled = !loading, onClick = { onClear(); notice = "" }) { Text("Clear selection") }
+                Text("Camera photos must fit the 2 MB limit. Larger photos can be resized and selected through Photos or Files.", color = Muted, fontSize = 12.sp)
                 if (notice.isNotBlank() || error.isNotBlank()) Text(error.ifBlank { notice }, color = Muted, fontSize = 12.sp)
             }
         }
