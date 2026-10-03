@@ -17,7 +17,7 @@
    this.stop();const queue=chunks(text);if(!queue.length){this.state.status='No reply text to read.';this.publish();return;}
    const token=++this.generation;let index=0;
    this.state.activeId=id;this.state.status='Reading reply…';this.publish();
-   const finish=status=>{if(token!==this.generation)return;this.stop();this.state.status=status;this.publish();};
+   const finish=status=>{if(token!==this.generation)return;this.stop(status);};
    const next=()=>{
     if(token!==this.generation)return;
     clearTimeout(this.timer);this.timer=null;
@@ -33,7 +33,7 @@
    };
    next();
   }
-  stop(){this.generation++;clearTimeout(this.timer);this.timer=null;if(this.utterance){this.utterance.onend=this.utterance.onerror=null;}this.utterance=null;try{this.synthesis?.cancel();}catch{}this.state.activeId=null;this.state.status=this.state.available?'':'Read aloud is not supported in this browser.';this.publish();}
+  stop(status){this.generation++;clearTimeout(this.timer);this.timer=null;if(this.utterance){this.utterance.onend=this.utterance.onerror=null;}this.utterance=null;try{this.synthesis?.cancel();}catch{}this.state.activeId=null;this.state.status=status||(this.state.available?'':'Read aloud is not supported in this browser.');this.publish();}
  };
  root.DuaSpeechChunks=chunks;
 })(globalThis);

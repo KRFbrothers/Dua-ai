@@ -30,6 +30,20 @@ import kotlinx.coroutines.launch
 
 class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val api = DuaApiClient()
+    private val localPreferences = com.dua.ai.settings.DevicePreferences(application)
+    val localSettings = localPreferences.state
+    private val _settingsStatus = MutableStateFlow("")
+    val settingsStatus = _settingsStatus.asStateFlow()
+    var foreground = true
+    fun resetSettings() { try { localPreferences.reset(); _settingsStatus.value = "Settings and memories reset." } catch (error: Exception) { _settingsStatus.value = error.message ?: "Reset failed." } }
+    fun settingsNotice(text: String) { _settingsStatus.value = text }
+    fun updateSettings(value: com.dua.ai.settings.LocalPreferences) {
+        try { localPreferences.update(value); _settingsStatus.value = "Saved on this device." }
+        catch (error: Exception) { _settingsStatus.value = error.message ?: "Settings could not be saved." }
+    }
+    fun shareChatText(chat: SavedChat): String = "Dua conversation\n\n" + chat.messages.filter { it.state == "complete" }
+        .joinToString("\n\n") { (if (it.isUser) "You" else "Dua") + ": " + it.text }
+
     private var generation = 0
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
@@ -374,7 +388,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         _failedPrompt.value = null
         replyJob = viewModelScope.launch {
             try {
-                val reply = api.reply(responseModel, requestHistory, files)
+                val reply = api.reply(responseModel, requestHistory, files, com.dua.ai.settings.PreferencesCodec.memoryText(localSettings.value))
                 if (generation == currentGeneration) {
                     clearAttachments()
                     _messages.value = _messages.value + ChatMessage(
@@ -395,7 +409,11 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 }
             } finally {
-                if (generation == currentGeneration) { _isTyping.value = false; saveHistory() }
+                if (generation == currentGeneration) {
+                    _isTyping.value = false; saveHistory()
+                    if (!foreground && _error.value == null && localSettings.value.notifications && _messages.value.lastOrNull()?.isUser == false)
+                        com.dua.ai.settings.LocalReplyNotifications.show(getApplication(), activeId)
+                }
             }
         }
     }

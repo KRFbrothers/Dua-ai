@@ -25,8 +25,9 @@ class DuaApiClient(
     private val baseUrl: String = BuildConfig.DUA_API_BASE_URL,
     private val client: OkHttpClient = sharedClient
 ) {
-    suspend fun reply(model: String, history: List<ChatMessage>, attachments: List<ChatAttachment> = emptyList()): String {
+    suspend fun reply(model: String, history: List<ChatMessage>, attachments: List<ChatAttachment> = emptyList(), memory: String = ""): String {
         require(model in listOf("Dua", "Gemini")) { "Dua ya Gemini select karein." }
+        require(memory.length <= 3000) { "Memory notes are too large." }
         val base = URL(baseUrl.trimEnd('/') + "/")
         require(base.protocol == "https") { "Dua backend ke liye HTTPS URL set karein." }
         val request = withContext(Dispatchers.IO) {
@@ -38,7 +39,7 @@ class DuaApiClient(
         val files = JSONArray().apply { attachments.forEach { file ->
             put(JSONObject().put("name", file.name).put("mimeType", file.mimeType).put("data", file.data))
         } }
-        val body = JSONObject().put("model", model).put("messages", messages).put("attachments", files)
+        val body = JSONObject().put("model", model).put("messages", messages).put("attachments", files).put("memory", memory)
             .toString().toByteArray(Charsets.UTF_8)
         require(body.size <= 3 * 1024 * 1024) { "Conversation too large. New chat shuru karein." }
         Request.Builder().url(URL(base, "api/chat"))

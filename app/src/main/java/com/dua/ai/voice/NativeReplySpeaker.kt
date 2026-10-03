@@ -22,7 +22,7 @@ class NativeReplySpeaker(context: Context) {
     private var focusHeld = false
     private val focus = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
         .setAudioAttributes(attributes).setOnAudioFocusChangeListener({ change ->
-            if (change <= 0) session.stop()
+            if (change <= 0) session.stop("Playback interrupted. Start again.")
         }, handler).build()
     private var timeout: Runnable? = null
     private val mutableState = MutableStateFlow(ReadAloudState())

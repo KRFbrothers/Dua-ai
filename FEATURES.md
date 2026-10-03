@@ -7,18 +7,18 @@ Updated 3 October 2026. Web and Android share the intended product behavior; pla
 | 1 | Persistent chat history | Implemented: saved chats, search, reopen, draft/model recovery and confirmed deletion on web/Android | Physical Android restart/file-picker/import verification; account/cloud sync is separate |
 | 2 | Attachment processing | Implemented inline JPEG/PNG/WebP/PDF/TXT input on web and Android, with validation and retry/Stop selection retention | Live Gemini and physical Android verification; larger documents, DOCX and durable/provider file storage |
 | 3 | Camera/photos | Web image selection/capture and native full-photo camera output/photo picker feed attachment processing | Automatic photo resizing added; physical-device camera/picker, native compression/EXIF and low-memory verification |
-| 4 | AI voice conversation | Speech-to-draft input and user-triggered reply read aloud on web/Android; native mic permission and playback lifecycle cleanup | Physical speech/TTS/permission verification; hands-free conversational turns, provider-generated audio and interruption |
+| 4 | AI voice conversation | Speech-to-draft, explicit reply playback and foreground hands-free turns on web/Android | Physical speech/TTS/permission verification; provider-generated audio, full duplex/barge-in and background sessions |
 | 5 | Account sign-in/profile/logout | Design screens only | Authentication provider, sessions, real profile and logout behavior |
 | 6 | Cloud history sync | Not implemented | Authenticated ownership, backend storage, cross-device sync and conflict handling |
 | 7 | Other AI providers | ChatGPT, Claude, Grok and Kimi remain unavailable | Server-side provider credentials/configuration, routing, errors, quotas and tests |
 | 8 | Web search | Disabled/Coming soon | Search provider, citations and user controls |
-| 9 | Memory | Disabled/Coming soon | Opt-in storage, retrieval, inspect/edit/delete controls and account ownership |
+| 9 | Memory | Opt-in local notes; inspect, edit, delete and include in new prompts on web/Android | Account ownership/cloud sync and automatic memory extraction/retrieval |
 | 10 | Connectors/plugins | Placeholder UI | Integration selection, authorization, actual tools and revocation |
 | 11 | Computer mode/screen sharing/video | Coming soon/design states | Define supported desktop/device capabilities and implement permissions/session lifecycle |
-| 12 | Appearance/font settings | Design samples; launcher uses dark styling | Apply supported choices across screens and persist them consistently |
-| 13 | Notifications | Design sample | Browser/native permission flows, notification delivery and settings |
-| 14 | Data controls/privacy/sharing | Local JSON export/import, confirmed delete-all and individual deletion now work on web/Android | Account deletion, real sharing and cloud retention settings |
-| 15 | Microphone/camera permissions | Voice requests native microphone permission with denial/settings recovery; camera capture is delegated to the external camera app | Physical permission/recognizer verification; remaining Settings permission samples and other device capabilities |
+| 12 | Appearance/font settings | Persisted Dark/Light/System and Default/System/Serif/Monospace; haptic preference | Physical font/language rendering and vibration verification |
+| 13 | Notifications | Opt-in generic local reply notifications, permission flow and test action | Physical delivery/tap verification; server push and durable background processing |
+| 14 | Data controls/privacy/sharing | Local JSON export/import, confirmed delete-all and individual deletion now work on web/Android | Completed-message plain-text sharing added; account deletion and cloud retention still deferred |
+| 15 | Microphone/camera permissions | Voice requests native microphone permission with denial/settings recovery; camera capture is delegated to the external camera app | Settings now shows/requests actual supported permissions; physical verification and new capabilities remain |
 | 16 | Usage/account protection | IP burst limit added; endpoints are not authenticated | Account-based access policy and project-wide daily/spend budgeting |
 
 ## First implementation: local history
@@ -29,7 +29,7 @@ Deleting a chat removes that local record. Clearing browser/app storage also rem
 
 Validation: 43 web tests, including migration/reload/deletion/storage-error coverage; 12 Android JVM tests including history serialization; Android debug APK assembly; mobile Chromium checks with mocked Gemini for multiple chats, draft restore, search and deletion. Physical Android process death/restart and live Gemini were not tested.
 
-Implement the remaining items one at a time with matching web/native behavior. Provider/account integrations require configured server-side services; do not place private provider credentials in the browser or APK.
+Continue planned integrations with matching web/native behavior. The local batch below deliberately defers cloud setup. Provider/account integrations require configured server-side services; do not place private provider credentials in the browser or APK.
 
 ## Second implementation: attachments
 
@@ -92,3 +92,19 @@ Image sources are bounded to 10 MiB each. Resizing rejects invalid or excessive 
 A source exceeding the safety limits, decode/encode failure or a result that cannot fit leaves the previous attachment selection intact. Native camera output cleanup runs after processing success/failure. Selecting newer files still invalidates earlier reads. No automatic message/API request occurs until Send, and Stop/retry behavior is preserved. This does not add HEIC/GIF, larger documents or durable file storage.
 
 Validation: 93 web tests and 38 Android JVM tests plus debug APK assembly. Mobile Chromium selected a 4.5 MB EXIF-rotated JPEG, a 6.5 MB transparent PNG and UTF-8 TXT together. The prepared selection totaled 1,851,571 bytes; camera orientation and a white transparent region were checked from decoded JPEG output. The shared backend accepted the actual converted bytes and forwarded six content parts to a mocked provider; successful sending cleared selection with no overflow/browser errors. Native policy/byte pass-through and camera processing cleanup are covered by JVM tests. Real Android bitmap compression/EXIF, camera/picker behavior, low-memory handling and live Gemini remain unverified on a physical device.
+
+
+## Ninth implementation: local feature batch (cloud setup deferred)
+
+The user selected local features now and cloud setup later. This batch implements six local areas together, without marking every remaining integration complete:
+
+- Persistent appearance: Dark, Light and System themes; Default, System, Serif and Monospace fonts. Settings persist in `dua-preferences-v1` on web and `dua_preferences` on Android. Default/System can look similar. Haptic preference persists and provides supported navigation/action feedback; devices may ignore vibration.
+- Device permissions: browser microphone/camera tests release every acquired track immediately; native microphone permission is real and links to app Settings. Android camera/files remain delegated to camera/photo/document apps. Permission status is refreshed when returning from app Settings.
+- Reply notifications: explicit opt-in and permission, generic content without chat text, test action and conversation tap destination. Only replies completing while the process/page is alive can notify. Android may kill the process and browsers may suspend pages. No server push or background listening is implemented. The browser service worker handles notification clicks only and does not cache app assets.
+- Local memory: off by default, at most ten manually entered notes of 200 UTF-16 code units each; inspect/edit/delete and confirmed delete-all. Enabled notes join the next Gemini request as untrusted preference context. Turning memory off retains notes but excludes them from new requests. No automatic extraction, embeddings or cloud memory exists. Corrupt settings are preserved until an explicit Privacy reset; reset removes settings/notes but keeps chats.
+- Sharing/privacy: review and share/copy completed messages as plain text. Unsent drafts, stopped/pending replies, file bytes and audio are excluded; completed message text can still mention filenames or contain private information. No public hosted link is created. Privacy explains provider and speech-service processing, separate chat/memory controls, local deletion limits and unchanged OS backup policy.
+- Foreground hands-free: Voice offers an explicit Start for a separate conversation, preserving the prior saved draft. Final speech sends automatically, the text reply is read with device TTS, then the next turn listens. Stop/Back/background cancels recognition, the pending request and playback; foreground return never auto-starts. Errors, denied permission, empty speech, recognition timeout and playback failure stop the loop. One stage consumes each callback; stale replies and duplicate speech callbacks cannot restart it. Pending attachments must be sent/removed before starting. Failed prompts stay available for review/retry in Chat. This is device speech recognition plus text Gemini plus TTS, not provider-generated audio or simultaneous listening/speaking.
+
+Cloud/authentication/profile/logout, cross-device chat/memory sync, ChatGPT/Claude/Grok/Kimi routing, web search, connectors/plugins, remote computer/screen/video capabilities and account-level quotas/spend protection remain deferred. Existing unavailable/design states are retained. Local storage is separate on web and Android; matching UI behavior does not synchronize their data. The `/preview/` sandbox remains a design simulation.
+
+Validation: 103 web tests, 43 Android JVM tests and Android debug APK assembly pass. Mobile Chromium at 390 × 844 verified light theme/font persistence across Home, Chat, Settings, Voice and new pages, zero horizontal overflow after fixes, memory included in the mocked Gemini request, sharing review, permission-test track cleanup, and hands-free listening → reply → playback → listening → Stop. Unit integration tests cover Stop with a late provider response, background pause without automatic restart and playback failure without reopening the microphone. Providers/speech/permissions were mocked where needed. Live Gemini, physical Android microphone/audio focus/notifications/pickers, process recreation and actual device delivery still need device verification.

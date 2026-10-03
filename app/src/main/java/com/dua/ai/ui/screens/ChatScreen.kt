@@ -52,19 +52,20 @@ import com.dua.ai.R
 import com.dua.ai.viewmodel.ChatViewModel
 import com.dua.ai.model.MessageReaction
 
-private val Background = Color(0xFF141218)
-private val Container = Color(0xFF211F26)
-private val Highest = Color(0xFF36343B)
-private val Secondary = Color(0xFF4A4458)
-private val Primary = Color(0xFFD0BCFF)
-private val Ink = Color(0xFFE6E0E9)
-private val Muted = Color(0xFFCAC4D0)
-private enum class Screen { Home, Chat, Settings, Attachments, Voice, Profile, DataControls, Permissions, ColorMode, FontStyle, Notifications, Logout, ComputerMode, VoicePermission, VoiceDenied }
+private val Background: Color @Composable get() = MaterialTheme.colorScheme.background
+private val Container: Color @Composable get() = MaterialTheme.colorScheme.surface
+private val Highest: Color @Composable get() = MaterialTheme.colorScheme.surfaceContainerHighest
+private val Secondary: Color @Composable get() = MaterialTheme.colorScheme.secondaryContainer
+private val Primary: Color @Composable get() = MaterialTheme.colorScheme.primary
+private val Ink: Color @Composable get() = MaterialTheme.colorScheme.onSurface
+private val Muted: Color @Composable get() = MaterialTheme.colorScheme.onSurfaceVariant
+private enum class Screen { Home, Chat, Settings, Attachments, Voice, Profile, DataControls, Permissions, ColorMode, FontStyle, Notifications, Logout, ComputerMode, VoicePermission, VoiceDenied, Memory, Sharing, Privacy, HandsFree }
 
 /** Native Compose counterpart of web/dist; no WebView or hosted page dependency. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ChatScreen(viewModel: ChatViewModel = viewModel()) {
+fun ChatScreen(viewModel: ChatViewModel = viewModel(), notificationRoute: Pair<String, String>? = null) {
+    val preferences by viewModel.localSettings.collectAsState()
     var screenName by rememberSaveable { mutableStateOf(Screen.Home.name) }
     var settingsReturn by rememberSaveable { mutableStateOf(Screen.Home.name) }
     val draft by viewModel.draft.collectAsState()
@@ -77,7 +78,7 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel()) {
     val fileError by viewModel.attachmentError.collectAsState()
     var deletingId by remember { mutableStateOf<String?>(null) }
     var attachmentNotice by rememberSaveable { mutableStateOf("") }
-    var haptic by rememberSaveable { mutableStateOf(false) }
+    val haptic = preferences.haptic
     val screen = Screen.valueOf(screenName)
     val messages by viewModel.messages.collectAsState()
     val typing by viewModel.isTyping.collectAsState()
@@ -90,21 +91,25 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel()) {
     val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
     DisposableEffect(speaker, lifecycle) {
         val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
-            if (event == androidx.lifecycle.Lifecycle.Event.ON_STOP) speaker.stop()
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_STOP) { speaker.stop(); viewModel.foreground = false }
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_START) viewModel.foreground = true
         }
         lifecycle.addObserver(observer)
         onDispose { lifecycle.removeObserver(observer); speaker.close() }
     }
-    fun navigate(next: Screen) { if (viewModel.dataBusy.value) return; speaker.stop(); screenName = next.name }
+    val touchFeedback = LocalHapticFeedback.current
+    fun pulse() { if (preferences.haptic) touchFeedback.performHapticFeedback(HapticFeedbackType.LongPress) }
+    fun navigate(next: Screen) { if (viewModel.dataBusy.value) return; pulse(); speaker.stop(); screenName = next.name }
     fun settings() { settingsReturn = screenName; navigate(Screen.Settings) }
     fun back() {
         if (viewModel.dataBusy.value) return
         picker = false
         navigate(when (screen) {
             Screen.Settings -> Screen.valueOf(settingsReturn)
+            Screen.HandsFree -> Screen.Voice
             Screen.Attachments, Screen.Voice -> Screen.Chat
             Screen.Profile, Screen.DataControls, Screen.Permissions, Screen.ColorMode,
-            Screen.FontStyle, Screen.Notifications, Screen.Logout, Screen.ComputerMode, Screen.VoicePermission, Screen.VoiceDenied -> {
+            Screen.Memory, Screen.Sharing, Screen.Privacy, Screen.FontStyle, Screen.Notifications, Screen.Logout, Screen.ComputerMode, Screen.VoicePermission, Screen.VoiceDenied -> {
                 val previous = detailHistory.lastOrNull() ?: Screen.Settings.name
                 detailHistory = ArrayList(detailHistory.dropLast(1))
                 Screen.valueOf(previous)
@@ -117,7 +122,7 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel()) {
         navigate(next)
     }
     fun send() {
-        speaker.stop()
+        pulse(); speaker.stop()
         if ((draft.isNotBlank() || attachments.isNotEmpty()) && !typing && !readingFiles) viewModel.sendMessage(draft)
     }
     BackHandler(enabled = picker || screen != Screen.Home) {
@@ -129,12 +134,10 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel()) {
     LaunchedEffect(failedPrompt) {
         failedPrompt?.let { viewModel.consumeFailedPrompt() }
     }
-    MaterialTheme(colorScheme = darkColorScheme(
-        primary = Primary, onPrimary = Color(0xFF381E72),
-        secondaryContainer = Secondary, onSecondaryContainer = Color(0xFFE8DEF8),
-        background = Background, surface = Container, onSurface = Ink,
-        onBackground = Ink, onSurfaceVariant = Muted, outline = Color(0xFF938F99)
-    )) {
+    LaunchedEffect(notificationRoute) { notificationRoute?.second?.let { id ->
+        if (savedChats.any { it.id == id }) { viewModel.openChat(id); navigate(Screen.Chat) }
+    } }
+    com.dua.ai.settings.LocalAppearance(preferences) {
         deletingId?.let { id ->
             AlertDialog(onDismissRequest = { deletingId = null }, title = { Text("Delete chat?") },
                 text = { Text("Delete this chat from this device?") },
@@ -275,7 +278,7 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel()) {
                             Column(Modifier.padding(if (compact) 12.dp else 20.dp)) {
                                 BasicTextField(
                                     value = draft, onValueChange = viewModel::updateDraft, enabled = !typing,
-                                    textStyle = MaterialTheme.typography.bodyLarge.copy(color = Ink, fontSize = 20.sp, lineHeight = 28.sp),
+                                    textStyle = MaterialTheme.typography.bodyLarge.copy(color = Ink, fontSize = 20.sp, lineHeight = 28.sp, fontFamily = MaterialTheme.typography.bodyLarge.fontFamily),
                                     cursorBrush = SolidColor(Primary), maxLines = if (compact) 2 else 4,
                                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                                     keyboardActions = KeyboardActions(onSend = { send() }),
@@ -298,9 +301,9 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel()) {
                                             when { typing -> viewModel.stopReply(); draft.isBlank() && attachments.isEmpty() -> navigate(Screen.Voice); else -> send() }
                                         }, modifier = Modifier.size(48.dp)) {
                                             when {
-                                                typing -> Icon(Icons.Default.Stop, "Stop response", tint = Color(0xFF381E72))
+                                                typing -> Icon(Icons.Default.Stop, "Stop response", tint = MaterialTheme.colorScheme.onPrimary)
                                                 draft.isBlank() && attachments.isEmpty() -> Cube(Modifier.size(34.dp).semantics { contentDescription = "Start voice mode" })
-                                                else -> Icon(Icons.Default.ArrowUpward, "Send message", tint = Color(0xFF381E72))
+                                                else -> Icon(Icons.Default.ArrowUpward, "Send message", tint = MaterialTheme.colorScheme.onPrimary)
                                             }
                                         }
                                     }
@@ -308,14 +311,16 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel()) {
                             }
                         }
                     }
-                    Screen.Settings -> SettingsScreen(onBack = ::back, haptic = haptic, onHaptic = { haptic = it }, onOpen = { detail(it) })
+                    Screen.Settings -> SettingsScreen(onBack = ::back, haptic = haptic, onHaptic = { viewModel.updateSettings(preferences.copy(haptic = it)) }, onOpen = { detail(it) }, preferences = preferences)
                     Screen.Attachments -> AttachmentsScreen(onBack = ::back, selected = attachments.map { it.name },
                         onSelected = viewModel::selectAttachments, onCamera = viewModel::selectCameraFile,
                         onClear = viewModel::clearAttachments, loading = readingFiles, error = fileError)
                     Screen.DataControls -> DataControlsScreen(viewModel, onBack = ::back)
-                    Screen.Voice -> VoiceScreen(onBack = ::back, onSettings = ::settings, draft = draft, onUse = {
+                    Screen.HandsFree -> HandsFreeScreen(viewModel, onBack = ::back, onChat = { navigate(Screen.Chat) })
+                    Screen.Voice -> VoiceScreen(onHandsFree = { navigate(Screen.HandsFree) }, onBack = ::back, onSettings = ::settings, draft = draft, onUse = {
                         viewModel.updateDraft(it); navigate(Screen.Chat)
                     })
+                    Screen.ColorMode, Screen.FontStyle, Screen.Permissions, Screen.Notifications, Screen.Memory, Screen.Sharing, Screen.Privacy -> DeviceSettingsScreen(viewModel, screen.name, onBack = ::back, onPage = { detail(Screen.valueOf(it), screen) }, onAttachments = { navigate(Screen.Attachments) })
                     else -> key(screen) { SettingsDetail(screen, onBack = ::back, onOpen = { detail(it, screen) }) }
                 }
                 }
@@ -362,6 +367,7 @@ private fun RoundAction(icon: ImageVector, label: String, modifier: Modifier = M
 
 @Composable
 private fun Cube(modifier: Modifier = Modifier) {
+    val stroke = Muted
     Canvas(modifier) {
         val w = size.width; val h = size.height
         val top = Offset(w * .5f, h * .08f); val left = Offset(w * .1f, h * .3f)
@@ -369,7 +375,7 @@ private fun Cube(modifier: Modifier = Modifier) {
         val bottom = Offset(w * .5f, h * .94f)
         fun face(a: Offset, b: Offset, c: Offset, d: Offset, fill: Color) {
             val path = Path().apply { moveTo(a.x,a.y); lineTo(b.x,b.y); lineTo(c.x,c.y); lineTo(d.x,d.y); close() }
-            drawPath(path, fill); drawPath(path, Muted, style = Stroke(width = 1.dp.toPx()))
+            drawPath(path, fill); drawPath(path, stroke, style = Stroke(width = 1.dp.toPx()))
         }
         face(top, right, center, left, Color(0xFF626066))
         face(left, center, bottom, Offset(w * .1f,h * .72f), Color(0xFF333137))
@@ -389,15 +395,15 @@ private fun PageHeader(title: String, back: () -> Unit, close: Boolean = false, 
 }
 
 @Composable
-private fun SettingsScreen(onBack: () -> Unit, haptic: Boolean, onHaptic: (Boolean) -> Unit, onOpen: (Screen) -> Unit) {
+private fun SettingsScreen(onBack: () -> Unit, haptic: Boolean, onHaptic: (Boolean) -> Unit, onOpen: (Screen) -> Unit, preferences: com.dua.ai.settings.LocalPreferences) {
     PageHeader("Settings", onBack, info = true)
     val feedback = LocalHapticFeedback.current
     val destinations = mapOf("Profile" to Screen.Profile, "Computer mode" to Screen.ComputerMode,
         "Data controls" to Screen.DataControls, "Permissions" to Screen.Permissions,
         "Color mode" to Screen.ColorMode, "Font style" to Screen.FontStyle,
-        "Notifications" to Screen.Notifications, "Log out" to Screen.Logout)
+        "Notifications" to Screen.Notifications, "Memory" to Screen.Memory, "Privacy" to Screen.Privacy, "Sharing" to Screen.Sharing, "Voice" to Screen.Voice, "Log out" to Screen.Logout)
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp)) {
-        listOf(listOf("Profile", "Computer mode"), listOf("Data controls"),
+        listOf(listOf("Profile", "Computer mode"), listOf("Data controls", "Memory"),
             listOf("Capabilities", "Plugins", "Permissions"), listOf("Color mode", "Font style", "Voice"),
             listOf("Haptic feedback", "Notifications", "Privacy", "Sharing"), listOf("Log out")).forEach { group ->
             Surface(color = Container, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
@@ -425,8 +431,8 @@ private fun SettingsScreen(onBack: () -> Unit, haptic: Boolean, onHaptic: (Boole
                             Column(Modifier.weight(1f).padding(start = 16.dp)) {
                                 Text(title, fontSize = 16.sp, color = if (title == "Log out") Color(0xFFFFB1C0) else Ink)
                                 val subtitle = when (title) {
-                                    "Color mode" -> "Dark"; "Font style" -> "Default"; "Profile" -> "Dua AI account"
-                                    "Computer mode", "Capabilities", "Plugins", "Voice" -> "Coming soon"
+                                    "Color mode" -> preferences.theme.replaceFirstChar { it.uppercase() }; "Font style" -> preferences.font.replaceFirstChar { it.uppercase() }; "Profile" -> "Dua AI account"
+                                    "Computer mode", "Capabilities", "Plugins" -> "Coming soon"; "Voice" -> "Speech and read aloud"; "Memory" -> if (preferences.memoryEnabled) "Enabled locally" else "Local · Off"
                                     else -> null
                                 }
                                 subtitle?.let { Text(it, color = Muted, fontSize = 14.sp, lineHeight = 20.sp) }
@@ -524,7 +530,7 @@ private fun AttachmentsScreen(onBack: () -> Unit, selected: List<String>, onSele
 }
 
 @Composable
-private fun VoiceScreen(onBack: () -> Unit, onSettings: () -> Unit, draft: String, onUse: (String) -> Unit) {
+private fun VoiceScreen(onHandsFree: () -> Unit, onBack: () -> Unit, onSettings: () -> Unit, draft: String, onUse: (String) -> Unit) {
     val context = LocalContext.current
     var more by remember { mutableStateOf(false) }
     var reaction by rememberSaveable { mutableStateOf(0) }
@@ -569,6 +575,7 @@ private fun VoiceScreen(onBack: () -> Unit, onSettings: () -> Unit, draft: Strin
                     }
                 }
             }
+            TextButton(onClick = onHandsFree) { Text("Hands-free conversation") }
             Text("Voice input · Send and hear replies in Chat", color = Muted, fontSize = 12.sp,
                 modifier = Modifier.padding(top = if (short) 8.dp else 12.dp).align(Alignment.CenterHorizontally))
             Box(Modifier.fillMaxWidth().height(28.dp), contentAlignment = Alignment.Center) {

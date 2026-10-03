@@ -60,14 +60,13 @@ class ReadAloudSession(private val output: SpeechOutput, private val changed: (R
     fun completed(id: String) { if (id == utterance && state.activeId != null) next() }
     fun failed(id: String) {
         if (id != utterance || state.activeId == null) return
-        stop()
-        publish(state.copy(status = "Read aloud failed. Tap the reply speaker to retry."))
+        stop("Read aloud failed. Tap the reply speaker to retry.")
     }
-    fun stop() {
+    fun stop(reason: String = "") {
         generation++
         utterance = null
         queue = emptyList()
         output.stop()
-        if (state.activeId != null) publish(state.copy(activeId = null, status = ""))
+        if (state.activeId != null) publish(state.copy(activeId = null, status = reason))
     }
 }
