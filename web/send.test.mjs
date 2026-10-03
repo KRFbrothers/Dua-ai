@@ -22,6 +22,7 @@ function setup({deferChat=false,replyError=false}={}) {
   document:{querySelector:s=>elements[s]||(elements[s]=node()),createElement:node,addEventListener(){},documentElement:node()},
   location:{protocol:'https:',search:'',pathname:'/chat.html'},
   window:{addEventListener(){},history:{replaceState(){}}},URLSearchParams,AbortController,
+  DuaHistory:{save(){},load(){return null},newChat(){}},
   sessionStorage:{getItem:k=>storage.get(k)||null,setItem:(k,v)=>storage.set(k,v),removeItem:k=>storage.delete(k)},
   fetch:async (url,options)=>{
    if(url==='/api/config')return new Promise(resolve=>configuration.push(configured=>resolve({ok:true,json:async()=>({geminiConfigured:configured})})));
