@@ -65,7 +65,7 @@ Validation: 67 web tests and 26 Android JVM tests; debug APK assembly. Mobile Ch
 
 ## Sixth implementation: local data controls
 
-Data controls now exports local chats and unsent drafts as JSON on both platforms, using the same `dua-chat-export` version-1 envelope with exportedAt and chats. Android uses the system CreateDocument picker; web requests a named JSON download. Models, message roles/text and timestamps are retained; no attachment bytes or audio are exported. Import/restore is not implemented yet.
+Data controls now exports local chats and unsent drafts as JSON on both platforms, using the same `dua-chat-export` version-1 envelope with exportedAt and chats. Android uses the system CreateDocument picker; web requests a named JSON download. Models, message roles/text and timestamps are retained; no attachment bytes or audio are exported. Version-1 import/restore is described below.
 
 Clear all requires a confirmation. Web removes local records and current-tab pending attachments/voice handoff, keeps an empty history marker to block legacy migration, and increments a storage generation. Existing Chat tabs cancel pending replies/playback and return Home; stale saves cannot restore deleted history. Android cancels pending replies, persists an empty history before updating the visible list, removes the unreadable-history backup, clears the current draft/selection and attempts camera-cache cleanup. Failed storage writes report errors rather than displaying a successful deletion.
 
@@ -75,6 +75,16 @@ Validation: 76 web tests and 28 Android JVM tests passed; debug APK assembled. M
 
 ## Local data controls
 
-Settings → Data controls offers Export chats and confirmed Clear all on web and Android. Exports use the shared `dua-chat-export` version-1 JSON envelope and include messages, models, timestamps and unsent drafts without attachment bytes/audio. Web requests a dated JSON download; Android uses the system file picker. Import/restore remains pending.
+Settings → Data controls offers Export chats and confirmed Clear all on web and Android. Exports use the shared `dua-chat-export` version-1 JSON envelope and include messages, models, timestamps and unsent drafts without attachment bytes/audio. Web requests a dated JSON download; Android uses the system file picker. Version-1 import/restore is described below.
 
 Clear all deletes local history and the current session's draft/selected files. Open browser Chat tabs stop pending work and return Home; a storage-generation check blocks stale tabs from re-saving deleted history. Other devices, previously exported files, provider records and OS backups are unaffected. Other tabs' temporary file/voice selections are not globally erased. Android removes its unreadable-history backup and attempts camera-cache cleanup. Native file-picker and restart/disk-failure behavior still need physical-device verification.
+
+### Import local chats
+
+Data controls → Import chats accepts a `dua-chat-export` version-1 UTF-8 JSON file. The file is checked before showing its chat count and an explicit confirmation. Import adds separate copies with new local IDs, retaining existing chats and drafts; repeated imports create additional copies. The selected chat and pending attachment selections are preserved. Cancel or invalid data leaves history unchanged. No Gemini request or automatic Send occurs.
+
+Limits are 4 MiB/file, 100 chats/file, 500 messages/chat, draft length 8000 UTF-16 code units, message length 1,048,576 code units and nesting depth 64. Required schema, supported model/role/state, non-negative safe-integer timestamps and unique source IDs are validated. Unknown fields are ignored. Empty exports do nothing. Oversized exports are not truncated; exports above these limits require reduction before import. Imported attachment bytes/audio are unavailable. Stored and displayed message text remains plain text, including markup-like strings.
+
+Web validates bounded UTF-8 bytes, re-reads history when confirming, and adds copies with one atomic write while preserving active ID and generation. Other open tabs retain their chats and future saves preserve imported copies. Android uses OpenDocument and a bounded background stream reader, then commits merged history before changing its list. Failed storage writes retain the review for retry. Imported stopped responses stay stopped, are not read aloud and are excluded from request history on both clients.
+
+Validation: 84 web tests, 32 native JVM tests and APK assembly; mobile browser checks with a Hindi/emoji fixture cover confirmation/cancel, invalid input, preservation of an existing draft and reopening the imported chat. Android physical document-provider I/O, disk failure and restart are still pending.
