@@ -22,9 +22,9 @@ class CameraCaptureStoreTest {
         assertFalse(file.exists())
     }
 
-    @Test fun oversizeAndEmptyCapturesAreRejectedAndCleaned() {
+    @Test fun OverSourceLimitAndEmptyCapturesAreRejectedAndCleaned() {
         val store = CameraCaptureStore(temporary.root)
-        for (size in listOf(0, AttachmentReader.MAX_BYTES + 1)) {
+        for (size in listOf(0, PhotoPolicy.MAX_SOURCE_BYTES + 1)) {
             val file = store.create()
             file.writeBytes(ByteArray(size))
             assertThrows(IllegalArgumentException::class.java) { store.read(file) }
@@ -42,6 +42,20 @@ class CameraCaptureStoreTest {
         val fresh = store.create()
         assertFalse(abandoned.exists())
         assertTrue(fresh.exists())
+    }
+
+    @Test fun preparationProcessorReceivesFullCaptureAndCleanupRunsAfterSuccessOrFailure() {
+        val store = CameraCaptureStore(temporary.root)
+        val capture = store.create().apply { writeBytes(ByteArray(AttachmentReader.MAX_BYTES + 1) { 1 }) }
+        val prepared = store.read(capture) { name, mime, input ->
+            val source = PhotoPolicy.readSource(name, mime, input)
+            assertEquals(AttachmentReader.MAX_BYTES + 1, source.bytes.size)
+            ChatAttachment("Camera-resized.jpg", "image/jpeg", "prepared")
+        }
+        assertEquals("Camera-resized.jpg", prepared.name); assertFalse(capture.exists())
+        val failed = store.create().apply { writeBytes(byteArrayOf(1)) }
+        assertThrows(IllegalArgumentException::class.java) { store.read(failed) { _, _, _ -> throw IllegalArgumentException("Cannot resize") } }
+        assertFalse(failed.exists())
     }
 
     @Test fun namesCannotEscapeCameraDirectory() {
