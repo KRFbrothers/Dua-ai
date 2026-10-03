@@ -1,6 +1,7 @@
 (function (root) {
   const key = 'dua-history-v2';
   let active = null;
+  let observedGeneration = null;
   const id = () => root.crypto?.randomUUID?.() || Date.now().toString(36) + Math.random().toString(36).slice(2);
   const normalize = chat => ({
     id: chat.id, updatedAt: Number(chat.updatedAt) || Date.now(),
@@ -11,10 +12,10 @@
   });
   function read() {
     const raw = root.localStorage.getItem(key);
-    if (!raw) return {activeId:null, chats:[]};
+    if (!raw) return {activeId:null, chats:[], generation:"legacy"};
     const data = JSON.parse(raw);
     if (!data || !Array.isArray(data.chats)) throw new Error('Saved chat data could not be loaded.');
-    return {activeId:data.activeId, chats:data.chats.filter(c => c && typeof c.id === 'string').map(normalize)};
+    return {generation:typeof data.generation==='string'?data.generation:"legacy", activeId:data.activeId, chats:data.chats.filter(c => c && typeof c.id === 'string').map(normalize)};
   }
   function write(data) { root.localStorage.setItem(key, JSON.stringify(data)); }
   function migrate() {
@@ -28,18 +29,32 @@
   root.DuaHistory = {
     list() { migrate(); return read().chats.sort((a,b) => b.updatedAt-a.updatedAt); },
     load(chatId) {
-      migrate(); const data = read(); active = chatId || data.activeId || id();
+      migrate(); const data = read(); observedGeneration=data.generation; active = chatId || data.activeId || id();
       const chat = data.chats.find(c => c.id === active);
       if (chatId && !chat) active = id();
       return chat || null;
     },
-    newChat() { migrate(); active = id(); const data=read(); data.activeId=active; write(data); },
+    newChat() { migrate(); active = id(); const data=read(); observedGeneration=data.generation; data.activeId=active; write(data); },
     save(snapshot) {
-      const data=read(); active ||= data.activeId || id();
+      const data=read();
+      if(observedGeneration!==null && observedGeneration!==data.generation) throw new Error('Chat history was cleared in another tab. Reload before saving.');
+      observedGeneration=data.generation; active ||= data.activeId || id();
       const chat=normalize({...snapshot,id:active,updatedAt:Date.now()});
       const chats=data.chats.filter(c=>c.id!==active);
       if(chat.messages.length || chat.draft.trim()) chats.unshift(chat);
-      write({activeId:active,chats}); return active;
+      write({activeId:active,chats,generation:data.generation}); return active;
+    },
+    exportJson() {
+      migrate(); const data=read();
+      return JSON.stringify({format:'dua-chat-export',version:1,exportedAt:Date.now(),chats:data.chats.sort((a,b)=>b.updatedAt-a.updatedAt)},null,2);
+    },
+    clearAll() {
+      const generation=id();
+      write({activeId:null,chats:[],generation});
+      active=null;observedGeneration=generation;
+      let cleanupFailed=false;
+      for(const key of ['dua-chat-v1','dua-attachments','dua-voice-draft'])try{root.sessionStorage.removeItem(key);}catch{cleanupFailed=true;}
+      if(cleanupFailed)throw new Error('Chats deleted; temporary selections could not be cleared.');
     },
     remove(chatId) {
       const data=read(); data.chats=data.chats.filter(c=>c.id!==chatId);
