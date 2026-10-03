@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { handleGemini } from './gemini.mjs';
 
-const root = fileURLToPath(new URL('./dist/', import.meta.url));
+const root = path.resolve(fileURLToPath(new URL('./dist/', import.meta.url)));
 const types = { '.html': 'text/html; charset=utf-8', '.png': 'image/png', '.svg': 'image/svg+xml', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8' };
 function json(res, code, data) {
   res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
@@ -15,12 +15,13 @@ export function makeServer({ key = process.env.GEMINI_API_KEY, model = process.e
     try {
       const url = new URL(req.url, 'http://localhost');
       if (url.pathname === '/api/config' || url.pathname === '/api/chat') {
-        let body = ''; let size = 0;
+        const chunks = []; let size = 0;
         for await (const chunk of req) {
           size += chunk.length;
           if (size > 262144) return json(res, 413, { error: 'Message history is too large.' });
-          body += chunk.toString();
+          chunks.push(chunk);
         }
+        const body = Buffer.concat(chunks).toString('utf8');
         const request = new Request('http://' + (req.headers.host || 'localhost') + req.url, {
           method: req.method,
           headers: req.headers,
@@ -32,7 +33,8 @@ export function makeServer({ key = process.env.GEMINI_API_KEY, model = process.e
       }
       if (url.pathname.startsWith('/api/')) return json(res, 404, { error: 'Not found.' });
       if (!['GET','HEAD'].includes(req.method)) return json(res, 405, { error: 'Method not allowed.' });
-      const name = decodeURIComponent(url.pathname === '/' ? '/index.html' : url.pathname);
+      const pathname = decodeURIComponent(url.pathname);
+      const name = pathname.endsWith('/') ? pathname + 'index.html' : pathname;
       const file = path.resolve(root, '.' + name);
       if (!file.startsWith(root + path.sep) || !types[path.extname(file)]) return json(res, 404, { error: 'Not found.' });
       let content;
