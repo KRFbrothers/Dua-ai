@@ -1,6 +1,7 @@
 package com.dua.ai.network
 
 import com.dua.ai.model.ChatMessage
+import com.dua.ai.attachments.ChatAttachment
 import kotlinx.coroutines.*
 import okhttp3.OkHttpClient
 import okhttp3.Call
@@ -92,6 +93,15 @@ class DuaApiClientTest {
         assertEquals("Gemini", json.getString("model"))
         assertEquals("Hi", json.getJSONArray("messages").getJSONObject(0).getString("text"))
         assertNull(request.getHeader("Authorization"))
+    }
+
+    @Test fun fileContentIsIncludedInRequest() = runBlocking {
+        server.enqueue(response("{\"text\":\"Read file\"}"))
+        assertEquals("Read file", api.reply("Dua", history, listOf(ChatAttachment("notes.txt", "text/plain", "aGk="))))
+        val json = JSONObject(server.takeRequest(3, TimeUnit.SECONDS)!!.body.readUtf8())
+        val file = json.getJSONArray("attachments").getJSONObject(0)
+        assertEquals("aGk=", file.getString("data"))
+        assertEquals("text/plain", file.getString("mimeType"))
     }
 
     @Test fun serverErrorIsPreserved() = runBlocking {
