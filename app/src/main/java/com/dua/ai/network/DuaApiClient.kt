@@ -2,7 +2,10 @@ package com.dua.ai.network
 
 import com.dua.ai.BuildConfig
 import com.dua.ai.model.ChatMessage
+import com.dua.ai.attachments.ChatAttachment
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.OkHttpClient
@@ -22,20 +25,27 @@ class DuaApiClient(
     private val baseUrl: String = BuildConfig.DUA_API_BASE_URL,
     private val client: OkHttpClient = sharedClient
 ) {
-    suspend fun reply(model: String, history: List<ChatMessage>): String {
+    suspend fun reply(model: String, history: List<ChatMessage>, attachments: List<ChatAttachment> = emptyList()): String {
         require(model in listOf("Dua", "Gemini")) { "Dua ya Gemini select karein." }
         val base = URL(baseUrl.trimEnd('/') + "/")
         require(base.protocol == "https") { "Dua backend ke liye HTTPS URL set karein." }
+        val request = withContext(Dispatchers.IO) {
         val messages = JSONArray()
         history.takeLast(39).forEach { message ->
             messages.put(JSONObject().put("role", if (message.isUser) "user" else "model").put("text", message.text))
         }
-        val body = JSONObject().put("model", model).put("messages", messages).toString().toByteArray(Charsets.UTF_8)
-        require(body.size <= 262144) { "Conversation too large. New chat shuru karein." }
-        val request = Request.Builder().url(URL(base, "api/chat"))
+        require(messages.toString().toByteArray(Charsets.UTF_8).size <= 262144) { "Conversation too large. New chat shuru karein." }
+        val files = JSONArray().apply { attachments.forEach { file ->
+            put(JSONObject().put("name", file.name).put("mimeType", file.mimeType).put("data", file.data))
+        } }
+        val body = JSONObject().put("model", model).put("messages", messages).put("attachments", files)
+            .toString().toByteArray(Charsets.UTF_8)
+        require(body.size <= 3 * 1024 * 1024) { "Conversation too large. New chat shuru karein." }
+        Request.Builder().url(URL(base, "api/chat"))
             .header("Accept", "application/json")
             .post(body.toRequestBody("application/json; charset=utf-8".toMediaType()))
             .build()
+        }
         return suspendCancellableCoroutine { continuation ->
             val call = client.newCall(request)
             // Cancels the socket even while waiting for headers or reading the body.

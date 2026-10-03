@@ -72,7 +72,9 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel()) {
     val model by viewModel.selectedModel.collectAsState()
     var picker by rememberSaveable { mutableStateOf(false) }
     var detailHistory by rememberSaveable { mutableStateOf(arrayListOf<String>()) }
-    var attachments by rememberSaveable { mutableStateOf(arrayListOf<String>()) }
+    val attachments by viewModel.attachments.collectAsState()
+    val readingFiles by viewModel.readingFiles.collectAsState()
+    val fileError by viewModel.attachmentError.collectAsState()
     var deletingId by remember { mutableStateOf<String?>(null) }
     var attachmentNotice by rememberSaveable { mutableStateOf("") }
     var haptic by rememberSaveable { mutableStateOf(false) }
@@ -104,13 +106,7 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel()) {
         navigate(next)
     }
     fun send() {
-        if (attachments.isNotEmpty()) {
-            attachmentNotice = "Attachment upload is coming soon. Remove selected files to send text."
-            return
-        }
-        if (draft.isNotBlank() && !typing) {
-            viewModel.sendMessage(draft)
-        }
+        if ((draft.isNotBlank() || attachments.isNotEmpty()) && !typing && !readingFiles) viewModel.sendMessage(draft)
     }
     BackHandler(enabled = picker || screen != Screen.Home) {
         if (picker) picker = false else back()
@@ -148,7 +144,7 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel()) {
                             RoundAction(Icons.Default.Search, "Search chats", onClick = { searchVisible = !searchVisible })
                             Spacer(Modifier.width(12.dp))
                             RoundAction(Icons.Default.Add, "New chat", enabled = !typing, onClick = {
-                                viewModel.startNewChat(); attachments = arrayListOf(); attachmentNotice = ""; navigate(Screen.Chat)
+                                viewModel.startNewChat(); viewModel.clearAttachments(); attachmentNotice = ""; navigate(Screen.Chat)
                             })
                         }
                         if (searchVisible) OutlinedTextField(
@@ -161,7 +157,7 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel()) {
                             LazyColumn(Modifier.weight(1f).fillMaxWidth()) {
                                 items(filtered, key = { it.id }) { chat ->
                                     Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp)
-                                        .clickable { viewModel.openChat(chat.id); attachments = arrayListOf(); navigate(Screen.Chat) }
+                                        .clickable { viewModel.openChat(chat.id); viewModel.clearAttachments(); navigate(Screen.Chat) }
                                         .padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                                         Cube(Modifier.size(48.dp))
                                         Spacer(Modifier.width(14.dp))
@@ -243,13 +239,13 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel()) {
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
                             Row(Modifier.padding(start = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Column(Modifier.weight(1f)) {
-                                    Text(attachments.joinToString(", "), maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 14.sp)
-                                    Text("Upload coming soon", color = Muted, fontSize = 12.sp)
+                                    Text(attachments.joinToString(", ") { it.name }, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 14.sp)
+                                    Text("Ready to send with this message", color = Muted, fontSize = 12.sp)
                                 }
-                                TextButton(onClick = { attachments = arrayListOf(); attachmentNotice = "" }) { Text("Remove") }
+                                TextButton(enabled = !typing && !readingFiles, onClick = { viewModel.clearAttachments(); attachmentNotice = "" }) { Text("Remove") }
                             }
                         }
-                        if (attachmentNotice.isNotEmpty()) Text(attachmentNotice, color = Muted, fontSize = 12.sp,
+                        if (fileError.isNotEmpty() || readingFiles || attachmentNotice.isNotEmpty()) Text(if (readingFiles) "Reading files…" else fileError.ifBlank { attachmentNotice }, color = Muted, fontSize = 12.sp,
                             modifier = Modifier.padding(horizontal = 20.dp))
                         Surface(shape = RoundedCornerShape(28.dp), color = Container,
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = if (compact) 12.dp else 16.dp)) {
@@ -274,13 +270,13 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel()) {
                                     RoundAction(Icons.Default.Mic, "Open voice mode", color = Color.Transparent,
                                         onClick = { navigate(Screen.Voice) })
                                     Spacer(Modifier.width(8.dp))
-                                    Surface(color = if (draft.isBlank() && !typing) Secondary else Primary, shape = RoundedCornerShape(16.dp)) {
+                                    Surface(color = if (draft.isBlank() && attachments.isEmpty() && !typing) Secondary else Primary, shape = RoundedCornerShape(16.dp)) {
                                         IconButton(onClick = {
-                                            when { typing -> viewModel.stopReply(); draft.isBlank() -> navigate(Screen.Voice); else -> send() }
+                                            when { typing -> viewModel.stopReply(); draft.isBlank() && attachments.isEmpty() -> navigate(Screen.Voice); else -> send() }
                                         }, modifier = Modifier.size(48.dp)) {
                                             when {
                                                 typing -> Icon(Icons.Default.Stop, "Stop response", tint = Color(0xFF381E72))
-                                                draft.isBlank() -> Cube(Modifier.size(34.dp).semantics { contentDescription = "Start voice mode" })
+                                                draft.isBlank() && attachments.isEmpty() -> Cube(Modifier.size(34.dp).semantics { contentDescription = "Start voice mode" })
                                                 else -> Icon(Icons.Default.ArrowUpward, "Send message", tint = Color(0xFF381E72))
                                             }
                                         }
@@ -290,8 +286,9 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel()) {
                         }
                     }
                     Screen.Settings -> SettingsScreen(onBack = ::back, haptic = haptic, onHaptic = { haptic = it }, onOpen = { detail(it) })
-                    Screen.Attachments -> AttachmentsScreen(onBack = ::back, selected = attachments,
-                        onSelected = { attachments = ArrayList(it); attachmentNotice = "" })
+                    Screen.Attachments -> AttachmentsScreen(onBack = ::back, selected = attachments.map { it.name },
+                        onSelected = viewModel::selectAttachments, onCamera = viewModel::selectCameraImage,
+                        onClear = viewModel::clearAttachments, loading = readingFiles, error = fileError)
                     Screen.Voice -> VoiceScreen(onBack = ::back, onSettings = ::settings)
                     else -> key(screen) { SettingsDetail(screen, onBack = ::back, onOpen = { detail(it, screen) }) }
                 }
@@ -421,20 +418,15 @@ private fun SettingsScreen(onBack: () -> Unit, haptic: Boolean, onHaptic: (Boole
 }
 
 @Composable
-private fun AttachmentsScreen(onBack: () -> Unit, selected: List<String>, onSelected: (List<String>) -> Unit) {
+private fun AttachmentsScreen(onBack: () -> Unit, selected: List<String>, onSelected: (List<android.net.Uri>) -> Unit,
+    onCamera: (android.graphics.Bitmap) -> Unit, onClear: () -> Unit, loading: Boolean, error: String) {
     val context = LocalContext.current
     var notice by rememberSaveable { mutableStateOf("") }
     val files = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
-        if (uris.isNotEmpty()) onSelected(uris.map { uri ->
-            try {
-                context.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
-                    if (cursor.moveToFirst()) cursor.getString(0) else "Selected file"
-                } ?: "Selected file"
-            } catch (_: Exception) { "Selected file" }
-        })
+        if (uris.isNotEmpty()) onSelected(uris)
     }
     val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicturePreview()) { bitmap ->
-        if (bitmap != null) onSelected(listOf("Camera image"))
+        if (bitmap != null) onCamera(bitmap)
     }
     Box(Modifier.fillMaxWidth().padding(top = 8.dp), contentAlignment = Alignment.Center) {
         Surface(color = Muted.copy(alpha = .6f), shape = RoundedCornerShape(2.dp), modifier = Modifier.size(44.dp, 4.dp)) {}
@@ -447,7 +439,7 @@ private fun AttachmentsScreen(onBack: () -> Unit, selected: List<String>, onSele
                 Surface(color = Container, shape = RoundedCornerShape(20.dp), modifier = Modifier.weight(1f)) {
                     Column(Modifier.fillMaxWidth().heightIn(min = 120.dp).clickable {
                         try {
-                            when (title) { "Camera" -> camera.launch(null); "Photos" -> files.launch(arrayOf("image/*")); else -> files.launch(arrayOf("*/*")) }
+                            when (title) { "Camera" -> camera.launch(null); "Photos" -> files.launch(arrayOf("image/jpeg", "image/png", "image/webp")); else -> files.launch(com.dua.ai.attachments.AttachmentReader.types) }
                         } catch (_: android.content.ActivityNotFoundException) { notice = "No app available for this action" }
                           catch (_: SecurityException) { notice = "Camera access is unavailable" }
                     }.padding(vertical = 16.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
@@ -462,9 +454,9 @@ private fun AttachmentsScreen(onBack: () -> Unit, selected: List<String>, onSele
         Surface(color = Container, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp)) {
                 Text(if (selected.isEmpty()) "No files selected" else selected.joinToString("\n"), fontSize = 14.sp)
-                Text("Selection only · Upload coming soon", color = Muted, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
-                if (selected.isNotEmpty()) TextButton(onClick = { onSelected(emptyList()) }) { Text("Clear selection") }
-                if (notice.isNotBlank()) Text(notice, color = Muted, fontSize = 12.sp)
+                Text(if (loading) "Reading files…" else "3 files · 2 MB total · TXT 64 KB; sent with next message only", color = Muted, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+                if (selected.isNotEmpty()) TextButton(onClick = { onClear() }) { Text("Clear selection") }
+                if (notice.isNotBlank() || error.isNotBlank()) Text(error.ifBlank { notice }, color = Muted, fontSize = 12.sp)
             }
         }
         listOf("Add to project", "Web search", "Connectors", "Memory").forEach { title ->

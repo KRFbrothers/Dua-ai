@@ -10,7 +10,7 @@ This folder contains the browser app created from the supplied references. The n
 4. Deploy from the repository. A drag-and-drop HTML ZIP does not deploy the Gemini functions.
 5. Open `/api/config` on the deployed origin to check configuration. It returns only whether both the key and model are configured, never its value.
 
-Gemini is available through Dua and Gemini in the model picker. Other providers remain unavailable. Voice mode provides browser speech input, not AI audio replies. Camera/screen sharing in voice mode are unavailable. Web search and Memory remain disabled/off and marked Coming soon. Files are selected locally, and only filenames/metadata are retained; they are not uploaded or sent to Gemini.
+Gemini is available through Dua and Gemini in the model picker. Other providers remain unavailable. Voice mode provides browser speech input, not AI audio replies. Camera/screen sharing in voice mode are unavailable. Web search and Memory remain disabled/off and marked Coming soon. JPEG, PNG, WebP, PDF and UTF-8 TXT files can be sent to Gemini with the current message.
 
 ## Local use
 
@@ -31,3 +31,11 @@ On Netlify, `/api/chat` has an edge-enforced limit of 5 requests per 60 seconds 
 This rule limits bursts, not total daily Gemini usage or spending. The endpoint still accepts native requests without an Origin header and does not authenticate users. Multiple IPs can consume the shared provider quota. Account authentication and project-wide quota budgeting remain pending work; no private token is embedded in browser code or the APK.
 
 Netlify enforces the rule only on deployed requests, not the local Node server or direct function unit tests. After deployment, confirm the rule in the Netlify deploy log's rate-limiting section. Unit tests validate routing and the safe 429 response; they do not simulate Netlify's counters or prove live edge enforcement. See [Netlify rate-limiting documentation](https://docs.netlify.com/manage/security/secure-access-to-sites/rate-limiting/).
+
+## Attachments
+
+Web and native Android send base64 file contents through the shared `/api/chat` endpoint. Select up to 3 files with a combined size of 2 MiB; each TXT file is limited to 64 KiB. The backend validates file type, signatures, base64 and size before contacting Gemini. Requests are limited to 3 MiB, while conversation JSON retains its separate 256 KiB limit.
+
+Files apply only to the current user message. Reattach a file for later analysis. Pending bytes live in browser session storage or Android ViewModel memory; persistent history keeps filenames and replies, not file contents. Successful replies clear the selection. Failed or stopped requests retain it for retry. Remove/New chat clears it. Native camera capture currently supplies a preview-sized JPEG, not a full-resolution photo.
+
+Large files, DOCX, video/audio, durable file storage and provider File API uploads remain pending. Mobile Chromium was checked with a mocked provider; live Gemini media handling and physical Android picker/camera behavior remain unverified.

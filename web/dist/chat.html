@@ -95,7 +95,8 @@ function saveChatState(){
  try{sessionStorage.setItem(stateKey,JSON.stringify(snapshot));DuaHistory.save(snapshot);}catch{document.querySelector('.history-warning').textContent='Chat could not be saved on this device. Storage may be full or unavailable.';}
 }
 function updateAction() {
-  const hasText = message.value.trim().length > 0;
+  document.querySelector('.remove-files').disabled=busy;
+  const hasText = message.value.trim().length > 0 || selectedFiles.length > 0;
   if(busy){cube.hidden=true;arrow.removeAttribute('hidden');arrow.innerHTML='<rect x="13" y="13" width="14" height="14" rx="2"/>';action.classList.remove('voice-ready');action.setAttribute('aria-label','Stop response');action.title='Stop response';return;}
   arrow.innerHTML='<path d="M20 33V7M9 18 20 7l11 11"/>';
   cube.hidden = hasText;
@@ -119,7 +120,7 @@ message.addEventListener('input', () => {
 });
 action.addEventListener('click', (event) => {
   if(busy){event.preventDefault();stopResponse();return;}
-  if (!message.value.trim()) return;
+  if (!message.value.trim() && !selectedFiles.length) return;
   event.preventDefault();
   stopVoice();
   document.querySelector('.composer').requestSubmit();
@@ -178,9 +179,10 @@ async function loadConfiguration(){
 }
 loadConfiguration();
 composer.addEventListener('submit',async event=>{
- event.preventDefault();const text=message.value.trim();if(!text||busy)return;
- if(selectedFiles.length){errorView.textContent='Attachment upload coming soon. Remove selected files to send text.';return;}
+ event.preventDefault();const text=message.value.trim() || (selectedFiles.length?'Describe these files.':'');if(!text||busy)return;
+ if(selectedFiles.some(file=>!file.data||!file.mimeType)){errorView.textContent='File dobara select karein; purani selection mein content nahi hai.';return;}
  if(text.length>8000){errorView.textContent='Message 8000 characters se chhota rakhein.';return;}
+ const sentFiles=selectedFiles.slice();
  busy=true;message.disabled=true;errorView.textContent='';updateAction();
  const id=++requestId;const currentController=new AbortController();controller=currentController;
  let userBubble,pending;
@@ -189,12 +191,13 @@ composer.addEventListener('submit',async event=>{
   if(!configured)throw new Error('Gemini API key aur model server settings mein set karein.');
   message.value='';document.querySelector('.empty').hidden=true;
   userBubble=appendMessage('user',text);pending=appendMessage('model','Dua is thinking…');pending.dataset.state='pending';pendingBubble=pending;saveChatState();
-  const nextHistory=[...history.slice(-38),{role:'user',text}];
-  const response=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:composer.dataset.model,messages:nextHistory}),signal:currentController.signal});
+  const sentText=text+(sentFiles.length?'\nFiles: '+sentFiles.map(file=>file.name).join(', '):'');userBubble.textContent=sentText;
+  const nextHistory=[...history.slice(-38),{role:'user',text:sentText}];
+  const response=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:composer.dataset.model,messages:nextHistory,attachments:sentFiles}),signal:currentController.signal});
   const data=await response.json();if(id!==requestId)return;
   if(!response.ok)throw new Error(data.error||'Reply nahi aa saka. Dobara try karein.');
   if(typeof data.text!=='string'||!data.text.trim())throw new Error('Gemini ne text response nahi diya. Dobara try karein.');
-  pending.textContent=data.text;pending.dataset.state='complete';history.push({role:'user',text},{role:'model',text:data.text});
+  selectedFiles=[];sessionStorage.removeItem('dua-attachments');showFiles();pending.textContent=data.text;pending.dataset.state='complete';history.push({role:'user',text:sentText},{role:'model',text:data.text});
  }catch(error){
   if(id!==requestId)return;
   pending?.remove();userBubble?.remove();message.value=text;
@@ -218,7 +221,7 @@ try{
 }catch{document.querySelector('.history-warning').textContent='Saved chats could not be loaded. Existing stored data was preserved.';}
 
 const fileCard=document.querySelector('.selected-files'),fileCopy=document.querySelector('.selected-file-copy');
-function showFiles(){fileCard.hidden=!selectedFiles.length;fileCopy.textContent=selectedFiles.map(f=>f.name).join(', ')+' · Upload coming soon';action.setAttribute('aria-disabled',String(selectedFiles.length>0));}
+function showFiles(){fileCard.hidden=!selectedFiles.length;fileCopy.textContent=selectedFiles.map(f=>f.name).join(', ')+' · Ready to send';action.setAttribute('aria-disabled','false');updateAction();}
 document.querySelector('.remove-files').onclick=()=>{selectedFiles=[];try{sessionStorage.removeItem('dua-attachments')}catch{}errorView.textContent='';showFiles();updateAction();};showFiles();
 message.addEventListener('keydown',event=>{if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing){event.preventDefault();composer.requestSubmit();}});
 </script>
