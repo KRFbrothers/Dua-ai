@@ -3,9 +3,12 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFile} from 'node:fs/promises';
 
+const readAloudSource=await readFile(new URL('./dist/read-aloud.js',import.meta.url),'utf8');
 const voiceSource=await readFile(new URL('./dist/voice-input.js',import.meta.url),'utf8');
 const source=(await readFile(new URL('./dist/chat.html',import.meta.url),'utf8')).split('<script>')[1].split('</script>')[0];
-function setup({deferChat=false,replyError=false,files=[],voiceDraft=null}={}) {
+function setup({deferChat=false,replyError=false,files=[],voiceDraft=null,speechSupported=false}={}) {
+ const synthesis={spoken:[],speak(utterance){this.spoken.push(utterance)},cancel(){},getVoices(){return[]}};
+ class Utterance{constructor(text){this.text=text;}}
  const events={};const configuration=[];const replies=[];let chatCalls=0;let signal;let payload;
  const node=()=>{
   const n={hidden:false,value:'',dataset:{},children:[],attributes:{},events:{},style:{setProperty(){}},
@@ -19,10 +22,10 @@ function setup({deferChat=false,replyError=false,files=[],voiceDraft=null}={}) {
  composer.addEventListener=(type,handler)=>{events[type]=handler};
  const elements={'textarea':message,'#composer-action':action,'.model-picker':picker,'.composer':composer,'.chat-messages':node(),'.chat-error':error,'.empty':empty,'.model-chip-label':node(),'.model-sheet-footer':node()};
  const storage=new Map();if(voiceDraft)storage.set('dua-voice-draft',JSON.stringify({text:voiceDraft}));if(files.length)storage.set('dua-attachments',JSON.stringify(files));
- vm.runInNewContext(voiceSource+source,{
+ vm.runInNewContext(readAloudSource+voiceSource+source,{
   document:{querySelector:s=>elements[s]||(elements[s]=node()),createElement:node,addEventListener(){},documentElement:node()},
   location:{protocol:'https:',search:'',pathname:'/chat.html'},
-  window:{addEventListener(){},history:{replaceState(){}}},URLSearchParams,AbortController,
+  window:{speechSynthesis:speechSupported?synthesis:null,SpeechSynthesisUtterance:speechSupported?Utterance:null,navigator:{language:"hi-IN"},addEventListener(){},history:{replaceState(){}}},URLSearchParams,AbortController,setTimeout,clearTimeout,
   DuaHistory:{save(){},load(){return null},newChat(){}},
   sessionStorage:{getItem:k=>storage.get(k)||null,setItem:(k,v)=>storage.set(k,v),removeItem:k=>storage.delete(k)},
   fetch:async (url,options)=>{
@@ -32,7 +35,7 @@ function setup({deferChat=false,replyError=false,files=[],voiceDraft=null}={}) {
    return {ok:!replyError,json:async()=>replyError?{error:'Gemini quota limit aa gayi.'}:{text:'Hello'}};
   }
  });
- return {message,error,empty,configuration,replies,storage,messages:elements['.chat-messages'],signal:()=>signal,
+ return {synthesis,message,error,empty,configuration,replies,storage,messages:elements['.chat-messages'],signal:()=>signal,
   payload:()=>payload,calls:()=>chatCalls,submit:()=>events.submit({preventDefault(){}}),stop:()=>action.events.click({preventDefault(){}})};
 }
 const flush=async()=>{for(let i=0;i<10;i++)await Promise.resolve()};
@@ -105,4 +108,14 @@ test('oversize voice handoff preserves the existing draft and pending transcript
  const page=setup({voiceDraft:'x'.repeat(8000)});
  assert.equal(page.message.value,'Hi');assert.equal(page.calls(),0);
  assert.equal(page.storage.has('dua-voice-draft'),true);assert.match(page.error.textContent,/8000/);
+});
+
+test('read-aloud controls never enter saved history or a later API request',async()=>{
+ const page=setup({speechSupported:true});page.configuration.splice(0).forEach(resolve=>resolve(true));await flush();
+ await page.submit();assert.equal(page.synthesis.spoken.length,0);
+ const reply=page.messages.children[1],read=reply.children[0];read.events.click();
+ assert.equal(page.synthesis.spoken[0].text,'Hello');
+ const snapshot=JSON.parse(page.storage.get('dua-chat-v1'));assert.equal(snapshot.messages[1].text,'Hello');
+ page.message.value='Next question';await page.submit();
+ assert.equal(page.payload().messages[1].text,'Hello');assert.ok(!page.payload().messages.some(message=>message.text.includes('Read aloud')));
 });
