@@ -6,13 +6,12 @@ import com.dua.ai.history.SavedChat
 import com.dua.ai.history.ChatHistoryCodec
 import java.util.UUID
 import android.net.Uri
-import android.graphics.Bitmap
 import com.dua.ai.attachments.ChatAttachment
 import com.dua.ai.attachments.AttachmentReader
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.io.ByteArrayInputStream
-import java.io.ByteArrayOutputStream
+import java.io.File
+import com.dua.ai.attachments.CameraCaptureStore
 import androidx.lifecycle.viewModelScope
 import com.dua.ai.model.ChatMessage
 import com.dua.ai.model.ChatSession
@@ -76,8 +75,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         _readingFiles.value = false
     }
 
-    private fun loadFiles(loader: () -> List<ChatAttachment>) {
-        if (_isTyping.value) { _attachmentError.value = "Reply complete hone ke baad files select karein."; return }
+    private fun loadFiles(cleanup: () -> Unit = {}, loader: () -> List<ChatAttachment>) {
+        if (_isTyping.value) { cleanup(); _attachmentError.value = "Reply complete hone ke baad files select karein."; return }
         val version = ++selectionVersion
         _readingFiles.value = true
         _attachmentError.value = ""
@@ -95,7 +94,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (error: Exception) {
                 if (version == selectionVersion) _attachmentError.value = error.message ?: "File read nahi hui. Dobara select karein."
-            } finally { if (version == selectionVersion) _readingFiles.value = false }
+            } finally { cleanup(); if (version == selectionVersion) _readingFiles.value = false }
         }
     }
 
@@ -112,10 +111,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun selectCameraImage(bitmap: Bitmap) = loadFiles {
-        val out = ByteArrayOutputStream()
-        bitmap.compress(Bitmap.CompressFormat.JPEG, 90, out)
-        listOf(AttachmentReader.read("Camera.jpg", "image/jpeg", ByteArrayInputStream(out.toByteArray())))
+    fun selectCameraFile(file: File) = loadFiles(cleanup = { file.delete() }) {
+        listOf(CameraCaptureStore(getApplication<Application>().cacheDir).read(file))
     }
 
     private val _draft = MutableStateFlow("")
