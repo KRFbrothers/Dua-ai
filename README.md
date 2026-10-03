@@ -24,7 +24,7 @@ With Node 24+, run `npm test` from `web/` to run the local and Netlify endpoint 
 
 ## Native interface
 
-The Android Compose launcher now follows the current web design: I am Dua home, centered-logo chat, Material 3 composer, model sheet, Add to chat, Settings and Voice screens. Navigation preserves the current in-memory conversation and draft; New chat resets it. Native Dua and Gemini selections use the same HTTPS backend as the web app. Images, PDF and TXT attachments are sent with the current message. Other providers and AI voice remain planned features. No WebView or live website is required to render the Android interface.
+The Android Compose launcher now follows the current web design: I am Dua home, centered-logo chat, Material 3 composer, model sheet, Add to chat, Settings and Voice screens. Navigation preserves the current in-memory conversation and draft; New chat resets it. Native Dua and Gemini selections use the same HTTPS backend as the web app. Images, PDF and TXT attachments are sent with the current message. Camera uses the external device camera for full-photo JPEG capture with temporary-file cleanup and the shared 2 MiB attachment limit. Other providers and AI voice remain planned features. No WebView or live website is required to render the Android interface.
 
 ## Android AI backend
 
