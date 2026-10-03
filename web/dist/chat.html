@@ -2,18 +2,23 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">
 <meta name="theme-color" content="#0a0a0a">
 <title>New chat</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath fill='%23333333' stroke='%23aaaaaa' d='M16 2 30 10v15L16 32 2 25V10Z M2 10l14 8 14-8 M16 18v14'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="shared.css">
-<link rel="stylesheet" href="logo.css">
-<style>
-.topbar{gap:12px;justify-content:space-between}
-.topbar>button{position:static;flex-shrink:0;margin-left:auto}
+<style>.settings-shell:not([open])>summary{left:80px}@media(min-width:700px){.settings-shell:not([open])>summary{left:88px}}.topbar{justify-content:initial}.topbar>button{position:absolute;left:50%;transform:translateX(-50%)}
+
+.topbar{gap:12px}
+.topbar>button{position:static;left:auto;transform:none;flex-shrink:0}
 .home-link{flex-shrink:0}
-.chat-header-title{position:absolute;left:50%;transform:translateX(-50%);max-width:calc(100% - 120px);font-size:18px;line-height:24px;font-weight:500;text-align:center}
-@media(max-width:600px){.topbar{gap:8px;left:12px;right:12px}.topbar>button,.home-link{width:40px;height:40px}.chat-header-title{max-width:calc(100% - 104px);font-size:16px;line-height:22px}}
+.chat-header-title{position:absolute;left:50%;transform:translateX(-50%);max-width:calc(100% - 248px);font-size:18px;line-height:24px;font-weight:500;text-align:center}
+@media(max-width:600px){.topbar{gap:8px;left:12px;right:12px}.topbar>button,.home-link{width:40px;height:40px}.chat-header-title{position:static;transform:none;flex:1;max-width:none;padding-right:88px;font-size:16px;line-height:22px}}
+
+.topbar{justify-content:space-between}
+.topbar>button{margin-left:auto}
+.chat-header-title{position:absolute;left:50%;transform:translateX(-50%);max-width:calc(100% - 120px);padding:0;flex:none}
+@media(max-width:600px){.chat-header-title{position:absolute;transform:translateX(-50%);max-width:calc(100% - 104px);padding:0}}
 
 .model-picker>summary{list-style:none;display:flex;align-items:center;justify-content:center;cursor:pointer}
 .model-picker>summary::-webkit-details-marker{display:none}
@@ -51,10 +56,10 @@
 .chat-messages{position:absolute;top:92px;bottom:210px;left:max(20px,calc((100% - 760px)/2));right:max(20px,calc((100% - 760px)/2));overflow:auto;display:flex;flex-direction:column;gap:18px;padding:12px 4px}
 .chat-bubble{padding:14px 18px;border-radius:20px;max-width:88%;white-space:pre-wrap;overflow-wrap:anywhere;font-size:16px;line-height:25px;flex-shrink:0}
 .chat-bubble.user{align-self:flex-end;background:var(--secondary-container);color:var(--on-secondary-container)}
-.chat-bubble.assistant{align-self:flex-start;background:var(--surface-container)}
-.chat-error{position:absolute;bottom:172px;left:20px;right:20px;text-align:center;margin:0;font-size:14px;line-height:20px;color:var(--on-surface-variant);max-height:calc(100dvh - 280px);overflow:auto;overflow-wrap:anywhere}
+.chat-bubble.model{align-self:flex-start;background:var(--surface-container)}
+.chat-error{position:absolute;bottom:172px;left:20px;right:20px;text-align:center;margin:0;font-size:14px;line-height:20px;color:var(--on-surface-variant)}
 .model-option:has(input:disabled){opacity:.45;cursor:not-allowed}
-</style>
+.selected-files{display:flex;align-items:center;gap:8px;background:var(--surface-container);border-radius:16px;padding:8px 12px;position:absolute;left:0;right:0;bottom:calc(100% + 12px);font-size:14px;line-height:1.4}.selected-file-copy{flex:1;min-width:0;overflow-wrap:anywhere}.remove-files{width:48px;height:48px;flex:none;border:0;border-radius:50%;background:transparent;color:var(--on-surface)}.selected-files[hidden]{display:none}.screen{min-height:0;height:var(--visible-height,100dvh);position:fixed;top:var(--visible-top,0px);left:0}.chat-messages{overscroll-behavior:contain}.screen:has(.selected-files:not([hidden])) .chat-messages{bottom:290px}.screen:has(.selected-files:not([hidden])) .chat-error{bottom:250px}@media(max-height:440px){.topbar{inset:12px 16px auto}.chat-messages{top:72px;bottom:184px}.chat-error{bottom:148px}.screen:has(.selected-files:not([hidden])) .chat-messages{bottom:264px}.screen:has(.selected-files:not([hidden])) .chat-error{bottom:224px}}.selected-files{max-height:80px;overflow:auto}.chat-bubble{height:auto;min-height:0;min-width:0;display:block;box-sizing:border-box}.controls .send .action-arrow{display:block;fill:none;stroke:var(--on-primary);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}.controls .send .action-arrow[hidden]{display:none!important}.topbar{display:grid;grid-template-columns:48px minmax(0,1fr) 48px;gap:8px;align-items:center}.topbar .home-link,.topbar>button{width:48px;height:48px;margin:0}.chat-header-title{position:static;left:auto;transform:none;max-width:none;padding:0;min-width:0;text-align:center;font-size:18px;line-height:24px}.controls .model{min-height:48px;height:48px;display:flex;align-items:center;justify-content:center}.topbar .home-link{grid-column:1;grid-row:1}.topbar .chat-header-title{grid-column:2;grid-row:1;white-space:nowrap}.topbar>button{grid-column:3;grid-row:1;justify-self:end}.screen[data-compact="true"] .composer{height:120px;padding:12px 16px;bottom:12px}.screen[data-compact="true"] .controls{margin-top:8px}.screen[data-compact="true"] .topbar{inset:12px 16px auto}.screen[data-compact="true"] .chat-messages{top:72px;bottom:168px}.screen[data-compact="true"] .chat-error{bottom:136px;font-size:12px;line-height:16px}.screen[data-compact="true"]:has(.selected-files:not([hidden])) .chat-messages{bottom:248px}.screen[data-compact="true"]:has(.selected-files:not([hidden])) .chat-error{bottom:216px}</style>
 </head>
 <body>
 <main class="screen" aria-label="New chat interface">
@@ -63,36 +68,56 @@
 <button class="round" aria-label="Desktop view"><svg viewBox="0 0 32 32"><rect x="6" y="5" width="20" height="17" rx="1"/><path d="M16 22v5M10 27h12"/></svg></button>
 
 <span class="chat-header-title">I am Dua</span></nav>
-<section class="empty"><div class="center-logo" role="img" aria-label="DUA logo"></div></section>
-<section class="chat-messages" aria-label="Conversation" aria-live="polite"></section><p class="chat-error" role="status"></p><form class="composer"><textarea aria-label="Message" placeholder="Ask anything..." rows="1"></textarea><div class="controls"><div class="control-group"><a class="round" aria-label="Add to chat" id="attach" href="add-to-chat.html"><svg viewBox="0 0 40 40"><path d="M20 7v26M7 20h26"/></svg></a><details class="model-picker"><summary class="model" aria-label="Choose a model"><span class="model-chip-label">Model</span><span class="model-close-label">Done</span></summary><div class="model-backdrop" aria-hidden="true"></div><section class="model-sheet" aria-labelledby="model-sheet-title"><div class="sheet-handle" aria-hidden="true"></div><header class="model-sheet-header"><h2 id="model-sheet-title">Choose a model</h2><p>Pick who responds in this chat</p></header><fieldset class="model-options"><legend class="voice-status">Available models</legend><label class="model-option"><input type="radio" name="chat-model" value="Dua" checked><span class="provider-icon" aria-hidden="true">D</span><span class="model-option-copy"><span class="model-option-name">Dua</span><span class="model-option-description">Default · Gemini</span></span><span class="model-check" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="m5 10 3 3 7-7"/></svg></span></label><label class="model-option"><input type="radio" name="chat-model" value="GPT"><span class="provider-icon" aria-hidden="true">G</span><span class="model-option-copy"><span class="model-option-name">GPT</span><span class="model-option-description">OpenAI · Placeholder</span></span><span class="model-check" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="m5 10 3 3 7-7"/></svg></span></label><label class="model-option"><input type="radio" name="chat-model" value="Gemini"><span class="provider-icon" aria-hidden="true">✦</span><span class="model-option-copy"><span class="model-option-name">Gemini</span><span class="model-option-description">Google · Gemini</span></span><span class="model-check" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="m5 10 3 3 7-7"/></svg></span></label><label class="model-option"><input type="radio" name="chat-model" value="Claude"><span class="provider-icon" aria-hidden="true">C</span><span class="model-option-copy"><span class="model-option-name">Claude</span><span class="model-option-description">Anthropic · Placeholder</span></span><span class="model-check" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="m5 10 3 3 7-7"/></svg></span></label><label class="model-option"><input type="radio" name="chat-model" value="Grok"><span class="provider-icon" aria-hidden="true">X</span><span class="model-option-copy"><span class="model-option-name">Grok</span><span class="model-option-description">xAI · Placeholder</span></span><span class="model-check" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="m5 10 3 3 7-7"/></svg></span></label><label class="model-option"><input type="radio" name="chat-model" value="Kimi"><span class="provider-icon" aria-hidden="true">K</span><span class="model-option-copy"><span class="model-option-name">Kimi</span><span class="model-option-description">Moonshot · Placeholder</span></span><span class="model-check" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="m5 10 3 3 7-7"/></svg></span></label></fieldset><footer class="model-sheet-footer">Gemini configuration check ho rahi hai…</footer></section></details></div><div class="control-group"><a class="round mic" aria-label="Open voice mode" href="voice.html"><svg viewBox="0 0 40 48" stroke="white" stroke-width="2.5" fill="none"><rect x="11" y="4" width="18" height="32" rx="9" fill="white" stroke="none"/><path d="M6 23v3a14 14 0 0 0 28 0v-3M20 40v7M9 47h22"/></svg></a><a class="round send voice-ready" aria-label="Start voice mode" id="composer-action" href="voice.html"><img class="action-cube" src="dua-cube.svg" alt=""><svg class="action-arrow" hidden viewBox="0 0 40 40"><path d="M20 33V7M9 18 20 7l11 11"/></svg></a></div></div></form>
+<section class="empty"><img class="center-logo" src="dua-logo.svg" alt="DUA logo"></section>
+<section class="chat-messages" aria-label="Conversation" aria-live="polite"></section><p class="chat-error" role="status"></p><form class="composer"><div class="selected-files" hidden><span class="selected-file-copy"></span><button type="button" class="remove-files" aria-label="Remove selected files">✕</button></div><textarea aria-label="Message" placeholder="Ask anything..." rows="1"></textarea><div class="controls"><div class="control-group"><a class="round" aria-label="Add to chat" id="attach" href="add-to-chat.html"><svg viewBox="0 0 40 40"><path d="M20 7v26M7 20h26"/></svg></a><input type="file" id="file" hidden><details class="model-picker"><summary class="model" aria-label="Choose a model"><span class="model-chip-label">Model</span><span class="model-close-label">Done</span></summary><div class="model-backdrop" aria-hidden="true"></div><section class="model-sheet" aria-labelledby="model-sheet-title"><div class="sheet-handle" aria-hidden="true"></div><header class="model-sheet-header"><h2 id="model-sheet-title">Choose a model</h2><p>Pick who responds in this chat</p></header><fieldset class="model-options"><legend class="voice-status">Available models</legend><label class="model-option"><input type="radio" name="chat-model" value="Dua" checked><span class="provider-icon" aria-hidden="true">D</span><span class="model-option-copy"><span class="model-option-name">Dua</span><span class="model-option-description">Default · Gemini</span></span><span class="model-check" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="m5 10 3 3 7-7"/></svg></span></label><label class="model-option"><input type="radio" name="chat-model" value="GPT"><span class="provider-icon" aria-hidden="true">G</span><span class="model-option-copy"><span class="model-option-name">ChatGPT</span><span class="model-option-description">OpenAI · Coming soon</span></span><span class="model-check" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="m5 10 3 3 7-7"/></svg></span></label><label class="model-option"><input type="radio" name="chat-model" value="Gemini"><span class="provider-icon" aria-hidden="true">✦</span><span class="model-option-copy"><span class="model-option-name">Gemini</span><span class="model-option-description">Google · Gemini</span></span><span class="model-check" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="m5 10 3 3 7-7"/></svg></span></label><label class="model-option"><input type="radio" name="chat-model" value="Claude"><span class="provider-icon" aria-hidden="true">C</span><span class="model-option-copy"><span class="model-option-name">Claude</span><span class="model-option-description">Anthropic · Coming soon</span></span><span class="model-check" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="m5 10 3 3 7-7"/></svg></span></label><label class="model-option"><input type="radio" name="chat-model" value="Grok"><span class="provider-icon" aria-hidden="true">X</span><span class="model-option-copy"><span class="model-option-name">Grok</span><span class="model-option-description">xAI · Coming soon</span></span><span class="model-check" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="m5 10 3 3 7-7"/></svg></span></label><label class="model-option"><input type="radio" name="chat-model" value="Kimi"><span class="provider-icon" aria-hidden="true">K</span><span class="model-option-copy"><span class="model-option-name">Kimi</span><span class="model-option-description">Moonshot · Coming soon</span></span><span class="model-check" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="m5 10 3 3 7-7"/></svg></span></label></fieldset><footer class="model-sheet-footer">Gemini configuration check ho rahi hai…</footer></section></details></div><div class="control-group"><a class="round mic" aria-label="Open voice mode" href="voice.html"><svg viewBox="0 0 40 48" stroke="white" stroke-width="2.5" fill="none"><rect x="11" y="4" width="18" height="32" rx="9" fill="white" stroke="none"/><path d="M6 23v3a14 14 0 0 0 28 0v-3M20 40v7M9 47h22"/></svg></a><a class="round send voice-ready" aria-label="Start voice mode" id="composer-action" href="voice.html"><img class="action-cube" src="dua-cube.svg" alt=""><svg class="action-arrow" hidden viewBox="0 0 40 40"><path d="M20 33V7M9 18 20 7l11 11"/></svg></a></div></div></form>
 
-
+<span class="voice-status" role="status" aria-live="polite" id="voice-status"></span>
 </main>
 
 <script>
+function syncVisibleViewport(){const viewport=window.visualViewport;if(!viewport)return;document.documentElement.style.setProperty('--visible-height',viewport.height+'px');document.documentElement.style.setProperty('--visible-top',viewport.offsetTop+'px');document.querySelector('.screen').dataset.compact=String(viewport.height<440);}
+window.visualViewport?.addEventListener('resize',syncVisibleViewport);window.visualViewport?.addEventListener('scroll',syncVisibleViewport);syncVisibleViewport();
+
 const message = document.querySelector('textarea');
 const action = document.querySelector('#composer-action');
 const cube = action.querySelector('.action-cube');
 const arrow = action.querySelector('.action-arrow');
-
+const status = document.querySelector('#voice-status');
+const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+let recognition = null;
+let listening = false;
+let selectedFiles=[];try{const stored=JSON.parse(sessionStorage.getItem('dua-attachments')||'[]');if(Array.isArray(stored))selectedFiles=stored.filter(f=>f&&typeof f.name==='string');}catch{}
+let busy=false;let requestId=0;let controller=null;let pendingBubble=null;let configurationPromise=null;let configured=false;
+const stateKey='dua-chat-v1';
+function saveChatState(){try{sessionStorage.setItem(stateKey,JSON.stringify({updatedAt:Date.now(),draft:message.value,model:document.querySelector('.composer').dataset.model||'Dua',messages:Array.from(document.querySelector('.chat-messages').children,b=>({role:b.classList.contains('user')?'user':'model',text:b.textContent,state:b.dataset.state||'complete'}))}));}catch{}}
 function updateAction() {
   const hasText = message.value.trim().length > 0;
+  if(busy){cube.hidden=true;arrow.removeAttribute('hidden');arrow.innerHTML='<rect x="13" y="13" width="14" height="14" rx="2"/>';action.classList.remove('voice-ready');action.setAttribute('aria-label','Stop response');action.title='Stop response';return;}
+  arrow.innerHTML='<path d="M20 33V7M9 18 20 7l11 11"/>';
   cube.hidden = hasText;
   arrow.toggleAttribute('hidden', !hasText);
   action.classList.toggle('voice-ready', !hasText);
-
-  const label = hasText ? 'Send message' : 'Start voice mode';
+  action.classList.toggle('listening', listening);
+  const label = hasText ? 'Send message' : listening ? 'Stop voice mode' : 'Start voice mode';
   action.setAttribute('aria-label', label);
   action.title = label;
 }
+function stopVoice() {
+  if (recognition) recognition.stop();
+  listening = false;
+  updateAction();
+}
+function startVoice() { window.location.href = 'voice.html'; }
 message.addEventListener('input', () => {
-
+  saveChatState();
+  if (listening) stopVoice();
   updateAction();
 });
 action.addEventListener('click', (event) => {
+  if(busy){event.preventDefault();stopResponse();return;}
   if (!message.value.trim()) return;
   event.preventDefault();
-
+  stopVoice();
   document.querySelector('.composer').requestSubmit();
 });
 
@@ -103,10 +128,10 @@ const modelPicker = document.querySelector('.model-picker');
 const modelSummary = modelPicker.querySelector('summary');
 function closeModelPicker(){modelPicker.open=false;modelSummary.focus();}
 modelPicker.querySelector('.model-backdrop').addEventListener('click',closeModelPicker);
-
+modelPicker.addEventListener('toggle',()=>{if(modelPicker.open)stopVoice();});
 modelPicker.querySelectorAll('input[name="chat-model"]').forEach(input=>input.addEventListener('change',()=>{
   document.querySelector('.model-chip-label').textContent=input.value;
-  document.querySelector('.composer').dataset.model=input.value;
+  document.querySelector('.composer').dataset.model=input.value;saveChatState();
 }));
 document.addEventListener('keydown',event=>{
   if(!modelPicker.open)return;
@@ -120,45 +145,77 @@ document.addEventListener('keydown',event=>{
 
 const composer=document.querySelector('.composer');
 const messagesView=document.querySelector('.chat-messages');
+let followLatest=true;
+messagesView.addEventListener('scroll',()=>{followLatest=messagesView.scrollHeight-messagesView.scrollTop-messagesView.clientHeight<60;});
+window.visualViewport?.addEventListener('resize',()=>{const follow=followLatest;requestAnimationFrame(()=>{if(follow)messagesView.scrollTop=messagesView.scrollHeight;});});
 const errorView=document.querySelector('.chat-error');
 const history=[];
-let busy=false;
-let configured=false;
 function appendMessage(role,text){
- const bubble=document.createElement('div');bubble.className='chat-bubble '+(role==='model'?'assistant':role);bubble.textContent=text;
+ const bubble=document.createElement('div');bubble.className='chat-bubble '+role;bubble.textContent=text;
  messagesView.append(bubble);messagesView.scrollTop=messagesView.scrollHeight;return bubble;
 }
 composer.dataset.model='Dua';
 modelPicker.querySelectorAll('input[name="chat-model"]').forEach(input=>{if(!['Dua','Gemini'].includes(input.value))input.disabled=true;});
+function stopResponse(){
+ requestId++;controller?.abort();controller=null;
+ if(pendingBubble){pendingBubble.textContent='Response stopped';pendingBubble.dataset.state='stopped';}
+ pendingBubble=null;busy=false;message.disabled=false;updateAction();saveChatState();
+}
 async function loadConfiguration(){
+ if(configurationPromise)return configurationPromise;
  const footer=document.querySelector('.model-sheet-footer');
- if(location.protocol==='file:'){footer.textContent='AI replies ke liye Dua server par chat kholein.';return;}
- try{
-  const response=await fetch('/api/config');if(!response.ok)throw new Error();
-  const data=await response.json();configured=data.geminiConfigured;
-  footer.textContent=configured?'Dua and Gemini available · Other models coming soon':'Gemini API key abhi server par set nahi hai.';
- }catch(e){footer.textContent='Gemini server se connection nahi hua.';}
+ configurationPromise=(async()=>{
+  try{const response=await fetch('/api/config');if(!response.ok)throw new Error();
+   const data=await response.json();configured=Boolean(data.geminiConfigured);
+   footer.textContent=configured?'Dua and Gemini available · Other models coming soon':'Gemini API key aur model server settings mein set karein.';
+  }catch{configured=false;footer.textContent='Gemini server se connection nahi hua.';}
+ })();
+ try{await configurationPromise;}finally{configurationPromise=null;}
 }
 loadConfiguration();
 composer.addEventListener('submit',async event=>{
- event.preventDefault();
- const text=message.value.trim();if(!text||busy)return;
- busy=true;message.disabled=true;action.setAttribute('aria-disabled','true');
+ event.preventDefault();const text=message.value.trim();if(!text||busy)return;
+ if(selectedFiles.length){errorView.textContent='Attachment upload coming soon. Remove selected files to send text.';return;}
+ if(text.length>8000){errorView.textContent='Message 8000 characters se chhota rakhein.';return;}
+ busy=true;message.disabled=true;errorView.textContent='';updateAction();
+ const id=++requestId;const currentController=new AbortController();controller=currentController;
  let userBubble,pending;
  try{
-  errorView.textContent='';
-  if(!configured){await loadConfiguration();if(!configured){errorView.textContent=location.protocol==='file:'?'AI chat ke liye http://localhost:3000 kholein.':'Gemini API key aur model server settings mein set karein.';return;}}
-  if(text.length>8000){errorView.textContent='Message 8000 characters se chhota rakhein.';return;}
-  document.querySelector('.empty').hidden=true;
-  userBubble=appendMessage('user',text);pending=appendMessage('model','Dua is thinking…');
+  if(!configured)await loadConfiguration();if(id!==requestId)return;
+  if(!configured)throw new Error('Gemini API key aur model server settings mein set karein.');
+  message.value='';document.querySelector('.empty').hidden=true;
+  userBubble=appendMessage('user',text);pending=appendMessage('model','Dua is thinking…');pending.dataset.state='pending';pendingBubble=pending;saveChatState();
   const nextHistory=[...history.slice(-38),{role:'user',text}];
-  const response=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:composer.dataset.model,messages:nextHistory})});
-  const data=await response.json();if(!response.ok)throw new Error(data.error||'Reply nahi aa saka.');
-  pending.textContent=data.text;history.push({role:'user',text},{role:'model',text:data.text});
-  message.value='';
- }catch(e){pending?.remove();userBubble?.remove();errorView.textContent=e.message;}
- finally{busy=false;message.disabled=false;action.removeAttribute('aria-disabled');updateAction();messagesView.scrollTop=messagesView.scrollHeight;message.focus();if(!history.length)document.querySelector('.empty').hidden=Boolean(errorView.textContent);}
+  const response=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:composer.dataset.model,messages:nextHistory}),signal:currentController.signal});
+  const data=await response.json();if(id!==requestId)return;
+  if(!response.ok)throw new Error(data.error||'Reply nahi aa saka. Dobara try karein.');
+  if(typeof data.text!=='string'||!data.text.trim())throw new Error('Gemini ne text response nahi diya. Dobara try karein.');
+  pending.textContent=data.text;pending.dataset.state='complete';history.push({role:'user',text},{role:'model',text:data.text});
+ }catch(error){
+  if(id!==requestId)return;
+  pending?.remove();userBubble?.remove();message.value=text;
+  errorView.textContent=error.name==='AbortError'?'Response stopped.':error.message;
+ }finally{
+  if(id===requestId){busy=false;message.disabled=false;pendingBubble=null;controller=null;updateAction();saveChatState();messagesView.scrollTop=messagesView.scrollHeight;message.focus();if(!history.length&&!messagesView.children.length)document.querySelector('.empty').hidden=Boolean(errorView.textContent);}
+ }
 });
+window.addEventListener('pagehide',()=>{if(busy)stopResponse();else saveChatState();});
+try{
+ if(new URLSearchParams(location.search).has('new')){sessionStorage.removeItem(stateKey);sessionStorage.removeItem('dua-attachments');selectedFiles=[];window.history.replaceState(null,'',location.pathname);}
+ const saved=JSON.parse(sessionStorage.getItem(stateKey)||'null');
+ if(saved&&typeof saved==='object'){
+  message.value=typeof saved.draft==='string'?saved.draft:'';
+  const model=['Dua','Gemini'].includes(saved.model)?saved.model:'Dua';composer.dataset.model=model;
+  modelPicker.querySelectorAll('input[name="chat-model"]').forEach(input=>input.checked=input.value===model);
+  document.querySelector('.model-chip-label').textContent=model;
+  if(Array.isArray(saved.messages))for(const item of saved.messages){if(item&&['user','model'].includes(item.role)&&typeof item.text==='string'){const text=item.text==='Dua is thinking…'?'Response stopped':item.text;const bubble=appendMessage(item.role,text);bubble.dataset.state=item.state==='pending'?'stopped':item.state||'complete';if(bubble.dataset.state==='complete')history.push({role:item.role,text});}}
+  document.querySelector('.empty').hidden=messagesView.children.length>0;updateAction();
+ }
+}catch{}
+
+const fileCard=document.querySelector('.selected-files'),fileCopy=document.querySelector('.selected-file-copy');
+function showFiles(){fileCard.hidden=!selectedFiles.length;fileCopy.textContent=selectedFiles.map(f=>f.name).join(', ')+' · Upload coming soon';action.setAttribute('aria-disabled',String(selectedFiles.length>0));}
+document.querySelector('.remove-files').onclick=()=>{selectedFiles=[];try{sessionStorage.removeItem('dua-attachments')}catch{}errorView.textContent='';showFiles();updateAction();};showFiles();
 message.addEventListener('keydown',event=>{if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing){event.preventDefault();composer.requestSubmit();}});
 </script>
 </body>
