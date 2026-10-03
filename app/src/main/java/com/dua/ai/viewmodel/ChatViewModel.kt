@@ -115,6 +115,63 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         listOf(CameraCaptureStore(getApplication<Application>().cacheDir).read(file))
     }
 
+    private val _dataBusy = MutableStateFlow(false)
+    val dataBusy: StateFlow<Boolean> = _dataBusy.asStateFlow()
+    private val _dataStatus = MutableStateFlow("")
+    val dataStatus: StateFlow<String> = _dataStatus.asStateFlow()
+    fun dataControlNotice(text: String) { _dataStatus.value = text }
+
+    fun exportChats(uri: Uri) {
+        if (_dataBusy.value) return
+        val records = _savedChats.value.toList()
+        _dataBusy.value = true
+        _dataStatus.value = "Creating export…"
+        viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    val output = getApplication<Application>().contentResolver.openOutputStream(uri, "wt")
+                        ?: error("Selected file cannot be written.")
+                    output.use { it.write(ChatHistoryCodec.export(records).toByteArray(Charsets.UTF_8)) }
+                }
+                _dataStatus.value = "Export saved. Your chats are unchanged."
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { _dataStatus.value = "Export failed. The selected file may be incomplete; try again." }
+            finally { _dataBusy.value = false }
+        }
+    }
+
+    fun clearAllChats() {
+        if (_dataBusy.value) return
+        _dataBusy.value = true
+        _dataStatus.value = "Clearing local history…"
+        cancelReply()
+        val nextId = UUID.randomUUID().toString()
+        viewModelScope.launch {
+            try {
+                val committed = withContext(Dispatchers.IO) {
+                    val previous = preferences.getString("history", null)
+                    val backup = preferences.getString("unreadable_history_backup", null)
+                    val success = preferences.edit().putString("history", ChatHistoryCodec.encode(emptyList(), nextId))
+                        .remove("unreadable_history_backup").commit()
+                    if (!success) preferences.edit().putString("history", previous)
+                        .putString("unreadable_history_backup", backup).apply()
+                    if (success) runCatching { File(getApplication<Application>().cacheDir, "camera-captures").listFiles()?.forEach { it.delete() } }
+                    success
+                }
+                if (committed) {
+                    activeId = nextId
+                    _messages.value = emptyList()
+                    _draft.value = ""
+                    _savedChats.value = emptyList()
+                    clearAttachments()
+                    _dataStatus.value = "All local chats, drafts and pending files cleared."
+                } else _dataStatus.value = "Delete could not be saved. Chats are kept in memory; try again."
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { _dataStatus.value = "Local history could not be cleared. Try again." }
+            finally { _dataBusy.value = false }
+        }
+    }
+
     private val _draft = MutableStateFlow("")
     val draft: StateFlow<String> = _draft.asStateFlow()
 
