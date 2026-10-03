@@ -32,3 +32,31 @@ test('corrupt data and full storage surface errors without erasing existing hist
  const good=open();good.api.save(first);const original=good.localStorage.getItem('dua-history-v2');good.localStorage.setItem=()=>{throw Error('Full')};
  assert.throws(()=>good.api.save({...first,draft:'unsaved'}));assert.equal(good.localStorage.getItem('dua-history-v2'),original);
 });
+
+test('export preserves all local messages/drafts and does not mutate stored history',()=>{
+ const page=open();page.api.save(first);page.api.newChat();page.api.save({draft:'Draft only 😀',model:'Dua',messages:[]});
+ const original=page.localStorage.getItem('dua-history-v2');const data=JSON.parse(page.api.exportJson());
+ assert.equal(data.format,'dua-chat-export');assert.equal(data.version,1);assert.equal(data.chats.length,2);
+ assert.ok(data.chats.some(chat=>chat.draft==='अधूरा'&&chat.messages[0].text==='नमस्ते'));
+ assert.ok(!data.chats.some(chat=>'attachments' in chat));assert.equal(page.localStorage.getItem('dua-history-v2'),original);
+});
+test('clear all removes chats and temporary selections and prevents legacy migration',()=>{
+ const page=open();page.api.save(first);
+ for(const key of ['dua-chat-v1','dua-attachments','dua-voice-draft'])page.sessionStorage.setItem(key,JSON.stringify(first));
+ page.api.clearAll();assert.equal(open(page.localStorage,page.sessionStorage).api.list().length,0);
+ for(const key of ['dua-chat-v1','dua-attachments','dua-voice-draft'])assert.equal(page.sessionStorage.getItem(key),null);
+ page.api.save({model:'Dua',draft:'New',messages:[]});assert.equal(page.api.list().length,1);
+});
+test('another tab cannot resurrect history after clear all, until explicitly reloaded',()=>{
+ const firstTab=open();const id=firstTab.api.save(first);const secondTab=open(firstTab.localStorage,storage());secondTab.api.load(id);
+ firstTab.api.clearAll();assert.throws(()=>secondTab.api.save(first),/cleared in another tab/);assert.equal(firstTab.api.list().length,0);
+ const fresh=open(firstTab.localStorage,storage());fresh.api.load();fresh.api.save({model:'Dua',draft:'New',messages:[]});assert.equal(fresh.api.list().length,1);
+});
+test('failed deletion leaves existing history and pending selections untouched',()=>{
+ const page=open();page.api.save(first);page.sessionStorage.setItem('dua-attachments','retain');
+ const original=page.localStorage.getItem('dua-history-v2');page.localStorage.setItem=()=>{throw Error('Blocked')};
+ assert.throws(()=>page.api.clearAll(),/Blocked/);assert.equal(page.localStorage.getItem('dua-history-v2'),original);assert.equal(page.sessionStorage.getItem('dua-attachments'),'retain');
+});
+test('confirmed clear all can reset unreadable stored data',()=>{
+ const page=open();page.localStorage.setItem('dua-history-v2','broken');page.api.clearAll();assert.equal(page.api.list().length,0);
+});
