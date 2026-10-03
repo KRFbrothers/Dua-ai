@@ -3,8 +3,9 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFile} from 'node:fs/promises';
 
+const voiceSource=await readFile(new URL('./dist/voice-input.js',import.meta.url),'utf8');
 const source=(await readFile(new URL('./dist/chat.html',import.meta.url),'utf8')).split('<script>')[1].split('</script>')[0];
-function setup({deferChat=false,replyError=false,files=[]}={}) {
+function setup({deferChat=false,replyError=false,files=[],voiceDraft=null}={}) {
  const events={};const configuration=[];const replies=[];let chatCalls=0;let signal;let payload;
  const node=()=>{
   const n={hidden:false,value:'',dataset:{},children:[],attributes:{},events:{},style:{setProperty(){}},
@@ -17,8 +18,8 @@ function setup({deferChat=false,replyError=false,files=[]}={}) {
  const message=node(),action=node(),picker=node(),composer=node(),error=node(),empty=node();message.value='Hi';
  composer.addEventListener=(type,handler)=>{events[type]=handler};
  const elements={'textarea':message,'#composer-action':action,'.model-picker':picker,'.composer':composer,'.chat-messages':node(),'.chat-error':error,'.empty':empty,'.model-chip-label':node(),'.model-sheet-footer':node()};
- const storage=new Map();if(files.length)storage.set('dua-attachments',JSON.stringify(files));
- vm.runInNewContext(source,{
+ const storage=new Map();if(voiceDraft)storage.set('dua-voice-draft',JSON.stringify({text:voiceDraft}));if(files.length)storage.set('dua-attachments',JSON.stringify(files));
+ vm.runInNewContext(voiceSource+source,{
   document:{querySelector:s=>elements[s]||(elements[s]=node()),createElement:node,addEventListener(){},documentElement:node()},
   location:{protocol:'https:',search:'',pathname:'/chat.html'},
   window:{addEventListener(){},history:{replaceState(){}}},URLSearchParams,AbortController,
@@ -93,4 +94,15 @@ test('failed attachment request keeps file selection and draft for retry',async(
  const files=[{name:'notes.txt',mimeType:'text/plain',data:'aGk='}];
  const page=setup({files,replyError:true});page.configuration.splice(0).forEach(resolve=>resolve(true));await flush();
  await page.submit();assert.equal(page.message.value,'Hi');assert.deepEqual(JSON.parse(page.storage.get('dua-attachments')),files);
+});
+
+test('reviewed voice appends to composer once without sending an API request',()=>{
+ const page=setup({voiceDraft:'नमस्ते Dua'});
+ assert.equal(page.message.value,'Hi\nनमस्ते Dua');assert.equal(page.calls(),0);
+ assert.equal(page.storage.has('dua-voice-draft'),false);
+});
+test('oversize voice handoff preserves the existing draft and pending transcript',()=>{
+ const page=setup({voiceDraft:'x'.repeat(8000)});
+ assert.equal(page.message.value,'Hi');assert.equal(page.calls(),0);
+ assert.equal(page.storage.has('dua-voice-draft'),true);assert.match(page.error.textContent,/8000/);
 });

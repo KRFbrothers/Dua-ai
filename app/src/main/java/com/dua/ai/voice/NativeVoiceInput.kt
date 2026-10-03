@@ -1,0 +1,111 @@
+package com.dua.ai.voice
+
+import android.content.Context
+import android.content.Intent
+import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.speech.RecognitionListener
+import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import java.util.Locale
+
+data class VoiceInputState(
+    val busy: Boolean = false,
+    val transcript: String = "",
+    val partial: String = "",
+    val status: String = "Tap mic to speak. Review before sending.",
+    val permissionDenied: Boolean = false
+)
+
+/** Owns one foreground, user-started speech recognition session; never sends an AI request. */
+class NativeVoiceInput(private val context: Context) {
+    private val mutableState = MutableStateFlow(VoiceInputState())
+    val state = mutableState.asStateFlow()
+    private var recognizer: SpeechRecognizer? = null
+    private val handler = Handler(Looper.getMainLooper())
+    private var generation = 0
+    private var closed = false
+    private var timeout: Runnable? = null
+
+    fun permissionDenied() {
+        if (closed) return
+        stop()
+        mutableState.value = mutableState.value.copy(status = "Microphone permission denied. Allow it in app Settings or retry.", permissionDenied = true)
+    }
+
+    fun start() {
+        if (closed || mutableState.value.busy) return
+        if (!SpeechRecognizer.isRecognitionAvailable(context)) {
+            mutableState.value = mutableState.value.copy(status = "Speech recognition unavailable on this device. Type in Chat instead.")
+            return
+        }
+        release()
+        val token = ++generation
+        mutableState.value = VoiceInputState(busy = true, status = "Starting microphone…")
+        try {
+            val speech = SpeechRecognizer.createSpeechRecognizer(context)
+            recognizer = speech
+            fun update(value: VoiceInputState) { if (token == generation) mutableState.value = value }
+            fun finish(status: String, transcript: String = "", denied: Boolean = false) {
+                if (token != generation) return
+                generation++
+                release()
+                mutableState.value = VoiceInputState(transcript = transcript, status = status, permissionDenied = denied)
+            }
+            speech.setRecognitionListener(object : RecognitionListener {
+                override fun onReadyForSpeech(params: Bundle?) { update(mutableState.value.copy(status = "Listening… Tap mic to stop.")) }
+                override fun onBeginningOfSpeech() {}
+                override fun onRmsChanged(rmsdB: Float) {}
+                override fun onBufferReceived(buffer: ByteArray?) {}
+                override fun onEndOfSpeech() { update(mutableState.value.copy(status = "Processing speech…")) }
+                override fun onError(error: Int) {
+                    val status = when (error) {
+                        SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "Microphone permission denied. Allow it in app Settings or retry."
+                        SpeechRecognizer.ERROR_NO_MATCH, SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "No speech detected. Tap mic to retry."
+                        SpeechRecognizer.ERROR_NETWORK, SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "Speech service network error. Check connection and retry."
+                        SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "Speech service is busy. Tap mic to retry."
+                        else -> "Voice input unavailable. Tap mic to retry or type in Chat."
+                    }
+                    finish(status, denied = error == SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS)
+                }
+                override fun onResults(results: Bundle?) {
+                    val words = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull().orEmpty()
+                    try { finish("Review transcript, then use it in Chat.", VoiceDraft.merge("", words)) }
+                    catch (error: IllegalArgumentException) { finish(error.message ?: "Speech could not be read.") }
+                }
+                override fun onPartialResults(partialResults: Bundle?) {
+                    update(mutableState.value.copy(partial = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull().orEmpty()))
+                }
+                override fun onEvent(eventType: Int, params: Bundle?) {}
+            })
+            timeout = Runnable { if (token == generation) finish("Voice input timed out. Tap mic to retry.") }.also { handler.postDelayed(it, 30000) }
+            speech.startListening(Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault().toLanguageTag())
+                putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+                putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+            })
+        } catch (_: SecurityException) { permissionDenied() }
+        catch (_: Exception) { stop(); mutableState.value = mutableState.value.copy(status = "Voice input unavailable. Tap mic to retry or type in Chat.") }
+    }
+
+    fun stop() {
+        generation++
+        release()
+        mutableState.value = mutableState.value.copy(busy = false, partial = "", status = if (mutableState.value.transcript.isBlank()) "Stopped. Tap mic to retry." else "Review transcript, then use it in Chat.")
+    }
+
+    fun close() { closed = true; stop() }
+
+    private fun release() {
+        timeout?.let(handler::removeCallbacks)
+        timeout = null
+        val previous = recognizer
+        recognizer = null
+        runCatching { previous?.cancel() }
+        runCatching { previous?.destroy() }
+    }
+}

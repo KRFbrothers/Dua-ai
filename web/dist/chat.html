@@ -59,7 +59,9 @@
 .chat-bubble.model{align-self:flex-start;background:var(--surface-container)}
 .chat-error{position:absolute;bottom:172px;left:20px;right:20px;text-align:center;margin:0;font-size:14px;line-height:20px;color:var(--on-surface-variant)}
 .model-option:has(input:disabled){opacity:.45;cursor:not-allowed}
-.selected-files{display:flex;align-items:center;gap:8px;background:var(--surface-container);border-radius:16px;padding:8px 12px;position:absolute;left:0;right:0;bottom:calc(100% + 12px);font-size:14px;line-height:1.4}.selected-file-copy{flex:1;min-width:0;overflow-wrap:anywhere}.remove-files{width:48px;height:48px;flex:none;border:0;border-radius:50%;background:transparent;color:var(--on-surface)}.selected-files[hidden]{display:none}.screen{min-height:0;height:var(--visible-height,100dvh);position:fixed;top:var(--visible-top,0px);left:0}.chat-messages{overscroll-behavior:contain}.screen:has(.selected-files:not([hidden])) .chat-messages{bottom:290px}.screen:has(.selected-files:not([hidden])) .chat-error{bottom:250px}@media(max-height:440px){.topbar{inset:12px 16px auto}.chat-messages{top:72px;bottom:184px}.chat-error{bottom:148px}.screen:has(.selected-files:not([hidden])) .chat-messages{bottom:264px}.screen:has(.selected-files:not([hidden])) .chat-error{bottom:224px}}.selected-files{max-height:80px;overflow:auto}.chat-bubble{height:auto;min-height:0;min-width:0;display:block;box-sizing:border-box}.controls .send .action-arrow{display:block;fill:none;stroke:var(--on-primary);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}.controls .send .action-arrow[hidden]{display:none!important}.topbar{display:grid;grid-template-columns:48px minmax(0,1fr) 48px;gap:8px;align-items:center}.topbar .home-link,.topbar>button{width:48px;height:48px;margin:0}.chat-header-title{position:static;left:auto;transform:none;max-width:none;padding:0;min-width:0;text-align:center;font-size:18px;line-height:24px}.controls .model{min-height:48px;height:48px;display:flex;align-items:center;justify-content:center}.topbar .home-link{grid-column:1;grid-row:1}.topbar .chat-header-title{grid-column:2;grid-row:1;white-space:nowrap}.topbar>button{grid-column:3;grid-row:1;justify-self:end}.screen[data-compact="true"] .composer{height:120px;padding:12px 16px;bottom:12px}.screen[data-compact="true"] .controls{margin-top:8px}.screen[data-compact="true"] .topbar{inset:12px 16px auto}.screen[data-compact="true"] .chat-messages{top:72px;bottom:168px}.screen[data-compact="true"] .chat-error{bottom:136px;font-size:12px;line-height:16px}.screen[data-compact="true"]:has(.selected-files:not([hidden])) .chat-messages{bottom:248px}.screen[data-compact="true"]:has(.selected-files:not([hidden])) .chat-error{bottom:216px}</style>
+.selected-files{display:flex;align-items:center;gap:8px;background:var(--surface-container);border-radius:16px;padding:8px 12px;position:absolute;left:0;right:0;bottom:calc(100% + 12px);font-size:14px;line-height:1.4}.selected-file-copy{flex:1;min-width:0;overflow-wrap:anywhere}.remove-files{width:48px;height:48px;flex:none;border:0;border-radius:50%;background:transparent;color:var(--on-surface)}.selected-files[hidden]{display:none}.screen{min-height:0;height:var(--visible-height,100dvh);position:fixed;top:var(--visible-top,0px);left:0}.chat-messages{overscroll-behavior:contain}.screen:has(.selected-files:not([hidden])) .chat-messages{bottom:290px}.screen:has(.selected-files:not([hidden])) .chat-error{bottom:250px}@media(max-height:440px){.topbar{inset:12px 16px auto}.chat-messages{top:72px;bottom:184px}.chat-error{bottom:148px}.screen:has(.selected-files:not([hidden])) .chat-messages{bottom:264px}.screen:has(.selected-files:not([hidden])) .chat-error{bottom:224px}}.selected-files{max-height:80px;overflow:auto}.chat-bubble{height:auto;min-height:0;min-width:0;display:block;box-sizing:border-box}.controls .send .action-arrow{display:block;fill:none;stroke:var(--on-primary);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}.controls .send .action-arrow[hidden]{display:none!important}.topbar{display:grid;grid-template-columns:48px minmax(0,1fr) 48px;gap:8px;align-items:center}.topbar .home-link,.topbar>button{width:48px;height:48px;margin:0}.chat-header-title{position:static;left:auto;transform:none;max-width:none;padding:0;min-width:0;text-align:center;font-size:18px;line-height:24px}.controls .model{min-height:48px;height:48px;display:flex;align-items:center;justify-content:center}.topbar .home-link{grid-column:1;grid-row:1}.topbar .chat-header-title{grid-column:2;grid-row:1;white-space:nowrap}.topbar>button{grid-column:3;grid-row:1;justify-self:end}.screen[data-compact="true"] .composer{height:120px;padding:12px 16px;bottom:12px}.screen[data-compact="true"] .controls{margin-top:8px}.screen[data-compact="true"] .topbar{inset:12px 16px auto}.screen[data-compact="true"] .chat-messages{top:72px;bottom:168px}.screen[data-compact="true"] .chat-error{bottom:136px;font-size:12px;line-height:16px}.screen[data-compact="true"]:has(.selected-files:not([hidden])) .chat-messages{bottom:248px}.screen[data-compact="true"]:has(.selected-files:not([hidden])) .chat-error{bottom:216px}
+.screen[data-multiline="true"] .composer{height:160px}.screen[data-multiline="true"] .composer textarea{height:56px;display:block}.screen[data-multiline="true"] .controls{margin-top:8px}.screen[data-multiline="true"] .chat-messages{bottom:226px}.screen[data-multiline="true"] .chat-error{bottom:188px}.screen[data-multiline="true"]:has(.selected-files:not([hidden])) .chat-messages{bottom:306px}.screen[data-multiline="true"]:has(.selected-files:not([hidden])) .chat-error{bottom:266px}.screen[data-compact="true"][data-multiline="true"] .composer{height:136px}.screen[data-compact="true"][data-multiline="true"] .chat-messages{bottom:184px}.screen[data-compact="true"][data-multiline="true"] .chat-error{bottom:152px}.screen[data-compact="true"][data-multiline="true"]:has(.selected-files:not([hidden])) .chat-messages{bottom:264px}.screen[data-compact="true"][data-multiline="true"]:has(.selected-files:not([hidden])) .chat-error{bottom:232px}
+</style>
 </head>
 <body><p class="history-warning" role="status" style="position:fixed;top:0;left:16px;right:16px;font-size:12px;z-index:20;color:#ffb1c0"></p>
 <main class="screen" aria-label="New chat interface">
@@ -74,7 +76,7 @@
 <span class="voice-status" role="status" aria-live="polite" id="voice-status"></span>
 </main>
 
-<script src="chat-history.js"></script>
+<script src="chat-history.js"></script><script src="voice-input.js"></script>
 <script>
 function syncVisibleViewport(){const viewport=window.visualViewport;if(!viewport)return;document.documentElement.style.setProperty('--visible-height',viewport.height+'px');document.documentElement.style.setProperty('--visible-top',viewport.offsetTop+'px');document.querySelector('.screen').dataset.compact=String(viewport.height<440);}
 window.visualViewport?.addEventListener('resize',syncVisibleViewport);window.visualViewport?.addEventListener('scroll',syncVisibleViewport);syncVisibleViewport();
@@ -95,6 +97,7 @@ function saveChatState(){
  try{sessionStorage.setItem(stateKey,JSON.stringify(snapshot));DuaHistory.save(snapshot);}catch{document.querySelector('.history-warning').textContent='Chat could not be saved on this device. Storage may be full or unavailable.';}
 }
 function updateAction() {
+  document.querySelector(".screen").dataset.multiline=String(message.value.includes("\n"));
   document.querySelector('.remove-files').disabled=busy;
   const hasText = message.value.trim().length > 0 || selectedFiles.length > 0;
   if(busy){cube.hidden=true;arrow.removeAttribute('hidden');arrow.innerHTML='<rect x="13" y="13" width="14" height="14" rx="2"/>';action.classList.remove('voice-ready');action.setAttribute('aria-label','Stop response');action.title='Stop response';return;}
@@ -208,7 +211,7 @@ composer.addEventListener('submit',async event=>{
 });
 window.addEventListener('pagehide',()=>{if(busy)stopResponse();else saveChatState();});
 try{
- if(new URLSearchParams(location.search).has('new')){DuaHistory.newChat();sessionStorage.removeItem(stateKey);sessionStorage.removeItem('dua-attachments');selectedFiles=[];window.history.replaceState(null,'',location.pathname);}
+ if(new URLSearchParams(location.search).has('new')){DuaHistory.newChat();sessionStorage.removeItem('dua-voice-draft');sessionStorage.removeItem(stateKey);sessionStorage.removeItem('dua-attachments');selectedFiles=[];window.history.replaceState(null,'',location.pathname);}
  const saved=DuaHistory.load(new URLSearchParams(location.search).get('chat'));
  if(saved&&typeof saved==='object'){
   message.value=typeof saved.draft==='string'?saved.draft:'';
@@ -223,6 +226,13 @@ try{
 const fileCard=document.querySelector('.selected-files'),fileCopy=document.querySelector('.selected-file-copy');
 function showFiles(){fileCard.hidden=!selectedFiles.length;fileCopy.textContent=selectedFiles.map(f=>f.name).join(', ')+' · Ready to send';action.setAttribute('aria-disabled','false');updateAction();}
 document.querySelector('.remove-files').onclick=()=>{selectedFiles=[];try{sessionStorage.removeItem('dua-attachments')}catch{}errorView.textContent='';showFiles();updateAction();};showFiles();
+try{
+ const voiceDraft=JSON.parse(sessionStorage.getItem('dua-voice-draft')||'null');
+ if(voiceDraft&&typeof voiceDraft.text==='string'){
+  message.value=DuaVoiceDraft.merge(message.value,voiceDraft.text);
+  saveChatState();sessionStorage.removeItem('dua-voice-draft');updateAction();
+ }
+}catch(error){errorView.textContent=error.message||'Voice draft could not be restored.';}
 message.addEventListener('keydown',event=>{if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing){event.preventDefault();composer.requestSubmit();}});
 </script>
 </body>

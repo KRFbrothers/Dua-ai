@@ -8,7 +8,7 @@ The browser app includes home, chat, settings, attachments, model selection and 
 
 The root `netlify.toml` publishes `web/dist` and deploys the Gemini function. Store `GEMINI_API_KEY` and `GEMINI_MODEL` in private Netlify configuration. Never commit API keys.
 
-Voice AI replies, account/cloud sync and most settings remain unfinished; see [FEATURES.md](FEATURES.md) for the ordered implementation list.
+AI audio replies, account/cloud sync and most settings remain unfinished; see [FEATURES.md](FEATURES.md) for the ordered implementation list.
 
 ## Android client
 
@@ -24,8 +24,8 @@ With Node 24+, run `npm test` from `web/` to run the local and Netlify endpoint 
 
 ## Native interface
 
-The Android Compose launcher now follows the current web design: I am Dua home, centered-logo chat, Material 3 composer, model sheet, Add to chat, Settings and Voice screens. Navigation preserves the current in-memory conversation and draft; New chat resets it. Native Dua and Gemini selections use the same HTTPS backend as the web app. Images, PDF and TXT attachments are sent with the current message. Camera uses the external device camera for full-photo JPEG capture with temporary-file cleanup and the shared 2 MiB attachment limit. Other providers and AI voice remain planned features. No WebView or live website is required to render the Android interface.
+The Android Compose launcher now follows the current web design: I am Dua home, centered-logo chat, Material 3 composer, model sheet, Add to chat, Settings and Voice screens. Navigation preserves the current in-memory conversation and draft; New chat resets it. Native Dua and Gemini selections use the same HTTPS backend as the web app. Images, PDF and TXT attachments are sent with the current message. Camera uses the external device camera for full-photo JPEG capture with temporary-file cleanup and the shared 2 MiB attachment limit. Voice input now supports speech recognition, editable transcript review and append-to-draft with explicit Send. Other providers and AI audio replies remain planned features. No WebView or live website is required to render the Android interface.
 
 ## Android AI backend
 
-Android sends the same `model`, `messages` and optional `attachments` JSON to `/api/chat` as web. The default backend is `https://celadon-halva-adafe4.netlify.app`. Override it with `-PduaApiBaseUrl=https://your-project.netlify.app` when building. Set GEMINI_API_KEY and GEMINI_MODEL on the server only; no API key belongs in the APK. The hosted endpoint must permit native clients; if Netlify requires browser/team login, adjust access policy before testing. Native AI voice remains a future feature. Attachment limits and retention are documented in web/README.md. Android/backend integration has not been live-tested here.
+Android sends the same `model`, `messages` and optional `attachments` JSON to `/api/chat` as web. The default backend is `https://celadon-halva-adafe4.netlify.app`. Override it with `-PduaApiBaseUrl=https://your-project.netlify.app` when building. Set GEMINI_API_KEY and GEMINI_MODEL on the server only; no API key belongs in the APK. The hosted endpoint must permit native clients; if Netlify requires browser/team login, adjust access policy before testing. Native speech-to-draft input uses device speech recognition and runtime microphone permission. AI audio replies remain a future feature. Attachment limits and retention are documented in web/README.md. Android/backend integration has not been live-tested here.
