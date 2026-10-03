@@ -18,7 +18,9 @@ Android text replies use the same Gemini backend as web. Session history is stil
 
 ## Validation
 
-With Node 24+, run `npm test` from `web/` to run the local and Netlify endpoint tests. Android requires its SDK and a separate clean build.
+With Node 24+, run `npm test` from `web/` to run the local and Netlify endpoint tests. With JDK 17 and Android SDK 35 installed, run `bash ./gradlew :app:assembleDebug :app:testDebugUnitTest` from the repository root.
+
+[Project checks](.github/workflows/checks.yml) runs both commands on pull requests and pushes to `main`, and supports manual runs from the Actions tab. Tests use mocked providers/local HTTPS and do not require Gemini credentials. Android unit-test reports are uploaded even when tests fail. These checks do not deploy the application, verify a physical device, or call live Gemini. Required branch-protection checks must be configured separately.
 
 ## Native interface
 
