@@ -23,3 +23,11 @@ Run `npm test` for Node and Netlify endpoint tests with mocked Gemini responses.
 The default browser pages now follow the native Android mobile layout, including the responsive composer, model sheet, Settings detail pages, attachment selection cards and Voice cube. Chat calls the real `/api/chat` backend, clears accepted drafts and supports Stop with client-side request cancellation. Failed requests restore the draft. In-tab session storage preserves the current chat across navigation; this is not account-backed persistent history.
 
 `/preview/` remains a separate design sandbox with simulated replies. Account, appearance, notification and permission samples remain explicitly labelled design states. Voice keeps browser speech input where supported; native Voice currently demonstrates animation without recording.
+
+## Chat request protection
+
+On Netlify, `/api/chat` has an edge-enforced limit of 5 requests per 60 seconds for each IP/domain combination. Requests above the allowance are rewritten to a provider-free JSON endpoint returning HTTP 429 and `Retry-After: 60`. `/api/config` does not consume this allowance. Browser and native Android clients receive the same retry guidance; clients sharing a public IP also share the allowance.
+
+This rule limits bursts, not total daily Gemini usage or spending. The endpoint still accepts native requests without an Origin header and does not authenticate users. Multiple IPs can consume the shared provider quota. Account authentication and project-wide quota budgeting remain pending work; no private token is embedded in browser code or the APK.
+
+Netlify enforces the rule only on deployed requests, not the local Node server or direct function unit tests. After deployment, confirm the rule in the Netlify deploy log's rate-limiting section. Unit tests validate routing and the safe 429 response; they do not simulate Netlify's counters or prove live edge enforcement. See [Netlify rate-limiting documentation](https://docs.netlify.com/manage/security/secure-access-to-sites/rate-limiting/).
