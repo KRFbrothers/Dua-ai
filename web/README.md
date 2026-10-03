@@ -1,53 +1,80 @@
-# Dua browser app and Gemini backend
+# Dua incomplete features and implementation order
 
-This folder contains the browser app created from the supplied references. The native Android application lives separately under `app/`.
+Updated 3 October 2026. Web and Android share the intended product behavior; platform implementations differ. This list preserves planned integrations.
 
-## Deploy from GitHub on Netlify
+| Order | Feature | Current state | Remaining work |
+| --- | --- | --- | --- |
+| 1 | Persistent chat history | Implemented: saved chats, search, reopen, draft/model recovery and confirmed deletion on web/Android | Physical Android restart/file-picker verification; import/restore; account/cloud sync is separate |
+| 2 | Attachment processing | Implemented inline JPEG/PNG/WebP/PDF/TXT input on web and Android, with validation and retry/Stop selection retention | Live Gemini and physical Android verification; larger files, DOCX and durable/provider file storage |
+| 3 | Camera/photos | Web image selection/capture and native full-photo camera output/photo picker feed attachment processing | Physical-device camera/picker verification; image resizing/compression for captures above 2 MiB |
+| 4 | AI voice conversation | Speech-to-draft input and user-triggered reply read aloud on web/Android; native mic permission and playback lifecycle cleanup | Physical speech/TTS/permission verification; hands-free conversational turns, provider-generated audio and interruption |
+| 5 | Account sign-in/profile/logout | Design screens only | Authentication provider, sessions, real profile and logout behavior |
+| 6 | Cloud history sync | Not implemented | Authenticated ownership, backend storage, cross-device sync and conflict handling |
+| 7 | Other AI providers | ChatGPT, Claude, Grok and Kimi remain unavailable | Server-side provider credentials/configuration, routing, errors, quotas and tests |
+| 8 | Web search | Disabled/Coming soon | Search provider, citations and user controls |
+| 9 | Memory | Disabled/Coming soon | Opt-in storage, retrieval, inspect/edit/delete controls and account ownership |
+| 10 | Connectors/plugins | Placeholder UI | Integration selection, authorization, actual tools and revocation |
+| 11 | Computer mode/screen sharing/video | Coming soon/design states | Define supported desktop/device capabilities and implement permissions/session lifecycle |
+| 12 | Appearance/font settings | Design samples; launcher uses dark styling | Apply supported choices across screens and persist them consistently |
+| 13 | Notifications | Design sample | Browser/native permission flows, notification delivery and settings |
+| 14 | Data controls/privacy/sharing | Local JSON export, confirmed delete-all and individual deletion now work on web/Android | Import/restore, account deletion, real sharing and cloud retention settings |
+| 15 | Microphone/camera permissions | Voice requests native microphone permission with denial/settings recovery; camera capture is delegated to the external camera app | Physical permission/recognizer verification; remaining Settings permission samples and other device capabilities |
+| 16 | Usage/account protection | IP burst limit added; endpoints are not authenticated | Account-based access policy and project-wide daily/spend budgeting |
 
-1. Connect this repository to the existing Netlify project under Project configuration → Build & deploy → Continuous deployment → Link repository, or import it as a new project.
-2. Select the branch containing these files. The root `netlify.toml` sets base directory `web`, publish directory `dist`, and functions directory `netlify/functions`. No build command is needed.
-3. In Netlify Environment variables, add `GEMINI_API_KEY` as a secret available to Functions. Also add `GEMINI_MODEL` using an available model ID from your Google AI Studio project. There is no hardcoded model fallback. Never add your key to GitHub or browser code.
-4. Deploy from the repository. A drag-and-drop HTML ZIP does not deploy the Gemini functions.
-5. Open `/api/config` on the deployed origin to check configuration. It returns only whether both the key and model are configured, never its value.
+## First implementation: local history
 
-Gemini is available through Dua and Gemini in the model picker. Other providers remain unavailable. Voice mode provides speech input, and completed Chat replies have an explicit Read aloud option using device/browser text-to-speech. Hands-free conversation and provider-generated audio remain pending. Camera/screen sharing in voice mode are unavailable. Web search and Memory remain disabled/off and marked Coming soon. JPEG, PNG, WebP, PDF and UTF-8 TXT files can be sent to Gemini with the current message.
+Production web uses `localStorage` at `dua-history-v2`, migrates the previous in-tab chat once, and preserves separate chats when New chat is selected. Android uses app-private SharedPreferences and serialized chat records. Both retain messages, draft and selected model; Home supports title/preview search, reopening and confirmed deletion. History stays on its device/browser and does not sync between web and Android.
 
-## Local use
+Deleting a chat removes that local record. Clearing browser/app storage also removes local history. No cloud backup/sync service, account ownership or end-to-end encryption feature is implemented. OS-level Android backup policy is unchanged. The separate `/preview/` design sandbox still uses simulated replies.
 
-With Node 24+, copy `.env.example` to `.env`, enter your key and available model ID there, and run `npm start` from `web/`. Open http://localhost:3000. Opening HTML files directly provides only the interface.
+Validation: 43 web tests, including migration/reload/deletion/storage-error coverage; 12 Android JVM tests including history serialization; Android debug APK assembly; mobile Chromium checks with mocked Gemini for multiple chats, draft restore, search and deletion. Physical Android process death/restart and live Gemini were not tested.
 
-Run `npm test` for Node and Netlify endpoint tests with mocked Gemini responses. Live Gemini API testing requires a configured key and has not been performed.
+Implement the remaining items one at a time with matching web/native behavior. Provider/account integrations require configured server-side services; do not place private provider credentials in the browser or APK.
 
-## Mobile interface
+## Second implementation: attachments
 
-The default browser pages now follow the native Android mobile layout, including the responsive composer, model sheet, Settings detail pages, attachment selection cards and Voice cube. Chat calls the real `/api/chat` backend, clears accepted drafts and supports Stop with client-side request cancellation. Failed requests restore the draft. Local browser storage now preserves multiple chats, drafts and selected models across visits. Home supports search, reopening and confirmed deletion. The previous in-tab chat migrates once; storage failures show a warning. This is device-local history, not account/cloud synchronization. See [../FEATURES.md](../FEATURES.md) for the remaining feature list.
+Both clients send at most 3 files / 2 MiB total with the current message; TXT is limited to 64 KiB. The shared backend validates contents and adds inline image/PDF or decoded text parts only to the final user message. Successful replies clear selection; Stop/errors retain it. Persistent history stores filenames and replies without file bytes. Pending bytes are browser-session/Android-memory only.
 
-`/preview/` remains a separate design sandbox with simulated replies. Account, appearance, notification and permission samples remain explicitly labelled design states. Voice keeps browser speech input where supported; native Voice now uses Android speech recognition with runtime microphone permission.
+Validation: 50 web tests and 16 Android JVM tests passed; Android debug APK assembled. Mobile Chromium file selection, sending and selection clearing passed with a mocked Gemini response. Live Gemini and physical Android file picker/camera tests remain pending.
 
-## Chat request protection
+## Third implementation: camera capture
 
-On Netlify, `/api/chat` has an edge-enforced limit of 5 requests per 60 seconds for each IP/domain combination. Requests above the allowance are rewritten to a provider-free JSON endpoint returning HTTP 429 and `Retry-After: 60`. `/api/config` does not consume this allowance. Browser and native Android clients receive the same retry guidance; clients sharing a public IP also share the allowance.
+Android delegates capture to the device camera app through TakePicture and a restricted FileProvider cache path. Original JPEG bytes are read through the bounded attachment reader without thumbnail conversion or resizing. A cancelled/failed capture keeps the previous selected attachment. Output files are removed after reading, on failure/cancel, or when launch fails; files abandoned by process death are pruned after 24 hours when capture next starts. The pending filename survives normal activity recreation. App cache may also be cleared by Android. No direct Camera API or CAMERA permission is needed for delegated capture.
 
-This rule limits bursts, not total daily Gemini usage or spending. The endpoint still accepts native requests without an Origin header and does not authenticate users. Multiple IPs can consume the shared provider quota. Account authentication and project-wide quota budgeting remain pending work; no private token is embedded in browser code or the APK.
+Web uses the browser's capture input where supported, resets the input to allow reselection, preserves prior selection on cancellation/failure, and ignores late reads from older selections. Both platforms retain the 2 MiB total limit; larger photos require resizing outside the app for now. Camera JPEG metadata is retained along with the original bytes.
 
-Netlify enforces the rule only on deployed requests, not the local Node server or direct function unit tests. After deployment, confirm the rule in the Netlify deploy log's rate-limiting section. Unit tests validate routing and the safe 429 response; they do not simulate Netlify's counters or prove live edge enforcement. See [Netlify rate-limiting documentation](https://docs.netlify.com/manage/security/secure-access-to-sites/rate-limiting/).
+Validation: 54 web tests and 20 Android JVM tests passed; debug APK assembled. Mobile Chromium checked camera-input selection, input reset and return to Chat without layout overflow or browser errors. A physical Android camera app, rotation/process restoration with external camera open, and live Gemini media replies remain untested.
 
-## Attachments
+## Fourth implementation: voice input to draft
 
-Web and native Android send base64 file contents through the shared `/api/chat` endpoint. Select up to 3 files with a combined size of 2 MiB; each TXT file is limited to 64 KiB. The backend validates file type, signatures, base64 and size before contacting Gemini. Requests are limited to 3 MiB, while conversation JSON retains its separate 256 KiB limit.
+Production Voice now supports speech-to-text through the browser SpeechRecognition API and Android SpeechRecognizer. Tap mic to start; review/edit a completed transcript and choose Use in chat to append it to the existing draft. Sending remains a separate action; recognition does not call Gemini. Blank/over-8000-character transcripts are rejected, and drafts are never silently overwritten or truncated. Web restores the originating chat and consumes its temporary handoff once. Android retains completed review text through normal activity recreation.
 
-Files apply only to the current user message. Reattach a file for later analysis. Pending bytes live in browser session storage or Android ViewModel memory; persistent history keeps filenames and replies, not file contents. Successful replies clear the selection. Failed or stopped requests retain it for retry. Remove/New chat clears it. Native camera capture now receives the original full-photo JPEG from an external camera app through a restricted temporary FileProvider URI. The pending filename survives activity recreation; temporary output is removed after reading or cancellation, with abandoned files pruned after 24 hours on the next capture. Photos above 2 MiB must be resized before selection; automatic resizing is not implemented. Original JPEG metadata is retained. Browser camera capture depends on device/browser support; Photos and Files remain alternatives.
+Start is user initiated. Android requests RECORD_AUDIO, handles denial with an app Settings action, checks speech-service availability, and releases its recognizer on Stop/background/disposal. Web checks support, handles permission/service errors, aborts on Stop/background/page exit, prevents overlapping starts and ignores late callbacks. Both use a 30-second timeout. Recognition uses the device/browser language. No raw audio is stored by this application, but the selected device/browser speech service may process audio remotely. Voice input and final transcript review do not implement AI audio replies, video or screen sharing.
 
-Large files, DOCX, video/audio, durable file storage and provider File API uploads remain pending. Mobile Chromium was checked with a mocked provider; live Gemini media handling and physical Android picker/camera behavior remain unverified.
+Validation: 61 web tests and 22 Android JVM tests, plus debug APK assembly. Mobile Chromium with mocked speech results checked Hindi/English editing and transfer to an existing draft with no automatic send. Real microphone/service behavior, Android permission denial/recovery and rotation with the microphone active remain unverified on a physical device.
 
-## Voice input
+## Fifth implementation: reply read aloud
 
-Tap mic on Voice to recognize speech, edit the completed transcript and choose Use in chat. Both browser and Android append to the existing draft, capped at 8000 characters; Send remains explicit. Recognition never starts a Gemini request. Browser support and device speech services vary; unsupported/denied/service-error states provide retry or typed-chat guidance. Android offers app Settings after permission denial. Stop, backgrounding and exiting release recognition; a session times out after 30 seconds. The device/browser language is used.
+Completed AI replies now have explicit Read aloud / Stop controls on both clients. Browser SpeechSynthesis and Android TextToSpeech use the device/browser language and installed voices. Nothing speaks automatically. Long replies are split into <=300-code-point chunks with whitespace/sentence boundaries where practical, preserving Hindi and emoji. Replacing/stopping playback invalidates old callbacks; a stalled chunk times out after 45 seconds.
 
-The app stores no raw audio. The selected speech service may use network/cloud processing. Only a transcript explicitly moved into Chat becomes part of locally saved drafts/history. Hands-free conversation and provider-generated audio remain pending. Browser flow was checked with mocked recognition; real microphone input and physical Android permission/lifecycle behavior still need device verification.
+Playback stops on backgrounding/navigation and when a new prompt is submitted. Android also requests transient audio focus, stops on focus loss and releases focus at Stop/completion. Unsupported engines, missing native language/data and playback errors show guidance. Pending/stopped web replies have no read-aloud action. Button labels are excluded from stored message text and subsequent API history.
 
-## Reply read aloud
+This is device/browser text-to-speech for existing text replies, not a provider audio API or hands-free live conversation. The app stores no audio output; installed/network speech voices may process reply text through their service.
 
-Select Read aloud on a completed AI reply; select it again or use Stop reading to stop. Web and native Android use their installed speech engine/voices in the device/browser language. Playback never starts automatically. Long replies play in bounded Unicode-safe chunks. Navigation, backgrounding and sending a new prompt stop playback. Android also stops on audio-focus loss and releases audio focus at completion. Unsupported/missing speech engines or language data show guidance.
+Validation: 67 web tests and 26 Android JVM tests; debug APK assembly. Mobile Chromium with mocked speech output checked explicit playback, Stop, clean saved history and 48px controls at 320px width. Actual speaker output, installed voices/languages and Android audio-focus/background behavior still need physical-device verification.
 
-Audio is not stored by the app. Some installed/network speech voices may process the reply text remotely. No Gemini audio endpoint or additional provider key is used. Physical speaker output and native audio focus still need device verification; automated UI checks used mocked speech output.
+## Sixth implementation: local data controls
+
+Data controls now exports local chats and unsent drafts as JSON on both platforms, using the same `dua-chat-export` version-1 envelope with exportedAt and chats. Android uses the system CreateDocument picker; web requests a named JSON download. Models, message roles/text and timestamps are retained; no attachment bytes or audio are exported. Import/restore is not implemented yet.
+
+Clear all requires a confirmation. Web removes local records and current-tab pending attachments/voice handoff, keeps an empty history marker to block legacy migration, and increments a storage generation. Existing Chat tabs cancel pending replies/playback and return Home; stale saves cannot restore deleted history. Android cancels pending replies, persists an empty history before updating the visible list, removes the unreadable-history backup, clears the current draft/selection and attempts camera-cache cleanup. Failed storage writes report errors rather than displaying a successful deletion.
+
+This manages only the current browser/device. Previously exported files, other devices, provider-side records and OS backups are outside this control; Android backup policy remains unchanged. Pending attachment/voice session storage in other browser tabs is not globally erased. JSON exports are plain text and include unsent drafts.
+
+Validation: 76 web tests and 28 Android JVM tests passed; debug APK assembled. Mobile Chromium checked generated JSON contents including Hindi/emoji, cancel without deletion, confirmed deletion, empty Home and an open second Chat tab returning Home without resurrecting data. Physical Android document-provider writing, disk-failure recovery and restart after deletion remain unverified.
+
+## Local data controls
+
+Settings → Data controls offers Export chats and confirmed Clear all on web and Android. Exports use the shared `dua-chat-export` version-1 JSON envelope and include messages, models, timestamps and unsent drafts without attachment bytes/audio. Web requests a dated JSON download; Android uses the system file picker. Import/restore remains pending.
+
+Clear all deletes local history and the current session's draft/selected files. Open browser Chat tabs stop pending work and return Home; a storage-generation check blocks stale tabs from re-saving deleted history. Other devices, previously exported files, provider records and OS backups are unaffected. Other tabs' temporary file/voice selections are not globally erased. Android removes its unreadable-history backup and attempts camera-cache cleanup. Native file-picker and restart/disk-failure behavior still need physical-device verification.
