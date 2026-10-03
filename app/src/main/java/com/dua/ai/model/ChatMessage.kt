@@ -11,7 +11,8 @@ data class ChatMessage(
     val hasCode: Boolean = false,
     val codeSnippet: String? = null,
     val codeLanguage: String = "Kotlin",
-    val reaction: MessageReaction = MessageReaction.NONE
+    val reaction: MessageReaction = MessageReaction.NONE,
+    val state: String = "complete"
 )
 
 enum class MessageReaction {
@@ -31,3 +32,4 @@ data class ChatSession(
     val category: String = "General",
     val timestamp: String = "Today"
 )
+

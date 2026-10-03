@@ -217,7 +217,7 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel()) {
                                                             modifier = Modifier.padding(top = 12.dp))
                                                     }
                                                     if (!message.isUser) {
-                                                        FilledTonalButton(enabled = speech.available,
+                                                        FilledTonalButton(enabled = speech.available && message.state == "complete",
                                                             onClick = { speaker.toggle(message.id, message.text) },
                                                             shape = RoundedCornerShape(20.dp), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
                                                             modifier = Modifier.padding(top = 8.dp).heightIn(min = 48.dp)) {

@@ -4,7 +4,7 @@ Updated 3 October 2026. Web and Android share the intended product behavior; pla
 
 | Order | Feature | Current state | Remaining work |
 | --- | --- | --- | --- |
-| 1 | Persistent chat history | Implemented: saved chats, search, reopen, draft/model recovery and confirmed deletion on web/Android | Physical Android restart/file-picker verification; import/restore; account/cloud sync is separate |
+| 1 | Persistent chat history | Implemented: saved chats, search, reopen, draft/model recovery and confirmed deletion on web/Android | Physical Android restart/file-picker/import verification; account/cloud sync is separate |
 | 2 | Attachment processing | Implemented inline JPEG/PNG/WebP/PDF/TXT input on web and Android, with validation and retry/Stop selection retention | Live Gemini and physical Android verification; larger files, DOCX and durable/provider file storage |
 | 3 | Camera/photos | Web image selection/capture and native full-photo camera output/photo picker feed attachment processing | Physical-device camera/picker verification; image resizing/compression for captures above 2 MiB |
 | 4 | AI voice conversation | Speech-to-draft input and user-triggered reply read aloud on web/Android; native mic permission and playback lifecycle cleanup | Physical speech/TTS/permission verification; hands-free conversational turns, provider-generated audio and interruption |
@@ -17,7 +17,7 @@ Updated 3 October 2026. Web and Android share the intended product behavior; pla
 | 11 | Computer mode/screen sharing/video | Coming soon/design states | Define supported desktop/device capabilities and implement permissions/session lifecycle |
 | 12 | Appearance/font settings | Design samples; launcher uses dark styling | Apply supported choices across screens and persist them consistently |
 | 13 | Notifications | Design sample | Browser/native permission flows, notification delivery and settings |
-| 14 | Data controls/privacy/sharing | Local JSON export, confirmed delete-all and individual deletion now work on web/Android | Import/restore, account deletion, real sharing and cloud retention settings |
+| 14 | Data controls/privacy/sharing | Local JSON export/import, confirmed delete-all and individual deletion now work on web/Android | Account deletion, real sharing and cloud retention settings |
 | 15 | Microphone/camera permissions | Voice requests native microphone permission with denial/settings recovery; camera capture is delegated to the external camera app | Physical permission/recognizer verification; remaining Settings permission samples and other device capabilities |
 | 16 | Usage/account protection | IP burst limit added; endpoints are not authenticated | Account-based access policy and project-wide daily/spend budgeting |
 
@@ -65,10 +65,20 @@ Validation: 67 web tests and 26 Android JVM tests; debug APK assembly. Mobile Ch
 
 ## Sixth implementation: local data controls
 
-Data controls now exports local chats and unsent drafts as JSON on both platforms, using the same `dua-chat-export` version-1 envelope with exportedAt and chats. Android uses the system CreateDocument picker; web requests a named JSON download. Models, message roles/text and timestamps are retained; no attachment bytes or audio are exported. Import/restore is not implemented yet.
+Data controls now exports local chats and unsent drafts as JSON on both platforms, using the same `dua-chat-export` version-1 envelope with exportedAt and chats. Android uses the system CreateDocument picker; web requests a named JSON download. Models, message roles/text and timestamps are retained; no attachment bytes or audio are exported. Version-1 import/restore was added in the seventh implementation below.
 
 Clear all requires a confirmation. Web removes local records and current-tab pending attachments/voice handoff, keeps an empty history marker to block legacy migration, and increments a storage generation. Existing Chat tabs cancel pending replies/playback and return Home; stale saves cannot restore deleted history. Android cancels pending replies, persists an empty history before updating the visible list, removes the unreadable-history backup, clears the current draft/selection and attempts camera-cache cleanup. Failed storage writes report errors rather than displaying a successful deletion.
 
 This manages only the current browser/device. Previously exported files, other devices, provider-side records and OS backups are outside this control; Android backup policy remains unchanged. Pending attachment/voice session storage in other browser tabs is not globally erased. JSON exports are plain text and include unsent drafts.
 
 Validation: 76 web tests and 28 Android JVM tests passed; debug APK assembled. Mobile Chromium checked generated JSON contents including Hindi/emoji, cancel without deletion, confirmed deletion, empty Home and an open second Chat tab returning Home without resurrecting data. Physical Android document-provider writing, disk-failure recovery and restart after deletion remain unverified.
+
+## Seventh implementation: local JSON import/restore
+
+Data controls accepts the same version-1 Dua export on web and Android. Choose a JSON file, review its chat count and explicitly confirm Import. Existing chats, the active draft and pending attachment selections are retained. Each imported chat receives a fresh local ID and is added as a separate copy, preserving model, timestamps, message roles/text, stopped states and unsent drafts. Importing the same file again creates more copies; there is no silent overwrite or automatic deduplication. Imported stopped messages remain excluded from provider history and read-aloud playback.
+
+Files are limited to 4 MiB, 100 chats per file, 500 messages per chat, 8000 UTF-16 code units per draft and 1,048,576 per message. Schema/version/model/role/state/timestamp and duplicate source-ID checks reject the entire file without importing a subset. UTF-8 input is validated, nested structures are bounded, empty exports change nothing, and unknown fields are ignored rather than executed or stored. Exports exceeding import limits must be reduced outside the app; content is never silently truncated.
+
+Web re-reads local history at confirmation to preserve other tabs’ intervening saves and uses one atomic localStorage write. Android reads through the system OpenDocument picker on a background dispatcher, bounds bytes while streaming, retains review through normal activity recreation, cancels an in-flight reply when confirmed, and commits merged history before publishing it to the UI. Storage failures keep the checked import available for retry. File reads and confirmation do not call Gemini or send messages. Exported attachments remain filenames/text only; file bytes and audio cannot be restored. Local import is separate from account/cloud sync.
+
+Validation: 84 web tests and 32 Android JVM tests, plus debug APK assembly. Mobile Chromium verified review/cancel without changes, confirmed import with the existing Hindi draft retained, invalid-file rejection, imported Hindi/emoji messages and draft/model reopening without overflow or browser errors. Physical Android document-provider import, storage-failure recovery and restart remain unverified.

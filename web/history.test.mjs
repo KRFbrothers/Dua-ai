@@ -5,7 +5,7 @@ import { readFile } from 'node:fs/promises';
 const source=await readFile(new URL('./dist/chat-history.js',import.meta.url),'utf8');
 function storage(){const data=new Map();return {getItem:key=>data.get(key)||null,setItem:(key,value)=>data.set(key,value),removeItem:key=>data.delete(key)};}
 function open(localStorage=storage(),sessionStorage=storage()){
- const context={localStorage,sessionStorage,crypto:{randomUUID:()=>Math.random().toString(36).slice(2)}};
+ const context={TextEncoder,localStorage,sessionStorage,crypto:{randomUUID:()=>Math.random().toString(36).slice(2)}};
  vm.runInNewContext(source,context);return {api:context.DuaHistory,localStorage,sessionStorage};
 }
 const first={model:'Gemini',draft:'अधूरा',messages:[{role:'user',text:'नमस्ते',state:'complete'},{role:'model',text:'Hello',state:'complete'}]};
@@ -59,4 +59,35 @@ test('failed deletion leaves existing history and pending selections untouched',
 });
 test('confirmed clear all can reset unreadable stored data',()=>{
  const page=open();page.localStorage.setItem('dua-history-v2','broken');page.api.clearAll();assert.equal(page.api.list().length,0);
+});
+
+function exported(chat=first){return JSON.stringify({format:'dua-chat-export',version:1,exportedAt:123,chats:[{...chat,id:'source',updatedAt:0}]});}
+test('import previews without writes, restores export as copies and keeps current draft and active chat',()=>{
+ const page=open();const active=page.api.save(first);const original=page.localStorage.getItem('dua-history-v2');
+ assert.equal(page.api.previewImport(exported()),1);assert.equal(page.localStorage.getItem('dua-history-v2'),original);
+ assert.equal(page.api.importJson(exported()),1);const records=page.api.list();assert.equal(records.length,2);
+ const copy=records.find(chat=>chat.id!==active);assert.notEqual(copy.id,'source');assert.equal(copy.draft,'अधूरा');assert.equal(copy.messages[0].text,'नमस्ते');
+ assert.equal(JSON.parse(page.localStorage.getItem('dua-history-v2')).activeId,active);
+ page.api.save({...first,draft:'Existing still editable'});assert.equal(page.api.list().length,2);
+ page.api.importJson(exported());assert.equal(page.api.list().length,3);assert.equal(new Set(page.api.list().map(c=>c.id)).size,3);
+});
+test('web can restore native canonical exports, preserve stopped states and reload imported history',()=>{
+ const page=open();const raw=exported({model:'Dua',draft:'Draft 😀',messages:[{role:'user',text:'<img onerror=alert(1)>',state:'complete'},{role:'model',text:'Response stopped',state:'stopped'}]});
+ page.api.importJson('\uFEFF'+raw);const copy=open(page.localStorage).api.list()[0];
+ assert.equal(copy.updatedAt,0);assert.equal(copy.messages[1].state,'stopped');assert.equal(copy.messages[0].text,'<img onerror=alert(1)>');assert.equal(copy.draft,'Draft 😀');
+});
+test('import rejects wrong formats, versions, roles, model, types, limits and duplicate ids without any writes',()=>{
+ const page=open();page.api.save(first);const before=page.localStorage.getItem('dua-history-v2');
+ const valid=JSON.parse(exported());
+ const cases=['broken','null',JSON.stringify({...valid,version:2}),JSON.stringify({...valid,version:'1'}),JSON.stringify({...valid,format:'other'}),JSON.stringify({...valid,exportedAt:1.5}),JSON.stringify({...valid,chats:Array(101).fill(valid.chats[0])})];
+ for(const patch of [{draft:4},{draft:'x'.repeat(8001)},{model:'ChatGPT'},{updatedAt:-1},{id:''},{messages:[{role:'system',text:'Hi',state:'complete'}]},{messages:[{role:'model',text:'Hi',state:'pending'}]},{messages:[{role:'user',text:null,state:'complete'}]},{messages:Array(501).fill({role:'user',text:'Hi',state:'complete'})},{messages:[{role:'model',text:'x'.repeat(1048577),state:'complete'}]}])cases.push(JSON.stringify({...valid,chats:[{...valid.chats[0],...patch}]}));
+ cases.push(JSON.stringify({...valid,chats:[valid.chats[0],valid.chats[0]]}));cases.push('x'.repeat(page.api.maxImportBytes+1));cases.push('['.repeat(65)+'0'+']'.repeat(65));
+ for(const raw of cases){assert.throws(()=>page.api.importJson(raw));assert.equal(page.localStorage.getItem('dua-history-v2'),before);}
+});
+test('import failure is atomic, empty exports do nothing, and confirmed import preserves concurrent tab changes',()=>{
+ const page=open();page.api.save(first);const original=page.localStorage.getItem('dua-history-v2');const setter=page.localStorage.setItem;
+ page.localStorage.setItem=()=>{throw Error('Full')};assert.throws(()=>page.api.importJson(exported()),/Full/);assert.equal(page.localStorage.getItem('dua-history-v2'),original);
+ page.localStorage.setItem=setter;assert.equal(page.api.importJson(JSON.stringify({format:'dua-chat-export',version:1,exportedAt:0,chats:[]})),0);assert.equal(page.localStorage.getItem('dua-history-v2'),original);
+ page.api.previewImport(exported());const other=open(page.localStorage);other.api.newChat();other.api.save({model:'Dua',draft:'Other tab',messages:[]});
+ page.api.importJson(exported());assert.equal(page.api.list().length,3);assert.ok(page.api.list().some(c=>c.draft==='Other tab'));
 });

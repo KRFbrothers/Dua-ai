@@ -121,6 +121,58 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     val dataStatus: StateFlow<String> = _dataStatus.asStateFlow()
     fun dataControlNotice(text: String) { _dataStatus.value = text }
 
+    private val _importPreview = MutableStateFlow<List<SavedChat>?>(null)
+    val importPreview: StateFlow<List<SavedChat>?> = _importPreview.asStateFlow()
+    fun cancelImport() { if (!_dataBusy.value) { _importPreview.value = null; _dataStatus.value = "Import cancelled. Your chats are unchanged." } }
+
+    fun reviewImport(uri: Uri) {
+        if (_dataBusy.value) return
+        _importPreview.value = null
+        _dataBusy.value = true
+        _dataStatus.value = "Checking export…"
+        viewModelScope.launch {
+            try {
+                val records = withContext(Dispatchers.IO) {
+                    val input = getApplication<Application>().contentResolver.openInputStream(uri)
+                        ?: error("Selected file cannot be read.")
+                    input.use { ChatHistoryCodec.readImport(it) }
+                }
+                if (records.isEmpty()) _dataStatus.value = "This export has no chats. Nothing was changed."
+                else { _importPreview.value = records; _dataStatus.value = "Export checked. Confirm to add chats." }
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (error: Exception) { _dataStatus.value = error.message ?: "Export could not be read. No chats were changed." }
+            finally { _dataBusy.value = false }
+        }
+    }
+
+    fun confirmImport() {
+        if (_dataBusy.value) return
+        val imported = _importPreview.value ?: return
+        _dataBusy.value = true
+        _dataStatus.value = "Saving imported chats…"
+        cancelReply()
+        // Use the latest local records at confirmation, keeping the active draft/selection.
+        val merged = ChatHistoryCodec.importCopies(_savedChats.value, imported)
+        val encoded = ChatHistoryCodec.encode(merged, activeId)
+        viewModelScope.launch {
+            try {
+                val committed = withContext(Dispatchers.IO) {
+                    val previous = preferences.getString("history", null)
+                    val success = preferences.edit().putString("history", encoded).commit()
+                    if (!success) preferences.edit().putString("history", previous).apply()
+                    success
+                }
+                if (committed) {
+                    _savedChats.value = merged
+                    _importPreview.value = null
+                    _dataStatus.value = "${imported.size} chats imported. Existing chats and drafts were kept."
+                } else _dataStatus.value = "Import could not be saved. No chats were changed. Try again."
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { _dataStatus.value = "Import could not be saved. No chats were changed. Try again." }
+            finally { _dataBusy.value = false }
+        }
+    }
+
     fun exportChats(uri: Uri) {
         if (_dataBusy.value) return
         val records = _savedChats.value.toList()

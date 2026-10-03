@@ -85,12 +85,13 @@ class DuaApiClientTest {
 
     @Test fun requestContractAndUnicodeReplyArePreserved() = runBlocking {
         server.enqueue(response("{\"text\":\"नमस्ते\"}"))
-        assertEquals("नमस्ते", api.reply("Gemini", history))
+        assertEquals("नमस्ते", api.reply("Gemini", listOf(ChatMessage(text = "Response stopped", isUser = false, state = "stopped")) + history))
         val request = server.takeRequest(3, TimeUnit.SECONDS)!!
         assertEquals("/api/chat", request.path)
         assertEquals("POST", request.method)
         val json = JSONObject(request.body.readUtf8())
         assertEquals("Gemini", json.getString("model"))
+        assertEquals(1, json.getJSONArray("messages").length())
         assertEquals("Hi", json.getJSONArray("messages").getJSONObject(0).getString("text"))
         assertNull(request.getHeader("Authorization"))
     }

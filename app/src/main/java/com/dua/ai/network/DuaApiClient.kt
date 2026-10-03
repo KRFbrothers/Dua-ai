@@ -31,7 +31,7 @@ class DuaApiClient(
         require(base.protocol == "https") { "Dua backend ke liye HTTPS URL set karein." }
         val request = withContext(Dispatchers.IO) {
         val messages = JSONArray()
-        history.takeLast(39).forEach { message ->
+        history.filter { it.state == "complete" }.takeLast(39).forEach { message ->
             messages.put(JSONObject().put("role", if (message.isUser) "user" else "model").put("text", message.text))
         }
         require(messages.toString().toByteArray(Charsets.UTF_8).size <= 262144) { "Conversation too large. New chat shuru karein." }
