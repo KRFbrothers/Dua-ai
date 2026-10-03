@@ -90,6 +90,13 @@ class ChatViewModel : ViewModel() {
         _selectedModel.value = model
     }
 
+    /** Cancels the current request without removing the user's sent message. */
+    fun stopReply() {
+        if (!_isTyping.value) return
+        cancelReply()
+        _error.value = "Response stopped."
+    }
+
     fun startNewChat() {
         cancelReply()
         _messages.value = emptyList()
@@ -175,3 +182,4 @@ class ChatViewModel : ViewModel() {
         }
     }
 }
+
