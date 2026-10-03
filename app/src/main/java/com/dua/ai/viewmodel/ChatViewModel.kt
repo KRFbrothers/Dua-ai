@@ -5,6 +5,14 @@ import androidx.lifecycle.AndroidViewModel
 import com.dua.ai.history.SavedChat
 import com.dua.ai.history.ChatHistoryCodec
 import java.util.UUID
+import android.net.Uri
+import android.graphics.Bitmap
+import com.dua.ai.attachments.ChatAttachment
+import com.dua.ai.attachments.AttachmentReader
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 import androidx.lifecycle.viewModelScope
 import com.dua.ai.model.ChatMessage
 import com.dua.ai.model.ChatSession
@@ -53,6 +61,63 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private var activeId = UUID.randomUUID().toString()
     private val _savedChats = MutableStateFlow<List<SavedChat>>(emptyList())
     val savedChats: StateFlow<List<SavedChat>> = _savedChats.asStateFlow()
+    private val _attachments = MutableStateFlow<List<ChatAttachment>>(emptyList())
+    val attachments: StateFlow<List<ChatAttachment>> = _attachments.asStateFlow()
+    private val _attachmentError = MutableStateFlow("")
+    val attachmentError: StateFlow<String> = _attachmentError.asStateFlow()
+    private val _readingFiles = MutableStateFlow(false)
+    val readingFiles: StateFlow<Boolean> = _readingFiles.asStateFlow()
+    private var selectionVersion = 0
+
+    fun clearAttachments() {
+        selectionVersion++
+        _attachments.value = emptyList()
+        _attachmentError.value = ""
+        _readingFiles.value = false
+    }
+
+    private fun loadFiles(loader: () -> List<ChatAttachment>) {
+        if (_isTyping.value) { _attachmentError.value = "Reply complete hone ke baad files select karein."; return }
+        val version = ++selectionVersion
+        _readingFiles.value = true
+        _attachmentError.value = ""
+        viewModelScope.launch {
+            try {
+                val files = withContext(Dispatchers.IO) {
+                    val result = loader()
+                    require(result.size <= 3) { "Maximum 3 files select karein." }
+                    require(result.sumOf { java.util.Base64.getDecoder().decode(it.data).size } <= AttachmentReader.MAX_BYTES) {
+                        "Attachments total 2 MB se chhote rakhein."
+                    }
+                    result
+                }
+                if (version == selectionVersion) _attachments.value = files
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (error: Exception) {
+                if (version == selectionVersion) _attachmentError.value = error.message ?: "File read nahi hui. Dobara select karein."
+            } finally { if (version == selectionVersion) _readingFiles.value = false }
+        }
+    }
+
+    fun selectAttachments(uris: List<Uri>) = loadFiles {
+        require(uris.size <= 3) { "Maximum 3 files select karein." }
+        val resolver = getApplication<Application>().contentResolver
+        uris.map { uri ->
+            val name = resolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use {
+                if (it.moveToFirst()) it.getString(0) else "Selected file"
+            } ?: "Selected file"
+            val type = resolver.getType(uri) ?: if (name.endsWith(".txt", true)) "text/plain" else ""
+            val input = resolver.openInputStream(uri) ?: error("File read nahi hui.")
+            input.use { AttachmentReader.read(name, type, it) }
+        }
+    }
+
+    fun selectCameraImage(bitmap: Bitmap) = loadFiles {
+        val out = ByteArrayOutputStream()
+        bitmap.compress(Bitmap.CompressFormat.JPEG, 90, out)
+        listOf(AttachmentReader.read("Camera.jpg", "image/jpeg", ByteArrayInputStream(out.toByteArray())))
+    }
+
     private val _draft = MutableStateFlow("")
     val draft: StateFlow<String> = _draft.asStateFlow()
 
@@ -86,6 +151,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     fun openChat(id: String) {
         val chat = _savedChats.value.find { it.id == id } ?: return
         cancelReply()
+        clearAttachments()
         activeId = chat.id
         _messages.value = chat.messages
         _selectedModel.value = chat.model
@@ -151,6 +217,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     fun startNewChat() {
         cancelReply()
+        clearAttachments()
         activeId = UUID.randomUUID().toString()
         _messages.value = emptyList()
         _draft.value = ""
@@ -174,7 +241,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun sendMessage(userText: String) {
-        if (userText.isBlank() || _isTyping.value) return
+        if ((userText.isBlank() && _attachments.value.isEmpty()) || _isTyping.value || _readingFiles.value) return
         _error.value = null
         if (userText.length > 8000) {
             _error.value = "Message 8000 characters se chhota rakhein."
@@ -185,7 +252,10 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             _error.value = "Dua ya Gemini select karein."
             return
         }
-        val userMessage = ChatMessage(text = userText.trim(), isUser = true, model = responseModel)
+        val files = _attachments.value
+        val prompt = userText.trim().ifBlank { "Describe these files." }
+        val text = prompt + if (files.isEmpty()) "" else "\nFiles: " + files.joinToString(", ") { it.name }
+        val userMessage = ChatMessage(text = text, isUser = true, model = responseModel)
         val requestHistory = _messages.value.takeLast(38) + userMessage
         val currentGeneration = generation
         _messages.value = _messages.value + userMessage
@@ -195,8 +265,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         _failedPrompt.value = null
         replyJob = viewModelScope.launch {
             try {
-                val reply = api.reply(responseModel, requestHistory)
+                val reply = api.reply(responseModel, requestHistory, files)
                 if (generation == currentGeneration) {
+                    clearAttachments()
                     _messages.value = _messages.value + ChatMessage(
                         text = reply, isUser = false, model = responseModel
                     )
