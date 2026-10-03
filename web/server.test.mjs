@@ -65,3 +65,69 @@ test('missing model prevents provider requests', async t => {
   assert.equal((await post(url, payload)).status, 503);
   assert.equal((await (await fetch(url + '/api/config')).json()).geminiConfigured, false);
 });
+
+// Use a real socket: consuming the request body must not be mistaken for a disconnect.
+test('disconnect cancels provider work and a subsequent socket request succeeds', { timeout: 5000 }, async t => {
+ const { request: httpRequest } = await import('node:http');
+ let providerSignal;
+ let notifyStarted, notifyAborted;
+ const started = new Promise(resolve => { notifyStarted = resolve; });
+ const aborted = new Promise(resolve => { notifyAborted = resolve; });
+ let calls = 0;
+ const server = makeServer({ key: 'test', model: 'test-model', fetcher: async (_url, options) => {
+  calls++;
+  if (calls > 1) return Response.json({ candidates: [{ content: { parts: [{ text: 'Next reply' }] } }] });
+  providerSignal = options.signal;
+  notifyStarted();
+  return new Promise((_resolve, reject) => options.signal.addEventListener('abort', () => {
+   notifyAborted(); reject(options.signal.reason);
+  }, { once: true }));
+ }});
+ await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+ t.after(() => { server.closeAllConnections(); server.close(); });
+ const origin = `http://127.0.0.1:${server.address().port}`;
+ const client = httpRequest(origin + '/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+ client.on('error', () => {}); // Expected when Stop destroys the connection.
+ t.after(() => client.destroy());
+ client.end(JSON.stringify(payload));
+ await started;
+ assert.equal(providerSignal.aborted, false);
+ client.destroy();
+ await aborted;
+ assert.equal(providerSignal.aborted, true);
+ const response = await globalThis.fetch(origin + '/api/chat', {
+  method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+ });
+ assert.equal(response.status, 200);
+ assert.deepEqual(await response.json(), { text: 'Next reply' });
+ assert.equal(calls, 2);
+});
+
+test('shared handler forwards request cancellation to the provider', { timeout: 2000 }, async () => {
+ const { handleGemini } = await import('./gemini.mjs');
+ const controller = new AbortController();
+ let started;
+ const waiting = new Promise(resolve => { started = resolve; });
+ let providerSignal;
+ const reply = handleGemini(new Request('https://dua.example/api/chat', {
+  method: 'POST', body: JSON.stringify(payload), signal: controller.signal
+ }), { key: 'test', model: 'test-model', fetcher: async (_url, options) => {
+  providerSignal = options.signal; started();
+  return new Promise((_resolve, reject) => options.signal.addEventListener('abort', () => reject(options.signal.reason), { once: true }));
+ }});
+ await waiting;
+ controller.abort();
+ assert.equal(providerSignal.aborted, true);
+ assert.equal((await reply).status, 504);
+});
+
+test('already canceled requests never start provider work', async () => {
+ const { handleGemini } = await import('./gemini.mjs');
+ const controller = new AbortController(); controller.abort();
+ let calls = 0;
+ const response = await handleGemini(new Request('https://dua.example/api/chat', {
+  method: 'POST', body: JSON.stringify(payload), signal: controller.signal
+ }), { key: 'test', model: 'test-model', fetcher: () => { calls++; throw Error('Unexpected call'); } });
+ assert.equal(calls, 0);
+ assert.equal(response.status, 504);
+});
