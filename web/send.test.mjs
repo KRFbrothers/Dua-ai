@@ -4,8 +4,8 @@ import vm from 'node:vm';
 import {readFile} from 'node:fs/promises';
 
 const source=(await readFile(new URL('./dist/chat.html',import.meta.url),'utf8')).split('<script>')[1].split('</script>')[0];
-function setup({deferChat=false,replyError=false}={}) {
- const events={};const configuration=[];const replies=[];let chatCalls=0;let signal;
+function setup({deferChat=false,replyError=false,files=[]}={}) {
+ const events={};const configuration=[];const replies=[];let chatCalls=0;let signal;let payload;
  const node=()=>{
   const n={hidden:false,value:'',dataset:{},children:[],attributes:{},events:{},style:{setProperty(){}},
    classList:{toggle(){},remove(){},contains(name){return (n.className||'').split(' ').includes(name)}},
@@ -17,7 +17,7 @@ function setup({deferChat=false,replyError=false}={}) {
  const message=node(),action=node(),picker=node(),composer=node(),error=node(),empty=node();message.value='Hi';
  composer.addEventListener=(type,handler)=>{events[type]=handler};
  const elements={'textarea':message,'#composer-action':action,'.model-picker':picker,'.composer':composer,'.chat-messages':node(),'.chat-error':error,'.empty':empty,'.model-chip-label':node(),'.model-sheet-footer':node()};
- const storage=new Map();
+ const storage=new Map();if(files.length)storage.set('dua-attachments',JSON.stringify(files));
  vm.runInNewContext(source,{
   document:{querySelector:s=>elements[s]||(elements[s]=node()),createElement:node,addEventListener(){},documentElement:node()},
   location:{protocol:'https:',search:'',pathname:'/chat.html'},
@@ -26,13 +26,13 @@ function setup({deferChat=false,replyError=false}={}) {
   sessionStorage:{getItem:k=>storage.get(k)||null,setItem:(k,v)=>storage.set(k,v),removeItem:k=>storage.delete(k)},
   fetch:async (url,options)=>{
    if(url==='/api/config')return new Promise(resolve=>configuration.push(configured=>resolve({ok:true,json:async()=>({geminiConfigured:configured})})));
-   chatCalls++;signal=options.signal;
+   chatCalls++;signal=options.signal;payload=JSON.parse(options.body);
    if(deferChat)return new Promise(resolve=>replies.push(resolve));
    return {ok:!replyError,json:async()=>replyError?{error:'Gemini quota limit aa gayi.'}:{text:'Hello'}};
   }
  });
  return {message,error,empty,configuration,replies,storage,messages:elements['.chat-messages'],signal:()=>signal,
-  calls:()=>chatCalls,submit:()=>events.submit({preventDefault(){}}),stop:()=>action.events.click({preventDefault(){}})};
+  payload:()=>payload,calls:()=>chatCalls,submit:()=>events.submit({preventDefault(){}}),stop:()=>action.events.click({preventDefault(){}})};
 }
 const flush=async()=>{for(let i=0;i<10;i++)await Promise.resolve()};
 test('double send while config loads produces one chat request',async()=>{
@@ -80,4 +80,17 @@ test('Stop while configuration loads never sends a provider request',async()=>{
  const page=setup();const send=page.submit();page.stop();
  page.configuration.splice(0).forEach(resolve=>resolve(true));await send;
  assert.equal(page.calls(),0);assert.equal(page.message.value,'Hi');assert.equal(page.message.disabled,false);
+});
+
+test('attachments are sent once and clear only after a successful reply',async()=>{
+ const files=[{name:'notes.txt',mimeType:'text/plain',data:'aGk='}];
+ const page=setup({files});page.configuration.splice(0).forEach(resolve=>resolve(true));await flush();
+ await page.submit();assert.equal(page.calls(),1);assert.deepEqual(page.payload().attachments,files);
+ assert.match(page.messages.children[0].textContent,/notes.txt/);
+ assert.equal(page.storage.has('dua-attachments'),false);
+});
+test('failed attachment request keeps file selection and draft for retry',async()=>{
+ const files=[{name:'notes.txt',mimeType:'text/plain',data:'aGk='}];
+ const page=setup({files,replyError:true});page.configuration.splice(0).forEach(resolve=>resolve(true));await flush();
+ await page.submit();assert.equal(page.message.value,'Hi');assert.deepEqual(JSON.parse(page.storage.get('dua-attachments')),files);
 });
