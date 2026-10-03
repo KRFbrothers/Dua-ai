@@ -7,7 +7,7 @@ Updated 3 October 2026. Web and Android share the intended product behavior; pla
 | 1 | Persistent chat history | Implemented: saved chats, search, reopen, draft/model recovery and confirmed deletion on web/Android | Physical Android restart verification; export/delete-all controls; account/cloud sync is separate |
 | 2 | Attachment processing | Implemented inline JPEG/PNG/WebP/PDF/TXT input on web and Android, with validation and retry/Stop selection retention | Live Gemini and physical Android verification; larger files, DOCX and durable/provider file storage |
 | 3 | Camera/photos | Web image selection/capture and native full-photo camera output/photo picker feed attachment processing | Physical-device camera/picker verification; image resizing/compression for captures above 2 MiB |
-| 4 | AI voice conversation | Speech-to-draft input implemented on web and Android: editable review, append to Chat, explicit Send; native mic permission and lifecycle cleanup | Real-device speech/permission verification; AI audio output and conversational interruption |
+| 4 | AI voice conversation | Speech-to-draft input and user-triggered reply read aloud on web/Android; native mic permission and playback lifecycle cleanup | Physical speech/TTS/permission verification; hands-free conversational turns, provider-generated audio and interruption |
 | 5 | Account sign-in/profile/logout | Design screens only | Authentication provider, sessions, real profile and logout behavior |
 | 6 | Cloud history sync | Not implemented | Authenticated ownership, backend storage, cross-device sync and conflict handling |
 | 7 | Other AI providers | ChatGPT, Claude, Grok and Kimi remain unavailable | Server-side provider credentials/configuration, routing, errors, quotas and tests |
@@ -52,3 +52,13 @@ Production Voice now supports speech-to-text through the browser SpeechRecogniti
 Start is user initiated. Android requests RECORD_AUDIO, handles denial with an app Settings action, checks speech-service availability, and releases its recognizer on Stop/background/disposal. Web checks support, handles permission/service errors, aborts on Stop/background/page exit, prevents overlapping starts and ignores late callbacks. Both use a 30-second timeout. Recognition uses the device/browser language. No raw audio is stored by this application, but the selected device/browser speech service may process audio remotely. Voice input and final transcript review do not implement AI audio replies, video or screen sharing.
 
 Validation: 61 web tests and 22 Android JVM tests, plus debug APK assembly. Mobile Chromium with mocked speech results checked Hindi/English editing and transfer to an existing draft with no automatic send. Real microphone/service behavior, Android permission denial/recovery and rotation with the microphone active remain unverified on a physical device.
+
+## Fifth implementation: reply read aloud
+
+Completed AI replies now have explicit Read aloud / Stop controls on both clients. Browser SpeechSynthesis and Android TextToSpeech use the device/browser language and installed voices. Nothing speaks automatically. Long replies are split into <=300-code-point chunks with whitespace/sentence boundaries where practical, preserving Hindi and emoji. Replacing/stopping playback invalidates old callbacks; a stalled chunk times out after 45 seconds.
+
+Playback stops on backgrounding/navigation and when a new prompt is submitted. Android also requests transient audio focus, stops on focus loss and releases focus at Stop/completion. Unsupported engines, missing native language/data and playback errors show guidance. Pending/stopped web replies have no read-aloud action. Button labels are excluded from stored message text and subsequent API history.
+
+This is device/browser text-to-speech for existing text replies, not a provider audio API or hands-free live conversation. The app stores no audio output; installed/network speech voices may process reply text through their service.
+
+Validation: 67 web tests and 26 Android JVM tests; debug APK assembly. Mobile Chromium with mocked speech output checked explicit playback, Stop, clean saved history and 48px controls at 320px width. Actual speaker output, installed voices/languages and Android audio-focus/background behavior still need physical-device verification.

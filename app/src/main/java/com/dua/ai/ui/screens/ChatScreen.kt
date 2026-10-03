@@ -85,7 +85,17 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel()) {
     val failedPrompt by viewModel.failedPrompt.collectAsState()
     val listState = rememberLazyListState()
     val context = LocalContext.current
-    fun navigate(next: Screen) { screenName = next.name }
+    val speaker = remember(context) { com.dua.ai.voice.NativeReplySpeaker(context.applicationContext) }
+    val speech by speaker.state.collectAsState()
+    val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
+    DisposableEffect(speaker, lifecycle) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_STOP) speaker.stop()
+        }
+        lifecycle.addObserver(observer)
+        onDispose { lifecycle.removeObserver(observer); speaker.close() }
+    }
+    fun navigate(next: Screen) { speaker.stop(); screenName = next.name }
     fun settings() { settingsReturn = screenName; navigate(Screen.Settings) }
     fun back() {
         picker = false
@@ -106,6 +116,7 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel()) {
         navigate(next)
     }
     fun send() {
+        speaker.stop()
         if ((draft.isNotBlank() || attachments.isNotEmpty()) && !typing && !readingFiles) viewModel.sendMessage(draft)
     }
     BackHandler(enabled = picker || screen != Screen.Home) {
@@ -205,6 +216,12 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel()) {
                                                             modifier = Modifier.padding(top = 12.dp))
                                                     }
                                                     if (!message.isUser) {
+                                                        FilledTonalButton(enabled = speech.available,
+                                                            onClick = { speaker.toggle(message.id, message.text) },
+                                                            shape = RoundedCornerShape(20.dp), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
+                                                            modifier = Modifier.padding(top = 8.dp).heightIn(min = 48.dp)) {
+                                                            Text(if (speech.activeId == message.id) "Stop reading" else "Read aloud", fontSize = 14.sp)
+                                                        }
                                                         Row(verticalAlignment = Alignment.CenterVertically) {
                                                             IconButton(onClick = {
                                                                 (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
@@ -229,6 +246,11 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel()) {
                                     if (typing) item { Text("Dua is thinking…", color = Muted) }
                                 }
                             }
+                        }
+                        if (speech.activeId != null || speech.status.isNotBlank()) Row(
+                            Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text(speech.status, color = Muted, fontSize = 12.sp, modifier = Modifier.weight(1f))
+                            if (speech.activeId != null) TextButton(onClick = { speaker.stop() }) { Text("Stop") }
                         }
                         error?.let { message ->
                             Text(message, color = Muted, fontSize = 14.sp, maxLines = 3,
@@ -545,7 +567,7 @@ private fun VoiceScreen(onBack: () -> Unit, onSettings: () -> Unit, draft: Strin
                     }
                 }
             }
-            Text("Voice input · AI voice replies coming soon", color = Muted, fontSize = 12.sp,
+            Text("Voice input · Send and hear replies in Chat", color = Muted, fontSize = 12.sp,
                 modifier = Modifier.padding(top = if (short) 8.dp else 12.dp).align(Alignment.CenterHorizontally))
             Box(Modifier.fillMaxWidth().height(28.dp), contentAlignment = Alignment.Center) {
                 Text(notice, color = Primary, fontSize = 14.sp)
