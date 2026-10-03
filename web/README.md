@@ -22,7 +22,7 @@ Run `npm test` for Node and Netlify endpoint tests with mocked Gemini responses.
 
 The default browser pages now follow the native Android mobile layout, including the responsive composer, model sheet, Settings detail pages, attachment selection cards and Voice cube. Chat calls the real `/api/chat` backend, clears accepted drafts and supports Stop with client-side request cancellation. Failed requests restore the draft. Local browser storage now preserves multiple chats, drafts and selected models across visits. Home supports search, reopening and confirmed deletion. The previous in-tab chat migrates once; storage failures show a warning. This is device-local history, not account/cloud synchronization. See [../FEATURES.md](../FEATURES.md) for the remaining feature list.
 
-`/preview/` remains a separate design sandbox with simulated replies. Account, appearance, notification and permission samples remain explicitly labelled design states. Voice keeps browser speech input where supported; native Voice currently demonstrates animation without recording.
+`/preview/` remains a separate design sandbox with simulated replies. Account, appearance, notification and permission samples remain explicitly labelled design states. Voice keeps browser speech input where supported; native Voice now uses Android speech recognition with runtime microphone permission.
 
 ## Chat request protection
 
@@ -39,3 +39,9 @@ Web and native Android send base64 file contents through the shared `/api/chat` 
 Files apply only to the current user message. Reattach a file for later analysis. Pending bytes live in browser session storage or Android ViewModel memory; persistent history keeps filenames and replies, not file contents. Successful replies clear the selection. Failed or stopped requests retain it for retry. Remove/New chat clears it. Native camera capture now receives the original full-photo JPEG from an external camera app through a restricted temporary FileProvider URI. The pending filename survives activity recreation; temporary output is removed after reading or cancellation, with abandoned files pruned after 24 hours on the next capture. Photos above 2 MiB must be resized before selection; automatic resizing is not implemented. Original JPEG metadata is retained. Browser camera capture depends on device/browser support; Photos and Files remain alternatives.
 
 Large files, DOCX, video/audio, durable file storage and provider File API uploads remain pending. Mobile Chromium was checked with a mocked provider; live Gemini media handling and physical Android picker/camera behavior remain unverified.
+
+## Voice input
+
+Tap mic on Voice to recognize speech, edit the completed transcript and choose Use in chat. Both browser and Android append to the existing draft, capped at 8000 characters; Send remains explicit. Recognition never starts a Gemini request. Browser support and device speech services vary; unsupported/denied/service-error states provide retry or typed-chat guidance. Android offers app Settings after permission denial. Stop, backgrounding and exiting release recognition; a session times out after 30 seconds. The device/browser language is used.
+
+The app stores no raw audio. The selected speech service may use network/cloud processing. Only a transcript explicitly moved into Chat becomes part of locally saved drafts/history. AI audio replies remain pending. Browser flow was checked with mocked recognition; real microphone input and physical Android permission/lifecycle behavior still need device verification.
