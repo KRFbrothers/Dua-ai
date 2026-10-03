@@ -68,7 +68,7 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel()) {
     var screenName by rememberSaveable { mutableStateOf(Screen.Home.name) }
     var settingsReturn by rememberSaveable { mutableStateOf(Screen.Home.name) }
     var draft by rememberSaveable { mutableStateOf("") }
-    var model by rememberSaveable { mutableStateOf("Dua") }
+    val model by viewModel.selectedModel.collectAsState()
     var picker by rememberSaveable { mutableStateOf(false) }
     var detailHistory by rememberSaveable { mutableStateOf(arrayListOf<String>()) }
     var attachments by rememberSaveable { mutableStateOf(arrayListOf<String>()) }
@@ -296,7 +296,7 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel()) {
                     val provider = when (name) { "ChatGPT" -> "OpenAI"; "Claude" -> "Anthropic"; "Grok" -> "xAI"; "Kimi" -> "Moonshot"; else -> "Gemini" }
                     Surface(color = if (model == name) Highest else Color.Transparent, shape = RoundedCornerShape(18.dp)) {
                         Row(Modifier.fillMaxWidth().heightIn(min = 70.dp).clickable(enabled = available) {
-                            model = name; viewModel.setModel(name)
+                            viewModel.setModel(name)
                         }.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                             Surface(color = if (available) Secondary else Highest.copy(alpha = .45f), shape = RoundedCornerShape(12.dp)) {
                                 Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) { Text(name.take(1), color = if (available) Ink else Muted.copy(alpha = .45f)) }
