@@ -289,7 +289,9 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel()) {
                     Screen.Attachments -> AttachmentsScreen(onBack = ::back, selected = attachments.map { it.name },
                         onSelected = viewModel::selectAttachments, onCamera = viewModel::selectCameraFile,
                         onClear = viewModel::clearAttachments, loading = readingFiles, error = fileError)
-                    Screen.Voice -> VoiceScreen(onBack = ::back, onSettings = ::settings)
+                    Screen.Voice -> VoiceScreen(onBack = ::back, onSettings = ::settings, draft = draft, onUse = {
+                        viewModel.updateDraft(it); navigate(Screen.Chat)
+                    })
                     else -> key(screen) { SettingsDetail(screen, onBack = ::back, onOpen = { detail(it, screen) }) }
                 }
                 }
@@ -498,14 +500,33 @@ private fun AttachmentsScreen(onBack: () -> Unit, selected: List<String>, onSele
 }
 
 @Composable
-private fun VoiceScreen(onBack: () -> Unit, onSettings: () -> Unit) {
+private fun VoiceScreen(onBack: () -> Unit, onSettings: () -> Unit, draft: String, onUse: (String) -> Unit) {
     val context = LocalContext.current
     var more by remember { mutableStateOf(false) }
     var reaction by rememberSaveable { mutableStateOf(0) }
-    var listening by rememberSaveable { mutableStateOf(false) }
+    val voice = remember(context) { com.dua.ai.voice.NativeVoiceInput(context.applicationContext) }
+    val input by voice.state.collectAsState()
+    val listening = input.busy
+    var reviewed by rememberSaveable { mutableStateOf("") }
+    LaunchedEffect(input.transcript, input.busy) {
+        if (input.transcript.isNotBlank()) reviewed = input.transcript
+        else if (input.busy) reviewed = ""
+    }
+    val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
+    val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted && lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)) voice.start()
+        else if (!granted) voice.permissionDenied()
+    }
+    DisposableEffect(voice, lifecycle) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_STOP) voice.stop()
+        }
+        lifecycle?.addObserver(observer)
+        onDispose { lifecycle?.removeObserver(observer); voice.close() }
+    }
     var notice by remember { mutableStateOf("") }
     LaunchedEffect(notice) { if (notice.isNotBlank()) { delay(2400); notice = "" } }
-    val greeting = "Hello! Aur bataye, aaj kya plan hai aur kya madad chahiye aapko?"
+    val greeting = "Tap the microphone and speak. Review your words, then use them in Chat."
     BoxWithConstraints(Modifier.fillMaxSize().padding(16.dp)) {
         val short = maxHeight < 500.dp
         Column(Modifier.fillMaxSize()) {
@@ -524,7 +545,7 @@ private fun VoiceScreen(onBack: () -> Unit, onSettings: () -> Unit) {
                     }
                 }
             }
-            Text("Preview · No audio recorded", color = Muted, fontSize = 12.sp,
+            Text("Voice input · AI voice replies coming soon", color = Muted, fontSize = 12.sp,
                 modifier = Modifier.padding(top = if (short) 8.dp else 12.dp).align(Alignment.CenterHorizontally))
             Box(Modifier.fillMaxWidth().height(28.dp), contentAlignment = Alignment.Center) {
                 Text(notice, color = Primary, fontSize = 14.sp)
@@ -543,18 +564,32 @@ private fun VoiceScreen(onBack: () -> Unit, onSettings: () -> Unit) {
                     })
                     RoundAction(Icons.Default.IosShare, "Share response", color = Color.Transparent, onClick = {
                         try {
-                            context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, greeting) }, "Share response"))
+                            context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, reviewed.ifBlank { greeting }) }, "Share response"))
                         } catch (_: android.content.ActivityNotFoundException) { notice = "Sharing is unavailable" }
                     })
                     RoundAction(Icons.Default.ContentCopy, "Copy response", color = Color.Transparent, onClick = {
-                        (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("Dua response", greeting))
+                        (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("Dua response", reviewed.ifBlank { greeting }))
                         notice = "Response copied"
                     })
                     RoundAction(Icons.Default.MoreHoriz, "More response options", color = Color.Transparent, onClick = { more = !more })
                 }
+            if (input.partial.isNotBlank()) Text(input.partial.take(8000), color = Muted, fontSize = 16.sp,
+                maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.fillMaxWidth())
+            if (input.transcript.isNotBlank() || reviewed.isNotBlank()) OutlinedTextField(value = reviewed,
+                onValueChange = { if (it.length <= 8000) reviewed = it }, enabled = !listening,
+                label = { Text("Review transcript") }, maxLines = 4, modifier = Modifier.fillMaxWidth())
+            if (reviewed.isNotBlank()) FilledTonalButton(enabled = !listening && reviewed.isNotBlank(), modifier = Modifier.fillMaxWidth(), onClick = {
+                try { onUse(com.dua.ai.voice.VoiceDraft.merge(draft, reviewed)) }
+                catch (error: IllegalArgumentException) { notice = error.message.orEmpty() }
+            }) { Text("Use in chat") }
+            if (input.permissionDenied) TextButton(modifier = Modifier.fillMaxWidth(), onClick = {
+                try { context.startActivity(Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                    android.net.Uri.parse("package:${context.packageName}"))) }
+                catch (_: android.content.ActivityNotFoundException) { notice = "App Settings unavailable." }
+            }) { Text("Open app Settings") }
             }
             HorizontalDivider(color = Highest)
-            Text(if (listening) "Listening preview · No audio recorded" else "Muted · Tap mic to preview", color = Muted,
+            Text(input.status, color = Muted,
                 fontSize = 14.sp, lineHeight = 20.sp, modifier = Modifier.fillMaxWidth().padding(top = 12.dp, bottom = if (short) 8.dp else 16.dp),
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -565,8 +600,12 @@ private fun VoiceScreen(onBack: () -> Unit, onSettings: () -> Unit) {
                     Box(contentAlignment = Alignment.Center) { AnimatedVoiceCube(listening, Modifier.size(36.dp)) }
                 }
                 RoundAction(if (listening) Icons.Default.Mic else Icons.Default.MicOff,
-                    if (listening) "Mute voice preview" else "Start voice preview", color = if (listening) Secondary else Container,
-                    onClick = { listening = !listening })
+                    if (listening) "Stop voice input" else "Start voice input", color = if (listening) Secondary else Container,
+                    onClick = {
+                        if (listening) voice.stop()
+                        else if (androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED) voice.start()
+                        else permission.launch(android.Manifest.permission.RECORD_AUDIO)
+                    })
                 RoundAction(Icons.Default.Close, "Exit voice mode", onClick = onBack)
             }
         }
