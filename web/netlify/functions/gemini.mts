@@ -6,4 +6,15 @@ export default async function handler(req: Request) {
     model: Netlify.env.get('GEMINI_MODEL')
   });
 }
-export const config = { path: ['/api/config', '/api/chat'] };
+// Netlify enforces this at the edge across function instances, before Gemini runs.
+export const config = {
+  path: '/api/chat',
+  rateLimit: {
+    windowLimit: 5,
+    windowSize: 60,
+    aggregateBy: ['ip', 'domain'],
+    action: 'rewrite',
+    to: '/api/chat-rate-limit'
+  }
+};
+
