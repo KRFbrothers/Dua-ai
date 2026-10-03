@@ -4,9 +4,9 @@ Updated 3 October 2026. Web and Android share the intended product behavior; pla
 
 | Order | Feature | Current state | Remaining work |
 | --- | --- | --- | --- |
-| 1 | Persistent chat history | Local implementation in this PR: saved chats, search, reopen, draft/model recovery and confirmed deletion on web/Android | Physical Android restart verification; export/delete-all controls; account/cloud sync is separate |
-| 2 | Attachment processing | File selection and metadata UI exist; files are not sent to Gemini | Real uploads, size/type validation, provider media input, upload/retry/cancel states and retention |
-| 3 | Camera/photos | Selection UI exists | Actual capture and media-processing integration on both platforms |
+| 1 | Persistent chat history | Implemented: saved chats, search, reopen, draft/model recovery and confirmed deletion on web/Android | Physical Android restart verification; export/delete-all controls; account/cloud sync is separate |
+| 2 | Attachment processing | Implemented inline JPEG/PNG/WebP/PDF/TXT input on web and Android, with validation and retry/Stop selection retention | Live Gemini and physical Android verification; larger files, DOCX and durable/provider file storage |
+| 3 | Camera/photos | Web image selection/capture and native photo picker/preview-sized camera JPEG feed attachment processing | Physical-device permission/capture verification and full-resolution native capture |
 | 4 | AI voice conversation | Web speech input is partial; native Voice is animation/UI only | Native recording/transcription, AI audio output, mute/interruption and permission/error handling |
 | 5 | Account sign-in/profile/logout | Design screens only | Authentication provider, sessions, real profile and logout behavior |
 | 6 | Cloud history sync | Not implemented | Authenticated ownership, backend storage, cross-device sync and conflict handling |
@@ -30,3 +30,9 @@ Deleting a chat removes that local record. Clearing browser/app storage also rem
 Validation: 43 web tests, including migration/reload/deletion/storage-error coverage; 12 Android JVM tests including history serialization; Android debug APK assembly; mobile Chromium checks with mocked Gemini for multiple chats, draft restore, search and deletion. Physical Android process death/restart and live Gemini were not tested.
 
 Implement the remaining items one at a time with matching web/native behavior. Provider/account integrations require configured server-side services; do not place private provider credentials in the browser or APK.
+
+## Second implementation: attachments
+
+Both clients send at most 3 files / 2 MiB total with the current message; TXT is limited to 64 KiB. The shared backend validates contents and adds inline image/PDF or decoded text parts only to the final user message. Successful replies clear selection; Stop/errors retain it. Persistent history stores filenames and replies without file bytes. Pending bytes are browser-session/Android-memory only.
+
+Validation: 50 web tests and 16 Android JVM tests passed; Android debug APK assembled. Mobile Chromium file selection, sending and selection clearing passed with a mocked Gemini response. Live Gemini and physical Android file picker/camera tests remain pending.
