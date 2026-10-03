@@ -23,10 +23,10 @@ class CameraCaptureStore(cacheDir: File) {
         return file
     }
 
-    fun read(file: File): ChatAttachment {
+    fun read(file: File, processor: (String, String, java.io.InputStream) -> ChatAttachment = PhotoAttachmentReader::read): ChatAttachment {
         require(find(file.name).canonicalFile == file.canonicalFile) { "Invalid camera file." }
         return try {
-            file.inputStream().use { AttachmentReader.read("Camera.jpg", "image/jpeg", it) }
+            file.inputStream().use { processor("Camera.jpg", "image/jpeg", it) }
         } finally { file.delete() }
     }
 

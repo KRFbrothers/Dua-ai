@@ -6,7 +6,7 @@ Updated 3 October 2026. Web and Android share the intended product behavior; pla
 | --- | --- | --- | --- |
 | 1 | Persistent chat history | Implemented: saved chats, search, reopen, draft/model recovery and confirmed deletion on web/Android | Physical Android restart/file-picker verification; import/restore; account/cloud sync is separate |
 | 2 | Attachment processing | Implemented inline JPEG/PNG/WebP/PDF/TXT input on web and Android, with validation and retry/Stop selection retention | Live Gemini and physical Android verification; larger files, DOCX and durable/provider file storage |
-| 3 | Camera/photos | Web image selection/capture and native full-photo camera output/photo picker feed attachment processing | Physical-device camera/picker verification; image resizing/compression for captures above 2 MiB |
+| 3 | Camera/photos | Web image selection/capture and native full-photo camera output/photo picker feed attachment processing | Automatic photo resizing added; physical-device camera/picker, native compression/EXIF and low-memory verification |
 | 4 | AI voice conversation | Speech-to-draft input and user-triggered reply read aloud on web/Android; native mic permission and playback lifecycle cleanup | Physical speech/TTS/permission verification; hands-free conversational turns, provider-generated audio and interruption |
 | 5 | Account sign-in/profile/logout | Design screens only | Authentication provider, sessions, real profile and logout behavior |
 | 6 | Cloud history sync | Not implemented | Authenticated ownership, backend storage, cross-device sync and conflict handling |
@@ -39,9 +39,9 @@ Validation: 50 web tests and 16 Android JVM tests passed; Android debug APK asse
 
 ## Third implementation: camera capture
 
-Android delegates capture to the device camera app through TakePicture and a restricted FileProvider cache path. Original JPEG bytes are read through the bounded attachment reader without thumbnail conversion or resizing. A cancelled/failed capture keeps the previous selected attachment. Output files are removed after reading, on failure/cancel, or when launch fails; files abandoned by process death are pruned after 24 hours when capture next starts. The pending filename survives normal activity recreation. App cache may also be cleared by Android. No direct Camera API or CAMERA permission is needed for delegated capture.
+Android delegates capture to the device camera app through TakePicture and a restricted FileProvider cache path. Full JPEG output is prepared through the bounded photo reader; oversized captures are resized as described in the eighth implementation. A cancelled/failed capture keeps the previous selected attachment. Output files are removed after reading, on failure/cancel, or when launch fails; files abandoned by process death are pruned after 24 hours when capture next starts. The pending filename survives normal activity recreation. App cache may also be cleared by Android. No direct Camera API or CAMERA permission is needed for delegated capture.
 
-Web uses the browser's capture input where supported, resets the input to allow reselection, preserves prior selection on cancellation/failure, and ignores late reads from older selections. Both platforms retain the 2 MiB total limit; larger photos require resizing outside the app for now. Camera JPEG metadata is retained along with the original bytes.
+Web uses the browser's capture input where supported, resets the input to allow reselection, preserves prior selection on cancellation/failure, and ignores late reads from older selections. Both platforms retain the 2 MiB total limit; automatic photo resizing is described below. Unmodified camera JPEG metadata is retained; resized copies omit original metadata.
 
 Validation: 54 web tests and 20 Android JVM tests passed; debug APK assembled. Mobile Chromium checked camera-input selection, input reset and return to Chat without layout overflow or browser errors. A physical Android camera app, rotation/process restoration with external camera open, and live Gemini media replies remain untested.
 
@@ -88,3 +88,13 @@ Limits are 4 MiB/file, 100 chats/file, 500 messages/chat, draft length 8000 UTF-
 Web validates bounded UTF-8 bytes, re-reads history when confirming, and adds copies with one atomic write while preserving active ID and generation. Other open tabs retain their chats and future saves preserve imported copies. Android uses OpenDocument and a bounded background stream reader, then commits merged history before changing its list. Failed storage writes retain the review for retry. Imported stopped responses stay stopped, are not read aloud and are excluded from request history on both clients.
 
 Validation: 84 web tests, 32 native JVM tests and APK assembly; mobile browser checks with a Hindi/emoji fixture cover confirmation/cancel, invalid input, preservation of an existing draft and reopening the imported chat. Android physical document-provider I/O, disk failure and restart are still pending.
+
+### Larger photo preparation
+
+Camera/Photos/Files accept JPEG, PNG and WebP sources up to 10 MiB each. If the entire selection already fits 2 MiB, it is passed through unchanged. Otherwise document bytes are reserved and remaining upload capacity is divided across the selected images. Images over their share are locally resized/re-encoded into JPEG, with a longest side no greater than 2048 pixels; dimensions and quality are reduced further if needed. Converted filenames end in `-resized.jpg` and originals on the device are unchanged.
+
+Resized images apply EXIF orientation, flatten transparency on white, use the first animation frame and omit original metadata. These are lossy copies; output differs between browser/native codecs while respecting the same limits. Invalid/oversized dimensions (>16000 on either side or >40 million pixels), source files above 10 MiB, encoding failure and selections that cannot fit produce errors while preserving the previous selection. PDF/TXT are never recompressed: total uploaded file bytes remain <=2 MiB, at most three files, TXT <=64 KiB.
+
+Web processes images sequentially, checks dimension headers before decoding, closes decoded bitmaps and releases canvas buffers. Android bounds source streaming, uses sampled decoding, EXIF transforms and bitmap cleanup on a background dispatcher; camera-cache files are cleaned after processing. No image is uploaded before the explicit Send action. Stop/errors still retain prepared attachments for retry.
+
+Validation: 93 web tests, 38 native JVM tests and APK assembly. A real browser decode/encode check compressed a rotated JPEG and transparent PNG plus TXT to 1,851,571 bytes, verified orientation/white background and sent the prepared bytes through the shared backend with a mocked provider. Android physical codec/EXIF, camera/picker and low-memory testing, plus live Gemini, remain pending.

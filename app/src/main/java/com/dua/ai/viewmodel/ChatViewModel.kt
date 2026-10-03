@@ -8,6 +8,8 @@ import java.util.UUID
 import android.net.Uri
 import com.dua.ai.attachments.ChatAttachment
 import com.dua.ai.attachments.AttachmentReader
+import com.dua.ai.attachments.PhotoPolicy
+import com.dua.ai.attachments.PhotoAttachmentReader
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -101,14 +103,15 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     fun selectAttachments(uris: List<Uri>) = loadFiles {
         require(uris.size <= 3) { "Maximum 3 files select karein." }
         val resolver = getApplication<Application>().contentResolver
-        uris.map { uri ->
+        val sources = uris.map { uri ->
             val name = resolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use {
                 if (it.moveToFirst()) it.getString(0) else "Selected file"
             } ?: "Selected file"
             val type = resolver.getType(uri) ?: if (name.endsWith(".txt", true)) "text/plain" else ""
             val input = resolver.openInputStream(uri) ?: error("File read nahi hui.")
-            input.use { AttachmentReader.read(name, type, it) }
+            input.use { PhotoPolicy.readSource(name, type, it) }
         }
+        PhotoAttachmentReader.prepare(sources)
     }
 
     fun selectCameraFile(file: File) = loadFiles(cleanup = { file.delete() }) {
