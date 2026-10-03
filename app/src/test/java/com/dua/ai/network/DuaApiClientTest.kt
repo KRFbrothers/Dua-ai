@@ -96,6 +96,15 @@ class DuaApiClientTest {
         assertNull(request.getHeader("Authorization"))
     }
 
+    @Test fun enabledMemoryIsPassedAndOversizedMemoryRejectedBeforeNetwork() = runBlocking {
+        server.enqueue(response("{\"text\":\"Reply\"}"))
+        api.reply("Dua", history, memory = "- Prefer Hindi")
+        val request = server.takeRequest(3, TimeUnit.SECONDS)!!
+        assertEquals("- Prefer Hindi", JSONObject(request.body.readUtf8()).getString("memory"))
+        try { api.reply("Dua", history, memory = "x".repeat(3001)); fail("Oversized memory accepted") } catch (_: IllegalArgumentException) { }
+        assertEquals(1, server.requestCount)
+    }
+
     @Test fun fileContentIsIncludedInRequest() = runBlocking {
         server.enqueue(response("{\"text\":\"Read file\"}"))
         assertEquals("Read file", api.reply("Dua", history, listOf(ChatAttachment("notes.txt", "text/plain", "aGk="))))
