@@ -67,11 +67,13 @@ private enum class Screen { Home, Chat, Settings, Attachments, Voice, Profile, D
 fun ChatScreen(viewModel: ChatViewModel = viewModel()) {
     var screenName by rememberSaveable { mutableStateOf(Screen.Home.name) }
     var settingsReturn by rememberSaveable { mutableStateOf(Screen.Home.name) }
-    var draft by rememberSaveable { mutableStateOf("") }
+    val draft by viewModel.draft.collectAsState()
+    val savedChats by viewModel.savedChats.collectAsState()
     val model by viewModel.selectedModel.collectAsState()
     var picker by rememberSaveable { mutableStateOf(false) }
     var detailHistory by rememberSaveable { mutableStateOf(arrayListOf<String>()) }
     var attachments by rememberSaveable { mutableStateOf(arrayListOf<String>()) }
+    var deletingId by remember { mutableStateOf<String?>(null) }
     var attachmentNotice by rememberSaveable { mutableStateOf("") }
     var haptic by rememberSaveable { mutableStateOf(false) }
     val screen = Screen.valueOf(screenName)
@@ -108,7 +110,6 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel()) {
         }
         if (draft.isNotBlank() && !typing) {
             viewModel.sendMessage(draft)
-            if (draft.length <= 8000) draft = ""
         }
     }
     BackHandler(enabled = picker || screen != Screen.Home) {
@@ -118,7 +119,7 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel()) {
         if (messages.isNotEmpty()) listState.animateScrollToItem(messages.lastIndex)
     }
     LaunchedEffect(failedPrompt) {
-        failedPrompt?.let { draft = it; viewModel.consumeFailedPrompt() }
+        failedPrompt?.let { viewModel.consumeFailedPrompt() }
     }
     MaterialTheme(colorScheme = darkColorScheme(
         primary = Primary, onPrimary = Color(0xFF381E72),
@@ -126,6 +127,12 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel()) {
         background = Background, surface = Container, onSurface = Ink,
         onBackground = Ink, onSurfaceVariant = Muted, outline = Color(0xFF938F99)
     )) {
+        deletingId?.let { id ->
+            AlertDialog(onDismissRequest = { deletingId = null }, title = { Text("Delete chat?") },
+                text = { Text("Delete this chat from this device?") },
+                confirmButton = { TextButton(onClick = { viewModel.deleteChat(id); deletingId = null }) { Text("Delete") } },
+                dismissButton = { TextButton(onClick = { deletingId = null }) { Text("Cancel") } })
+        }
         Surface(color = Background, modifier = Modifier.fillMaxSize()) {
             BoxWithConstraints(Modifier.fillMaxSize().safeDrawingPadding().imePadding(), contentAlignment = Alignment.TopCenter) {
                 val compact = maxHeight < 440.dp
@@ -141,7 +148,7 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel()) {
                             RoundAction(Icons.Default.Search, "Search chats", onClick = { searchVisible = !searchVisible })
                             Spacer(Modifier.width(12.dp))
                             RoundAction(Icons.Default.Add, "New chat", enabled = !typing, onClick = {
-                                viewModel.startNewChat(); draft = ""; attachments = arrayListOf(); attachmentNotice = ""; navigate(Screen.Chat)
+                                viewModel.startNewChat(); attachments = arrayListOf(); attachmentNotice = ""; navigate(Screen.Chat)
                             })
                         }
                         if (searchVisible) OutlinedTextField(
@@ -149,26 +156,30 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel()) {
                             placeholder = { Text("Search chats") }, shape = RoundedCornerShape(24.dp),
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp)
                         )
-                        val preview = messages.lastOrNull()?.text ?: draft.ifBlank { "Ask anything..." }
-                        val hasChat = messages.isNotEmpty() || draft.isNotBlank()
-                        val matches = "I am Dua $preview".contains(query, ignoreCase = true)
-                        if (hasChat && matches) {
-                            Row(Modifier.fillMaxWidth().padding(20.dp).clickable { navigate(Screen.Chat) }.padding(vertical = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically) {
-                                Cube(Modifier.size(48.dp))
-                                Spacer(Modifier.width(14.dp))
-                                Column(Modifier.weight(1f)) {
-                                    Text("I am Dua", fontSize = 20.sp)
-                                    Text(preview, color = Muted, fontSize = 16.sp, maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp))
+                        val filtered = savedChats.filter { (it.title + " " + it.preview).contains(query, ignoreCase = true) }
+                        if (filtered.isNotEmpty()) {
+                            LazyColumn(Modifier.weight(1f).fillMaxWidth()) {
+                                items(filtered, key = { it.id }) { chat ->
+                                    Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp)
+                                        .clickable { viewModel.openChat(chat.id); attachments = arrayListOf(); navigate(Screen.Chat) }
+                                        .padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                        Cube(Modifier.size(48.dp))
+                                        Spacer(Modifier.width(14.dp))
+                                        Column(Modifier.weight(1f)) {
+                                            Text(chat.title, fontSize = 20.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                            Text(chat.preview, color = Muted, fontSize = 16.sp, maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp))
+                                        }
+                                        RoundAction(Icons.Default.DeleteOutline, "Delete chat", onClick = { deletingId = chat.id })
+                                    }
                                 }
                             }
                         } else {
                             Column(Modifier.fillMaxWidth().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(if (hasChat) "No chats found" else "No chats yet", fontSize = 20.sp)
-                                Text(if (hasChat) "Try a different search." else "Start a new chat with Dua.", color = Muted,
+                                Text(if (query.isNotBlank()) "No chats found" else "No chats yet", fontSize = 20.sp)
+                                Text(if (query.isNotBlank()) "Try a different search." else "Start a new chat with Dua.", color = Muted,
                                     modifier = Modifier.padding(top = 8.dp))
-                                if (hasChat) TextButton(onClick = { query = "" }) { Text("Clear search") }
+                                if (query.isNotBlank()) TextButton(onClick = { query = "" }) { Text("Clear search") }
                             }
                         }
                     }
@@ -244,7 +255,7 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel()) {
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = if (compact) 12.dp else 16.dp)) {
                             Column(Modifier.padding(if (compact) 12.dp else 20.dp)) {
                                 BasicTextField(
-                                    value = draft, onValueChange = { draft = it }, enabled = !typing,
+                                    value = draft, onValueChange = viewModel::updateDraft, enabled = !typing,
                                     textStyle = MaterialTheme.typography.bodyLarge.copy(color = Ink, fontSize = 20.sp, lineHeight = 28.sp),
                                     cursorBrush = SolidColor(Primary), maxLines = if (compact) 2 else 4,
                                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
