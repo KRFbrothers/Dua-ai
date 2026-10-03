@@ -7,18 +7,18 @@ Updated 3 October 2026. Web and Android share the intended product behavior; pla
 | 1 | Persistent chat history | Implemented: saved chats, search, reopen, draft/model recovery and confirmed deletion on web/Android | Physical Android restart/file-picker verification; import/restore; account/cloud sync is separate |
 | 2 | Attachment processing | Implemented inline JPEG/PNG/WebP/PDF/TXT input on web and Android, with validation and retry/Stop selection retention | Live Gemini and physical Android verification; larger files, DOCX and durable/provider file storage |
 | 3 | Camera/photos | Web image selection/capture and native full-photo camera output/photo picker feed attachment processing | Automatic photo resizing added; physical-device camera/picker, native compression/EXIF and low-memory verification |
-| 4 | AI voice conversation | Speech-to-draft input and user-triggered reply read aloud on web/Android; native mic permission and playback lifecycle cleanup | Physical speech/TTS/permission verification; hands-free conversational turns, provider-generated audio and interruption |
+| 4 | AI voice conversation | Speech-to-draft, reply playback and foreground hands-free turns | Physical speech/TTS/permission verification; provider-generated audio, full duplex and background sessions |
 | 5 | Account sign-in/profile/logout | Design screens only | Authentication provider, sessions, real profile and logout behavior |
 | 6 | Cloud history sync | Not implemented | Authenticated ownership, backend storage, cross-device sync and conflict handling |
 | 7 | Other AI providers | ChatGPT, Claude, Grok and Kimi remain unavailable | Server-side provider credentials/configuration, routing, errors, quotas and tests |
 | 8 | Web search | Disabled/Coming soon | Search provider, citations and user controls |
-| 9 | Memory | Disabled/Coming soon | Opt-in storage, retrieval, inspect/edit/delete controls and account ownership |
+| 9 | Memory | Opt-in local notes with inspect/edit/delete controls | Cloud/account ownership and automatic extraction/retrieval |
 | 10 | Connectors/plugins | Placeholder UI | Integration selection, authorization, actual tools and revocation |
 | 11 | Computer mode/screen sharing/video | Coming soon/design states | Define supported desktop/device capabilities and implement permissions/session lifecycle |
-| 12 | Appearance/font settings | Design samples; launcher uses dark styling | Apply supported choices across screens and persist them consistently |
-| 13 | Notifications | Design sample | Browser/native permission flows, notification delivery and settings |
-| 14 | Data controls/privacy/sharing | Local JSON export, confirmed delete-all and individual deletion now work on web/Android | Import/restore, account deletion, real sharing and cloud retention settings |
-| 15 | Microphone/camera permissions | Voice requests native microphone permission with denial/settings recovery; camera capture is delegated to the external camera app | Physical permission/recognizer verification; remaining Settings permission samples and other device capabilities |
+| 12 | Appearance/font settings | Persisted theme/font/haptic settings on web and Android | Physical rendering/vibration verification |
+| 13 | Notifications | Explicit permission, generic local reply notification and test action | Physical delivery; server push/durable background work |
+| 14 | Data controls/privacy/sharing | Local JSON export, confirmed delete-all and individual deletion now work on web/Android | Import/restore and completed-message text sharing implemented; cloud retention/account deletion deferred |
+| 15 | Microphone/camera permissions | Voice requests native microphone permission with denial/settings recovery; camera capture is delegated to the external camera app | Settings requests supported real permissions; physical verification and new capabilities remain |
 | 16 | Usage/account protection | IP burst limit added; endpoints are not authenticated | Account-based access policy and project-wide daily/spend budgeting |
 
 ## First implementation: local history
@@ -98,3 +98,10 @@ Resized images apply EXIF orientation, flatten transparency on white, use the fi
 Web processes images sequentially, checks dimension headers before decoding, closes decoded bitmaps and releases canvas buffers. Android bounds source streaming, uses sampled decoding, EXIF transforms and bitmap cleanup on a background dispatcher; camera-cache files are cleaned after processing. No image is uploaded before the explicit Send action. Stop/errors still retain prepared attachments for retry.
 
 Validation: 93 web tests, 38 native JVM tests and APK assembly. A real browser decode/encode check compressed a rotated JPEG and transparent PNG plus TXT to 1,851,571 bytes, verified orientation/white background and sent the prepared bytes through the shared backend with a mocked provider. Android physical codec/EXIF, camera/picker and low-memory testing, plus live Gemini, remain pending.
+
+
+## Local feature batch
+
+Cloud setup is deferred by user choice. Production Settings persists theme/font/haptics and exposes actual permission controls, local reply notifications, opt-in manually managed memory and completed-message plain-text sharing. Voice offers explicit foreground hands-free Start/Stop with speech → Gemini text → TTS turns and background/error cleanup. Memory is limited to ten notes of 200 characters and is forwarded only when enabled. Chat deletion and preference/memory reset are separate controls. No live auth, push server, other provider routing or cross-device sync is configured. The notification service worker does not cache assets.
+
+See the ninth implementation in [FEATURES.md](../FEATURES.md) for data handling, limits, deferred work and verification (103 web tests, 43 native JVM tests, APK build and mocked mobile browser checks). Physical Android speech/notifications and live providers remain unverified.
