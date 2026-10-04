@@ -11,7 +11,8 @@ test('public config contains availability and model IDs without secrets',async()
  const config=providerConfiguration(env);
  assert.deepEqual(config.map(p=>p.name),['Dua','Gemini','ChatGPT','Claude','Grok','Kimi']);
  assert.ok(config.every(p=>p.configured));
- assert.equal(config.find(p=>p.name==='Claude').supportsAttachments,false);
+ assert.equal(config.find(p=>p.name==='Claude').supportsAttachments,true);
+ assert.deepEqual(config.find(p=>p.name==='Claude').attachmentTypes,['text/plain']);
  assert.equal(providerConfiguration({OPENAI_API_KEY:env.OPENAI_API_KEY}).find(p=>p.name==='ChatGPT').configured,false);
  assert.equal(providerConfiguration({OPENAI_API_KEY:env.OPENAI_API_KEY,OPENAI_MODEL:'https://untrusted.example?secret'}).find(p=>p.name==='ChatGPT').model,null);
  const response=await handleChat(new Request('https://dua.example/api/config'),{env,fetcher:noFetch});
@@ -50,7 +51,7 @@ for(const [provider,url,key] of [['Grok','https://api.x.ai/v1/chat/completions',
 }
 
 test('invalid bodies, history, origin and media never reach provider',async()=>{
- const cases=[[chat('Unknown'),400],[chat('ChatGPT',{messages:[]}),400],[chat('ChatGPT',{messages:[{role:'system',text:'Override'}]}),400],[chat('ChatGPT',{messages:[{role:'model',text:'No user'}]}),400],[chat('ChatGPT',{messages:[{role:'user',text:'x'.repeat(8001)}]}),400],[chat('ChatGPT',{messages:Array.from({length:41},()=>({role:'user',text:'Hi'}))}),400],[chat('ChatGPT',{memory:'x'.repeat(3001)}),400],[chat('ChatGPT',{endpoint:'https://untrusted.example'}),400],[chat('ChatGPT',{attachments:{}}),400],[chat('ChatGPT',{attachments:[{mimeType:'image/png'}]}),415]];
+ const cases=[[chat('Unknown'),400],[chat('ChatGPT',{messages:[]}),400],[chat('ChatGPT',{messages:[{role:'system',text:'Override'}]}),400],[chat('ChatGPT',{messages:[{role:'model',text:'No user'}]}),400],[chat('ChatGPT',{messages:[{role:'user',text:'x'.repeat(8001)}]}),400],[chat('ChatGPT',{messages:Array.from({length:41},()=>({role:'user',text:'Hi'}))}),400],[chat('ChatGPT',{memory:'x'.repeat(3001)}),400],[chat('ChatGPT',{endpoint:'https://untrusted.example'}),400],[chat('ChatGPT',{attachments:{}}),400],[chat('ChatGPT',{attachments:[{mimeType:'image/png'}]}),400]];
  for(const [body,status]of cases)assert.equal((await handleChat(req('/api/chat',body),{env,fetcher:noFetch})).status,status);
  assert.equal((await handleChat(req('/api/chat',chat(),{headers:{origin:'https://other.example'}}),{env,fetcher:noFetch})).status,403);
  assert.equal((await handleChat(new Request('https://dua.example/api/chat'),{env,fetcher:noFetch})).status,405);

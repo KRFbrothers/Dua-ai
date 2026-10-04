@@ -6,7 +6,7 @@ Open **Settings → Capabilities / Feature setup** after deploying. The page rep
 
 | Group | Setup included | Activate | Still outside this setup |
 | --- | --- | --- | --- |
-| AI providers | Gemini plus text adapters for ChatGPT, Claude, Grok and Kimi; configured model picker on both clients | Add that provider's API key and model ID, redeploy | Live provider verification; new providers' attachments |
+| AI providers | Gemini plus ChatGPT, Claude, Grok and Kimi adapters; TXT on all, explicit model-dependent image/PDF capabilities; configured model picker on both clients | Add that provider's API key/model ID and optional attachment MIME types, redeploy | Live model verification, Grok/Kimi PDF ingestion, image generation |
 | Web search | Explicit Brave queries and source links on both clients | Add `BRAVE_SEARCH_API_KEY`, redeploy, submit Search | Automatic search during AI chat and webpage analysis |
 | Automatic sync | Web and Android foreground opt-in snapshot coordinators, plus manual reviews | Sign in, review existing data, enable automatic sync separately on each device | Background/realtime sync and physical-device verification |
 | Memory | Local proposals from explicit remember/yaad rakho statements, individual Save/Dismiss on both clients | Enable proposals on web or choose Suggest memory notes on Android; approve notes | Unprompted model extraction, embeddings and automatic fact learning |
@@ -51,6 +51,8 @@ Use **Vercel project → Environment Variables**. Add only the variables for a f
 | Generated audio | `ENABLE_GENERATED_VOICE=1`, `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`, `DUA_ALLOWED_EMAIL` |
 
 Provider model values must be API model IDs available to your account. Keep API secrets in server settings; never put them in browser code, Android, screenshots or chat. Consumer chat subscriptions are separate from API access. No new paid provider or key was provisioned; OpenAI key setup remains deferred as requested.
+
+Attachments default to TXT for the four optional providers. `OPENAI_ATTACHMENT_TYPES`, `ANTHROPIC_ATTACHMENT_TYPES`, `GROK_ATTACHMENT_TYPES` and `KIMI_ATTACHMENT_TYPES` opt in to model-supported MIME types. See [PROVIDERS.md](PROVIDERS.md) for formats and limits. Native changes are prepared in source; APK builds are deferred at your request.
 
 GitHub and generated audio stay inaccessible until an allowed personal owner is configured and signed in. Revoke a connector by disabling its flag and revoking the token at GitHub. See [PROVIDERS.md](PROVIDERS.md), [ACCOUNT-SETUP.md](ACCOUNT-SETUP.md) and [ADVANCED-SETUP.md](ADVANCED-SETUP.md) for service-specific steps.
 

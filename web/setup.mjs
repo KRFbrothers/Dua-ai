@@ -10,7 +10,7 @@ export function setupConfiguration(env = {},requestUrl = env.SUPABASE_AUTH_REDIR
  const advanced = advancedConfiguration(env);
  const group=(id,title,state,requires,limitations)=>({id,title,state,requires,limitations});
  return {providers,account,search,advanced,groups:[
-  group('providers','AI providers',providers.slice(2).every(p=>p.configured)?'configured':providers.some(p=>p.configured)?'partial':'needs-configuration',['API key and model for each provider'],['New providers accept text only; Gemini supports existing attachments.']),
+  group('providers','AI providers',providers.slice(2).every(p=>p.configured)?'configured':providers.some(p=>p.configured)?'partial':'needs-configuration',['API key and model for each provider'],['All providers accept TXT. Image/PDF support depends on configured model capabilities; Grok/Kimi do not accept PDF.']),
   group('search','Web search',search.configured?'configured':'needs-configuration',['Brave Search API key'],['Search runs only when you submit a query. Results include source links.']),
   group('sync','Automatic cloud sync',account.configured?'available':'needs-configuration',['Supabase cloud migration','Sign in and enable on this device'],['Defaults off. Conflicts and deletions pause for review. No file or audio bytes.']),
   group('memory','Memory suggestions','available',['Enable suggestions and approve each note'],['Explicit remember statements become proposals; saved notes are used only when memory is enabled.']),

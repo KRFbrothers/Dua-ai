@@ -639,8 +639,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
         val files = _attachments.value
-        if (files.isNotEmpty() && !provider.supportsAttachments) {
-            _error.value = "This provider currently supports text only. Remove attachments or choose Dua/Gemini."
+        val attachmentError = com.dua.ai.setup.IntegrationCapabilities.attachmentError(provider, files.map { it.mimeType })
+        if (attachmentError != null) {
+            _error.value = attachmentError
             return
         }
         val prompt = userText.trim().ifBlank { "Describe these files." }
