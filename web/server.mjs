@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { MAX_REQUEST_BYTES } from './attachments.mjs';
+import { handleAccount, handleCloudRead } from './account.mjs';
 import { handleGemini } from './gemini.mjs';
 
 const root = path.resolve(fileURLToPath(new URL('./dist/', import.meta.url)));
@@ -11,7 +12,7 @@ function json(res, code, data) {
   res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
   res.end(JSON.stringify(data));
 }
-export function makeServer({ key = process.env.GEMINI_API_KEY, model = process.env.GEMINI_MODEL, fetcher = fetch } = {}) {
+export function makeServer({ key = process.env.GEMINI_API_KEY, model = process.env.GEMINI_MODEL, fetcher = fetch, supabaseUrl = process.env.SUPABASE_URL, supabaseKey = process.env.SUPABASE_ANON_KEY } = {}) {
   return createServer(async (req, res) => {
     const controller = new AbortController();
     const onDisconnect = () => {
@@ -20,11 +21,11 @@ export function makeServer({ key = process.env.GEMINI_API_KEY, model = process.e
     res.on?.('close', onDisconnect);
     try {
       const url = new URL(req.url, 'http://localhost');
-      if (url.pathname === '/api/config' || url.pathname === '/api/chat') {
+      if (url.pathname === '/api/config' || url.pathname === '/api/chat' || url.pathname.startsWith('/api/account/') || url.pathname === '/api/cloud') {
         const chunks = []; let size = 0;
         for await (const chunk of req) {
           size += chunk.length;
-          if (size > MAX_REQUEST_BYTES) return json(res, 413, { error: 'Message history is too large.' });
+          if (size > (url.pathname === '/api/cloud' ? 4 * 1024 * 1024 + 1024 : url.pathname.startsWith('/api/account/') ? 16384 : MAX_REQUEST_BYTES)) return json(res, 413, { error: 'Message history is too large.' });
           chunks.push(chunk);
         }
         const body = Buffer.concat(chunks).toString('utf8');
@@ -34,9 +35,9 @@ export function makeServer({ key = process.env.GEMINI_API_KEY, model = process.e
           signal: controller.signal,
           ...(!['GET','HEAD'].includes(req.method) ? { body } : {})
         });
-        const response = await handleGemini(request, { key, model, fetcher });
+        const response = url.pathname.startsWith('/api/account/') || url.pathname === '/api/cloud' ? await (url.pathname === '/api/cloud' && req.method === 'GET' ? handleCloudRead : handleAccount)(request, {url:supabaseUrl,key:supabaseKey,fetcher}) : await handleGemini(request, { key, model, fetcher });
         if (res.destroyed) return;
-        res.writeHead(response.status, Object.fromEntries(response.headers));
+        const headers=Object.fromEntries(response.headers);const cookies=response.headers.getSetCookie();if(cookies.length)headers['set-cookie']=cookies;res.writeHead(response.status, headers);
         return res.end(await response.text());
       }
       if (url.pathname.startsWith('/api/')) return json(res, 404, { error: 'Not found.' });

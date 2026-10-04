@@ -1,6 +1,6 @@
 # Dua incomplete features and implementation order
 
-Updated 3 October 2026. Web and Android share the intended product behavior; platform implementations differ. This list preserves planned integrations.
+Updated 4 October 2026. Web and Android share the intended product behavior; platform implementations differ. This list preserves planned integrations.
 
 | Order | Feature | Current state | Remaining work |
 | --- | --- | --- | --- |
@@ -8,16 +8,16 @@ Updated 3 October 2026. Web and Android share the intended product behavior; pla
 | 2 | Attachment processing | Implemented inline JPEG/PNG/WebP/PDF/TXT input on web and Android, with validation and retry/Stop selection retention | Live Gemini and physical Android verification; larger documents, DOCX and durable/provider file storage |
 | 3 | Camera/photos | Web image selection/capture and native full-photo camera output/photo picker feed attachment processing | Automatic photo resizing added; physical-device camera/picker, native compression/EXIF and low-memory verification |
 | 4 | AI voice conversation | Speech-to-draft, explicit reply playback and foreground hands-free turns on web/Android | Physical speech/TTS/permission verification; provider-generated audio, full duplex/barge-in and background sessions |
-| 5 | Account sign-in/profile/logout | Design screens only | Authentication provider, sessions, real profile and logout behavior |
-| 6 | Cloud history sync | Not implemented | Authenticated ownership, backend storage, cross-device sync and conflict handling |
+| 5 | Account sign-in/profile/logout | Supabase email auth, encrypted native/HttpOnly web sessions, display name and device logout implemented | Create/configure project; live email and physical-device verification; OAuth/reset/deletion remain future |
+| 6 | Cloud history sync | Reviewed manual chat/draft/memory snapshots with RLS ownership and revision conflicts | Apply migration/configure project; live cross-device verification; automatic sync remains future |
 | 7 | Other AI providers | ChatGPT, Claude, Grok and Kimi remain unavailable | Server-side provider credentials/configuration, routing, errors, quotas and tests |
 | 8 | Web search | Disabled/Coming soon | Search provider, citations and user controls |
-| 9 | Memory | Opt-in local notes; inspect, edit, delete and include in new prompts on web/Android | Account ownership/cloud sync and automatic memory extraction/retrieval |
+| 9 | Memory | Opt-in local notes; inspect, edit, delete and include in new prompts on web/Android | Manual cloud notes implemented after setup; automatic memory extraction/retrieval remains future |
 | 10 | Connectors/plugins | Placeholder UI | Integration selection, authorization, actual tools and revocation |
 | 11 | Computer mode/screen sharing/video | Coming soon/design states | Define supported desktop/device capabilities and implement permissions/session lifecycle |
 | 12 | Appearance/font settings | Persisted Dark/Light/System and Default/System/Serif/Monospace; haptic preference | Physical font/language rendering and vibration verification |
 | 13 | Notifications | Opt-in generic local reply notifications, permission flow and test action | Physical delivery/tap verification; server push and durable background processing |
-| 14 | Data controls/privacy/sharing | Local JSON export/import, confirmed delete-all and individual deletion now work on web/Android | Completed-message plain-text sharing added; account deletion and cloud retention still deferred |
+| 14 | Data controls/privacy/sharing | Local JSON export/import, confirmed delete-all and individual deletion now work on web/Android | Completed-message plain-text sharing added; reviewed cloud clearing implemented after setup; account deletion still deferred |
 | 15 | Microphone/camera permissions | Voice requests native microphone permission with denial/settings recovery; camera capture is delegated to the external camera app | Settings now shows/requests actual supported permissions; physical verification and new capabilities remain |
 | 16 | Usage/account protection | IP burst limit added; endpoints are not authenticated | Account-based access policy and project-wide daily/spend budgeting |
 
@@ -108,3 +108,7 @@ The user selected local features now and cloud setup later. This batch implement
 Cloud/authentication/profile/logout, cross-device chat/memory sync, ChatGPT/Claude/Grok/Kimi routing, web search, connectors/plugins, remote computer/screen/video capabilities and account-level quotas/spend protection remain deferred. Existing unavailable/design states are retained. Local storage is separate on web and Android; matching UI behavior does not synchronize their data. The `/preview/` sandbox remains a design simulation.
 
 Validation: 103 web tests, 43 Android JVM tests and Android debug APK assembly pass. Mobile Chromium at 390 × 844 verified light theme/font persistence across Home, Chat, Settings, Voice and new pages, zero horizontal overflow after fixes, memory included in the mocked Gemini request, sharing review, permission-test track cleanup, and hands-free listening → reply → playback → listening → Stop. Unit integration tests cover Stop with a late provider response, background pause without automatic restart and playback failure without reopening the microphone. Providers/speech/permissions were mocked where needed. Live Gemini, physical Android microphone/audio focus/notifications/pickers, process recreation and actual device delivery still need device verification.
+
+## Supabase account and cloud snapshot integration
+
+See [SUPABASE.md](SUPABASE.md). Web and Android now share email sign-in, profile, device logout and explicit cloud review/upload/download/clear. No project was created and no live credentials were used. 118 web tests and 51 Android JVM tests pass; the debug APK builds. A mocked mobile browser flow and temporary PostgreSQL SQL ownership/CAS checks pass. Live email, deployment and physical native session checks remain required. Earlier implementation sections record historical states.

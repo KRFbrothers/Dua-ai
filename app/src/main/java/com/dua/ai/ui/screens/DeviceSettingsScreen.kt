@@ -100,8 +100,8 @@ fun DeviceSettingsScreen(viewModel: ChatViewModel, page: String, onBack: () -> U
                 TextButton(enabled = current?.messages?.any { it.state == "complete" } == true, onClick = { (context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager).setPrimaryClip(android.content.ClipData.newPlainText("Dua conversation", text)); notice("Copied conversation.") }) { Text("Copy conversation") }
             }
             "Privacy" -> {
-                Text("Chats, settings and memory notes are local. Sending forwards messages, selected file contents and enabled memory notes to the configured AI provider. Device/browser speech services may process speech remotely. OS backup policy is unchanged.", fontSize = 14.sp)
-                Text("Local deletion does not delete provider records, exports or other devices. Account/cloud retention needs account setup.", fontSize = 14.sp)
+                Text("Chats, settings and memory notes are local. Sending forwards messages, selected file contents and enabled memory notes to the configured AI provider. Device/browser speech services may process speech remotely. Account sessions are encrypted on this device and excluded from backup.", fontSize = 14.sp)
+                Text("Local deletion does not delete provider records, exports or other devices. Reviewed Cloud sync uploads store drafts, messages and saved notes in your Supabase account. Logout does not erase local or cloud data. Clear cloud separately in Profile → Cloud sync. Account deletion is not available.", fontSize = 14.sp)
                 TextButton(onClick = { onPage("DataControls") }) { Text("Manage local chats") }
                 TextButton(onClick = { onPage("Memory") }) { Text("Manage local memories") }
                 TextButton(onClick = { resetting = true }) { Text("Reset local settings and memories") }

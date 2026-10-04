@@ -29,6 +29,60 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 class ChatViewModel(application: Application) : AndroidViewModel(application) {
+    val account = com.dua.ai.account.AccountRepository(application)
+    data class CloudPreview(val kind: String, val userId: String, val review: com.dua.ai.account.CloudReview)
+    private val _cloudPreview = MutableStateFlow<CloudPreview?>(null)
+    val cloudPreview = _cloudPreview.asStateFlow()
+    fun accountAction(action: suspend () -> Unit) {
+        if (account.state.value.busy || _dataBusy.value) return
+        account.busy(true)
+        viewModelScope.launch {
+            try { action() } catch (cancelled: CancellationException) { throw cancelled }
+            catch (failure: Exception) { account.notice(failure.message ?: "Account request failed. Local data was kept.") }
+            finally { account.busy(false) }
+        }
+    }
+    fun loadAccount() = accountAction { account.load() }
+    fun signIn(email: String, password: String, signup: Boolean) = accountAction { _cloudPreview.value = null; account.signIn(email, password, signup) }
+    fun logOut() = accountAction { _cloudPreview.value = null; account.logout() }
+    fun cancelCloudReview() { _cloudPreview.value = null; account.notice("Cancelled. Data was not changed.") }
+    fun reviewCloud(kind: String) = accountAction {
+        val remote = account.cloud()
+        val snapshot = if (kind == "upload") com.dua.ai.account.CloudSnapshot(_savedChats.value.toList(), localSettings.value.memory.toList()) else remote.snapshot
+        com.dua.ai.account.CloudSnapshotCodec.encode(snapshot)
+        _cloudPreview.value = CloudPreview(kind, account.state.value.user?.id ?: error("Sign in again."), remote.copy(snapshot = snapshot))
+    }
+    fun confirmCloud() = accountAction {
+        _dataBusy.value = true
+        try {
+        val preview = _cloudPreview.value ?: return@accountAction
+        account.load()
+        check(account.state.value.user?.id == preview.userId) { "Account changed. Review again." }
+        when (preview.kind) {
+            "upload" -> account.notice("Uploaded cloud revision ${account.upload(preview.review)}. Local data stays unchanged.")
+            "delete" -> { account.upload(preview.review, clear = true); account.notice("Cloud snapshot cleared. Local data stays unchanged.") }
+            "download" -> {
+                val oldSettings = localSettings.value
+                val notes = (oldSettings.memory + preview.review.snapshot.memory).distinct()
+                require(notes.size <= 10) { "Merged memories exceed 10 notes. Remove some local notes and review again." }
+                val result = com.dua.ai.account.CloudSnapshotCodec.merge(_savedChats.value, preview.review.snapshot.chats)
+                val encoded = ChatHistoryCodec.encode(result.chats, activeId)
+                val previous = preferences.getString("history", null)
+                localPreferences.update(oldSettings.copy(memory = notes))
+                try {
+                    val committed = withContext(Dispatchers.IO) { preferences.edit().putString("history", encoded).commit() }
+                    if (!committed) { preferences.edit().putString("history", previous).apply(); error("Cloud chats could not be saved. Retry.") }
+                    _savedChats.value = result.chats
+                } catch (failure: Exception) {
+                    try { localPreferences.update(oldSettings) } catch (_: Exception) { throw IllegalStateException("Import interrupted and memory rollback failed. Inspect local memories before retrying.", failure) }
+                    throw failure
+                }
+                account.notice("${result.added} chats merged; ${result.conflicts} conflicts kept as copies.")
+            }
+        }
+        _cloudPreview.value = null
+        } finally { _dataBusy.value = false }
+    }
     private val api = DuaApiClient()
     private val localPreferences = com.dua.ai.settings.DevicePreferences(application)
     val localSettings = localPreferences.state

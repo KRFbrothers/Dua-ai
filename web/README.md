@@ -105,3 +105,7 @@ Validation: 93 web tests, 38 native JVM tests and APK assembly. A real browser d
 Cloud setup is deferred by user choice. Production Settings persists theme/font/haptics and exposes actual permission controls, local reply notifications, opt-in manually managed memory and completed-message plain-text sharing. Voice offers explicit foreground hands-free Start/Stop with speech → Gemini text → TTS turns and background/error cleanup. Memory is limited to ten notes of 200 characters and is forwarded only when enabled. Chat deletion and preference/memory reset are separate controls. No live auth, push server, other provider routing or cross-device sync is configured. The notification service worker does not cache assets.
 
 See the ninth implementation in [FEATURES.md](../FEATURES.md) for data handling, limits, deferred work and verification (103 web tests, 43 native JVM tests, APK build and mocked mobile browser checks). Physical Android speech/notifications and live providers remain unverified.
+
+## Supabase account integration
+
+Email account/profile/logout and reviewed manual chat/memory cloud snapshots are implemented for web and Android. They require a Supabase project and shared backend environment configuration. See [SUPABASE.md](../SUPABASE.md) for setup, ownership checks, limits and remaining live verification. Local features continue without account setup; signing in does not upload automatically.
