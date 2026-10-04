@@ -5,7 +5,7 @@
   const id = () => root.crypto?.randomUUID?.() || Date.now().toString(36) + Math.random().toString(36).slice(2);
   const normalize = chat => ({
     id: chat.id, updatedAt: Number.isFinite(chat.updatedAt) && chat.updatedAt >= 0 ? chat.updatedAt : Date.now(),
-    model: ['Dua', 'Gemini'].includes(chat.model) ? chat.model : 'Dua',
+    model: ['Dua', 'Gemini', 'ChatGPT', 'Claude', 'Grok', 'Kimi'].includes(chat.model) ? chat.model : 'Dua',
     draft: typeof chat.draft === 'string' ? chat.draft : '',
     messages: (Array.isArray(chat.messages) ? chat.messages : []).filter(m => m && ['user', 'model'].includes(m.role) && typeof m.text === 'string')
       .map(m => ({role:m.role, text:m.state === 'pending' ? 'Response stopped' : m.text, state:m.state === 'pending' ? 'stopped' : m.state || 'complete'}))
@@ -34,7 +34,7 @@
     if (!data || data.format !== 'dua-chat-export' || data.version !== 1 || !integer(data.exportedAt) || !Array.isArray(data.chats) || data.chats.length > 100) invalid();
     const ids = new Set();
     const records = data.chats.map(chat => {
-      if (!chat || typeof chat.id !== 'string' || !chat.id.trim() || chat.id.length > 200 || ids.has(chat.id) || !integer(chat.updatedAt) || !['Dua','Gemini'].includes(chat.model) || typeof chat.draft !== 'string' || chat.draft.length > 8000 || !Array.isArray(chat.messages) || chat.messages.length > 500) invalid();
+      if (!chat || typeof chat.id !== 'string' || !chat.id.trim() || chat.id.length > 200 || ids.has(chat.id) || !integer(chat.updatedAt) || !['Dua','Gemini','ChatGPT','Claude','Grok','Kimi'].includes(chat.model) || typeof chat.draft !== 'string' || chat.draft.length > 8000 || !Array.isArray(chat.messages) || chat.messages.length > 500) invalid();
       ids.add(chat.id);
       const messages = chat.messages.map(message => {
         if (!message || !['user','model'].includes(message.role) || typeof message.text !== 'string' || message.text.length > 1048576 || !['complete','stopped'].includes(message.state)) invalid();
@@ -44,7 +44,7 @@
     });
     return records;
   }
-  function write(data) { root.localStorage.setItem(key, JSON.stringify(data)); }
+  function write(data) { root.localStorage.setItem(key, JSON.stringify(data)); root.dispatchEvent?.(new Event('dua-history')); }
   function migrate() {
     if (root.localStorage.getItem(key)) return;
     const old = JSON.parse(root.sessionStorage.getItem('dua-chat-v1') || 'null');

@@ -1,4 +1,4 @@
--- Run in the Supabase SQL editor. No service-role key belongs in the app or backend env.
+-- Run in the Supabase SQL editor. Snapshot routes use the public key and RLS. Never put a service-role key in clients.
 create table if not exists public.dua_cloud_snapshots (
  owner_id uuid primary key references auth.users(id) on delete cascade,
  revision bigint not null default 1 check (revision > 0),

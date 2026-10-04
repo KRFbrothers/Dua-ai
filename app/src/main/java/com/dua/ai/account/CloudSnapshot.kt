@@ -7,7 +7,7 @@ import org.json.JSONObject
 import java.util.UUID
 
 data class CloudSnapshot(val chats: List<SavedChat>, val memory: List<String>)
-data class CloudReview(val revision: Long, val snapshot: CloudSnapshot)
+data class CloudReview(val revision: Long, val snapshot: CloudSnapshot, val ownerId: String? = null)
 data class CloudMergeResult(val chats: List<SavedChat>, val added: Int, val conflicts: Int)
 object CloudSnapshotCodec {
     fun encode(value: CloudSnapshot): JSONObject {

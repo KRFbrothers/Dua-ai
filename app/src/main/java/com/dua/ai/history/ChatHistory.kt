@@ -79,7 +79,7 @@ object ChatHistoryCodec {
                 val id = text(chat, "id", 200)
                 require(id.isNotBlank() && ids.add(id)) { invalid }
                 val model = text(chat, "model", 20)
-                require(model in listOf("Dua", "Gemini")) { invalid }
+                require(model in com.dua.ai.setup.IntegrationCapabilities.MODELS) { invalid }
                 val draft = text(chat, "draft", 8000)
                 val updatedAt = integer(chat, "updatedAt")
                 val messages = chat.getJSONArray("messages")
@@ -139,7 +139,7 @@ object ChatHistoryCodec {
                         isUser = message.getBoolean("isUser"), model = message.getString("model"), state = message.optString("state", "complete"))
                 }, item.getLong("updatedAt"))
         }
-        require(chats.all { it.model in listOf("Dua", "Gemini") } && chats.map { it.id }.distinct().size == chats.size)
+        require(chats.all { it.model in com.dua.ai.setup.IntegrationCapabilities.MODELS } && chats.map { it.id }.distinct().size == chats.size)
         return root.getString("activeId") to chats
     }
 }

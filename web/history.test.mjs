@@ -80,7 +80,7 @@ test('import rejects wrong formats, versions, roles, model, types, limits and du
  const page=open();page.api.save(first);const before=page.localStorage.getItem('dua-history-v2');
  const valid=JSON.parse(exported());
  const cases=['broken','null',JSON.stringify({...valid,version:2}),JSON.stringify({...valid,version:'1'}),JSON.stringify({...valid,format:'other'}),JSON.stringify({...valid,exportedAt:1.5}),JSON.stringify({...valid,chats:Array(101).fill(valid.chats[0])})];
- for(const patch of [{draft:4},{draft:'x'.repeat(8001)},{model:'ChatGPT'},{updatedAt:-1},{id:''},{messages:[{role:'system',text:'Hi',state:'complete'}]},{messages:[{role:'model',text:'Hi',state:'pending'}]},{messages:[{role:'user',text:null,state:'complete'}]},{messages:Array(501).fill({role:'user',text:'Hi',state:'complete'})},{messages:[{role:'model',text:'x'.repeat(1048577),state:'complete'}]}])cases.push(JSON.stringify({...valid,chats:[{...valid.chats[0],...patch}]}));
+ for(const patch of [{draft:4},{draft:'x'.repeat(8001)},{model:'Unknown'},{updatedAt:-1},{id:''},{messages:[{role:'system',text:'Hi',state:'complete'}]},{messages:[{role:'model',text:'Hi',state:'pending'}]},{messages:[{role:'user',text:null,state:'complete'}]},{messages:Array(501).fill({role:'user',text:'Hi',state:'complete'})},{messages:[{role:'model',text:'x'.repeat(1048577),state:'complete'}]}])cases.push(JSON.stringify({...valid,chats:[{...valid.chats[0],...patch}]}));
  cases.push(JSON.stringify({...valid,chats:[valid.chats[0],valid.chats[0]]}));cases.push('x'.repeat(page.api.maxImportBytes+1));cases.push('['.repeat(65)+'0'+']'.repeat(65));
  for(const raw of cases){assert.throws(()=>page.api.importJson(raw));assert.equal(page.localStorage.getItem('dua-history-v2'),before);}
 });
@@ -91,3 +91,5 @@ test('import failure is atomic, empty exports do nothing, and confirmed import p
  page.api.previewImport(exported());const other=open(page.localStorage);other.api.newChat();other.api.save({model:'Dua',draft:'Other tab',messages:[]});
  page.api.importJson(exported());assert.equal(page.api.list().length,3);assert.ok(page.api.list().some(c=>c.draft==='Other tab'));
 });
+
+test('all configured provider names survive save and export/import',()=>{const page=open();for(const model of ['Dua','Gemini','ChatGPT','Claude','Grok','Kimi']){page.api.newChat();page.api.save({...first,model});}const raw=page.api.exportJson(),restored=open();restored.api.importJson(raw);assert.deepEqual(Array.from(new Set(restored.api.list().map(chat=>chat.model))).sort(),['Claude','Dua','Gemini','Grok','Kimi','ChatGPT'].sort());});

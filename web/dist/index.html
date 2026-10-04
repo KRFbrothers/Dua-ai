@@ -32,4 +32,4 @@ function filterChats(){
  empty.hidden=!query||matches>0;historyEmpty.hidden=chats.length>0||!!query;
 }
 document.querySelector('#search-chats').onclick=()=>{search.hidden=!search.hidden;if(!search.hidden)input.focus();else input.value='';filterChats()};input.oninput=filterChats;document.querySelector('.search-clear').onclick=()=>{input.value='';filterChats();input.focus()};window.addEventListener('pageshow',loadChats);window.addEventListener('storage',loadChats);loadChats();
-</script></body></html>
+</script><script src="account-client.js"></script><script src="cloud-merge.js"></script><script src="auto-sync.js"></script><script src="memory-suggestions.js"></script><script src="automation-page.js"></script></body></html>

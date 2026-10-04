@@ -9,17 +9,17 @@ Updated 4 October 2026. Web and Android share the intended product behavior; pla
 | 3 | Camera/photos | Web image selection/capture and native full-photo camera output/photo picker feed attachment processing | Automatic photo resizing added; physical-device camera/picker, native compression/EXIF and low-memory verification |
 | 4 | AI voice conversation | Speech-to-draft, explicit reply playback and foreground hands-free turns on web/Android | Physical speech/TTS/permission verification; provider-generated audio, full duplex/barge-in and background sessions |
 | 5 | Account sign-in/profile/logout | Supabase email auth, encrypted native/HttpOnly web sessions, display name and device logout implemented | Create/configure project; live email and physical-device verification; OAuth/reset/deletion remain future |
-| 6 | Cloud history sync | Reviewed manual chat/draft/memory snapshots with RLS ownership and revision conflicts | Apply migration/configure project; live cross-device verification; automatic sync remains future |
-| 7 | Other AI providers | ChatGPT, Claude, Grok and Kimi remain unavailable | Server-side provider credentials/configuration, routing, errors, quotas and tests |
-| 8 | Web search | Disabled/Coming soon | Search provider, citations and user controls |
-| 9 | Memory | Opt-in local notes; inspect, edit, delete and include in new prompts on web/Android | Manual cloud notes implemented after setup; automatic memory extraction/retrieval remains future |
-| 10 | Connectors/plugins | Placeholder UI | Integration selection, authorization, actual tools and revocation |
-| 11 | Computer mode/screen sharing/video | Coming soon/design states | Define supported desktop/device capabilities and implement permissions/session lifecycle |
+| 6 | Cloud history sync | Reviewed manual chat/draft/memory snapshots with RLS ownership and revision conflicts | Apply migration/configure project; live cross-device verification; Web opt-in automatic foreground sync is prepared; native scheduler and background/realtime sync remain future |
+| 7 | Other AI providers | ChatGPT, Claude, Grok and Kimi remain unavailable | Adapters and configured provider picker are prepared; configure keys/model IDs and verify live requests. New providers are text-only. |
+| 8 | Web search | Disabled/Coming soon | Brave adapter, explicit queries and source links are prepared; configure key and verify live search. Automatic chat search remains future. |
+| 9 | Memory | Opt-in local notes; inspect, edit, delete and include in new prompts on web/Android | Manual cloud notes implemented after setup; Reviewed local remember-statement proposals are prepared; model extraction/embeddings remain future |
+| 10 | Connectors/plugins | Placeholder UI | Read-only GitHub listing with owner access and flag/token revocation is prepared; OAuth and other tools remain future. |
+| 11 | Computer mode/screen sharing/video | Coming soon/design states | Browser local camera/screen preview is prepared with Stop/lifecycle cleanup; native capture, analysis and remote control remain future. |
 | 12 | Appearance/font settings | Persisted Dark/Light/System and Default/System/Serif/Monospace; haptic preference | Physical font/language rendering and vibration verification |
 | 13 | Notifications | Opt-in generic local reply notifications, permission flow and test action | Physical delivery/tap verification; server push and durable background processing |
 | 14 | Data controls/privacy/sharing | Local JSON export/import, confirmed delete-all and individual deletion now work on web/Android | Completed-message plain-text sharing added; reviewed cloud clearing implemented after setup; account deletion still deferred |
 | 15 | Microphone/camera permissions | Voice requests native microphone permission with denial/settings recovery; camera capture is delegated to the external camera app | Settings now shows/requests actual supported permissions; physical verification and new capabilities remain |
-| 16 | Usage/account protection | IP burst limit added; endpoints are not authenticated | Account-based access policy and project-wide daily/spend budgeting |
+| 16 | Usage/account protection | IP burst limit added; endpoints are not authenticated | Owner/login policy and durable daily request quota are prepared; activate migration/configuration. Currency spend limits remain future. |
 
 ## First implementation: local history
 
@@ -112,3 +112,7 @@ Validation: 103 web tests, 43 Android JVM tests and Android debug APK assembly p
 ## Supabase account and cloud snapshot integration
 
 See [SUPABASE.md](SUPABASE.md). Web and Android now share email sign-in, profile, device logout and explicit cloud review/upload/download/clear. No project was created and no live credentials were used. 118 web tests and 51 Android JVM tests pass; the debug APK builds. A mocked mobile browser flow and temporary PostgreSQL SQL ownership/CAS checks pass. Live email, deployment and physical native session checks remain required. Earlier implementation sections record historical states.
+
+## Eight-group setup batch
+
+See [EIGHT-FEATURE-SETUP.md](EIGHT-FEATURE-SETUP.md). This batch prepares server adapters, configuration reporting and explicit activation controls for all eight main unfinished groups. Recovery/Googleweb/deletion and personal access policies are implemented but optional external settings are not activated. Web automatic sync is foreground-only and opt-in; native automatic scheduling remains pending. Memory suggestions require per-note approval. Camera/screen previews stay local. Provider audio uses an explicit optional web action. Full duplex, background voice, remote computer control, native Google session handoff and general plugin tools are not completed by setup. Earlier sections record historical implementation states.
