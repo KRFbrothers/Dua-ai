@@ -59,7 +59,7 @@ private val Secondary: Color @Composable get() = MaterialTheme.colorScheme.secon
 private val Primary: Color @Composable get() = MaterialTheme.colorScheme.primary
 private val Ink: Color @Composable get() = MaterialTheme.colorScheme.onSurface
 private val Muted: Color @Composable get() = MaterialTheme.colorScheme.onSurfaceVariant
-private enum class Screen { Home, Chat, Settings, Attachments, Voice, Profile, DataControls, Permissions, ColorMode, FontStyle, Notifications, Logout, ComputerMode, VoicePermission, VoiceDenied, Memory, Sharing, Privacy, HandsFree }
+private enum class Screen { Home, Chat, Settings, Attachments, Voice, Profile, DataControls, Permissions, ColorMode, FontStyle, Notifications, Logout, ComputerMode, VoicePermission, VoiceDenied, Memory, Sharing, Privacy, HandsFree, CloudSync }
 
 /** Native Compose counterpart of web/dist; no WebView or hosted page dependency. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -108,7 +108,7 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel(), notificationRoute: Pair<S
             Screen.Settings -> Screen.valueOf(settingsReturn)
             Screen.HandsFree -> Screen.Voice
             Screen.Attachments, Screen.Voice -> Screen.Chat
-            Screen.Profile, Screen.DataControls, Screen.Permissions, Screen.ColorMode,
+            Screen.CloudSync, Screen.Profile, Screen.DataControls, Screen.Permissions, Screen.ColorMode,
             Screen.Memory, Screen.Sharing, Screen.Privacy, Screen.FontStyle, Screen.Notifications, Screen.Logout, Screen.ComputerMode, Screen.VoicePermission, Screen.VoiceDenied -> {
                 val previous = detailHistory.lastOrNull() ?: Screen.Settings.name
                 detailHistory = ArrayList(detailHistory.dropLast(1))
@@ -320,6 +320,7 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel(), notificationRoute: Pair<S
                     Screen.Voice -> VoiceScreen(onHandsFree = { navigate(Screen.HandsFree) }, onBack = ::back, onSettings = ::settings, draft = draft, onUse = {
                         viewModel.updateDraft(it); navigate(Screen.Chat)
                     })
+                    Screen.Profile, Screen.Logout, Screen.CloudSync -> AccountScreen(viewModel, screen.name, onBack = ::back, onOpen = { detail(Screen.valueOf(it), screen) })
                     Screen.ColorMode, Screen.FontStyle, Screen.Permissions, Screen.Notifications, Screen.Memory, Screen.Sharing, Screen.Privacy -> DeviceSettingsScreen(viewModel, screen.name, onBack = ::back, onPage = { detail(Screen.valueOf(it), screen) }, onAttachments = { navigate(Screen.Attachments) })
                     else -> key(screen) { SettingsDetail(screen, onBack = ::back, onOpen = { detail(it, screen) }) }
                 }
