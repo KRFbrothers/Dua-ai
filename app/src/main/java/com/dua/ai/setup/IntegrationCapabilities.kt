@@ -8,7 +8,7 @@ data class IntegrationGroup(val id: String, val title: String, val state: String
 data class SearchResult(val title: String, val url: String, val snippet: String)
 data class RepositoryResult(val name: String, val url: String, val description: String)
 data class IntegrationState(val groups: List<IntegrationGroup> = emptyList(), val providers: List<ProviderCapability> = IntegrationCapabilities.fallbackProviders,
-    val searchConfigured: Boolean = false, val googleConfigured: Boolean = false, val busy: Boolean = false, val notice: String = "")
+    val searchConfigured: Boolean = false, val googleConfigured: Boolean = false, val busy: Boolean = false, val notice: String = "", val generatedVoiceConfigured: Boolean = false)
 
 object IntegrationCapabilities {
     val MODELS = listOf("Dua", "ChatGPT", "Gemini", "Claude", "Grok", "Kimi")
@@ -31,7 +31,9 @@ object IntegrationCapabilities {
         } }.distinctBy { it.id }
         require(groups.map { it.id }.toSet() == GROUPS.toSet()) { "Setup status is incomplete. Refresh after deploying the backend." }
         return IntegrationState(groups, providers(json), json.optJSONObject("search")?.optBoolean("configured") == true,
-            json.optJSONObject("account")?.optBoolean("googleConfigured") == true)
+            json.optJSONObject("account")?.optBoolean("googleConfigured") == true).copy(generatedVoiceConfigured =
+            json.optJSONObject("advanced")?.optJSONObject("voice")?.optJSONObject("generatedAudio")?.opt("configured") == true &&
+                json.optJSONObject("account")?.optBoolean("ownerRestricted") == true)
     }
     private fun strings(json: JSONObject, name: String): List<String> {
         val array = json.optJSONArray(name) ?: return emptyList()

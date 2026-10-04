@@ -4,6 +4,13 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class PreferencesCodecTest {
+    @Test fun generatedVoiceDefaultsOffForExistingSettingsAndRequiresStrictBooleanConsent() {
+        val old = org.json.JSONObject(PreferencesCodec.encode(LocalPreferences())).apply { remove("generatedVoice") }.toString()
+        assertFalse(PreferencesCodec.decode(old).generatedVoice)
+        val enabled = LocalPreferences(generatedVoice = true)
+        assertEquals(enabled, PreferencesCodec.decode(PreferencesCodec.encode(enabled)))
+        assertNotNull(runCatching { PreferencesCodec.decode(org.json.JSONObject(old).put("generatedVoice", "true").toString()) }.exceptionOrNull())
+    }
     @Test fun memoryIsExplicitAndPreferencesRoundTrip() {
         val off = LocalPreferences(theme = "light", font = "serif", haptic = true, memory = listOf("Prefer Hindi"))
         assertEquals("", PreferencesCodec.memoryText(off))

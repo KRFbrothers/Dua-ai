@@ -5,6 +5,16 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class IntegrationCapabilitiesTest {
+    @Test fun generatedVoiceRequiresBothActualBackendConfigurationAndPersonalOwnerRestriction() {
+        val json = JSONObject().put("groups", org.json.JSONArray(IntegrationCapabilities.GROUPS.map {
+            JSONObject().put("id", it).put("title", it).put("state", "partial")
+        })).put("advanced", JSONObject().put("voice", JSONObject().put("generatedAudio", JSONObject().put("configured", true))))
+        assertFalse(IntegrationCapabilities.decode(json).generatedVoiceConfigured)
+        json.put("account", JSONObject().put("ownerRestricted", true))
+        assertTrue(IntegrationCapabilities.decode(json).generatedVoiceConfigured)
+        json.getJSONObject("advanced").getJSONObject("voice").getJSONObject("generatedAudio").put("configured", "true")
+        assertFalse(IntegrationCapabilities.decode(json).generatedVoiceConfigured)
+    }
     @Test fun providerNamesMustBeSupportedAndConfigurationIsExplicit() {
         val providers = IntegrationCapabilities.providers(JSONObject("""{"providers":[{"name":"ChatGPT","configured":true,"model":"example"},{"name":"Gemini","configured":false},{"name":"unknown","configured":true}]}"""))
         assertEquals(listOf("ChatGPT", "Gemini"), providers.map { it.name })

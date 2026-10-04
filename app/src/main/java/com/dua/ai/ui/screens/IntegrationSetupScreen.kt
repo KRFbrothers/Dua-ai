@@ -22,6 +22,7 @@ fun IntegrationSetupScreen(viewModel: ChatViewModel, onBack: () -> Unit, onProfi
     val repositories by viewModel.connectorRepositories.collectAsState()
     val memoryCandidates by viewModel.memoryCandidates.collectAsState()
     val account by viewModel.account.state.collectAsState()
+    val preferences by viewModel.localSettings.collectAsState()
     var query by rememberSaveable { mutableStateOf("") }
     val context = LocalContext.current
     fun open(url: String) {
@@ -73,7 +74,18 @@ fun IntegrationSetupScreen(viewModel: ChatViewModel, onBack: () -> Unit, onProfi
                             repositories.forEach { repository -> TextButton(onClick = { open(repository.url) }) { Text(repository.name) }; Text(repository.description, fontSize = 14.sp) }
                         }
                         "computer" -> Text("Browser screen capture setup does not control another computer. Native screen sharing/video capture is not active.", fontSize = 14.sp)
-                        "voice" -> Text("On-device speech remains available. AI voice configuration is prepared on the backend; continuous background conversation is not active in Android.", fontSize = 14.sp)
+                        "voice" -> {
+                            Text("Device voice is the free default. Optional AI voice sends only a completed reply after you tap its speaker. Provider quota/charges may apply. No automatic audio requests or background conversation.", fontSize = 14.sp)
+                            Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                                Text("Use AI voice for reply speaker", Modifier.weight(1f))
+                                Switch(checked = preferences.generatedVoice, onCheckedChange = { viewModel.updateSettings(preferences.copy(generatedVoice = it)) },
+                                    enabled = !state.busy && (preferences.generatedVoice || (state.generatedVoiceConfigured && account.user != null)),
+                                    modifier = Modifier.semantics { contentDescription = "Use optional AI generated reply voice" })
+                            }
+                            if (!state.generatedVoiceConfigured) Text("AI voice backend setup is required. Device voice stays available.", fontSize = 14.sp)
+                            else if (account.user == null) TextButton(onClick = onProfile) { Text("Sign in for AI voice") }
+                            Text("AI voice supports replies up to 2000 characters. Audio stays in memory and is released on Stop, navigation, backgrounding or sign-in changes. Hands-free keeps using device speech.", fontSize = 14.sp)
+                        }
                         "account" -> TextButton(onClick = onProfile) { Text("Profile and account controls") }
                     }
                 }
