@@ -220,27 +220,20 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel(), notificationRoute: Pair<S
                                                             modifier = Modifier.padding(top = 12.dp))
                                                     }
                                                     if (!message.isUser) {
-                                                        FilledTonalButton(enabled = speech.available && message.state == "complete",
-                                                            onClick = { speaker.toggle(message.id, message.text) },
-                                                            shape = RoundedCornerShape(20.dp), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
-                                                            modifier = Modifier.padding(top = 8.dp).heightIn(min = 48.dp)) {
-                                                            Text(if (speech.activeId == message.id) "Stop reading" else "Read aloud", fontSize = 14.sp)
-                                                        }
-                                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                                        if (message.state == "complete") Row(
+                                                            Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                                                             IconButton(onClick = {
                                                                 (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
                                                                     .setPrimaryClip(ClipData.newPlainText("Dua response", message.text + (message.codeSnippet?.let { "\n" + it } ?: "")))
-                                                            }) { Icon(Icons.Default.ContentCopy, "Copy response", modifier = Modifier.size(18.dp)) }
-                                                            IconButton(onClick = { viewModel.toggleReaction(message.id, true) }) {
-                                                                Icon(Icons.Default.ThumbUp, "Like response", tint = if (message.reaction == MessageReaction.LIKED) Primary else Muted, modifier = Modifier.size(18.dp))
+                                                            }, modifier = Modifier.size(48.dp)) { Icon(Icons.Default.ContentCopy, "Copy response", tint = Muted, modifier = Modifier.size(22.dp)) }
+                                                            IconButton(enabled = !typing && messages.lastOrNull()?.id == message.id,
+                                                                onClick = { speaker.stop(); viewModel.retryResponse(message.id) }, modifier = Modifier.size(48.dp)) {
+                                                                Icon(Icons.Default.Refresh, "Retry response", tint = Muted, modifier = Modifier.size(22.dp))
                                                             }
-                                                            IconButton(onClick = { viewModel.toggleReaction(message.id, false) }) {
-                                                                Icon(Icons.Default.ThumbDown, "Dislike response", tint = if (message.reaction == MessageReaction.DISLIKED) Primary else Muted, modifier = Modifier.size(18.dp))
+                                                            IconButton(enabled = speech.available, onClick = { speaker.toggle(message.id, message.text) }, modifier = Modifier.size(48.dp)) {
+                                                                Icon(if (speech.activeId == message.id) Icons.Default.Stop else Icons.Default.VolumeUp,
+                                                                    if (speech.activeId == message.id) "Stop reading" else "Speak response", tint = Muted, modifier = Modifier.size(22.dp))
                                                             }
-                                                            IconButton(enabled = !typing, onClick = {
-                                                                val index = messages.indexOfFirst { it.id == message.id }
-                                                                messages.take(index.coerceAtLeast(0)).lastOrNull { it.isUser }?.let { viewModel.sendMessage(it.text) }
-                                                            }) { Icon(Icons.Default.Refresh, "Retry this prompt", modifier = Modifier.size(18.dp)) }
                                                         }
                                                     }
                                                 }
