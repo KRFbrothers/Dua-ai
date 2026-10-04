@@ -417,6 +417,30 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun retryResponse(messageId: String) {
+        if (_isTyping.value || _readingFiles.value || _dataBusy.value) return
+        val original = _messages.value.lastOrNull() ?: return
+        if (original.id != messageId || original.isUser || original.state != "complete") return
+        val plan = try { com.dua.ai.model.ReplyRetryPlan.create(_messages.value, messageId) }
+            catch (failure: IllegalArgumentException) { _error.value = failure.message; return }
+        val currentGeneration = generation
+        _error.value = null; _isTyping.value = true
+        replyJob = viewModelScope.launch {
+            try {
+                val reply = api.reply(plan.model, plan.context, emptyList(), com.dua.ai.settings.PreferencesCodec.memoryText(localSettings.value))
+                if (generation == currentGeneration) {
+                    _messages.value = _messages.value.map { if (it.id == messageId) it.copy(text = reply, codeSnippet = null) else it }
+                    saveHistory()
+                }
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (failure: Exception) {
+                if (generation == currentGeneration) _error.value = "Retry failed. Original response kept."
+            } finally {
+                if (generation == currentGeneration) { _isTyping.value = false; saveHistory() }
+            }
+        }
+    }
+
     fun sendMessage(userText: String) {
         if ((userText.isBlank() && _attachments.value.isEmpty()) || _isTyping.value || _readingFiles.value) return
         _error.value = null
