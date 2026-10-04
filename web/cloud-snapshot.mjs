@@ -1,0 +1,6 @@
+export function validateCloudSnapshot(data){
+ const fail=()=>{throw Error('Invalid cloud snapshot. Local data was kept.');};const integer=v=>Number.isSafeInteger(v)&&v>=0;
+ if(!data||data.format!=='dua-cloud-snapshot'||data.version!==1||!Array.isArray(data.chats)||data.chats.length>100||!Array.isArray(data.memory)||data.memory.length>10||data.memory.some(v=>typeof v!=='string'||!v.trim()||v.length>200))fail();
+ const ids=new Set();const chats=data.chats.map(chat=>{if(!chat||typeof chat.id!=='string'||!chat.id.trim()||chat.id.length>200||ids.has(chat.id)||!integer(chat.updatedAt)||!['Dua','Gemini'].includes(chat.model)||typeof chat.draft!=='string'||chat.draft.length>8000||!Array.isArray(chat.messages)||chat.messages.length>500)fail();ids.add(chat.id);const messages=chat.messages.map(m=>{if(!m||!['user','model'].includes(m.role)||typeof m.text!=='string'||m.text.length>1048576||!['complete','stopped'].includes(m.state))fail();return {role:m.role,text:m.text,state:m.state};});return {id:chat.id,updatedAt:chat.updatedAt,model:chat.model,draft:chat.draft,messages};});
+ const value={format:'dua-cloud-snapshot',version:1,chats,memory:data.memory.slice()};if(new TextEncoder().encode(JSON.stringify(value)).length>4*1024*1024)fail();return value;
+}
