@@ -26,7 +26,15 @@ import com.dua.ai.network.DuaApiException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import com.dua.ai.account.CloudSnapshot
+import com.dua.ai.account.CloudReview
+import com.dua.ai.setup.AutomaticCloudSync
+import com.dua.ai.setup.AutomaticSyncAccount
+import com.dua.ai.setup.AutomationSyncStore
 
 class ChatViewModel(application: Application) : AndroidViewModel(application) {
     val account = com.dua.ai.account.AccountRepository(application)
@@ -96,15 +104,16 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     fun accountAction(action: suspend () -> Unit) {
         if (account.state.value.busy || _dataBusy.value) return
         account.busy(true)
+        automaticSync.setBusy(true)
         viewModelScope.launch {
             try { action() } catch (cancelled: CancellationException) { throw cancelled }
             catch (failure: Exception) { account.notice(failure.message ?: "Account request failed. Local data was kept.") }
-            finally { account.busy(false) }
+            finally { account.busy(false); refreshSyncBusy() }
         }
     }
     fun loadAccount() = accountAction { account.load(); account.loadFeatures() }
     fun signIn(email: String, password: String, signup: Boolean) = accountAction { _cloudPreview.value = null; account.signIn(email, password, signup) }
-    fun logOut() = accountAction { _cloudPreview.value = null; account.logout() }
+    fun logOut() { automaticSync.disable(); accountAction { _cloudPreview.value = null; account.logout() } }
     fun cancelCloudReview() { _cloudPreview.value = null; account.notice("Cancelled. Data was not changed.") }
     fun reviewCloud(kind: String) = accountAction {
         val remote = account.cloud()
@@ -113,7 +122,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         _cloudPreview.value = CloudPreview(kind, account.state.value.user?.id ?: error("Sign in again."), remote.copy(snapshot = snapshot))
     }
     fun confirmCloud() = accountAction {
-        _dataBusy.value = true
+        _dataBusy.value = true; refreshSyncBusy()
         try {
         val preview = _cloudPreview.value ?: return@accountAction
         account.load()
@@ -148,7 +157,13 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     val localSettings = localPreferences.state
     private val _settingsStatus = MutableStateFlow("")
     val settingsStatus = _settingsStatus.asStateFlow()
-    var foreground = true
+    var foreground = false
+        private set
+    fun setForeground(value: Boolean) {
+        foreground = value
+        automaticSync.setForeground(value)
+        refreshSyncNetwork()
+    }
     fun resetSettings() { try { localPreferences.reset(); _settingsStatus.value = "Settings and memories reset." } catch (error: Exception) { _settingsStatus.value = error.message ?: "Reset failed." } }
     fun settingsNotice(text: String) { _settingsStatus.value = text }
     fun updateSettings(value: com.dua.ai.settings.LocalPreferences) {
@@ -259,7 +274,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     fun reviewImport(uri: Uri) {
         if (_dataBusy.value) return
         _importPreview.value = null
-        _dataBusy.value = true
+        _dataBusy.value = true; refreshSyncBusy()
         _dataStatus.value = "Checking export…"
         viewModelScope.launch {
             try {
@@ -279,7 +294,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     fun confirmImport() {
         if (_dataBusy.value) return
         val imported = _importPreview.value ?: return
-        _dataBusy.value = true
+        _dataBusy.value = true; refreshSyncBusy()
         _dataStatus.value = "Saving imported chats…"
         cancelReply()
         // Use the latest local records at confirmation, keeping the active draft/selection.
@@ -307,7 +322,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     fun exportChats(uri: Uri) {
         if (_dataBusy.value) return
         val records = _savedChats.value.toList()
-        _dataBusy.value = true
+        _dataBusy.value = true; refreshSyncBusy()
         _dataStatus.value = "Creating export…"
         viewModelScope.launch {
             try {
@@ -325,7 +340,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     fun clearAllChats() {
         if (_dataBusy.value) return
-        _dataBusy.value = true
+        _dataBusy.value = true; refreshSyncBusy()
         _dataStatus.value = "Clearing local history…"
         cancelReply()
         val nextId = UUID.randomUUID().toString()
@@ -343,6 +358,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 if (committed) {
                     activeId = nextId
+                    historyReadable = true
                     _messages.value = emptyList()
                     _draft.value = ""
                     _savedChats.value = emptyList()
@@ -357,6 +373,78 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _draft = MutableStateFlow("")
     val draft: StateFlow<String> = _draft.asStateFlow()
+    private var historyReadable = true
+    private val automaticSync = AutomaticCloudSync(
+        viewModelScope,
+        object : AutomaticCloudSync.AccountPort {
+            override fun currentAccountId() = account.state.value.user?.id
+            override suspend fun load(): AutomaticSyncAccount {
+                account.load()
+                return AutomaticSyncAccount(account.state.value.configured, account.state.value.user?.id)
+            }
+            override suspend fun cloud(expectedAccountId: String): CloudReview {
+                check(account.state.value.user?.id == expectedAccountId) { "Account changed. Review cloud sync again." }
+                return account.cloud()
+            }
+            override suspend fun upload(expectedAccountId: String, revision: Long, snapshot: CloudSnapshot): Long =
+                account.upload(CloudReview(revision, snapshot, expectedAccountId), expectedAccountId = expectedAccountId)
+        },
+        object : AutomaticCloudSync.LocalPort {
+            override fun read(): CloudSnapshot {
+                check(!syncBlocked()) { "Sync paused during a reply or manual review." }
+                check(historyReadable) { "Saved chats could not be read. Review Data controls before enabling sync." }
+                localPreferences.requireReadable()
+                return CloudSnapshot(_savedChats.value.toList(), localSettings.value.memory.toList())
+            }
+            // Called without suspension on the main dispatcher. Active edit buffers and attachments
+            // remain authoritative; the controller keeps changed cloud chats as separate copies.
+            override fun commit(snapshot: CloudSnapshot) {
+                check(!syncBlocked()) { "Sync paused during a reply or manual review." }
+                com.dua.ai.account.CloudSnapshotCodec.encode(snapshot)
+                val settings = localSettings.value
+                val previous = preferences.getString("history", null)
+                val encoded = ChatHistoryCodec.encode(snapshot.chats, activeId)
+                localPreferences.update(settings.copy(memory = snapshot.memory))
+                try {
+                    if (!preferences.edit().putString("history", encoded).commit()) {
+                        preferences.edit().putString("history", previous).commit()
+                        error("Synced chats could not be saved. Local data was kept.")
+                    }
+                    _savedChats.value = snapshot.chats
+                } catch (failure: Exception) {
+                    try { localPreferences.update(settings) }
+                    catch (_: Exception) { throw IllegalStateException("Sync interrupted. Review local memories before retrying.", failure) }
+                    throw failure
+                }
+            }
+        },
+        AutomationSyncStore(application)
+    )
+    val automaticSyncState = automaticSync.state
+    fun enableAutomaticSync() { refreshSyncBusy(); automaticSync.enable() }
+    fun disableAutomaticSync() = automaticSync.disable()
+    fun resetAutomaticSync() = automaticSync.reset()
+    fun retryAutomaticSync() { refreshSyncBusy(); automaticSync.retry() }
+    fun resumeAutomaticSyncAfterReview() { refreshSyncBusy(); automaticSync.resumeAfterReview() }
+    private fun syncBlocked() = account.state.value.busy || _dataBusy.value || _isTyping.value ||
+        _cloudPreview.value != null || _importPreview.value != null
+    private fun refreshSyncBusy() = automaticSync.setBusy(syncBlocked())
+    private val connectivity = application.getSystemService(android.net.ConnectivityManager::class.java)
+    private val networkObserver = object : android.net.ConnectivityManager.NetworkCallback() {
+        override fun onAvailable(network: android.net.Network) { viewModelScope.launch { refreshSyncNetwork() } }
+        override fun onLost(network: android.net.Network) { viewModelScope.launch { refreshSyncNetwork() } }
+        override fun onCapabilitiesChanged(network: android.net.Network, capabilities: android.net.NetworkCapabilities) {
+            viewModelScope.launch { refreshSyncNetwork() }
+        }
+    }
+    private var networkObserverRegistered = false
+    private fun refreshSyncNetwork() {
+        val online = runCatching {
+            connectivity.getNetworkCapabilities(connectivity.activeNetwork)
+                ?.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED) == true
+        }.getOrDefault(false)
+        automaticSync.setOnline(online)
+    }
 
     init {
         preferences.getString("history", null)?.let { raw ->
@@ -370,16 +458,38 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     _draft.value = it.draft
                 }
             } catch (_: Exception) {
+                historyReadable = false
                 preferences.edit().putString("unreadable_history_backup", raw).apply()
                 _error.value = "Saved chats could not be loaded. Stored data has not been deleted."
             }
         }
+        refreshSyncNetwork()
+        networkObserverRegistered = runCatching { connectivity.registerDefaultNetworkCallback(networkObserver); true }.getOrDefault(false)
+        viewModelScope.launch {
+            combine(account.state, _dataBusy, _isTyping, _cloudPreview, _importPreview) { state, dataBusy, typing, cloud, imported ->
+                state.busy || dataBusy || typing || cloud != null || imported != null
+            }.distinctUntilChanged().collect { refreshSyncBusy() }
+        }
+        viewModelScope.launch { account.state.map { it.user?.id }.distinctUntilChanged().collect { automaticSync.accountChanged() } }
+        viewModelScope.launch {
+            combine(_savedChats, localSettings) { chats, settings -> CloudSnapshot(chats, settings.memory) }
+                .distinctUntilChanged().collect { automaticSync.localChanged() }
+        }
+        automaticSync.restore()
+    }
+
+    override fun onCleared() {
+        automaticSync.close()
+        if (networkObserverRegistered) runCatching { connectivity.unregisterNetworkCallback(networkObserver) }
+        super.onCleared()
     }
 
     private fun saveHistory() {
+        val previous = _savedChats.value.find { it.id == activeId }
         val others = _savedChats.value.filterNot { it.id == activeId }
         _savedChats.value = if (_messages.value.isEmpty() && _draft.value.isBlank()) others else
-            listOf(SavedChat(activeId, _selectedModel.value, _draft.value, _messages.value, System.currentTimeMillis())) + others
+            listOf(com.dua.ai.history.ChatSavePolicy.preserveUnchangedTime(previous,
+                SavedChat(activeId, _selectedModel.value, _draft.value, _messages.value, System.currentTimeMillis()))) + others
         preferences.edit().putString("history", ChatHistoryCodec.encode(_savedChats.value, activeId)).apply()
     }
 
@@ -484,7 +594,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         val plan = try { com.dua.ai.model.ReplyRetryPlan.create(_messages.value, messageId) }
             catch (failure: IllegalArgumentException) { _error.value = failure.message; return }
         val currentGeneration = generation
-        _error.value = null; _isTyping.value = true
+        _error.value = null; _isTyping.value = true; refreshSyncBusy()
         replyJob = viewModelScope.launch {
             try {
                 val reply = account.withToken { token -> api.reply(plan.model, plan.context, emptyList(), com.dua.ai.settings.PreferencesCodec.memoryText(localSettings.value), token) }
@@ -527,7 +637,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         _messages.value = _messages.value + userMessage
         _draft.value = ""
         saveHistory()
-        _isTyping.value = true
+        _isTyping.value = true; refreshSyncBusy()
         _failedPrompt.value = null
         replyJob = viewModelScope.launch {
             try {

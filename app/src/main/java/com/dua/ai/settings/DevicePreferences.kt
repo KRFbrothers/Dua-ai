@@ -34,6 +34,7 @@ class DevicePreferences(context: Context) {
     private var damaged = false
     private val mutable = MutableStateFlow(runCatching { storage.getString("preferences", null)?.let(PreferencesCodec::decode) ?: LocalPreferences() }.getOrElse { damaged = true; LocalPreferences() })
     val state = mutable.asStateFlow()
+    fun requireReadable() { check(!damaged) { "Saved settings could not be read. Reset settings in Privacy before syncing." } }
     fun reset() { damaged = false; try { update(LocalPreferences()) } catch (error: Exception) { damaged = true; throw error } }
     fun update(value: LocalPreferences) {
         check(!damaged) { "Saved settings could not be read. Reset settings in Privacy to continue." }

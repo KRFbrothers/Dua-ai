@@ -53,7 +53,7 @@ fun IntegrationSetupScreen(viewModel: ChatViewModel, onBack: () -> Unit, onProfi
                             }
                         }
                         "sync" -> {
-                            Text("Android uses reviewed manual snapshots. Automatic sync is available on the website; it is not active in Android yet.", fontSize = 14.sp)
+                            Text("Android and web support opt-in automatic snapshots while the app is open. Enable it in Cloud sync on each device. Conflicts and deletions pause for review; sync stops in the background.", fontSize = 14.sp)
                             TextButton(onClick = onCloud) { Text("Open cloud sync") }
                         }
                         "memory" -> {

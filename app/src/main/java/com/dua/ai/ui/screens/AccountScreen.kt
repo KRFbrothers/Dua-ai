@@ -19,6 +19,8 @@ import com.dua.ai.viewmodel.ChatViewModel
 fun AccountScreen(viewModel: ChatViewModel, page: String, onBack: () -> Unit, onOpen: (String) -> Unit) {
     val state by viewModel.account.state.collectAsState()
     val preview by viewModel.cloudPreview.collectAsState()
+    val sync by viewModel.automaticSyncState.collectAsState()
+    val dataBusy by viewModel.dataBusy.collectAsState()
     var email by rememberSaveable { mutableStateOf("") }
     // Password is ephemeral: never saved across process/activity recreation.
     var password by remember { mutableStateOf("") }
@@ -89,6 +91,33 @@ fun AccountScreen(viewModel: ChatViewModel, page: String, onBack: () -> Unit, on
             FilledTonalButton(enabled = !state.busy, onClick = { password = ""; viewModel.logOut() }) { Text("Confirm log out") }
             TextButton(onClick = { onOpen("Profile") }) { Text("Profile") }
         } else {
+            Surface(color = MaterialTheme.colorScheme.surfaceContainerHighest, shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp)) {
+                Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                        Text("Automatic sync on this device", Modifier.weight(1f))
+                        Switch(checked = sync.enabled, onCheckedChange = { enabled ->
+                            if (enabled) viewModel.enableAutomaticSync() else viewModel.disableAutomaticSync()
+                        }, enabled = sync.phase != "checking" && !state.busy && !dataBusy && (sync.enabled || (state.configured && state.user != null && preview == null)),
+                            modifier = Modifier.semantics { contentDescription = "Automatic cloud sync on this device" })
+                    }
+                    Text("When enabled, saved chats, drafts and memory notes sync while this app is open and online. File/audio bytes stay on the device. Sync pauses during replies and manual reviews.", fontSize = 14.sp)
+                    Text(sync.message, fontSize = 14.sp, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+                    if (sync.phase == "checking") {
+                        TextButton(onClick = { viewModel.disableAutomaticSync() }) { Text("Cancel sync setup") }
+                    } else if (sync.phase == "storage-error") {
+                        TextButton(enabled = !state.busy && !dataBusy,
+                            onClick = { viewModel.resetAutomaticSync() }) { Text("Reset automatic sync settings") }
+                        Text("Reset clears sync consent and guards on this device. Chats and memories stay saved. Review both copies before enabling again.", fontSize = 14.sp)
+                    } else if (sync.reviewRequired) {
+                        Text("Use the manual actions below to inspect local and cloud data. Resume only after checking the changes; remaining local data can be uploaded again.", fontSize = 14.sp)
+                        FilledTonalButton(enabled = state.user != null && !state.busy && !dataBusy && preview == null,
+                            onClick = { viewModel.resumeAutomaticSyncAfterReview() }) { Text("Resume after review") }
+                    } else if (sync.enabled) {
+                        TextButton(enabled = state.user != null && !state.busy && !dataBusy && preview == null,
+                            onClick = { viewModel.retryAutomaticSync() }) { Text("Check sync / Retry") }
+                    }
+                }
+            }
             Text("Manually upload a snapshot or download and merge another device's snapshot. Includes saved drafts and memory notes; no file/audio bytes. Conflicting chats stay as copies. Local or cloud deletion does not automatically delete the other copy.", fontSize = 14.sp)
             listOf("upload" to "Review upload", "download" to "Review download", "delete" to "Clear cloud snapshot").forEach { (kind, title) ->
                 FilledTonalButton(enabled = state.configured && state.user != null && !state.busy, onClick = { viewModel.reviewCloud(kind) }) { Text(title) }
@@ -101,7 +130,7 @@ fun AccountScreen(viewModel: ChatViewModel, page: String, onBack: () -> Unit, on
                             reviewed.review.snapshot.chats.forEach { chat -> Text("${chat.title}: ${chat.messages.size} messages\nDraft: ${chat.draft}", fontSize = 14.sp) }
                             Text("Memories:\n" + reviewed.review.snapshot.memory.joinToString("\n"), fontSize = 14.sp)
                         } else Text("Cloud snapshot becomes empty. Local data stays saved.")
-                        Text("Check the account shown above. Signing in never uploads automatically. Imported memories keep their current on/off setting.", fontSize = 14.sp)
+                        Text("Check the account shown above. Automatic uploads require consent on this device. Imported memories keep their current on/off setting.", fontSize = 14.sp)
                         FilledTonalButton(enabled = !state.busy, onClick = { viewModel.confirmCloud() }) { Text("Confirm") }
                         TextButton(enabled = !state.busy, onClick = { viewModel.cancelCloudReview() }) { Text("Cancel") }
                     }

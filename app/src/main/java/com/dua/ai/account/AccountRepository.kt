@@ -1,8 +1,10 @@
 package com.dua.ai.account
 
 import android.content.Context
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.json.JSONObject
@@ -13,116 +15,190 @@ class AccountRepository(private val api: AccountApi, private val store: SessionP
     private var session = runCatching { store.read() }.getOrNull()
     private val mutable = MutableStateFlow(AccountState(user = session?.user)); val state = mutable.asStateFlow()
     private val mutex = Mutex()
-    fun notice(text: String) { mutable.value = mutable.value.copy(notice = text) }
-    fun busy(value: Boolean) { mutable.value = mutable.value.copy(busy = value) }
-    private fun save(value: AccountSession?) {
+    private val sessionLock = Any()
+    private var authGeneration = 0L
+    private var sessionRevision = 0L
+    private data class Snapshot(val value: AccountSession?, val generation: Long, val revision: Long)
+    private fun snapshot() = synchronized(sessionLock) { Snapshot(session, authGeneration, sessionRevision) }
+    private fun matches(value: Snapshot) = authGeneration == value.generation && session?.user?.id == value.value?.user?.id
+    private fun checkIdentity(value: Snapshot) = synchronized(sessionLock) {
+        check(matches(value)) { "Account changed. Retry from the current account." }
+    }
+    fun notice(text: String) { mutable.update { it.copy(notice = text) } }
+    fun busy(value: Boolean) { mutable.update { it.copy(busy = value) } }
+    /** Call only while holding sessionLock. Persistence and the generation guard commit together. */
+    private fun writeSession(value: AccountSession?, authenticationChange: Boolean = false) {
         val sameAccount = value != null && value.user.id == session?.user?.id
-        store.write(value); session = value
-        mutable.value = mutable.value.copy(user = value?.user, recoveryVerified = sameAccount && mutable.value.recoveryVerified)
+        store.write(value); session = value; sessionRevision++
+        if (authenticationChange) authGeneration++
+        mutable.update { it.copy(user = value?.user, recoveryVerified = sameAccount && it.recoveryVerified) }
     }
-    private suspend fun token(): String = mutex.withLock {
-        var value = session ?: error("Sign in from Profile to continue.")
-        if (value.expiresAt <= System.currentTimeMillis() / 1000 + 60) {
-            val owner = value.user.id
-            val result = api.request("/api/account/refresh", "POST", JSONObject().put("refreshToken", value.refreshToken))
-            value = AccountSessionCodec.decode(result)
-            check(session?.user?.id == owner && value.user.id == owner) { "Account changed. Retry from the current account." }
-            save(value)
-        }
-        value.accessToken
+    private fun beginAuthentication() = synchronized(sessionLock) { ++authGeneration }
+    private fun installAuthentication(ticket: Long, value: AccountSession, recovery: Boolean = false) = synchronized(sessionLock) {
+        check(authGeneration == ticket) { "Account changed. Retry from the current account." }
+        writeSession(value, authenticationChange = true)
+        mutable.update { it.copy(configured = true, recoveryVerified = recovery) }
+        Snapshot(session, authGeneration, sessionRevision)
     }
-    private suspend fun refresh(expectedId: String): String = mutex.withLock {
-        val value = session ?: error("Sign in from Profile to continue.")
-        check(value.user.id == expectedId) { "Account changed. Retry from the current account." }
-        val result = api.request("/api/account/refresh", "POST", JSONObject().put("refreshToken", value.refreshToken))
-        val next = AccountSessionCodec.decode(result)
-        check(session?.user?.id == expectedId && next.user.id == expectedId) { "Account changed. Retry from the current account." }
-        save(next)
+    private fun noticeIfCurrent(value: Snapshot, text: String) = synchronized(sessionLock) { if (matches(value)) notice(text) }
+    private fun credentialsMatch(value: Snapshot): Boolean = matches(value) && session?.accessToken == value.value?.accessToken && session?.refreshToken == value.value?.refreshToken
+    private fun installRefresh(value: Snapshot, next: AccountSession): String = synchronized(sessionLock) {
+        check(credentialsMatch(value) && next.user.id == value.value?.user?.id) { "Account changed. Retry from the current account." }
+        // Preserve any profile update that completed while the credential refresh was in flight.
+        writeSession(next.copy(user = session!!.user))
         next.accessToken
     }
-    /** Optional authentication for chat/search; a configured owner policy is enforced by the server. */
-    suspend fun <T> withToken(action: suspend (String?) -> T): T {
-        val owner = session?.user?.id ?: return action(null)
-        val first = token()
-        check(session?.user?.id == owner) { "Account changed. Retry." }
+    private suspend fun token(expected: Snapshot): String = mutex.withLock {
+        val current = snapshot(); checkIdentity(expected)
+        val value = current.value ?: error("Sign in from Profile to continue.")
+        if (value.expiresAt <= System.currentTimeMillis() / 1000 + 60) {
+            val result = api.request("/api/account/refresh", "POST", JSONObject().put("refreshToken", value.refreshToken))
+            installRefresh(current, AccountSessionCodec.decode(result))
+        } else value.accessToken
+    }
+    private suspend fun refresh(expected: Snapshot, rejectedToken: String): String = mutex.withLock {
+        val current = snapshot(); checkIdentity(expected)
+        val value = current.value ?: error("Sign in from Profile to continue.")
+        // Another request may already have refreshed the rejected access token.
+        if (value.accessToken != rejectedToken) return@withLock value.accessToken
+        val result = api.request("/api/account/refresh", "POST", JSONObject().put("refreshToken", value.refreshToken))
+        installRefresh(current, AccountSessionCodec.decode(result))
+    }
+    private suspend fun <T> withSnapshot(expected: Snapshot, action: suspend (String?) -> T): T {
+        checkIdentity(expected)
+        if (expected.value == null) {
+            val result = action(null); checkIdentity(expected); return result
+        }
+        val first = token(expected); checkIdentity(expected)
         val result = try { action(first) } catch (failure: Exception) {
             val unauthorized = failure is AccountException && failure.status == 401 || failure is com.dua.ai.network.DuaApiException && failure.status == 401
             if (!unauthorized) throw failure
-            action(refresh(owner))
+            action(refresh(expected, first))
         }
-        check(session?.user?.id == owner) { "Account changed. Retry from the current account." }
+        checkIdentity(expected)
         return result
     }
+    /** Optional authentication for chat/search; a configured owner policy is enforced by the server. */
+    suspend fun <T> withToken(action: suspend (String?) -> T): T = withSnapshot(snapshot(), action)
     suspend fun request(path: String, method: String = "GET", body: JSONObject? = null, authenticated: Boolean = false): JSONObject {
-        if (authenticated) check(session != null) { "Sign in from Profile to continue." }
-        return withToken { access -> api.request(path, method, body, access) }
+        val expected = snapshot()
+        if (authenticated) check(expected.value != null) { "Sign in from Profile to continue." }
+        return withSnapshot(expected) { access -> api.request(path, method, body, access) }
     }
     suspend fun resetPassword(email: String) {
+        val expected = snapshot()
         api.request("/api/account/reset-password", "POST", JSONObject().put("email", email.trim()))
-        notice("If the account exists, a recovery email was requested. Check your inbox and spam folder.")
+        noticeIfCurrent(expected, "If the account exists, a recovery email was requested. Check your inbox and spam folder.")
     }
     suspend fun verifyRecovery(email: String, code: String) {
+        val ticket = beginAuthentication()
         val result = api.request("/api/account/verify-recovery", "POST", JSONObject().put("email", email.trim()).put("token", code.trim()))
         check(result.optBoolean("recoveryVerified")) { "Recovery code could not be verified." }
-        save(AccountSessionCodec.decode(result)); mutable.value = mutable.value.copy(recoveryVerified = true); notice("Recovery verified. Choose a new password.")
+        val installed = installAuthentication(ticket, AccountSessionCodec.decode(result), recovery = true)
+        noticeIfCurrent(installed, "Recovery verified. Choose a new password.")
     }
     suspend fun changePassword(password: String, currentPassword: String = "") {
+        val expected = snapshot(); check(expected.value != null) { "Sign in from Profile to continue." }
         val body = JSONObject().put("password", password)
         if (currentPassword.isNotBlank()) body.put("currentPassword", currentPassword)
-        request("/api/account/password", "PUT", body, authenticated = true)
-        mutable.value = mutable.value.copy(recoveryVerified = false); notice("Password updated.")
+        withSnapshot(expected) { api.request("/api/account/password", "PUT", body, it) }
+        synchronized(sessionLock) {
+            check(matches(expected)) { "Account changed. Retry from the current account." }
+            mutable.update { it.copy(recoveryVerified = false, notice = "Password updated.") }
+        }
     }
     suspend fun deleteAccount(confirmation: String, expectedAccountId: String? = null) {
         require(confirmation == "DELETE MY ACCOUNT") { "Type DELETE MY ACCOUNT to confirm." }
-        val owner = expectedAccountId ?: session?.user?.id ?: error("Sign in from Profile to continue.")
-        check(session?.user?.id == owner) { "Account changed. Review account deletion again." }
-        request("/api/account/delete", "DELETE", JSONObject().put("confirmation", confirmation).put("expectedAccountId", owner), authenticated = true)
-        save(null); notice("Account and its cloud data deleted. Local chats and memories stay on this device.")
+        val expected = snapshot()
+        val owner = expectedAccountId ?: expected.value?.user?.id ?: error("Sign in from Profile to continue.")
+        check(expected.value?.user?.id == owner) { "Account changed. Review account deletion again." }
+        withSnapshot(expected) { api.request("/api/account/delete", "DELETE", JSONObject().put("confirmation", confirmation).put("expectedAccountId", owner), it) }
+        synchronized(sessionLock) {
+            check(matches(expected)) { "Account changed. Review account deletion again." }
+            writeSession(null, authenticationChange = true)
+            notice("Account and its cloud data deleted. Local chats and memories stay on this device.")
+        }
+    }
+    private fun applyLoadedUser(expected: Snapshot, user: AccountUser?): Boolean = synchronized(sessionLock) {
+        if (!matches(expected) || sessionRevision != expected.revision) return@synchronized false
+        check(user == null || user.id == expected.value?.user?.id) { "Account response changed. Sign in again." }
+        if (user == null) {
+            writeSession(null, authenticationChange = true); notice("Session expired. Sign in again.")
+        } else writeSession(session!!.copy(user = user))
+        true
     }
     suspend fun load() {
+        val initial = snapshot()
         val config = api.request("/api/account/session")
-        mutable.value = mutable.value.copy(configured = config.optBoolean("configured"))
-        if (!config.optBoolean("configured")) { notice("Supabase setup is required. Local data is unchanged."); return }
-        if (session == null) return
+        synchronized(sessionLock) {
+            if (!matches(initial)) return
+            mutable.update { it.copy(configured = config.optBoolean("configured")) }
+            if (!config.optBoolean("configured")) { notice("Supabase setup is required. Local data is unchanged."); return }
+        }
+        if (initial.value == null) return
+        var authenticated = initial
         try {
-            val result = api.request("/api/account/session", token = token())
-            val user = result.optJSONObject("user")?.let(AccountSessionCodec::user)
-            if (user != null) save(session!!.copy(user = user))
-            else { save(null); notice("Session expired. Sign in again.") }
+            val access = token(initial)
+            authenticated = snapshot(); checkIdentity(initial)
+            if (authenticated.value?.accessToken != access) return
+            val result = api.request("/api/account/session", token = access)
+            applyLoadedUser(authenticated, result.optJSONObject("user")?.let(AccountSessionCodec::user))
         } catch (failure: AccountException) {
-            if (failure.status == 401 || failure.status == 403) { save(null); notice("Session expired. Sign in again.") } else throw failure
+            if (failure.status == 401 || failure.status == 403) applyLoadedUser(authenticated, null) else throw failure
         }
     }
     suspend fun loadFeatures() {
         try {
             val features = api.request("/api/account/features")
-            mutable.value = mutable.value.copy(googleConfigured = features.optBoolean("googleLogin"), deletionConfigured = features.optBoolean("accountDeletion"))
-        } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
-        catch (_: Exception) { mutable.value = mutable.value.copy(googleConfigured = false, deletionConfigured = false) }
+            mutable.update { it.copy(googleConfigured = features.optBoolean("googleLogin"), deletionConfigured = features.optBoolean("accountDeletion")) }
+        } catch (cancelled: CancellationException) { throw cancelled }
+        catch (_: Exception) { mutable.update { it.copy(googleConfigured = false, deletionConfigured = false) } }
     }
     suspend fun signIn(email: String, password: String, signup: Boolean) {
+        val ticket = beginAuthentication()
         val result = api.request(if (signup) "/api/account/signup" else "/api/account/signin", "POST", JSONObject().put("email", email.trim()).put("password", password))
-        if (result.has("session")) { save(AccountSessionCodec.decode(result)); mutable.value = mutable.value.copy(configured = true); notice("Signed in. Local data was not uploaded.") }
-        else notice("Check your email, confirm your account, then sign in.")
+        if (result.has("session")) {
+            val installed = installAuthentication(ticket, AccountSessionCodec.decode(result))
+            noticeIfCurrent(installed, "Signed in. Local data was not uploaded.")
+        } else synchronized(sessionLock) {
+            check(authGeneration == ticket) { "Account changed. Retry from the current account." }
+            notice("Check your email, confirm your account, then sign in.")
+        }
     }
     suspend fun profile(name: String) {
-        val result = api.request("/api/account/profile", "PATCH", JSONObject().put("displayName", name.trim()), token()); val user = AccountSessionCodec.user(result.getJSONObject("user")); save(session!!.copy(user = user)); notice("Profile updated.")
+        val expected = snapshot(); check(expected.value != null) { "Sign in from Profile to continue." }
+        val result = withSnapshot(expected) { api.request("/api/account/profile", "PATCH", JSONObject().put("displayName", name.trim()), it) }
+        val user = AccountSessionCodec.user(result.getJSONObject("user"))
+        synchronized(sessionLock) {
+            check(matches(expected) && user.id == expected.value.user.id) { "Account changed. Retry from the current account." }
+            writeSession(session!!.copy(user = user)); notice("Profile updated.")
+        }
     }
     suspend fun logout() {
+        // Forget locally before waiting on the network, invalidating pending login/recovery responses too.
+        val (prior, signedOut) = synchronized(sessionLock) {
+            val prior = session
+            writeSession(null, authenticationChange = true)
+            prior to Snapshot(session, authGeneration, sessionRevision)
+        }
         var revoked = false
-        try { revoked = api.request("/api/account/logout", "POST", token = token()).optBoolean("revoked") } catch (_: Exception) { }
-        save(null); notice(if (revoked) "Signed out on this device. Local data stays saved." else "Signed out locally. Server revocation could not be confirmed.")
+        try { if (prior != null) revoked = api.request("/api/account/logout", "POST", token = prior.accessToken).optBoolean("revoked") }
+        catch (cancelled: CancellationException) { throw cancelled }
+        catch (_: Exception) { }
+        noticeIfCurrent(signedOut, if (revoked) "Signed out on this device. Local data stays saved." else "Signed out locally. Server revocation could not be confirmed.")
     }
     suspend fun cloud(): CloudReview {
-        val owner = session?.user?.id ?: error("Sign in from Profile to continue.")
-        val result = request("/api/cloud", authenticated = true); val revision = result.getLong("revision"); require(revision >= 0)
-        check(session?.user?.id == owner && (!result.has("ownerId") || result.optString("ownerId") == owner)) { "Cloud account changed. Review again." }
+        val expected = snapshot(); val owner = expected.value?.user?.id ?: error("Sign in from Profile to continue.")
+        val result = withSnapshot(expected) { api.request("/api/cloud", token = it) }; val revision = result.getLong("revision"); require(revision >= 0)
+        checkIdentity(expected)
+        check(!result.has("ownerId") || result.optString("ownerId") == owner) { "Cloud account changed. Review again." }
         return CloudReview(revision, CloudSnapshotCodec.decode(result.getJSONObject("snapshot")), owner)
     }
     suspend fun upload(review: CloudReview, clear: Boolean = false, expectedAccountId: String? = null): Long {
-        val owner = expectedAccountId ?: review.ownerId ?: session?.user?.id ?: error("Sign in from Profile to continue.")
-        check(session?.user?.id == owner) { "Cloud account changed. Review again." }
+        val expected = snapshot()
+        val owner = expectedAccountId ?: review.ownerId ?: expected.value?.user?.id ?: error("Sign in from Profile to continue.")
+        check(expected.value?.user?.id == owner) { "Cloud account changed. Review again." }
         val body = JSONObject().put("expectedRevision", review.revision).put("expectedAccountId", owner); if (!clear) body.put("snapshot", CloudSnapshotCodec.encode(review.snapshot))
-        return request("/api/cloud", if (clear) "DELETE" else "PUT", body, authenticated = true).getLong("revision")
+        return withSnapshot(expected) { api.request("/api/cloud", if (clear) "DELETE" else "PUT", body, it) }.getLong("revision")
     }
 }
