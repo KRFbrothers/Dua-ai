@@ -22,6 +22,13 @@ fun AccountScreen(viewModel: ChatViewModel, page: String, onBack: () -> Unit, on
     var email by rememberSaveable { mutableStateOf("") }
     // Password is ephemeral: never saved across process/activity recreation.
     var password by remember { mutableStateOf("") }
+    var recovery by remember { mutableStateOf(false) }
+    var recoveryCode by remember { mutableStateOf("") }
+    var currentPassword by remember { mutableStateOf("") }
+    var newPassword by remember { mutableStateOf("") }
+    var deleting by remember { mutableStateOf(false) }
+    var deleteConfirmation by remember { mutableStateOf("") }
+    val context = androidx.compose.ui.platform.LocalContext.current
     var name by rememberSaveable(state.user?.displayName) { mutableStateOf(state.user?.displayName.orEmpty()) }
     LaunchedEffect(page) { viewModel.loadAccount() }
     LaunchedEffect(state.user?.id) { if (state.user != null) password = "" }
@@ -37,10 +44,44 @@ fun AccountScreen(viewModel: ChatViewModel, page: String, onBack: () -> Unit, on
                 FilledTonalButton(enabled = state.configured && !state.busy && email.isNotBlank() && password.isNotBlank(), onClick = { viewModel.signIn(email, password, false) }) { Text("Sign in") }
                 TextButton(enabled = state.configured && !state.busy && email.isNotBlank() && password.length >= 8, onClick = { viewModel.signIn(email, password, true); password = "" }) { Text("Create account") }
                 Text("Use at least 8 password characters for signup. Confirm the email, then sign in.", fontSize = 14.sp)
+                TextButton(enabled = state.configured && !state.busy, onClick = { recovery = !recovery; recoveryCode = "" }) { Text("Forgot password") }
+                if (recovery) {
+                    Text("Enter your email above and request recovery. Use the code from the recovery email. Your email template must include the recovery code.", fontSize = 14.sp)
+                    FilledTonalButton(enabled = state.configured && !state.busy && email.isNotBlank(), onClick = { viewModel.accountAction { viewModel.account.resetPassword(email) } }) { Text("Send recovery email") }
+                    OutlinedTextField(recoveryCode, { recoveryCode = it.take(12) }, label = { Text("Recovery code") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth(), enabled = !state.busy)
+                    FilledTonalButton(enabled = state.configured && !state.busy && email.isNotBlank() && recoveryCode.isNotBlank(), onClick = {
+                        val code = recoveryCode; recoveryCode = ""
+                        viewModel.accountAction { viewModel.account.verifyRecovery(email, code) }
+                    }) { Text("Verify recovery code") }
+                }
+                TextButton(enabled = state.googleConfigured && !state.busy, onClick = {
+                    runCatching { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(com.dua.ai.BuildConfig.DUA_API_BASE_URL.trimEnd('/') + "/profile.html"))) }
+                        .onFailure { viewModel.account.notice("A browser is unavailable on this device.") }
+                }) { Text("Open Google sign-in on website") }
+                Text("Google sign-in uses the browser. It does not sign this native app in; use email/password here.", fontSize = 14.sp)
             } else {
                 OutlinedTextField(name, { name = it.take(80) }, label = { Text("Display name") }, modifier = Modifier.fillMaxWidth(), enabled = !state.busy)
                 FilledTonalButton(enabled = state.configured && !state.busy && name.isNotBlank(), onClick = { viewModel.accountAction { viewModel.account.profile(name) } }) { Text("Save profile") }
                 FilledTonalButton(enabled = !state.busy, onClick = { onOpen("CloudSync") }) { Text("Cloud chat/memory sync") }
+                Text(if (state.recoveryVerified) "Recovery verified. Set your new password." else "Change password", fontSize = 18.sp)
+                if (!state.recoveryVerified) OutlinedTextField(currentPassword, { currentPassword = it.take(256) }, label = { Text("Current password") }, singleLine = true, visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password), modifier = Modifier.fillMaxWidth(), enabled = !state.busy)
+                OutlinedTextField(newPassword, { newPassword = it.take(256) }, label = { Text("New password") }, singleLine = true, visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password), modifier = Modifier.fillMaxWidth(), enabled = !state.busy)
+                FilledTonalButton(enabled = !state.busy && newPassword.length >= 8 && (state.recoveryVerified || currentPassword.isNotBlank()), onClick = {
+                    val next = newPassword; val current = currentPassword; newPassword = ""; currentPassword = ""
+                    viewModel.accountAction { viewModel.account.changePassword(next, current) }
+                }) { Text("Update password") }
+                TextButton(enabled = state.deletionConfigured && !state.busy, onClick = { deleting = true; deleteConfirmation = "" }) { Text("Delete account") }
+                if (!state.deletionConfigured) Text("Account deletion requires backend admin setup.", fontSize = 14.sp)
+                if (deleting) {
+                    Text("Delete this account and its cloud snapshot permanently? Local chats and memories remain on this device. Type DELETE MY ACCOUNT to confirm.", fontSize = 14.sp)
+                    OutlinedTextField(deleteConfirmation, { deleteConfirmation = it.take(32) }, label = { Text("Deletion confirmation") }, modifier = Modifier.fillMaxWidth(), enabled = !state.busy)
+                    FilledTonalButton(enabled = !state.busy && deleteConfirmation == "DELETE MY ACCOUNT", onClick = {
+                        val confirmation = deleteConfirmation; val shownOwner = state.user?.id
+                        deleteConfirmation = ""; deleting = false
+                        viewModel.accountAction { viewModel.account.deleteAccount(confirmation, shownOwner) }
+                    }) { Text("Permanently delete account") }
+                    TextButton(enabled = !state.busy, onClick = { deleting = false; deleteConfirmation = "" }) { Text("Cancel deletion") }
+                }
             }
             TextButton(enabled = !state.busy, onClick = { onOpen("Logout") }) { Text("Log out / clear saved session") }
         } else if (page == "Logout") {

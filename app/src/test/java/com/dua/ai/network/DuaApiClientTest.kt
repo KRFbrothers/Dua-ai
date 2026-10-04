@@ -119,6 +119,17 @@ class DuaApiClientTest {
         val error = runCatching { api.reply("Dua", history) }.exceptionOrNull()
         assertTrue(error is DuaApiException)
         assertEquals("Quota reached", error?.message)
+        assertEquals(429, (error as DuaApiException).status)
+    }
+
+    @Test fun configuredProviderUsesBearerAndTextOnlyContract() = runBlocking {
+        server.enqueue(response("{\"text\":\"ChatGPT response\"}"))
+        assertEquals("ChatGPT response", api.reply("ChatGPT", history, token = "fake-session"))
+        val request = server.takeRequest(3, TimeUnit.SECONDS)!!
+        assertEquals("Bearer fake-session", request.getHeader("Authorization"))
+        assertEquals("1", request.getHeader("x-dua-native"))
+        assertEquals("ChatGPT", JSONObject(request.body.readUtf8()).getString("model"))
+        assertNull(request.getHeader("apikey"))
     }
 
     @Test fun oversizedResponseIsRejected() = runBlocking {

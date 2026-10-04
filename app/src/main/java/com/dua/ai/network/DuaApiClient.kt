@@ -20,13 +20,13 @@ import org.json.JSONObject
 import java.net.URL
 import java.io.ByteArrayOutputStream
 
-/** Both clients use the same server-owned Gemini key and model configuration. */
+/** Provider credentials and model names remain on the server. */
 class DuaApiClient(
     private val baseUrl: String = BuildConfig.DUA_API_BASE_URL,
     private val client: OkHttpClient = sharedClient
 ) {
-    suspend fun reply(model: String, history: List<ChatMessage>, attachments: List<ChatAttachment> = emptyList(), memory: String = ""): String {
-        require(model in listOf("Dua", "Gemini")) { "Dua ya Gemini select karein." }
+    suspend fun reply(model: String, history: List<ChatMessage>, attachments: List<ChatAttachment> = emptyList(), memory: String = "", token: String? = null): String {
+        require(model in com.dua.ai.setup.IntegrationCapabilities.MODELS) { "Supported model select karein." }
         require(memory.length <= 3000) { "Memory notes are too large." }
         val base = URL(baseUrl.trimEnd('/') + "/")
         require(base.protocol == "https") { "Dua backend ke liye HTTPS URL set karein." }
@@ -42,10 +42,15 @@ class DuaApiClient(
         val body = JSONObject().put("model", model).put("messages", messages).put("attachments", files).put("memory", memory)
             .toString().toByteArray(Charsets.UTF_8)
         require(body.size <= 3 * 1024 * 1024) { "Conversation too large. New chat shuru karein." }
-        Request.Builder().url(URL(base, "api/chat"))
+        val builder = Request.Builder().url(URL(base, "api/chat"))
             .header("Accept", "application/json")
+            .header("x-dua-native", "1")
             .post(body.toRequestBody("application/json; charset=utf-8".toMediaType()))
-            .build()
+        if (token != null) {
+            require(token.length <= 10000 && token.matches(Regex("[A-Za-z0-9._-]+"))) { "Invalid account session." }
+            builder.header("Authorization", "Bearer $token")
+        }
+        builder.build()
         }
         return suspendCancellableCoroutine { continuation ->
             val call = client.newCall(request)
@@ -87,7 +92,7 @@ class DuaApiClient(
             catch (_: Exception) { throw DuaApiException("Dua server se valid response nahi mila.") }
         if (status !in 200..299) throw DuaApiException(
             result.optString("error").takeIf { it.isNotBlank() }
-                ?: "Reply nahi aa saka. Dobara try karein."
+                ?: "Reply nahi aa saka. Dobara try karein.", status
         )
         return result.optString("text").takeIf { it.isNotBlank() }
             ?: throw DuaApiException("Gemini ne text response nahi diya. Dobara try karein.")
@@ -103,4 +108,4 @@ class DuaApiClient(
     }
 }
 
-class DuaApiException(message: String) : Exception(message)
+class DuaApiException(message: String, val status: Int = 0) : Exception(message)

@@ -41,7 +41,7 @@ class ChatImportTest {
         for ((key, value) in listOf("format" to "other", "version" to 2, "version" to "1", "exportedAt" to -1, "exportedAt" to 1.5)) {
             reject(JSONObject(export()).put(key, value).toString())
         }
-        for ((key, value) in listOf("id" to "", "model" to "ChatGPT", "draft" to 4, "draft" to "x".repeat(8001), "updatedAt" to -1)) {
+        for ((key, value) in listOf("id" to "", "model" to "UnsupportedProvider", "draft" to 4, "draft" to "x".repeat(8001), "updatedAt" to -1)) {
             val root = JSONObject(export()); root.getJSONArray("chats").getJSONObject(0).put(key, value); reject(root.toString())
         }
         for ((key, value) in listOf("role" to "system", "state" to "pending", "text" to JSONObject.NULL, "text" to "x".repeat(1048577))) {
@@ -53,6 +53,19 @@ class ChatImportTest {
         val messages = JSONObject(export()); val item = messages.getJSONArray("chats").getJSONObject(0)
         val message = item.getJSONArray("messages").getJSONObject(0)
         item.put("messages", JSONArray().apply { repeat(501) { put(message) } }); reject(messages.toString())
+    }
+
+    @Test fun allConfiguredProviderNamesRoundTripAcrossLocalAndCloudExports() {
+        val chats = com.dua.ai.setup.IntegrationCapabilities.MODELS.mapIndexed { index, model ->
+            SavedChat("provider-$index", model, "Draft", listOf(ChatMessage(text = "Hi", isUser = true, model = model)), index.toLong())
+        }
+        val local = ChatHistoryCodec.decode(ChatHistoryCodec.encode(chats, chats.first().id)).second
+        assertEquals(chats.map { it.model }, local.map { it.model })
+        val imported = ChatHistoryCodec.parseImport(ChatHistoryCodec.export(chats))
+        assertEquals(chats.map { it.model }.toSet(), imported.map { it.model }.toSet())
+        val cloud = com.dua.ai.account.CloudSnapshot(chats, listOf("Prefer Hindi"))
+        val restored = com.dua.ai.account.CloudSnapshotCodec.decode(com.dua.ai.account.CloudSnapshotCodec.encode(cloud))
+        assertEquals(chats.map { it.model }.toSet(), restored.chats.map { it.model }.toSet())
     }
 
     @Test fun inputIsBoundedAndInvalidUtf8RejectedBeforeParsing() {

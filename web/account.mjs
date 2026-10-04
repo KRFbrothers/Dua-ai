@@ -1,4 +1,5 @@
 import { validateCloudSnapshot } from './cloud-snapshot.mjs';
+import { createHash, randomBytes } from 'node:crypto';
 const cookieNames={access:'dua_access',refresh:'dua_refresh'};
 function configuration(env){
  const url=String(env.url||'').replace(/\/$/,'');const key=env.key;
@@ -9,6 +10,21 @@ function configuration(env){
  try{if(JSON.parse(Buffer.from(key.split('.')[1]||'','base64url').toString()).role==='service_role')return null;}catch{}
  return {url,key};
 }
+function privilegedKey(value){
+ if(typeof value!=='string'||value.length>10000)return null;
+ if(/^sb_secret_[A-Za-z0-9_-]+$/.test(value))return value;
+ try{if(/^[A-Za-z0-9._-]+$/.test(value)&&JSON.parse(Buffer.from(value.split('.')[1]||'','base64url').toString()).role==='service_role')return value;}catch{}
+ return null;
+}
+function oauthRedirect(env,requestUrl){
+ try{const value=new URL(env.oauthRedirectUrl||'');if(value.protocol!=='https:'||value.origin!==new URL(requestUrl).origin||value.pathname!=='/api/account/oauth/callback'||value.search||value.hash||value.username||value.password)return null;return value;}catch{return null;}
+}
+export function accountCapabilities(env={},requestUrl){
+ const configured=!!configuration(env);
+ return {configured,googleConfigured:configured&&!!oauthRedirect(env,requestUrl),deletionConfigured:configured&&!!privilegedKey(env.serviceRoleKey)};
+}
+function oauthCookies(verifier='',flow=''){return [`dua_oauth_verifier=${verifier}`,`dua_oauth_flow=${flow}`].map(value=>`${value}; Path=/api/account; HttpOnly; Secure; SameSite=Lax; Max-Age=${verifier?600:0}`);}
+const validEmail=value=>typeof value==='string'&&value.length<=254&&/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 function cookies(req){return Object.fromEntries((req.headers.get('cookie')||'').split(';').map(value=>value.trim().split('=' )).filter(pair=>pair.length===2));}
 function publicUser(user){if(!user||typeof user.id!=='string'||! /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(user.id))throw Error('Invalid account response');return {id:user.id,email:typeof user.email==='string'?user.email:'',displayName:typeof user.user_metadata?.display_name==='string'?user.user_metadata.display_name.slice(0,80):''};}
 function sessionCookies(session,clear=false){return [cookieNames.access,cookieNames.refresh].map((name,index)=>`${name}=${clear?'':index===0?session.access_token:session.refresh_token}; Path=/api; HttpOnly; Secure; SameSite=Strict; Max-Age=${clear?0:index===0?Math.min(86400,Math.max(60,session.expires_in||3600)):2592000}`);}
@@ -29,10 +45,32 @@ export async function handleAccount(req,env={}){
  }
  try{
   if(url.pathname==='/api/account/session'&&req.method==='GET')return json({configured:true,user:await authenticated()});
+  if(url.pathname==='/api/account/features'&&req.method==='GET')return json({passwordReset:true,googleLogin:!!oauthRedirect(env,req.url),accountDeletion:!!privilegedKey(env.serviceRoleKey)});
+  if(url.pathname==='/api/account/oauth/callback'&&req.method==='GET'){
+   extraCookies=oauthCookies();const redirect=oauthRedirect(env,req.url),verifier=stored.dua_oauth_verifier,flow=stored.dua_oauth_flow,code=url.searchParams.get('code');
+   if(native||!redirect||!verifier||! /^[A-Za-z0-9_-]{43}$/.test(verifier)||!flow||! /^[A-Za-z0-9_-]{32}$/.test(flow)||url.searchParams.get('flow')!==flow||typeof code!=='string'||! /^[A-Za-z0-9._-]{1,2048}$/.test(code))return json({error:'Google sign-in expired or could not be verified. Start again from Profile.'},400);
+   const result=await request('/auth/v1/token?grant_type=pkce','POST',{auth_code:code,code_verifier:verifier});
+   if(!result.response.ok)return json({error:'Google sign-in failed. Start again from Profile.'},401);
+   validSession(result.data);extraCookies=[...oauthCookies(),...sessionCookies(result.data)];
+   const responseHeaders=new Headers({'Cache-Control':'no-store',Location:new URL('/profile.html',redirect).toString()});extraCookies.forEach(value=>responseHeaders.append('Set-Cookie',value));return new Response(null,{status:303,headers:responseHeaders});
+  }
   if(!['POST','PATCH','PUT','DELETE'].includes(req.method))return json({error:'Method not allowed.'},405);
   if(!(req.headers.get('content-type')||'').startsWith('application/json'))return json({error:'Use JSON.'},415);
   const raw=await req.text();if(Buffer.byteLength(raw)> (url.pathname==='/api/cloud'?4*1024*1024+1024:16384))return json({error:'Request too large.'},413);
   let body;try{body=JSON.parse(raw||'{}');}catch{return json({error:'Invalid request.'},400);}if(!body||typeof body!=='object'||Array.isArray(body))return json({error:'Invalid request.'},400);
+  if(url.pathname==='/api/account/google'&&req.method==='POST'){
+   const redirect=oauthRedirect(env,req.url);if(native)return json({error:'Open the web Profile page for Google sign-in. Native Google sign-in needs a registered Android callback.'},501);if(!redirect)return json({error:'Google login callback is not configured for this site.'},503);
+   const verifier=randomBytes(32).toString('base64url'),flow=randomBytes(24).toString('base64url');redirect.searchParams.set('flow',flow);const authorize=new URL(config.url+'/auth/v1/authorize');authorize.searchParams.set('provider','google');authorize.searchParams.set('redirect_to',redirect.toString());authorize.searchParams.set('code_challenge',createHash('sha256').update(verifier).digest('base64url'));authorize.searchParams.set('code_challenge_method','s256');extraCookies=oauthCookies(verifier,flow);return json({url:authorize.toString()});
+  }
+  if(url.pathname==='/api/account/reset-password'&&req.method==='POST'){
+   if(!validEmail(body.email))return json({error:'Enter a valid email address.'},400);
+   const result=await request('/auth/v1/recover','POST',{email:body.email.trim()});if(!result.response.ok)return json({error:result.response.status===429?'Password reset limit reached. Wait and retry.':'Password reset could not be sent. Check email setup and retry.',...(result.response.status===429?{retryAfterSeconds:60}:{})},result.response.status===429?429:502);
+   return json({message:'If this account exists, a recovery email was sent. Enter its recovery code to choose a new password.'});
+  }
+  if(url.pathname==='/api/account/verify-recovery'&&req.method==='POST'){
+   if(!validEmail(body.email)||typeof body.token!=='string'||! /^[0-9]{6,10}$/.test(body.token))return json({error:'Enter the email address and numeric recovery code.'},400);
+   const result=await request('/auth/v1/verify','POST',{email:body.email.trim(),token:body.token,type:'recovery'});if(!result.response.ok)return json({error:'Recovery code is invalid or expired. Request a new code.'},401);return json({...deliver(result.data),recoveryVerified:true});
+  }
   if(url.pathname==='/api/account/signin'||url.pathname==='/api/account/signup'){
    const signup=url.pathname.endsWith('signup');if(req.method!=='POST')return json({error:'Method not allowed.'},405);
    if(typeof body.email!=='string'||body.email.length>254||! /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.email)||typeof body.password!=='string'||body.password.length>256||body.password.length<(signup?8:1)||body.displayName!==undefined&&(typeof body.displayName!=='string'||body.displayName.length>80))return json({error:'Enter a valid email and password (at least 8 characters for signup).'},400);
@@ -49,11 +87,22 @@ export async function handleAccount(req,env={}){
    if(!native)extraCookies=sessionCookies(null,true);return json({user:null,revoked,message:revoked?'Signed out on this device.':'Signed out locally; server revocation could not be confirmed.'});
   }
   const user=await authenticated();if(!user)return json({error:'Sign in from Profile to continue.'},401);
+  if(url.pathname==='/api/account/password'&&req.method==='PUT'){
+   if(typeof body.password!=='string'||body.password.length<8||body.password.length>256||body.currentPassword!==undefined&&(typeof body.currentPassword!=='string'||body.currentPassword.length>256))return json({error:'Use a new password between 8 and 256 characters.'},400);
+   const result=await request('/auth/v1/user','PUT',{password:body.password,...(body.currentPassword?{current_password:body.currentPassword}:{})},token);if(!result.response.ok)return json({error:'Password could not be changed. Verify a fresh recovery code and retry.'},401);return json({user:publicUser(result.data),message:'Password updated. Sign out other devices from your account security settings if needed.'});
+  }
+  if(url.pathname==='/api/account/delete'&&req.method==='DELETE'){
+   if(body.expectedAccountId!==user.id)return json({error:'Account changed. Review the account shown in Profile before deleting.'},409);
+   if(body.confirmation!=='DELETE MY ACCOUNT')return json({error:'Type DELETE MY ACCOUNT to confirm permanent account and cloud data deletion.'},400);const serviceKey=privilegedKey(env.serviceRoleKey);if(!serviceKey)return json({error:'Account deletion is not configured. The server needs its Supabase admin key.'},503);
+   // Only this verified user's id is used. Never accept an owner id from request JSON.
+   const result=await fetcher(config.url+'/auth/v1/admin/users/'+encodeURIComponent(user.id),{method:'DELETE',headers:{apikey:serviceKey,Authorization:'Bearer '+serviceKey,'Content-Type':'application/json'},body:JSON.stringify({should_soft_delete:false}),signal:AbortSignal.any([req.signal,AbortSignal.timeout(15000)]),redirect:'error'});if(!result.ok)return json({error:'Account deletion failed. The account and local data may still be available. Check Profile before retrying.'},502);if(!native)extraCookies=sessionCookies(null,true);return json({user:null,deleted:true,message:'Account deleted. Its cloud snapshot and request usage were deleted. Local chats and memories stay on this device.'});
+  }
   if(url.pathname==='/api/account/profile'&&req.method==='PATCH'){
    if(typeof body.displayName!=='string'||!body.displayName.trim()||body.displayName.length>80)return json({error:'Enter a display name up to 80 characters.'},400);
    const result=await request('/auth/v1/user','PUT',{data:{display_name:body.displayName.trim()}},token);return result.response.ok?json({user:publicUser(result.data)}):json({error:'Profile could not be updated.'},502);
   }
   if(url.pathname==='/api/cloud'&&(req.method==='PUT'||req.method==='DELETE')){
+   if(body.expectedAccountId!==undefined&&body.expectedAccountId!==user.id)return json({error:'Account changed. Review the cloud snapshot again.'},409);
    if(!Number.isSafeInteger(body.expectedRevision)||body.expectedRevision<0||body.expectedRevision>2147483647)return json({error:'Review the cloud version before changing it.'},400);
    let snapshot;try{snapshot=validateCloudSnapshot(req.method==='DELETE'?{format:'dua-cloud-snapshot',version:1,chats:[],memory:[]}:body.snapshot);}catch(error){return json({error:error.message},400);}
    const result=await request('/rest/v1/rpc/dua_write_cloud_snapshot','POST',{expected_revision:body.expectedRevision,next_payload:snapshot},token);if(!result.response.ok)return json({error:'Cloud database setup or saving failed. Local data was kept.'},503);
@@ -71,5 +120,5 @@ export async function handleCloudRead(req,env={}){
  if(!session.ok||!details.user)return Response.json({error:'Sign in from Profile to continue.'},{status:401,headers:{'Cache-Control':'no-store'}});
  const config=configuration(env);let token=req.headers.get('authorization')?.replace(/^Bearer /,'')||cookies(req)[cookieNames.access];const fresh=session.headers.getSetCookie?.()||[];for(const value of fresh)if(value.startsWith(cookieNames.access+'='))token=value.split(';')[0].slice(cookieNames.access.length+1);
  const headers=new Headers({'Cache-Control':'no-store','Content-Type':'application/json'});fresh.forEach(value=>headers.append('Set-Cookie',value));
- try{const response=await (env.fetcher||fetch)(config.url+'/rest/v1/dua_cloud_snapshots?select=revision,payload,updated_at&owner_id=eq.'+encodeURIComponent(details.user.id),{headers:{apikey:config.key,Authorization:'Bearer '+token},signal:AbortSignal.any([req.signal,AbortSignal.timeout(15000)]),redirect:'error'});if(!response.ok)return new Response(JSON.stringify({error:'Cloud database setup is not finished.'}),{status:503,headers});const rows=await response.json();if(!Array.isArray(rows)||rows.length>1)throw Error('Invalid snapshot');const row=rows[0];if(row&&(!Number.isSafeInteger(row.revision)||row.revision<1||row.revision>2147483647))throw Error('Invalid revision');const snapshot=row?validateCloudSnapshot(row.payload):{format:'dua-cloud-snapshot',version:1,chats:[],memory:[]};return new Response(JSON.stringify({revision:row?.revision||0,snapshot}),{headers});}catch{return new Response(JSON.stringify({error:'Cloud could not be loaded. Local data was kept.'}),{status:502,headers});}
+ try{const response=await (env.fetcher||fetch)(config.url+'/rest/v1/dua_cloud_snapshots?select=revision,payload,updated_at&owner_id=eq.'+encodeURIComponent(details.user.id),{headers:{apikey:config.key,Authorization:'Bearer '+token},signal:AbortSignal.any([req.signal,AbortSignal.timeout(15000)]),redirect:'error'});if(!response.ok)return new Response(JSON.stringify({error:'Cloud database setup is not finished.'}),{status:503,headers});const rows=await response.json();if(!Array.isArray(rows)||rows.length>1)throw Error('Invalid snapshot');const row=rows[0];if(row&&(!Number.isSafeInteger(row.revision)||row.revision<1||row.revision>2147483647))throw Error('Invalid revision');const snapshot=row?validateCloudSnapshot(row.payload):{format:'dua-cloud-snapshot',version:1,chats:[],memory:[]};return new Response(JSON.stringify({ownerId:details.user.id,revision:row?.revision||0,snapshot}),{headers});}catch{return new Response(JSON.stringify({error:'Cloud could not be loaded. Local data was kept.'}),{status:502,headers});}
 }

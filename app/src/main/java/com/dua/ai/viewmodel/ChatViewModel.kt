@@ -30,6 +30,66 @@ import kotlinx.coroutines.launch
 
 class ChatViewModel(application: Application) : AndroidViewModel(application) {
     val account = com.dua.ai.account.AccountRepository(application)
+    private val setupApi = com.dua.ai.account.AccountApi()
+    private val _integrations = MutableStateFlow(com.dua.ai.setup.IntegrationState())
+    val integrations = _integrations.asStateFlow()
+    private val _searchResults = MutableStateFlow<List<com.dua.ai.setup.SearchResult>>(emptyList())
+    val searchResults = _searchResults.asStateFlow()
+    private val _connectorRepositories = MutableStateFlow<List<com.dua.ai.setup.RepositoryResult>>(emptyList())
+    val connectorRepositories = _connectorRepositories.asStateFlow()
+    private val _memoryCandidates = MutableStateFlow<List<String>>(emptyList())
+    val memoryCandidates = _memoryCandidates.asStateFlow()
+    fun proposeMemoryNotes() {
+        val existing = localSettings.value.memory
+        _memoryCandidates.value = _messages.value.filter { it.isUser && it.state == "complete" }.takeLast(20)
+            .flatMap { com.dua.ai.setup.AutomationMemoryCandidates.propose(it.text, existing) }.distinct().take(4)
+        integrationNotice(if (_memoryCandidates.value.isEmpty()) "No explicit memory requests found. Try saying ‘remember that I prefer Hindi’." else "Review each proposed note before saving. Nothing has been sent or saved automatically.")
+    }
+    fun acceptMemoryNote(note: String) {
+        if (note !in _memoryCandidates.value) return
+        try {
+            val settings = localSettings.value
+            val notes = com.dua.ai.setup.AutomationMemoryCandidates.confirm(note, settings.memory)
+            localPreferences.update(settings.copy(memory = notes))
+            _memoryCandidates.value = _memoryCandidates.value.filterNot { it == note }
+            integrationNotice("Note saved locally. Notes are sent with chat only when Memory is enabled.")
+        } catch (failure: Exception) { integrationNotice(failure.message ?: "Memory could not be saved.") }
+    }
+    fun dismissMemoryNote(note: String) { _memoryCandidates.value = _memoryCandidates.value.filterNot { it == note } }
+    fun integrationNotice(text: String) { _integrations.value = _integrations.value.copy(notice = text) }
+    fun loadProviderConfiguration() = viewModelScope.launch {
+        try {
+            val config = setupApi.request("/api/config")
+            _integrations.value = _integrations.value.copy(providers = com.dua.ai.setup.IntegrationCapabilities.providers(config))
+        } catch (cancelled: CancellationException) { throw cancelled }
+        catch (_: Exception) { integrationNotice("Provider status could not be loaded. Dua and Gemini use the existing backend configuration; refresh Feature setup to retry.") }
+    }
+    private fun integrationAction(action: suspend () -> Unit) {
+        if (_integrations.value.busy) return
+        _integrations.value = _integrations.value.copy(busy = true, notice = "")
+        viewModelScope.launch {
+            try { action() } catch (cancelled: CancellationException) { throw cancelled }
+            catch (failure: Exception) { integrationNotice(failure.message ?: "Integration request failed. Local data was kept.") }
+            finally { _integrations.value = _integrations.value.copy(busy = false) }
+        }
+    }
+    fun loadIntegrations() = integrationAction {
+        val next = com.dua.ai.setup.IntegrationCapabilities.decode(setupApi.request("/api/setup"))
+        _integrations.value = next.copy(busy = true, notice = "Setup status refreshed.")
+    }
+    fun searchWeb(query: String) = integrationAction {
+        require(query.trim().length in 1..500) { "Enter a search up to 500 characters." }
+        _searchResults.value = emptyList()
+        val response = account.request("/api/search", "POST", org.json.JSONObject().put("query", query.trim()))
+        _searchResults.value = com.dua.ai.setup.IntegrationCapabilities.search(response)
+        integrationNotice(if (_searchResults.value.isEmpty()) "No search results." else "Search complete. Open a source to read it.")
+    }
+    fun listConnectorRepositories() = integrationAction {
+        _connectorRepositories.value = emptyList()
+        val response = account.request("/api/connectors/github", "POST", org.json.JSONObject().put("action", "list-repositories"), authenticated = true)
+        _connectorRepositories.value = com.dua.ai.setup.IntegrationCapabilities.repositories(response)
+        integrationNotice(if (_connectorRepositories.value.isEmpty()) "No repositories returned." else "Read-only repository list loaded.")
+    }
     data class CloudPreview(val kind: String, val userId: String, val review: com.dua.ai.account.CloudReview)
     private val _cloudPreview = MutableStateFlow<CloudPreview?>(null)
     val cloudPreview = _cloudPreview.asStateFlow()
@@ -42,7 +102,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             finally { account.busy(false) }
         }
     }
-    fun loadAccount() = accountAction { account.load() }
+    fun loadAccount() = accountAction { account.load(); account.loadFeatures() }
     fun signIn(email: String, password: String, signup: Boolean) = accountAction { _cloudPreview.value = null; account.signIn(email, password, signup) }
     fun logOut() = accountAction { _cloudPreview.value = null; account.logout() }
     fun cancelCloudReview() { _cloudPreview.value = null; account.notice("Cancelled. Data was not changed.") }
@@ -379,7 +439,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun setModel(model: String) {
-        if (model !in listOf("Dua", "Gemini")) return
+        if (_integrations.value.providers.none { it.name == model && it.configured }) return
         _selectedModel.value = model
         saveHistory()
     }
@@ -417,6 +477,30 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun retryResponse(messageId: String) {
+        if (_isTyping.value || _readingFiles.value || _dataBusy.value) return
+        val original = _messages.value.lastOrNull() ?: return
+        if (original.id != messageId || original.isUser || original.state != "complete") return
+        val plan = try { com.dua.ai.model.ReplyRetryPlan.create(_messages.value, messageId) }
+            catch (failure: IllegalArgumentException) { _error.value = failure.message; return }
+        val currentGeneration = generation
+        _error.value = null; _isTyping.value = true
+        replyJob = viewModelScope.launch {
+            try {
+                val reply = account.withToken { token -> api.reply(plan.model, plan.context, emptyList(), com.dua.ai.settings.PreferencesCodec.memoryText(localSettings.value), token) }
+                if (generation == currentGeneration) {
+                    _messages.value = _messages.value.map { if (it.id == messageId) it.copy(text = reply, codeSnippet = null) else it }
+                    saveHistory()
+                }
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (failure: Exception) {
+                if (generation == currentGeneration) _error.value = "Retry failed. Original response kept."
+            } finally {
+                if (generation == currentGeneration) { _isTyping.value = false; saveHistory() }
+            }
+        }
+    }
+
     fun sendMessage(userText: String) {
         if ((userText.isBlank() && _attachments.value.isEmpty()) || _isTyping.value || _readingFiles.value) return
         _error.value = null
@@ -425,11 +509,16 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
         val responseModel = _selectedModel.value
-        if (responseModel !in listOf("Dua", "Gemini")) {
-            _error.value = "Dua ya Gemini select karein."
+        val provider = _integrations.value.providers.firstOrNull { it.name == responseModel && it.configured }
+        if (provider == null) {
+            _error.value = "This provider needs backend setup. Choose a configured model."
             return
         }
         val files = _attachments.value
+        if (files.isNotEmpty() && !provider.supportsAttachments) {
+            _error.value = "This provider currently supports text only. Remove attachments or choose Dua/Gemini."
+            return
+        }
         val prompt = userText.trim().ifBlank { "Describe these files." }
         val text = prompt + if (files.isEmpty()) "" else "\nFiles: " + files.joinToString(", ") { it.name }
         val userMessage = ChatMessage(text = text, isUser = true, model = responseModel)
@@ -442,7 +531,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         _failedPrompt.value = null
         replyJob = viewModelScope.launch {
             try {
-                val reply = api.reply(responseModel, requestHistory, files, com.dua.ai.settings.PreferencesCodec.memoryText(localSettings.value))
+                val reply = account.withToken { token -> api.reply(responseModel, requestHistory, files, com.dua.ai.settings.PreferencesCodec.memoryText(localSettings.value), token) }
                 if (generation == currentGeneration) {
                     clearAttachments()
                     _messages.value = _messages.value + ChatMessage(
@@ -472,4 +561,3 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 }
-

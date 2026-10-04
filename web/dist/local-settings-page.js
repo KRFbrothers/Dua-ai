@@ -32,5 +32,5 @@
  document.querySelector('#share-copy')?.addEventListener('click',async()=>{try{await navigator.clipboard.writeText(DuaPreferences.shareText(selected()));notice('Copied conversation.');}catch(error){notice(error.message||'Copy unavailable.');}});
  if(new URLSearchParams(location.search).get('from')==='voice')document.querySelector('.local-header a').href='settings.html?from=voice';
  document.querySelector('#reset-settings')?.addEventListener('click',()=>{if(confirm('Reset appearance, notifications and all memories? Chats stay saved.'))try{DuaPreferences.reset();notice('Settings and memories reset.');}catch(error){notice(error.message);}});
- window.addEventListener('storage',event=>{if(event.key==='dua-preferences-v1')render();});render();permissionState();
+ window.addEventListener('dua-settings',render);window.addEventListener('storage',event=>{if(event.key==='dua-preferences-v1')render();});render();permissionState();
 })();

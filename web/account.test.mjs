@@ -1,4 +1,4 @@
-import {test} from 'node:test';import assert from 'node:assert/strict';import {handleAccount,handleCloudRead} from './account.mjs';import {validateCloudSnapshot} from './cloud-snapshot.mjs';import {readFileSync} from 'node:fs';import vm from 'node:vm';
+import {test} from 'node:test';import assert from 'node:assert/strict';import {handleAccount,handleCloudRead,accountCapabilities} from './account.mjs';import {validateCloudSnapshot} from './cloud-snapshot.mjs';import {readFileSync} from 'node:fs';import vm from 'node:vm';
 const id='11111111-1111-4111-8111-111111111111';const user={id,email:'person@example.com',user_metadata:{display_name:'Dua User'}};const session={access_token:'test-access',refresh_token:'test-refresh',expires_in:3600,user};const snapshot={format:'dua-cloud-snapshot',version:1,chats:[{id:'chat',updatedAt:12,model:'Dua',draft:'Unsent draft',messages:[{role:'user',text:'Hi',state:'complete'}]}],memory:['Prefer Hindi']};
 const req=(path,method='GET',body,headers={})=>new Request('https://dua.example'+path,{method,headers:{...(body===undefined?{}:{'Content-Type':'application/json'}),...headers},...(body===undefined?{}:{body:JSON.stringify(body)})});
 const env=fetcher=>({url:'https://project.supabase.co',key:'public-test-key',fetcher});
@@ -17,3 +17,65 @@ test('cloud CAS conflict returns 409, not a false success; owner comes from JWT/
 test('cloud delete writes an empty revisioned snapshot instead of touching local data',async()=>{let forwarded;const response=await handleAccount(req('/api/cloud','DELETE',{expectedRevision:2},{Authorization:'Bearer test-access'}),env(async(url,options)=>{if(url.includes('/auth/'))return Response.json(user);forwarded=JSON.parse(options.body);return Response.json({revision:3});}));assert.equal(response.status,200);assert.deepEqual(forwarded.next_payload.chats,[]);assert.deepEqual(forwarded.next_payload.memory,[]);});
 test('snapshot bounds reject malformed data and ignore attachment/token metadata',()=>{const safe=validateCloudSnapshot({...snapshot,accessToken:'NEVER',chats:[{...snapshot.chats[0],attachments:[{data:'NEVER'}]}]});assert.ok(!JSON.stringify(safe).includes('NEVER'));for(const value of [{...snapshot,memory:Array(11).fill('note')},{...snapshot,chats:[snapshot.chats[0],snapshot.chats[0]]},{...snapshot,memory:['x'.repeat(201)]},{...snapshot,chats:[{...snapshot.chats[0],draft:'x'.repeat(8001)}]}])assert.throws(()=>validateCloudSnapshot(value));});
 test('cloud merge keeps local drafts, forks conflicts and does not re-import identical copies',()=>{const context={};vm.runInNewContext(readFileSync('dist/cloud-merge.js','utf8'),context);const local=snapshot.chats,remote=[{...local[0],draft:'Remote draft'}];const first=context.DuaCloudMerge(local,remote,()=> 'copy-id');assert.equal(first.conflicts,1);assert.equal(first.chats[0].draft,'Unsent draft');assert.equal(first.chats[1].draft,'Remote draft');const repeated=context.DuaCloudMerge(first.chats,remote,()=> 'another-id');assert.equal(repeated.added,0);});
+
+test('password recovery sends no raw errors and verifies only recovery OTP into protected session',async()=>{
+ const calls=[];const settings=env(async(url,options)=>{calls.push({url,body:JSON.parse(options.body)});return Response.json(url.endsWith('/verify')?session:{});});
+ const recovery=await handleAccount(req('/api/account/reset-password','POST',{email:user.email}),settings);assert.equal(recovery.status,200);assert.equal(calls[0].body.email,user.email);assert.ok(!(await recovery.text()).includes('test-access'));
+ const verified=await handleAccount(req('/api/account/verify-recovery','POST',{email:user.email,token:'123456'}),settings);const details=await verified.json();assert.equal(details.recoveryVerified,true);assert.equal(details.user.id,id);assert.ok(!details.session);assert.equal(calls[1].body.type,'recovery');assert.equal(verified.headers.getSetCookie().length,2);
+ const native=await handleAccount(req('/api/account/verify-recovery','POST',{email:user.email,token:'123456'},{'x-dua-native':'1'}),settings);assert.equal((await native.json()).session.accessToken,'test-access');
+});
+test('recovery validates input and keeps provider diagnostics out of response',async()=>{
+ let requests=0;const settings=env(async()=>{requests++;return Response.json({error:'SECRET diagnostics'},{status:400});});
+ assert.equal((await handleAccount(req('/api/account/reset-password','POST',{email:'bad'}),settings)).status,400);
+ assert.equal((await handleAccount(req('/api/account/verify-recovery','POST',{email:user.email,token:'token-hash'}),settings)).status,400);assert.equal(requests,0);
+ const invalid=await handleAccount(req('/api/account/verify-recovery','POST',{email:user.email,token:'123456'}),settings);assert.equal(invalid.status,401);assert.ok(!(await invalid.text()).includes('SECRET'));
+});
+test('password update requires a verified session and forwards optional current password without returning it',async()=>{
+ const calls=[];const settings=env(async(url,options)=>{calls.push({url,options});return Response.json(user);});
+ assert.equal((await handleAccount(req('/api/account/password','PUT',{password:'newpassword'}),settings)).status,401);assert.equal(calls.length,0);
+ const updated=await handleAccount(req('/api/account/password','PUT',{password:'newpassword',currentPassword:'oldpassword'},{authorization:'Bearer test-access'}),settings);assert.equal(updated.status,200);assert.deepEqual(JSON.parse(calls.at(-1).options.body),{password:'newpassword',current_password:'oldpassword'});assert.ok(!(await updated.text()).includes('password"'));
+});
+test('Google OAuth uses server-only PKCE cookie, fixed callback and exchanges a bound code',async()=>{
+ const settings={...env(async(url,options)=>{assert.ok(url.endsWith('grant_type=pkce'));assert.equal(JSON.parse(options.body).auth_code,'provider-code');return Response.json(session);}),oauthRedirectUrl:'https://dua.example/api/account/oauth/callback'};
+ const start=await handleAccount(req('/api/account/google','POST',{}),settings);const details=await start.json();const authorize=new URL(details.url);assert.equal(authorize.origin,'https://project.supabase.co');assert.equal(authorize.searchParams.get('provider'),'google');assert.equal(authorize.searchParams.get('code_challenge_method'),'s256');
+ const issued=start.headers.getSetCookie();assert.equal(issued.length,2);assert.match(issued[0],/HttpOnly; Secure; SameSite=Lax; Max-Age=600/);assert.ok(!details.verifier);
+ const cookie=issued.map(value=>value.split(';')[0]).join('; '),flow=new URL(authorize.searchParams.get('redirect_to')).searchParams.get('flow');
+ const callback=await handleAccount(req('/api/account/oauth/callback?code=provider-code&flow='+flow,'GET',undefined,{cookie}),settings);assert.equal(callback.status,303);assert.equal(callback.headers.get('Location'),'https://dua.example/profile.html');assert.equal(callback.headers.getSetCookie().length,4);
+});
+test('Google OAuth refuses arbitrary redirect URLs, native flow and missing callback binding',async()=>{
+ const settings={...env(()=>assert.fail('Must not exchange invalid OAuth')),oauthRedirectUrl:'https://dua.example/api/account/oauth/callback'};
+ const arbitrary=await handleAccount(req('/api/account/google','POST',{redirectTo:'https://evil.example'}),settings);assert.equal(arbitrary.status,200);assert.equal(new URL(new URL((await arbitrary.json()).url).searchParams.get('redirect_to')).origin,'https://dua.example');
+ assert.equal((await handleAccount(req('/api/account/google','POST',{}, {'x-dua-native':'1'}),settings)).status,501);
+ assert.equal((await handleAccount(req('/api/account/oauth/callback?code=code&flow=wrong'),settings)).status,400);
+ assert.equal((await handleAccount(req('/api/account/google','POST',{}),{...settings,oauthRedirectUrl:'https://evil.example/api/account/oauth/callback'})).status,503);
+});
+test('account deletion needs exact confirmation and deletes only the verified user with separate admin key',async()=>{
+ const calls=[];const settings={...env(async(url,options)=>{calls.push({url,options});return url.includes('/admin/')?new Response(null,{status:204}):Response.json(user);}),serviceRoleKey:'sb_secret_admin-test'};
+ const headers={authorization:'Bearer test-access'};
+ assert.equal((await handleAccount(req('/api/account/delete','DELETE',{confirmation:'DELETE',expectedAccountId:id},headers),settings)).status,400);assert.equal(calls.length,1);
+ const deleted=await handleAccount(req('/api/account/delete','DELETE',{confirmation:'DELETE MY ACCOUNT',expectedAccountId:id,ownerId:'forged'},headers),settings);assert.equal(deleted.status,200);assert.equal((await deleted.json()).deleted,true);assert.ok(calls.at(-1).url.endsWith('/admin/users/'+id));assert.equal(calls.at(-1).options.headers.Authorization,'Bearer sb_secret_admin-test');assert.equal(calls[0].options.headers.Authorization,'Bearer test-access');assert.equal(deleted.headers.getSetCookie().length,2);
+});
+test('account deletion stays disabled without admin setup and no unverified request can delete',async()=>{
+ let adminRequests=0;const settings=env(async(url)=>{if(url.includes('/admin/'))adminRequests++;return Response.json(user);});
+ assert.equal((await handleAccount(req('/api/account/delete','DELETE',{confirmation:'DELETE MY ACCOUNT',expectedAccountId:id}),{...settings,serviceRoleKey:'sb_secret_admin-test'})).status,401);
+ assert.equal((await handleAccount(req('/api/account/delete','DELETE',{confirmation:'DELETE MY ACCOUNT',expectedAccountId:id},{authorization:'Bearer test-access'}),settings)).status,503);assert.equal(adminRequests,0);
+});
+test('cloud owner binding rejects stale-account autosync before write and read exposes verified owner',async()=>{
+ let writes=0;const settings=env(async(url)=>{if(url.includes('/rpc/'))writes++;return url.includes('/auth/')?Response.json(user):Response.json([]);});
+ const result=await handleAccount(req('/api/cloud','PUT',{expectedRevision:0,expectedAccountId:'another-account',snapshot},{authorization:'Bearer test-access'}),settings);assert.equal(result.status,409);assert.equal(writes,0);
+ const cloud=await handleCloudRead(req('/api/cloud','GET',undefined,{authorization:'Bearer test-access'}),settings);assert.equal((await cloud.json()).ownerId,id);
+});
+
+test('account deletion rejects missing or switched account binding before admin call',async()=>{
+ let deletes=0;const settings={...env(async(url)=>{if(url.includes('/admin/'))deletes++;return Response.json(user);}),serviceRoleKey:'sb_secret_admin-test'};
+ for (const expectedAccountId of [undefined,'22222222-2222-4222-8222-222222222222']) { const result=await handleAccount(req('/api/account/delete','DELETE',{confirmation:'DELETE MY ACCOUNT',expectedAccountId},{authorization:'Bearer test-access'}),settings);assert.equal(result.status,409); }
+ assert.equal(deletes,0);
+});
+test('sanitized account capabilities use actual key and redirect validators',()=>{
+ assert.deepEqual(accountCapabilities({},'https://dua.example'),{configured:false,googleConfigured:false,deletionConfigured:false});
+ const settings={...env(()=>{}),oauthRedirectUrl:'https://dua.example/api/account/oauth/callback',serviceRoleKey:'sb_secret_admin-test'};
+ assert.deepEqual(accountCapabilities(settings,'https://dua.example'),{configured:true,googleConfigured:true,deletionConfigured:true});
+ assert.equal(accountCapabilities({...settings,oauthRedirectUrl:'https://elsewhere.example/api/account/oauth/callback'},'https://dua.example').googleConfigured,false);
+ assert.equal(accountCapabilities({...settings,serviceRoleKey:'public-key'},'https://dua.example').deletionConfigured,false);
+ assert.equal(accountCapabilities({...settings,key:'sb_secret_forbidden'},'https://dua.example').configured,false);
+});

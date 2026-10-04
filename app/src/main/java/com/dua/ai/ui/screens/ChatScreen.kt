@@ -59,7 +59,7 @@ private val Secondary: Color @Composable get() = MaterialTheme.colorScheme.secon
 private val Primary: Color @Composable get() = MaterialTheme.colorScheme.primary
 private val Ink: Color @Composable get() = MaterialTheme.colorScheme.onSurface
 private val Muted: Color @Composable get() = MaterialTheme.colorScheme.onSurfaceVariant
-private enum class Screen { Home, Chat, Settings, Attachments, Voice, Profile, DataControls, Permissions, ColorMode, FontStyle, Notifications, Logout, ComputerMode, VoicePermission, VoiceDenied, Memory, Sharing, Privacy, HandsFree, CloudSync }
+private enum class Screen { Home, Chat, Settings, Attachments, Voice, Profile, DataControls, Permissions, ColorMode, FontStyle, Notifications, Logout, ComputerMode, VoicePermission, VoiceDenied, Memory, Sharing, Privacy, HandsFree, CloudSync, IntegrationSetup }
 
 /** Native Compose counterpart of web/dist; no WebView or hosted page dependency. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -71,6 +71,8 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel(), notificationRoute: Pair<S
     val draft by viewModel.draft.collectAsState()
     val savedChats by viewModel.savedChats.collectAsState()
     val model by viewModel.selectedModel.collectAsState()
+    val integrations by viewModel.integrations.collectAsState()
+    LaunchedEffect(Unit) { viewModel.loadProviderConfiguration() }
     var picker by rememberSaveable { mutableStateOf(false) }
     var detailHistory by rememberSaveable { mutableStateOf(arrayListOf<String>()) }
     val attachments by viewModel.attachments.collectAsState()
@@ -108,7 +110,7 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel(), notificationRoute: Pair<S
             Screen.Settings -> Screen.valueOf(settingsReturn)
             Screen.HandsFree -> Screen.Voice
             Screen.Attachments, Screen.Voice -> Screen.Chat
-            Screen.CloudSync, Screen.Profile, Screen.DataControls, Screen.Permissions, Screen.ColorMode,
+            Screen.IntegrationSetup, Screen.CloudSync, Screen.Profile, Screen.DataControls, Screen.Permissions, Screen.ColorMode,
             Screen.Memory, Screen.Sharing, Screen.Privacy, Screen.FontStyle, Screen.Notifications, Screen.Logout, Screen.ComputerMode, Screen.VoicePermission, Screen.VoiceDenied -> {
                 val previous = detailHistory.lastOrNull() ?: Screen.Settings.name
                 detailHistory = ArrayList(detailHistory.dropLast(1))
@@ -220,27 +222,20 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel(), notificationRoute: Pair<S
                                                             modifier = Modifier.padding(top = 12.dp))
                                                     }
                                                     if (!message.isUser) {
-                                                        FilledTonalButton(enabled = speech.available && message.state == "complete",
-                                                            onClick = { speaker.toggle(message.id, message.text) },
-                                                            shape = RoundedCornerShape(20.dp), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
-                                                            modifier = Modifier.padding(top = 8.dp).heightIn(min = 48.dp)) {
-                                                            Text(if (speech.activeId == message.id) "Stop reading" else "Read aloud", fontSize = 14.sp)
-                                                        }
-                                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                                        if (message.state == "complete") Row(
+                                                            Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                                                             IconButton(onClick = {
                                                                 (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
                                                                     .setPrimaryClip(ClipData.newPlainText("Dua response", message.text + (message.codeSnippet?.let { "\n" + it } ?: "")))
-                                                            }) { Icon(Icons.Default.ContentCopy, "Copy response", modifier = Modifier.size(18.dp)) }
-                                                            IconButton(onClick = { viewModel.toggleReaction(message.id, true) }) {
-                                                                Icon(Icons.Default.ThumbUp, "Like response", tint = if (message.reaction == MessageReaction.LIKED) Primary else Muted, modifier = Modifier.size(18.dp))
+                                                            }, modifier = Modifier.size(48.dp)) { Icon(Icons.Default.ContentCopy, "Copy response", tint = Muted, modifier = Modifier.size(22.dp)) }
+                                                            IconButton(enabled = !typing && messages.lastOrNull()?.id == message.id,
+                                                                onClick = { speaker.stop(); viewModel.retryResponse(message.id) }, modifier = Modifier.size(48.dp)) {
+                                                                Icon(Icons.Default.Refresh, "Retry response", tint = Muted, modifier = Modifier.size(22.dp))
                                                             }
-                                                            IconButton(onClick = { viewModel.toggleReaction(message.id, false) }) {
-                                                                Icon(Icons.Default.ThumbDown, "Dislike response", tint = if (message.reaction == MessageReaction.DISLIKED) Primary else Muted, modifier = Modifier.size(18.dp))
+                                                            IconButton(enabled = speech.available, onClick = { speaker.toggle(message.id, message.text) }, modifier = Modifier.size(48.dp)) {
+                                                                Icon(if (speech.activeId == message.id) Icons.Default.Stop else Icons.Default.VolumeUp,
+                                                                    if (speech.activeId == message.id) "Stop reading" else "Speak response", tint = Muted, modifier = Modifier.size(22.dp))
                                                             }
-                                                            IconButton(enabled = !typing, onClick = {
-                                                                val index = messages.indexOfFirst { it.id == message.id }
-                                                                messages.take(index.coerceAtLeast(0)).lastOrNull { it.isUser }?.let { viewModel.sendMessage(it.text) }
-                                                            }) { Icon(Icons.Default.Refresh, "Retry this prompt", modifier = Modifier.size(18.dp)) }
                                                         }
                                                     }
                                                 }
@@ -321,6 +316,7 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel(), notificationRoute: Pair<S
                         viewModel.updateDraft(it); navigate(Screen.Chat)
                     })
                     Screen.Profile, Screen.Logout, Screen.CloudSync -> AccountScreen(viewModel, screen.name, onBack = ::back, onOpen = { detail(Screen.valueOf(it), screen) })
+                    Screen.IntegrationSetup -> IntegrationSetupScreen(viewModel, onBack = ::back, onProfile = { detail(Screen.Profile, screen) }, onCloud = { detail(Screen.CloudSync, screen) })
                     Screen.ColorMode, Screen.FontStyle, Screen.Permissions, Screen.Notifications, Screen.Memory, Screen.Sharing, Screen.Privacy -> DeviceSettingsScreen(viewModel, screen.name, onBack = ::back, onPage = { detail(Screen.valueOf(it), screen) }, onAttachments = { navigate(Screen.Attachments) })
                     else -> key(screen) { SettingsDetail(screen, onBack = ::back, onOpen = { detail(it, screen) }) }
                 }
@@ -332,7 +328,8 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel(), notificationRoute: Pair<S
                 Text("Choose a model", fontSize = 22.sp)
                 Text("Pick who responds in this chat", color = Muted, modifier = Modifier.padding(top = 8.dp, bottom = 16.dp))
                 listOf("Dua", "ChatGPT", "Gemini", "Claude", "Grok", "Kimi").forEach { name ->
-                    val available = name == "Dua" || name == "Gemini"
+                    val capability = integrations.providers.firstOrNull { it.name == name }
+                    val available = capability?.configured == true
                     val provider = when (name) { "ChatGPT" -> "OpenAI"; "Claude" -> "Anthropic"; "Grok" -> "xAI"; "Kimi" -> "Moonshot"; else -> "Gemini" }
                     Surface(color = if (model == name) Highest else Color.Transparent, shape = RoundedCornerShape(18.dp)) {
                         Row(Modifier.fillMaxWidth().heightIn(min = 70.dp).clickable(enabled = available) {
@@ -343,13 +340,14 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel(), notificationRoute: Pair<S
                             }
                             Column(Modifier.weight(1f).padding(start = 14.dp)) {
                                 Text(name, color = if (available) Ink else Muted.copy(alpha = .45f))
-                                Text(if (available) (if (name == "Dua") "Default · Gemini" else "Google · Gemini") else "$provider · Coming soon", color = Muted.copy(alpha = if (available) 1f else .45f), fontSize = 14.sp)
+                                Text(if (available) "$provider · ${capability?.model.orEmpty()}" else "$provider · Setup required", color = Muted.copy(alpha = if (available) 1f else .45f), fontSize = 14.sp)
                             }
                             if (model == name) Icon(Icons.Default.CheckCircle, "Selected", tint = Primary)
                         }
                     }
                 }
-                Text("Dua and Gemini available\nOther models coming soon", color = Muted, fontSize = 12.sp, modifier = Modifier.padding(top = 20.dp))
+                Text("Available models follow backend configuration. Provider keys stay on the server.", color = Muted, fontSize = 12.sp, modifier = Modifier.padding(top = 20.dp))
+                TextButton(onClick = { picker = false; detail(Screen.IntegrationSetup, screen) }) { Text("Feature setup") }
                 FilledTonalButton(onClick = { picker = false }, modifier = Modifier.align(Alignment.End).heightIn(min = 48.dp)) { Text("Done") }
             }
         }
@@ -399,7 +397,7 @@ private fun PageHeader(title: String, back: () -> Unit, close: Boolean = false, 
 private fun SettingsScreen(onBack: () -> Unit, haptic: Boolean, onHaptic: (Boolean) -> Unit, onOpen: (Screen) -> Unit, preferences: com.dua.ai.settings.LocalPreferences) {
     PageHeader("Settings", onBack, info = true)
     val feedback = LocalHapticFeedback.current
-    val destinations = mapOf("Profile" to Screen.Profile, "Computer mode" to Screen.ComputerMode,
+    val destinations = mapOf("Profile" to Screen.Profile, "Computer mode" to Screen.IntegrationSetup, "Capabilities" to Screen.IntegrationSetup, "Plugins" to Screen.IntegrationSetup,
         "Data controls" to Screen.DataControls, "Permissions" to Screen.Permissions,
         "Color mode" to Screen.ColorMode, "Font style" to Screen.FontStyle,
         "Notifications" to Screen.Notifications, "Memory" to Screen.Memory, "Privacy" to Screen.Privacy, "Sharing" to Screen.Sharing, "Voice" to Screen.Voice, "Log out" to Screen.Logout)
@@ -433,7 +431,7 @@ private fun SettingsScreen(onBack: () -> Unit, haptic: Boolean, onHaptic: (Boole
                                 Text(title, fontSize = 16.sp, color = if (title == "Log out") Color(0xFFFFB1C0) else Ink)
                                 val subtitle = when (title) {
                                     "Color mode" -> preferences.theme.replaceFirstChar { it.uppercase() }; "Font style" -> preferences.font.replaceFirstChar { it.uppercase() }; "Profile" -> "Dua AI account"
-                                    "Computer mode", "Capabilities", "Plugins" -> "Coming soon"; "Voice" -> "Speech and read aloud"; "Memory" -> if (preferences.memoryEnabled) "Enabled locally" else "Local · Off"
+                                    "Computer mode", "Capabilities", "Plugins" -> "Feature setup"; "Voice" -> "Speech and read aloud"; "Memory" -> if (preferences.memoryEnabled) "Enabled locally" else "Local · Off"
                                     else -> null
                                 }
                                 subtitle?.let { Text(it, color = Muted, fontSize = 14.sp, lineHeight = 20.sp) }
