@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "start": "node --env-file-if-exists=.env server.mjs",
-    "test": "node --test --test-isolation=none server.test.mjs static-server.test.mjs netlify.test.mjs gemini-errors.test.mjs send.test.mjs safe-errors.test.mjs history.test.mjs attachments.test.mjs attachment-selection.test.mjs voice-input.test.mjs read-aloud.test.mjs data-controls.test.mjs photo-compression.test.mjs local-features.test.mjs account.test.mjs vercel.test.mjs providers-search.test.mjs access-policy.test.mjs advanced-integrations.test.mjs automation.test.mjs setup.test.mjs",
+    "test": "node --test --test-isolation=none server.test.mjs static-server.test.mjs netlify.test.mjs gemini-errors.test.mjs send.test.mjs safe-errors.test.mjs history.test.mjs attachments.test.mjs attachment-selection.test.mjs voice-input.test.mjs read-aloud.test.mjs data-controls.test.mjs photo-compression.test.mjs local-features.test.mjs account.test.mjs vercel.test.mjs providers-search.test.mjs provider-attachments.test.mjs access-policy.test.mjs advanced-integrations.test.mjs automation.test.mjs setup.test.mjs",
     "build": "node verify-static.mjs"
   },
   "engines": {

@@ -3,7 +3,8 @@ package com.dua.ai.setup
 import org.json.JSONObject
 import java.net.URI
 
-data class ProviderCapability(val name: String, val configured: Boolean, val model: String, val supportsAttachments: Boolean)
+data class ProviderCapability(val name: String, val configured: Boolean, val model: String, val supportsAttachments: Boolean,
+    val attachmentTypes: List<String> = IntegrationCapabilities.legacyAttachmentTypes(name, supportsAttachments))
 data class IntegrationGroup(val id: String, val title: String, val state: String, val requires: List<String>, val limitations: List<String>)
 data class SearchResult(val title: String, val url: String, val snippet: String)
 data class RepositoryResult(val name: String, val url: String, val description: String)
@@ -13,13 +14,43 @@ data class IntegrationState(val groups: List<IntegrationGroup> = emptyList(), va
 object IntegrationCapabilities {
     val MODELS = listOf("Dua", "ChatGPT", "Gemini", "Claude", "Grok", "Kimi")
     val GROUPS = listOf("providers", "search", "sync", "memory", "connectors", "computer", "voice", "account")
-    val fallbackProviders = listOf("Dua", "Gemini").map { ProviderCapability(it, true, "Gemini", true) }
+    val ATTACHMENT_TYPES = listOf("image/jpeg", "image/png", "image/webp", "application/pdf", "text/plain")
+    val fallbackProviders = listOf("Dua", "Gemini").map { ProviderCapability(it, true, "Gemini", true, ATTACHMENT_TYPES) }
+    fun legacyAttachmentTypes(name: String, supportsAttachments: Boolean): List<String> = when {
+        !supportsAttachments -> emptyList()
+        name == "Dua" || name == "Gemini" -> ATTACHMENT_TYPES
+        else -> listOf("text/plain")
+    }
     fun providers(json: JSONObject): List<ProviderCapability> {
         val array = json.optJSONArray("providers") ?: return fallbackProviders.map { it.copy(configured = json.optBoolean("geminiConfigured", true), model = json.optString("model", "Gemini").take(100)) }
         return (0 until array.length()).mapNotNull { index -> array.optJSONObject(index)?.let { item ->
             val name = item.optString("name")
-            if (name !in MODELS) null else ProviderCapability(name, item.optBoolean("configured"), item.optString("model").take(100), item.optBoolean("supportsAttachments"))
+            if (name !in MODELS) null else {
+                val supportsAttachments = item.optBoolean("supportsAttachments")
+                val types = when {
+                    !supportsAttachments -> emptyList()
+                    !item.has("attachmentTypes") -> legacyAttachmentTypes(name, true)
+                    else -> item.optJSONArray("attachmentTypes")?.let { values ->
+                        (0 until values.length()).mapNotNull { values.opt(it) as? String }.filter { it in ATTACHMENT_TYPES }.distinct()
+                    } ?: emptyList()
+                }
+                ProviderCapability(name, item.optBoolean("configured"), item.optString("model").take(100), supportsAttachments, types)
+            }
         } }.distinctBy { it.name }
+    }
+    fun attachmentError(provider: ProviderCapability, mimeTypes: List<String>): String? {
+        val supportedTypes = if (provider.supportsAttachments) provider.attachmentTypes else emptyList()
+        if (mimeTypes.all { it in supportedTypes }) return null
+        val extensions = supportedTypes.map { type -> when (type) {
+            "image/jpeg" -> ".jpg/.jpeg"
+            "image/png" -> ".png"
+            "image/webp" -> ".webp"
+            "application/pdf" -> ".pdf"
+            "text/plain" -> ".txt"
+            else -> type
+        } }.joinToString(", ")
+        return if (extensions.isEmpty()) "${provider.name} does not support file attachments. Remove selected files or choose another configured provider. Your selected files were kept."
+            else "${provider.name} supports $extensions files. Remove unsupported files or choose another configured provider. Your selected files were kept."
     }
     fun decode(json: JSONObject): IntegrationState {
         val array = json.getJSONArray("groups")

@@ -22,6 +22,60 @@ class IntegrationCapabilitiesTest {
         assertFalse(providers[1].configured)
         assertFalse(providers[0].supportsAttachments)
     }
+    @Test fun explicitAttachmentTypesRemainAuthoritativeForEverySelectedFile() {
+        val provider = IntegrationCapabilities.providers(JSONObject("""{"providers":[{"name":"ChatGPT","configured":true,"supportsAttachments":true,"attachmentTypes":["image/jpeg","text/plain"]}]}""")).single()
+        assertEquals(listOf("image/jpeg", "text/plain"), provider.attachmentTypes)
+        assertNull(IntegrationCapabilities.attachmentError(provider, listOf("image/jpeg", "text/plain")))
+        val error = IntegrationCapabilities.attachmentError(provider, listOf("text/plain", "application/pdf"))!!
+        assertTrue(error.contains("ChatGPT supports .jpg/.jpeg, .txt files"))
+        assertTrue(error.contains("Your selected files were kept"))
+        assertFalse(error.contains(".pdf"))
+    }
+    @Test fun explicitAttachmentTypesNeverAddImplicitMimeSupport() {
+        val provider = IntegrationCapabilities.providers(JSONObject("""{"providers":[{"name":"Gemini","configured":true,"supportsAttachments":true,"attachmentTypes":["image/png"]}]}""")).single()
+        assertEquals(listOf("image/png"), provider.attachmentTypes)
+        assertNull(IntegrationCapabilities.attachmentError(provider, listOf("image/png")))
+        assertTrue(IntegrationCapabilities.attachmentError(provider, listOf("text/plain"))!!.contains("Gemini supports .png files"))
+    }
+    @Test fun explicitAttachmentTypesDropUnknownAndMalformedEntriesAndDeduplicate() {
+        val provider = IntegrationCapabilities.providers(JSONObject("""{"providers":[{"name":"Claude","configured":true,"supportsAttachments":true,"attachmentTypes":["image/png","application/x-unknown",42,null,"image/png",{},"text/plain"]}]}""")).single()
+        assertEquals(listOf("image/png", "text/plain"), provider.attachmentTypes)
+        val error = IntegrationCapabilities.attachmentError(provider, listOf("application/x-unknown"))!!
+        assertTrue(error.contains("Claude supports .png, .txt files"))
+        assertFalse(error.contains("application/x-unknown"))
+    }
+    @Test fun olderProviderConfigurationUsesFullGeminiAndDuaSupportAndTxtForOtherProviders() {
+        val entries = org.json.JSONArray(IntegrationCapabilities.MODELS.map {
+            JSONObject().put("name", it).put("configured", true).put("supportsAttachments", true)
+        })
+        val providers = IntegrationCapabilities.providers(JSONObject().put("providers", entries))
+        providers.forEach { provider ->
+            val expected = if (provider.name in listOf("Dua", "Gemini")) IntegrationCapabilities.ATTACHMENT_TYPES else listOf("text/plain")
+            assertEquals(provider.name, expected, provider.attachmentTypes)
+            assertNull(IntegrationCapabilities.attachmentError(provider, listOf("text/plain")))
+            if (provider.name !in listOf("Dua", "Gemini")) {
+                assertTrue(IntegrationCapabilities.attachmentError(provider, listOf("image/jpeg"))!!.contains("${provider.name} supports .txt files"))
+            }
+        }
+        val legacy = IntegrationCapabilities.providers(JSONObject("""{"geminiConfigured":true}"""))
+        assertEquals(listOf("Dua", "Gemini"), legacy.map { it.name })
+        legacy.forEach { assertEquals(IntegrationCapabilities.ATTACHMENT_TYPES, it.attachmentTypes) }
+    }
+    @Test fun disabledEmptyAndMalformedAttachmentCapabilitiesDoNotEnableFallbackTypes() {
+        listOf(
+            """{"supportsAttachments":false}""",
+            """{"supportsAttachments":false,"attachmentTypes":["text/plain"]}""",
+            """{"supportsAttachments":true,"attachmentTypes":[]}""",
+            """{"supportsAttachments":true,"attachmentTypes":["application/x-unknown",42,null]}""",
+            """{"supportsAttachments":true,"attachmentTypes":"text/plain"}"""
+        ).forEach { capability ->
+            val item = JSONObject(capability).put("name", "Gemini").put("configured", true)
+            val provider = IntegrationCapabilities.providers(JSONObject().put("providers", org.json.JSONArray().put(item))).single()
+            assertEquals(emptyList<String>(), provider.attachmentTypes)
+            assertNull(IntegrationCapabilities.attachmentError(provider, emptyList()))
+            assertTrue(IntegrationCapabilities.attachmentError(provider, listOf("text/plain"))!!.contains("Gemini does not support file attachments"))
+        }
+    }
     @Test fun searchLinksRejectExecutableSchemesCredentialsAndCleartext() {
         assertNull(IntegrationCapabilities.safeUrl("javascript:alert(1)"))
         assertNull(IntegrationCapabilities.safeUrl("http://example.org"))

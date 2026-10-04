@@ -1,6 +1,6 @@
 # AI providers and web search setup
 
-Dua and Gemini retain the existing Gemini setup and attachment support. ChatGPT, Claude, Grok and Kimi now have server adapters for text conversations, history, retry and optional memory context. Their setup remains inactive until provider credentials and a model ID are configured. This change does not provision keys or create subscriptions.
+Dua and Gemini retain the existing Gemini setup and attachment support. ChatGPT, Claude, Grok and Kimi have server adapters for conversations, attachments, history, retry and optional memory context. Their setup remains inactive until provider credentials and a model ID are configured. This change does not provision keys or create subscriptions.
 
 ## Server variables
 
@@ -18,7 +18,25 @@ Use an API model ID available to your account, rather than a marketing label suc
 
 The earlier decision to defer OpenAI key setup remains in effect. No key was created, inspected or used during development. Verification uses mocked responses. Provider APIs can have separate billing from consumer chat subscriptions; enable only providers you want.
 
-Redeploy after setting server variables. `/api/config` exposes provider availability, model IDs and attachment capabilities, without keys. Missing credentials or a model ID leave that provider unavailable. Only Dua/Gemini support attachments; the other adapters reject media explicitly. Requests support cancellation, a 45-second provider timeout, bounded history/output and sanitized errors. OpenAI requests use `store: false`.
+Redeploy after setting server variables. `/api/config` exposes provider availability, model IDs, `supportsAttachments` and the supported `attachmentTypes` MIME array, without keys. Missing credentials or a model ID leave that provider unavailable. Requests support cancellation, a 45-second provider timeout, bounded history/output and sanitized errors. OpenAI requests use `store: false`.
+
+## Attachments
+
+All providers accept UTF-8 TXT files. For the four optional providers, enable images or PDFs only after confirming that your configured API model accepts that input. The capability variables are comma-separated MIME types; TXT remains available automatically. Unsupported or misspelled types are ignored, and the clients and server reject files outside the published list.
+
+| Provider | Capability variable | Available types |
+| --- | --- | --- |
+| Dua / Gemini | Existing support; no additional variable | TXT, JPEG, PNG, WebP, PDF |
+| ChatGPT | `OPENAI_ATTACHMENT_TYPES` | TXT; opt-in JPEG, PNG, WebP, PDF through Responses |
+| Claude | `ANTHROPIC_ATTACHMENT_TYPES` | TXT; opt-in JPEG, PNG, WebP, PDF through Messages |
+| Grok | `GROK_ATTACHMENT_TYPES` | TXT; opt-in JPEG, PNG, WebP through chat completions |
+| Kimi | `KIMI_ATTACHMENT_TYPES` | TXT; opt-in JPEG, PNG, WebP with a vision-capable model |
+
+For example, set `OPENAI_ATTACHMENT_TYPES=image/jpeg,image/png,image/webp,application/pdf` for an OpenAI model that supports all these formats. Choose only the formats supported by the model in your provider account. This setting advertises your configuration; it does not probe or activate model capabilities. Grok/Kimi PDF ingestion and image-generation output remain pending.
+
+Select up to three files, with a combined decoded size of 2 MB. Each TXT file must be at most 64 KB. Encoding, MIME type, file signatures and UTF-8 are checked before an upstream request. Validated content is added only to the final user turn. Unsupported selections leave the local draft and files available to change or remove. File bytes are not persisted in chat history or cloud snapshots; retrying a completed reply does not recover earlier file bytes.
+
+Schema, validation, cancellation and error tests use mocked provider responses. Live model acceptance still needs verification after you choose to configure credentials. Native capability checks are included in source; installing them requires a later Android release. No APK is built for this change.
 
 ## Web search
 

@@ -91,7 +91,17 @@ const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 let recognition = null;
 let listening = false;
 let selectedFiles=[];try{const stored=JSON.parse(sessionStorage.getItem('dua-attachments')||'[]');if(Array.isArray(stored))selectedFiles=stored.filter(f=>f&&typeof f.name==='string');}catch{}
-let busy=false;let regenerating=false;let requestId=0;let controller=null;let pendingBubble=null;let configurationPromise=null;let configured=false;let availableModels=new Set();
+let busy=false;let regenerating=false;let requestId=0;let controller=null;let pendingBubble=null;let configurationPromise=null;let configured=false;let availableModels=new Set();let providerCapabilities=new Map();let preparingFiles=false;
+const attachmentExtensions={'image/jpeg':'.jpg/.jpeg','image/png':'.png','image/webp':'.webp','application/pdf':'.pdf','text/plain':'.txt'};
+function supportedAttachmentTypes(model){
+ const provider=providerCapabilities.get(model);if(provider?.supportsAttachments!==true)return [];
+ if(Object.prototype.hasOwnProperty.call(provider,'attachmentTypes'))return Array.isArray(provider.attachmentTypes)?Array.from(new Set(provider.attachmentTypes.filter(type=>typeof type==='string'&&Object.prototype.hasOwnProperty.call(attachmentExtensions,type)))):[];
+ return ['Dua','Gemini'].includes(model)?Object.keys(attachmentExtensions):['text/plain'];
+}
+function attachmentSupportError(files,model){
+ const types=supportedAttachmentTypes(model);if(files.every(file=>types.includes(file.mimeType)))return '';
+ return types.length?model+' supports '+types.map(type=>attachmentExtensions[type]||type).join(', ')+' attachments. Remove unsupported files or choose another model. Your selected files were kept.':model+' does not support attachments. Remove the files or choose another model. Your selected files were kept.';
+}
 const stateKey='dua-chat-v1';
 let historyInvalidated=false;
 function savedMessageText(bubble){return typeof bubble.dataset.messageText==='string'?bubble.dataset.messageText:bubble.textContent;}
@@ -220,8 +230,8 @@ async function loadConfiguration(){
  const footer=document.querySelector('.model-sheet-footer');
  configurationPromise=(async()=>{
   try{const response=await fetch('/api/config');if(!response.ok)throw new Error();
-   const data=await response.json();availableModels=new Set(Array.isArray(data.providers)?data.providers.filter(p=>p.configured).map(p=>p.name):data.geminiConfigured?['Dua','Gemini']:[]);configured=availableModels.has(composer.dataset.model);
-   for(const input of modelPicker.querySelectorAll('input[name="chat-model"]')){input.disabled=!availableModels.has(input.value);const label=input.closest('.model-option')?.querySelector('.model-option-description');if(label)label.textContent=input.disabled?'Server setup required':input.value==='Dua'?'Default · Gemini':'Configured · Text'+(['Dua','Gemini'].includes(input.value)?' and files':' only');}
+   const data=await response.json();const providers=Array.isArray(data.providers)?data.providers:data.geminiConfigured?['Dua','Gemini'].map(name=>({name,configured:true,supportsAttachments:true})):[];providerCapabilities=new Map(providers.map(provider=>[provider.name,provider]));availableModels=new Set(providers.filter(p=>p.configured).map(p=>p.name));configured=availableModels.has(composer.dataset.model);
+   for(const input of modelPicker.querySelectorAll('input[name="chat-model"]')){input.disabled=!availableModels.has(input.value);const label=input.closest('.model-option')?.querySelector('.model-option-description');if(label)label.textContent=input.disabled?'Server setup required':input.value==='Dua'?'Default · Gemini':'Configured · Text'+(supportedAttachmentTypes(input.value).length?' and files':' only');}
    footer.textContent=availableModels.size?Array.from(availableModels).join(', ')+' available':'Gemini API key aur model server settings mein set karein.';
   }catch{configured=false;footer.textContent='Gemini server se connection nahi hua.';}
  })();
@@ -229,9 +239,13 @@ async function loadConfiguration(){
 }
 loadConfiguration();
 composer.addEventListener('submit',async event=>{
- event.preventDefault();reader.stop();const text=message.value.trim() || (selectedFiles.length?'Describe these files.':'');if(!text||busy)return;
+ event.preventDefault();if(busy||preparingFiles||(!message.value.trim()&&!selectedFiles.length))return;
+ if(selectedFiles.length&&!configured){preparingFiles=true;try{await loadConfiguration();}finally{preparingFiles=false;}if(!configured){errorView.textContent=composer.dataset.model==='Dua'||composer.dataset.model==='Gemini'?'Gemini API key aur model server settings mein set karein.':'Selected provider needs an API key and model in server settings.';return;}}
+ const text=message.value.trim() || (selectedFiles.length?'Describe these files.':'');if(!text||busy)return;
  if(selectedFiles.some(file=>!file.data||!file.mimeType)){errorView.textContent='File dobara select karein; purani selection mein content nahi hai.';return;}
  if(text.length>8000){errorView.textContent='Message 8000 characters se chhota rakhein.';return;}
+ const fileError=attachmentSupportError(selectedFiles,composer.dataset.model);if(fileError){errorView.textContent=fileError;return;}
+ reader.stop();
  const sentFiles=selectedFiles.slice();
  busy=true;message.disabled=true;errorView.textContent='';updateAction();
  const id=++requestId;const currentController=new AbortController();controller=currentController;

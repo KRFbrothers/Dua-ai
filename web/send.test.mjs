@@ -6,7 +6,7 @@ import {readFile} from 'node:fs/promises';
 const readAloudSource=await readFile(new URL('./dist/read-aloud.js',import.meta.url),'utf8');
 const voiceSource=await readFile(new URL('./dist/voice-input.js',import.meta.url),'utf8');
 const source=(await readFile(new URL('./dist/chat.html',import.meta.url),'utf8')).split('<script>')[1].split('</script>')[0];
-function setup({deferChat=false,replyError=false,files=[],voiceDraft=null,speechSupported=false}={}) {
+function setup({deferChat=false,replyError=false,files=[],voiceDraft=null,speechSupported=false,model='Dua'}={}) {
  const synthesis={spoken:[],speak(utterance){this.spoken.push(utterance)},cancel(){},getVoices(){return[]}};
  class Utterance{constructor(text){this.text=text;}}
  const windowEvents={};let redirected=null;
@@ -31,16 +31,16 @@ function setup({deferChat=false,replyError=false,files=[],voiceDraft=null,speech
   document:{querySelectorAll:s=>Object.values(elements).flatMap(n=>[n,...n.querySelectorAll('*')]).filter(n=>n.classList.contains(s.slice(1))),querySelector:s=>elements[s]||(elements[s]=node()),createElement:node,addEventListener(){},documentElement:node()},
   location:{protocol:'https:',search:'',pathname:'/chat.html',replace(url){redirected=url}},
   navigator:{clipboard:{async writeText(text){storage.set('copied',text)}}},window:{speechSynthesis:speechSupported?synthesis:null,SpeechSynthesisUtterance:speechSupported?Utterance:null,navigator:{language:"hi-IN"},addEventListener(event,handler){windowEvents[event]=handler},history:{replaceState(){}}},URLSearchParams,AbortController,setTimeout,clearTimeout,
-  DuaHistory:{save(){},load(){return null},newChat(){}},
+  DuaHistory:{save(){},load(){return model==='Dua'?null:{model,draft:'Hi',messages:[]}},newChat(){}},
   sessionStorage:{getItem:k=>storage.get(k)||null,setItem:(k,v)=>storage.set(k,v),removeItem:k=>storage.delete(k)},
   fetch:async (url,options)=>{
-   if(url==='/api/config')return new Promise(resolve=>configuration.push(configured=>resolve({ok:true,json:async()=>({geminiConfigured:configured})})));
+   if(url==='/api/config')return new Promise(resolve=>configuration.push(config=>resolve({ok:true,json:async()=>typeof config==='object'?config:{geminiConfigured:config}})));
    chatCalls++;signal=options.signal;payload=JSON.parse(options.body);
    if(deferChat)return new Promise(resolve=>replies.push(resolve));
    return {ok:!replyError,json:async()=>replyError?{error:'Gemini quota limit aa gayi.'}:{text:'Hello'}};
   }
  });
- return {windowEvents,redirected:()=>redirected,synthesis,message,error,empty,configuration,replies,storage,messages:elements['.chat-messages'],signal:()=>signal,
+ return {windowEvents,redirected:()=>redirected,synthesis,message,error,empty,configuration,replies,storage,fileCard:elements['.selected-files'],fileCopy:elements['.selected-file-copy'],messages:elements['.chat-messages'],signal:()=>signal,
   payload:()=>payload,calls:()=>chatCalls,submit:()=>events.submit({preventDefault(){}}),stop:()=>action.events.click({preventDefault(){}})};
 }
 const flush=async()=>{for(let i=0;i<10;i++)await Promise.resolve()};
@@ -102,6 +102,54 @@ test('failed attachment request keeps file selection and draft for retry',async(
  const files=[{name:'notes.txt',mimeType:'text/plain',data:'aGk='}];
  const page=setup({files,replyError:true});page.configuration.splice(0).forEach(resolve=>resolve(true));await flush();
  await page.submit();assert.equal(page.message.value,'Hi');assert.deepEqual(JSON.parse(page.storage.get('dua-attachments')),files);
+});
+
+test('provider MIME restrictions reject mixed files before draft, history or pending UI changes',async()=>{
+ const files=[{name:'notes.txt',mimeType:'text/plain',data:'aGk='},{name:'paper.pdf',mimeType:'application/pdf',data:'JVBERi0='}];
+ const page=setup({model:'ChatGPT',files});page.configuration.splice(0).forEach(resolve=>resolve({providers:[{name:'ChatGPT',configured:true,supportsAttachments:true,attachmentTypes:['image/jpeg','image/png','image/webp','text/plain']}]}));await flush();
+ page.storage.set('dua-chat-v1','saved history');const fileCopy=page.fileCopy.textContent;
+ await page.submit();assert.equal(page.calls(),0);assert.equal(page.message.value,'Hi');assert.equal(Boolean(page.message.disabled),false);assert.equal(page.messages.children.length,0);assert.equal(page.empty.hidden,false);
+ assert.equal(page.storage.get('dua-chat-v1'),'saved history');assert.deepEqual(JSON.parse(page.storage.get('dua-attachments')),files);assert.equal(page.fileCard.hidden,false);assert.equal(page.fileCopy.textContent,fileCopy);
+ assert.match(page.error.textContent,/ChatGPT supports \.jpg\/\.jpeg, \.png, \.webp, \.txt attachments/);
+});
+test('capabilities are loaded before an unsupported file can change pending UI',async()=>{
+ const files=[{name:'photo.webp',mimeType:'image/webp',data:'UklGRg=='}];const page=setup({model:'Kimi',files});page.storage.set('dua-chat-v1','saved history');
+ const send=page.submit();assert.equal(Boolean(page.message.disabled),false);assert.equal(page.message.value,'Hi');assert.equal(page.messages.children.length,0);
+ page.configuration.splice(0).forEach(resolve=>resolve({providers:[{name:'Kimi',configured:true,supportsAttachments:true,attachmentTypes:['image/jpeg','image/png','text/plain']}]}));await send;
+ assert.equal(page.calls(),0);assert.equal(page.storage.get('dua-chat-v1'),'saved history');assert.deepEqual(JSON.parse(page.storage.get('dua-attachments')),files);assert.match(page.error.textContent,/Kimi supports \.jpg\/\.jpeg, \.png, \.txt attachments/);
+});
+test('provider exact MIME lists permit supported files and explicitly empty or disabled lists reject files',async()=>{
+ const file={name:'paper.pdf',mimeType:'application/pdf',data:'JVBERi0='};
+ const page=setup({model:'Claude',files:[file]});page.configuration.splice(0).forEach(resolve=>resolve({providers:[{name:'Claude',configured:true,supportsAttachments:true,attachmentTypes:['application/pdf']}]}));await flush();await page.submit();
+ assert.equal(page.calls(),1);assert.deepEqual(page.payload().attachments,[file]);
+ for(const capability of [{supportsAttachments:true,attachmentTypes:[]},{supportsAttachments:false,attachmentTypes:['application/pdf']}]){
+  const blocked=setup({model:'Claude',files:[file]});blocked.configuration.splice(0).forEach(resolve=>resolve({providers:[{name:'Claude',configured:true,...capability}]}));await flush();await blocked.submit();
+  assert.equal(blocked.calls(),0);assert.equal(blocked.message.value,'Hi');assert.deepEqual(JSON.parse(blocked.storage.get('dua-attachments')),[file]);assert.match(blocked.error.textContent,/Claude does not support attachments/);
+ }
+});
+test('provider gating uses exact MIME values rather than filenames or MIME families',async()=>{
+ for(const mimeType of ['image/png','IMAGE/JPEG','image/*']){
+  const file={name:'photo.jpg',mimeType,data:'aGk='};const page=setup({model:'ChatGPT',files:[file]});page.configuration.splice(0).forEach(resolve=>resolve({providers:[{name:'ChatGPT',configured:true,supportsAttachments:true,attachmentTypes:['image/jpeg']}]}));await flush();await page.submit();
+  assert.equal(page.calls(),0);assert.deepEqual(JSON.parse(page.storage.get('dua-attachments')),[file]);assert.match(page.error.textContent,/ChatGPT supports \.jpg\/\.jpeg attachments/);
+ }
+});
+test('unknown and malformed capabilities are ignored without enabling legacy attachment fallback',async()=>{
+ const file={name:'photo.png',mimeType:'image/png',data:'aGk='};
+ for(const attachmentTypes of [null,'image/png',3,true,{},['application/octet-stream','image/*','IMAGE/PNG',null,3]]){
+  const page=setup({files:[file]});page.configuration.splice(0).forEach(resolve=>resolve({providers:[{name:'Dua',configured:true,supportsAttachments:true,attachmentTypes}]}));await flush();await page.submit();
+  assert.equal(page.calls(),0);assert.deepEqual(JSON.parse(page.storage.get('dua-attachments')),[file]);assert.match(page.error.textContent,/Dua does not support attachments/);
+ }
+ const page=setup({model:'ChatGPT',files:[{name:'paper.pdf',mimeType:'application/pdf',data:'JVBERi0='}]});page.configuration.splice(0).forEach(resolve=>resolve({providers:[{name:'ChatGPT',configured:true,supportsAttachments:true,attachmentTypes:['application/octet-stream','image/png','image/png',null]}]}));await flush();await page.submit();
+ assert.equal(page.calls(),0);assert.match(page.error.textContent,/ChatGPT supports \.png attachments/);assert.doesNotMatch(page.error.textContent,/application\/octet-stream/);
+});
+test('missing MIME metadata preserves Gemini files and limits other attachment providers to TXT',async()=>{
+ for(const model of ['Dua','Gemini','ChatGPT','Claude','Grok','Kimi']){
+  for(const mimeType of ['image/jpeg','image/png','image/webp','application/pdf','text/plain']){
+   const file={name:'selected-file',mimeType,data:'aGk='};const page=setup({model,files:[file]});page.configuration.splice(0).forEach(resolve=>resolve({providers:[{name:model,configured:true,supportsAttachments:true}]}));await flush();await page.submit();
+   const supported=['Dua','Gemini'].includes(model)||mimeType==='text/plain';assert.equal(page.calls(),supported?1:0,model+' '+mimeType);
+   if(!supported){assert.match(page.error.textContent,new RegExp(model+' supports \\.txt attachments'));assert.deepEqual(JSON.parse(page.storage.get('dua-attachments')),[file]);}
+  }
+ }
 });
 
 test('reviewed voice appends to composer once without sending an API request',()=>{
