@@ -25,9 +25,10 @@ class DuaApiClient(
     private val baseUrl: String = BuildConfig.DUA_API_BASE_URL,
     private val client: OkHttpClient = sharedClient
 ) {
-    suspend fun reply(model: String, history: List<ChatMessage>, attachments: List<ChatAttachment> = emptyList(), memory: String = "", token: String? = null): String {
+    suspend fun reply(model: String, history: List<ChatMessage>, attachments: List<ChatAttachment> = emptyList(), memory: String = "", token: String? = null, web: String? = null): String {
         require(model in com.dua.ai.setup.IntegrationCapabilities.MODELS) { "Supported model select karein." }
         require(memory.length <= 3000) { "Memory notes are too large." }
+        require(web == null || web == "search" || web == "page") { "Web mode must be search or page." }
         val base = URL(baseUrl.trimEnd('/') + "/")
         require(base.protocol == "https") { "Dua backend ke liye HTTPS URL set karein." }
         val request = withContext(Dispatchers.IO) {
@@ -40,6 +41,7 @@ class DuaApiClient(
             put(JSONObject().put("name", file.name).put("mimeType", file.mimeType).put("data", file.data))
         } }
         val body = JSONObject().put("model", model).put("messages", messages).put("attachments", files).put("memory", memory)
+            .apply { if (web != null) put("web", web) }
             .toString().toByteArray(Charsets.UTF_8)
         require(body.size <= 3 * 1024 * 1024) { "Conversation too large. New chat shuru karein." }
         val builder = Request.Builder().url(URL(base, "api/chat"))

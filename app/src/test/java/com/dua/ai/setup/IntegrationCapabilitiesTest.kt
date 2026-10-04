@@ -5,6 +5,21 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class IntegrationCapabilitiesTest {
+    @Test fun inChatWebCapabilitiesAreExplicitAndKeepSetupState() {
+        val existing = IntegrationState(searchConfigured = true, busy = true, notice = "Refreshing")
+        val next = IntegrationCapabilities.configuration(JSONObject("""{"web":{"searchConfigured":true,"pageReadingAvailable":true}}"""), existing)
+        assertTrue(next.webSearchConfigured)
+        assertTrue(next.pageReadingAvailable)
+        assertTrue(next.searchConfigured)
+        assertTrue(next.busy)
+        assertEquals("Refreshing", next.notice)
+        val malformed = IntegrationCapabilities.configuration(JSONObject("""{"web":{"searchConfigured":"true","pageReadingAvailable":"true"}}"""), next)
+        assertFalse(malformed.webSearchConfigured)
+        assertFalse(malformed.pageReadingAvailable)
+        val missing = IntegrationCapabilities.configuration(JSONObject(), next)
+        assertFalse(missing.webSearchConfigured)
+        assertFalse(missing.pageReadingAvailable)
+    }
     @Test fun generatedVoiceRequiresBothActualBackendConfigurationAndPersonalOwnerRestriction() {
         val json = JSONObject().put("groups", org.json.JSONArray(IntegrationCapabilities.GROUPS.map {
             JSONObject().put("id", it).put("title", it).put("state", "partial")

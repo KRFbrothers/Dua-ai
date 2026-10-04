@@ -7,6 +7,8 @@ import { guardChatAccess } from './access-policy.mjs';
 
 export async function handleService(request,{env=process.env,fetcher=fetch}={}) {
  const url=new URL(request.url),path=url.pathname;
+ // Include authentication/quota work in the chat deadline, before the 60s host limit.
+ if(path==='/api/chat')request=new Request(request,{signal:AbortSignal.any([request.signal,AbortSignal.timeout(55000)])});
  if(request.headers.get('origin')&&request.headers.get('origin')!==url.origin)return Response.json({error:'Request origin is not allowed.'},{status:403,headers:{'Cache-Control':'no-store'}});
  if(path==='/api/setup')return handleSetup(request,{env});
  if(path==='/api/config')return handleChat(request,{env,fetcher});

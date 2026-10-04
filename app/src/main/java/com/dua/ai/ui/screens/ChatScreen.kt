@@ -35,6 +35,12 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.LinkInteractionListener
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.foundation.border
 import kotlinx.coroutines.delay
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -72,6 +78,7 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel(), notificationRoute: Pair<S
     val draft by viewModel.draft.collectAsState()
     val savedChats by viewModel.savedChats.collectAsState()
     val model by viewModel.selectedModel.collectAsState()
+    val webMode by viewModel.webMode.collectAsState()
     val integrations by viewModel.integrations.collectAsState()
     LaunchedEffect(Unit) { viewModel.loadProviderConfiguration(); viewModel.loadIntegrations() }
     var picker by rememberSaveable { mutableStateOf(false) }
@@ -237,12 +244,22 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel(), notificationRoute: Pair<S
                                             Surface(color = if (message.isUser) Secondary else Container,
                                                 shape = RoundedCornerShape(20.dp), modifier = Modifier.widthIn(max = 320.dp)) {
                                                 Column(Modifier.padding(horizontal = 18.dp, vertical = 14.dp)) {
-                                                    Text(message.text, color = Ink, fontSize = 16.sp, lineHeight = 25.sp)
+                                                    if (message.isUser) Text(message.text, color = Ink, fontSize = 16.sp, lineHeight = 25.sp)
+                                                    else ReplyText(message.text)
                                                     message.codeSnippet?.let { code ->
                                                         Text(code, color = Muted, fontSize = 13.sp,
                                                             modifier = Modifier.padding(top = 12.dp))
                                                     }
                                                     if (!message.isUser) {
+                                                        val originalWebMode = viewModel.replyWebMode(message.id)
+                                                        val retryDescription = when (originalWebMode) {
+                                                            "search" -> "Retry response with web search"
+                                                            "page" -> "Retry response by reading its original link"
+                                                            else -> "Retry response with web off"
+                                                        }
+                                                        if (message.state == "complete" && messages.lastOrNull()?.id == message.id && originalWebMode != null)
+                                                            Text(if (originalWebMode == "search") "Retry keeps web search." else "Retry reads the original link.",
+                                                                color = Muted, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
                                                         if (message.state == "complete") Row(
                                                             Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                                                             IconButton(onClick = {
@@ -251,7 +268,7 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel(), notificationRoute: Pair<S
                                                             }, modifier = Modifier.size(48.dp)) { Icon(Icons.Default.ContentCopy, "Copy response", tint = Muted, modifier = Modifier.size(22.dp)) }
                                                             IconButton(enabled = !typing && messages.lastOrNull()?.id == message.id,
                                                                 onClick = { stopSpeakers(); viewModel.retryResponse(message.id) }, modifier = Modifier.size(48.dp)) {
-                                                                Icon(Icons.Default.Refresh, "Retry response", tint = Muted, modifier = Modifier.size(22.dp))
+                                                                Icon(Icons.Default.Refresh, retryDescription, tint = Muted, modifier = Modifier.size(22.dp))
                                                             }
                                                             val speaking = speech.activeId == message.id || generatedSpeech.activeId == message.id
                                                             IconButton(enabled = preferences.generatedVoice || speech.available, onClick = {
@@ -304,6 +321,9 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel(), notificationRoute: Pair<S
                         Surface(shape = RoundedCornerShape(28.dp), color = Container,
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = if (compact) 12.dp else 16.dp)) {
                             Column(Modifier.padding(if (compact) 12.dp else 20.dp)) {
+                                WebModeControl(webMode, integrations.webSearchConfigured, integrations.pageReadingAvailable,
+                                    enabled = !typing && !readingFiles, onMode = viewModel::setWebMode,
+                                    onSetup = { detail(Screen.IntegrationSetup, Screen.Chat) })
                                 BasicTextField(
                                     value = draft, onValueChange = viewModel::updateDraft, enabled = !typing,
                                     textStyle = MaterialTheme.typography.bodyLarge.copy(color = Ink, fontSize = 20.sp, lineHeight = 28.sp, fontFamily = MaterialTheme.typography.bodyLarge.fontFamily),
@@ -385,6 +405,56 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel(), notificationRoute: Pair<S
             }
         }
     }
+}
+
+@Composable
+private fun WebModeControl(mode: String?, searchConfigured: Boolean, pageReadingAvailable: Boolean,
+    enabled: Boolean, onMode: (String?) -> Unit, onSetup: () -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    val label = when (mode) { "search" -> "Search"; "page" -> "Read link"; else -> "Off" }
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Box {
+            TextButton(enabled = enabled, onClick = { expanded = true }, contentPadding = PaddingValues(horizontal = 4.dp),
+                modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = "Web mode: $label" }) {
+                Text("Web: $label", fontSize = 14.sp)
+                Icon(Icons.Default.ArrowDropDown, null, modifier = Modifier.size(20.dp))
+            }
+            DropdownMenu(expanded = expanded && enabled, onDismissRequest = { expanded = false }) {
+                DropdownMenuItem(text = { Text("Off") }, onClick = { onMode(null); expanded = false })
+                DropdownMenuItem(text = { Text(if (searchConfigured) "Search" else "Search (setup needed)") },
+                    enabled = searchConfigured, onClick = { onMode("search"); expanded = false })
+                DropdownMenuItem(text = { Text(if (pageReadingAvailable) "Read link" else "Read link (unavailable)") },
+                    enabled = pageReadingAvailable, onClick = { onMode("page"); expanded = false })
+            }
+        }
+        Spacer(Modifier.weight(1f))
+        if (!searchConfigured) TextButton(enabled = enabled, onClick = onSetup,
+            contentPadding = PaddingValues(horizontal = 4.dp), modifier = Modifier.heightIn(min = 48.dp)
+                .semantics { contentDescription = "Web search needs setup. Open Feature setup" }) { Text("Search setup", fontSize = 12.sp) }
+    }
+    if (mode != null) Text(if (mode == "search") "Searches the web using this message." else "Reads the first HTTPS link in this message.",
+        color = Muted, fontSize = 12.sp, modifier = Modifier.padding(bottom = 8.dp))
+}
+
+@Composable
+private fun ReplyText(text: String) {
+    val context = LocalContext.current
+    val linkColor = Primary
+    val annotated = remember(text, linkColor, context) {
+        buildAnnotatedString {
+            append(text)
+            com.dua.ai.model.ReplyLinks.find(text).forEach { source ->
+                addLink(LinkAnnotation.Url(source.url,
+                    styles = TextLinkStyles(style = SpanStyle(color = linkColor, textDecoration = TextDecoration.Underline)),
+                    linkInteractionListener = LinkInteractionListener {
+                        val safe = com.dua.ai.setup.IntegrationCapabilities.safeUrl(source.url) ?: return@LinkInteractionListener
+                        runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(safe))) }
+                            .onFailure { android.widget.Toast.makeText(context, "A browser is unavailable on this device.", android.widget.Toast.LENGTH_SHORT).show() }
+                    }), source.start, source.end)
+            }
+        }
+    }
+    Text(annotated, color = Ink, fontSize = 16.sp, lineHeight = 25.sp)
 }
 
 @Composable

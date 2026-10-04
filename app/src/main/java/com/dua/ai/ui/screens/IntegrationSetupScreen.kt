@@ -30,12 +30,12 @@ fun IntegrationSetupScreen(viewModel: ChatViewModel, onBack: () -> Unit, onProfi
         runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(safe))) }
             .onFailure { viewModel.integrationNotice("A browser is unavailable on this device.") }
     }
-    LaunchedEffect(Unit) { viewModel.loadIntegrations() }
+    LaunchedEffect(Unit) { viewModel.loadIntegrations(); viewModel.loadProviderConfiguration() }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         TextButton(onClick = onBack) { Text("‹ Back") }
         Text("Feature setup", fontSize = 24.sp)
         Text("Check which integrations are configured. Account connections and provider keys are managed securely on the backend.")
-        FilledTonalButton(enabled = !state.busy, onClick = { viewModel.loadIntegrations() }) { Text("Refresh setup") }
+        FilledTonalButton(enabled = !state.busy, onClick = { viewModel.loadIntegrations(); viewModel.loadProviderConfiguration() }) { Text("Refresh setup") }
         state.groups.forEach { group ->
             Surface(color = MaterialTheme.colorScheme.surfaceContainerHighest, shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp)) {
                 Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
