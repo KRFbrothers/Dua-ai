@@ -6,7 +6,7 @@ plugins {
 
 val duaApiBaseUrl = providers.gradleProperty("duaApiBaseUrl")
     .orElse(providers.environmentVariable("DUA_API_BASE_URL"))
-    .orElse("https://celadon-halva-adafe4.netlify.app").get()
+    .orElse("https://dua-cyan.vercel.app").get()
 require(duaApiBaseUrl.startsWith("https://") && !duaApiBaseUrl.contains('"')) {
     "duaApiBaseUrl must be an HTTPS URL"
 }
