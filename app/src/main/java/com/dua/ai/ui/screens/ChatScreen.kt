@@ -31,6 +31,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
@@ -72,7 +73,7 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel(), notificationRoute: Pair<S
     val savedChats by viewModel.savedChats.collectAsState()
     val model by viewModel.selectedModel.collectAsState()
     val integrations by viewModel.integrations.collectAsState()
-    LaunchedEffect(Unit) { viewModel.loadProviderConfiguration() }
+    LaunchedEffect(Unit) { viewModel.loadProviderConfiguration(); viewModel.loadIntegrations() }
     var picker by rememberSaveable { mutableStateOf(false) }
     var detailHistory by rememberSaveable { mutableStateOf(arrayListOf<String>()) }
     val attachments by viewModel.attachments.collectAsState()
@@ -90,19 +91,38 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel(), notificationRoute: Pair<S
     val context = LocalContext.current
     val speaker = remember(context) { com.dua.ai.voice.NativeReplySpeaker(context.applicationContext) }
     val speech by speaker.state.collectAsState()
+    val voiceScope = rememberCoroutineScope()
+    val generatedOutput = remember(context) { com.dua.ai.voice.NativeGeneratedAudioOutput(context.applicationContext) }
+    val generatedSpeaker = remember(viewModel, generatedOutput, voiceScope) {
+        com.dua.ai.voice.GeneratedVoiceSession(voiceScope, viewModel::generateReplyAudio, generatedOutput,
+            currentOwner = { viewModel.account.state.value.user?.id },
+            configured = { viewModel.localSettings.value.generatedVoice && viewModel.integrations.value.generatedVoiceConfigured })
+    }
+    val generatedSpeech by generatedSpeaker.state.collectAsState()
+    val accountState by viewModel.account.state.collectAsState()
+    val online by viewModel.online.collectAsState()
+    LaunchedEffect(generatedSpeaker, online) { generatedSpeaker.setOnline(online) }
+    LaunchedEffect(generatedSpeaker, integrations.generatedVoiceConfigured) { if (!integrations.generatedVoiceConfigured) generatedSpeaker.stop() }
+    LaunchedEffect(generatedSpeaker, accountState.user?.id, accountState.busy) {
+        generatedSpeaker.accountChanged()
+        if (accountState.busy) { speaker.stop(); generatedSpeaker.stop() }
+    }
+    LaunchedEffect(generatedSpeaker, preferences.generatedVoice) { speaker.stop(); generatedSpeaker.stop() }
+    fun stopSpeakers() { speaker.stop(); generatedSpeaker.stop() }
     val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
-    DisposableEffect(speaker, lifecycle) {
+    DisposableEffect(speaker, generatedSpeaker, generatedOutput, lifecycle) {
         viewModel.setForeground(lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED))
+        generatedSpeaker.setForeground(lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED))
         val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
-            if (event == androidx.lifecycle.Lifecycle.Event.ON_STOP) { speaker.stop(); viewModel.setForeground(false) }
-            if (event == androidx.lifecycle.Lifecycle.Event.ON_START) viewModel.setForeground(true)
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_STOP) { stopSpeakers(); generatedSpeaker.setForeground(false); viewModel.setForeground(false) }
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_START) { viewModel.setForeground(true); generatedSpeaker.setForeground(true) }
         }
         lifecycle.addObserver(observer)
-        onDispose { lifecycle.removeObserver(observer); viewModel.setForeground(false); speaker.close() }
+        onDispose { lifecycle.removeObserver(observer); viewModel.setForeground(false); generatedSpeaker.close(); generatedOutput.close(); speaker.close() }
     }
     val touchFeedback = LocalHapticFeedback.current
     fun pulse() { if (preferences.haptic) touchFeedback.performHapticFeedback(HapticFeedbackType.LongPress) }
-    fun navigate(next: Screen) { if (viewModel.dataBusy.value) return; pulse(); speaker.stop(); screenName = next.name }
+    fun navigate(next: Screen) { if (viewModel.dataBusy.value) return; pulse(); stopSpeakers(); screenName = next.name }
     fun settings() { settingsReturn = screenName; navigate(Screen.Settings) }
     fun back() {
         if (viewModel.dataBusy.value) return
@@ -125,7 +145,7 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel(), notificationRoute: Pair<S
         navigate(next)
     }
     fun send() {
-        pulse(); speaker.stop()
+        pulse(); stopSpeakers()
         if ((draft.isNotBlank() || attachments.isNotEmpty()) && !typing && !readingFiles) viewModel.sendMessage(draft)
     }
     BackHandler(enabled = picker || screen != Screen.Home) {
@@ -230,12 +250,16 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel(), notificationRoute: Pair<S
                                                                     .setPrimaryClip(ClipData.newPlainText("Dua response", message.text + (message.codeSnippet?.let { "\n" + it } ?: "")))
                                                             }, modifier = Modifier.size(48.dp)) { Icon(Icons.Default.ContentCopy, "Copy response", tint = Muted, modifier = Modifier.size(22.dp)) }
                                                             IconButton(enabled = !typing && messages.lastOrNull()?.id == message.id,
-                                                                onClick = { speaker.stop(); viewModel.retryResponse(message.id) }, modifier = Modifier.size(48.dp)) {
+                                                                onClick = { stopSpeakers(); viewModel.retryResponse(message.id) }, modifier = Modifier.size(48.dp)) {
                                                                 Icon(Icons.Default.Refresh, "Retry response", tint = Muted, modifier = Modifier.size(22.dp))
                                                             }
-                                                            IconButton(enabled = speech.available, onClick = { speaker.toggle(message.id, message.text) }, modifier = Modifier.size(48.dp)) {
-                                                                Icon(if (speech.activeId == message.id) Icons.Default.Stop else Icons.Default.VolumeUp,
-                                                                    if (speech.activeId == message.id) "Stop reading" else "Speak response", tint = Muted, modifier = Modifier.size(22.dp))
+                                                            val speaking = speech.activeId == message.id || generatedSpeech.activeId == message.id
+                                                            IconButton(enabled = preferences.generatedVoice || speech.available, onClick = {
+                                                                if (preferences.generatedVoice) { speaker.stop(); generatedSpeaker.toggle(message.id, message.text, message.state == "complete") }
+                                                                else { generatedSpeaker.stop(); speaker.toggle(message.id, message.text) }
+                                                            }, modifier = Modifier.size(48.dp)) {
+                                                                Icon(if (speaking) Icons.Default.Stop else Icons.Default.VolumeUp,
+                                                                    if (speaking) "Stop response voice" else if (preferences.generatedVoice) "Generate AI voice for this response" else "Speak response with device voice", tint = Muted, modifier = Modifier.size(22.dp))
                                                             }
                                                         }
                                                     }
@@ -251,6 +275,14 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel(), notificationRoute: Pair<S
                             Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
                             Text(speech.status, color = Muted, fontSize = 12.sp, modifier = Modifier.weight(1f))
                             if (speech.activeId != null) TextButton(onClick = { speaker.stop() }) { Text("Stop") }
+                        }
+                        if (preferences.generatedVoice || generatedSpeech.status.isNotBlank()) Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp)) {
+                            Text(generatedSpeech.status.ifBlank { "AI voice selected · sends only the reply you tap" }, color = Muted, fontSize = 12.sp,
+                                modifier = Modifier.semantics { liveRegion = androidx.compose.ui.semantics.LiveRegionMode.Polite })
+                            Row {
+                                if (generatedSpeech.activeId != null) TextButton(onClick = { generatedSpeaker.stop() }) { Text("Stop") }
+                                TextButton(onClick = { stopSpeakers(); viewModel.updateSettings(preferences.copy(generatedVoice = false)) }) { Text("Use device voice") }
+                            }
                         }
                         error?.let { message ->
                             Text(message, color = Muted, fontSize = 14.sp, maxLines = 3,

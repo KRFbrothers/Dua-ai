@@ -7,7 +7,7 @@ import org.json.JSONObject
 import org.json.JSONArray
 
 data class LocalPreferences(val theme: String = "dark", val font: String = "default", val haptic: Boolean = false,
-    val notifications: Boolean = false, val memoryEnabled: Boolean = false, val memory: List<String> = emptyList())
+    val notifications: Boolean = false, val memoryEnabled: Boolean = false, val memory: List<String> = emptyList(), val generatedVoice: Boolean = false)
 
 object PreferencesCodec {
     fun validate(value: LocalPreferences): LocalPreferences {
@@ -19,12 +19,13 @@ object PreferencesCodec {
         validate(value)
         return JSONObject().put("theme", value.theme).put("font", value.font).put("haptic", value.haptic)
             .put("notifications", value.notifications).put("memoryEnabled", value.memoryEnabled)
-            .put("memory", JSONArray(value.memory)).toString()
+            .put("memory", JSONArray(value.memory)).put("generatedVoice", value.generatedVoice).toString()
     }
     fun decode(raw: String): LocalPreferences {
         val data = JSONObject(raw); val notes = data.getJSONArray("memory")
+        val generatedVoice = if (!data.has("generatedVoice")) false else data.get("generatedVoice") as? Boolean ?: error("Invalid voice preference")
         return validate(LocalPreferences(data.getString("theme"), data.getString("font"), data.getBoolean("haptic"),
-            data.getBoolean("notifications"), data.getBoolean("memoryEnabled"), (0 until notes.length()).map { (notes.get(it) as? String ?: error("Invalid memory note")) }))
+            data.getBoolean("notifications"), data.getBoolean("memoryEnabled"), (0 until notes.length()).map { (notes.get(it) as? String ?: error("Invalid memory note")) }, generatedVoice))
     }
     fun memoryText(value: LocalPreferences): String = if (value.memoryEnabled) value.memory.joinToString("\n") { "- $it" } else ""
 }

@@ -39,6 +39,19 @@ import com.dua.ai.setup.AutomationSyncStore
 class ChatViewModel(application: Application) : AndroidViewModel(application) {
     val account = com.dua.ai.account.AccountRepository(application)
     private val setupApi = com.dua.ai.account.AccountApi()
+    private val generatedAudioApi = com.dua.ai.voice.GeneratedAudioApi()
+    private val _online = MutableStateFlow(false)
+    val online = _online.asStateFlow()
+    suspend fun generateReplyAudio(text: String): ByteArray {
+        check(_online.value && _integrations.value.generatedVoiceConfigured) { "AI voice setup is unavailable. Try device voice." }
+        var received: ByteArray? = null
+        try {
+            return account.withToken { token ->
+                check(token != null) { "Sign in before using AI voice." }
+                generatedAudioApi.generate(text, token).also { received = it }
+            }
+        } catch (failure: Exception) { received?.fill(0); throw failure }
+    }
     private val _integrations = MutableStateFlow(com.dua.ai.setup.IntegrationState())
     val integrations = _integrations.asStateFlow()
     private val _searchResults = MutableStateFlow<List<com.dua.ai.setup.SearchResult>>(emptyList())
@@ -443,6 +456,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             connectivity.getNetworkCapabilities(connectivity.activeNetwork)
                 ?.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED) == true
         }.getOrDefault(false)
+        _online.value = online
         automaticSync.setOnline(online)
     }
 

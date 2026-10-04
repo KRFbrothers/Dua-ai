@@ -12,7 +12,7 @@ Open **Settings → Capabilities / Feature setup** after deploying. The page rep
 | Memory | Local proposals from explicit remember/yaad rakho statements, individual Save/Dismiss on both clients | Enable proposals on web or choose Suggest memory notes on Android; approve notes | Unprompted model extraction, embeddings and automatic fact learning |
 | Connectors/plugins | Allowlisted read-only GitHub repository listing on both clients | Configure token, owner email and enable flag; sign in | OAuth connectors, arbitrary plugins or write tools |
 | Computer/screen/video | Browser local camera and desktop screen previews with explicit permission and Stop | Open Feature setup → Camera and screen preview | Native capture, video analysis, remote computer control |
-| Advanced voice | Device speech remains; optional explicit generated audio on web through ElevenLabs | Set voice key/ID, enable flag and owner email; sign in | Native generated audio UI, full duplex, automatic interruption, background voice |
+| Advanced voice | Device speech remains; optional explicit generated audio on web and Android through ElevenLabs | Set voice key/ID, enable flag and owner email; sign in; explicitly select AI voice on each client | Physical Android playback verification, full duplex, automatic interruption, background voice |
 | Account/protection | Email recovery OTP, password update, Google web PKCE, explicit account deletion, optional owner/login policy and daily request quota | See account steps below | Native Google callback/session handoff, currency spending cap |
 
 ## Deployment

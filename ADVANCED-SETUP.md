@@ -38,6 +38,14 @@ This setup does not provide AI screen understanding, a remote computer, Android 
 
 When playing the response, create an object URL for its audio blob and revoke the URL after Stop, playback completion, or navigation. Send only the reply the user selected, not chat history or files. An unavailable provider must leave device speech and local chat usable. Deploy after adding environment variables and test with a short, non-private phrase before using personal content.
 
+## Android generated reply audio
+
+Rebuild/install Android, refresh **Settings → Feature setup**, and sign in to the configured personal account. Device voice remains the default, with no new credentials provisioned. If the existing optional ElevenLabs backend and owner restriction are configured, explicitly enable **Use AI voice for reply speaker**. The reply speaker icon then generates only the completed reply you tap. **Use device voice** switches back immediately; hands-free conversation continues using device speech.
+
+Selection alone never sends a request. Text is trimmed, limited to 2000 UTF-16 characters and never truncated; longer replies use device voice. The native client posts only `{text}` to the fixed HTTPS `/api/voice/audio` endpoint through account-token refresh/identity guards. Redirects are refused, successful content must be MP3 with at most 8 MiB, and raw provider errors stay out of the UI. Provider plans/quotas can charge for explicit online generation; this integration stays disabled until server and device opt-in.
+
+MP3 bytes remain in memory using MediaDataSource; no audio cache/file is created or synchronized. Stop, another reply, Retry, Send, navigation, backgrounding, offline status, changed sign-in, capability revocation and disposal stop pending requests/playback. Late results cannot restart playback. The player releases before the buffer is wiped; focus interruption also stops playback. Preparation is bounded to 45 seconds and total playback lifetime to 120 seconds. There is no provider retry, auto-generation or background listening. Physical MP3 decoding, audio focus and interruption behavior still require Android-device verification.
+
 ## Validation
 
 Run `node --test advanced-integrations.test.mjs` from `web/`. The tests use mock providers and media devices; they check authorization, fixed read-only actions, bounded requests/audio, disabled defaults, permission denial, interruption, and capture cleanup. Actual permission dialogs and Android/desktop browser differences still need device testing.
