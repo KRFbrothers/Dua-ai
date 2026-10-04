@@ -362,16 +362,19 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel(), notificationRoute: Pair<S
                     Screen.Settings -> SettingsScreen(onBack = ::back, haptic = haptic, onHaptic = { viewModel.updateSettings(preferences.copy(haptic = it)) }, onOpen = { detail(it) }, preferences = preferences)
                     Screen.Attachments -> AttachmentsScreen(onBack = ::back, selected = attachments.map { it.name },
                         onSelected = viewModel::selectAttachments, onCamera = viewModel::selectCameraFile,
-                        onClear = viewModel::clearAttachments, loading = readingFiles, error = fileError)
+                        onClear = viewModel::clearAttachments, loading = readingFiles, error = fileError,
+                        onSearch = { navigate(Screen.Chat) }, onMemory = { detail(Screen.Memory, Screen.Attachments) },
+                        onConnectors = { detail(Screen.IntegrationSetup, Screen.Attachments) })
                     Screen.DataControls -> DataControlsScreen(viewModel, onBack = ::back)
                     Screen.HandsFree -> HandsFreeScreen(viewModel, onBack = ::back, onChat = { navigate(Screen.Chat) })
                     Screen.Voice -> VoiceScreen(onHandsFree = { navigate(Screen.HandsFree) }, onBack = ::back, onSettings = ::settings, draft = draft, onUse = {
                         viewModel.updateDraft(it); navigate(Screen.Chat)
                     })
                     Screen.Profile, Screen.Logout, Screen.CloudSync -> AccountScreen(viewModel, screen.name, onBack = ::back, onOpen = { detail(Screen.valueOf(it), screen) })
-                    Screen.IntegrationSetup -> IntegrationSetupScreen(viewModel, onBack = ::back, onProfile = { detail(Screen.Profile, screen) }, onCloud = { detail(Screen.CloudSync, screen) })
+                    Screen.IntegrationSetup, Screen.ComputerMode -> IntegrationSetupScreen(viewModel, onBack = ::back, onProfile = { detail(Screen.Profile, screen) }, onCloud = { detail(Screen.CloudSync, screen) })
                     Screen.ColorMode, Screen.FontStyle, Screen.Permissions, Screen.Notifications, Screen.Memory, Screen.Sharing, Screen.Privacy -> DeviceSettingsScreen(viewModel, screen.name, onBack = ::back, onPage = { detail(Screen.valueOf(it), screen) }, onAttachments = { navigate(Screen.Attachments) })
-                    else -> key(screen) { SettingsDetail(screen, onBack = ::back, onOpen = { detail(it, screen) }) }
+                    Screen.VoicePermission, Screen.VoiceDenied -> DeviceSettingsScreen(viewModel, "Permissions", onBack = ::back,
+                        onPage = { detail(Screen.valueOf(it), screen) }, onAttachments = { navigate(Screen.Attachments) })
                 }
                 }
             }
@@ -553,7 +556,8 @@ private fun SettingsScreen(onBack: () -> Unit, haptic: Boolean, onHaptic: (Boole
 
 @Composable
 private fun AttachmentsScreen(onBack: () -> Unit, selected: List<String>, onSelected: (List<android.net.Uri>) -> Unit,
-    onCamera: (java.io.File) -> Unit, onClear: () -> Unit, loading: Boolean, error: String) {
+    onCamera: (java.io.File) -> Unit, onClear: () -> Unit, loading: Boolean, error: String,
+    onSearch: () -> Unit, onMemory: () -> Unit, onConnectors: () -> Unit) {
     val context = LocalContext.current
     var notice by rememberSaveable { mutableStateOf("") }
     val files = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
@@ -616,14 +620,16 @@ private fun AttachmentsScreen(onBack: () -> Unit, selected: List<String>, onSele
         }
         listOf("Add to project", "Web search", "Connectors", "Memory").forEach { title ->
             Surface(color = Container, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
-                Row(Modifier.heightIn(min = 72.dp).padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                val action = when (title) { "Web search" -> onSearch; "Memory" -> onMemory; "Connectors" -> onConnectors; else -> null }
+                Row(Modifier.fillMaxWidth().heightIn(min = 72.dp).clickable(enabled = action != null) { action?.invoke() }
+                    .padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(when (title) { "Web search" -> Icons.Default.Public; "Memory" -> Icons.Default.History; "Connectors" -> Icons.Default.AttachFile; else -> Icons.Default.Folder }, null, tint = Muted)
                     Column(Modifier.weight(1f).padding(start = 16.dp)) {
                         Text(title, fontSize = 16.sp, lineHeight = 24.sp)
-                        Text("Coming soon", fontSize = 14.sp, lineHeight = 20.sp, color = Muted)
+                        Text(when (title) { "Web search" -> "Choose Web: Search or Read link in chat"; "Memory" -> "Local notes · Opt in";
+                            "Connectors" -> "Check configured GitHub access"; else -> "Not available" }, fontSize = 14.sp, lineHeight = 20.sp, color = Muted)
                     }
-                    if (title == "Web search" || title == "Memory") Switch(checked = false, onCheckedChange = null, enabled = false)
-                    else Icon(Icons.Default.ChevronRight, null, tint = Muted)
+                    if (action != null) Icon(Icons.Default.ChevronRight, null, tint = Muted)
                 }
             }
         }
@@ -741,145 +747,6 @@ private fun VoiceScreen(onHandsFree: () -> Unit, onBack: () -> Unit, onSettings:
                     })
                 RoundAction(Icons.Default.Close, "Exit voice mode", onClick = onBack)
             }
-        }
-    }
-}
-@Composable
-private fun SettingsDetail(screen: Screen, onBack: () -> Unit, onOpen: (Screen) -> Unit) {
-    val title = when (screen) {
-        Screen.DataControls -> "Data controls"; Screen.ColorMode -> "Color mode"; Screen.FontStyle -> "Font style"
-        Screen.ComputerMode -> "Computer mode"; Screen.Logout -> "Account"
-        Screen.VoicePermission, Screen.VoiceDenied -> "Microphone permission"
-        else -> screen.name
-    }
-    PageHeader(title, onBack)
-    var dialog by rememberSaveable { mutableStateOf("") }
-    var name by rememberSaveable { mutableStateOf("Dua User") }
-    var editedName by rememberSaveable { mutableStateOf(name) }
-    var selection by rememberSaveable { mutableStateOf("Default") }
-    var notifications by rememberSaveable { mutableStateOf(false) }
-    var complete by rememberSaveable { mutableStateOf(false) }
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        when (screen) {
-            Screen.Profile -> {
-                Surface(color = Container, shape = RoundedCornerShape(20.dp), modifier = Modifier.fillMaxWidth()) {
-                    Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Surface(color = Secondary, shape = CircleShape) { Box(Modifier.size(56.dp), contentAlignment = Alignment.Center) { Text(name.take(1).uppercase(), fontSize = 24.sp) } }
-                        Column(Modifier.padding(start = 16.dp)) { Text(name, fontSize = 20.sp); Text("Sample account · Preview", color = Muted, fontSize = 14.sp) }
-                    }
-                }
-                DetailRow("Edit display name", Icons.Default.Edit, onClick = { editedName = name; dialog = "name" })
-                DetailNote("Account integration is pending. Editing this name changes only the preview.")
-                DetailRow("Log out options", Icons.Default.Logout, onClick = { onOpen(Screen.Logout) })
-            }
-            Screen.Permissions -> {
-                DetailRow("Microphone", Icons.Default.Mic, "Voice integration pending", onClick = { onOpen(Screen.VoicePermission) })
-                DetailRow("Camera", Icons.Default.PhotoCamera, "Coming soon", onClick = { dialog = "Camera" })
-                DetailRow("Photos", Icons.Default.Photo, "Attachment integration pending", onClick = { dialog = "Photos" })
-                DetailRow("Notifications", Icons.Default.NotificationsNone, "Coming soon", onClick = { onOpen(Screen.Notifications) })
-                DetailNote("These are design states, not your device's current permissions. This preview does not request microphone or camera permissions.")
-            }
-            Screen.ColorMode -> {
-                Text("Choose appearance", fontSize = 22.sp)
-                listOf("Dark", "Light", "System").forEach { choice ->
-                    val chosen = if (selection == "Default") "Dark" else selection
-                    Surface(color = Container, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
-                        Row(Modifier.fillMaxWidth().clickable { selection = choice }.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                            RadioButton(chosen == choice, onClick = { selection = choice })
-                            Column { Text(choice); Text(when(choice) { "Dark" -> "Dua’s default appearance"; "Light" -> "A brighter appearance"; else -> "Follow your device’s color mode" }, fontSize = 14.sp, color = Muted) }
-                        }
-                    }
-                }
-                val light = selection == "Light" || (selection == "System" && !androidx.compose.foundation.isSystemInDarkTheme())
-                Surface(color = if (light) Color(0xFFF7F2FA) else Background, shape = RoundedCornerShape(20.dp),
-                    modifier = Modifier.fillMaxWidth().border(1.dp, Highest, RoundedCornerShape(20.dp))) {
-                    Column(Modifier.padding(20.dp)) { Text("I am Dua", color = if (light) Background else Ink); Text("Hello! How can I help you today?", color = if (light) Secondary else Muted, modifier = Modifier.padding(top = 16.dp)) }
-                }
-                DetailNote("This changes only the design sample. Your app settings stay unchanged.")
-            }
-            Screen.FontStyle -> {
-                Text("Choose a font", fontSize = 22.sp)
-                listOf("Default", "System").forEach { choice ->
-                    Surface(color = Container, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
-                        Row(Modifier.fillMaxWidth().clickable { selection = choice }.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                            RadioButton(selection == choice, onClick = { selection = choice }); Text(choice)
-                        }
-                    }
-                }
-                Surface(color = Container, shape = RoundedCornerShape(20.dp), modifier = Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(20.dp)) {
-                        Text("I am Dua", fontSize = 18.sp)
-                        Text("Hi\nHello! I'm Dua. How can I help you today?\nAaj kya plan hai?\nआज मैं आपकी कैसे मदद करूँ?\n0123456789", fontSize = 16.sp, lineHeight = 26.sp, modifier = Modifier.padding(top = 16.dp),
-                            fontFamily = if (selection == "System") androidx.compose.ui.text.font.FontFamily.Default else androidx.compose.ui.text.font.FontFamily.SansSerif)
-                    }
-                }
-                DetailNote("This changes the sample only. Android's default font is already Roboto; these options may look similar.")
-            }
-            Screen.Notifications -> {
-                Surface(color = Container, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
-                    Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) { Text("Allow notifications"); Text("Receive updates from Dua", color = Muted, fontSize = 14.sp) }
-                        Switch(notifications, { notifications = it })
-                    }
-                }
-                DetailNote("Notifications integration is pending. This toggle demonstrates the design; it won't request permissions or send notifications.")
-                Text("Permission required", fontSize = 22.sp)
-                Text("Device permission will be needed when notifications are implemented.", color = Muted)
-                FilledTonalButton(onClick = { dialog = "Notifications" }, modifier = Modifier.heightIn(min = 48.dp)) { Text("View permission details") }
-            }
-            Screen.ComputerMode -> {
-                Column(Modifier.fillMaxWidth().padding(vertical = 48.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Surface(color = Secondary, shape = RoundedCornerShape(28.dp)) { Box(Modifier.size(88.dp), contentAlignment = Alignment.Center) { Icon(Icons.Default.DesktopWindows, null, tint = Primary, modifier = Modifier.size(44.dp)) } }
-                    Text("Coming soon", color = Muted, modifier = Modifier.padding(top = 24.dp))
-                    Text("Computer mode isn't ready yet", fontSize = 24.sp, modifier = Modifier.padding(top = 20.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-                    DetailNote("You can continue chatting with Dua while this feature is being developed. This preview does not connect to or control a computer.")
-                    FilledTonalButton(onClick = onBack, modifier = Modifier.heightIn(min = 48.dp)) { Text("Back") }
-                }
-            }
-            Screen.Logout -> {
-                DetailNote("Dua AI account\nSample account · Design preview")
-                DetailRow("Log out", Icons.Default.Logout, onClick = { dialog = "logout" })
-                DetailNote(if (complete) "Log out preview complete. No account was signed out." else "Account integration is pending. This preview won't change your login or remove chat history.")
-            }
-            Screen.VoicePermission, Screen.VoiceDenied -> {
-                Icon(Icons.Default.MicOff, null, tint = Muted, modifier = Modifier.size(64.dp).align(Alignment.CenterHorizontally))
-                Text(if (screen == Screen.VoiceDenied) "Microphone access denied" else "Allow microphone access?", fontSize = 24.sp)
-                DetailNote("Voice integration is pending. This screen demonstrates the permission design; no audio is recorded.")
-                FilledTonalButton(onClick = { if (screen == Screen.VoiceDenied) onBack() else onOpen(Screen.VoiceDenied) }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (screen == Screen.VoiceDenied) "Try again · Preview" else "Preview denied state") }
-                TextButton(onClick = onBack, modifier = Modifier.heightIn(min = 48.dp)) { Text("Back") }
-            }
-            else -> Unit
-        }
-        Spacer(Modifier.height(16.dp))
-    }
-    if (dialog.isNotEmpty()) AlertDialog(onDismissRequest = { dialog = "" }, containerColor = Container,
-        title = { Text(when(dialog) { "name" -> "Edit display name"; "logout" -> "Log out of Dua?"; else -> "$dialog coming soon" }) },
-        text = {
-            if (dialog == "name") OutlinedTextField(value = editedName, onValueChange = { editedName = it.take(80) }, singleLine = true, label = { Text("Display name") })
-            else Text(when(dialog) { "logout" -> "This is a design preview; no account will be signed out."; else -> "This feature and its permission flow will be connected when ready." })
-        },
-        confirmButton = { TextButton(enabled = dialog != "name" || editedName.isNotBlank(), onClick = {
-            if (dialog == "name") name = editedName.trim() else if (dialog == "logout") complete = true
-            dialog = ""
-        }) { Text(if (dialog == "name") "Save" else if (dialog == "logout") "Log out · Preview" else "Got it") } },
-        dismissButton = { if (dialog in listOf("name", "logout")) TextButton(onClick = { dialog = "" }) { Text("Cancel") } })
-}
-
-@Composable
-private fun DetailNote(text: String) {
-    Text(text, color = Muted, fontSize = 14.sp, lineHeight = 22.sp, modifier = Modifier.padding(8.dp))
-}
-
-@Composable
-private fun DetailRow(title: String, icon: ImageVector, subtitle: String? = null, onClick: () -> Unit) {
-    Surface(color = Container, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
-        Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).clickable(onClick = onClick).padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(icon, null, tint = Muted)
-            Column(Modifier.weight(1f).padding(start = 16.dp)) {
-                Text(title, fontSize = 16.sp)
-                subtitle?.let { Text(it, color = Muted, fontSize = 14.sp, lineHeight = 20.sp) }
-            }
-            Icon(Icons.Default.ChevronRight, null, tint = Muted)
         }
     }
 }

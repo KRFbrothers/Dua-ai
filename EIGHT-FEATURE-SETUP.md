@@ -17,10 +17,10 @@ Open **Settings → Capabilities / Feature setup** after deploying. The page rep
 
 ## Deployment
 
-1. Merge the combined setup PR into main. It includes the pending reply-icon changes from PR #34, so one merge installs both. Merging #34 first is also compatible.
+1. Merge reviewed changes into main; the initial setup, reply icons, provider attachments and chat web-source changes are already merged.
 2. Let the GitHub-connected Vercel project deploy. Use the production domain, rather than a protected preview URL.
 3. Check `/api/setup` or the app's Feature setup screen. This response never contains API keys or the allowed owner's email.
-4. Install a newly built Android APK for native changes. Updating the website does not replace an installed APK.
+4. Native source changes reach an installed app through a later Android release. Website deployment updates the web/backend; APK packaging is currently deferred and excluded from routine CI.
 
 The new setup endpoints use the Vercel/local Node handler. The legacy Netlify functions retain their earlier Gemini-only behavior; use the Vercel production project for these integrations. There are nine Vercel functions, within the current Hobby project's function-count limit.
 
