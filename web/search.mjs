@@ -1,4 +1,4 @@
-import { readJsonLimited } from './providers.mjs';
+import { readJsonLimited } from './limited-json.mjs';
 
 const json = (data, status = 200) => Response.json(data, { status, headers: { 'Cache-Control': 'no-store' } });
 export function searchConfiguration(env = {}) { return { configured: typeof env.BRAVE_SEARCH_API_KEY === 'string' && Boolean(env.BRAVE_SEARCH_API_KEY.trim()), provider: 'Brave' }; }

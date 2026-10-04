@@ -81,7 +81,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     fun loadProviderConfiguration() = viewModelScope.launch {
         try {
             val config = setupApi.request("/api/config")
-            _integrations.value = _integrations.value.copy(providers = com.dua.ai.setup.IntegrationCapabilities.providers(config))
+            _integrations.value = com.dua.ai.setup.IntegrationCapabilities.configuration(config, _integrations.value)
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (_: Exception) { integrationNotice("Provider status could not be loaded. Dua and Gemini use the existing backend configuration; refresh Feature setup to retry.") }
     }
@@ -96,7 +96,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     }
     fun loadIntegrations() = integrationAction {
         val next = com.dua.ai.setup.IntegrationCapabilities.decode(setupApi.request("/api/setup"))
-        _integrations.value = next.copy(busy = true, notice = "Setup status refreshed.")
+        _integrations.value = next.copy(busy = true, notice = "Setup status refreshed.",
+            webSearchConfigured = _integrations.value.webSearchConfigured, pageReadingAvailable = _integrations.value.pageReadingAvailable)
     }
     fun searchWeb(query: String) = integrationAction {
         require(query.trim().length in 1..500) { "Enter a search up to 500 characters." }
@@ -207,6 +208,23 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _selectedModel = MutableStateFlow("Dua")
     val selectedModel: StateFlow<String> = _selectedModel.asStateFlow()
+
+    // Web requests require a choice in this session; history and cloud snapshots never save it.
+    private val _webMode = MutableStateFlow<String?>(null)
+    val webMode = _webMode.asStateFlow()
+    private val replyWebModes = mutableMapOf<String, String?>()
+    fun replyWebMode(messageId: String): String? = replyWebModes[messageId]
+    fun setWebMode(mode: String?) {
+        if (_isTyping.value || mode !in listOf(null, "search", "page")) return
+        webModeError(mode)?.let { _error.value = it; return }
+        _webMode.value = mode
+        _error.value = null
+    }
+    private fun webModeError(mode: String?): String? = when {
+        mode == "search" && !_integrations.value.webSearchConfigured -> "Web search needs setup. Open Feature setup to configure search, or choose Off or Read link."
+        mode == "page" && !_integrations.value.pageReadingAvailable -> "Read link is unavailable. Refresh Feature setup, or choose Off."
+        else -> null
+    }
 
     private val _isTyping = MutableStateFlow(false)
     val isTyping: StateFlow<Boolean> = _isTyping.asStateFlow()
@@ -375,6 +393,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     _messages.value = emptyList()
                     _draft.value = ""
                     _savedChats.value = emptyList()
+                    _webMode.value = null
+                    replyWebModes.clear()
                     clearAttachments()
                     _dataStatus.value = "All local chats, drafts and pending files cleared."
                 } else _dataStatus.value = "Delete could not be saved. Chats are kept in memory; try again."
@@ -517,15 +537,18 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         _messages.value = chat.messages
         _selectedModel.value = chat.model
         _draft.value = chat.draft
+        _webMode.value = null
         saveHistory()
     }
 
     fun deleteChat(id: String) {
+        _savedChats.value.find { it.id == id }?.messages?.forEach { replyWebModes.remove(it.id) }
         if (id == activeId) {
             cancelReply()
             activeId = UUID.randomUUID().toString()
             _messages.value = emptyList()
             _draft.value = ""
+            _webMode.value = null
         }
         _savedChats.value = _savedChats.value.filterNot { it.id == id }
         saveHistory()
@@ -582,6 +605,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         activeId = UUID.randomUUID().toString()
         _messages.value = emptyList()
         _draft.value = ""
+        _webMode.value = null
         saveHistory()
     }
 
@@ -607,11 +631,15 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         if (original.id != messageId || original.isUser || original.state != "complete") return
         val plan = try { com.dua.ai.model.ReplyRetryPlan.create(_messages.value, messageId) }
             catch (failure: IllegalArgumentException) { _error.value = failure.message; return }
+        // A restored reply has no saved mode and retries with web off. In this session,
+        // retries keep the original request's choice even if the composer has changed.
+        val requestWebMode = replyWebModes[messageId]
+        webModeError(requestWebMode)?.let { _error.value = it; return }
         val currentGeneration = generation
         _error.value = null; _isTyping.value = true; refreshSyncBusy()
         replyJob = viewModelScope.launch {
             try {
-                val reply = account.withToken { token -> api.reply(plan.model, plan.context, emptyList(), com.dua.ai.settings.PreferencesCodec.memoryText(localSettings.value), token) }
+                val reply = account.withToken { token -> api.reply(plan.model, plan.context, emptyList(), com.dua.ai.settings.PreferencesCodec.memoryText(localSettings.value), token, requestWebMode) }
                 if (generation == currentGeneration) {
                     _messages.value = _messages.value.map { if (it.id == messageId) it.copy(text = reply, codeSnippet = null) else it }
                     saveHistory()
@@ -632,6 +660,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             _error.value = "Message 8000 characters se chhota rakhein."
             return
         }
+        val requestWebMode = _webMode.value
+        webModeError(requestWebMode)?.let { _error.value = it; return }
         val responseModel = _selectedModel.value
         val provider = _integrations.value.providers.firstOrNull { it.name == responseModel && it.configured }
         if (provider == null) {
@@ -656,12 +686,14 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         _failedPrompt.value = null
         replyJob = viewModelScope.launch {
             try {
-                val reply = account.withToken { token -> api.reply(responseModel, requestHistory, files, com.dua.ai.settings.PreferencesCodec.memoryText(localSettings.value), token) }
+                val reply = account.withToken { token -> api.reply(responseModel, requestHistory, files, com.dua.ai.settings.PreferencesCodec.memoryText(localSettings.value), token, requestWebMode) }
                 if (generation == currentGeneration) {
                     clearAttachments()
-                    _messages.value = _messages.value + ChatMessage(
+                    val response = ChatMessage(
                         text = reply, isUser = false, model = responseModel
                     )
+                    replyWebModes[response.id] = requestWebMode
+                    _messages.value = _messages.value + response
                 }
             } catch (cancelled: CancellationException) {
                 throw cancelled

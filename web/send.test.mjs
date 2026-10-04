@@ -6,21 +6,21 @@ import {readFile} from 'node:fs/promises';
 const readAloudSource=await readFile(new URL('./dist/read-aloud.js',import.meta.url),'utf8');
 const voiceSource=await readFile(new URL('./dist/voice-input.js',import.meta.url),'utf8');
 const source=(await readFile(new URL('./dist/chat.html',import.meta.url),'utf8')).split('<script>')[1].split('</script>')[0];
-function setup({deferChat=false,replyError=false,files=[],voiceDraft=null,speechSupported=false,model='Dua'}={}) {
+function setup({deferChat=false,replyError=false,replyText='Hello',files=[],voiceDraft=null,speechSupported=false,model='Dua',savedChat=null}={}) {
  const synthesis={spoken:[],speak(utterance){this.spoken.push(utterance)},cancel(){},getVoices(){return[]}};
  class Utterance{constructor(text){this.text=text;}}
  const windowEvents={};let redirected=null;
  const events={};const configuration=[];const replies=[];let chatCalls=0;let signal;let payload;
- const node=()=>{
-  const n={hidden:false,value:'',dataset:{},children:[],attributes:{},events:{},style:{setProperty(){}},
+ const node=(tag='div')=>{
+  const n={tagName:tag.toUpperCase(),hidden:false,value:'',dataset:{},children:[],queries:{},attributes:{},events:{},style:{setProperty(){}},
    classList:{toggle(){},remove(){},contains(name){return (n.className||'').split(' ').includes(name)}},
    setAttribute(k,v){this.attributes[k]=v},getAttribute(k){return this.attributes[k]},removeAttribute(k){delete this.attributes[k]},toggleAttribute(){},focus(){},
-   addEventListener(type,handler){this.events[type]=handler},querySelector(){return node()},querySelectorAll(selector){return this.children.flatMap(child=>[child,...child.querySelectorAll('*')]).filter(child=>selector==='*'||child.classList.contains(selector.slice(1)))},
+   addEventListener(type,handler){this.events[type]=handler},querySelector(selector){return this.queries[selector]||(this.queries[selector]=node())},querySelectorAll(selector){return this.children.flatMap(child=>[child,...child.querySelectorAll('*')]).filter(child=>selector==='*'||child.classList.contains(selector.slice(1)))},
    append(child){this.children.push(child);child.parent=this},remove(){if(this.parent)this.parent.children=this.parent.children.filter(n=>n!==this)}
   };
   n.contains=child=>n===child||n.children.some(c=>c.contains(child));
   n.closest=selector=>n.classList.contains(selector.slice(1))?n:n.parent?.closest(selector);
-  Object.defineProperties(n,{lastElementChild:{get(){return n.children.at(-1)}},previousElementSibling:{get(){return n.parent?.children[n.parent.children.indexOf(n)-1]}},textContent:{get(){return n.text||''},set(value){n.text=value;n.children=[]}}});
+  Object.defineProperties(n,{lastElementChild:{get(){return n.children.at(-1)}},previousElementSibling:{get(){return n.parent?.children[n.parent.children.indexOf(n)-1]}},textContent:{get(){return (n.text||'')+n.children.map(child=>child.textContent).join('')},set(value){n.text=value;n.children=[]}}});
   return n;
  };
  const message=node(),action=node(),picker=node(),composer=node(),error=node(),empty=node();message.value='Hi';
@@ -30,17 +30,18 @@ function setup({deferChat=false,replyError=false,files=[],voiceDraft=null,speech
  vm.runInNewContext(readAloudSource+voiceSource+source,{
   document:{querySelectorAll:s=>Object.values(elements).flatMap(n=>[n,...n.querySelectorAll('*')]).filter(n=>n.classList.contains(s.slice(1))),querySelector:s=>elements[s]||(elements[s]=node()),createElement:node,addEventListener(){},documentElement:node()},
   location:{protocol:'https:',search:'',pathname:'/chat.html',replace(url){redirected=url}},
-  navigator:{clipboard:{async writeText(text){storage.set('copied',text)}}},window:{speechSynthesis:speechSupported?synthesis:null,SpeechSynthesisUtterance:speechSupported?Utterance:null,navigator:{language:"hi-IN"},addEventListener(event,handler){windowEvents[event]=handler},history:{replaceState(){}}},URLSearchParams,AbortController,setTimeout,clearTimeout,
-  DuaHistory:{save(){},load(){return model==='Dua'?null:{model,draft:'Hi',messages:[]}},newChat(){}},
+  navigator:{clipboard:{async writeText(text){storage.set('copied',text)}}},window:{speechSynthesis:speechSupported?synthesis:null,SpeechSynthesisUtterance:speechSupported?Utterance:null,navigator:{language:"hi-IN"},addEventListener(event,handler){windowEvents[event]=handler},history:{replaceState(){}}},URL,URLSearchParams,AbortController,setTimeout,clearTimeout,
+  DuaHistory:{save(){},load(){return savedChat||(model==='Dua'?null:{model,draft:'Hi',messages:[]})},newChat(){}},
   sessionStorage:{getItem:k=>storage.get(k)||null,setItem:(k,v)=>storage.set(k,v),removeItem:k=>storage.delete(k)},
   fetch:async (url,options)=>{
    if(url==='/api/config')return new Promise(resolve=>configuration.push(config=>resolve({ok:true,json:async()=>typeof config==='object'?config:{geminiConfigured:config}})));
    chatCalls++;signal=options.signal;payload=JSON.parse(options.body);
    if(deferChat)return new Promise(resolve=>replies.push(resolve));
-   return {ok:!replyError,json:async()=>replyError?{error:'Gemini quota limit aa gayi.'}:{text:'Hello'}};
+   return {ok:!replyError,json:async()=>replyError?{error:'Gemini quota limit aa gayi.'}:{text:replyText}};
   }
  });
  return {windowEvents,redirected:()=>redirected,synthesis,message,error,empty,configuration,replies,storage,fileCard:elements['.selected-files'],fileCopy:elements['.selected-file-copy'],messages:elements['.chat-messages'],signal:()=>signal,
+  webMode:elements['#web-mode'],webHelp:elements['#web-mode-help'],chooseWeb(mode){elements['#web-mode'].value=mode;elements['#web-mode'].events.change()},
   payload:()=>payload,calls:()=>chatCalls,submit:()=>events.submit({preventDefault(){}}),stop:()=>action.events.click({preventDefault(){}})};
 }
 const flush=async()=>{for(let i=0;i<10;i++)await Promise.resolve()};
@@ -206,4 +207,102 @@ test('failed regeneration retains the original reply and unsent draft',async()=>
  const p=setup({deferChat:true});p.configuration.splice(0).forEach(r=>r(true));await flush();const send=p.submit();await flush();p.replies.shift()({ok:true,json:async()=>({text:'Original'})});await send;p.message.value='Draft';
  p.messages.children[1].children[0].children[1].events.click();await flush();p.replies.shift()({ok:false,json:async()=>({error:'Quota reached'})});await flush();
  assert.equal(p.messages.children[1].dataset.messageText,'Original');assert.equal(p.message.value,'Draft');assert.match(p.error.textContent,/Original response kept/);
+});
+
+const webConfig={geminiConfigured:true,web:{searchConfigured:true,pageReadingAvailable:true}};
+test('web defaults Off even with configured search or a stored mode and is omitted from requests and saved chats',async()=>{
+ const page=setup({savedChat:{model:'Dua',draft:'Hi',web:'search',messages:[]}});
+ page.configuration.splice(0).forEach(resolve=>resolve(webConfig));await flush();
+ assert.equal(page.webMode.value,'off');await page.submit();assert.equal(Object.hasOwn(page.payload(),'web'),false);
+ const snapshot=JSON.parse(page.storage.get('dua-chat-v1'));assert.equal(Object.hasOwn(snapshot,'web'),false);
+ assert.ok(snapshot.messages.every(item=>!Object.hasOwn(item,'web')));
+ assert.match(page.webHelp.textContent,/each time this page opens/);
+});
+test('only opt-in Search and Read link requests include their exact mode, and choosing Off removes it again',async()=>{
+ for(const mode of ['search','page']){
+  const page=setup();page.configuration.splice(0).forEach(resolve=>resolve(webConfig));await flush();
+  page.chooseWeb(mode);page.message.value='Read https://example.com/first and https://example.com/second';await page.submit();
+  assert.equal(page.payload().web,mode);assert.equal(page.payload().messages.at(-1).text,'Read https://example.com/first and https://example.com/second');
+  page.chooseWeb('off');page.message.value='Continue';await page.submit();assert.equal(Object.hasOwn(page.payload(),'web'),false);
+ }
+});
+test('Search without a configured key is disabled and preserves the draft and files when requested',async()=>{
+ const files=[{name:'notes.txt',mimeType:'text/plain',data:'aGk='}],page=setup({files});
+ page.configuration.splice(0).forEach(resolve=>resolve({geminiConfigured:true,web:{searchConfigured:false,pageReadingAvailable:true}}));await flush();
+ const option=page.webMode.querySelector('option[value="search"]');assert.equal(option.disabled,true);assert.match(option.textContent,/setup needed/);assert.match(page.webHelp.textContent,/Brave Search API key/);
+ page.chooseWeb('search');await page.submit();assert.equal(page.calls(),0);assert.equal(page.message.value,'Hi');assert.equal(page.message.disabled,false);
+ assert.deepEqual(JSON.parse(page.storage.get('dua-attachments')),files);assert.equal(page.messages.children.length,0);assert.match(page.error.textContent,/Choose Web: Off or Read link/);
+});
+test('Read link stays disabled unless configuration explicitly advertises support',async()=>{
+ for(const web of [undefined,null,true,{}, {pageReadingAvailable:false}, {pageReadingAvailable:'true'}, {pageReadingAvailable:1}]){
+  const page=setup();assert.equal(page.webMode.querySelector('option[value="page"]').disabled,true);
+  page.configuration.splice(0).forEach(resolve=>resolve({geminiConfigured:true,...(web===undefined?{}:{web})}));await flush();
+  assert.equal(page.webMode.querySelector('option[value="page"]').disabled,true);assert.match(page.webHelp.textContent,/Read link is unavailable/);
+  page.chooseWeb('page');page.message.value='Read https://example.com/page';await page.submit();
+  assert.equal(page.calls(),0);assert.equal(page.message.value,'Read https://example.com/page');assert.match(page.error.textContent,/Reading links is unavailable/);
+ }
+});
+test('Read link requires a valid first HTTPS URL and preserves drafts before any request',async()=>{
+ for(const draft of ['No link here','Read http://example.com','Read https://user:secret@example.com/first then https://example.com/second']){
+  const page=setup();page.configuration.splice(0).forEach(resolve=>resolve(webConfig));await flush();page.chooseWeb('page');page.message.value=draft;
+  await page.submit();assert.equal(page.calls(),0);assert.equal(page.message.value,draft);assert.equal(page.messages.children.length,0);assert.match(page.error.textContent,/Read link needs a valid HTTPS link/);
+ }
+});
+test('web retrieval errors restore draft and keep file selection without pending message UI',async()=>{
+ for(const mode of ['search','page']){
+  const files=[{name:'notes.txt',mimeType:'text/plain',data:'aGk='}],page=setup({files,deferChat:true});
+  page.configuration.splice(0).forEach(resolve=>resolve(webConfig));await flush();page.chooseWeb(mode);page.message.value='Read https://example.com/page';
+  const send=page.submit();await flush();page.replies.shift()({ok:false,json:async()=>({error:'Web context could not be retrieved.'})});await send;
+  assert.equal(page.payload().web,mode);assert.equal(page.message.value,'Read https://example.com/page');assert.equal(page.message.disabled,false);assert.equal(page.webMode.disabled,false);
+  assert.deepEqual(JSON.parse(page.storage.get('dua-attachments')),files);assert.equal(page.messages.children.length,0);assert.match(page.error.textContent,/Web context could not be retrieved/);
+ }
+});
+test('retries retain the original request web mode when the composer mode changes',async()=>{
+ for(const originalMode of ['off','search','page']){
+  const page=setup();page.configuration.splice(0).forEach(resolve=>resolve(webConfig));await flush();page.chooseWeb(originalMode);page.message.value='Read https://example.com/page';await page.submit();
+  page.chooseWeb(originalMode==='search'?'page':'search');page.message.value='Unsent draft';
+  await page.messages.children[1].querySelectorAll('.message-action')[1].events.click();await flush();
+  assert.equal(page.calls(),2);assert.equal(page.payload().web,originalMode==='off'?undefined:originalMode);assert.equal(page.message.value,'Unsent draft');assert.equal(page.payload().messages.length,1);
+ }
+});
+test('reloaded replies retry with Off and explain that the original web mode was not retained',async()=>{
+ const page=setup({savedChat:{model:'Dua',draft:'Draft',web:'search',messages:[{role:'user',text:'Question',state:'complete'},{role:'model',text:'Original',state:'complete'}]}});
+ page.configuration.splice(0).forEach(resolve=>resolve(webConfig));await flush();page.chooseWeb('search');
+ const retry=page.messages.children[1].querySelectorAll('.message-action')[1];assert.match(retry.title,/Web: Off/);assert.match(retry.title,/after reload/);
+ await retry.events.click();await flush();assert.equal(Object.hasOwn(page.payload(),'web'),false);assert.equal(page.message.value,'Draft');
+});
+test('Stop aborts web requests, unlocks the selector and ignores late source-bearing responses',async()=>{
+ for(const mode of ['search','page']){
+  const page=setup({deferChat:true});page.configuration.splice(0).forEach(resolve=>resolve(webConfig));await flush();page.chooseWeb(mode);page.message.value='Read https://example.com/page';
+  const send=page.submit();await flush();assert.equal(page.webMode.disabled,true);page.stop();assert.equal(page.signal().aborted,true);assert.equal(page.webMode.disabled,false);
+  page.replies.shift()({ok:true,json:async()=>({text:'Late\n\nSources:\n[1] Example\nhttps://example.com/page'})});await send;
+  assert.equal(page.messages.children[1].dataset.messageText,'Response stopped');assert.equal(page.messages.children[1].querySelectorAll('.source-link').length,0);
+  assert.equal(JSON.parse(page.storage.get('dua-chat-v1')).messages[1].state,'stopped');
+ }
+});
+test('model HTTPS links use safe DOM anchors while HTML, non-HTTPS links and userinfo remain text',async()=>{
+ const replyText='Literal <img src=x onerror=alert(1)> and javascript:alert(1), http://example.com/insecure.\n\nSources:\n[1] <script>alert(1)</script>\nhttps://example.com/page?x=1&y=2\n[2] Signed in\nhttps://user:secret@example.com/private\n[3] Markdown (https://example.com/other).';
+ const page=setup({replyText,speechSupported:true});page.configuration.splice(0).forEach(resolve=>resolve(webConfig));await flush();await page.submit();
+ const bubble=page.messages.children[1],links=bubble.querySelectorAll('.source-link');
+ assert.deepEqual(links.map(link=>link.attributes.href),['https://example.com/page?x=1&y=2','https://example.com/other']);
+ for(const link of links){assert.equal(link.tagName,'A');assert.equal(link.attributes.target,'_blank');assert.equal(link.attributes.rel,'noopener noreferrer');assert.equal(link.innerHTML,undefined);}
+ assert.equal(bubble.dataset.messageText,replyText);assert.equal(bubble.textContent,replyText);assert.ok(bubble.children.every(child=>['SPAN','A','DIV'].includes(child.tagName)));
+ const actions=bubble.querySelectorAll('.message-action');await actions[0].events.click();assert.equal(page.storage.get('copied'),replyText);actions[2].events.click();assert.match(page.synthesis.spoken[0].text,/Literal/);
+ const snapshot=JSON.parse(page.storage.get('dua-chat-v1'));assert.equal(snapshot.messages[1].text,replyText);
+ page.message.value='Next question';await page.submit();assert.equal(page.payload().messages[1].text,replyText);assert.ok(!page.payload().messages[1].text.includes('Copy response'));
+});
+test('nested schemes and malformed URL tokens stay text while wrapped and canonical source URLs preserve their ranges',async()=>{
+ const unsafe=["javascript:alert('https://evil.com')",'data:text/plain,https://evil.com','myhttps://evil.com','https:///missing-host',"https://user:'https://evil.com'@example.com",'https://user:https://evil.com@example.com','http://user:https://evil.com@example.com','https://example.com\\@evil.com','https://@example.com'];
+ const replyText=unsafe.join('\n')+'\nRead (https://example.com/wiki/Topic_(detail)). See [source](https://example.com/report).\n\nSources:\n[1] Exact punctuation\nhttps://example.com/report.\n[2] Query punctuation\nhttps://example.com/path_(v2)?item=done!';
+ const page=setup({replyText});page.configuration.splice(0).forEach(resolve=>resolve(webConfig));await flush();await page.submit();
+ const bubble=page.messages.children[1],links=bubble.querySelectorAll('.source-link');
+ assert.deepEqual(links.map(link=>link.attributes.href),['https://example.com/wiki/Topic_(detail)','https://example.com/report','https://example.com/report.','https://example.com/path_(v2)?item=done!']);
+ assert.deepEqual(links.map(link=>link.textContent),['https://example.com/wiki/Topic_(detail)','https://example.com/report','https://example.com/report.','https://example.com/path_(v2)?item=done!']);
+ assert.equal(bubble.textContent,replyText);assert.equal(bubble.dataset.messageText,replyText);
+});
+test('restoring history renders safe source links and keeps the canonical footer available for copy',async()=>{
+ const replyText='Saved answer\n\nSources:\n[1] Example\nhttps://example.com/page';
+ const page=setup({savedChat:{model:'Dua',draft:'Draft',messages:[{role:'user',text:'Question',state:'complete'},{role:'model',text:replyText,state:'complete'}]}});
+ const bubble=page.messages.children[1];assert.equal(bubble.querySelectorAll('.source-link')[0].attributes.href,'https://example.com/page');
+ await bubble.querySelectorAll('.message-action')[0].events.click();assert.equal(page.storage.get('copied'),replyText);assert.equal(bubble.dataset.messageText,replyText);
 });

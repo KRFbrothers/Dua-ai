@@ -7,7 +7,7 @@ Open **Settings → Capabilities / Feature setup** after deploying. The page rep
 | Group | Setup included | Activate | Still outside this setup |
 | --- | --- | --- | --- |
 | AI providers | Gemini plus ChatGPT, Claude, Grok and Kimi adapters; TXT on all, explicit model-dependent image/PDF capabilities; configured model picker on both clients | Add that provider's API key/model ID and optional attachment MIME types, redeploy | Live model verification, Grok/Kimi PDF ingestion, image generation |
-| Web search | Explicit Brave queries and source links on both clients | Add `BRAVE_SEARCH_API_KEY`, redeploy, submit Search | Automatic search during AI chat and webpage analysis |
+| Web search | Standalone Brave search, session opt-in Search/Read link during chat, bounded public page excerpts and clickable source footers on both clients | For Search add `BRAVE_SEARCH_API_KEY`; Read link needs only the configured chat provider and a public HTTPS page | Live search verification; JavaScript-rendered/login pages and multi-page crawling |
 | Automatic sync | Web and Android foreground opt-in snapshot coordinators, plus manual reviews | Sign in, review existing data, enable automatic sync separately on each device | Background/realtime sync and physical-device verification |
 | Memory | Local proposals from explicit remember/yaad rakho statements, individual Save/Dismiss on both clients | Enable proposals on web or choose Suggest memory notes on Android; approve notes | Unprompted model extraction, embeddings and automatic fact learning |
 | Connectors/plugins | Allowlisted read-only GitHub repository listing on both clients | Configure token, owner email and enable flag; sign in | OAuth connectors, arbitrary plugins or write tools |
