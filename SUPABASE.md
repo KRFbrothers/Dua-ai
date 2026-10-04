@@ -44,3 +44,7 @@ Cloud storage is protected by user-token RLS and revision checks; it is not end-
 ## Validation status
 
 Mocked API tests cover authentication, refresh, ownership, redacted errors, limits and conflicts. The SQL migration was exercised in a temporary PostgreSQL-compatible PGlite instance with owner isolation, write permissions and revision tests. Android unit tests and debug build pass. Actual Supabase email delivery, deployed Netlify cookies and Android Keystore on a physical device require the project and deployment above.
+
+## Hosting migration
+
+The same Supabase project, schema and SMTP can be retained on Vercel. Follow [VERCEL.md](VERCEL.md) to configure the new backend, change confirmation URLs and rebuild Android. Values saved in Netlify do not transfer automatically.
