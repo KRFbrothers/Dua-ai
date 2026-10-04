@@ -1,39 +1,43 @@
 # Dua AI
 
-Dua contains an Android client in `app/` and the mobile browser app with Gemini backend in `web/`.
+Dua includes a native Android Compose client in `app/` and a mobile web app with server-side API functions in `web/`. Production uses **https://dua-cyan.vercel.app**. Both clients use the same backend; Android renders its own interface without a WebView.
 
-## Browser app
+## Current features
 
-The browser app includes home, chat, settings, attachments, model selection and voice-input screens. Gemini text replies use the server-side key. Follow [web/README.md](web/README.md) for Netlify deployment and local use.
+- Local conversations, drafts, model selection, search, export/import, sharing and data controls.
+- Gemini plus configurable ChatGPT, Claude, Grok and Kimi adapters. TXT attachments work on all providers; images/PDF depend on the selected provider and configured model. See [PROVIDERS.md](PROVIDERS.md).
+- Chat Web: Off/Search/Read link modes and clickable source footers. Search requires Brave configuration; public page reading uses the existing chat provider. Web mode starts Off.
+- Copy, retry and speaker reply icons; device speech recognition/TTS and explicit foreground hands-free turns. Optional generated reply audio uses an authenticated, owner-restricted server integration.
+- Appearance, permissions, local notifications, reviewed memory notes/proposals and local privacy controls.
+- Supabase email accounts, reviewed cloud snapshots and opt-in foreground automatic sync on web and Android. Optional recovery, web Google login, account deletion, owner/login restrictions and durable daily request limits require their server settings.
+- A configured read-only GitHub repository connector and browser local camera/screen previews.
 
-The root `netlify.toml` publishes `web/dist` and deploys the Gemini function. Store `GEMINI_API_KEY` and `GEMINI_MODEL` in private Netlify configuration. Never commit API keys.
+API keys and optional credentials remain server-side. Preparing a feature does not activate a provider or paid service. OpenAI key setup remains deferred. Background/realtime sync, model-based memory learning, native Google handoff, full-duplex/background voice, remote computer control and general plugin tools remain unfinished. See [EIGHT-FEATURE-SETUP.md](EIGHT-FEATURE-SETUP.md) for activation and remaining scope.
 
-Foreground hands-free speech turns, persistent appearance, permissions, local memory, notifications and completed-message sharing are available. Provider-generated audio remains unfinished; account/cloud code requires Supabase setup; see [FEATURES.md](FEATURES.md) for the ordered implementation list.
+## Web and hosting
 
-## Android client
+Use Node 24+ and run from `web/`:
 
-Open the repository in Android Studio. The launcher is `com.dua.ai.MainActivity`. Build instructions are in [GRADLE.md](GRADLE.md).
+```sh
+npm start
+npm test
+npm run build
+```
 
-Android text replies use the same Gemini backend as web. Local chat history saves separate conversations, drafts and selected models; Home can search, reopen and delete them. Reviewed manual account/cloud synchronization is available after Supabase setup.
+Local settings use an ignored `.env`; available names are in [web/.env.example](web/.env.example). Vercel uses Root Directory `web`, Framework Other and the checked-in [web/vercel.json](web/vercel.json). See [VERCEL.md](VERCEL.md), [web/README.md](web/README.md), [SUPABASE.md](SUPABASE.md) and [ACCOUNT-SETUP.md](ACCOUNT-SETUP.md).
 
-## Validation
+Legacy Netlify files remain for the earlier backend contract. Current provider/setup/advanced integrations use Vercel or the local Node handler.
 
-With Node 24+, run `npm test` from `web/` to run the local and Netlify endpoint tests. With JDK 17 and Android SDK 35 installed, run `bash ./gradlew :app:assembleDebug :app:testDebugUnitTest` from the repository root.
+## Android and routine checks
 
-[Project checks](.github/workflows/checks.yml) runs both commands on pull requests and pushes to `main`, and supports manual runs from the Actions tab. Tests use mocked providers/local HTTPS and do not require Gemini credentials. Android unit-test reports are uploaded even when tests fail. These checks do not deploy the application, verify a physical device, or call live Gemini. Required branch-protection checks must be configured separately.
+Open the repository in Android Studio. The launcher is `com.dua.ai.MainActivity`; checked-in Gradle configuration uses JDK 17 and Android SDK 35. The default API URL is `https://dua-cyan.vercel.app`. Override it with the `duaApiBaseUrl` Gradle property or `DUA_API_BASE_URL` environment variable when testing another HTTPS backend. Provider keys never belong in Android resources.
 
-## Native interface
+Run source compilation and JVM tests without packaging an APK:
 
-The Android Compose launcher now follows the current web design: I am Dua home, centered-logo chat, Material 3 composer, model sheet, Add to chat, Settings and Voice screens. Navigation preserves the current in-memory conversation and draft; New chat resets it. Native Dua and Gemini selections use the same HTTPS backend as the web app. Images, PDF and TXT attachments are sent with the current message. Camera uses the external device camera for full-photo JPEG capture with temporary-file cleanup and the shared 2 MiB attachment limit. Voice input now supports speech recognition, editable transcript review and append-to-draft with explicit Send. Completed replies have explicit Read aloud / Stop controls using device text-to-speech. Settings Data controls exports local chats/drafts as JSON and supports confirmed delete-all. Voice also offers explicit foreground hands-free Start/Stop. Appearance, local memory, permission/notification controls and plain-text sharing persist on the device. Other providers and provider audio remain planned; cloud snapshots require Supabase setup. No WebView or live website is required to render the Android interface.
+```sh
+bash ./gradlew :app:testDebugUnitTest --no-daemon --max-workers=2
+```
 
-## Android AI backend
+[Project checks](.github/workflows/checks.yml) runs web tests and Android compilation/JVM tests on PRs, pushes to main and manual runs. It does not assemble an APK. Tests use mocked services/local HTTPS and require no live provider credentials. Android test reports are preserved on failures; branch-protection rules are configured separately.
 
-Android sends the same `model`, `messages`, optional `attachments` and opt-in `memory` JSON to `/api/chat` as web. The default backend is `https://dua-cyan.vercel.app`. Override it with `-PduaApiBaseUrl=https://your-project.netlify.app` when building. Set GEMINI_API_KEY and GEMINI_MODEL on the server only; no API key belongs in the APK. The hosted endpoint must permit native clients; if Netlify requires browser/team login, adjust access policy before testing. Native speech-to-draft input uses device speech recognition and runtime microphone permission. Reply read aloud uses installed TextToSpeech voices. Foreground hands-free turns combine device speech recognition, Gemini text replies and TTS; provider-generated audio remains planned. Attachment limits and retention are documented in web/README.md. Android/backend integration has not been live-tested here.
-
-## Supabase account integration
-
-Email account/profile/logout and reviewed manual chat/memory cloud snapshots are implemented for web and Android. They require a Supabase project and shared backend environment configuration. See [SUPABASE.md](SUPABASE.md) for setup, ownership checks, limits and remaining live verification. Local features continue without account setup; signing in does not upload automatically.
-
-## Vercel personal hosting
-
-Vercel Hobby support is available with Root Directory `web`, Framework Other, Node 24 and the checked-in `web/vercel.json`. The web UI and shared Gemini/Supabase contracts are unchanged. Follow [VERCEL.md](VERCEL.md) for import, server environment, production domain, Supabase redirects, browser data transfer and Android rebuild. Netlify remains available during migration.
+Android local data remains on the device. Website deployment updates the backend/web app; installed native code changes require a later Android release. APK packaging is deferred at the user's request. Physical-device and live-service checks remain separate from automated tests. [FEATURES.md](FEATURES.md) records implementation history and validation.
