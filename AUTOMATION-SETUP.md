@@ -51,8 +51,14 @@ suggestions.disable();
 
 Confirmation saves a local memory note but does not enable sending memories in future AI requests. The existing **Use saved memory** preference controls retrieval separately. There are no silent memory writes, and full/invalid memory storage preserves existing notes.
 
-## Android parity and remaining verification
+## Android foreground automatic sync
 
-`AutomationMemoryCandidates` implements the same local proposal/confirmation rules. `AutomationConsent` and `AutomationSyncPolicy` provide account binding, deletion-review, and bounded-retry policy for native integration. Android continues using the existing explicit manual snapshot actions until a native scheduler/controller is integrated; these policy helpers do not claim background native sync. Device verification is still needed for lifecycle behavior, storage-full handling, sign-in changes, and simultaneous web/Android edits.
+Install the updated APK, sign in, then open **Settings → Cloud sync → Automatic sync on this device**. Android uses the same Supabase snapshot API with explicit account-bound consent. It debounces local changes by 1.2 seconds and checks for cloud changes every 30 seconds while foreground, online and idle. Replies, account actions, manual snapshot reviews and import/export/clear operations pause it. Returning to the foreground can resume previously enabled consent for the same account; a new account/device must explicitly enable it.
 
-Run `node --test automation.test.mjs` in `web` for coordinator and candidate checks. Native policy tests live in `AutomationPolicyTest` and run with the Android unit-test task. These tests use injected local storage and transport; they do not send user data to a provider.
+`AutomaticCloudSync` runs in the ViewModel scope. Backgrounding, disabling, going offline or switching accounts invalidates pending work before another merge/upload. Active message/draft/model buffers and attachment selections stay intact. Changed cloud chats become stable separate copies, and both-side edits require review. Cloud uploads include the expected revision and account ID; revision conflicts pause writes. Deletions, invalid snapshots, combined storage limits and storage failures also pause. Retry is bounded to 2, 4, 8 and 16 seconds before explicit Retry is required.
+
+Consent, review state, last revision and digest-only deletion/content baselines are synchronously stored in `dua_auto_sync.xml`, bound to the backend and account. This store is excluded from Android cloud backups and device transfer. A corrupt record leaves sync off until **Reset automatic sync settings**; resetting consent never deletes chats or notes. Use manual snapshot controls before **Resume after review**. Resuming acknowledges current data and may upload local data remaining after an intentional cloud clear.
+
+This is foreground synchronization, with no WorkManager job, background service, file/audio upload or realtime collaborative editing. `AutomationMemoryCandidates` still uses individual local proposal/confirmation rules. Physical-device verification remains necessary for lifecycle, connectivity, storage-full behavior, process recreation and simultaneous web/Android edits.
+
+Run `node --test automation.test.mjs` in `web` for coordinator and candidate checks. Native policy, coordinator, durable-store and account-race tests run with the Android unit-test task. These tests use injected local storage and transport; they do not send user data to a provider.

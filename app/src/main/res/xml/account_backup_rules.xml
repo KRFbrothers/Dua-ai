@@ -1,1 +1,5 @@
-<?xml version="1.0" encoding="utf-8"?><full-backup-content><exclude domain="sharedpref" path="dua_account_session.xml" /></full-backup-content>
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+    <exclude domain="sharedpref" path="dua_account_session.xml" />
+    <exclude domain="sharedpref" path="dua_auto_sync.xml" />
+</full-backup-content>

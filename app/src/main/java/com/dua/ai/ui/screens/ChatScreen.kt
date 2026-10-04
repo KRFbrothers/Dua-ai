@@ -92,12 +92,13 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel(), notificationRoute: Pair<S
     val speech by speaker.state.collectAsState()
     val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
     DisposableEffect(speaker, lifecycle) {
+        viewModel.setForeground(lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED))
         val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
-            if (event == androidx.lifecycle.Lifecycle.Event.ON_STOP) { speaker.stop(); viewModel.foreground = false }
-            if (event == androidx.lifecycle.Lifecycle.Event.ON_START) viewModel.foreground = true
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_STOP) { speaker.stop(); viewModel.setForeground(false) }
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_START) viewModel.setForeground(true)
         }
         lifecycle.addObserver(observer)
-        onDispose { lifecycle.removeObserver(observer); speaker.close() }
+        onDispose { lifecycle.removeObserver(observer); viewModel.setForeground(false); speaker.close() }
     }
     val touchFeedback = LocalHapticFeedback.current
     fun pulse() { if (preferences.haptic) touchFeedback.performHapticFeedback(HapticFeedbackType.LongPress) }

@@ -8,7 +8,7 @@ Open **Settings → Capabilities / Feature setup** after deploying. The page rep
 | --- | --- | --- | --- |
 | AI providers | Gemini plus text adapters for ChatGPT, Claude, Grok and Kimi; configured model picker on both clients | Add that provider's API key and model ID, redeploy | Live provider verification; new providers' attachments |
 | Web search | Explicit Brave queries and source links on both clients | Add `BRAVE_SEARCH_API_KEY`, redeploy, submit Search | Automatic search during AI chat and webpage analysis |
-| Automatic sync | Web foreground opt-in snapshot coordinator; native policy helpers and manual snapshots | Sign in, review existing data, enable automatic sync on the website | Native automatic scheduler and background/realtime sync |
+| Automatic sync | Web and Android foreground opt-in snapshot coordinators, plus manual reviews | Sign in, review existing data, enable automatic sync separately on each device | Background/realtime sync and physical-device verification |
 | Memory | Local proposals from explicit remember/yaad rakho statements, individual Save/Dismiss on both clients | Enable proposals on web or choose Suggest memory notes on Android; approve notes | Unprompted model extraction, embeddings and automatic fact learning |
 | Connectors/plugins | Allowlisted read-only GitHub repository listing on both clients | Configure token, owner email and enable flag; sign in | OAuth connectors, arbitrary plugins or write tools |
 | Computer/screen/video | Browser local camera and desktop screen previews with explicit permission and Stop | Open Feature setup → Camera and screen preview | Native capture, video analysis, remote computer control |
@@ -26,9 +26,9 @@ The new setup endpoints use the Vercel/local Node handler. The legacy Netlify fu
 
 ## Start with the existing services
 
-You already created the Supabase cloud table, configured Gmail SMTP, signed in and uploaded a manual snapshot. No additional service is needed for web automatic sync, reviewed local memory proposals, or email recovery.
+You already created the Supabase cloud table, configured Gmail SMTP, signed in and uploaded a manual snapshot. No additional service is needed for web/Android automatic sync, reviewed local memory proposals, or email recovery.
 
-- **Automatic sync:** Cloud sync → enable on this device. Consent is bound to the signed-in account. It uploads saved chats, drafts and memory notes; file/audio bytes are excluded. Switching accounts, deletions, conflicting edits or failed storage pause it. Use the manual cloud actions to inspect data before choosing Resume. It runs while a browser page is visible, rather than after the app closes. See [AUTOMATION-SETUP.md](AUTOMATION-SETUP.md).
+- **Automatic sync:** Cloud sync → enable on this device. Consent is bound to the signed-in account. It uploads saved chats, drafts and memory notes; file/audio bytes are excluded. Switching accounts, deletions, conflicting edits or failed storage pause it. Use the manual cloud actions to inspect data before choosing Resume. It runs while the browser page is visible or the native app is in the foreground. Android also pauses during replies and manual data/account operations. It stops when the app closes. See [AUTOMATION-SETUP.md](AUTOMATION-SETUP.md).
 - **Memory:** Memory → enable suggestions → Find suggestions. Only explicit remember statements create proposals. Save each note you want. Separately enable “Use local memory in replies” if notes should be sent with prompts. On Android, Feature setup → Suggest memory notes scans the current conversation.
 - **Recovery:** Supabase Authentication → Emails → Reset Password template must include `{{ .Token }}`. In Dua Profile enter the account email, request a reset email, then enter its code and choose a new password. The existing SMTP is reused; no password or OTP belongs in GitHub.
 - **Personal access:** After sign-in is working, optionally set `DUA_REQUIRE_LOGIN=1` and `DUA_ALLOWED_EMAIL` to your own login email. Redeploy. Local history remains available when online access is denied.
@@ -56,7 +56,7 @@ GitHub and generated audio stay inaccessible until an allowed personal owner is 
 
 ## Optional database migration
 
-The original `202610040001_dua_cloud.sql` is already applied in your project. Automatic web snapshots and recovery do not need another table. If you choose a durable daily request quota, run [supabase/migrations/202610040002_dua_usage.sql](supabase/migrations/202610040002_dua_usage.sql) in Supabase SQL Editor, then add the quota variables above and redeploy. This migration creates usage rows with account ownership and a server-only atomic request reservation.
+The original `202610040001_dua_cloud.sql` is already applied in your project. Automatic web/Android snapshots and recovery do not need another table. If you choose a durable daily request quota, run [supabase/migrations/202610040002_dua_usage.sql](supabase/migrations/202610040002_dua_usage.sql) in Supabase SQL Editor, then add the quota variables above and redeploy. This migration creates usage rows with account ownership and a server-only atomic request reservation.
 
 The quota counts attempts shared by chat, search and optional online integrations. Failed providers consume attempts. It is a request count, rather than a token or currency budget. Provider-side spending controls remain separate. Account deletion requires typing **DELETE MY ACCOUNT** and binds the request to the account shown; it deletes cloud account data while keeping local chats and notes.
 

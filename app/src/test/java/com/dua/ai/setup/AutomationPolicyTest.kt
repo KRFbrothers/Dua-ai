@@ -38,4 +38,26 @@ class AutomationPolicyTest {
         assertEquals(16_000L, AutomationSyncPolicy.retryDelayMillis(4))
         assertNull(AutomationSyncPolicy.retryDelayMillis(5))
     }
+
+    @Test fun `signatures survive imported message ids and contain no plaintext`() {
+        val snapshot = CloudSnapshot(listOf(chat), listOf("Personal memory note"))
+        val imported = snapshot.copy(chats = listOf(chat.copy(messages = chat.messages.map { it.copy(id = "different", reaction = com.dua.ai.model.MessageReaction.LIKED) })))
+        assertEquals(AutomationSyncPolicy.baseline(snapshot), AutomationSyncPolicy.baseline(imported))
+        val baseline = AutomationSyncPolicy.baseline(snapshot)
+        assertTrue(baseline.chatSignatures.values.all { it.matches(Regex("[0-9a-f]{64}")) })
+        assertFalse(baseline.toString().contains("Personal memory note"))
+        assertNotEquals(AutomationSyncPolicy.signature(chat), AutomationSyncPolicy.signature(chat.copy(draft = "Changed draft")))
+    }
+
+    @Test fun `stable conflict copies require review and repeated merge is idempotent`() {
+        val local = CloudSnapshot(listOf(chat), emptyList())
+        val remote = local.copy(chats = listOf(chat.copy(messages = listOf(ChatMessage(text = "Other prompt", isUser = true)))))
+        val first = AutomationSyncPolicy.merge(local, remote, null)
+        assertTrue(first.requiresContentReview)
+        assertEquals(2, first.snapshot.chats.size)
+        assertTrue(first.snapshot.chats.last().id.startsWith("auto-"))
+        val repeated = AutomationSyncPolicy.merge(first.snapshot, remote, null)
+        assertFalse(repeated.requiresContentReview)
+        assertTrue(AutomationSyncPolicy.same(first.snapshot, repeated.snapshot))
+    }
 }
