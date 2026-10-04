@@ -7,11 +7,11 @@ function modules(){const ctx={TextEncoder,setTimeout,clearTimeout};vm.runInNewCo
 const copy=value=>JSON.parse(JSON.stringify(value));
 const chat=(id='one',text='Hi')=>({id,updatedAt:1,model:'Dua',draft:'',messages:[{role:'user',text,state:'complete'}]});
 const snapshot=(chats=[],memory=[])=>({format:'dua-cloud-snapshot',version:1,chats,memory});
-function fixture({local=snapshot(),cloud=snapshot(),revision=0}={}){
+function fixture({local=snapshot(),cloud=snapshot(),revision=0,visible=()=>true,online=()=>true}={}){
  const ctx=modules(),calls=[],timers=new Map(),saved=[];let here=copy(local),remote=copy(cloud),version=revision,timerId=0;
  const account={state:{configured:true,user:{id:'alpha'}},async load(){calls.push('load');return this.state;},async cloud(){calls.push('cloud');return {ownerId:this.state.user?.id,revision:version,snapshot:copy(remote)};},async upload(expected,next,owner){calls.push(['upload',expected,owner]);assert.equal(owner,this.state.user.id);assert.equal(expected,version);remote=copy(next);return {revision:++version};}};
  const localIO={read:()=>copy(here),async merge(value){calls.push('merge');here=copy(value);}};
- const api=ctx.DuaAutoSync.create({account,local:localIO,persist:state=>saved.push(copy(state)),setTimer:(fn,ms)=>{const id=++timerId;timers.set(id,{fn,ms});return id;},clearTimer:id=>timers.delete(id)});
+ const api=ctx.DuaAutoSync.create({account,local:localIO,visible,online,persist:state=>saved.push(copy(state)),setTimer:(fn,ms)=>{const id=++timerId;timers.set(id,{fn,ms});return id;},clearTimer:id=>timers.delete(id)});
  return {ctx,api,account,calls,timers,saved,get local(){return here;},set local(value){here=copy(value);},get cloud(){return remote;},set cloud(value){remote=copy(value);},get revision(){return version;},set revision(value){version=value;}};
 }
 const uploads=p=>p.calls.filter(call=>Array.isArray(call)&&call[0]==='upload');
@@ -60,6 +60,14 @@ test('corrupt persisted consent cannot enable uploads for a newly signed-in acco
 });
 test('account changes during a request prevent both local merge and upload',async()=>{
  const p=fixture({cloud:snapshot([chat('remote')])});let resolve;p.account.cloud=()=>new Promise(done=>resolve=done);const enabling=p.api.enable();for(let i=0;i<6;i++)await Promise.resolve();p.account.state.user={id:'beta'};resolve({ownerId:'alpha',revision:1,snapshot:p.cloud});await enabling;assert.equal(p.local.chats.length,0);assert.equal(uploads(p).length,0);assert.equal(p.api.status.phase,'review');
+});
+test('a page hidden or disconnected during cloud read starts neither a local merge nor an upload',async()=>{
+ for(const gate of ['visible','online']){
+  let permitted=true;const p=fixture({local:snapshot([chat('local')]),cloud:snapshot([chat('remote','Remote prompt')]),[gate]:()=>permitted});const read=p.account.cloud.bind(p.account);let resolve;p.account.cloud=()=>new Promise(done=>resolve=done);
+  const enabling=p.api.enable();for(let i=0;i<6;i++)await Promise.resolve();permitted=false;resolve({ownerId:'alpha',revision:0,snapshot:p.cloud});await enabling;
+  assert.equal(p.api.status.phase,gate==='visible'?'paused':'offline');assert.equal(p.local.chats.length,1);assert.equal(p.calls.filter(call=>call==='merge').length,0);assert.equal(uploads(p).length,0);
+  permitted=true;p.account.cloud=read;await p.api.flush();assert.equal(p.api.status.phase,'synced');assert.equal(p.local.chats.length,2);assert.equal(uploads(p).length,1);
+ }
 });
 test('change notifications debounce and request failures have a bounded exponential retry budget',async()=>{
  const p=fixture();await p.api.enable();p.api.changed();p.api.changed();assert.equal(p.timers.size,1);assert.equal([...p.timers.values()][0].ms,1200);

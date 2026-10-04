@@ -58,7 +58,13 @@
   function cancel(){if(scheduled!==null)cancelTimer(scheduled);scheduled=null;}
   function pause(message){review=true;queued=false;cancel();publish('review',message);remember();}
   function schedule(ms){if(!enabled||review||destroyed||attempts>=5)return;cancel();scheduled=timer(()=>{scheduled=null;void flush();},ms);}
-  function assertOwner(ticket){if(ticket!==generation||!enabled||destroyed)return false;if(currentOwner()!==owner){pause('Account changed. Review local data before enabling sync for another account.');return false;}return true;}
+  function assertOwner(ticket){
+   if(ticket!==generation||!enabled||destroyed)return false;
+   if(currentOwner()!==owner){pause('Account changed. Review local data before enabling sync for another account.');return false;}
+   if(options.visible?.()===false){queued=false;cancel();publish('paused','Automatic sync pauses while this page is hidden.');return false;}
+   if(options.online?.()===false){queued=false;cancel();publish('offline','Offline. Automatic sync will retry when online.');return false;}
+   return true;
+  }
   async function reconcile(ticket){
    if(!assertOwner(ticket))return;
    if(options.online?.()===false){publish('offline','Offline. Automatic sync will retry when online.');return;}

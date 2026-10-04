@@ -17,7 +17,7 @@ Open **Settings → Capabilities / Feature setup** after deploying. The page rep
 
 ## Deployment
 
-1. Merge the reply-icon PR first, then the setup PR. The setup branch starts from the reply-icon branch.
+1. Merge the combined setup PR into main. It includes the pending reply-icon changes from PR #34, so one merge installs both. Merging #34 first is also compatible.
 2. Let the GitHub-connected Vercel project deploy. Use the production domain, rather than a protected preview URL.
 3. Check `/api/setup` or the app's Feature setup screen. This response never contains API keys or the allowed owner's email.
 4. Install a newly built Android APK for native changes. Updating the website does not replace an installed APK.
