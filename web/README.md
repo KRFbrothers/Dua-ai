@@ -109,3 +109,7 @@ See the ninth implementation in [FEATURES.md](../FEATURES.md) for data handling,
 ## Supabase account integration
 
 Email account/profile/logout and reviewed manual chat/memory cloud snapshots are implemented for web and Android. They require a Supabase project and shared backend environment configuration. See [SUPABASE.md](../SUPABASE.md) for setup, ownership checks, limits and remaining live verification. Local features continue without account setup; signing in does not upload automatically.
+
+## Vercel personal hosting
+
+Vercel Hobby support is available with Root Directory `web`, Framework Other, Node 24 and the checked-in `web/vercel.json`. The web UI and shared Gemini/Supabase contracts are unchanged. Follow [VERCEL.md](../VERCEL.md) for import, server environment, production domain, Supabase redirects, browser data transfer and Android rebuild. Netlify remains available during migration.
