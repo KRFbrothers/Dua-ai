@@ -25,7 +25,7 @@ Rebuild Android with the same production URL:
 bash ./gradlew :app:assembleDebug -PduaApiBaseUrl=https://YOUR-PRODUCTION-DOMAIN
 ```
 
-Or set the `DUA_API_BASE_URL` environment variable before building; the Gradle property takes precedence over the environment, and the existing Netlify URL remains the fallback until a real production domain is available. Normal Android Studio Run uses that fallback unless you set `duaApiBaseUrl` in your local Gradle properties or configure the environment. A hosted deployment cannot change an already installed APK: rebuild and install it.
+Or set the `DUA_API_BASE_URL` environment variable before building; the Gradle property takes precedence over the environment, and `https://dua-cyan.vercel.app` is the default backend. Normal Android Studio Run uses that production URL unless you set `duaApiBaseUrl` in your local Gradle properties or configure the environment. A hosted deployment cannot change an already installed APK: rebuild and install it.
 
 Changing backend invalidates the endpoint-bound encrypted native session; sign in again. Existing local chats/drafts/notes remain. Preview deployment protection should stay enabled. Test protected previews with authenticated Vercel tooling; use the production domain for a normal Android client.
 
