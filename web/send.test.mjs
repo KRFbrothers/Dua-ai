@@ -15,18 +15,22 @@ function setup({deferChat=false,replyError=false,files=[],voiceDraft=null,speech
   const n={hidden:false,value:'',dataset:{},children:[],attributes:{},events:{},style:{setProperty(){}},
    classList:{toggle(){},remove(){},contains(name){return (n.className||'').split(' ').includes(name)}},
    setAttribute(k,v){this.attributes[k]=v},getAttribute(k){return this.attributes[k]},removeAttribute(k){delete this.attributes[k]},toggleAttribute(){},focus(){},
-   addEventListener(type,handler){this.events[type]=handler},querySelector(){return node()},querySelectorAll(){return []},
+   addEventListener(type,handler){this.events[type]=handler},querySelector(){return node()},querySelectorAll(selector){return this.children.flatMap(child=>[child,...child.querySelectorAll('*')]).filter(child=>selector==='*'||child.classList.contains(selector.slice(1)))},
    append(child){this.children.push(child);child.parent=this},remove(){if(this.parent)this.parent.children=this.parent.children.filter(n=>n!==this)}
-  };return n;
+  };
+  n.contains=child=>n===child||n.children.some(c=>c.contains(child));
+  n.closest=selector=>n.classList.contains(selector.slice(1))?n:n.parent?.closest(selector);
+  Object.defineProperties(n,{lastElementChild:{get(){return n.children.at(-1)}},previousElementSibling:{get(){return n.parent?.children[n.parent.children.indexOf(n)-1]}},textContent:{get(){return n.text||''},set(value){n.text=value;n.children=[]}}});
+  return n;
  };
  const message=node(),action=node(),picker=node(),composer=node(),error=node(),empty=node();message.value='Hi';
  composer.addEventListener=(type,handler)=>{events[type]=handler};
  const elements={'textarea':message,'#composer-action':action,'.model-picker':picker,'.composer':composer,'.chat-messages':node(),'.chat-error':error,'.empty':empty,'.model-chip-label':node(),'.model-sheet-footer':node()};
  const storage=new Map();if(voiceDraft)storage.set('dua-voice-draft',JSON.stringify({text:voiceDraft}));if(files.length)storage.set('dua-attachments',JSON.stringify(files));
  vm.runInNewContext(readAloudSource+voiceSource+source,{
-  document:{querySelector:s=>elements[s]||(elements[s]=node()),createElement:node,addEventListener(){},documentElement:node()},
+  document:{querySelectorAll:s=>Object.values(elements).flatMap(n=>[n,...n.querySelectorAll('*')]).filter(n=>n.classList.contains(s.slice(1))),querySelector:s=>elements[s]||(elements[s]=node()),createElement:node,addEventListener(){},documentElement:node()},
   location:{protocol:'https:',search:'',pathname:'/chat.html',replace(url){redirected=url}},
-  window:{speechSynthesis:speechSupported?synthesis:null,SpeechSynthesisUtterance:speechSupported?Utterance:null,navigator:{language:"hi-IN"},addEventListener(event,handler){windowEvents[event]=handler},history:{replaceState(){}}},URLSearchParams,AbortController,setTimeout,clearTimeout,
+  navigator:{clipboard:{async writeText(text){storage.set('copied',text)}}},window:{speechSynthesis:speechSupported?synthesis:null,SpeechSynthesisUtterance:speechSupported?Utterance:null,navigator:{language:"hi-IN"},addEventListener(event,handler){windowEvents[event]=handler},history:{replaceState(){}}},URLSearchParams,AbortController,setTimeout,clearTimeout,
   DuaHistory:{save(){},load(){return null},newChat(){}},
   sessionStorage:{getItem:k=>storage.get(k)||null,setItem:(k,v)=>storage.set(k,v),removeItem:k=>storage.delete(k)},
   fetch:async (url,options)=>{
@@ -114,7 +118,7 @@ test('oversize voice handoff preserves the existing draft and pending transcript
 test('read-aloud controls never enter saved history or a later API request',async()=>{
  const page=setup({speechSupported:true});page.configuration.splice(0).forEach(resolve=>resolve(true));await flush();
  await page.submit();assert.equal(page.synthesis.spoken.length,0);
- const reply=page.messages.children[1],read=reply.children[0];read.events.click();
+ const reply=page.messages.children[1],read=reply.children[0].children[2];read.events.click();
  assert.equal(page.synthesis.spoken[0].text,'Hello');
  const snapshot=JSON.parse(page.storage.get('dua-chat-v1'));assert.equal(snapshot.messages[1].text,'Hello');
  page.message.value='Next question';await page.submit();
@@ -127,4 +131,31 @@ test('deletion in another tab stops pending work and exits without resaving dele
  page.windowEvents.storage({key:'dua-history-v2',oldValue:JSON.stringify({generation:'old'}),newValue:JSON.stringify({generation:'new',chats:[]})});
  assert.equal(page.signal().aborted,true);assert.equal(page.redirected(),'index.html');assert.equal(page.storage.get('dua-chat-v1'),snapshot);
  page.replies[0]({ok:true,json:async()=>({text:'Late'})});await sending;
+});
+
+test('copy icon writes only response text and three actions have accessible labels',async()=>{
+ const p=setup({speechSupported:true});p.configuration.splice(0).forEach(r=>r(true));await flush();await p.submit();
+ const buttons=p.messages.children[1].children[0].children;
+ assert.deepEqual(buttons.map(b=>b.attributes['aria-label']),['Copy response','Retry response','Speak response']);
+ await buttons[0].events.click();assert.equal(p.storage.get('copied'),'Hello');
+});
+test('retry replaces only latest reply, sends prompt once and preserves the draft',async()=>{
+ const p=setup();p.configuration.splice(0).forEach(r=>r(true));await flush();await p.submit();p.message.value='Unsent draft';
+ await p.messages.children[1].children[0].children[1].events.click();await flush();
+ assert.equal(p.calls(),2);assert.equal(p.messages.children.length,2);assert.equal(p.payload().messages.length,1);assert.equal(p.payload().messages[0].text,'Hi');assert.equal(p.message.value,'Unsent draft');
+});
+test('stopped regeneration keeps original reply and ignores late completion',async()=>{
+ const p=setup({deferChat:true});p.configuration.splice(0).forEach(r=>r(true));await flush();const send=p.submit();await flush();p.replies.shift()({ok:true,json:async()=>({text:'Original'})});await send;
+ p.messages.children[1].children[0].children[1].events.click();await flush();p.stop();p.replies.shift()({ok:true,json:async()=>({text:'Late'})});await flush();
+ assert.equal(p.messages.children[1].dataset.messageText,'Original');assert.equal(p.message.disabled,false);
+});
+test('file-backed retry requests reattachment instead of silently sending text only',async()=>{
+ const p=setup({files:[{name:'note.txt',mimeType:'text/plain',data:'SGk='}]});p.configuration.splice(0).forEach(r=>r(true));await flush();await p.submit();
+ p.messages.children[1].children[0].children[1].events.click();await flush();assert.equal(p.calls(),1);assert.match(p.error.textContent,/Reattach/);
+});
+
+test('failed regeneration retains the original reply and unsent draft',async()=>{
+ const p=setup({deferChat:true});p.configuration.splice(0).forEach(r=>r(true));await flush();const send=p.submit();await flush();p.replies.shift()({ok:true,json:async()=>({text:'Original'})});await send;p.message.value='Draft';
+ p.messages.children[1].children[0].children[1].events.click();await flush();p.replies.shift()({ok:false,json:async()=>({error:'Quota reached'})});await flush();
+ assert.equal(p.messages.children[1].dataset.messageText,'Original');assert.equal(p.message.value,'Draft');assert.match(p.error.textContent,/Original response kept/);
 });
