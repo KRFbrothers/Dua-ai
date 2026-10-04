@@ -25,6 +25,9 @@ This is a bounded starter, not a complete autonomous replacement for Codex.
 Cloud Shell runs commands on Google's computer; no local terminal installation is
 needed. On a phone, Chrome's Desktop site mode may be necessary.
 
+Your selected project ID is **`global-healer-m6shk`**; `.env.example` already
+contains it. Its billing, enabled APIs and IAM have not been checked from this session.
+
 1. Merge this setup PR into main. In Google Cloud console choose your billing-linked
    project. Copy its **Project ID**, not the display name.
 2. Create a small billing budget/alerts under Billing. Alerts do not stop spending.
@@ -56,7 +59,7 @@ needed. On a phone, Chrome's Desktop site mode may be necessary.
    ```
 
 7. In Cloud Shell Editor open `google-agent/dua_coder/.env`. Replace
-   `your-project-id` with your actual project ID and enter the GitHub token in
+   the project value if you choose another project, and enter the GitHub token in
    `DUA_GITHUB_TOKEN`. Leave it in this ignored private file, never commit it.
    The GitHub runtime tools use it; it is not provided to Gemini as a tool argument.
 8. Authenticate application-default credentials if needed:
