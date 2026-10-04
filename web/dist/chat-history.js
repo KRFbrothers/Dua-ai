@@ -71,6 +71,11 @@
       if(chat.messages.length || chat.draft.trim()) chats.unshift(chat);
       write({activeId:active,chats,generation:data.generation}); return active;
     },
+    mergeCloud(records) {
+      const parsed=parseImport(JSON.stringify({format:'dua-chat-export',version:1,exportedAt:Date.now(),chats:records}));
+      migrate();const data=read();const result=root.DuaCloudMerge(data.chats,parsed,id);
+      write({...data,chats:result.chats});return {added:result.added,conflicts:result.conflicts};
+    },
     exportJson() {
       migrate(); const data=read();
       return JSON.stringify({format:'dua-chat-export',version:1,exportedAt:Date.now(),chats:data.chats.sort((a,b)=>b.updatedAt-a.updatedAt)},null,2);
