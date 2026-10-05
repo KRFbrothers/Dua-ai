@@ -2,6 +2,8 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    id("com.google.gms.google-services")
+    id("com.google.firebase.crashlytics")
 }
 
 val duaApiBaseUrl = providers.gradleProperty("duaApiBaseUrl")
@@ -21,6 +23,7 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "1.0.0"
+        manifestPlaceholders["crashlyticsCollectionEnabled"] = "false"
         buildConfigField("String", "DUA_API_BASE_URL", "\"" + duaApiBaseUrl + "\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -28,6 +31,7 @@ android {
 
     buildTypes {
         release {
+            manifestPlaceholders["crashlyticsCollectionEnabled"] = "true"
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
@@ -49,6 +53,8 @@ android {
 }
 
 dependencies {
+    implementation(platform("com.google.firebase:firebase-bom:34.7.0"))
+    implementation("com.google.firebase:firebase-crashlytics")
     testImplementation("junit:junit:4.13.2")
     testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
     testImplementation("com.squareup.okhttp3:okhttp-tls:4.12.0")

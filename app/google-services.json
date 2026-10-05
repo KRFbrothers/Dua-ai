@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "756077145339",
+    "project_id": "dua-ansari",
+    "storage_bucket": "dua-ansari.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:756077145339:android:0d6edc57826c191a58545e",
+        "android_client_info": {
+          "package_name": "com.dua.ai"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCPHiTF-L5BOhh_9Wf3u0LaPB_2MTce8Dk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
