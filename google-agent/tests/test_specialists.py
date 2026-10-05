@@ -32,12 +32,26 @@ class BoundaryTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_scope_rejected_before_any_read(self):
         for tasks in ([task(paths=["web/api/a.js"])], [task(paths=["app/src/main/../A.kt"])],
-                      [task(), task()], [dict(task(), independent=False), task("web", ["web/api/a.js"])],
-                      [dict(task(), extra="client context")]):
+                      [task(), task()], [dict(task(), independent=False), task("web", ["web/api/a.js"])]):
             with self.assertRaises(ValueError):
                 await s.delegate_tasks(SHA, tasks, self.ctx)
         self.read.assert_not_called()
         self.child.assert_not_called()
+
+    async def test_missing_extra_or_wrong_types_return_correction_without_reading(self):
+        cases = [dict(task(), extra="client context"), {"role": "android", "task": "Audit"},
+                 dict(task(), independent="true"), dict(task(), paths="app/src/main/A.kt")]
+        for case in cases:
+            result = await s.delegate_tasks(SHA, [case], self.ctx)
+            self.assertEqual(result["status"], "invalid_arguments")
+            self.assertEqual(set(result["required_fields"]), {"role", "task", "paths", "independent"})
+        self.info.assert_not_called()
+        self.read.assert_not_called()
+        self.child.assert_not_called()
+
+    async def test_parsed_task_models_and_dicts_have_same_scope(self):
+        result = await s.delegate_tasks(SHA, [s.DelegationTask(**task())], self.ctx)
+        self.assertEqual(result["status"], "delegated")
 
     async def test_output_cannot_escape_assignment(self):
         self.child.return_value = report("app/src/main/B.kt")
@@ -68,6 +82,21 @@ class BoundaryTests(unittest.IsolatedAsyncioTestCase):
         self.child.return_value["changes"][0]["content"] = "ghp_abcd"
         result = await s.delegate_tasks(SHA, [task()], self.ctx)
         self.assertEqual(result["status"], "incomplete")
+
+
+class DeclarationTests(unittest.TestCase):
+    def test_real_sdk_schema_declares_required_task_fields_and_types(self):
+        declaration = FunctionTool(s.delegate_tasks)._get_declaration()
+        schema = declaration.parameters_json_schema
+        item = schema["properties"]["tasks"]["items"]
+        if "$ref" in item:
+            item = schema["$defs"][item["$ref"].split("/")[-1]]
+        self.assertEqual(set(item["required"]), {"role", "task", "paths", "independent"})
+        self.assertEqual(item["properties"]["role"]["enum"], ["android", "web"])
+        self.assertEqual(item["properties"]["independent"]["type"], "boolean")
+        self.assertEqual(item["properties"]["paths"]["items"]["type"], "string")
+        self.assertFalse(item["additionalProperties"])
+
 
 class WorkerModel(BaseLlm):
     calls: int = 0
