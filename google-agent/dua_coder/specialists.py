@@ -3,7 +3,7 @@ import asyncio
 import json
 import os
 from typing import Literal, Annotated
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, ValidationError
 from google.adk.agents import Agent
 from google.adk.tools import AgentTool, ToolContext
 from . import github_tools as github
@@ -12,6 +12,16 @@ from .reviewer import model_config
 
 KEY = "dua:delegation"
 MAX_SOURCE_BYTES = 60_000
+
+
+class DelegationTask(BaseModel):
+    """Concrete task contract exposed in the model's function declaration."""
+    model_config = ConfigDict(extra="forbid", strict=True)
+    role: Literal["android", "web"] = Field(description="Specialist role; each role at most once per batch.")
+    task: str = Field(min_length=1, max_length=4000, description="Bounded task; specify read-only audit when requested.")
+    paths: list[Annotated[str, Field(min_length=1, max_length=240)]] = Field(
+        min_length=1, max_length=6, description="Explicit existing source paths assigned only to this worker.")
+    independent: StrictBool = Field(description="Must be true for both workers in a parallel batch.")
 
 
 class Change(BaseModel):
@@ -74,9 +84,25 @@ def validate_tasks(tasks):
             seen_paths.add(path)
 
 
-async def delegate_tasks(base_sha: str, tasks: list[dict], tool_context: ToolContext) -> dict:
-    """Read pinned assigned files and request bounded specialist proposals, without writing."""
+async def delegate_tasks(base_sha: str, tasks: list[DelegationTask], tool_context: ToolContext) -> dict:
+    """Read pinned assigned files and request specialist advice without writing.
+
+    Each tasks item requires exactly role, task, paths and independent. Example:
+    {"role":"android","task":"Read-only audit","paths":["app/src/main/A.kt"],"independent":true}.
+    Use the same pinned base_sha for both workers. Do not rename or omit fields.
+    """
     github.validate_sha(base_sha)
+    # FunctionTool can provide dictionaries or parsed models depending on SDK
+    # conversion. Normalize both; do not echo rejected inputs or validation details.
+    if not isinstance(tasks, list) or not 1 <= len(tasks) <= 2:
+        raise ValueError("Delegate one or two bounded tasks.")
+    try:
+        tasks = [DelegationTask.model_validate(task).model_dump() for task in tasks]
+    except ValidationError:
+        return {"status": "invalid_arguments", "validation_status": "not_run",
+                "error": "Each task requires exactly role, task, paths and independent with the declared types.",
+                "required_fields": ["role", "task", "paths", "independent"],
+                "note": "No source read or worker started. Correct the arguments once; do not loop."}
     validate_tasks(tasks)
     counter = dict(tool_context.state.get(KEY, {}))
     if counter.get("invocation_id") != tool_context.invocation_id:
