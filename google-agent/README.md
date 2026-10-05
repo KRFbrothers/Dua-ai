@@ -1,4 +1,4 @@
-# Dua coding coordinator + independent reviewer — Google ADK
+# Dua multi-agent coding assistant — Google ADK
 
 This is a separate developer assistant, not the Android app or Dua's chat backend.
 It uses Google ADK 2.11.0 and Gemini on Vertex AI. Vercel and Supabase remain in place.
@@ -10,24 +10,68 @@ automatically edit this repository without these custom tools.
 
 - Read the fixed repository `KRFbrothers/Dua-ai` at a pinned commit.
 - Store up to 12 bounded source files in an immutable proposal and show a focused diff.
+- Delegate bounded Android and Web/backend work to tool-free specialists using pinned source and disjoint assigned files.
 - Run a separate Reviewer with structured findings, no write tools and no user approval power.
+- Ask a separate Validation specialist for test suggestions; derive check status from exact-commit workflow evidence, never model opinion.
+- Read a compact `task_status` snapshot for the phone owner without forwarding source contents.
 - Create a new `dua-agent/…` branch and **draft** PR only after ready review and
   framework confirmation of the matching proposal hash/diff; never write main or merge.
 - Dispatch the existing `checks.yml` workflow and read results for the exact commit.
 - No shell, APK packaging, deployment, deletion, dependency/workflow editing or secret tools.
-- Per-invocation model/tool/token scheduling budgets shared with the Reviewer.
-- 35 mocked/security/schema/orchestration tests pass, including real ADK child-agent
-  execution, shared usage, confirmation rejection/approval and duplicate-write guards.
+- Per-invocation model/tool/token scheduling budgets shared with all four child specialists.
+- Credential-free policy/schema/orchestration tests cover real ADK child-agent execution
+  with fake models, shared usage, assigned scope, exact-commit evidence, confirmation
+  rejection/approval and duplicate-write guards.
 - Agent tests have a separate credential-free GitHub Actions workflow.
 
 The original single-agent preview has produced live Gemini replies and GitHub reads
-in the owner's session. The upgraded two-agent flow has not yet been verified with
+in the owner's session. The upgraded five-role flow has not yet been verified with
 live credentials or the phone UI. Authentication currently needs refresh in that
 session. Managed deployment remains unverified. Confirmations are an experimental ADK
 feature; if your client does not support them, writes must remain blocked.
-This is the first multi-agent milestone: Coordinator + Reviewer, run sequentially.
-Android/Web specialist workers, parallel file ownership, a separate validation agent
-and automated failing-log diagnosis remain future work. No automatic self-upgrades.
+The five roles are Coordinator, Android specialist, Web/backend specialist, Reviewer
+and Validation specialist. Only independent Android/Web work can run in parallel;
+integration, review, confirmation and validation remain ordered. Automated failing-log
+diagnosis and automatic self-upgrades are not implemented.
+
+## How bounded delegation works
+
+Simple changes use the Coordinator alone, followed by independent review. For a
+larger task the Coordinator calls `delegate_tasks(base_sha, tasks)` with one or two
+assignments. Each assignment has exactly `role` (`android` or `web`), `task`,
+`paths` (one to six existing source files), and `independent` (boolean). Two tasks
+require `independent=true`, separate roles and disjoint files. Independence is an
+explicit planning assertion: the code cannot prove semantic independence. Shared
+contracts or dependent changes must be integrated sequentially.
+
+The tool validates the whole assignment list before reading files, checks the current
+main SHA, reads assigned source at that SHA, and bounds combined input to 60 KB.
+Workers cannot fetch other files, execute tools, write GitHub or approve patches.
+Output changes must remain within assigned paths and the existing source allowlist.
+Inputs/outputs use the existing credential-pattern checks; these are not an exhaustive
+secret detector. Keep credentials out of repository source. Insufficient context or
+invalid worker output produces no usable changes for that worker. Split oversized
+files/tasks or use direct Coordinator reads; workers cannot create new files yet.
+
+The Coordinator integrates compatible results into one `prepare_proposal` patch.
+The existing immutable diff, independent review and real framework confirmation
+remain required for publication. Suggested tests are not executed tests.
+`validate_commit(branch, head_sha)` reads only the Project checks workflow, uses
+its latest matching run for the status, and asks a tool-free specialist for prospective
+test suggestions. It does not inspect logs, dispatch checks or verify physical devices.
+Neutral/skipped/missing checks do not pass. `task_status` shows stored evidence only;
+refresh checks before relying on it. A result for another branch/SHA never marks
+the latest patch passed. Model-written summaries still require human judgment.
+
+After upgrading, start **New Session** and test read-only delegation first:
+
+> Current main SHA lo. Android aur web se ek-ek relevant small source file identify
+> karo. Independent specialists se un files ke improvement suggestions lo, lekin
+> prepare_proposal, publish_proposal, test dispatch aur deployment mat karo.
+
+Then test a single small real change through prepare → review → confirmation →
+draft PR. Check the returned commit on GitHub before merging. Five-role live validation
+is pending until this works in the owner's authenticated session.
 
 ## Update the existing phone workspace after merging
 
@@ -142,11 +186,14 @@ contains it. Its billing, enabled APIs and IAM have not been checked from this s
 Cloud Shell preview is temporary and may stop when your session ends. Model calls
 use billable Vertex AI quotas; GitHub Actions uses your account's runner quotas.
 The callbacks schedule at most 15 model calls and 40 tool calls per invocation,
-including the reviewer, and stop scheduling after 60,000 reported tokens or 10 minutes.
+including all child specialists, and stop scheduling after 60,000 reported tokens or 10 minutes.
 These are not hard monetary limits: an in-flight call can exceed the token threshold,
 unreported/failed calls are not fully accounted, and the deadline is checked before
 new work rather than cancelling all active requests. Model output is capped at 8192
 tokens, provider HTTP attempts at two and reviewer attempts at two per proposal.
+Delegation is capped at two batches and validation at two attempts per invocation;
+child calls time out after 120 seconds. These scheduling limits apply together, not
+a fresh allowance for each worker.
 New messages start a new invocation budget. No daily spending cap is implemented.
 Close the server with
 Ctrl+C when finished. Do not deploy the whole Android repository with Buildpacks.
