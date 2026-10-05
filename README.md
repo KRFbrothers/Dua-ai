@@ -1,6 +1,7 @@
 # Dua AI
 
 Dua includes a native Android Compose client in `app/` and a mobile web app with server-side API functions in `web/`. Production uses **https://dua-cyan.vercel.app**. Both clients use the same backend; Android renders its own interface without a WebView.
+Simple tasks use the coordinator; independent Android and web tasks can use bounded specialists.
 
 ## Current features
 
