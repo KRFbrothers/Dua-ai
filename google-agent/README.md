@@ -1,4 +1,4 @@
-# Dua GitHub coding agent — Google ADK
+# Dua coding coordinator + independent reviewer — Google ADK
 
 This is a separate developer assistant, not the Android app or Dua's chat backend.
 It uses Google ADK 2.11.0 and Gemini on Vertex AI. Vercel and Supabase remain in place.
@@ -9,16 +9,57 @@ automatically edit this repository without these custom tools.
 ## What is ready
 
 - Read the fixed repository `KRFbrothers/Dua-ai` at a pinned commit.
-- Propose up to 12 bounded source files, with explicit ADK tool confirmation.
-- Create a new `dua-agent/…` branch and **draft** PR; never write main or merge.
+- Store up to 12 bounded source files in an immutable proposal and show a focused diff.
+- Run a separate Reviewer with structured findings, no write tools and no user approval power.
+- Create a new `dua-agent/…` branch and **draft** PR only after ready review and
+  framework confirmation of the matching proposal hash/diff; never write main or merge.
 - Dispatch the existing `checks.yml` workflow and read results for the exact commit.
 - No shell, APK packaging, deployment, deletion, dependency/workflow editing or secret tools.
-- 13 mocked/security/schema tests pass, including actual ADK approve/reject handling.
+- Per-invocation model/tool/token scheduling budgets shared with the Reviewer.
+- 35 mocked/security/schema/orchestration tests pass, including real ADK child-agent
+  execution, shared usage, confirmation rejection/approval and duplicate-write guards.
+- Agent tests have a separate credential-free GitHub Actions workflow.
 
-Not yet verified: a live Gemini call, GitHub token access, Cloud project IAM, managed
-deployment and the phone confirmation UI. Confirmations are an experimental ADK
+The original single-agent preview has produced live Gemini replies and GitHub reads
+in the owner's session. The upgraded two-agent flow has not yet been verified with
+live credentials or the phone UI. Authentication currently needs refresh in that
+session. Managed deployment remains unverified. Confirmations are an experimental ADK
 feature; if your client does not support them, writes must remain blocked.
-This is a bounded starter, not a complete autonomous replacement for Codex.
+This is the first multi-agent milestone: Coordinator + Reviewer, run sequentially.
+Android/Web specialist workers, parallel file ownership, a separate validation agent
+and automated failing-log diagnosis remain future work. No automatic self-upgrades.
+
+## Update the existing phone workspace after merging
+
+Stop your current server with Ctrl+C. Keep `dua_coder/.env` private and unchanged.
+In the owner's existing Cloud Shell checkout, run each command separately:
+
+```sh
+cd ~/Dua-agent-setup
+git fetch https://github.com/KRFbrothers/Dua-ai.git main
+git merge --ff-only FETCH_HEAD
+cd google-agent
+.venv/bin/python -m pip install -r requirements.txt
+.venv/bin/python -m unittest discover -s tests -v
+```
+
+The fetch may prompt for GitHub username/token; finish those prompts before pasting
+the next command. If merge refuses because of local changes/divergence, stop and
+inspect it; do not delete the checkout or force-reset to make it pass.
+
+Copy the current Cloud Shell preview URL, remove `/dev-ui/` and any query string,
+and choose its matching port. Start using your actual origin, for example:
+
+```sh
+.venv/bin/python start_agent.py --port 8081 --preview-origin https://8081-YOUR-PREVIEW-HOST.cloudshell.dev
+```
+
+This is a placeholder: replace the origin with your own exact preview address.
+The launcher keeps loopback binding, loads the ignored settings file, checks Google
+credential refresh and adds that literal origin to ADK. It does not grant IAM or
+disable origin protection. Port-in-use errors mean an existing server must be stopped
+or another matching port/origin chosen. Existing sessions may contain old tool calls;
+start **New Session** after an upgrade.
 
 ## Phone setup: first test through Google Cloud Shell
 
@@ -53,8 +94,7 @@ contains it. Its billing, enabled APIs and IAM have not been checked from this s
    ```sh
    cd Dua-ai/google-agent
    python3 -m venv .venv
-   source .venv/bin/activate
-   pip install -r requirements.txt
+   .venv/bin/python -m pip install -r requirements.txt
    cp .env.example dua_coder/.env
    ```
 
@@ -70,31 +110,45 @@ contains it. Its billing, enabled APIs and IAM have not been checked from this s
 
    Follow the browser login instructions. If prompted for a quota project, set it
    with `gcloud auth application-default set-quota-project YOUR_PROJECT_ID`.
+   If Cloud Shell says credentials are already available but refresh fails with
+   metadata/service-account errors, choose **Y** to finish explicit application-default
+   browser login. Do not publish its verification code. Then set the quota project.
    Your identity needs access to use Vertex AI in that project; a 403 is an IAM/API
    configuration issue, not a reason to put credentials in code.
 9. Check the starter, then start the private development UI:
 
    ```sh
-   python -m unittest discover -s tests -v
-   adk web --host 127.0.0.1 --port 8080 --max_llm_calls 15 .
+   .venv/bin/python -m unittest discover -s tests -v
+   .venv/bin/python start_agent.py --port 8081 --preview-origin https://8081-YOUR-PREVIEW-HOST.cloudshell.dev
    ```
 
-10. Click Cloud Shell **Web Preview → Preview on port 8080**. Select `dua_coder`.
+   Replace that preview placeholder with your actual origin. You can open Cloud Shell
+   Web Preview on 8081 first to copy its address, then start the server and refresh.
+10. Click Cloud Shell **Web Preview → Change port → 8081 → Preview**. Select `dua_coder`.
     Keep the preview restricted to your Google account. ADK's development server
     has no built-in authentication; do not publish it on an unauthenticated endpoint.
 11. First message: **"Read README and list improvements. Do not change files."**
     Check that only your repository is read. Then request one small source change.
-    Review the complete `create_draft_pr` arguments in the confirmation panel.
+    The coordinator prepares a stored proposal and asks the independent Reviewer to
+    check it. Inspect its findings and the focused diff. Review the `publish_proposal`
+    hash/diff arguments in the confirmation panel.
     Approve only the intended patch. A text message saying "approved" is not a
     replacement for ADK's confirmation response. If no approval UI appears, stop
     and keep the agent read-only until the client supports confirmation.
-12. Approve a test dispatch if needed; open the PR/Actions links on GitHub.
+12. Approve a test dispatch only if no suitable PR-triggered run exists; open the PR/Actions links on GitHub.
     CI runs web tests and Android compilation/unit tests; it does not build an APK.
     Inspect the diff and passing checks, mark the draft ready and merge yourself.
 
 Cloud Shell preview is temporary and may stop when your session ends. Model calls
 use billable Vertex AI quotas; GitHub Actions uses your account's runner quotas.
-The 15-call per-run limit is not a daily monetary limit. Close the server with
+The callbacks schedule at most 15 model calls and 40 tool calls per invocation,
+including the reviewer, and stop scheduling after 60,000 reported tokens or 10 minutes.
+These are not hard monetary limits: an in-flight call can exceed the token threshold,
+unreported/failed calls are not fully accounted, and the deadline is checked before
+new work rather than cancelling all active requests. Model output is capped at 8192
+tokens, provider HTTP attempts at two and reviewer attempts at two per proposal.
+New messages start a new invocation budget. No daily spending cap is implemented.
+Close the server with
 Ctrl+C when finished. Do not deploy the whole Android repository with Buildpacks.
 
 ## Agent Platform managed runtime — after the private preview works
@@ -148,6 +202,11 @@ change. The repository includes no automatic cloud deployment or API key creatio
 - Vertex 403: check project, billing, API enablement and identity access.
 - Model 404: choose an available Gemini model via `DUA_AGENT_MODEL`.
 - Main changed: re-read and approve a new patch; no force push.
+- Proposals expire after one hour; prepare a fresh pinned proposal rather than
+  approving old content. At most four proposals are stored per session; split tasks.
+- Review failure/blocking finding: publishing is blocked; at most two review attempts.
+- A proposal's deterministic branch protects against repeated writes across sessions.
+  A `write_unknown` result requires manual GitHub inspection; it is not retried.
 - PR creation failed after branch creation: use the returned compare link rather
   than repeating the write and creating another branch.
 - Tests pending/failed: never claim passed. Inspect GitHub Actions and the exact SHA.
@@ -155,3 +214,6 @@ change. The repository includes no automatic cloud deployment or API key creatio
   source can invoke external services, and the token permissions are broader than
   the tool's code restrictions. Protect main and never expose this developer agent
   to ordinary Dua chat users.
+- Main branch protection is a separate GitHub plan/settings concern. The code has
+  no main-push/merge tools, but its runtime token permissions are broader than those
+  tool restrictions. No new scopes or third-party MCP server are required here.

@@ -156,7 +156,7 @@ def validate_changes(changes):
         raise ValueError("Combined patch exceeds 300 KB limit.")
 
 
-def create_draft_pr(base_sha: str, title: str, description: str, changes: list[dict[str, str]]) -> dict:
+def create_draft_pr(base_sha: str, title: str, description: str, changes: list[dict[str, str]], branch=None) -> dict:
     """AFTER USER CONFIRMATION create a new branch and draft PR containing reviewed file text.
 
     Never update main, existing branches, workflows, dependencies or credentials.
@@ -183,7 +183,9 @@ def create_draft_pr(base_sha: str, title: str, description: str, changes: list[d
                for i in range(1, len(path.split("/")))):
             raise ValueError("A path parent is not a directory.")
         elements.append({"path": path, "mode": mode, "type": "blob", "content": change["content"]})
-    branch = "dua-agent/" + uuid.uuid4().hex[:16]
+    branch = branch or "dua-agent/" + uuid.uuid4().hex[:16]
+    if not BRANCH.fullmatch(branch):
+        raise ValueError("Invalid agent branch.")
     new_tree = api("POST", "/git/trees", {"base_tree": commit["tree"]["sha"], "tree": elements})
     new_commit = api("POST", "/git/commits", {"message": title, "tree": new_tree["sha"], "parents": [base_sha]})
     api("POST", "/git/refs", {"ref": "refs/heads/" + branch, "sha": new_commit["sha"]})
@@ -214,4 +216,7 @@ def check_results(branch: str, commit_sha: str) -> dict:
     data = api("GET", f"/actions/workflows/checks.yml/runs?branch={quote(branch, safe='')}&per_page=20")
     runs = [{"id": r["id"], "status": r["status"], "conclusion": r.get("conclusion"), "url": r["html_url"]}
             for r in data.get("workflow_runs", []) if r["head_sha"] == commit_sha]
-    return {"runs": runs, "note": "No run means unknown/pending. Only completed success counts as passed."}
+    latest = max(runs, key=lambda r: r["id"], default=None)
+    return {"runs": runs, "latest": latest,
+            "passed": bool(latest and latest["status"] == "completed" and latest["conclusion"] == "success"),
+            "note": "No run means unknown/pending. Use latest run, never an older passing attempt."}

@@ -125,7 +125,7 @@ class ConfirmationTests(unittest.TestCase):
 
     def test_real_agent_tools_generate_schemas_without_model_credentials(self):
         from dua_coder.agent import root_agent
-        self.assertEqual(len(root_agent.tools), 6)
+        self.assertEqual(len(root_agent.tools), 8)
         from google.adk.tools import FunctionTool
         for tool in root_agent.tools:
             wrapped = tool if isinstance(tool, FunctionTool) else FunctionTool(tool)
@@ -133,6 +133,15 @@ class ConfirmationTests(unittest.TestCase):
         for tool in root_agent.tools:
             if isinstance(tool, FunctionTool):
                 self.assertTrue(tool._require_confirmation)
+
+    def test_coordinator_cannot_call_raw_write_and_reviewer_has_no_tools(self):
+        from dua_coder.agent import root_agent
+        from dua_coder.reviewer import reviewer
+        from google.adk.tools import FunctionTool
+        names = [t.name if isinstance(t, FunctionTool) else t.__name__ for t in root_agent.tools]
+        self.assertNotIn("create_draft_pr", names)
+        self.assertIn("publish_proposal", names)
+        self.assertEqual(reviewer.tools, [])
 
 
 if __name__ == "__main__": unittest.main()
