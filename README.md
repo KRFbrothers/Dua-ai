@@ -19,6 +19,7 @@ API keys and optional credentials remain server-side. Preparing a feature does n
 ## Project roadmap
 
 See [ROADMAP.md](ROADMAP.md) for the product and engineering roadmap, including design polish, provider validation, cloud sync, privacy, and advanced feature planning.
+Use [RELEASE-CHECKLIST.md](RELEASE-CHECKLIST.md) to verify production access controls, provider spending limits, device/staging checks, and Android release preparation. The production configuration cannot be verified from this source checkout alone.
 
 ## Web and hosting
 
@@ -42,7 +43,6 @@ Run source compilation and JVM tests without packaging an APK:
 bash ./gradlew :app:testDebugUnitTest --no-daemon --max-workers=2
 ```
 
-[Project checks](.github/workflows/checks.yml) runs web tests and Android compilation/JVM tests on PRs, pushes to main and manual runs. It does not assemble an APK. Tests use mocked services/local network checks and focused Android verification without deploying an app.
+[Project checks](.github/workflows/checks.yml) runs web tests and Android compilation/JVM tests on PRs, pushes to main and manual runs. It does not assemble or sign an APK. Tests use mocked services/local network checks and focused Android verification without deploying an app.
 
-Android local data remains on the device. Website deployment updates the backend/web app; installed native code changes require a later Android release. APK packaging is deferred at the user's request. The app remains local-first while cloud setup and provider activation are configured separately.
-
+Android local data is stored in app-private preferences; Android backup/device transfer can include chat history and preferences according to device settings. Website deployment updates the backend/web app; installed native code changes require a later Android release.

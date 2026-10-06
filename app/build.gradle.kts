@@ -13,6 +13,33 @@ require(duaApiBaseUrl.startsWith("https://") && !duaApiBaseUrl.contains('"')) {
     "duaApiBaseUrl must be an HTTPS URL"
 }
 
+fun releaseSetting(propertyName: String, environmentName: String) =
+    providers.gradleProperty(propertyName).orElse(providers.environmentVariable(environmentName)).orNull
+
+val releaseStoreFile = releaseSetting("duaReleaseStoreFile", "DUA_RELEASE_STORE_FILE")
+val releaseStorePassword = releaseSetting("duaReleaseStorePassword", "DUA_RELEASE_STORE_PASSWORD")
+val releaseKeyAlias = releaseSetting("duaReleaseKeyAlias", "DUA_RELEASE_KEY_ALIAS")
+val releaseKeyPassword = releaseSetting("duaReleaseKeyPassword", "DUA_RELEASE_KEY_PASSWORD")
+val releaseSigningValues = listOf(releaseStoreFile, releaseStorePassword, releaseKeyAlias, releaseKeyPassword)
+val releaseSigningConfigured = releaseSigningValues.all { !it.isNullOrBlank() }
+require(releaseSigningValues.all { it.isNullOrBlank() } || releaseSigningConfigured) {
+    "Release signing requires DUA_RELEASE_STORE_FILE, DUA_RELEASE_STORE_PASSWORD, DUA_RELEASE_KEY_ALIAS, and DUA_RELEASE_KEY_PASSWORD."
+}
+
+gradle.taskGraph.whenReady { taskGraph ->
+    val releaseArtifactRequested = taskGraph.allTasks.any {
+        it.name == "assembleRelease" || it.name == "bundleRelease" || it.name.startsWith("packageRelease")
+    }
+    if (releaseArtifactRequested) {
+        require(releaseSigningConfigured) {
+            "Release APK/AAB tasks require signing credentials from environment variables or Gradle properties; unsigned release artifacts are not produced."
+        }
+        require(java.io.File(releaseStoreFile!!).isFile) {
+            "DUA_RELEASE_STORE_FILE must point to an existing keystore file."
+        }
+    }
+}
+
 android {
     namespace = "com.dua.ai"
     compileSdk = 35
@@ -33,6 +60,14 @@ android {
         release {
             manifestPlaceholders["crashlyticsCollectionEnabled"] = "true"
             isMinifyEnabled = false
+            if (releaseSigningConfigured) {
+                signingConfig = signingConfigs.create("release").apply {
+                    storeFile = java.io.File(releaseStoreFile!!)
+                    storePassword = releaseStorePassword!!
+                    keyAlias = releaseKeyAlias!!
+                    keyPassword = releaseKeyPassword!!
+                }
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

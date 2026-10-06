@@ -2,7 +2,7 @@
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability, please email security@dua-ai.local or create a private security advisory on GitHub. **Do not** open a public issue for security vulnerabilities.
+If you discover a security vulnerability, use GitHub's **Private vulnerability reporting** or create a private security advisory for this repository. If neither option is available, contact a repository maintainer privately. **Do not** open a public issue for security vulnerabilities. No monitored security email address is published in this repository; repository administrators should enable private vulnerability reporting in GitHub settings.
 
 Include:
 - Description of the vulnerability
@@ -21,31 +21,29 @@ We will acknowledge reports within 48 hours and aim to provide an update within 
   - GitHub Actions Secrets for CI/CD
   - Cloud provider Secret Manager (Google Cloud Secret Manager, AWS Secrets Manager, etc.)
   - Supabase Vault for application credentials
-- All credential-carrying files are monitored by GitHub's secret scanning.
+- Verify repository/org-level secret scanning and push protection in GitHub settings; this repository does not configure those hosted settings.
 
 ### Dependency Management
-- Keep dependencies up to date; run `npm audit` and `gradle --refresh-dependencies` regularly.
-- Dependency scanning is enabled; critical vulnerabilities trigger CI alerts.
-- Review and approve Dependabot PRs promptly.
+- Keep dependencies up to date; review the Android dependency graph and run dependency checks supported by the configured environment.
+- Verify GitHub dependency graph, Dependabot alerts and update PR settings in repository/org settings; they are not configured by the checked-in CI workflow.
 
 ### Code Review & Branch Protection
-- All changes to `main` require at least one approved PR review.
-- Status checks (web tests, Android compilation/tests) must pass before merge.
-- Force-push to `main` is disabled.
+- Configure branch protection/rulesets to require review and the `Project checks` status before merging to `main`.
+- Branch protection, required reviews/checks and force-push rules are GitHub-hosted settings and must be verified by a repository administrator.
 
 ### Privacy & Data Handling
 
 #### Audio & Voice
 - Audio data captured for speech recognition is:
-  - Processed on-device when possible (Android RecognitionService, Web Speech API).
-  - Transmitted to the configured provider only when sent as part of a message.
-  - Retained according to provider terms (OpenAI, Google, Anthropic, etc.).
-- Users are informed via privacy notice that voice input may be transmitted to AI providers.
+  - Passed to the selected Android recognition service or browser speech service; processing may be local or remote depending on that service and its settings.
+  - Not automatically sent to the chat provider. A reviewed transcript is sent only when the user submits it.
+  - Subject to the selected speech service's own privacy and retention terms.
+- Optional generated reply audio sends selected reply text to the configured ElevenLabs service.
 
 #### Cloud Snapshots & Sync
 - Cloud sync is opt-in; users explicitly enable it.
-- Snapshots are stored encrypted in Supabase with per-user access controls.
-- Retention: Users can delete snapshots manually; admin retention is 90 days post-deletion per Supabase policy.
+- Snapshots use Supabase RLS and per-user access controls. They are not end-to-end encrypted by Dua.
+- Users can delete snapshots manually; post-deletion backup retention depends on Supabase project policy and has not been verified here.
 - Users can request full data export/deletion via account settings.
 
 #### Local Data
@@ -53,39 +51,21 @@ We will acknowledge reports within 48 hours and aim to provide an update within 
 - Web local data uses browser local storage; it is not synced without explicit opt-in.
 - Export/import are user-initiated.
 
-### Google Agent Permissions
-The Google ADK agent uses a GitHub Personal Access Token with **minimal scope**:
-- ✅ `Contents: read/write` — only for Dua-ai repository, for creating branches and PRs.
-- ✅ `Pull requests: read/write` — only for managing the agent's own PRs.
-- ✅ `Actions: read/write` — only to read workflow results, not to modify workflows.
-- ❌ NO Administration, Workflows, or Organization permissions.
-- ❌ NO access to other repositories.
-
-Token storage:
-- Development: Stored in `google-agent/dua_coder/.env` (ignored, not committed).
-- Production: Stored in Google Cloud Secret Manager (`dua-github-token` secret).
-- Token rotation: Refresh at least quarterly; monitor for unusual activity in audit logs.
-
 ### Secrets Scanning
-- GitHub Secret Scanning is enabled (push protection).
-- Secrets found in commits are automatically revoked if supported by the provider.
-- Manual audits of git history are performed quarterly.
+- GitHub secret scanning and push-protection status are controlled by repository/org settings and must be checked by an administrator.
+- Revoke or rotate any credential exposed in a commit; do not assume a provider has automatically revoked it.
 
 ## Compliance & Audits
 
 ### Current Compliance Status
 - ✅ MIT License
-- ✅ Branch protection on `main`
-- ✅ Required PR approvals & status checks
-- ✅ GitHub Secret Scanning (enterprise feature)
-- ✅ Dependency Scanning (GitHub/Dependabot)
 - ✅ Privacy guidelines documented
-- ✅ Minimal GitHub Agent token permissions
+- Repository/org settings such as branch protection, required reviews/checks, secret scanning and Dependabot are not verifiable from this checkout.
 
 ### Testing & CI/CD
-- Web: Jest/Node tests for all backend logic, Vercel integration tests.
-- Android: Gradle unit tests for compilation and logic; no APK testing in CI.
-- Security: Dependency scanning on each push; manual audits quarterly.
+- Web: Node.js built-in test runner with mocked services.
+- Android: Gradle JVM unit tests and source compilation; no APK or instrumented tests in CI.
+- The checked-in workflows do not run dependency or secret scanning. Verify any GitHub-hosted scanning configuration separately.
 
 ## Updates & Notifications
 
@@ -93,4 +73,4 @@ Security updates to this policy are made on a rolling basis. Critical changes ar
 
 ---
 
-*Last Updated: 2026-10-05*
+*Last Updated: 2026-10-06*

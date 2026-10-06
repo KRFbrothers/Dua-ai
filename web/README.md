@@ -12,7 +12,7 @@ npm run build
 
 Chat supports configurable providers, bounded model-supported attachments, history, draft recovery, copy/retry/speaker actions, voice input and device speech. Web: Off/Search/Read link modes add source-backed replies and clickable links. Local appearance, reviewed memory, sharing and data controls are included. Supabase provides email accounts, reviewed snapshots and opt-in foreground automatic sync on web and Android.
 
-Feature setup reports provider/search availability, a limited read-only GitHub connector, browser local media preview, optional generated reply audio and account recovery/protection. Configuration and incomplete capabilities are documented in [EIGHT-FEATURE-SETUP.md](../EIGHT-FEATURE-SETUP.md), [PROVIDERS.md](../PROVIDERS.md) and [AUTOMATION-SETUP.md](../AUTOMATION-SETUP.md). Preparing an adapter does not activate an external service.
+Feature setup reports provider/search availability, a limited read-only GitHub connector, browser local media preview, optional generated reply audio and account recovery/protection. Configuration and incomplete capabilities are documented in [EIGHT-FEATURE-SETUP.md](../EIGHT-FEATURE-SETUP.md), [PROVIDERS.md](../PROVIDERS.md) and [SUPABASE.md](../SUPABASE.md). Production and release checks are in [RELEASE-CHECKLIST.md](../RELEASE-CHECKLIST.md). Preparing an adapter does not activate an external service.
 
 See [FEATURES.md](../FEATURES.md) for current scope, [VERCEL.md](../VERCEL.md) for hosting and [SUPABASE.md](../SUPABASE.md) for cloud ownership. New setup endpoints use Vercel/local Node; legacy Netlify functions retain earlier Gemini behavior.
 
