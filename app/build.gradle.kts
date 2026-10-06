@@ -1,3 +1,7 @@
+import org.gradle.api.Action
+import org.gradle.api.execution.TaskExecutionGraph
+import java.io.File
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -26,19 +30,19 @@ require(releaseSigningValues.all { it.isNullOrBlank() } || releaseSigningConfigu
     "Release signing requires DUA_RELEASE_STORE_FILE, DUA_RELEASE_STORE_PASSWORD, DUA_RELEASE_KEY_ALIAS, and DUA_RELEASE_KEY_PASSWORD."
 }
 
-gradle.taskGraph.whenReady { taskGraph ->
-    val releaseArtifactRequested = taskGraph.allTasks.any {
-        it.name == "assembleRelease" || it.name == "bundleRelease" || it.name.startsWith("packageRelease")
+gradle.taskGraph.whenReady(Action<TaskExecutionGraph> { graph ->
+    val releaseArtifactRequested = graph.allTasks.any { task ->
+        task.name == "assembleRelease" || task.name == "bundleRelease" || task.name.startsWith("packageRelease")
     }
     if (releaseArtifactRequested) {
         require(releaseSigningConfigured) {
             "Release APK/AAB tasks require signing credentials from environment variables or Gradle properties; unsigned release artifacts are not produced."
         }
-        require(java.io.File(releaseStoreFile!!).isFile) {
+        require(File(releaseStoreFile!!).isFile) {
             "DUA_RELEASE_STORE_FILE must point to an existing keystore file."
         }
     }
-}
+})
 
 android {
     namespace = "com.dua.ai"
@@ -62,7 +66,7 @@ android {
             isMinifyEnabled = false
             if (releaseSigningConfigured) {
                 signingConfig = signingConfigs.create("release").apply {
-                    storeFile = java.io.File(releaseStoreFile!!)
+                    storeFile = File(releaseStoreFile!!)
                     storePassword = releaseStorePassword!!
                     keyAlias = releaseKeyAlias!!
                     keyPassword = releaseKeyPassword!!
