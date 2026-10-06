@@ -98,3 +98,11 @@ test('sanitized account capabilities use actual key and redirect validators',()=
  assert.equal(accountCapabilities({...settings,serviceRoleKey:'public-key'},'https://dua.example').deletionConfigured,false);
  assert.equal(accountCapabilities({...settings,key:'sb_secret_forbidden'},'https://dua.example').configured,false);
 });
+test('Native Google sign-in exchanges an ID token through Supabase and only for native clients',async()=>{
+ const idToken='aaa.bbb.ccc',nonce='n'.repeat(32);
+ const settings=env(async(url,options)=>{assert.ok(url.endsWith('grant_type=id_token'));assert.deepEqual(JSON.parse(options.body),{provider:'google',id_token:idToken,nonce});return Response.json(session);});
+ const ok=await handleAccount(req('/api/account/google-token','POST',{idToken,nonce},{'x-dua-native':'1'}),settings);assert.equal(ok.status,200);const data=await ok.json();assert.ok(data.session.accessToken);assert.equal(ok.headers.getSetCookie().length,0);
+ assert.equal((await handleAccount(req('/api/account/google-token','POST',{idToken,nonce}),settings)).status,400);
+ assert.equal((await handleAccount(req('/api/account/google-token','POST',{idToken:'bad token'},{'x-dua-native':'1'}),settings)).status,400);
+ const rejected=await handleAccount(req('/api/account/google-token','POST',{idToken},{'x-dua-native':'1'}),env(async()=>new Response('{}',{status:400})));assert.equal(rejected.status,401);
+});

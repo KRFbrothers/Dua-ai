@@ -16,6 +16,9 @@ require(duaApiBaseUrl.startsWith("https://") && !duaApiBaseUrl.contains('"')) {
     "duaApiBaseUrl must be an HTTPS URL"
 }
 
+val googleWebClientId = (providers.gradleProperty("duaGoogleWebClientId").orElse(providers.environmentVariable("GOOGLE_CLIENT_ID")).orNull ?: "").trim()
+require(googleWebClientId.matches(Regex("[A-Za-z0-9._-]*"))) { "GOOGLE_CLIENT_ID contains invalid characters." }
+
 fun releaseSetting(propertyName: String, environmentName: String) =
     providers.gradleProperty(propertyName).orElse(providers.environmentVariable(environmentName)).orNull
 
@@ -54,6 +57,7 @@ android {
         versionCode = 1
         versionName = "1.0.0"
         manifestPlaceholders["crashlyticsCollectionEnabled"] = "false"
+        buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"" + googleWebClientId + "\"")
         buildConfigField("String", "DUA_API_BASE_URL", "\"" + duaApiBaseUrl + "\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -98,6 +102,9 @@ dependencies {
     testImplementation("com.squareup.okhttp3:okhttp-tls:4.12.0")
     testImplementation("org.json:json:20240303")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("androidx.credentials:credentials:1.3.0")
+    implementation("androidx.credentials:credentials-play-services-auth:1.3.0")
+    implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
     implementation("androidx.exifinterface:exifinterface:1.4.1")
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
