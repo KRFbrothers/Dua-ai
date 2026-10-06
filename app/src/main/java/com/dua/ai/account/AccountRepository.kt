@@ -154,6 +154,12 @@ class AccountRepository(private val api: AccountApi, private val store: SessionP
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (_: Exception) { mutable.update { it.copy(googleConfigured = false, deletionConfigured = false) } }
     }
+    suspend fun signInWithGoogle(idToken: String, nonce: String) {
+        val ticket = beginAuthentication()
+        val result = api.request("/api/account/google-token", "POST", JSONObject().put("idToken", idToken).put("nonce", nonce))
+        val installed = installAuthentication(ticket, AccountSessionCodec.decode(result))
+        noticeIfCurrent(installed, "Signed in with Google. Local data was not uploaded.")
+    }
     suspend fun signIn(email: String, password: String, signup: Boolean) {
         val ticket = beginAuthentication()
         val result = api.request(if (signup) "/api/account/signup" else "/api/account/signin", "POST", JSONObject().put("email", email.trim()).put("password", password))

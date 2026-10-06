@@ -71,6 +71,13 @@ export async function handleAccount(req,env={}){
   if(!(req.headers.get('content-type')||'').startsWith('application/json'))return json({error:'Use JSON.'},415);
   const raw=await req.text();if(Buffer.byteLength(raw)> (url.pathname==='/api/cloud'?4*1024*1024+1024:16384))return json({error:'Request too large.'},413);
   let body;try{body=JSON.parse(raw||'{}');}catch{return json({error:'Invalid request.'},400);}if(!body||typeof body!=='object'||Array.isArray(body))return json({error:'Invalid request.'},400);
+  if(url.pathname==='/api/account/google-token'&&req.method==='POST'){
+   if(!native)return json({error:'Native Google sign-in is only available from the Android app.'},400);
+   if(typeof body.idToken!=='string'||! /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(body.idToken)||body.idToken.length>8192||body.nonce!==undefined&&(typeof body.nonce!=='string'||! /^[A-Za-z0-9_-]{16,128}$/.test(body.nonce)))return json({error:'Google sign-in could not be verified. Try again.'},400);
+   const result=await request('/auth/v1/token?grant_type=id_token','POST',{provider:'google',id_token:body.idToken,...(body.nonce?{nonce:body.nonce}:{})});
+   if(!result.response.ok){console.warn('[dua-auth] Google ID token rejected ('+result.response.status+').');return json({error:'Google sign-in failed. Check that this Google account is allowed and try again.'},result.response.status===429?429:401);}
+   console.info('[dua-auth] Google native sign-in succeeded.');return json(deliver(result.data));
+  }
   if(url.pathname==='/api/account/google'&&req.method==='POST'){
    const redirect=oauthRedirect(env,req.url);if(native)return json({error:'Open the web Profile page for Google sign-in. Native Google sign-in needs a registered Android callback.'},501);if(!redirect)return json({error:'Google login callback is not configured for this site.'},503);
    const verifier=randomBytes(32).toString('base64url'),flow=randomBytes(24).toString('base64url');redirect.searchParams.set('flow',flow);const authorize=new URL(config.url+'/auth/v1/authorize');authorize.searchParams.set('provider','google');authorize.searchParams.set('redirect_to',redirect.toString());authorize.searchParams.set('code_challenge',createHash('sha256').update(verifier).digest('base64url'));authorize.searchParams.set('code_challenge_method','s256');extraCookies=oauthCookies(verifier,flow);return json({url:authorize.toString()});

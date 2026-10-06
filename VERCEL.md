@@ -59,3 +59,12 @@ Before deploying to production, configure these environment variables in Vercel:
 3. **DUA_DAILY_REQUEST_LIMIT** (Optional)
    - Set daily API request limit (e.g., 100)
    - Default: unlimited
+
+## Google sign-in (web and Android)
+
+Dua uses Supabase Auth as the Google OAuth broker, so the Google client secret never reaches Vercel or the apps.
+
+1. In Google Cloud create an OAuth *Web application* client. Add Supabase's callback (`https://<project>.supabase.co/auth/v1/callback`) as an authorized redirect URI. Put the client ID and secret in Supabase → Authentication → Providers → Google (`GOOGLE_CLIENT_SECRET` stays only there).
+2. **Web** (authorization code + PKCE): set `SUPABASE_AUTH_REDIRECT_URL=https://<your-domain>/api/account/oauth/callback` and add it to Supabase Redirect URLs. Tokens are kept in HttpOnly, Secure cookies; `/api/account/session`, `/api/account/refresh` and `/api/account/logout` provide session check, refresh and sign-out.
+3. **Android**: create an Android OAuth client (package `com.dua.ai`, your signing SHA-1) in the same Google project, add the *web* client ID to Supabase's "Authorized Client IDs", and build with `GOOGLE_CLIENT_ID=<web-client-id>` (or `-PduaGoogleWebClientId=...`). The app sends the Google ID token with a random nonce to `POST /api/account/google-token`; Supabase verifies signature, audience, expiry and nonce. The resulting session is stored encrypted with an Android Keystore key and refreshed automatically.
+4. Access control is unchanged: `DUA_REQUIRE_LOGIN`, `DUA_ALLOWED_EMAIL` and `DUA_DAILY_REQUEST_LIMIT` apply to Google-authenticated accounts.

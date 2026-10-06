@@ -14,6 +14,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.semantics.*
 import com.dua.ai.viewmodel.ChatViewModel
+import kotlinx.coroutines.launch
 
 @Composable
 fun AccountScreen(viewModel: ChatViewModel, page: String, onBack: () -> Unit, onOpen: (String) -> Unit) {
@@ -56,11 +57,20 @@ fun AccountScreen(viewModel: ChatViewModel, page: String, onBack: () -> Unit, on
                         viewModel.accountAction { viewModel.account.verifyRecovery(email, code) }
                     }) { Text("Verify recovery code") }
                 }
+                if (com.dua.ai.BuildConfig.GOOGLE_WEB_CLIENT_ID.isNotBlank()) {
+                    val scope = rememberCoroutineScope()
+                    FilledTonalButton(enabled = state.configured && !state.busy, onClick = {
+                        scope.launch {
+                            runCatching { com.dua.ai.auth.GoogleSignIn.requestIdToken(context) }
+                                .onSuccess { viewModel.signInWithGoogle(it.idToken, it.nonce) }
+                                .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it; viewModel.account.notice(com.dua.ai.auth.GoogleSignIn.friendlyMessage(it)) }
+                        }
+                    }) { Text("Sign in with Google") }
+                }
                 TextButton(enabled = state.googleConfigured && !state.busy, onClick = {
                     runCatching { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(com.dua.ai.BuildConfig.DUA_API_BASE_URL.trimEnd('/') + "/profile.html"))) }
                         .onFailure { viewModel.account.notice("A browser is unavailable on this device.") }
                 }) { Text("Open Google sign-in on website") }
-                Text("Google sign-in uses the browser. It does not sign this native app in; use email/password here.", fontSize = 14.sp)
             } else {
                 OutlinedTextField(name, { name = it.take(80) }, label = { Text("Display name") }, modifier = Modifier.fillMaxWidth(), enabled = !state.busy)
                 FilledTonalButton(enabled = state.configured && !state.busy && name.isNotBlank(), onClick = { viewModel.accountAction { viewModel.account.profile(name) } }) { Text("Save profile") }
