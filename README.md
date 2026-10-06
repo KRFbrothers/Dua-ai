@@ -31,7 +31,7 @@ npm test
 npm run build
 ```
 
-Local settings use an ignored `.env`; available names are in [web/.env.example](web/.env.example). Vercel uses Root Directory `web`, Framework Other and the checked-in [web/vercel.json](web/vercel.json). Legacy Netlify files remain for the earlier backend contract. Current provider/setup/advanced integrations use Vercel or the local Node handler.
+Local settings use an ignored `.env`; available names are in [web/.env.example](web/.env.example). Vercel uses Root Directory `web`, Framework Other and the checked-in [web/vercel.json](web/vercel.json). Follow [VERCEL.md](VERCEL.md) for deployment; provider/setup/advanced integrations use Vercel or the local Node handler.
 
 ## Android and routine checks
 

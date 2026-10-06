@@ -14,6 +14,6 @@ Chat supports configurable providers, bounded model-supported attachments, histo
 
 Feature setup reports provider/search availability, a limited read-only GitHub connector, browser local media preview, optional generated reply audio and account recovery/protection. Configuration and incomplete capabilities are documented in [EIGHT-FEATURE-SETUP.md](../EIGHT-FEATURE-SETUP.md), [PROVIDERS.md](../PROVIDERS.md) and [SUPABASE.md](../SUPABASE.md). Production and release checks are in [RELEASE-CHECKLIST.md](../RELEASE-CHECKLIST.md). Preparing an adapter does not activate an external service.
 
-See [FEATURES.md](../FEATURES.md) for current scope, [VERCEL.md](../VERCEL.md) for hosting and [SUPABASE.md](../SUPABASE.md) for cloud ownership. New setup endpoints use Vercel/local Node; legacy Netlify functions retain earlier Gemini behavior.
+See [FEATURES.md](../FEATURES.md) for current scope, [VERCEL.md](../VERCEL.md) for hosting and [SUPABASE.md](../SUPABASE.md) for cloud ownership. Endpoints run on Vercel or the local Node handler.
 
 Keep API keys server-side. Never put private credentials in `dist`, Android, exports or GitHub.
