@@ -42,3 +42,20 @@ The Vercel adapter includes bounded **per-instance** burst guards: five chat/sea
 Local verification uses mocked providers and does not spend your quota. It covers API routing, browser/native token responses, cookie preservation, cloud ownership/conflicts and burst rejection. Live credentials, production deployment and physical Android login checks must be performed after the account connection and environment setup.
 
 Before release, follow the production, staging, device and signing gates in [RELEASE-CHECKLIST.md](RELEASE-CHECKLIST.md).
+
+## Production Security Configuration
+
+Before deploying to production, configure these environment variables in Vercel:
+
+1. **DUA_REQUIRE_LOGIN** (Required)
+   - Set to `1` to enforce login requirement
+   - Default: disabled (test/dev mode)
+   - Production: MUST be set to `1`
+
+2. **DUA_ALLOWED_EMAIL** (Optional)
+   - Restrict access to specific email address
+   - Default: any authenticated user
+
+3. **DUA_DAILY_REQUEST_LIMIT** (Optional)
+   - Set daily API request limit (e.g., 100)
+   - Default: unlimited

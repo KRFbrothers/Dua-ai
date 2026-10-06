@@ -76,3 +76,12 @@ Before distribution:
 - [ ] Establish an explicit release channel and rollback/update procedure before publishing.
 
 No signing keys, Android release workflow, signed artifacts, or app-store configuration are supplied by this repository.
+
+## Authentication & Access Control
+
+- [ ] `DUA_REQUIRE_LOGIN=1` is set in production environment
+- [ ] Non-authenticated users receive 401 error response
+- [ ] `DUA_ALLOWED_EMAIL` configured (if using owner restriction)
+- [ ] `DUA_DAILY_REQUEST_LIMIT` configured (if using quota)
+- [ ] Tested in staging: unauthenticated requests are rejected
+- [ ] Tested in staging: authenticated users can access AI
