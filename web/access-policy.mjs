@@ -34,7 +34,11 @@ export async function guardChatAccess(request, { env = {}, fetcher = env.fetcher
   try { details = await session.json(); } catch { return denied('Account verification is unavailable. Retry.', 503); }
   if (!session.ok) return denied('Account verification failed. Sign in and retry.', session.status);
   if (!details.configured) return denied('Supabase login setup is required for this access policy.', 503);
-  if (!details.user) return denied('Sign in from Profile before using online AI.', 401);
+  if (!details.user) {
+    console.warn('[dua-access] Unauthenticated AI request rejected (401).');
+    return denied('Authentication required. Sign in from Profile before using online AI.', 401);
+  }
+  if (owner && details.user.email.toLowerCase() !== owner) console.warn('[dua-access] AI request from non-allowed account rejected (403).');
   if (owner && details.user.email.toLowerCase() !== owner) return denied('Only the configured personal account can use online AI.', 403);
   if (!hasLimit) return { allowed: true, user: details.user, headers };
 
