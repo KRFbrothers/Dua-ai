@@ -22,18 +22,21 @@ val releaseKeyAlias = releaseSetting("duaReleaseKeyAlias", "DUA_RELEASE_KEY_ALIA
 val releaseKeyPassword = releaseSetting("duaReleaseKeyPassword", "DUA_RELEASE_KEY_PASSWORD")
 val releaseSigningValues = listOf(releaseStoreFile, releaseStorePassword, releaseKeyAlias, releaseKeyPassword)
 val releaseSigningConfigured = releaseSigningValues.all { !it.isNullOrBlank() }
-val releaseSigningRequested = gradle.startParameter.taskNames.any {
-    it.substringAfterLast(':').startsWith("assembleRelease") ||
-        it.substringAfterLast(':').startsWith("bundleRelease")
-}
 require(releaseSigningValues.all { it.isNullOrBlank() } || releaseSigningConfigured) {
     "Release signing requires DUA_RELEASE_STORE_FILE, DUA_RELEASE_STORE_PASSWORD, DUA_RELEASE_KEY_ALIAS, and DUA_RELEASE_KEY_PASSWORD."
 }
-if (releaseSigningRequested) {
-    require(releaseSigningConfigured) {
-        "Release APK/AAB tasks require signing credentials from environment variables or Gradle properties; unsigned release artifacts are not produced."
+gradle.taskGraph.whenReady { taskGraph ->
+    val releaseArtifactRequested = taskGraph.allTasks.any {
+        it.name == "assembleRelease" || it.name == "bundleRelease" || it.name.startsWith("packageRelease")
     }
-    require(java.io.File(releaseStoreFile!!).isFile) { "DUA_RELEASE_STORE_FILE must point to an existing keystore file." }
+    if (releaseArtifactRequested) {
+        require(releaseSigningConfigured) {
+            "Release APK/AAB tasks require signing credentials from environment variables or Gradle properties; unsigned release artifacts are not produced."
+        }
+        require(java.io.File(releaseStoreFile!!).isFile) {
+            "DUA_RELEASE_STORE_FILE must point to an existing keystore file."
+        }
+    }
 }
 
 android {
@@ -59,9 +62,9 @@ android {
             if (releaseSigningConfigured) {
                 signingConfig = signingConfigs.create("release").apply {
                     storeFile = java.io.File(releaseStoreFile!!)
-                    storePassword = releaseStorePassword
-                    keyAlias = releaseKeyAlias
-                    keyPassword = releaseKeyPassword
+                    storePassword = releaseStorePassword!!
+                    keyAlias = releaseKeyAlias!!
+                    keyPassword = releaseKeyPassword!!
                 }
             }
             proguardFiles(

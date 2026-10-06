@@ -17,7 +17,7 @@ Open **Settings → Capabilities / Feature setup** after deploying. The page rep
 
 ## Deployment
 
-1. Merge reviewed changes into main; the initial setup, reply icons, provider attachments and chat web-source changes are already merged.
+1. Merge reviewed changes into the deployment branch after required code review and checks pass.
 2. Let the GitHub-connected Vercel project deploy. Use the production domain, rather than a protected preview URL.
 3. Check `/api/setup` or the app's Feature setup screen. This response never contains API keys or the allowed owner's email.
 4. Native source changes reach an installed app through a later Android release. Website deployment updates the web/backend; signed APK packaging and distribution are not configured in routine CI.
@@ -26,7 +26,7 @@ The new setup endpoints use the Vercel/local Node handler. The legacy Netlify fu
 
 ## Start with the existing services
 
-You already created the Supabase cloud table, configured Gmail SMTP, signed in and uploaded a manual snapshot. No additional service is needed for web/Android automatic sync, reviewed local memory proposals, or email recovery.
+If a Supabase project and SMTP are already configured, no additional service is needed for web/Android automatic sync, reviewed local memory proposals, or email recovery. Otherwise, follow [SUPABASE.md](SUPABASE.md) to set them up.
 
 - **Automatic sync:** Cloud sync → enable on this device. Consent is bound to the signed-in account. It uploads saved chats, drafts and memory notes; file/audio bytes are excluded. Switching accounts, deletions, conflicting edits or failed storage pause it. Use the manual cloud actions to inspect data before choosing Resume. It runs while the browser page is visible or the native app is in the foreground. Android also pauses during replies and manual data/account operations. It stops when the app closes. See [SUPABASE.md](SUPABASE.md#data-and-security-behavior).
 - **Memory:** Memory → enable suggestions → Find suggestions. Only explicit remember statements create proposals. Save each note you want. Separately enable “Use local memory in replies” if notes should be sent with prompts. On Android, Feature setup → Suggest memory notes scans the current conversation.
