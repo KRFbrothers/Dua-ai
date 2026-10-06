@@ -22,7 +22,7 @@ Open **Settings → Capabilities / Feature setup** after deploying. The page rep
 3. Check `/api/setup` or the app's Feature setup screen. This response never contains API keys or the allowed owner's email.
 4. Native source changes reach an installed app through a later Android release. Website deployment updates the web/backend; signed APK packaging and distribution are not configured in routine CI.
 
-The new setup endpoints use the Vercel/local Node handler. The legacy Netlify functions retain their earlier Gemini-only behavior; use the Vercel production project for these integrations. The `web/api/` directory contains eight function entry files, including dynamic account and voice routes.
+The new setup endpoints use the Vercel/local Node handler. Use the Vercel production project for these integrations. The `web/api/` directory contains eight function entry files, including dynamic account and voice routes.
 
 ## Start with the existing services
 
