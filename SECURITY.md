@@ -2,7 +2,7 @@
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability, use GitHub's **Private vulnerability reporting** or create a private security advisory for this repository, if the feature is enabled. **Do not** open a public issue for security vulnerabilities. No monitored security email address is published in this repository.
+If you discover a security vulnerability, use GitHub's **Private vulnerability reporting** or create a private security advisory for this repository. If neither option is available, contact a repository maintainer privately. **Do not** open a public issue for security vulnerabilities. No monitored security email address is published in this repository; repository administrators should enable private vulnerability reporting in GitHub settings.
 
 Include:
 - Description of the vulnerability
@@ -28,9 +28,8 @@ We will acknowledge reports within 48 hours and aim to provide an update within 
 - Verify GitHub dependency graph, Dependabot alerts and update PR settings in repository/org settings; they are not configured by the checked-in CI workflow.
 
 ### Code Review & Branch Protection
-- All changes to `main` require at least one approved PR review.
-- Status checks (web tests, Android compilation/tests) must pass before merge.
-- Force-push to `main` is disabled.
+- Configure branch protection/rulesets to require review and the `Project checks` status before merging to `main`.
+- Branch protection, required reviews/checks and force-push rules are GitHub-hosted settings and must be verified by a repository administrator.
 
 ### Privacy & Data Handling
 
@@ -60,10 +59,8 @@ We will acknowledge reports within 48 hours and aim to provide an update within 
 
 ### Current Compliance Status
 - ✅ MIT License
-- ✅ Branch protection on `main`
-- ✅ Required PR approvals & status checks
 - ✅ Privacy guidelines documented
-- Repository/org settings such as branch protection, secret scanning and Dependabot are not verifiable from this checkout.
+- Repository/org settings such as branch protection, required reviews/checks, secret scanning and Dependabot are not verifiable from this checkout.
 
 ### Testing & CI/CD
 - Web: Node.js built-in test runner with mocked services.

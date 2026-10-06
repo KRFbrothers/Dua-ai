@@ -15,11 +15,7 @@ This document outlines how Dua AI handles user data, privacy, and retention acro
 #### Processing
 - **Speech recognition:** Recognition is provided by Android's selected `RecognitionService` or the browser's Web Speech implementation. Processing location and retention depend on that service; review its settings and privacy terms.
 - **Provider transmission:** Chat text, including a reviewed voice transcript, is sent over HTTPS to the selected chat provider when the user sends it. Optional generated reply audio sends the selected reply text over HTTPS to ElevenLabs.
-- **Provider Retention:** Each provider has its own retention policy:
-  - OpenAI: Up to 30 days (see OpenAI privacy policy)
-  - Google Gemini: Up to 3 days (see Google privacy policy)
-  - Anthropic/Claude: Up to 30 days (see Anthropic privacy policy)
-  - User is responsible for reviewing provider terms.
+- **Provider Retention:** Retention depends on the provider, product/API, account settings and applicable terms, which can change. Review the selected provider's current terms before sending data.
 
 #### User Control
 - Users can disable voice input in Settings.
@@ -145,8 +141,8 @@ API keys are stored server-side (Vercel Functions or Supabase) and are never exp
 | Chat Messages | Android app-private `SharedPreferences`; browser local storage | Opt-in snapshot | Until local deletion/storage removal; Android backup may retain copies; cloud deletion/backup timing is controlled by Supabase |
 | Audio/transcripts | Speech service; transcript may be retained locally as chat text if sent | No raw audio in snapshots | Speech-service terms apply; transcript follows chat retention; generated audio is not retained by Dua |
 | Account Credentials | Encrypted Android session token / secure web cookies; passwords not persisted | Supabase | Until logout, expiry or account deletion; provider backup retention may apply |
-| API Keys | Server-side only | Server-side only | Until revoked by user; never stored on device |
-| Search Queries | None | N/A (Brave) | Per Brave Search policy (~7 days) |
+| API Keys | Server-side only | Server-side only | Until removed or rotated by the deployment operator; never stored on device |
+| Search Queries | None | N/A (Brave) | Per Brave's current privacy policy and service terms |
 | Cloud Snapshots | N/A | Supabase | User-managed; deletion and backup retention depend on Supabase project behavior |
 
 ---
@@ -177,6 +173,7 @@ Dua AI integrates with:
 - **Supabase** (auth, cloud storage): https://supabase.com/privacy
 - **Vercel** (web hosting, API): https://vercel.com/legal/privacy-policy
 - **Firebase Crashlytics** (error reporting, Android only): https://firebase.google.com/support/privacy
+- Crashlytics collection is disabled by default for debug builds and enabled for Android release builds by the checked-in Gradle configuration. Review the Firebase privacy terms and the deployed app's crash-reporting behavior.
 - **AI Providers** (OpenAI, Google, Anthropic, etc.): See provider privacy policies above.
 
 ---

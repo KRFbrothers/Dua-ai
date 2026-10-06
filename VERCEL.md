@@ -35,7 +35,7 @@ Browser chats/preferences are origin-scoped. Vercel cannot read the old Netlify 
 
 ## Limits and checks
 
-Vercel functions use a 60-second maximum duration. Chat has a 55-second deadline including authentication/quota work; model calls have a 45-second timeout. Search and public page retrieval have 15-second limits. App upload bounds remain below the platform's 4.5 MB request cap. API responses are no-store and secure account cookies are retained. The nine function files cover config, chat, cloud, account actions/Google callback, search, setup, GitHub listing and generated audio.
+Vercel functions use a 60-second maximum duration. Chat has a 55-second deadline including authentication/quota work; model calls have a 45-second timeout. Search and public page retrieval have 15-second limits. App upload bounds remain below the platform's 4.5 MB request cap. API responses are no-store and secure account cookies are retained. Eight function entry files under `web/api/` cover config, chat, cloud, account actions/Google callback, search, setup, GitHub listing and generated audio.
 
 The Vercel adapter includes bounded **per-instance** burst guards: five chat/search/optional connector/audio requests or twenty account/cloud requests per IP per minute. Cold starts and different instances have independent windows. Optional Supabase-verified login/owner policies and a durable per-account daily request-attempt limit are implemented; see [EIGHT-FEATURE-SETUP.md](EIGHT-FEATURE-SETUP.md#start-with-the-existing-services) and [RELEASE-CHECKLIST.md](RELEASE-CHECKLIST.md#production-access-and-spend-controls). Request counts do not cap currency spending. Provider quotas/spending controls and Supabase Auth limits remain separate.
 
