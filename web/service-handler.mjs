@@ -12,9 +12,9 @@ export async function handleService(request,{env=process.env,fetcher=fetch}={}) 
  if(request.headers.get('origin')&&request.headers.get('origin')!==url.origin)return Response.json({error:'Request origin is not allowed.'},{status:403,headers:{'Cache-Control':'no-store'}});
  if(path==='/api/setup')return handleSetup(request,{env});
  if(path==='/api/config')return handleChat(request,{env,fetcher});
- if(path==='/api/cloud'||/^\/api\/account\/(session|signin|signup|refresh|profile|logout|features|reset-password|verify-recovery|password|google|delete|oauth\/callback)$/.test(path)) {
+ if(path==='/api/cloud'||/^\/api\/account\/(session|signin|signup|refresh|profile|logout|features|usage|reset-password|verify-recovery|password|google|delete|oauth\/callback)$/.test(path)) {
   const handler=path==='/api/cloud'&&request.method==='GET'?handleCloudRead:handleAccount;
-  return handler(request,{url:env.SUPABASE_URL,key:env.SUPABASE_ANON_KEY,oauthRedirectUrl:env.SUPABASE_AUTH_REDIRECT_URL,serviceRoleKey:env.SUPABASE_SERVICE_ROLE_KEY,fetcher});
+  return handler(request,{url:env.SUPABASE_URL,key:env.SUPABASE_ANON_KEY,oauthRedirectUrl:env.SUPABASE_AUTH_REDIRECT_URL,serviceRoleKey:env.SUPABASE_SERVICE_ROLE_KEY,dailyRequestLimit:env.DUA_DAILY_REQUEST_LIMIT,fetcher});
  }
  if(['/api/chat','/api/search','/api/connectors/github','/api/voice/audio'].includes(path)) {
   if(request.method!=='POST')return Response.json({error:'Method not allowed.'},{status:405,headers:{'Cache-Control':'no-store'}});

@@ -60,7 +60,7 @@ GitHub and generated audio stay inaccessible until an allowed personal owner is 
 
 The original `202610040001_dua_cloud.sql` is already applied in your project. Automatic web/Android snapshots and recovery do not need another table. If you choose a durable daily request quota, run [supabase/migrations/202610040002_dua_usage.sql](supabase/migrations/202610040002_dua_usage.sql) in Supabase SQL Editor, then add the quota variables above and redeploy. This migration creates usage rows with account ownership and a server-only atomic request reservation.
 
-The quota counts attempts shared by chat, search and optional online integrations. Failed providers consume attempts. It is a request count, rather than a token or currency budget. Provider-side spending controls remain separate. Account deletion requires typing **DELETE MY ACCOUNT** and binds the request to the account shown; it deletes cloud account data while keeping local chats and notes.
+The quota counts attempts shared by chat, search and optional online integrations. Failed providers consume attempts. It is a request count, rather than a token or currency budget. Provider-side spending controls remain separate. When the quota is configured, signed-in users can read their current UTC-day count and reset time from `GET /api/account/usage`; it does not consume a request. Apply [202610060001_dua_read_daily_usage.sql](supabase/migrations/202610060001_dua_read_daily_usage.sql) after the usage-table migration to enable this read-only insight. Account deletion requires typing **DELETE MY ACCOUNT** and binds the request to the account shown; it deletes cloud account data while keeping local chats and notes.
 
 ## Validation
 

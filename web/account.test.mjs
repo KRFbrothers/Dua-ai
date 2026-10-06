@@ -18,6 +18,25 @@ test('cloud delete writes an empty revisioned snapshot instead of touching local
 test('snapshot bounds reject malformed data and ignore attachment/token metadata',()=>{const safe=validateCloudSnapshot({...snapshot,accessToken:'NEVER',chats:[{...snapshot.chats[0],attachments:[{data:'NEVER'}]}]});assert.ok(!JSON.stringify(safe).includes('NEVER'));for(const value of [{...snapshot,memory:Array(11).fill('note')},{...snapshot,chats:[snapshot.chats[0],snapshot.chats[0]]},{...snapshot,memory:['x'.repeat(201)]},{...snapshot,chats:[{...snapshot.chats[0],draft:'x'.repeat(8001)}]}])assert.throws(()=>validateCloudSnapshot(value));});
 test('cloud merge keeps local drafts, forks conflicts and does not re-import identical copies',()=>{const context={};vm.runInNewContext(readFileSync('dist/cloud-merge.js','utf8'),context);const local=snapshot.chats,remote=[{...local[0],draft:'Remote draft'}];const first=context.DuaCloudMerge(local,remote,()=> 'copy-id');assert.equal(first.conflicts,1);assert.equal(first.chats[0].draft,'Unsent draft');assert.equal(first.chats[1].draft,'Remote draft');const repeated=context.DuaCloudMerge(first.chats,remote,()=> 'another-id');assert.equal(repeated.added,0);});
 
+test('daily usage is read-only, authenticated, bounded, and tied to the verified account',async()=>{
+ const calls=[];const settings={...env(async(url,options)=>{calls.push({url,options});return url.includes('/auth/')?Response.json(user):Response.json({used:7,resetAt:1900000000});}),serviceRoleKey:'sb_secret_test',DUA_DAILY_REQUEST_LIMIT:'20'};
+ const response=await handleAccount(req('/api/account/usage','GET',undefined,{cookie:'dua_access=test-access'}),settings);
+ assert.equal(response.status,200);assert.deepEqual(await response.json(),{used:7,limit:20,remaining:13,resetAt:1900000000});
+ assert.equal(calls.length,2);assert.ok(calls[1].url.endsWith('/rpc/dua_read_daily_usage'));assert.deepEqual(JSON.parse(calls[1].options.body),{account_id:id});assert.ok(calls[1].options.headers.Authorization.startsWith('Bearer '));
+});
+test('daily usage requires a signed-in user and configured quota without consuming requests',async()=>{
+ let reads=0;const settings={...env(async url=>{if(url.includes('/auth/'))return Response.json({error:'invalid token'},{status:401});reads++;return Response.json({used:0,resetAt:1900000000});}),serviceRoleKey:'sb_secret_test'};
+ assert.equal((await handleAccount(req('/api/account/usage'),settings)).status,401);
+ const configured={...settings,fetcher:async url=>{if(url.includes('/auth/'))return Response.json(user);reads++;return Response.json({used:0,resetAt:1900000000});}};
+ assert.equal((await handleAccount(req('/api/account/usage','GET',undefined,{cookie:'dua_access=test-access'}),configured)).status,503);
+ assert.equal(reads,0);
+});
+test('invalid daily usage responses fail closed',async()=>{
+ for(const usage of [Response.json({used:-1,resetAt:1900000000}),new Response('x'.repeat(4097))]){
+  const settings={...env(async url=>url.includes('/auth/')?Response.json(user):usage),serviceRoleKey:'sb_secret_test',DUA_DAILY_REQUEST_LIMIT:20};
+  assert.equal((await handleAccount(req('/api/account/usage','GET',undefined,{cookie:'dua_access=test-access'}),settings)).status,502);
+ }
+});
 test('password recovery sends no raw errors and verifies only recovery OTP into protected session',async()=>{
  const calls=[];const settings=env(async(url,options)=>{calls.push({url,body:JSON.parse(options.body)});return Response.json(url.endsWith('/verify')?session:{});});
  const recovery=await handleAccount(req('/api/account/reset-password','POST',{email:user.email}),settings);assert.equal(recovery.status,200);assert.equal(calls[0].body.email,user.email);assert.ok(!(await recovery.text()).includes('test-access'));
