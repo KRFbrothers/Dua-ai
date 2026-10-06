@@ -25,6 +25,7 @@ val releaseSigningConfigured = releaseSigningValues.all { !it.isNullOrBlank() }
 require(releaseSigningValues.all { it.isNullOrBlank() } || releaseSigningConfigured) {
     "Release signing requires DUA_RELEASE_STORE_FILE, DUA_RELEASE_STORE_PASSWORD, DUA_RELEASE_KEY_ALIAS, and DUA_RELEASE_KEY_PASSWORD."
 }
+
 gradle.taskGraph.whenReady { taskGraph ->
     val releaseArtifactRequested = taskGraph.allTasks.any {
         it.name == "assembleRelease" || it.name == "bundleRelease" || it.name.startsWith("packageRelease")
