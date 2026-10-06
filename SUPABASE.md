@@ -1,6 +1,6 @@
 # Supabase account and cloud sync setup
 
-Supabase provides email accounts, profile/device logout, reviewed chat/memory snapshot transfers and opt-in foreground automatic sync on web and Android. Production uses the existing project with the Vercel backend at `https://dua-cyan.vercel.app`. Credentials remain in server configuration. Optional recovery, web Google login, deletion and account protection are documented in [ACCOUNT-SETUP.md](ACCOUNT-SETUP.md).
+Supabase provides email accounts, profile/device logout, reviewed chat/memory snapshot transfers and opt-in foreground automatic sync on web and Android. Production uses the Vercel backend at `https://dua-cyan.vercel.app`; deployed settings must be verified in the hosting dashboard. Credentials remain in server configuration. Optional recovery, web Google login, deletion and account protection are described below and in [EIGHT-FEATURE-SETUP.md](EIGHT-FEATURE-SETUP.md#optional-server-variables).
 
 ## 1. Create and configure the project
 
@@ -16,7 +16,7 @@ Add these environment variables to Vercel Production and redeploy:
 - `SUPABASE_URL`: project URL, such as `https://PROJECT.supabase.co`.
 - `SUPABASE_ANON_KEY`: the project's public publishable key or legacy anon key.
 
-`SUPABASE_ANON_KEY` accepts only the project's public publishable/anon credential; service-role/secret credentials are rejected in that field. Optional deletion and durable request quotas use a separate server-only `SUPABASE_SERVICE_ROLE_KEY`, described in [ACCOUNT-SETUP.md](ACCOUNT-SETUP.md). Keep existing model configuration. Supabase credentials are read by the backend and are not embedded in HTML or Android. Local development uses an ignored `web/.env`; run `npm start` from `web` with Node 24 or newer.
+`SUPABASE_ANON_KEY` accepts only the project's public publishable/anon credential; service-role/secret credentials are rejected in that field. Optional deletion and durable request quotas use a separate server-only `SUPABASE_SERVICE_ROLE_KEY`. Keep existing model configuration. Supabase credentials are read by the backend and are not embedded in HTML or Android. Local development uses an ignored `web/.env`; run `npm start` from `web` with Node 24 or newer.
 
 Android defaults to the same HTTPS Vercel backend through `DUA_API_BASE_URL`. Native source changes reach installed apps through a later release; routine compilation/JVM tests do not package an APK. The backend serves `/api/account/*` and `/api/cloud`. No separate Supabase key belongs in Android.
 
@@ -31,7 +31,7 @@ Android defaults to the same HTTPS Vercel backend through `DUA_API_BASE_URL`. Na
 
 ## Data and security behavior
 
-Cloud storage uses whole snapshots with revision checks. Manual uploads replace the snapshot after review; downloads merge into local data, skipping identical records and retaining conflicting chats as separate copies. Optional automatic sync runs only while the page/app is in the foreground and pauses for account changes, deletions, conflicts or failed storage. Consent is specific to the device/account. Local deletions do not propagate automatically. Clearing cloud writes an empty revision so stale uploads still conflict. Background/realtime sync remains pending. See [AUTOMATION-SETUP.md](AUTOMATION-SETUP.md).
+Cloud storage uses whole snapshots with revision checks. Manual uploads replace the snapshot after review; downloads merge into local data, skipping identical records and retaining conflicting chats as separate copies. Optional automatic sync runs only while the page/app is in the foreground and pauses for account changes, deletions, conflicts or failed storage. Consent is specific to the device/account. Local deletions do not propagate automatically. Clearing cloud writes an empty revision so stale uploads still conflict. Background/realtime sync remains pending.
 
 Limits: 100 chats per snapshot, 500 messages per chat, 8,000 draft characters, 1,048,576 message characters, 10 memory notes of 200 characters each, and 4 MiB of normalized app JSON. PostgreSQL's JSON representation includes spaces, so snapshots near the limit may need to be reduced. File/audio bytes, local settings and provider keys are not synced. Saved memory notes are included even if memory use is currently switched off; download preserves that opt-in switch. The review shows drafts and notes before upload.
 
