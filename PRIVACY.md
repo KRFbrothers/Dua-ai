@@ -8,12 +8,13 @@ This document outlines how Dua AI handles user data, privacy, and retention acro
 
 #### Collection
 - **Source:** Users initiate voice input via microphone (Android `RecognitionService`, Web Speech API).
-- **Scope:** Audio is captured locally and transmitted only when explicitly sent as part of a chat message.
+- **Scope:** Microphone audio is passed to the operating system or browser speech-recognition service to produce a transcript. Depending on the device, browser, service and settings, recognition may be processed locally or remotely; Dua cannot guarantee on-device processing. Voice-to-draft does not send audio to Dua's chat API. The transcript is sent to the selected AI provider only if the user sends it as a chat message.
+- **Generated audio:** If enabled and explicitly selected, reply text is sent to the configured audio provider (ElevenLabs) to generate speech. Device text-to-speech uses the installed speech service and may have its own processing practices.
 - **Consent:** Users grant microphone permissions at the OS level (Android) or browser level (Web); the app displays a permission notice before first use.
 
 #### Processing
-- **Local Processing:** Device speech recognition (Android, Web) runs on-device; audio is NOT stored.
-- **Provider Transmission:** If audio is sent to an AI provider (OpenAI, Google Gemini, Anthropic, etc.), it is transmitted securely (HTTPS).
+- **Speech recognition:** Recognition is provided by Android's selected `RecognitionService` or the browser's Web Speech implementation. Processing location and retention depend on that service; review its settings and privacy terms.
+- **Provider transmission:** Chat text, including a reviewed voice transcript, is sent over HTTPS to the selected chat provider when the user sends it. Optional generated reply audio sends the selected reply text over HTTPS to ElevenLabs.
 - **Provider Retention:** Each provider has its own retention policy:
   - OpenAI: Up to 30 days (see OpenAI privacy policy)
   - Google Gemini: Up to 3 days (see Google privacy policy)
@@ -22,8 +23,8 @@ This document outlines how Dua AI handles user data, privacy, and retention acro
 
 #### User Control
 - Users can disable voice input in Settings.
-- Voice messages are not automatically saved; users choose to send them.
-- Audio is never stored by Dua AI itself (no server-side logs of raw audio).
+- Voice recognition does not automatically send a chat or store raw audio in Dua's chat history. Speech services may process or retain audio under their own terms.
+- Generated reply audio is optional and user-initiated. Dua does not persist the generated audio as chat history.
 
 ---
 
@@ -34,17 +35,18 @@ This document outlines how Dua AI handles user data, privacy, and retention acro
 - **Cloud Sync (Optional):** Users explicitly opt-in to cloud snapshots. No syncing occurs without user action.
 
 #### Local Storage
-- **Android:** Stored in encrypted local database (Room).
+- **Android:** Chat history and app preferences are stored in app-private `SharedPreferences`; they are not encrypted by the app. Android OS sandboxing protects app-private files, but this is not equivalent to an encrypted database.
 - **Web:** Stored in browser local storage; survives page refresh but cleared if cache is cleared.
-- **Retention:** Indefinite unless user manually deletes.
+- **Backup:** Android app backup and device transfer are enabled. The account-session and automatic-sync preference files are excluded, but chat history and other app preferences are not excluded by the checked-in backup rules. Whether a backup is created or restored depends on Android/device backup settings and the user's account. Users should not assume local chats remain only on one device.
+- **Retention:** Retained until the user deletes the data, clears app/browser storage, uninstalls the app, or an enabled device backup restores it. Backup copies may have separate retention.
 
 #### Cloud Storage (Opt-In)
 - **Activation:** User must explicitly enable "Cloud Sync" in account settings.
 - **Transport:** Messages are sent over HTTPS to Supabase (encrypted at rest).
 - **Retention:** 
-  - User-managed: Users can delete snapshots manually at any time.
-  - Admin retention: 90 days after user deletion (for backup/audit purposes).
-  - Account deletion: All snapshots deleted immediately upon account closure.
+  - Users can clear their cloud snapshot from the app or delete their account.
+  - Account deletion requests removal of the Supabase account and associated app data; provider backup-retention timing is controlled by Supabase and is not guaranteed by Dua.
+  - The repository does not define or verify a fixed post-deletion backup-retention period.
 - **Encryption:** Supabase Row Level Security (RLS) ensures only the account owner can access their snapshots.
 
 ---
@@ -54,9 +56,8 @@ This document outlines how Dua AI handles user data, privacy, and retention acro
 #### Data Stored
 - Email (for login & recovery)
 - Account display name (optional)
-- Notification preferences
-- Model & provider selections
-- API key references (keys themselves are NOT stored; only whether integration is enabled)
+- Local notification, appearance and provider selections are stored in app/browser settings, not Supabase cloud snapshots.
+- Provider API keys are configured server-side and are not stored in the app's local account profile.
 
 #### Local Account (No Cloud)
 - Users can chat without creating an account (local-only mode).
@@ -64,12 +65,12 @@ This document outlines how Dua AI handles user data, privacy, and retention acro
 
 #### Cloud Account (Opt-In)
 - Required for cloud snapshots, recovery, and multi-device sync.
-- Authenticated via Supabase (email + password or OAuth).
+- Authenticated via Supabase (email + password; web Google sign-in is optional when configured).
 - Account data is encrypted and subject to RLS.
 
 #### Retention
 - Account data is retained as long as the account is active.
-- Upon account deletion, all associated data (including cloud snapshots, email, preferences) is deleted within 30 days.
+- Account deletion removes the Supabase account and associated cloud data when the configured deletion flow succeeds. It does not clear local chats, drafts, preferences or memories; users must delete those separately. Supabase backup retention is outside Dua's control.
 
 ---
 
@@ -120,16 +121,16 @@ API keys are stored server-side (Vercel Functions or Supabase) and are never exp
 ### 6. GitHub Integration (Read-Only)
 
 #### Scope
-- Limited read-only access to the Dua-ai repository.
-- No write access; no modifications to code or issues.
+- Uses a server-side GitHub token to list up to 30 repositories owned by the signed-in GitHub account. The endpoint requests `affiliation=owner`; it is not restricted in code to the Dua-ai repository.
+- The feature does not write to repositories or modify code/issues.
 
 #### Data Shared
-- GitHub username (if authenticated)
-- OAuth token scope: read-only repository contents.
+- Repository names, visibility and descriptions returned by GitHub.
+- The configured GitHub token is sent only by the server to GitHub; its permissions are determined by the token owner and GitHub configuration.
 
 #### Data NOT Shared
-- Other repositories.
-- User's GitHub settings or private repos.
+- GitHub account settings.
+- Repository content is not fetched by this listing endpoint, but repositories visible to the configured token may appear, including private repositories owned by the account.
 
 #### Retention
 - GitHub token is stored securely server-side.
@@ -137,37 +138,16 @@ API keys are stored server-side (Vercel Functions or Supabase) and are never exp
 
 ---
 
-### 7. Google Agent (Optional Automation)
-
-#### Scope
-- Separate Python agent for code automation (not the chat app).
-- Used for reviewing code and generating PR suggestions.
-
-#### Data Access
-- Read-only: Dua-ai repository contents at a pinned commit.
-- Write-only: Creates branches and draft PRs (no merging, no write to main).
-
-#### Token Permissions
-- **Minimal scope:** Contents (read/write), Pull Requests (read/write), Actions (read).
-- **Repository-specific:** Token access is limited to KRFbrothers/Dua-ai only.
-- **No administrative access:** Token cannot modify workflows, settings, or repository administration.
-
-#### Retention
-- Token is stored in Google Cloud Secret Manager (production) or `.env` (development).
-- Token is rotated at least quarterly.
-
----
-
 ## Data Retention Summary
 
 | Data Type | Local | Cloud | Retention |
 |-----------|-------|-------|-----------|
-| Chat Messages | On-device DB | Opt-in snapshot | Indefinite (local); user-managed (cloud); 90 days post-deletion (admin backup) |
-| Audio | On-device (not logged) | N/A | Immediate (device); per provider (if sent) |
-| Account Credentials | N/A | Supabase | Until account deletion; 30 days for audit logs |
+| Chat Messages | Android app-private `SharedPreferences`; browser local storage | Opt-in snapshot | Until local deletion/storage removal; Android backup may retain copies; cloud deletion/backup timing is controlled by Supabase |
+| Audio/transcripts | Speech service; transcript may be retained locally as chat text if sent | No raw audio in snapshots | Speech-service terms apply; transcript follows chat retention; generated audio is not retained by Dua |
+| Account Credentials | Encrypted Android session token / secure web cookies; passwords not persisted | Supabase | Until logout, expiry or account deletion; provider backup retention may apply |
 | API Keys | Server-side only | Server-side only | Until revoked by user; never stored on device |
 | Search Queries | None | N/A (Brave) | Per Brave Search policy (~7 days) |
-| Cloud Snapshots | N/A | Supabase | User-managed; 90 days post-deletion (backup); deleted on account closure |
+| Cloud Snapshots | N/A | Supabase | User-managed; deletion and backup retention depend on Supabase project behavior |
 
 ---
 
@@ -182,9 +162,9 @@ API keys are stored server-side (Vercel Functions or Supabase) and are never exp
 - Users can delete entire cloud snapshots.
 
 ### Deletion
-- **Local Data:** Users can clear app cache or uninstall to remove local data.
+- **Local Data:** Users can use in-app data controls or clear app/browser storage. Android backup may retain or restore app data according to device settings.
 - **Cloud Data:** Users can delete snapshots manually or request full account deletion.
-- **Account Deletion:** Accessible via Account → Settings → Delete Account; all associated data deleted within 30 days.
+- **Account Deletion:** Available from Profile when configured. It removes the account/cloud data on successful completion; it does not remove local chats or memories. Supabase backup-retention timing is outside Dua's control.
 
 ### Portability
 - Users can export chat history and settings in standard JSON format.
@@ -203,16 +183,16 @@ Dua AI integrates with:
 
 ## Security Measures
 
-- HTTPS encryption for all data in transit.
+- HTTPS encryption for network requests.
 - Supabase Row Level Security (RLS) for cloud data isolation.
 - Server-side credential storage (no API keys on client devices).
-- GitHub Secret Scanning enabled.
-- Quarterly security audits and dependency reviews.
+- Android account tokens are encrypted with Android Keystore; local chat history is not app-encrypted.
+- Repository/org-level secret and dependency scanning settings must be verified by the repository administrator; they are not established by application code.
 
 ---
 
 ## Policy Updates
 
-This policy is effective as of **2026-10-05**. Updates will be announced via GitHub Releases and the repository's discussions.
+This policy is effective as of **2026-10-06**. Updates will be announced via GitHub Releases and the repository's discussions.
 
-**Last Updated:** 2026-10-05
+**Last Updated:** 2026-10-06

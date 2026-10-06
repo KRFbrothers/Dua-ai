@@ -15,18 +15,30 @@ Dua AI is a privacy-conscious AI chat application for Android and the web. The p
 
 ## Current Status
 
-**What exists:**
-- Native Android Compose client (`app/`)
-- Web app and server API (`web/`)
-- Provider abstraction for 5 AI services
-- Local features: history, attachments, voice, export/import, settings
-- Google ADK coding agent (`google-agent/`)
+The repository contains the implementation described below, but this checkout cannot inspect Vercel or Supabase production settings or verify live external services. “Configured” therefore means the required settings are present in the active deployment, not merely supported by code. Do not treat a mocked test as live verification.
 
-**What's ready but needs work:**
-- Provider credentials are configured but not fully live-tested
-- Cloud sync and accounts are partially implemented
-- UI is functional but not polished to premium app standards
-- Web search and advanced integrations are prepared but not activated
+| Feature | Implemented in repository | Configured in production | Verified |
+| --- | --- | --- | --- |
+| Android and web clients | Yes | N/A | Source/tests; physical-device behavior pending |
+| Local chat history, drafts and search | Yes, both clients | N/A | Automated tests; Android backup/restart checks pending |
+| Attachments and photo resizing | Yes, both clients | Provider/model capabilities are environment-dependent; production unknown | Automated/mock tests; live providers and physical Android pending |
+| Camera and photo selection | Yes, browser and Android | Device/browser permission is user-controlled | Automated coverage; physical-device checks pending |
+| Voice input, read-aloud and hands-free | Yes, both clients | Speech service is device/browser-dependent; generated voice is optional | Automated/mock tests; speech/audio behavior on devices pending |
+| Accounts and profile | Yes; web Google sign-in is optional | Supabase, SMTP and OAuth settings are production-controlled; unknown here | Mocked tests; live sign-in/recovery pending |
+| Cloud snapshots and foreground sync | Yes, reviewed manual and opt-in foreground flows | Supabase migration/environment and per-device consent are required; production unknown | Automated and migration tests; live cross-device checks pending |
+| Gemini and optional AI providers | Adapters and provider selection are implemented | API keys/model IDs are production-controlled; unknown here | Mocked responses; live provider/model checks pending |
+| Web search and link reading | Yes | Brave key needed for Search; production status unknown | Mocked tests; live retrieval/provider checks pending |
+| Local memory and reviewed proposals | Yes | Local opt-in; no provider setup needed for notes | Automated tests; live prompt behavior pending |
+| GitHub connector | Read-only repository listing is implemented | Token, owner restriction and feature flag are required; production unknown | Mocked tests; live authorization pending |
+| Browser camera/screen preview | Browser-local preview is implemented; remote control is not | Browser permission is user-controlled | Source/regression checks; device/browser coverage pending |
+| Appearance and local notifications | Yes, with platform-specific behavior | Notification permission is user-controlled | Automated tests; physical delivery/rendering checks pending |
+| Data controls and sharing | Local export/import/delete and reviewed cloud clearing are implemented | Cloud controls require Supabase; production unknown | Automated tests; physical file-picker checks pending |
+| Login/owner/quota protection | Optional controls and durable daily request quota are implemented | Vercel variables, service key and usage migration are needed; production unknown | Mocked tests; production enforcement not verified |
+| Release packaging and distribution | Android source builds; no release pipeline is configured | Signing credentials/store setup not verified | CI runs JVM tests, not a signed APK; release testing pending |
+
+**Phase alignment:** Phase 1 is implemented in code but still awaits some physical-device verification. Phase 2 design-polish success criteria remain open. Phase 3 is implemented as configurable adapters but has not been validated against live provider APIs. Phase 4 account/snapshot/foreground-sync code is substantially implemented, while deployment and cross-device verification remain open. Phase 5 documentation and privacy accuracy need the corrections/checks tracked in the release runbook. Phase 6 contains selected opt-in features, not the full connector/computer/agent vision.
+
+The separate Google ADK coding-agent component is not present in this repository checkout; its old workflow and documentation references should not be treated as an active feature.
 
 ---
 
