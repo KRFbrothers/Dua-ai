@@ -1,4 +1,5 @@
 import { validateCloudSnapshot } from './cloud-snapshot.mjs';
+import { readJsonLimited } from './limited-json.mjs';
 import { createHash, randomBytes } from 'node:crypto';
 const cookieNames={access:'dua_access',refresh:'dua_refresh'};
 function configuration(env){
@@ -46,6 +47,18 @@ export async function handleAccount(req,env={}){
  try{
   if(url.pathname==='/api/account/session'&&req.method==='GET')return json({configured:true,user:await authenticated()});
   if(url.pathname==='/api/account/features'&&req.method==='GET')return json({passwordReset:true,googleLogin:!!oauthRedirect(env,req.url),accountDeletion:!!privilegedKey(env.serviceRoleKey)});
+  if(url.pathname==='/api/account/usage'&&req.method==='GET'){
+   const user=await authenticated();if(!user)return json({error:'Sign in from Profile to continue.'},401);
+   const rawLimit=env.dailyRequestLimit??env.DUA_DAILY_REQUEST_LIMIT;
+   const limit=Number(rawLimit);
+   const serviceKey=privilegedKey(env.serviceRoleKey);
+   if((typeof rawLimit!=='number'&&(typeof rawLimit!=='string'||!/^[1-9][0-9]*$/.test(rawLimit.trim())))||!Number.isInteger(limit)||limit<1||limit>100000||!serviceKey)return json({error:'Daily request usage is not configured.'},503);
+   const response=await fetcher(config.url+'/rest/v1/rpc/dua_read_daily_usage',{method:'POST',headers:{apikey:serviceKey,Authorization:'Bearer '+serviceKey,'Content-Type':'application/json'},body:JSON.stringify({account_id:user.id}),signal:AbortSignal.any([req.signal,AbortSignal.timeout(15000)]),redirect:'error'});
+   if(!response.ok)return json({error:'Daily request usage is unavailable. Check setup and retry.'},503);
+   const usage=await readJsonLimited(response,4096);
+   if(!Number.isSafeInteger(usage?.used)||usage.used<0||usage.used>100000||!Number.isSafeInteger(usage.resetAt)||usage.resetAt<=0)throw Error('Invalid usage response');
+   return json({used:usage.used,limit,remaining:Math.max(0,limit-usage.used),resetAt:usage.resetAt});
+  }
   if(url.pathname==='/api/account/oauth/callback'&&req.method==='GET'){
    extraCookies=oauthCookies();const redirect=oauthRedirect(env,req.url),verifier=stored.dua_oauth_verifier,flow=stored.dua_oauth_flow,code=url.searchParams.get('code');
    if(native||!redirect||!verifier||! /^[A-Za-z0-9_-]{43}$/.test(verifier)||!flow||! /^[A-Za-z0-9_-]{32}$/.test(flow)||url.searchParams.get('flow')!==flow||typeof code!=='string'||! /^[A-Za-z0-9._-]{1,2048}$/.test(code))return json({error:'Google sign-in expired or could not be verified. Start again from Profile.'},400);
