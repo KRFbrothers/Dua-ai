@@ -29,8 +29,8 @@ require(releaseSigningValues.all { it.isNullOrBlank() } || releaseSigningConfigu
     "Release signing requires DUA_RELEASE_STORE_FILE, DUA_RELEASE_STORE_PASSWORD, DUA_RELEASE_KEY_ALIAS, and DUA_RELEASE_KEY_PASSWORD."
 }
 
-gradle.taskGraph.whenReady { graph: TaskExecutionGraph ->
-    val releaseArtifactRequested = graph.allTasks.any { task ->
+gradle.taskGraph.whenReady({
+    val releaseArtifactRequested = allTasks.any { task ->
         task.name == "assembleRelease" || task.name == "bundleRelease" || task.name.startsWith("packageRelease")
     }
     if (releaseArtifactRequested) {
@@ -41,7 +41,7 @@ gradle.taskGraph.whenReady { graph: TaskExecutionGraph ->
             "DUA_RELEASE_STORE_FILE must point to an existing keystore file."
         }
     }
-}
+})
 
 android {
     namespace = "com.dua.ai"
