@@ -2,4 +2,5 @@
 <full-backup-content>
     <exclude domain="sharedpref" path="dua_account_session.xml" />
     <exclude domain="sharedpref" path="dua_auto_sync.xml" />
+    <exclude domain="sharedpref" path="dua_chat_history.xml" />
 </full-backup-content>
