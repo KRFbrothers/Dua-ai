@@ -48,7 +48,7 @@ fun DataControlsScreen(viewModel: ChatViewModel, onBack: () -> Unit) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("${chats.size} saved chats · this device", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         FilledTonalButton(enabled = !busy && chats.isNotEmpty(), shape = RoundedCornerShape(16.dp),
-            colors = ButtonDefaults.filledTonalButtonColors(containerColor = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface), modifier = Modifier.fillMaxWidth().heightIn(min = 72.dp), onClick = {
+            colors = ButtonDefaults.filledTonalButtonColors(containerColor = MaterialTheme.colorScheme.surfaceContainer, contentColor = MaterialTheme.colorScheme.onSurface), modifier = Modifier.fillMaxWidth().heightIn(min = 72.dp), onClick = {
             try { export.launch("dua-chats-${Instant.now().toString().take(10)}.json") }
             catch (_: ActivityNotFoundException) { viewModel.dataControlNotice("File picker unavailable on this device.") }
             catch (_: SecurityException) { viewModel.dataControlNotice("File access unavailable. Try another location.") }
@@ -57,7 +57,7 @@ fun DataControlsScreen(viewModel: ChatViewModel, onBack: () -> Unit) {
             Column(Modifier.weight(1f)) { Text("Export chats", fontSize = 16.sp); Text("Save messages and drafts as JSON", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
         FilledTonalButton(enabled = !busy, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth().heightIn(min = 72.dp),
-            colors = ButtonDefaults.filledTonalButtonColors(containerColor = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface), onClick = {
+            colors = ButtonDefaults.filledTonalButtonColors(containerColor = MaterialTheme.colorScheme.surfaceContainer, contentColor = MaterialTheme.colorScheme.onSurface), onClick = {
             try { importer.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) }
             catch (_: ActivityNotFoundException) { viewModel.dataControlNotice("File picker unavailable on this device.") }
             catch (_: SecurityException) { viewModel.dataControlNotice("File access unavailable. Try another location.") }
@@ -66,7 +66,7 @@ fun DataControlsScreen(viewModel: ChatViewModel, onBack: () -> Unit) {
             Column(Modifier.weight(1f)) { Text("Import chats", fontSize = 16.sp); Text("Restore a Dua JSON export as separate copies", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
         FilledTonalButton(enabled = !busy, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth().heightIn(min = 72.dp),
-            colors = ButtonDefaults.filledTonalButtonColors(containerColor = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.error), onClick = { confirm = true }) {
+            colors = ButtonDefaults.filledTonalButtonColors(containerColor = MaterialTheme.colorScheme.surfaceContainer, contentColor = MaterialTheme.colorScheme.error), onClick = { confirm = true }) {
             Icon(Icons.Default.DeleteOutline, null); Spacer(Modifier.width(16.dp))
             Column(Modifier.weight(1f)) { Text("Clear all chats", fontSize = 16.sp); Text("Remove local chats, drafts and pending files", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
         }

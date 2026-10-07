@@ -60,7 +60,7 @@ import com.dua.ai.viewmodel.ChatViewModel
 import com.dua.ai.model.MessageReaction
 
 private val Background: Color @Composable get() = MaterialTheme.colorScheme.background
-private val Container: Color @Composable get() = MaterialTheme.colorScheme.surface
+private val Container: Color @Composable get() = MaterialTheme.colorScheme.surfaceContainer
 private val Highest: Color @Composable get() = MaterialTheme.colorScheme.surfaceContainerHighest
 private val Secondary: Color @Composable get() = MaterialTheme.colorScheme.secondaryContainer
 private val Primary: Color @Composable get() = MaterialTheme.colorScheme.primary
