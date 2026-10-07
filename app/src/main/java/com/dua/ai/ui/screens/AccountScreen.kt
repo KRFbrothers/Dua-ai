@@ -67,10 +67,6 @@ fun AccountScreen(viewModel: ChatViewModel, page: String, onBack: () -> Unit, on
                         }
                     }) { Text("Sign in with Google") }
                 }
-                TextButton(enabled = state.googleConfigured && !state.busy, onClick = {
-                    runCatching { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(com.dua.ai.BuildConfig.DUA_API_BASE_URL.trimEnd('/') + "/profile.html"))) }
-                        .onFailure { viewModel.account.notice("A browser is unavailable on this device.") }
-                }) { Text("Open Google sign-in on website") }
             } else {
                 OutlinedTextField(name, { name = it.take(80) }, label = { Text("Display name") }, modifier = Modifier.fillMaxWidth(), enabled = !state.busy)
                 FilledTonalButton(enabled = state.configured && !state.busy && name.isNotBlank(), onClick = { viewModel.accountAction { viewModel.account.profile(name) } }) { Text("Save profile") }

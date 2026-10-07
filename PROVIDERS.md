@@ -4,7 +4,7 @@ Dua and Gemini retain the existing Gemini setup and attachment support. ChatGPT,
 
 ## Server variables
 
-Add variables to Vercel's server environment or a local ignored `.env` file. API keys must never be added to Android resources, browser JavaScript, public `NEXT_PUBLIC_` variables or GitHub commits.
+Add variables to Vercel's server environment or a local ignored `.env` file. API keys must never be added to Android resources, public client configuration or GitHub commits.
 
 | Choice | API key | Model ID |
 | --- | --- | --- |
@@ -22,7 +22,7 @@ Redeploy after setting server variables. `/api/config` exposes provider availabi
 
 ## Attachments
 
-All providers accept UTF-8 TXT files. For the four optional providers, enable images or PDFs only after confirming that your configured API model accepts that input. The capability variables are comma-separated MIME types; TXT remains available automatically. Unsupported or misspelled types are ignored, and the clients and server reject files outside the published list.
+All providers accept UTF-8 TXT files. For the four optional providers, enable images or PDFs only after confirming that your configured API model accepts that input. The capability variables are comma-separated MIME types; TXT remains available automatically. Unsupported or misspelled types are ignored, and the app and server reject files outside the published list.
 
 | Provider | Capability variable | Available types |
 | --- | --- | --- |
@@ -42,12 +42,12 @@ Schema, validation, cancellation and error tests use mocked provider responses. 
 
 Set `BRAVE_SEARCH_API_KEY` for Brave Search API access. Explicit `POST /api/search` JSON `{ "query": "your search" }` returns `{ "query": "your search", "results": [{ "title": "...", "url": "https://...", "snippet": "..." }] }` with at most five results.
 
-The standalone search page remains available. Chat now has a **Web: Off / Search / Read link** control on web and in Android source. It starts Off when opening a chat/page; choosing a mode opts subsequent sends in for that session. Modes are not stored or synced. `/api/config.web` reports Search and Read link availability. Older backends without these fields keep both modes unavailable.
+Chat has a **Web: Off / Search / Read link** control in the Android app. It starts Off when opening a chat; choosing a mode opts subsequent sends in for that session. Modes are not stored or synced. `/api/config.web` reports Search and Read link availability. Older backends without these fields keep both modes unavailable.
 
 - **Search:** Each opted-in Send runs one Brave search, then gives the model up to five result snippets as untrusted evidence. The final prompt is normalized and limited to 500 characters for the search query. Earlier turns, memory notes and file names/bytes are excluded from the search query. The model still receives the ordinary conversation, selected attachments and enabled memory. This does not fetch every result page.
 - **Read link:** Put a public HTTPS URL in the message. Send reads only its first HTTPS link, then passes a bounded text excerpt to the model. This mode needs no additional API key. It still uses the configured chat provider for the answer.
 
-Successful grounded replies append the actual source titles/URLs in a Sources footer, with safe clickable links in both clients. The footer is part of the ordinary reply text, so copy, local history, sharing and cloud snapshots retain it without a schema change. The model is instructed to cite numbered sources and treat source content as untrusted data; generated claims still need judgment. A search snippet is not a verified full page. Retrieval errors and empty searches stop the request without an invented sourced answer, restoring the draft/files. Stop cancels retrieval and the subsequent model call, discarding late responses. In-memory retries retain the original mode; after process/page reload, retries use Off and explain that choice.
+Successful grounded replies append the actual source titles/URLs in a Sources footer, with safe clickable links in the Android app. The footer is part of the ordinary reply text, so copy, local history, sharing and cloud snapshots retain it without a schema change. The model is instructed to cite numbered sources and treat source content as untrusted data; generated claims still need judgment. A search snippet is not a verified full page. Retrieval errors and empty searches stop the request without an invented sourced answer, restoring the draft/files. Stop cancels retrieval and the subsequent model call, discarding late responses. In-memory retries retain the original mode; after the app process restarts, retries use Off and explain that choice.
 
 Search links are bounded, deduplicated and HTTPS only. Links with embedded credentials and literal IP/local addresses are excluded. Search has a 15-second timeout; an opted-in chat has a 55-second overall deadline within the existing 60-second function limit. Account/login and request-attempt controls apply before retrieval. One chat attempt can make both a search and a chat-provider call; provider billing controls remain separate.
 

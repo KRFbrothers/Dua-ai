@@ -9,7 +9,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.json.JSONObject
 
-data class AccountState(val configured: Boolean = false, val user: AccountUser? = null, val busy: Boolean = false, val notice: String = "", val googleConfigured: Boolean = false, val deletionConfigured: Boolean = false, val recoveryVerified: Boolean = false)
+data class AccountState(val configured: Boolean = false, val user: AccountUser? = null, val busy: Boolean = false, val notice: String = "", val deletionConfigured: Boolean = false, val recoveryVerified: Boolean = false)
 class AccountRepository(private val api: AccountApi, private val store: SessionPersistence) {
     constructor(context: Context) : this(AccountApi(), AccountSessionStore(context))
     private var session = runCatching { store.read() }.getOrNull()
@@ -150,9 +150,9 @@ class AccountRepository(private val api: AccountApi, private val store: SessionP
     suspend fun loadFeatures() {
         try {
             val features = api.request("/api/account/features")
-            mutable.update { it.copy(googleConfigured = features.optBoolean("googleLogin"), deletionConfigured = features.optBoolean("accountDeletion")) }
+            mutable.update { it.copy(deletionConfigured = features.optBoolean("accountDeletion")) }
         } catch (cancelled: CancellationException) { throw cancelled }
-        catch (_: Exception) { mutable.update { it.copy(googleConfigured = false, deletionConfigured = false) } }
+        catch (_: Exception) { mutable.update { it.copy(deletionConfigured = false) } }
     }
     suspend fun signInWithGoogle(idToken: String, nonce: String) {
         val ticket = beginAuthentication()

@@ -20,11 +20,11 @@ Before enabling online AI in Vercel Production:
 ## API and deployment runbook
 
 1. Review the change and ensure the `Project checks` workflow passes. Run `bash ./gradlew :app:testDebugUnitTest --no-daemon --max-workers=2` from the repository root.
-2. Deploy the web project from the intended branch with Vercel Root Directory `web`, Node.js 24, and the production-only secrets configured in Vercel. Never copy secret values into Android resources, or public client configuration.
+2. Deploy the backend API (`web/`) from the intended branch with Vercel Root Directory `web`, Node.js 24, and the production-only secrets configured in Vercel. Never copy secret values into Android resources, or public client configuration.
 3. Apply reviewed Supabase migrations before enabling their dependent features. Verify RLS, grants, and function permissions in the Supabase SQL editor; do not grant clients direct snapshot writes or access to daily usage rows.
-4. After deployment, smoke-check `/`, `/chat.html`, `/api/config`, `/api/setup`, and `/api/account/session`. Confirm that public responses contain no API keys, service-role key, or owner email. `/api/setup` may expose feature availability and access-policy booleans.
+4. After deployment, smoke-check `/api/config`, `/api/setup`, and `/api/account/session`. (There is no web client; `/` is not served.) Confirm that public responses contain no API keys, service-role key, or owner email. `/api/setup` may expose feature availability and access-policy booleans.
 5. Exercise one staging account and one non-owner account before enabling owner restrictions for real users. Check sign-in, refresh, logout, account deletion only with a disposable test account, cloud ownership/conflicts, and quota enforcement.
-6. For a failed web deployment, redeploy the last known-good Vercel deployment. Treat database migrations separately: do not assume rolling back the web deployment reverses schema changes.
+6. For a failed backend deployment, redeploy the last known-good Vercel deployment. Treat database migrations separately: do not assume rolling back the backend deployment reverses schema changes.
 7. Mark a feature configured only after checking deployed environment values, and verified only after successful live/staging behavior. Keep those labels separate from repository unit/mock test results.
 
 ## Staging provider checks
@@ -45,7 +45,7 @@ Use a dedicated test account and non-production test data on a supported emulato
 - [ ] Create chats, drafts and local memory; force-stop/restart the app and verify expected persistence.
 - [ ] Verify Android backup/device-transfer behavior with a test profile, including what data is restored. Do not use real conversations for backup experiments.
 - [ ] Test sign-up/sign-in, token refresh, expiry, logout, denied login, owner restriction and account switching. Confirm local chats remain on logout and are not uploaded without explicit sync consent.
-- [ ] Test microphone permission allow/deny/revoke, speech-service unavailable, transcript review, hands-free Stop/background behavior, and text-to-speech. Confirm the device/browser speech service may process audio remotely.
+- [ ] Test microphone permission allow/deny/revoke, speech-service unavailable, transcript review, hands-free Stop/background behavior, and text-to-speech. Confirm the device speech service may process audio remotely.
 - [ ] Test camera capture and photo/document pickers, cancellation, rotation/background interruption, oversized image resizing, and cleanup.
 - [ ] Test JSON export/import using Hindi/emoji, malformed/oversized input, cancel, duplicate import, and storage failure. Confirm import does not silently replace existing chats.
 - [ ] Test clear-local-data, clear-cloud, and account deletion independently; verify which data remains after each operation.
@@ -76,12 +76,3 @@ Before distribution:
 - [ ] Establish an explicit release channel and rollback/update procedure before publishing.
 
 No signing keys, Android release workflow, signed artifacts, or app-store configuration are supplied by this repository.
-
-## Authentication & Access Control
-
-- [ ] `DUA_REQUIRE_LOGIN=1` is set in production environment
-- [ ] Non-authenticated users receive 401 error response
-- [ ] `DUA_ALLOWED_EMAIL` configured (if using owner restriction)
-- [ ] `DUA_DAILY_REQUEST_LIMIT` configured (if using quota)
-- [ ] Tested in staging: unauthenticated requests are rejected
-- [ ] Tested in staging: authenticated users can access AI
