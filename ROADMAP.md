@@ -1,10 +1,12 @@
 # Dua AI — Product Roadmap
 
-This roadmap takes Dua from a feature-rich prototype to a clean, professional, Grok-style AI assistant. The full gap analysis behind it (code evidence, verified provider APIs, UI review) is in [docs/grok-style-plan.md](docs/grok-style-plan.md).
+This roadmap takes Dua from a feature-rich prototype to a clean, professional, Grok-style AI assistant for its owner's personal use. The full gap analysis behind it (code evidence, verified provider APIs, UI review) is in [docs/grok-style-plan.md](docs/grok-style-plan.md).
 
 ## Product direction
 
 Dua is becoming a **Grok-style assistant**: one clean, professional Android app backed by a server-side API on Vercel. The web client was removed; `web/` contains only the backend, and provider API keys never leave the server.
+
+**Personal, single-user app.** Dua is for the owner (Fareed) only. There are no clients, no other users, no Google Play release and no monetisation. The app is installed on his own device(s) as a debug or sideloaded APK (see [RELEASE-CHECKLIST.md](RELEASE-CHECKLIST.md#personal-install)). Owner-only access (`DUA_REQUIRE_LOGIN=1` plus `DUA_ALLOWED_EMAIL` set to his account) is the permanent access model, not a step before a launch: it keeps the server-side keys and the provider spend his alone.
 
 **Target experience**
 
@@ -20,9 +22,18 @@ Dua is becoming a **Grok-style assistant**: one clean, professional Android app 
 
 - **Local-first** — conversations, drafts and history live on the device by default
 - **Multiple AI providers** — Gemini, ChatGPT, Claude, Grok and Kimi today; the final lineup is an [open decision](#open-decisions)
-- **Privacy and data control** — local export, import and delete; Supabase accounts and cloud sync stay optional and opt-in
+- **Privacy and data control** — local export, import and delete; the Supabase account and cloud sync stay optional and opt-in, and exist to back up and sync his own devices
 
 The composer will offer one mode menu: **Auto** (default) · **Reasoning** · **Search** · **Imagine**, with **Build** added in Phase 5. A mode that is not configured explains why instead of disappearing.
+
+**What personal use simplifies**
+
+- Owner sign-in can be mandatory for every file, Imagine and voice feature; there is no anonymous or guest path to design.
+- Cost controls protect one wallet: daily per-feature caps plus provider-side hard limits. No per-user quotas or plan tiers.
+- Storage retention (files, generated media, cloud snapshots) is the owner's choice.
+- Distribution is an APK on his own phone: no store listing, review, billing or app-store compliance work.
+
+**Out of scope:** Google Play release and listing, Play Billing or paid tiers, public launch, multi-user accounts and quotas, team workspaces, onboarding for new users, and content-policy work aimed at other users.
 
 ## Feature status
 
@@ -37,7 +48,7 @@ Effort scale (one developer working with coding agents): **S** ≤ 2 days, **M**
 | Web search | Brave, one query of the raw prompt, plain-text Sources footer | Provider built-in search tools with Brave as fallback, structured sources as chips, Auto mode | M | 2 |
 | X search | None | xAI `x_search` in Search mode, X post chips | S–M after web search | 2 |
 | Files | JPEG, PNG, WebP, PDF, TXT; 3 files, 2 MB total; sent once, then forgotten | Quick win: CSV, MD, JSON and code as text. Then Supabase Storage uploads kept in history; XLSX, DOCX, audio | S + L | 1 (quick win), 2 |
-| Image generation and editing | None | `/api/imagine`, image messages, viewer, save and share, quotas | M | 3 |
+| Image generation and editing | None | `/api/imagine`, image messages, viewer, save and share, daily spend caps | M | 3 |
 | Video | None | Async jobs with polling; 480p/720p default, 1080p gated | M–L | 3 |
 | Voices and languages | Device speech follows the phone locale; one fixed ElevenLabs voice | Voice and language pickers (device plus xAI or Gemini TTS) | S–M | 4 |
 | Realtime voice | Half-duplex hands-free loop, foreground only | Speech-to-speech over WebSocket, interrupt by talking | L | 4 |
@@ -64,7 +75,7 @@ The repository contains the implementation described below, but this checkout ca
 | Appearance and local notifications | Yes | Notification permission is user-controlled | Automated tests; physical delivery/rendering checks pending |
 | Data controls and sharing | Local export/import/delete and reviewed cloud clearing are implemented | Cloud controls require Supabase; production unknown | Automated tests; physical file-picker checks pending |
 | Login/owner/quota protection | Optional controls and durable daily request quota are implemented | Vercel variables, service key and usage migration are needed; production unknown | Mocked tests; production enforcement not verified |
-| Release packaging and distribution | Android source builds; no release pipeline is configured | Signing credentials/store setup not verified | CI runs JVM tests, not a signed APK; release testing pending |
+| Personal install (APK) | Android source builds; a debug APK needs no signing setup; release signing with a personal key is optional | Not verified here | CI runs JVM tests, not an APK; install on the owner's phone pending |
 
 **How the previous phases map to this plan:** the earlier six phases are folded into the new ones rather than dropped. *Core stability* and *design polish* → Phase 1. *AI provider validation* → Phases 0–1 (search verification in Phase 2). *Cloud, identity and sync* → Phase 2, where stored files depend on it. *Privacy, security and trust* → the [cross-cutting track](#cross-cutting-privacy-security-and-cost). *Advanced features* (#47) → Phases 2–5 or [Deferred](#deferred). At the switch: stability work is implemented in code but awaits physical-device verification; design-polish criteria remain open; provider adapters are not yet validated against live APIs; account, snapshot and foreground-sync code is substantially implemented while deployment and cross-device checks remain open; documentation and privacy accuracy checks are tracked in [RELEASE-CHECKLIST.md](RELEASE-CHECKLIST.md); former Phase 6 shipped selected opt-in features, not the full connector/computer/agent vision.
 
@@ -83,11 +94,11 @@ Confirm production can support the plan and is not already failing.
 - Vercel: confirm Fluid compute is on and check the plan's function duration (Hobby: 300 s max; Pro: 800 s max). The code still assumes a 60 s function (55 s server deadline), and there is no `vercel.json`.
 - Check `GEMINI_MODEL`: `gemini-2.0-flash` is shut down and 2.5 models are limited to existing users, so an old ID may already be failing. Recommended: `gemini-3.8-flash`.
 - Decide which provider keys to fund ([Open decisions](#open-decisions) 1). If xAI is chosen, set `GROK_API_KEY` and `GROK_MODEL=grok-4.7`.
-- Record production access controls, quotas and provider spending limits using [RELEASE-CHECKLIST.md](RELEASE-CHECKLIST.md).
+- Confirm the owner-only lock (`DUA_REQUIRE_LOGIN=1`, `DUA_ALLOWED_EMAIL` = owner) and set provider spending limits using [RELEASE-CHECKLIST.md](RELEASE-CHECKLIST.md).
 
 **Success:**
 - Function duration and Gemini model ID are known and recorded; no retired model is in use
-- Keys needed for Phase 1 are configured
+- Keys needed for Phase 1 are configured; production accepts only the owner's account and every funded provider has a spending limit
 
 ---
 
@@ -120,7 +131,7 @@ Highest impact, lowest risk: make Dua look professional, then add streaming and 
 
 **Success:**
 - Zero critical data-loss bugs; stable sending, stop and retry behavior
-- Screens feel visually consistent and premium on phones and tablets; settings and onboarding are intuitive
+- Screens feel visually consistent and premium on the owner's devices; settings are easy to find
 - Long answers stream and are not truncated; reasoning appears as a collapsible block
 - Older APKs still work against the new backend; backend adapter tests run in CI
 - Each provider can be activated and tested safely, and provider failures never break chat
@@ -138,29 +149,29 @@ Files stay in the conversation, search becomes model-driven with real sources, a
 - **Files v2:** private Supabase Storage bucket with row-level security, migration and `POST /api/files/sign`; Android uploads straight to Supabase (resumable above 6 MB), bypassing Vercel's 4.5 MB body limit; `fileRefs` stay in history so follow-ups work; providers receive short-lived signed URLs; XLSX→CSV on the server, DOCX, audio via speech-to-text
 - **Search v2:** provider built-in tools (xAI `web_search` + `x_search`, Gemini `google_search` + `url_context`, OpenAI `web_search`); structured `sources[]` rendered as chips (X posts show @handle and date); Brave stays as fallback and is verified live together with link reading
 - **Context:** replace the 39-message limit with a per-provider token/byte budget; rolling conversation summary; xAI prompt caching keyed by chat; later, model-proposed memory notes the user approves
-- **Cloud and identity (carried over):** live-verify Supabase sign-in/logout, cloud snapshots and foreground sync across devices; enforce ownership and access controls; device and session controls
+- **Cloud and identity (carried over):** live-verify the owner's Supabase sign-in/logout, cloud snapshots and foreground sync across his own devices; keep ownership checks and the owner-only lock enforced; device and session controls
 - Update PRIVACY.md (it currently promises file bytes are never stored) and data controls to cover stored files
 
 **Success:**
-- Follow-up questions about an attached file work across turns; users can see and delete stored files
+- Follow-up questions about an attached file work across turns; the owner can see and delete stored files
 - Search answers cite structured sources; X search works when xAI is configured
-- Secure, user-controlled sync works across devices; ownership and data protections are clear and enforced
-- Users understand what is local and what is in the cloud
+- Secure, owner-controlled sync works across his devices; ownership and data protections are enforced
+- It is clear what is local and what is in the cloud
 
 ---
 
 ### Phase 3: Imagine (image, then video)
-**Priority: Medium | Effort: M, then M–L | Depends on: Phase 2 storage; per-feature quotas**
+**Priority: Medium | Effort: M, then M–L | Depends on: Phase 2 storage; per-feature spend caps**
 
 **Work:**
 - `POST /api/imagine` for generation and editing (xAI `grok-imagine-image-2.0` or Gemini Nano Banana 2); provider URLs are temporary, so results are copied to Supabase Storage (no base64 through Vercel's 4.5 MB response limit)
 - Android: image message, full-screen viewer, save to gallery, share, "Edit this image"
 - Then async video: submit returns a request id and the app polls, so no function runs long; `grok-imagine-video-1.5`, 480p/720p by default, 1080p gated; MP4 copied to Storage; Media3/ExoPlayer playback
-- Sign-in and per-user quotas required
+- Owner sign-in required; daily image and video caps
 
 **Success:**
 - Generated media survives provider URL expiry and can be saved and shared
-- Quotas are enforced before anyone other than the owner can use Imagine
+- Daily caps keep image and video spend within the owner's budget
 
 ---
 
@@ -174,8 +185,8 @@ Absorbs former Phase 6.5 (generated reply voice).
 - Then realtime speech-to-speech: the server mints ephemeral tokens (`/v1/realtime/client_secrets`) so the key never reaches the phone; WebSocket audio with echo cancellation and server-side turn detection; interrupt by talking; microphone foreground service on Android 14+ for background use
 
 **Success:**
-- Users can choose voice and language; a realtime session can be interrupted by speaking
-- Voice minutes are covered by quotas; behavior is verified on physical devices
+- The owner can choose voice and language; a realtime session can be interrupted by speaking
+- Voice minutes are covered by daily caps; behavior is verified on the owner's phone
 
 ---
 
@@ -200,14 +211,15 @@ Absorbs the former connector, coding-agent and computer-mode items.
 ### Cross-cutting: privacy, security and cost
 **Applies to every phase.** Absorbs the former *Privacy, Security and Trust* phase.
 
-- Move `access-policy.mjs` from a daily request count to **per-feature cost quotas** (image, video, voice minutes, X posts) before enabling any paid media feature for anyone other than the owner
+- Keep the owner-only lock (`DUA_REQUIRE_LOGIN=1`, `DUA_ALLOWED_EMAIL`) on every deployment; it is permanent and protects the keys and spend
+- Move `access-policy.mjs` from a daily request count to **per-feature spend caps** (image, video, voice minutes, X posts) before enabling any paid media feature, alongside provider-side hard limits, so a bug or leaked session cannot run up the owner's bill
 - Keep API keys server-side; give the phone only short-lived tokens or signed URLs
-- Document retention for local data, cloud sync, stored files and generated media; improve consent and permission flows; make deletion and export transparent
+- Document retention for local data, cloud sync, stored files and generated media (periods are the owner's choice); keep deletion and export transparent
 - Stronger access checks for connectors and integrations
 - Update PRIVACY.md, FEATURES.md and PROVIDERS.md in the same PR as the behavior they describe
 
 **Success:**
-- Users understand what is local vs. cloud
+- It is clear what is local vs. cloud
 - Data deletion and export flows are reliable and consistent
 - No credentials are exposed in the client or GitHub
 
@@ -215,7 +227,7 @@ Absorbs the former connector, coding-agent and computer-mode items.
 
 ### Deferred
 
-Former Phase 6 items not in the current plan: plugin system and developer extensibility, Google Drive and other connectors, screen capture, and team workspaces/collaboration. Revisit after Phase 5.
+Former Phase 6 items not in the current plan: plugin system, Google Drive and other connectors, and screen capture. Revisit after Phase 5. Team workspaces and collaboration are dropped: Dua is single-user.
 
 ---
 
@@ -223,18 +235,19 @@ Former Phase 6 items not in the current plan: plugin system and developer extens
 
 Only the owner can make these; details are in [docs/grok-style-plan.md §D](docs/grok-style-plan.md#d-open-questions-and-decisions-only-the-owner-fareed-can-make).
 
+Already settled: Dua is personal and owner-only, with no paid tiers and no store release; owner sign-in is required for files, Imagine and voice.
+
 1. **Providers to fund** — an xAI API key (needed for X search, Grok Imagine and Grok voice; billed separately from SuperGrok)? Gemini as the default "Dua" brain, Grok, or both? Keep ChatGPT, Claude and Kimi, or simplify to two providers?
-2. **Budget and caps** — monthly budget and daily per-feature limits. Reference prices at time of writing (Oct 2026): `grok-4.7` $2/$6 per 1M tokens; images $0.02–0.05 each; video $0.02–0.08 per second; X search $5 per 1k posts; realtime voice $0.08/min.
-3. **Audience** — personal/owner-only (today's `DUA_ALLOWED_EMAIL`) or public? Plan-based tiers (e.g. 1080p video) imply Google Play Billing, a large separate project.
-4. **Vercel and Supabase plans** — Hobby caps functions at 300 s, Pro at 800 s; Supabase Free caps files at 50 MB.
-5. **File retention** — store uploads in Supabase Storage? For how long (e.g. auto-delete after 30 days)? Require sign-in for files, Imagine and voice (recommended: yes)?
-6. **Thinking display** — show reasoning summaries collapsed by default?
-7. **Brand and design** — Figma file, palette, typeface, icon and logo rules; dark-first like Grok; keep the cube motif?
-8. **Language** — English-only UI, or Urdu/Hindi too (Urdu needs right-to-left layout)?
-9. **Search** — keep Brave as a fallback (another key and bill) or rely on provider search?
-10. **Imagine content policy** — safety level, real-person likeness rules, whether generated media syncs to the cloud.
-11. **Build mode scope** — read-only repo chat, or PRs after approval? Which repositories? Is handing off to the Copilot coding agent or Vercel Sandbox acceptable?
-12. **Voice** — keep device voice as the free default? Which paid provider (xAI, Gemini or ElevenLabs)? Is $0.08/min realtime voice acceptable?
+2. **Budget and caps** — monthly personal budget and daily per-feature caps. Reference prices at time of writing (Oct 2026): `grok-4.7` $2/$6 per 1M tokens; images $0.02–0.05 each; video $0.02–0.08 per second; X search $5 per 1k posts; realtime voice $0.08/min.
+3. **Vercel and Supabase plans** — Hobby caps functions at 300 s, Pro at 800 s; Supabase Free caps files at 50 MB.
+4. **File retention** — store uploads in Supabase Storage, and for how long (e.g. keep, or auto-delete after 30 days)?
+5. **Thinking display** — show reasoning summaries collapsed by default?
+6. **Brand and design** — Figma file, palette, typeface, icon and logo; dark-first like Grok; keep the cube motif?
+7. **Language** — English-only UI, or Urdu/Hindi too (Urdu needs right-to-left layout)?
+8. **Search** — keep Brave as a fallback (another key and bill) or rely on provider search?
+9. **Imagine media** — should generated images and video sync to the cloud? Provider usage policies still apply to what is generated.
+10. **Build mode scope** — read-only repo chat, or PRs after approval? Which repositories? Is handing off to the Copilot coding agent or Vercel Sandbox acceptable?
+11. **Voice** — keep device voice as the free default? Which paid provider (xAI, Gemini or ElevenLabs)? Is $0.08/min realtime voice acceptable?
 
 ---
 
@@ -258,9 +271,9 @@ These have not been created yet.
 | 6.1: Connector Framework | Establish the foundation for connectors | Connector interface; base classes; auth pattern; testing | Phase 5 | Cross-cutting security checks |
 | 6.2: GitHub Connector | Deliver the first production connector | GitHub auth; repository reading; issues integration; testing | Phase 5 (Build mode) | 6.1 |
 | 6.3: Memory & Persistent Context System | Persistent knowledge and custom instructions | Store/retrieve memory; memory UI; edit/delete; testing | Phase 2 (context) | Phase 1 |
-| 6.4: Plugin System & Developer Extensibility | Allow developers to extend Dua | Plugin API; registry; sandbox; examples; testing | Deferred | 6.1 |
+| 6.4: Plugin System & Developer Extensibility | Extend Dua with plugins | Plugin API; registry; sandbox; examples; testing | Deferred | 6.1 |
 | 6.5: Voice Generation & Audio Features | Generated reply voice | API integration; voice selection UI; caching; testing | Phase 4 | None |
-| 6.6: Computer Mode & Collaboration | Screen/file workflows and collaboration | Command running via delegation in Phase 5; screen capture and team workspaces deferred | Phase 5 / Deferred | Phase 2 (cloud) |
+| 6.6: Computer Mode & Collaboration | Screen/file workflows | Command running via delegation in Phase 5; screen capture deferred; team workspaces dropped (single-user) | Phase 5 / Deferred | Phase 2 (cloud) |
 
 When created, each sub-issue should include Android and backend acceptance checks based on real use cases, a review requirement, an effort estimate, the labels `phase-6`, `sub-issue` and `enhancement`, a parent reference to #47, and the new phase it belongs to.
 
@@ -282,28 +295,29 @@ The cross-cutting privacy, security and cost work runs alongside every step.
 
 ## Definition of Done
 
-A feature is ready to ship when:
+A feature is done when:
 
-- ✅ It works on the targeted platform with real validation (not mocked)
-- ✅ Failure states are safe and user-friendly
+- ✅ It works on the owner's Android device with real validation (not mocked)
+- ✅ Failure states are safe and clear
 - ✅ Privacy and data handling are explicit and documented
 - ✅ It has been reviewed for UX and reliability
 - ✅ Tests or equivalent verification exist for critical paths
 - ✅ No sensitive credentials are exposed
 - ✅ Backend changes stay compatible with already-installed app versions
-- ✅ Paid features have per-feature quotas before anyone other than the owner can use them
+- ✅ Paid features have per-feature spend caps before they are switched on
 
 ---
 
 ## Guiding Principles
 
 1. **Quality over speed** — Dua should feel polished and trustworthy, not rushed
-2. **Privacy by default** — Users own their data; cloud is optional
+2. **Privacy by default** — The owner's data stays local first; cloud is optional and only syncs his own devices
 3. **Consistency** — Android screens and backend behavior feel like one product
 4. **Real validation** — Features are tested live, not just mocked
-5. **User feedback** — Design decisions are informed by actual usage
+5. **Built for one person** — Design decisions follow the owner's actual daily use, not hypothetical users
 6. **Incremental improvement** — Ship complete phases, not partial features
 7. **Keys stay on the server** — The phone never holds provider credentials
+8. **Spend stays capped** — The backend stays owner-only and every paid feature has a limit
 
 ---
 
