@@ -17,8 +17,9 @@ out/
 build/
 app/build/
 
-# Gradle files
+# Gradle / Kotlin files
 .gradle/
+.kotlin/
 
 # Local configuration file (sdk path, etc)
 local.properties
@@ -43,9 +44,14 @@ captures/
 *.jks
 *.keystore
 
-# Google Services (Firebase)
-google-services.json
-
 # OS specific files
 .DS_Store
 Thumbs.db
+
+# Environment files (secrets)
+.env
+.env.*
+!.env.example
+
+# Node.js
+node_modules/
