@@ -2,6 +2,8 @@
 
 Dua is a native Android Compose app in `app/`, backed by server-side API functions in `web/` (deployed on Vercel). There is no web client; `web/` contains only the backend API. Production uses https://dua-cyan.vercel.app.
 
+Dua is a personal, single-user app: it is built for its owner only and installed on his own device(s) as a debug or sideloaded APK. There are no other users, no Google Play release and no monetisation. The backend is meant to stay locked to the owner's account (`DUA_REQUIRE_LOGIN=1`, `DUA_ALLOWED_EMAIL`) with provider spending limits.
+
 ## Current features
 
 - Local conversations, drafts, model selection, search, export/import, sharing and data controls.
@@ -17,7 +19,7 @@ API keys and optional credentials remain server-side. Preparing a feature does n
 ## Project roadmap
 
 See [ROADMAP.md](ROADMAP.md) for the product and engineering roadmap: the Grok-style product direction, feature status, phased plan (UI foundation and reasoning, files and search, Imagine, voice, coding/Build mode), privacy and cost controls, and open decisions. The underlying gap analysis is in [docs/grok-style-plan.md](docs/grok-style-plan.md).
-Use [RELEASE-CHECKLIST.md](RELEASE-CHECKLIST.md) to verify production access controls, provider spending limits, device/staging checks, and Android release preparation. The production configuration cannot be verified from this source checkout alone.
+Use [RELEASE-CHECKLIST.md](RELEASE-CHECKLIST.md) to verify the owner-only lock, provider spending limits, device/staging checks, and installing the APK on your own phone. The production configuration cannot be verified from this source checkout alone.
 
 ## Backend API and hosting
 
@@ -41,4 +43,4 @@ bash ./gradlew :app:testDebugUnitTest --no-daemon --max-workers=2
 
 [Project checks](.github/workflows/checks.yml) runs Android compilation and JVM unit tests on PRs, pushes to main and manual runs. It does not assemble or sign an APK. The backend currently has no automated test suite in this repository.
 
-Android local data is stored in app-private preferences; Android backup/device transfer can include chat history and preferences according to device settings. A Vercel deployment updates the backend only; installed native code changes require a later Android release.
+Android local data is stored in app-private preferences; Android backup/device transfer can include chat history and preferences according to device settings. A Vercel deployment updates the backend only; Android code changes require building and installing a new APK.

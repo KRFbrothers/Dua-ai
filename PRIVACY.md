@@ -2,6 +2,8 @@
 
 This document outlines how Dua AI handles user data, privacy, and retention across its native Android app, backend API, and cloud services.
 
+Dua is a personal, single-user app: the backend is meant to be restricted to the owner's account (see [RELEASE-CHECKLIST.md](RELEASE-CHECKLIST.md)) and the app is not distributed to other people. "Users" in this document means the owner. It records how the owner's data flows to device services, Supabase and providers.
+
 ## Data Collection & Processing
 
 ### 1. Audio & Voice Data
