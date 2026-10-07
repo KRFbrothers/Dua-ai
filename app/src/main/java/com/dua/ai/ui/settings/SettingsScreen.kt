@@ -1,0 +1,124 @@
+package com.dua.ai.ui.settings
+
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.Logout
+import androidx.compose.material.icons.automirrored.outlined.VolumeUp
+import androidx.compose.material.icons.outlined.CloudSync
+import androidx.compose.material.icons.outlined.GraphicEq
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.IosShare
+import androidx.compose.material.icons.outlined.Mic
+import androidx.compose.material.icons.outlined.NotificationsNone
+import androidx.compose.material.icons.outlined.Palette
+import androidx.compose.material.icons.outlined.PersonOutline
+import androidx.compose.material.icons.outlined.Psychology
+import androidx.compose.material.icons.outlined.Security
+import androidx.compose.material.icons.outlined.Shield
+import androidx.compose.material.icons.outlined.Storage
+import androidx.compose.material.icons.outlined.Tune
+import androidx.compose.material.icons.outlined.Vibration
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import com.dua.ai.BuildConfig
+import com.dua.ai.ui.components.DuaPageScaffold
+import com.dua.ai.ui.components.SettingsDivider
+import com.dua.ai.ui.components.SettingsRow
+import com.dua.ai.ui.components.SettingsSection
+import com.dua.ai.ui.components.SettingsSwitchRow
+import com.dua.ai.ui.navigation.DuaDestination
+import com.dua.ai.viewmodel.ChatViewModel
+
+@Immutable
+data class SettingsUiState(
+    val email: String? = null,
+    val theme: String = "dark",
+    val font: String = "default",
+    val haptic: Boolean = false,
+    val memoryEnabled: Boolean = false,
+    val notifications: Boolean = false,
+    val generatedVoice: Boolean = false,
+    val generatedVoiceConfigured: Boolean = false,
+    val busy: Boolean = false,
+    val version: String = BuildConfig.VERSION_NAME,
+) {
+    val generatedVoiceToggleEnabled: Boolean get() = !busy && (generatedVoice || (generatedVoiceConfigured && email != null))
+}
+
+internal fun themeLabel(theme: String) = when (theme) { "light" -> "Light"; "system" -> "Match system"; else -> "Dark" }
+internal fun fontLabel(font: String) = when (font) { "system" -> "Device font"; "serif" -> "Serif"; "monospace" -> "Monospace"; else -> "Inter" }
+
+/** Settings home: five groups, one entry per page. */
+@Composable
+fun SettingsScreen(viewModel: ChatViewModel, onBack: () -> Unit, onOpen: (DuaDestination) -> Unit) {
+    val preferences by viewModel.localSettings.collectAsState()
+    val account by viewModel.account.state.collectAsState()
+    val integrations by viewModel.integrations.collectAsState()
+    val haptics = LocalHapticFeedback.current
+    val state = SettingsUiState(
+        email = account.user?.email, theme = preferences.theme, font = preferences.font, haptic = preferences.haptic,
+        memoryEnabled = preferences.memoryEnabled, notifications = preferences.notifications,
+        generatedVoice = preferences.generatedVoice, generatedVoiceConfigured = integrations.generatedVoiceConfigured,
+        busy = integrations.busy,
+    )
+    SettingsContent(state, onBack, onOpen,
+        onHaptic = { enabled ->
+            viewModel.updateSettings(viewModel.localSettings.value.copy(haptic = enabled))
+            if (enabled) haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+        },
+        onGeneratedVoice = { enabled -> viewModel.updateSettings(viewModel.localSettings.value.copy(generatedVoice = enabled)) })
+}
+
+@Composable
+fun SettingsContent(state: SettingsUiState, onBack: () -> Unit, onOpen: (DuaDestination) -> Unit,
+    onHaptic: (Boolean) -> Unit, onGeneratedVoice: (Boolean) -> Unit) {
+    DuaPageScaffold(title = "Settings", onBack = onBack, backLabel = "Back to chat") {
+        SettingsSection("Account") {
+            SettingsRow(Icons.Outlined.PersonOutline, "Profile", state.email ?: "Not signed in · optional") { onOpen(DuaDestination.Profile) }
+            SettingsDivider()
+            SettingsRow(Icons.Outlined.CloudSync, "Cloud sync", "Back up chats and notes across your devices") { onOpen(DuaDestination.CloudSync) }
+            SettingsDivider()
+            SettingsRow(Icons.AutoMirrored.Outlined.Logout, "Log out", titleColor = MaterialTheme.colorScheme.error) { onOpen(DuaDestination.Logout) }
+        }
+        SettingsSection("Personalization") {
+            SettingsRow(Icons.Outlined.Palette, "Appearance", "${themeLabel(state.theme)} · ${fontLabel(state.font)}") { onOpen(DuaDestination.Appearance) }
+            SettingsDivider()
+            SettingsRow(Icons.Outlined.Psychology, "Memory", if (state.memoryEnabled) "On · stored on this device" else "Off · stored on this device") { onOpen(DuaDestination.Memory) }
+            SettingsDivider()
+            SettingsSwitchRow(Icons.Outlined.Vibration, "Haptic feedback", checked = state.haptic, onCheckedChange = onHaptic)
+        }
+        SettingsSection("Voice") {
+            SettingsRow(Icons.Outlined.Mic, "Voice input", "Dictate, review, then send") { onOpen(DuaDestination.Voice) }
+            SettingsDivider()
+            SettingsRow(Icons.Outlined.GraphicEq, "Hands-free conversation", "Speak and hear replies with the device voice") { onOpen(DuaDestination.HandsFree) }
+            SettingsDivider()
+            SettingsSwitchRow(Icons.AutoMirrored.Outlined.VolumeUp, "AI reply voice",
+                subtitle = when {
+                    !state.generatedVoiceConfigured && !state.generatedVoice -> "Needs backend setup · device voice stays available"
+                    state.email == null && !state.generatedVoice -> "Sign in to use a generated voice"
+                    else -> "Generates audio only for the reply you tap"
+                },
+                checked = state.generatedVoice, enabled = state.generatedVoiceToggleEnabled, onCheckedChange = onGeneratedVoice)
+        }
+        SettingsSection("Data & privacy") {
+            SettingsRow(Icons.Outlined.Storage, "Data controls", "Export, import or clear chats") { onOpen(DuaDestination.DataControls) }
+            SettingsDivider()
+            SettingsRow(Icons.Outlined.Shield, "Privacy", "What stays on this device and what is sent") { onOpen(DuaDestination.Privacy) }
+            SettingsDivider()
+            SettingsRow(Icons.Outlined.IosShare, "Sharing", "Share a conversation as text") { onOpen(DuaDestination.Sharing) }
+            SettingsDivider()
+            SettingsRow(Icons.Outlined.Security, "Permissions", "Microphone, camera and files") { onOpen(DuaDestination.Permissions) }
+            SettingsDivider()
+            SettingsRow(Icons.Outlined.NotificationsNone, "Notifications", if (state.notifications) "Reply notifications on" else "Off") { onOpen(DuaDestination.Notifications) }
+        }
+        SettingsSection("About") {
+            SettingsRow(Icons.Outlined.Tune, "Feature setup", "Providers, web search, connectors and diagnostics") { onOpen(DuaDestination.FeatureSetup) }
+            SettingsDivider()
+            SettingsRow(Icons.Outlined.Info, "Dua AI", "Version ${state.version} · personal build")
+        }
+    }
+}

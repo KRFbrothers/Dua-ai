@@ -22,7 +22,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import kotlin.math.cos
 
 @Composable
-internal fun AnimatedVoiceCube(listening: Boolean, modifier: Modifier = Modifier) {
+internal fun AnimatedVoiceCube(listening: Boolean, modifier: Modifier = Modifier, stroke: Color = com.dua.ai.ui.theme.DuaTheme.colors.voiceCubeStroke) {
     val context = LocalContext.current
     val resolver = context.contentResolver
     fun motionAllowed() = Settings.Global.getFloat(resolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) > 0f
@@ -47,7 +47,7 @@ internal fun AnimatedVoiceCube(listening: Boolean, modifier: Modifier = Modifier
             while (true) withFrameNanos { now -> progress = ((now - start) % 4_000_000_000L) / 4_000_000_000f }
         }
     }
-    Canvas(modifier.semantics { contentDescription = if (listening) "Dua cube · Voice preview" else "Dua cube · Muted" }) {
+    Canvas(modifier.semantics { contentDescription = if (listening) "Voice input active" else "Voice input idle" }) {
         val pulse = if (active) .96f + .08f * ((1f - cos(progress * Math.PI.toFloat() * 4f)) / 2f) else 1f
         val radius = size.minDimension * .28f * pulse
         val faces = VoiceCubeGeometry.faces(if (active) progress * 360f else 32f, if (active) 10f + 4f * kotlin.math.sin(progress * Math.PI.toFloat() * 2f) else -20f)
@@ -60,7 +60,7 @@ internal fun AnimatedVoiceCube(listening: Boolean, modifier: Modifier = Modifier
             }
             val alpha = if (active) .85f + .15f * ((1f - cos(progress * Math.PI.toFloat() * 4f)) / 2f) else 1f
             drawPath(path, Brush.linearGradient(listOf(Color(face.shade, face.shade, face.shade, alpha), Color(.88f, .88f, .90f, alpha)), start = points[0], end = points[2]))
-            drawPath(path, Color(0xFFCAC4D0).copy(alpha = alpha), style = Stroke(1.dp.toPx()))
+            drawPath(path, stroke.copy(alpha = alpha), style = Stroke(1.dp.toPx()))
         }
     }
 }
