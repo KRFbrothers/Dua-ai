@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFile } from 'node:fs/promises';
-const source=await readFile(new URL('./dist/chat-history.js',import.meta.url),'utf8');
+const source=await readFile(new URL('../dist/chat-history.js',import.meta.url),'utf8');
 function storage(){const data=new Map();return {getItem:key=>data.get(key)||null,setItem:(key,value)=>data.set(key,value),removeItem:key=>data.delete(key)};}
 function open(localStorage=storage(),sessionStorage=storage()){
  const context={TextEncoder,localStorage,sessionStorage,crypto:{randomUUID:()=>Math.random().toString(36).slice(2)}};

@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {handleGemini} from './gemini.mjs';
+import {handleGemini} from '../src/core/gemini.mjs';
 
 const payload={model:'Dua',messages:[{role:'user',text:'Hi'}]};
 const request=data=>new Request('https://dua.example/api/chat',{method:'POST',body:JSON.stringify(data)});

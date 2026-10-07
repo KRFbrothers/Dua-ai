@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {handleGemini} from './gemini.mjs';
+import {handleGemini} from '../src/core/gemini.mjs';
 const png='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jf0cAAAAASUVORK5CYII=';
 const message={model:'Dua',messages:[{role:'user',text:'Read these files'}]};
 async function send(attachments,fetcher){return handleGemini(new Request('https://dua.example/api/chat',{method:'POST',body:JSON.stringify({...message,attachments})}),{key:'private-test-key',model:'test-model',fetcher});}

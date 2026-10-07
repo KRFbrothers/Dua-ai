@@ -2,10 +2,10 @@ import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
-import { MAX_REQUEST_BYTES } from './attachments.mjs';
+import { MAX_REQUEST_BYTES } from '../core/attachments.mjs';
 import { handleService } from './service-handler.mjs';
 
-const root = path.resolve(fileURLToPath(new URL('./dist/', import.meta.url)));
+const root = path.resolve(fileURLToPath(new URL('../../dist/', import.meta.url)));
 const types = { '.html': 'text/html; charset=utf-8', '.png': 'image/png', '.svg': 'image/svg+xml', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8' };
 function json(res, code, data) {
   res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });

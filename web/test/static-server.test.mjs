@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { makeServer } from './server.mjs';
+import { makeServer } from '../src/server/server.mjs';
 
 // Exercise the actual server request listener without depending on socket access.
 async function request(server, url, { method = 'GET', chunks = [], headers = {} } = {}) {

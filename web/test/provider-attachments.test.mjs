@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { handleChat, providerConfiguration } from './providers.mjs';
+import { handleChat, providerConfiguration } from '../src/core/providers.mjs';
 
 const providers = [
   ['ChatGPT', 'OPENAI', 'responses'],

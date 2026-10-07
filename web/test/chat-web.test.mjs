@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { handleChat } from './providers.mjs';
-import { createVercelHandler } from './vercel-handler.mjs';
-import { PageReaderError } from './page-reader.mjs';
-import { withWebSources } from './chat-web.mjs';
+import { handleChat } from '../src/core/providers.mjs';
+import { createVercelHandler } from '../src/server/vercel-handler.mjs';
+import { PageReaderError } from '../src/core/page-reader.mjs';
+import { withWebSources } from '../src/core/chat-web.mjs';
 
 const env = { GEMINI_API_KEY: 'mock-gemini', GEMINI_MODEL: 'test-gemini', OPENAI_API_KEY: 'mock-openai', OPENAI_MODEL: 'test-openai', ANTHROPIC_API_KEY: 'mock-claude', ANTHROPIC_MODEL: 'test-claude', GROK_API_KEY: 'mock-grok', GROK_MODEL: 'test-grok', KIMI_API_KEY: 'mock-kimi', KIMI_MODEL: 'test-kimi', BRAVE_SEARCH_API_KEY: 'mock-search' };
 const models = ['Dua', 'Gemini', 'ChatGPT', 'Claude', 'Grok', 'Kimi'];

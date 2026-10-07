@@ -1,11 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createVercelHandler } from './vercel-handler.mjs';
-import { createBurstGuard } from './vercel-burst.mjs';
-import configEntry from './api/config.js';
-import chatEntry from './api/chat.js';
-import cloudEntry from './api/cloud.js';
-import accountEntry from './api/account/[action].js';
+import { createVercelHandler } from '../src/server/vercel-handler.mjs';
+import { createBurstGuard } from '../src/server/vercel-burst.mjs';
+import configEntry from '../api/config.js';
+import chatEntry from '../api/chat.js';
+import cloudEntry from '../api/cloud.js';
+import accountEntry from '../api/account/[action].js';
 const req=(path,method='GET',body,headers={})=>new Request('https://dua.vercel.app'+path,{method,headers:{...(body===undefined?{}:{'content-type':'application/json'}),...headers},...(body===undefined?{}:{body:JSON.stringify(body)})});
 const user={id:'11111111-1111-4111-8111-111111111111',email:'qa@example.com',user_metadata:{display_name:'QA'}};
 const snapshot={format:'dua-cloud-snapshot',version:1,chats:[],memory:[]};
