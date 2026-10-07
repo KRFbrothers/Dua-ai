@@ -67,7 +67,7 @@ private val Ink: Color @Composable get() = MaterialTheme.colorScheme.onSurface
 private val Muted: Color @Composable get() = MaterialTheme.colorScheme.onSurfaceVariant
 private enum class Screen { Home, Chat, Settings, Attachments, Voice, Profile, DataControls, Permissions, ColorMode, FontStyle, Notifications, Logout, ComputerMode, VoicePermission, VoiceDenied, Memory, Sharing, Privacy, HandsFree, CloudSync, IntegrationSetup }
 
-/** Native Compose counterpart of web/dist; no WebView or hosted page dependency. */
+/** Native Compose chat screen; no WebView or hosted page dependency. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatScreen(viewModel: ChatViewModel = viewModel(), notificationRoute: Pair<String, String>? = null) {

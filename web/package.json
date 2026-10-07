@@ -3,9 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node --env-file-if-exists=.env src/server/server.mjs",
-    "test": "node --test --test-isolation=none test/*.test.mjs",
-    "build": "node scripts/verify-static.mjs"
+    "start": "node --env-file-if-exists=.env src/server/server.mjs"
   },
   "engines": {
     "node": ">=24"

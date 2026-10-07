@@ -1,6 +1,6 @@
 # Supabase account and cloud sync setup
 
-Supabase provides email accounts, profile/device logout, reviewed chat/memory snapshot transfers and opt-in foreground automatic sync on web and Android. Production uses the Vercel backend at `https://dua-cyan.vercel.app`; deployed settings must be verified in the hosting dashboard. Credentials remain in server configuration. Optional recovery, web Google login, deletion and account protection are described below and in [EIGHT-FEATURE-SETUP.md](EIGHT-FEATURE-SETUP.md#optional-server-variables).
+Supabase provides email accounts, profile/device logout, reviewed chat/memory snapshot transfers and opt-in foreground automatic sync on web and Android. Production uses the Vercel backend at `https://dua-cyan.vercel.app`; deployed settings must be verified in the hosting dashboard. Credentials remain in server configuration. Optional recovery, web Google login, deletion and account protection are described below.
 
 ## 1. Create and configure the project
 
@@ -47,4 +47,4 @@ Mocked tests cover authentication, refresh, ownership, redacted errors, limits, 
 
 ## Hosting migration
 
-The current Vercel deployment retains the existing Supabase project, schema and SMTP. Follow [VERCEL.md](VERCEL.md) when setting up another deployment or transferring browser data from the earlier Netlify origin. Environment values do not transfer automatically between hosts.
+The current Vercel deployment retains the existing Supabase project, schema and SMTP. Environment values do not transfer automatically between hosts.
