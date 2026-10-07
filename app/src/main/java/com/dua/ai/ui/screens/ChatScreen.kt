@@ -57,7 +57,6 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dua.ai.R
 import com.dua.ai.viewmodel.ChatViewModel
-import com.dua.ai.model.MessageReaction
 
 private val Background: Color @Composable get() = MaterialTheme.colorScheme.background
 private val Container: Color @Composable get() = MaterialTheme.colorScheme.surface
