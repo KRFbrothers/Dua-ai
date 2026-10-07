@@ -17,7 +17,6 @@ import com.dua.ai.attachments.CameraCaptureStore
 import androidx.lifecycle.viewModelScope
 import com.dua.ai.model.ChatMessage
 import com.dua.ai.model.ChatSession
-import com.dua.ai.model.MessageReaction
 import com.dua.ai.model.PromptSuggestion
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.CancellationException
@@ -229,9 +228,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _isTyping = MutableStateFlow(false)
     val isTyping: StateFlow<Boolean> = _isTyping.asStateFlow()
-
-    private val _isDarkTheme = MutableStateFlow(true)
-    val isDarkTheme: StateFlow<Boolean> = _isDarkTheme.asStateFlow()
 
     private val preferences = application.getSharedPreferences("dua_chat_history", 0)
     private var activeId = UUID.randomUUID().toString()
@@ -582,10 +578,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         )
     )
 
-    fun toggleTheme() {
-        _isDarkTheme.value = !_isDarkTheme.value
-    }
-
     fun setModel(model: String) {
         if (_integrations.value.providers.none { it.name == model && it.configured }) return
         _selectedModel.value = model
@@ -608,22 +600,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         _draft.value = ""
         _webMode.value = null
         saveHistory()
-    }
-
-    fun toggleReaction(messageId: String, isLike: Boolean) {
-        _messages.value = _messages.value.map { msg ->
-            if (msg.id == messageId) {
-                val newReaction = when {
-                    isLike && msg.reaction == MessageReaction.LIKED -> MessageReaction.NONE
-                    isLike -> MessageReaction.LIKED
-                    !isLike && msg.reaction == MessageReaction.DISLIKED -> MessageReaction.NONE
-                    else -> MessageReaction.DISLIKED
-                }
-                msg.copy(reaction = newReaction)
-            } else {
-                msg
-            }
-        }
     }
 
     fun retryResponse(messageId: String) {
