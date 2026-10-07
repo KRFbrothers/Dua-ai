@@ -1,17 +1,48 @@
 # Dua AI — Product Roadmap
 
-This roadmap reflects the path from a feature-rich prototype to a polished, production-ready AI chat application.
+This roadmap takes Dua from a feature-rich prototype to a clean, professional, Grok-style AI assistant. The full gap analysis behind it (code evidence, verified provider APIs, UI review) is in [docs/grok-style-plan.md](docs/grok-style-plan.md).
 
-## Product Vision
+## Product direction
 
-Dua AI is a privacy-conscious AI chat application for Android, backed by a server-side API hosted on Vercel. The web client was removed; `web/` now contains only the backend. The product combines:
+Dua is becoming a **Grok-style assistant**: one clean, professional Android app backed by a server-side API on Vercel. The web client was removed; `web/` contains only the backend, and provider API keys never leave the server.
 
-- **Local-first chat experience** — conversations, drafts, and history live on your device by default
-- **Multiple AI provider support** — Gemini, ChatGPT, Claude, Grok, and Kimi
-- **Voice and media** — speech recognition, text-to-speech, camera, photos, file attachments
-- **Strong privacy and data control** — export, import, delete, and manage your data locally
-- **Optional cloud sync and accounts** — Supabase-based sign-in and cross-device sync
-- **Polished, low-friction UX** — consistent, intuitive experience across Android phones and tablets
+**Target experience**
+
+- **Chat that feels modern** — streamed answers, readable markdown and code, and a **Reasoning** mode with collapsible thinking
+- **Long memory** — conversation length limited by the model's context, not by Dua
+- **Live search** — model-driven web search plus real-time X search (when xAI is configured), shown as source chips
+- **Files that stay in the conversation** — follow-up questions about a PDF, spreadsheet or code file work
+- **Imagine** — image generation and editing, then short video
+- **Voice** — selectable voices and languages, then realtime hands-free conversation you can interrupt
+- **Coding** — hosted code execution, then a repo-aware **Build** mode that writes nothing without approval
+
+**Still core to Dua** (unchanged from the original vision)
+
+- **Local-first** — conversations, drafts and history live on the device by default
+- **Multiple AI providers** — Gemini, ChatGPT, Claude, Grok and Kimi today; the final lineup is an [open decision](#open-decisions)
+- **Privacy and data control** — local export, import and delete; Supabase accounts and cloud sync stay optional and opt-in
+
+The composer will offer one mode menu: **Auto** (default) · **Reasoning** · **Search** · **Imagine**, with **Build** added in Phase 5. A mode that is not configured explains why instead of disappearing.
+
+## Feature status
+
+Effort scale (one developer working with coding agents): **S** ≤ 2 days, **M** ≈ 1 week, **L** ≈ 2–3 weeks, **XL** > 1 month.
+
+| Feature | Today | Target | Effort | Phase |
+| --- | --- | --- | --- | --- |
+| UI and navigation | One large chat screen, hand-built navigation, no design system, template colors, placeholder controls | Design tokens, Navigation Compose, full-width assistant replies, history drawer, regrouped settings, app icon and splash | L | 1 |
+| Chat | Works with 6 provider choices; no streaming; 2048-token output cap on non-Gemini providers; plain text, no markdown | Opt-in streaming (SSE), markdown and code blocks, higher output caps | M | 1 |
+| Reasoning mode | None; Gemini thoughts are discarded | Mode switch with a collapsible "Thought for N s" block (Gemini `thinkingLevel`, xAI `reasoning.effort`, OpenAI Responses reasoning) | M | 1 |
+| Long memory / context | Last 39 messages; local notes up to 10 × 200 chars | Per-provider token/byte budget, rolling conversation summary, xAI prompt caching; later, model-proposed notes the user approves | M | 2 |
+| Web search | Brave, one query of the raw prompt, plain-text Sources footer | Provider built-in search tools with Brave as fallback, structured sources as chips, Auto mode | M | 2 |
+| X search | None | xAI `x_search` in Search mode, X post chips | S–M after web search | 2 |
+| Files | JPEG, PNG, WebP, PDF, TXT; 3 files, 2 MB total; sent once, then forgotten | Quick win: CSV, MD, JSON and code as text. Then Supabase Storage uploads kept in history; XLSX, DOCX, audio | S + L | 1 (quick win), 2 |
+| Image generation and editing | None | `/api/imagine`, image messages, viewer, save and share, quotas | M | 3 |
+| Video | None | Async jobs with polling; 480p/720p default, 1080p gated | M–L | 3 |
+| Voices and languages | Device speech follows the phone locale; one fixed ElevenLabs voice | Voice and language pickers (device plus xAI or Gemini TTS) | S–M | 4 |
+| Realtime voice | Half-duplex hands-free loop, foreground only | Speech-to-speech over WebSocket, interrupt by talking | L | 4 |
+| Code execution | None | Provider-hosted sandbox tool with collapsible code and output | S–M | 5 |
+| Build mode | GitHub connector lists repositories (read-only) | Repo-aware chat → PRs after approval → commands via delegation only | M · L · XL | 5 |
 
 ## Current Status
 
@@ -35,7 +66,7 @@ The repository contains the implementation described below, but this checkout ca
 | Login/owner/quota protection | Optional controls and durable daily request quota are implemented | Vercel variables, service key and usage migration are needed; production unknown | Mocked tests; production enforcement not verified |
 | Release packaging and distribution | Android source builds; no release pipeline is configured | Signing credentials/store setup not verified | CI runs JVM tests, not a signed APK; release testing pending |
 
-**Phase alignment:** Phase 1 is implemented in code but still awaits some physical-device verification. Phase 2 design-polish success criteria remain open. Phase 3 is implemented as configurable adapters but has not been validated against live provider APIs. Phase 4 account/snapshot/foreground-sync code is substantially implemented, while deployment and cross-device verification remain open. Phase 5 documentation and privacy accuracy need the corrections/checks tracked in the release runbook. Phase 6 contains selected opt-in features, not the full connector/computer/agent vision.
+**How the previous phases map to this plan:** the earlier six phases are folded into the new ones rather than dropped. *Core stability* and *design polish* → Phase 1. *AI provider validation* → Phases 0–1 (search verification in Phase 2). *Cloud, identity and sync* → Phase 2, where stored files depend on it. *Privacy, security and trust* → the [cross-cutting track](#cross-cutting-privacy-security-and-cost). *Advanced features* (#47) → Phases 2–5 or [Deferred](#deferred). At the switch: stability work is implemented in code but awaits physical-device verification; design-polish criteria remain open; provider adapters are not yet validated against live APIs; account, snapshot and foreground-sync code is substantially implemented while deployment and cross-device checks remain open; documentation and privacy accuracy checks are tracked in [RELEASE-CHECKLIST.md](RELEASE-CHECKLIST.md); former Phase 6 shipped selected opt-in features, not the full connector/computer/agent vision.
 
 The separate Google ADK coding-agent component is not present in this repository checkout; its old workflow and documentation references should not be treated as an active feature.
 
@@ -43,123 +74,167 @@ The separate Google ADK coding-agent component is not present in this repository
 
 ## Roadmap Phases
 
-### Phase 1: Core Product Stability  
-**Priority: High | Timeline: Weeks 1–4**
+### Phase 0: Configuration checks
+**Priority: Immediate | Effort: about 1 hour, owner/deployer only, no code**
 
-Stabilize chat, history, and local data handling.
+Confirm production can support the plan and is not already failing.
 
 **Work:**
-- Fix edge cases in message sending, retries, and state recovery
-- Validate local persistence on real Android devices
-- Stabilize error handling and recovery flows
-- Ensure consistent UI states across Android screens
-- Reduce crash paths and data loss scenarios
+- Vercel: confirm Fluid compute is on and check the plan's function duration (Hobby: 300 s max; Pro: 800 s max). The code still assumes a 60 s function (55 s server deadline), and there is no `vercel.json`.
+- Check `GEMINI_MODEL`: `gemini-2.0-flash` is shut down and 2.5 models are limited to existing users, so an old ID may already be failing. Recommended: `gemini-3.8-flash`.
+- Decide which provider keys to fund ([Open decisions](#open-decisions) 1). If xAI is chosen, set `GROK_API_KEY` and `GROK_MODEL=grok-4.7`.
+- Record production access controls, quotas and provider spending limits using [RELEASE-CHECKLIST.md](RELEASE-CHECKLIST.md).
 
 **Success:**
-- Zero critical data loss bugs
-- Stable sending and retry behavior
-- Consistent UI across the app
+- Function duration and Gemini model ID are known and recorded; no retired model is in use
+- Keys needed for Phase 1 are configured
 
 ---
 
-### Phase 2: Design and UX Polish  
-**Priority: High | Timeline: Weeks 5–8**
+### Phase 1: UI foundation and Reasoning mode
+**Priority: High | Effort: L + M (two PRs) | Depends on: Phase 0**
 
-Bring UI to modern AI app quality.
+Highest impact, lowest risk: make Dua look professional, then add streaming and reasoning. Absorbs the former *Core Product Stability* and *Design and UX Polish* phases.
 
-**Work:**
-- Improve message rendering: markdown, code blocks, syntax highlighting
-- Add chat bubbles with avatars and better visual hierarchy
-- Refine spacing, typography, and color consistency
-- Improve empty states, loading indicators, and error messages
-- Add smooth animations and micro-interactions
-- Optimize tablet and large-screen layouts
+**PR 1 — UI foundation (Android only, no API change, L):**
+- `ui/theme` tokens: brand colors (light/dark), one type scale, shapes, 4-dp spacing — replacing template purples and ad-hoc font sizes
+- Split `ChatScreen.kt` into focused components and move to Navigation Compose
+- Markdown and code-block rendering with copy; full-width assistant replies, user messages as bubbles
+- New composer with mode chips (Auto and Search map to today's web modes; Reasoning stays hidden until PR 2), attachment bottom sheet with thumbnail chips, source chips from existing reply links
+- Empty state with suggestions, history drawer with date grouping, settings regrouped into Account · Personalization · Data & privacy · Connections · About (Diagnostics moves under About)
+- Remove "coming soon" placeholders and duplicate entries (Computer mode / Plugins / Capabilities); add adaptive icon and splash screen; inline error cards; one UI language, moved to `strings.xml`
+- Keep stop, retry, draft recovery and sync working and every JVM test passing; move code in one commit, redesign in a later one
+
+**PR 2 — Reasoning mode, streaming, output limits, text files (backend + Android, M):**
+- `/api/chat` accepts `mode: "auto" | "reasoning"` and opt-in `stream: true` (SSE); without the flag the JSON response is unchanged, so older APKs keep working
+- Gemini `thinkingConfig {thinkingLevel, includeThoughts: true}`; Grok moves from the legacy `/v1/chat/completions` to `/v1/responses` with `reasoning.effort` and streamed reasoning summaries; OpenAI Responses reasoning effort; Claude and Kimi unchanged
+- Raise output caps from 2048 to 8k or more; make the deadline env-configurable to fit the real Vercel `maxDuration` (`vercel.json`); Android read timeout becomes an idle gap with server heartbeats
+- Store `ChatMessage.thinking` in history, cloud snapshots and export with a backward-compatible version bump; collapsible ThinkingBlock UI
+- Accept CSV, MD, JSON and source-code text inline (about 512 KB each, total ≤ 3 MB raw)
+- Drop WebP from Grok's allowed image types (or convert to JPEG)
+- Backend tests: `node:test` coverage of each adapter's stream parsing and a CI job for `web/`
+
+**Carried over (stability and provider validation):**
+- Fix edge cases in sending, retries and state recovery; validate local persistence on real Android devices; reduce crash and data-loss paths
+- Test each configured provider live: credentials, model compatibility, attachments by provider; clear messages for unsupported or failed requests; retry and fallback behavior
 
 **Success:**
-- Messages feel premium and readable
-- Settings and onboarding flows are intuitive
-- Screens feel visually consistent
-- Responsive on phones and tablets
+- Zero critical data-loss bugs; stable sending, stop and retry behavior
+- Screens feel visually consistent and premium on phones and tablets; settings and onboarding are intuitive
+- Long answers stream and are not truncated; reasoning appears as a collapsible block
+- Older APKs still work against the new backend; backend adapter tests run in CI
+- Each provider can be activated and tested safely, and provider failures never break chat
+
+**Risks:** PR 1 is a large diff. Gemini labels `generateContent` "Legacy", so keep the adapter thin. Reasoning tokens are billed as output. xAI returns reasoning summaries, not raw thoughts.
 
 ---
 
-### Phase 3: AI Provider Validation  
-**Priority: High | Timeline: Weeks 9–12**
+### Phase 2: Files, search and context
+**Priority: High | Effort: L + M (+ M for context) | Depends on: Phase 1 streaming and timeouts; Supabase deployed**
 
-Move from mocked to verified live integrations.
+Files stay in the conversation, search becomes model-driven with real sources, and long chats are limited by the model, not Dua. Absorbs the former *Cloud, Identity and Sync* phase.
 
 **Work:**
-- Configure and test provider credentials (OpenAI, Anthropic, xAI, Moonshot, Google)
-- Validate API compatibility by model and provider
-- Test attachment handling by provider (images, PDFs, text)
-- Add clear error messaging for unsupported or failed requests
-- Verify web search (Brave) and page reading workflows
-- Test retry and fallback behavior
+- **Files v2:** private Supabase Storage bucket with row-level security, migration and `POST /api/files/sign`; Android uploads straight to Supabase (resumable above 6 MB), bypassing Vercel's 4.5 MB body limit; `fileRefs` stay in history so follow-ups work; providers receive short-lived signed URLs; XLSX→CSV on the server, DOCX, audio via speech-to-text
+- **Search v2:** provider built-in tools (xAI `web_search` + `x_search`, Gemini `google_search` + `url_context`, OpenAI `web_search`); structured `sources[]` rendered as chips (X posts show @handle and date); Brave stays as fallback and is verified live together with link reading
+- **Context:** replace the 39-message limit with a per-provider token/byte budget; rolling conversation summary; xAI prompt caching keyed by chat; later, model-proposed memory notes the user approves
+- **Cloud and identity (carried over):** live-verify Supabase sign-in/logout, cloud snapshots and foreground sync across devices; enforce ownership and access controls; device and session controls
+- Update PRIVACY.md (it currently promises file bytes are never stored) and data controls to cover stored files
 
 **Success:**
-- Each provider can be activated and tested safely
-- Provider failures are communicated without breaking chat
-- Attachments work reliably across providers
+- Follow-up questions about an attached file work across turns; users can see and delete stored files
+- Search answers cite structured sources; X search works when xAI is configured
+- Secure, user-controlled sync works across devices; ownership and data protections are clear and enforced
+- Users understand what is local and what is in the cloud
 
 ---
 
-### Phase 4: Cloud, Identity, and Sync  
-**Priority: Medium-High | Timeline: Weeks 13–16**
-
-Add cross-device features without sacrificing privacy.
+### Phase 3: Imagine (image, then video)
+**Priority: Medium | Effort: M, then M–L | Depends on: Phase 2 storage; per-feature quotas**
 
 **Work:**
-- Complete Supabase email sign-in and logout flows
-- Implement cloud snapshots with ownership and access controls
-- Build durable sync with conflict resolution
-- Support cloud memory notes and chat history
-- Add device management and session controls
-- Protect against unauthorized access
+- `POST /api/imagine` for generation and editing (xAI `grok-imagine-image-2.0` or Gemini Nano Banana 2); provider URLs are temporary, so results are copied to Supabase Storage (no base64 through Vercel's 4.5 MB response limit)
+- Android: image message, full-screen viewer, save to gallery, share, "Edit this image"
+- Then async video: submit returns a request id and the app polls, so no function runs long; `grok-imagine-video-1.5`, 480p/720p by default, 1080p gated; MP4 copied to Storage; Media3/ExoPlayer playback
+- Sign-in and per-user quotas required
 
 **Success:**
-- Secure, user-controlled sync flows
-- Cloud history works across devices
-- Ownership and data protections are clear and enforced
+- Generated media survives provider URL expiry and can be saved and shared
+- Quotas are enforced before anyone other than the owner can use Imagine
 
 ---
 
-### Phase 5: Privacy, Security, and Trust  
-**Priority: High | Timeline: Weeks 17–20**
+### Phase 4: Voice v2
+**Priority: Medium | Effort: S–M, then L | Depends on: Phase 1 UI; voice provider decision**
 
-Make privacy a competitive advantage.
+Absorbs former Phase 6.5 (generated reply voice).
 
 **Work:**
-- Document data retention policies (local vs cloud)
-- Improve consent flows and permission handling
-- Clarify what is stored locally vs in the cloud
-- Add stronger access checks for connectors and integrations
-- Ensure API keys remain server-side only
-- Add transparency to data deletion and export
+- Language picker for speech recognition and TTS, device voice list, and a server `voice` parameter for xAI TTS or Gemini `gemini-3.8-flash-tts` (alongside or instead of ElevenLabs); remove voice-screen placeholders
+- Then realtime speech-to-speech: the server mints ephemeral tokens (`/v1/realtime/client_secrets`) so the key never reaches the phone; WebSocket audio with echo cancellation and server-side turn detection; interrupt by talking; microphone foreground service on Android 14+ for background use
 
 **Success:**
-- Users understand what is local vs cloud
+- Users can choose voice and language; a realtime session can be interrupted by speaking
+- Voice minutes are covered by quotas; behavior is verified on physical devices
+
+---
+
+### Phase 5: Coding and Build mode
+**Priority: Medium | Effort: S–M, M, L, then XL | Depends on: Phase 2 files; connector security review**
+
+Absorbs the former connector, coding-agent and computer-mode items.
+
+**Work:**
+- Provider-hosted code execution (xAI `code_interpreter`, Gemini `code_execution`, OpenAI `code_interpreter`) with collapsible code and output; pairs with CSV/XLSX files
+- Repo-aware Build chat: the GitHub connector gains read actions (tree, file) exposed as function-calling tools in a chat tied to one repository; answers come back as diffs
+- Approved changes: the backend creates a branch, commit and PR with a narrowly scoped token only after the user taps "Create PR"
+- Running commands only through delegation (GitHub Copilot coding agent or Vercel Sandbox) — never on the phone or inside a Vercel function
+
+**Success:**
+- Nothing is written to a repository without explicit user approval
+- Connector tokens are narrowly scoped and stay server-side
+- Advanced features are gated behind clear setup flows and platform-specific complexity is well-tested
+
+---
+
+### Cross-cutting: privacy, security and cost
+**Applies to every phase.** Absorbs the former *Privacy, Security and Trust* phase.
+
+- Move `access-policy.mjs` from a daily request count to **per-feature cost quotas** (image, video, voice minutes, X posts) before enabling any paid media feature for anyone other than the owner
+- Keep API keys server-side; give the phone only short-lived tokens or signed URLs
+- Document retention for local data, cloud sync, stored files and generated media; improve consent and permission flows; make deletion and export transparent
+- Stronger access checks for connectors and integrations
+- Update PRIVACY.md, FEATURES.md and PROVIDERS.md in the same PR as the behavior they describe
+
+**Success:**
+- Users understand what is local vs. cloud
 - Data deletion and export flows are reliable and consistent
-- No credentials are exposed in client or GitHub
+- No credentials are exposed in the client or GitHub
 
 ---
 
-### Phase 6: Advanced Features  
-**Priority: Medium | Timeline: Weeks 21–24**
+### Deferred
 
-Expand beyond core chat once foundation is stable.
+Former Phase 6 items not in the current plan: plugin system and developer extensibility, Google Drive and other connectors, screen capture, and team workspaces/collaboration. Revisit after Phase 5.
 
-**Work:**
-- Broader connector and plugin support (GitHub, Google Drive, etc.)
-- Richer memory and context tools
-- Computer mode and browser-assisted workflows
-- Screen and camera capabilities
-- Generated reply voice and personalization
-- Advanced agent and coding features
+---
 
-**Success:**
-- Advanced features are gated behind clear setup flows
-- No feature ships before verification
-- Platform-specific complexity is well-tested
+## Open decisions
+
+Only the owner can make these; details are in [docs/grok-style-plan.md §D](docs/grok-style-plan.md#d-open-questions-and-decisions-only-the-owner-fareed-can-make).
+
+1. **Providers to fund** — an xAI API key (needed for X search, Grok Imagine and Grok voice; billed separately from SuperGrok)? Gemini as the default "Dua" brain, Grok, or both? Keep ChatGPT, Claude and Kimi, or simplify to two providers?
+2. **Budget and caps** — monthly budget and daily per-feature limits. Reference prices at time of writing (Oct 2026): `grok-4.7` $2/$6 per 1M tokens; images $0.02–0.05 each; video $0.02–0.08 per second; X search $5 per 1k posts; realtime voice $0.08/min.
+3. **Audience** — personal/owner-only (today's `DUA_ALLOWED_EMAIL`) or public? Plan-based tiers (e.g. 1080p video) imply Google Play Billing, a large separate project.
+4. **Vercel and Supabase plans** — Hobby caps functions at 300 s, Pro at 800 s; Supabase Free caps files at 50 MB.
+5. **File retention** — store uploads in Supabase Storage? For how long (e.g. auto-delete after 30 days)? Require sign-in for files, Imagine and voice (recommended: yes)?
+6. **Thinking display** — show reasoning summaries collapsed by default?
+7. **Brand and design** — Figma file, palette, typeface, icon and logo rules; dark-first like Grok; keep the cube motif?
+8. **Language** — English-only UI, or Urdu/Hindi too (Urdu needs right-to-left layout)?
+9. **Search** — keep Brave as a fallback (another key and bill) or rely on provider search?
+10. **Imagine content policy** — safety level, real-person likeness rules, whether generated media syncs to the cloud.
+11. **Build mode scope** — read-only repo chat, or PRs after approval? Which repositories? Is handing off to the Copilot coding agent or Vercel Sandbox acceptable?
+12. **Voice** — keep device voice as the free default? Which paid provider (xAI, Gemini or ElevenLabs)? Is $0.08/min realtime voice acceptable?
 
 ---
 
@@ -169,36 +244,39 @@ Phase scope and success criteria live in this file. GitHub tracking status:
 
 | Phase | Epic issue | Status |
 | --- | --- | --- |
-| Phases 1–5 | Not created | Not tracked in GitHub |
-| Phase 6: Advanced Features | [#47](https://github.com/KRFbrothers/Dua-ai/issues/47) | Closed with no child issues, although the full advanced-feature vision is not complete; prior phases and feature-specific security reviews are dependencies |
+| Phases 0–5 (this plan) | Not created | Not tracked in GitHub |
+| Former Phase 6: Advanced Features | [#47](https://github.com/KRFbrothers/Dua-ai/issues/47) | Closed with no child issues, although the full advanced-feature vision is not complete; its scope is now spread across Phases 2–5 and Deferred, with feature-specific security reviews as dependencies |
 
 No GitHub Project board has been created.
 
-### Proposed Phase 6 sub-issues
+### Proposed sub-issues (former Phase 6, remapped)
 
 These have not been created yet.
 
-| Proposed issue | Goal | Work items | Requires |
-| --- | --- | --- | --- |
-| Phase 6.1: Connector Framework | Establish the foundation for connectors | Define connector interface; base classes; auth pattern; testing | Phase 5 complete |
-| Phase 6.2: GitHub Connector | Deliver the first production connector | GitHub auth; repository reading; issues integration; testing | Phase 6.1 |
-| Phase 6.3: Memory & Persistent Context System | Provide persistent knowledge and custom instructions | Store/retrieve memory; memory UI; edit/delete; testing | Phase 5 complete |
-| Phase 6.4: Plugin System & Developer Extensibility | Allow developers to extend Dua | Plugin API; registry; sandbox; examples; testing | Phase 6.1 |
-| Phase 6.5: Voice Generation & Audio Features | Support generated reply voice | API integration; voice selection UI; caching; testing | None |
-| Phase 6.6: Computer Mode & Collaboration | Support screen/file workflows and collaboration | Screen capture; file browser; team workspaces; testing | Phase 4 |
+| Proposed issue | Goal | Work items | New phase | Requires |
+| --- | --- | --- | --- | --- |
+| 6.1: Connector Framework | Establish the foundation for connectors | Connector interface; base classes; auth pattern; testing | Phase 5 | Cross-cutting security checks |
+| 6.2: GitHub Connector | Deliver the first production connector | GitHub auth; repository reading; issues integration; testing | Phase 5 (Build mode) | 6.1 |
+| 6.3: Memory & Persistent Context System | Persistent knowledge and custom instructions | Store/retrieve memory; memory UI; edit/delete; testing | Phase 2 (context) | Phase 1 |
+| 6.4: Plugin System & Developer Extensibility | Allow developers to extend Dua | Plugin API; registry; sandbox; examples; testing | Deferred | 6.1 |
+| 6.5: Voice Generation & Audio Features | Generated reply voice | API integration; voice selection UI; caching; testing | Phase 4 | None |
+| 6.6: Computer Mode & Collaboration | Screen/file workflows and collaboration | Command running via delegation in Phase 5; screen capture and team workspaces deferred | Phase 5 / Deferred | Phase 2 (cloud) |
 
-When created, each sub-issue should include Android and backend acceptance checks based on real use cases, a review requirement, an effort estimate, the labels `phase-6`, `sub-issue` and `enhancement`, and a parent reference to #47.
+When created, each sub-issue should include Android and backend acceptance checks based on real use cases, a review requirement, an effort estimate, the labels `phase-6`, `sub-issue` and `enhancement`, a parent reference to #47, and the new phase it belongs to.
 
 ---
 
-## Execution Timeline
+## Execution Order
 
-| Period | Focus |
-|--------|-------|
-| **Immediate (Weeks 1–4)** | Stabilize core chat, fix crashes, validate local data |
-| **Short-term (Weeks 5–12)** | Polish UI/UX, validate provider APIs, test live integrations |
-| **Mid-term (Weeks 13–20)** | Add cloud sync, improve privacy, complete accounts |
-| **Long-term (Weeks 21–24)** | Launch advanced features, refine based on user feedback |
+| Step | Focus | Effort |
+| --- | --- | --- |
+| **Now** | Phase 0: configuration checks | ~1 hour |
+| **Next** | Phase 1: UI foundation (PR 1), then reasoning + streaming (PR 2), plus stability and live provider checks | L + M |
+| **Then** | Phase 2: files, search and context; cross-device cloud verification | L + M + M |
+| **Later** | Phase 3: Imagine; Phase 4: Voice v2 | M → M–L; S–M → L |
+| **Last** | Phase 5: code execution, then Build mode | S–M → M → L → XL |
+
+The cross-cutting privacy, security and cost work runs alongside every step.
 
 ---
 
@@ -212,6 +290,8 @@ A feature is ready to ship when:
 - ✅ It has been reviewed for UX and reliability
 - ✅ Tests or equivalent verification exist for critical paths
 - ✅ No sensitive credentials are exposed
+- ✅ Backend changes stay compatible with already-installed app versions
+- ✅ Paid features have per-feature quotas before anyone other than the owner can use them
 
 ---
 
@@ -223,16 +303,17 @@ A feature is ready to ship when:
 4. **Real validation** — Features are tested live, not just mocked
 5. **User feedback** — Design decisions are informed by actual usage
 6. **Incremental improvement** — Ship complete phases, not partial features
+7. **Keys stay on the server** — The phone never holds provider credentials
 
 ---
 
 ## Notes
 
-The Dua codebase is well-structured and feature-complete in breadth, but needs investment in depth:
+The codebase is broad and well-structured, but needs depth:
 
-- **Foundation is solid** — state management, architecture, and modularity are good
-- **Polish is missing** — animations, design system, and premium UX need work
-- **Validation is pending** — provider APIs and cloud sync need real-world testing
-- **Scale is unclear** — performance and stability need load testing
+- **Foundation is solid** — state management, safety handling (stop, retry, draft recovery) and accessibility are good
+- **Polish is missing** — no design system, plain-text rendering, placeholder controls
+- **Capability is capped by Dua, not the models** — no streaming, short timeouts, small output caps, message-count history and one-turn attachments
+- **Validation is pending** — provider APIs, cloud sync and physical-device behavior need real-world testing
 
-This roadmap balances ambition with realism. Shipping a premium AI chat app requires not just features, but refinement, trust-building, and user validation.
+Model names, endpoints and prices in this roadmap come from the plan in [docs/grok-style-plan.md](docs/grok-style-plan.md), checked against official documentation in October 2026. Prices change often; re-check before building.
