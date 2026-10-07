@@ -23,6 +23,11 @@ import androidx.compose.ui.semantics.*
 import androidx.core.content.ContextCompat
 import com.dua.ai.viewmodel.ChatViewModel
 import com.dua.ai.settings.LocalReplyNotifications
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.semantics.Role
+import com.dua.ai.ui.components.DuaPageScaffold
+import com.dua.ai.ui.components.SettingsSection
 
 @Composable
 fun DeviceSettingsScreen(viewModel: ChatViewModel, page: String, onBack: () -> Unit, onPage: (String) -> Unit, onAttachments: () -> Unit) {
@@ -43,56 +48,60 @@ fun DeviceSettingsScreen(viewModel: ChatViewModel, page: String, onBack: () -> U
         if (granted && LocalReplyNotifications.available(context)) viewModel.updateSettings(settings.copy(notifications = true))
         else viewModel.settingsNotice("Notifications not granted. Allow them in app Settings.")
     }
-    Row(Modifier.fillMaxWidth().padding(16.dp)) {
-        TextButton(onClick = onBack) { Text("‹ Back") }
-        Text(when(page) { "ColorMode" -> "Color mode"; "FontStyle" -> "Font style"; else -> page }, fontSize = 18.sp, modifier = Modifier.padding(12.dp))
-    }
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    DuaPageScaffold(title = when (page) { "ColorMode", "FontStyle", "Appearance" -> "Appearance"; else -> page }, onBack = onBack) {
         fun notice(text: String) = viewModel.settingsNotice(text)
         when (page) {
-            "ColorMode", "FontStyle" -> {
-                val choices = if (page == "ColorMode") listOf("dark", "light", "system") else listOf("default", "system", "serif", "monospace")
-                val selectedChoice = if (page == "ColorMode") settings.theme else settings.font
-                choices.forEach { choice -> FilledTonalButton(modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp), onClick = {
-                    viewModel.updateSettings(if (page == "ColorMode") settings.copy(theme = choice) else settings.copy(font = choice))
-                }) { RadioButton(selectedChoice == choice, onClick = null); Text(choice.replaceFirstChar { it.uppercase() }, modifier = Modifier.padding(start = 12.dp)) } }
-                Text("Saved across all Dua screens on this device. Default and System fonts may look similar.", fontSize = 14.sp)
-                Text("I am Dua · आज मैं आपकी कैसे मदद करूँ? · 0123456789")
+            "ColorMode", "FontStyle", "Appearance" -> {
+                SettingsSection("Color mode") {
+                    listOf("dark" to "Dark", "light" to "Light", "system" to "Match system").forEach { (choice, label) ->
+                        ChoiceRow(label, selected = settings.theme == choice) { viewModel.updateSettings(settings.copy(theme = choice)) }
+                    }
+                }
+                SettingsSection("Font") {
+                    listOf("default" to "Inter (default)", "system" to "Device font", "serif" to "Serif", "monospace" to "Monospace").forEach { (choice, label) ->
+                        ChoiceRow(label, selected = settings.font == choice) { viewModel.updateSettings(settings.copy(font = choice)) }
+                    }
+                }
+                Text("Saved on this device and applied to every Dua screen. Text size follows your phone's font size setting.",
+                    style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Surface(color = MaterialTheme.colorScheme.surfaceContainer, shape = MaterialTheme.shapes.large, modifier = Modifier.fillMaxWidth()) {
+                    Text("I am Dua · आज मैं आपकी कैसे मदद करूँ? · 0123456789", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(16.dp))
+                }
             }
             "Memory" -> {
-                Row { Text("Use local memory in replies", modifier = Modifier.weight(1f)); Switch(settings.memoryEnabled, { viewModel.updateSettings(settings.copy(memoryEnabled = it)) }) }
-                Text("Off by default. Enabled notes are sent to Gemini with new prompts. Chats do not automatically create memories. Stored only on this device.", fontSize = 14.sp)
+                Row(Modifier.fillMaxWidth().heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically) { Text("Use local memory in replies", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f)); Switch(settings.memoryEnabled, { viewModel.updateSettings(settings.copy(memoryEnabled = it)) }) }
+                Text("Off by default. Enabled notes are sent to Gemini with new prompts. Chats do not automatically create memories. Stored only on this device.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 OutlinedTextField(note, { if (it.length <= 200) note = it }, label = { Text("New memory") }, modifier = Modifier.fillMaxWidth())
                 FilledTonalButton(onClick = { if (note.isBlank()) notice("Write a memory first.") else { viewModel.updateSettings(settings.copy(memory = if (editing < 0) settings.memory + note.trim() else settings.memory.mapIndexed { index, text -> if (index == editing) note.trim() else text })); if (viewModel.localSettings.value.memory.contains(note.trim())) { note = ""; editing = -1 } } }) { Text(if (editing < 0) "Save note" else "Save edit") }
                 if (editing >= 0) TextButton(onClick = { editing = -1; note = "" }) { Text("Cancel edit") }
-                settings.memory.forEachIndexed { index, text -> Row { Text(text, modifier = Modifier.weight(1f).padding(12.dp)); TextButton(onClick = { editing = index; note = text }) { Text("Edit") }; TextButton(onClick = { editing = -1; note = ""; viewModel.updateSettings(settings.copy(memory = settings.memory.filterIndexed { i, _ -> i != index })) }) { Text("Delete") } } }
+                settings.memory.forEachIndexed { index, text -> Row(verticalAlignment = Alignment.CenterVertically) { Text(text, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f).padding(12.dp)); TextButton(onClick = { editing = index; note = text }) { Text("Edit") }; TextButton(onClick = { editing = -1; note = ""; viewModel.updateSettings(settings.copy(memory = settings.memory.filterIndexed { i, _ -> i != index })) }) { Text("Delete") } } }
                 TextButton(onClick = { confirming = true }) { Text("Delete all memories") }
             }
             "Notifications" -> {
                 val notificationsAllowed = remember(permissionVersion) { LocalReplyNotifications.available(context) }
-                Row { Text("Reply notifications", modifier = Modifier.weight(1f)); Switch(settings.notifications && notificationsAllowed, {
+                Row(Modifier.fillMaxWidth().heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically) { Text("Reply notifications", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f)); Switch(settings.notifications && notificationsAllowed, {
                     if (!it) viewModel.updateSettings(settings.copy(notifications = false))
                     else if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) notifications.launch(Manifest.permission.POST_NOTIFICATIONS)
                     else if (LocalReplyNotifications.available(context)) viewModel.updateSettings(settings.copy(notifications = true))
                     else notice("Allow notifications in app Settings first.")
                 }) }
-                Text("Notify when a reply completes in the background while Dua is still running. No chat text is shown. No push service is connected; Android can stop the background process.", fontSize = 14.sp)
+                Text("Notify when a reply completes in the background while Dua is still running. No chat text is shown. No push service is connected; Android can stop the background process.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 FilledTonalButton(onClick = { if (settings.notifications && LocalReplyNotifications.available(context)) { LocalReplyNotifications.show(context, chats.firstOrNull()?.id.orEmpty()); notice("Test notification requested.") } else notice("Enable notifications first.") }) { Text("Send test notification") }
             }
             "Permissions" -> {
                 val granted = remember(permissionVersion) { ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED }
-                Text("Microphone: ${if (granted) "Granted" else "Not granted"}")
+                Text("Microphone: ${if (granted) "Granted" else "Not granted"}", style = MaterialTheme.typography.bodyLarge)
                 FilledTonalButton(onClick = { mic.launch(Manifest.permission.RECORD_AUDIO) }) { Text("Request microphone access") }
-                FilledTonalButton(onClick = onAttachments) { Text("Open camera / photos / files") }
-                Text("Camera capture uses the external camera app; no direct camera permission is needed. Photos/files use the system picker and its selected-file grants.", fontSize = 14.sp)
+                FilledTonalButton(onClick = onAttachments) { Text("Add photos or files in chat") }
+                Text("Camera capture uses the external camera app; no direct camera permission is needed. Photos/files use the system picker and its selected-file grants.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 TextButton(onClick = { onPage("Notifications") }) { Text("Notification settings") }
             }
             "Sharing" -> {
-                Text("Review completed messages before sharing. Unsent drafts and attachment bytes are excluded. This creates plain text, not a public cloud link.", fontSize = 14.sp)
+                Text("Review completed messages before sharing. Unsent drafts and attachment bytes are excluded. This creates plain text, not a public cloud link.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 val current = chats.find { it.id == selected } ?: chats.firstOrNull()
                 chats.forEach { chat -> TextButton(onClick = { selected = chat.id }) { Text((if (current?.id == chat.id) "✓ " else "") + chat.title) } }
                 val text = current?.let(viewModel::shareChatText).orEmpty()
-                Text(text.ifBlank { "No completed messages to share." }, fontSize = 14.sp)
+                Text(text.ifBlank { "No completed messages to share." }, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 FilledTonalButton(enabled = current?.messages?.any { it.state == "complete" } == true, onClick = {
                     try { context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, text) }, "Share conversation")) }
                     catch (_: Exception) { notice("Sharing unavailable on this device.") }
@@ -100,8 +109,8 @@ fun DeviceSettingsScreen(viewModel: ChatViewModel, page: String, onBack: () -> U
                 TextButton(enabled = current?.messages?.any { it.state == "complete" } == true, onClick = { (context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager).setPrimaryClip(android.content.ClipData.newPlainText("Dua conversation", text)); notice("Copied conversation.") }) { Text("Copy conversation") }
             }
             "Privacy" -> {
-                Text("Chats, settings and memory notes are local. Chat history is excluded from Android backups. Sending forwards messages, selected file contents and enabled memory notes to the configured AI provider. Device/browser speech services may process speech remotely. Account sessions are encrypted on this device and excluded from backup.", fontSize = 14.sp)
-                Text("Local deletion does not delete provider records, exports or other devices. Reviewed Cloud sync uploads store drafts, messages and saved notes in your Supabase account. Logout does not erase local or cloud data. Clear cloud separately in Profile → Cloud sync. Account deletion is not available.", fontSize = 14.sp)
+                Text("Chats, settings and memory notes are local. Chat history is excluded from Android backups. Sending forwards messages, selected file contents and enabled memory notes to the configured AI provider. Device/browser speech services may process speech remotely. Account sessions are encrypted on this device and excluded from backup.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("Local deletion does not delete provider records, exports or other devices. Reviewed Cloud sync uploads store drafts, messages and saved notes in your Supabase account. Logout does not erase local or cloud data. Clear cloud separately in Profile → Cloud sync. Account deletion is not available.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 TextButton(onClick = { onPage("DataControls") }) { Text("Manage local chats") }
                 TextButton(onClick = { onPage("Memory") }) { Text("Manage local memories") }
                 TextButton(onClick = { resetting = true }) { Text("Reset local settings and memories") }
@@ -111,8 +120,17 @@ fun DeviceSettingsScreen(viewModel: ChatViewModel, page: String, onBack: () -> U
             try { context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}"))) }
             catch (_: Exception) { notice("App Settings unavailable.") }
         }) { Text("Open app Settings") }
-        Text(status, fontSize = 14.sp, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+        Text(status, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
     }
     if (resetting) AlertDialog(onDismissRequest = { resetting = false }, title = { Text("Reset settings and memories?") }, text = { Text("Appearance, notifications and memories reset. Chats stay saved.") }, confirmButton = { TextButton(onClick = { resetting = false; viewModel.resetSettings() }) { Text("Reset") } }, dismissButton = { TextButton(onClick = { resetting = false }) { Text("Cancel") } })
     if (confirming) AlertDialog(onDismissRequest = { confirming = false }, title = { Text("Delete all memories?") }, text = { Text("Remove every memory stored on this device. Chats remain unchanged.") }, confirmButton = { TextButton(onClick = { confirming = false; viewModel.updateSettings(settings.copy(memory = emptyList())) }) { Text("Delete") } }, dismissButton = { TextButton(onClick = { confirming = false }) { Text("Cancel") } })
+}
+
+@Composable
+private fun ChoiceRow(label: String, selected: Boolean, onSelect: () -> Unit) {
+    Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).selectable(selected = selected, role = Role.RadioButton, onClick = onSelect)
+        .padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+        RadioButton(selected = selected, onClick = null)
+        Text(label, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(start = 16.dp))
+    }
 }
