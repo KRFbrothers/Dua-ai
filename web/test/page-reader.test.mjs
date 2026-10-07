@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
 import {PassThrough} from 'node:stream';
-import {PageReaderError,PAGE_READER_LIMITS,readPublicPage} from './page-reader.mjs';
+import {PageReaderError,PAGE_READER_LIMITS,readPublicPage} from '../src/core/page-reader.mjs';
 
 const publicV4 = {address:'93.184.216.34',family:4};
 const publicV6 = {address:'2606:4700:4700::1111',family:6};

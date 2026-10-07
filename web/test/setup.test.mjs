@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { makeServer } from './server.mjs';
-import { createVercelHandler } from './vercel-handler.mjs';
-import { setupConfiguration } from './setup.mjs';
+import { makeServer } from '../src/server/server.mjs';
+import { createVercelHandler } from '../src/server/vercel-handler.mjs';
+import { setupConfiguration } from '../src/core/setup.mjs';
 const request=(path,body,headers={})=>new Request('https://dua.example'+path,{method:body?'POST':'GET',headers:{...(body?{'Content-Type':'application/json'}:{}),...headers},...(body?{body:JSON.stringify(body)}:{})});
 const env={SUPABASE_URL:'https://mock.supabase.co',SUPABASE_ANON_KEY:'public',DUA_ALLOWED_EMAIL:'owner@example.com',ENABLE_GENERATED_VOICE:'1',ELEVENLABS_API_KEY:'private-voice',ELEVENLABS_VOICE_ID:'voice',ENABLE_GITHUB_CONNECTOR:'1',GITHUB_CONNECTOR_TOKEN:'private-github'};
 const user={id:'11111111-1111-4111-8111-111111111111',email:'owner@example.com'};

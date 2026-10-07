@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { guardChatAccess } from './access-policy.mjs';
+import { guardChatAccess } from '../src/core/access-policy.mjs';
 const id='11111111-1111-4111-8111-111111111111';
 const user={id,email:'owner@example.com'};
 const request=headers=>new Request('https://dua.example/api/chat',{method:'POST',headers,body:'{}'});

@@ -2,8 +2,8 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFile} from 'node:fs/promises';
-const compression=await readFile(new URL('./dist/photo-compression.js',import.meta.url),'utf8');
-const attachments=await readFile(new URL('./dist/attachments.js',import.meta.url),'utf8');
+const compression=await readFile(new URL('../dist/photo-compression.js',import.meta.url),'utf8');
+const attachments=await readFile(new URL('../dist/attachments.js',import.meta.url),'utf8');
 function setup({outputSize=1000,decodeFail=false,contextFail=false}={}){
  let closed=0,decodes=0,white=0,drawn=0,released=0;
  const context={Blob,DataView,Uint8Array,Error,createImageBitmap:async()=>{decodes++;if(decodeFail)throw Error('Bad image');return {width:2400,height:1600,close(){closed++}}},document:{createElement(){return {width:0,_height:0,set height(value){this._height=value;if(!value)released++},getContext(){if(contextFail)return null;return {set fillStyle(value){assert.equal(value,'#ffffff')},fillRect(){white++},drawImage(){drawn++}}},toBlob(callback,type,quality){assert.equal(type,'image/jpeg');assert.ok(quality>=.55);callback(new Blob([new Uint8Array(outputSize)],{type}))}}}},btoa:input=>Buffer.from(input,'binary').toString('base64')};

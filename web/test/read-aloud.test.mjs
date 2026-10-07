@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFile} from 'node:fs/promises';
-const source=await readFile(new URL('./dist/read-aloud.js',import.meta.url),'utf8');
+const source=await readFile(new URL('../dist/read-aloud.js',import.meta.url),'utf8');
 function setup(supported=true){
  const spoken=[],states=[];let cancelled=0,timeout;
  const synthesis={speak(utterance){spoken.push(utterance)},cancel(){cancelled++},getVoices(){return [{lang:'hi-IN'}]}};

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { makeServer } from './server.mjs';
+import { makeServer } from '../src/server/server.mjs';
 import { Readable } from 'node:stream';
 
 const handlers = new Map();
@@ -104,7 +104,7 @@ test('disconnect cancels provider work and a subsequent socket request succeeds'
 });
 
 test('shared handler forwards request cancellation to the provider', { timeout: 2000 }, async () => {
- const { handleGemini } = await import('./gemini.mjs');
+ const { handleGemini } = await import('../src/core/gemini.mjs');
  const controller = new AbortController();
  let started;
  const waiting = new Promise(resolve => { started = resolve; });
@@ -122,7 +122,7 @@ test('shared handler forwards request cancellation to the provider', { timeout: 
 });
 
 test('already canceled requests never start provider work', async () => {
- const { handleGemini } = await import('./gemini.mjs');
+ const { handleGemini } = await import('../src/core/gemini.mjs');
  const controller = new AbortController(); controller.abort();
  let calls = 0;
  const response = await handleGemini(new Request('https://dua.example/api/chat', {

@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFile} from 'node:fs/promises';
 
-const readAloudSource=await readFile(new URL('./dist/read-aloud.js',import.meta.url),'utf8');
-const voiceSource=await readFile(new URL('./dist/voice-input.js',import.meta.url),'utf8');
-const source=(await readFile(new URL('./dist/chat.html',import.meta.url),'utf8')).split('<script>')[1].split('</script>')[0];
+const readAloudSource=await readFile(new URL('../dist/read-aloud.js',import.meta.url),'utf8');
+const voiceSource=await readFile(new URL('../dist/voice-input.js',import.meta.url),'utf8');
+const source=(await readFile(new URL('../dist/chat.html',import.meta.url),'utf8')).split('<script>')[1].split('</script>')[0];
 function setup({deferChat=false,replyError=false,replyText='Hello',files=[],voiceDraft=null,speechSupported=false,model='Dua',savedChat=null}={}) {
  const synthesis={spoken:[],speak(utterance){this.spoken.push(utterance)},cancel(){},getVoices(){return[]}};
  class Utterance{constructor(text){this.text=text;}}

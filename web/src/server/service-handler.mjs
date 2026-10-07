@@ -1,9 +1,9 @@
-import { handleChat } from './providers.mjs';
-import { handleSearch } from './search.mjs';
-import { handleAccount, handleCloudRead } from './account.mjs';
-import { handleSetup } from './setup.mjs';
-import { handleAdvanced } from './advanced-integrations.mjs';
-import { guardChatAccess } from './access-policy.mjs';
+import { handleChat } from '../core/providers.mjs';
+import { handleSearch } from '../core/search.mjs';
+import { handleAccount, handleCloudRead } from '../core/account.mjs';
+import { handleSetup } from '../core/setup.mjs';
+import { handleAdvanced } from '../core/advanced-integrations.mjs';
+import { guardChatAccess } from '../core/access-policy.mjs';
 
 export async function handleService(request,{env=process.env,fetcher=fetch}={}) {
  const url=new URL(request.url),path=url.pathname;

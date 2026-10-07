@@ -17,3 +17,13 @@ Feature setup reports provider/search availability, a limited read-only GitHub c
 See [FEATURES.md](../FEATURES.md) for current scope, [VERCEL.md](../VERCEL.md) for hosting and [SUPABASE.md](../SUPABASE.md) for cloud ownership. Endpoints run on Vercel or the local Node handler.
 
 Keep API keys server-side. Never put private credentials in `dist`, Android, exports or GitHub.
+
+## Project layout
+
+- `src/core/` contains provider, account, attachment, search and other domain logic.
+- `src/server/` contains the local HTTP server and shared request handlers.
+- `api/` contains Vercel function entry points; keep this path stable for deployment.
+- `dist/` contains the static web app served by Vercel and the local server.
+- `test/` contains the web and backend regression tests; `scripts/` contains static-site verification.
+
+See [ARCHITECTURE.md](ARCHITECTURE.md) for the runtime boundaries and deployment constraints.

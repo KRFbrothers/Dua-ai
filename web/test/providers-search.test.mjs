@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { handleChat, providerConfiguration } from './providers.mjs';
-import { handleSearch, searchConfiguration } from './search.mjs';
+import { handleChat, providerConfiguration } from '../src/core/providers.mjs';
+import { handleSearch, searchConfiguration } from '../src/core/search.mjs';
 const env = { GEMINI_API_KEY:'private-gemini', GEMINI_MODEL:'test-gemini', OPENAI_API_KEY:'private-openai', OPENAI_MODEL:'test-openai', ANTHROPIC_API_KEY:'private-anthropic', ANTHROPIC_MODEL:'test-claude', GROK_API_KEY:'private-grok', GROK_MODEL:'test-grok', KIMI_API_KEY:'private-kimi', KIMI_MODEL:'test-kimi', BRAVE_SEARCH_API_KEY:'private-brave' };
 const req=(path,data,options={})=>new Request('https://dua.example'+path,{method:'POST',body:JSON.stringify(data),...options});
 const chat=(model='ChatGPT',extra={})=>({model,messages:[{role:'user',text:'Earlier prompt'},{role:'model',text:'Earlier answer'},{role:'user',text:'Hello'}],...extra});

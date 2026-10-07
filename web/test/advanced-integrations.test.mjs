@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
-import { advancedConfiguration, handleAdvanced } from './advanced-integrations.mjs';
+import { advancedConfiguration, handleAdvanced } from '../src/core/advanced-integrations.mjs';
 
 const configured = { ENABLE_GITHUB_CONNECTOR: '1', GITHUB_CONNECTOR_TOKEN: 'PRIVATE-GITHUB-TOKEN', ENABLE_GENERATED_VOICE: '1', ELEVENLABS_API_KEY: 'PRIVATE-AUDIO-KEY', ELEVENLABS_VOICE_ID: 'voice123' };
 const request = (path, body, headers = {}) => new Request('https://dua.example' + path, { method: 'POST', headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(body) });
@@ -95,7 +95,7 @@ test('integration request input and methods are validated before provider calls'
   assert.equal((await handleAdvanced(request('/api/voice/audio', { text: 'x'.repeat(13000) }), settings)).status, 400);
 });
 
-const mediaSource = readFileSync(new URL('./dist/media-session.js', import.meta.url), 'utf8');
+const mediaSource = readFileSync(new URL('../dist/media-session.js', import.meta.url), 'utf8');
 function fakeStream() {
   const listeners = {};
   const track = { stopped: 0, stop() { this.stopped++; }, addEventListener(name, callback) { listeners[name] = callback; } };

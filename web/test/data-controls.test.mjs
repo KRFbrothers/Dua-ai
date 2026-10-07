@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFile} from 'node:fs/promises';
-const source=await readFile(new URL('./dist/data-controls.js',import.meta.url),'utf8');
+const source=await readFile(new URL('../dist/data-controls.js',import.meta.url),'utf8');
 function setup({fail=false}={}){
  const elements={},windowEvents={};let cleared=0,imported=0,opened=false,download=null;let revoke;
  const node=()=>({textContent:'',events:{},disabled:false,addEventListener(event,handler){this.events[event]=handler},showModal(){this.open=true;opened=true},close(){this.open=false;opened=false;this.events.close?.()},focus(){},click(){download={href:this.href,name:this.download}},remove(){}});

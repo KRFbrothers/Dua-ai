@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFile} from 'node:fs/promises';
-const source=(await readFile(new URL('./dist/add-to-chat.html',import.meta.url),'utf8')).split('<script>')[1].split('</script>')[0];
+const source=(await readFile(new URL('../dist/add-to-chat.html',import.meta.url),'utf8')).split('<script>')[1].split('</script>')[0];
 function setup() {
  const status={textContent:''};const storage=new Map([['dua-attachments','previous selection']]);const pending=[];
  const inputs=Array.from({length:3},()=>({value:'chosen.jpg',files:[],addEventListener(type,fn){this[type]=fn}}));
