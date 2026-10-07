@@ -1,19 +1,19 @@
 # Privacy Policy
 
-This document outlines how Dua AI handles user data, privacy, and retention across its native Android app, web app, and cloud services.
+This document outlines how Dua AI handles user data, privacy, and retention across its native Android app, backend API, and cloud services.
 
 ## Data Collection & Processing
 
 ### 1. Audio & Voice Data
 
 #### Collection
-- **Source:** Users initiate voice input via microphone (Android `RecognitionService`, Web Speech API).
-- **Scope:** Microphone audio is passed to the operating system or browser speech-recognition service to produce a transcript. Depending on the device, browser, service and settings, recognition may be processed locally or remotely; Dua cannot guarantee on-device processing. Voice-to-draft does not send audio to Dua's chat API. The transcript is sent to the selected AI provider only if the user sends it as a chat message.
+- **Source:** Users initiate voice input via microphone (Android `RecognitionService`).
+- **Scope:** Microphone audio is passed to the operating system's speech-recognition service to produce a transcript. Depending on the device, service and settings, recognition may be processed locally or remotely; Dua cannot guarantee on-device processing. Voice-to-draft does not send audio to Dua's chat API. The transcript is sent to the selected AI provider only if the user sends it as a chat message.
 - **Generated audio:** If enabled and explicitly selected, reply text is sent to the configured audio provider (ElevenLabs) to generate speech. Device text-to-speech uses the installed speech service and may have its own processing practices.
-- **Consent:** Users grant microphone permissions at the OS level (Android) or browser level (Web); the app displays a permission notice before first use.
+- **Consent:** Users grant microphone permission at the Android OS level; the app displays a permission notice before first use.
 
 #### Processing
-- **Speech recognition:** Recognition is provided by Android's selected `RecognitionService` or the browser's Web Speech implementation. Processing location and retention depend on that service; review its settings and privacy terms.
+- **Speech recognition:** Recognition is provided by Android's selected `RecognitionService`. Processing location and retention depend on that service; review its settings and privacy terms.
 - **Provider transmission:** Chat text, including a reviewed voice transcript, is sent over HTTPS to the selected chat provider when the user sends it. Optional generated reply audio sends the selected reply text over HTTPS to ElevenLabs.
 - **Provider Retention:** Retention depends on the provider, product/API, account settings and applicable terms, which can change. Review the selected provider's current terms before sending data.
 
@@ -32,9 +32,8 @@ This document outlines how Dua AI handles user data, privacy, and retention acro
 
 #### Local Storage
 - **Android:** Chat history and app preferences are stored in app-private `SharedPreferences`; they are not encrypted by the app. Android OS sandboxing protects app-private files, but this is not equivalent to an encrypted database.
-- **Web:** Stored in browser local storage; survives page refresh but cleared if cache is cleared.
 - **Backup:** Android app backup and device transfer are enabled. The account-session and automatic-sync preference files are excluded, but chat history and other app preferences are not excluded by the checked-in backup rules. Whether a backup is created or restored depends on Android/device backup settings and the user's account. Users should not assume local chats remain only on one device.
-- **Retention:** Retained until the user deletes the data, clears app/browser storage, uninstalls the app, or an enabled device backup restores it. Backup copies may have separate retention.
+- **Retention:** Retained until the user deletes the data, clears app storage, uninstalls the app, or an enabled device backup restores it. Backup copies may have separate retention.
 
 #### Cloud Storage (Opt-In)
 - **Activation:** User must explicitly enable "Cloud Sync" in account settings.
@@ -52,7 +51,7 @@ This document outlines how Dua AI handles user data, privacy, and retention acro
 #### Data Stored
 - Email (for login & recovery)
 - Account display name (optional)
-- Local notification, appearance and provider selections are stored in app/browser settings, not Supabase cloud snapshots.
+- Local notification, appearance and provider selections are stored in app settings, not Supabase cloud snapshots.
 - Provider API keys are configured server-side and are not stored in the app's local account profile.
 
 #### Local Account (No Cloud)
@@ -61,7 +60,7 @@ This document outlines how Dua AI handles user data, privacy, and retention acro
 
 #### Cloud Account (Opt-In)
 - Required for cloud snapshots, recovery, and multi-device sync.
-- Authenticated via Supabase (email + password; web Google sign-in is optional when configured).
+- Authenticated via Supabase (email + password; native Google sign-in is optional when configured).
 - Account data is encrypted and subject to RLS.
 
 #### Retention
@@ -138,9 +137,9 @@ API keys are stored server-side (Vercel Functions or Supabase) and are never exp
 
 | Data Type | Local | Cloud | Retention |
 |-----------|-------|-------|-----------|
-| Chat Messages | Android app-private `SharedPreferences`; browser local storage | Opt-in snapshot | Until local deletion/storage removal; Android backup may retain copies; cloud deletion/backup timing is controlled by Supabase |
+| Chat Messages | Android app-private `SharedPreferences` | Opt-in snapshot | Until local deletion/storage removal; Android backup may retain copies; cloud deletion/backup timing is controlled by Supabase |
 | Audio/transcripts | Speech service; transcript may be retained locally as chat text if sent | No raw audio in snapshots | Speech-service terms apply; transcript follows chat retention; generated audio is not retained by Dua |
-| Account Credentials | Encrypted Android session token / secure web cookies; passwords not persisted | Supabase | Until logout, expiry or account deletion; provider backup retention may apply |
+| Account Credentials | Encrypted Android session token; passwords not persisted | Supabase | Until logout, expiry or account deletion; provider backup retention may apply |
 | API Keys | Server-side only | Server-side only | Until removed or rotated by the deployment operator; never stored on device |
 | Search Queries | None | N/A (Brave) | Per Brave's current privacy policy and service terms |
 | Cloud Snapshots | N/A | Supabase | User-managed; deletion and backup retention depend on Supabase project behavior |
@@ -158,7 +157,7 @@ API keys are stored server-side (Vercel Functions or Supabase) and are never exp
 - Users can delete entire cloud snapshots.
 
 ### Deletion
-- **Local Data:** Users can use in-app data controls or clear app/browser storage. Android backup may retain or restore app data according to device settings.
+- **Local Data:** Users can use in-app data controls or clear app storage. Android backup may retain or restore app data according to device settings.
 - **Cloud Data:** Users can delete snapshots manually or request full account deletion.
 - **Account Deletion:** Available from Profile when configured. It removes the account/cloud data on successful completion; it does not remove local chats or memories. Supabase backup-retention timing is outside Dua's control.
 
@@ -171,7 +170,7 @@ API keys are stored server-side (Vercel Functions or Supabase) and are never exp
 
 Dua AI integrates with:
 - **Supabase** (auth, cloud storage): https://supabase.com/privacy
-- **Vercel** (web hosting, API): https://vercel.com/legal/privacy-policy
+- **Vercel** (backend API hosting): https://vercel.com/legal/privacy-policy
 - **Firebase Crashlytics** (error reporting, Android only): https://firebase.google.com/support/privacy
 - Crashlytics collection is disabled by default for debug builds and enabled for Android release builds by the checked-in Gradle configuration. Review the Firebase privacy terms and the deployed app's crash-reporting behavior.
 - **AI Providers** (OpenAI, Google, Anthropic, etc.): See provider privacy policies above.

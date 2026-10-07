@@ -35,7 +35,7 @@ We will acknowledge reports within 48 hours and aim to provide an update within 
 
 #### Audio & Voice
 - Audio data captured for speech recognition is:
-  - Passed to the selected Android recognition service or browser speech service; processing may be local or remote depending on that service and its settings.
+  - Passed to the selected Android recognition service; processing may be local or remote depending on that service and its settings.
   - Not automatically sent to the chat provider. A reviewed transcript is sent only when the user submits it.
   - Subject to the selected speech service's own privacy and retention terms.
 - Optional generated reply audio sends selected reply text to the configured ElevenLabs service.
@@ -47,8 +47,7 @@ We will acknowledge reports within 48 hours and aim to provide an update within 
 - Users can request full data export/deletion via account settings.
 
 #### Local Data
-- Android local data remains on the device; it is not automatically uploaded.
-- Web local data uses browser local storage; it is not synced without explicit opt-in.
+- Android local data remains on the device; it is not automatically uploaded or synced without explicit opt-in.
 - Export/import are user-initiated.
 
 ### Secrets Scanning
@@ -63,7 +62,7 @@ We will acknowledge reports within 48 hours and aim to provide an update within 
 - Repository/org settings such as branch protection, required reviews/checks, secret scanning and Dependabot are not verifiable from this checkout.
 
 ### Testing & CI/CD
-- Web: Node.js built-in test runner with mocked services.
+- Backend (`web/`): no automated test suite is currently checked in; CI does not test the backend.
 - Android: Gradle JVM unit tests and source compilation; no APK or instrumented tests in CI.
 - The checked-in workflows do not run dependency or secret scanning. Verify any GitHub-hosted scanning configuration separately.
 

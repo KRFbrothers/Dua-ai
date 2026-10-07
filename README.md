@@ -1,8 +1,6 @@
 # Dua AI
 
-Dua includes a native Android Compose client in `app/` and a mobile web app with server-side API functions in `web/`. Production uses https://dua-cyan.vercel.app. Both clients use the same backend and feature model, with platform-specific differences.
-
-Simple tasks use the coordinator; independent Android and web tasks can use bounded specialists.
+Dua is a native Android Compose app in `app/`, backed by server-side API functions in `web/` (deployed on Vercel). There is no web client; `web/` contains only the backend API. Production uses https://dua-cyan.vercel.app.
 
 ## Current features
 
@@ -11,8 +9,8 @@ Simple tasks use the coordinator; independent Android and web tasks can use boun
 - Chat Web: Off/Search/Read link modes and clickable source footers. Search requires Brave configuration; public page reading uses the existing chat provider. Web mode starts Off.
 - Copy, retry and speaker reply icons; device speech recognition/TTS and explicit foreground hands-free turns. Optional generated reply audio uses an authenticated, owner-restricted server integration.
 - Appearance, permissions, local notifications, reviewed memory notes/proposals and local privacy controls.
-- Supabase email accounts, reviewed cloud snapshots and opt-in foreground automatic sync on web and Android. Optional recovery, Google login on web and Android, account deletion, owner/login restrictions and durable server-side quotas are prepared.
-- A configured read-only GitHub repository connector and browser local camera/screen previews.
+- Supabase email accounts, reviewed cloud snapshots and opt-in foreground automatic sync. Optional recovery, native Google sign-in, account deletion, owner/login restrictions and durable server-side quotas are prepared.
+- A configured read-only GitHub repository connector.
 
 API keys and optional credentials remain server-side. Preparing a feature does not activate a provider or paid service. OpenAI key setup remains deferred. Background/realtime sync, model-based memory and other advanced integrations remain pending.
 
@@ -21,15 +19,15 @@ API keys and optional credentials remain server-side. Preparing a feature does n
 See [ROADMAP.md](ROADMAP.md) for the product and engineering roadmap, including design polish, provider validation, cloud sync, privacy, and advanced feature planning.
 Use [RELEASE-CHECKLIST.md](RELEASE-CHECKLIST.md) to verify production access controls, provider spending limits, device/staging checks, and Android release preparation. The production configuration cannot be verified from this source checkout alone.
 
-## Web and hosting
+## Backend API and hosting
 
-Use Node 24+ and run from `web/`:
+The backend lives in `web/`: Vercel functions in `web/api/` route to `web/src/server/vercel-handler.mjs`, with shared logic in `web/src/core/`. To run the API locally, use Node 24+ from `web/`:
 
 ```sh
 npm start
 ```
 
-Local settings use an ignored `.env`. The backend API in `web/api` is deployed on Vercel with Root Directory `web`; provider/setup/advanced integrations use Vercel or the local Node handler.
+This serves only `/api/*` on `http://localhost:3000`. Local settings go in `web/.env`, which `.gitignore` excludes (`.env` and `.env.*`); never commit it. The backend is deployed on Vercel with Root Directory `web`.
 
 ## Android and routine checks
 
@@ -41,6 +39,6 @@ Run source compilation and JVM tests without packaging an APK:
 bash ./gradlew :app:testDebugUnitTest --no-daemon --max-workers=2
 ```
 
-[Project checks](.github/workflows/checks.yml) runs web tests and Android compilation/JVM tests on PRs, pushes to main and manual runs. It does not assemble or sign an APK. Tests use mocked services/local network checks and focused Android verification without deploying an app.
+[Project checks](.github/workflows/checks.yml) runs Android compilation and JVM unit tests on PRs, pushes to main and manual runs. It does not assemble or sign an APK. The backend currently has no automated test suite in this repository.
 
-Android local data is stored in app-private preferences; Android backup/device transfer can include chat history and preferences according to device settings. Website deployment updates the backend/web app; installed native code changes require a later Android release.
+Android local data is stored in app-private preferences; Android backup/device transfer can include chat history and preferences according to device settings. A Vercel deployment updates the backend only; installed native code changes require a later Android release.

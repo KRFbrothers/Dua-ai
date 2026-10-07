@@ -4,14 +4,14 @@ This roadmap reflects the path from a feature-rich prototype to a polished, prod
 
 ## Product Vision
 
-Dua AI is a privacy-conscious AI chat application for Android and the web. The product combines:
+Dua AI is a privacy-conscious AI chat application for Android, backed by a server-side API hosted on Vercel. The web client was removed; `web/` now contains only the backend. The product combines:
 
 - **Local-first chat experience** — conversations, drafts, and history live on your device by default
 - **Multiple AI provider support** — Gemini, ChatGPT, Claude, Grok, and Kimi
 - **Voice and media** — speech recognition, text-to-speech, camera, photos, file attachments
 - **Strong privacy and data control** — export, import, delete, and manage your data locally
 - **Optional cloud sync and accounts** — Supabase-based sign-in and cross-device sync
-- **Polished, low-friction UX** — consistent, intuitive experience across Android and web
+- **Polished, low-friction UX** — consistent, intuitive experience across Android phones and tablets
 
 ## Current Status
 
@@ -19,19 +19,18 @@ The repository contains the implementation described below, but this checkout ca
 
 | Feature | Implemented in repository | Configured in production | Verified |
 | --- | --- | --- | --- |
-| Android and web clients | Yes | N/A | Source/tests; physical-device behavior pending |
-| Local chat history, drafts and search | Yes, both clients | N/A | Automated tests; Android backup/restart checks pending |
-| Attachments and photo resizing | Yes, both clients | Provider/model capabilities are environment-dependent; production unknown | Automated/mock tests; live providers and physical Android pending |
-| Camera and photo selection | Yes, browser and Android | Device/browser permission is user-controlled | Automated coverage; physical-device checks pending |
-| Voice input, read-aloud and hands-free | Yes, both clients | Speech service is device/browser-dependent; generated voice is optional | Automated/mock tests; speech/audio behavior on devices pending |
-| Accounts and profile | Yes; web Google sign-in is optional | Supabase, SMTP and OAuth settings are production-controlled; unknown here | Mocked tests; live sign-in/recovery pending |
+| Android app and backend API | Yes (Android-only client; web client removed) | Backend deployed on Vercel; settings unknown here | Source/tests; physical-device behavior pending |
+| Local chat history, drafts and search | Yes | N/A | Automated tests; Android backup/restart checks pending |
+| Attachments and photo resizing | Yes | Provider/model capabilities are environment-dependent; production unknown | Automated/mock tests; live providers and physical Android pending |
+| Camera and photo selection | Yes | Device permission is user-controlled | Automated coverage; physical-device checks pending |
+| Voice input, read-aloud and hands-free | Yes | Speech service is device-dependent; generated voice is optional | Automated/mock tests; speech/audio behavior on devices pending |
+| Accounts and profile | Yes; native Google sign-in is optional | Supabase, SMTP and OAuth settings are production-controlled; unknown here | Mocked tests; live sign-in/recovery pending |
 | Cloud snapshots and foreground sync | Yes, reviewed manual and opt-in foreground flows | Supabase migration/environment and per-device consent are required; production unknown | Automated and migration tests; live cross-device checks pending |
 | Gemini and optional AI providers | Adapters and provider selection are implemented | API keys/model IDs are production-controlled; unknown here | Mocked responses; live provider/model checks pending |
 | Web search and link reading | Yes | Brave key needed for Search; production status unknown | Mocked tests; live retrieval/provider checks pending |
 | Local memory and reviewed proposals | Yes | Local opt-in; no provider setup needed for notes | Automated tests; live prompt behavior pending |
 | GitHub connector | Read-only repository listing is implemented | Token, owner restriction and feature flag are required; production unknown | Mocked tests; live authorization pending |
-| Browser camera/screen preview | Browser-local preview is implemented; remote control is not | Browser permission is user-controlled | Source/regression checks; device/browser coverage pending |
-| Appearance and local notifications | Yes, with platform-specific behavior | Notification permission is user-controlled | Automated tests; physical delivery/rendering checks pending |
+| Appearance and local notifications | Yes | Notification permission is user-controlled | Automated tests; physical delivery/rendering checks pending |
 | Data controls and sharing | Local export/import/delete and reviewed cloud clearing are implemented | Cloud controls require Supabase; production unknown | Automated tests; physical file-picker checks pending |
 | Login/owner/quota protection | Optional controls and durable daily request quota are implemented | Vercel variables, service key and usage migration are needed; production unknown | Mocked tests; production enforcement not verified |
 | Release packaging and distribution | Android source builds; no release pipeline is configured | Signing credentials/store setup not verified | CI runs JVM tests, not a signed APK; release testing pending |
@@ -53,13 +52,13 @@ Stabilize chat, history, and local data handling.
 - Fix edge cases in message sending, retries, and state recovery
 - Validate local persistence on real Android devices
 - Stabilize error handling and recovery flows
-- Ensure consistent UI states across Android and web
+- Ensure consistent UI states across Android screens
 - Reduce crash paths and data loss scenarios
 
 **Success:**
 - Zero critical data loss bugs
 - Stable sending and retry behavior
-- Consistent UI across platforms
+- Consistent UI across the app
 
 ---
 
@@ -74,13 +73,13 @@ Bring UI to modern AI app quality.
 - Refine spacing, typography, and color consistency
 - Improve empty states, loading indicators, and error messages
 - Add smooth animations and micro-interactions
-- Optimize desktop and tablet layouts
+- Optimize tablet and large-screen layouts
 
 **Success:**
 - Messages feel premium and readable
 - Settings and onboarding flows are intuitive
-- Android and web feel visually aligned
-- Responsive on phones, tablets, and desktop
+- Screens feel visually consistent
+- Responsive on phones and tablets
 
 ---
 
@@ -164,6 +163,34 @@ Expand beyond core chat once foundation is stable.
 
 ---
 
+## GitHub Tracking
+
+Phase scope and success criteria live in this file. GitHub tracking status:
+
+| Phase | Epic issue | Status |
+| --- | --- | --- |
+| Phases 1–5 | Not created | Not tracked in GitHub |
+| Phase 6: Advanced Features | [#47](https://github.com/KRFbrothers/Dua-ai/issues/47) | Closed with no child issues, although the full advanced-feature vision is not complete; prior phases and feature-specific security reviews are dependencies |
+
+No GitHub Project board has been created.
+
+### Proposed Phase 6 sub-issues
+
+These have not been created yet.
+
+| Proposed issue | Goal | Work items | Requires |
+| --- | --- | --- | --- |
+| Phase 6.1: Connector Framework | Establish the foundation for connectors | Define connector interface; base classes; auth pattern; testing | Phase 5 complete |
+| Phase 6.2: GitHub Connector | Deliver the first production connector | GitHub auth; repository reading; issues integration; testing | Phase 6.1 |
+| Phase 6.3: Memory & Persistent Context System | Provide persistent knowledge and custom instructions | Store/retrieve memory; memory UI; edit/delete; testing | Phase 5 complete |
+| Phase 6.4: Plugin System & Developer Extensibility | Allow developers to extend Dua | Plugin API; registry; sandbox; examples; testing | Phase 6.1 |
+| Phase 6.5: Voice Generation & Audio Features | Support generated reply voice | API integration; voice selection UI; caching; testing | None |
+| Phase 6.6: Computer Mode & Collaboration | Support screen/file workflows and collaboration | Screen capture; file browser; team workspaces; testing | Phase 4 |
+
+When created, each sub-issue should include Android and backend acceptance checks based on real use cases, a review requirement, an effort estimate, the labels `phase-6`, `sub-issue` and `enhancement`, and a parent reference to #47.
+
+---
+
 ## Execution Timeline
 
 | Period | Focus |
@@ -192,7 +219,7 @@ A feature is ready to ship when:
 
 1. **Quality over speed** — Dua should feel polished and trustworthy, not rushed
 2. **Privacy by default** — Users own their data; cloud is optional
-3. **Cross-platform consistency** — Android and web feel like one product
+3. **Consistency** — Android screens and backend behavior feel like one product
 4. **Real validation** — Features are tested live, not just mocked
 5. **User feedback** — Design decisions are informed by actual usage
 6. **Incremental improvement** — Ship complete phases, not partial features
