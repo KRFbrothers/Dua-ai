@@ -16,7 +16,7 @@ API keys and optional credentials remain server-side. Preparing a feature does n
 
 ## Project roadmap
 
-See [ROADMAP.md](ROADMAP.md) for the product and engineering roadmap, including design polish, provider validation, cloud sync, privacy, and advanced feature planning.
+See [ROADMAP.md](ROADMAP.md) for the product and engineering roadmap: the Grok-style product direction, feature status, phased plan (UI foundation and reasoning, files and search, Imagine, voice, coding/Build mode), privacy and cost controls, and open decisions. The underlying gap analysis is in [docs/grok-style-plan.md](docs/grok-style-plan.md).
 Use [RELEASE-CHECKLIST.md](RELEASE-CHECKLIST.md) to verify production access controls, provider spending limits, device/staging checks, and Android release preparation. The production configuration cannot be verified from this source checkout alone.
 
 ## Backend API and hosting
