@@ -3,9 +3,9 @@ import { accountCapabilities } from './account.mjs';
 import { searchConfiguration } from './search.mjs';
 import { advancedConfiguration } from './advanced-integrations.mjs';
 
-export function setupConfiguration(env = {},requestUrl = env.SUPABASE_AUTH_REDIRECT_URL) {
+export function setupConfiguration(env = {}) {
  const providers = providerConfiguration(env);
- const account = {...accountCapabilities({url:env.SUPABASE_URL,key:env.SUPABASE_ANON_KEY,oauthRedirectUrl:env.SUPABASE_AUTH_REDIRECT_URL,serviceRoleKey:env.SUPABASE_SERVICE_ROLE_KEY},requestUrl),requireLogin:['1','true'].includes(String(env.DUA_REQUIRE_LOGIN).toLowerCase()) || Boolean(env.DUA_ALLOWED_EMAIL?.trim()) || Number(env.DUA_DAILY_REQUEST_LIMIT)>0,ownerRestricted:Boolean(env.DUA_ALLOWED_EMAIL?.trim()),dailyRequestLimit:Number(env.DUA_DAILY_REQUEST_LIMIT) || 0};
+ const account = {...accountCapabilities({url:env.SUPABASE_URL,key:env.SUPABASE_ANON_KEY,serviceRoleKey:env.SUPABASE_SERVICE_ROLE_KEY}),requireLogin:['1','true'].includes(String(env.DUA_REQUIRE_LOGIN).toLowerCase()) || Boolean(env.DUA_ALLOWED_EMAIL?.trim()) || Number(env.DUA_DAILY_REQUEST_LIMIT)>0,ownerRestricted:Boolean(env.DUA_ALLOWED_EMAIL?.trim()),dailyRequestLimit:Number(env.DUA_DAILY_REQUEST_LIMIT) || 0};
  const search = searchConfiguration(env);
  const advanced = advancedConfiguration(env);
  const group=(id,title,state,requires,limitations)=>({id,title,state,requires,limitations});
@@ -22,5 +22,5 @@ export function setupConfiguration(env = {},requestUrl = env.SUPABASE_AUTH_REDIR
 }
 export function handleSetup(req,{env={}}={}) {
  if(req.method!=='GET')return Response.json({error:'Method not allowed.'},{status:405,headers:{'Cache-Control':'no-store'}});
- return Response.json(setupConfiguration(env,req.url),{headers:{'Cache-Control':'no-store'}});
+ return Response.json(setupConfiguration(env),{headers:{'Cache-Control':'no-store'}});
 }

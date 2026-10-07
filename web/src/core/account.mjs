@@ -15,14 +15,9 @@ function privilegedKey(value){
  try{if(/^[A-Za-z0-9._-]+$/.test(value)&&JSON.parse(Buffer.from(value.split('.')[1]||'','base64url').toString()).role==='service_role')return value;}catch{}
  return null;
 }
-// The web OAuth redirect flow was removed with the web client. SUPABASE_AUTH_REDIRECT_URL is still the switch that
-// advertises Google sign-in to the Android app (features.googleLogin / setup account.googleConfigured), so keep its validation.
-function googleLoginEnabled(env,requestUrl){
- try{const value=new URL(env.oauthRedirectUrl||'');if(value.protocol!=='https:'||value.origin!==new URL(requestUrl).origin||value.pathname!=='/api/account/oauth/callback'||value.search||value.hash||value.username||value.password)return null;return value;}catch{return null;}
-}
-export function accountCapabilities(env={},requestUrl){
+export function accountCapabilities(env={}){
  const configured=!!configuration(env);
- return {configured,googleConfigured:configured&&!!googleLoginEnabled(env,requestUrl),deletionConfigured:configured&&!!privilegedKey(env.serviceRoleKey)};
+ return {configured,deletionConfigured:configured&&!!privilegedKey(env.serviceRoleKey)};
 }
 const validEmail=value=>typeof value==='string'&&value.length<=254&&/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 function cookies(req){return Object.fromEntries((req.headers.get('cookie')||'').split(';').map(value=>value.trim().split('=' )).filter(pair=>pair.length===2));}
@@ -45,7 +40,7 @@ export async function handleAccount(req,env={}){
  }
  try{
   if(url.pathname==='/api/account/session'&&req.method==='GET')return json({configured:true,user:await authenticated()});
-  if(url.pathname==='/api/account/features'&&req.method==='GET')return json({passwordReset:true,googleLogin:!!googleLoginEnabled(env,req.url),accountDeletion:!!privilegedKey(env.serviceRoleKey)});
+  if(url.pathname==='/api/account/features'&&req.method==='GET')return json({passwordReset:true,accountDeletion:!!privilegedKey(env.serviceRoleKey)});
   if(!['POST','PATCH','PUT','DELETE'].includes(req.method))return json({error:'Method not allowed.'},405);
   if(!(req.headers.get('content-type')||'').startsWith('application/json'))return json({error:'Use JSON.'},415);
   const raw=await req.text();if(Buffer.byteLength(raw)> (url.pathname==='/api/cloud'?4*1024*1024+1024:16384))return json({error:'Request too large.'},413);
