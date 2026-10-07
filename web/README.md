@@ -24,6 +24,6 @@ Keep API keys server-side. Never put private credentials in `dist`, Android, exp
 - `src/server/` contains the local HTTP server and shared request handlers.
 - `api/` contains Vercel function entry points; keep this path stable for deployment.
 - `dist/` contains the static web app served by Vercel and the local server.
-- `test/` contains the web and backend regression tests; `build/` contains static-site verification.
+- `test/` contains the web and backend regression tests; `scripts/` contains static-site verification.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the runtime boundaries and deployment constraints.
