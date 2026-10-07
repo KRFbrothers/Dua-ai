@@ -11,7 +11,7 @@ Simple tasks use the coordinator; independent Android and web tasks can use boun
 - Chat Web: Off/Search/Read link modes and clickable source footers. Search requires Brave configuration; public page reading uses the existing chat provider. Web mode starts Off.
 - Copy, retry and speaker reply icons; device speech recognition/TTS and explicit foreground hands-free turns. Optional generated reply audio uses an authenticated, owner-restricted server integration.
 - Appearance, permissions, local notifications, reviewed memory notes/proposals and local privacy controls.
-- Supabase email accounts, reviewed cloud snapshots and opt-in foreground automatic sync on web and Android. Optional recovery, Google login on web and Android (see VERCEL.md), account deletion, owner/login restrictions and durable server-side quotas are prepared.
+- Supabase email accounts, reviewed cloud snapshots and opt-in foreground automatic sync on web and Android. Optional recovery, Google login on web and Android, account deletion, owner/login restrictions and durable server-side quotas are prepared.
 - A configured read-only GitHub repository connector and browser local camera/screen previews.
 
 API keys and optional credentials remain server-side. Preparing a feature does not activate a provider or paid service. OpenAI key setup remains deferred. Background/realtime sync, model-based memory and other advanced integrations remain pending.
@@ -27,11 +27,9 @@ Use Node 24+ and run from `web/`:
 
 ```sh
 npm start
-npm test
-npm run build
 ```
 
-Local settings use an ignored `.env`; available names are in [web/.env.example](web/.env.example). Vercel uses Root Directory `web`, Framework Other and the checked-in [web/vercel.json](web/vercel.json). Follow [VERCEL.md](VERCEL.md) for deployment; provider/setup/advanced integrations use Vercel or the local Node handler.
+Local settings use an ignored `.env`. The backend API in `web/api` is deployed on Vercel with Root Directory `web`; provider/setup/advanced integrations use Vercel or the local Node handler.
 
 ## Android and routine checks
 

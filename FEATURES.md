@@ -115,7 +115,7 @@ See [SUPABASE.md](SUPABASE.md). Web and Android now share email sign-in, profile
 
 ## Eight-group setup batch
 
-See [EIGHT-FEATURE-SETUP.md](EIGHT-FEATURE-SETUP.md). This batch prepares server adapters, configuration reporting and explicit activation controls for all eight main unfinished groups. Recovery/Googleweb/deletion and personal access policies are implemented but optional external settings are not activated. Web automatic sync is foreground-only and opt-in; native foreground automatic sync is added in the next section. Memory suggestions require per-note approval. Camera/screen previews stay local. Provider audio uses an explicit optional web action. Full duplex, background voice, remote computer control, native Google session handoff and general plugin tools are not completed by setup. Earlier sections record historical implementation states.
+This batch prepares server adapters, configuration reporting and explicit activation controls for all eight main unfinished groups. Recovery/Googleweb/deletion and personal access policies are implemented but optional external settings are not activated. Web automatic sync is foreground-only and opt-in; native foreground automatic sync is added in the next section. Memory suggestions require per-note approval. Camera/screen previews stay local. Provider audio uses an explicit optional web action. Full duplex, background voice, remote computer control, native Google session handoff and general plugin tools are not completed by setup. Earlier sections record historical implementation states.
 
 
 ## Android foreground automatic cloud sync
@@ -127,7 +127,7 @@ Validation: 107 Android JVM tests and debug APK assembly pass. The 43 web accoun
 
 ## Optional Android generated reply voice
 
-Android now offers optional AI voice through the existing authenticated, owner-restricted ElevenLabs endpoint. Device speech remains the default. Feature setup selects the reply speaker mode; only tapping a completed reply sends its text, with no automatic generation or provider retries. Audio is bounded and kept in memory, released on Stop/navigation/background/offline/account changes. Native hands-free remains device speech. No provider key, account or paid setup was activated. See [EIGHT-FEATURE-SETUP.md](EIGHT-FEATURE-SETUP.md#optional-server-variables). Native capture, native Google handoff, full duplex/background voice and general plugins remain unfinished.
+Android now offers optional AI voice through the existing authenticated, owner-restricted ElevenLabs endpoint. Device speech remains the default. Feature setup selects the reply speaker mode; only tapping a completed reply sends its text, with no automatic generation or provider retries. Audio is bounded and kept in memory, released on Stop/navigation/background/offline/account changes. Native hands-free remains device speech. No provider key, account or paid setup was activated. Native capture, native Google handoff, full duplex/background voice and general plugins remain unfinished.
 
 Validation: 123 Android JVM tests and debug APK assembly pass; 29 web advanced-integration, access-policy and setup tests pass. Tests use local TLS/mocked audio and cover reply-only transport, auth/error/redirect/size checks, cancellation, stale downloads and playback callbacks, cleanup order, strict optional preference compatibility and owner-gated capability reporting. No live audio-provider request or credential activation occurred. Physical Android MP3 playback, audio focus and lifecycle interruption remain unverified.
 

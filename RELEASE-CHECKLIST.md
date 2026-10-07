@@ -19,8 +19,8 @@ Before enabling online AI in Vercel Production:
 
 ## API and deployment runbook
 
-1. Review the change and ensure the `Project checks` workflow passes. Run `npm test` and `npm run build` from `web/`; run `bash ./gradlew :app:testDebugUnitTest --no-daemon --max-workers=2` from the repository root.
-2. Deploy the web project from the intended branch with Vercel Root Directory `web`, Node.js 24, and the production-only secrets configured in Vercel. Never copy secret values into `web/dist`, Android resources, or public client configuration.
+1. Review the change and ensure the `Project checks` workflow passes. Run `bash ./gradlew :app:testDebugUnitTest --no-daemon --max-workers=2` from the repository root.
+2. Deploy the web project from the intended branch with Vercel Root Directory `web`, Node.js 24, and the production-only secrets configured in Vercel. Never copy secret values into Android resources, or public client configuration.
 3. Apply reviewed Supabase migrations before enabling their dependent features. Verify RLS, grants, and function permissions in the Supabase SQL editor; do not grant clients direct snapshot writes or access to daily usage rows.
 4. After deployment, smoke-check `/`, `/chat.html`, `/api/config`, `/api/setup`, and `/api/account/session`. Confirm that public responses contain no API keys, service-role key, or owner email. `/api/setup` may expose feature availability and access-policy booleans.
 5. Exercise one staging account and one non-owner account before enabling owner restrictions for real users. Check sign-in, refresh, logout, account deletion only with a disposable test account, cloud ownership/conflicts, and quota enforcement.
