@@ -1,5 +1,4 @@
 import { readJsonLimited } from './limited-json.mjs';
-export { readJsonLimited } from './limited-json.mjs';
 import { handleGemini } from './gemini.mjs';
 import { attachmentParts, MAX_REQUEST_BYTES } from './attachments.mjs';
 import { chatWebConfiguration, prepareChatWeb, WEB_SOURCE_INSTRUCTIONS, WebContextError, withWebSources } from './chat-web.mjs';

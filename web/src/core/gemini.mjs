@@ -29,7 +29,6 @@ function waitText(seconds) {
 export async function handleGemini(req, {key, model, fetcher = fetch, webContext = ''}) {
   const json = (data, status = 200, headers = {}) => Response.json(data, { status, headers: { 'Cache-Control': 'no-store', ...headers } });
   const url = new URL(req.url);
-  if (url.pathname === '/api/config' && req.method === 'GET') return json({ geminiConfigured: Boolean(key && model?.trim()), model });
   if (url.pathname !== '/api/chat' || req.method !== 'POST') return json({ error: 'Method not allowed.' }, 405);
   if (req.headers.get('origin') && req.headers.get('origin') !== url.origin) return json({ error: 'Request origin is not allowed.' }, 403);
   if (!key) return json({ error: 'Gemini API key hosting settings mein set karein.' }, 503);

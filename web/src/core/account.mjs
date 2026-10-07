@@ -1,6 +1,4 @@
 import { validateCloudSnapshot } from './cloud-snapshot.mjs';
-import { readJsonLimited } from './limited-json.mjs';
-import { createHash, randomBytes } from 'node:crypto';
 const cookieNames={access:'dua_access',refresh:'dua_refresh'};
 function configuration(env){
  const url=String(env.url||'').replace(/\/$/,'');const key=env.key;
@@ -17,14 +15,15 @@ function privilegedKey(value){
  try{if(/^[A-Za-z0-9._-]+$/.test(value)&&JSON.parse(Buffer.from(value.split('.')[1]||'','base64url').toString()).role==='service_role')return value;}catch{}
  return null;
 }
-function oauthRedirect(env,requestUrl){
+// The web OAuth redirect flow was removed with the web client. SUPABASE_AUTH_REDIRECT_URL is still the switch that
+// advertises Google sign-in to the Android app (features.googleLogin / setup account.googleConfigured), so keep its validation.
+function googleLoginEnabled(env,requestUrl){
  try{const value=new URL(env.oauthRedirectUrl||'');if(value.protocol!=='https:'||value.origin!==new URL(requestUrl).origin||value.pathname!=='/api/account/oauth/callback'||value.search||value.hash||value.username||value.password)return null;return value;}catch{return null;}
 }
 export function accountCapabilities(env={},requestUrl){
  const configured=!!configuration(env);
- return {configured,googleConfigured:configured&&!!oauthRedirect(env,requestUrl),deletionConfigured:configured&&!!privilegedKey(env.serviceRoleKey)};
+ return {configured,googleConfigured:configured&&!!googleLoginEnabled(env,requestUrl),deletionConfigured:configured&&!!privilegedKey(env.serviceRoleKey)};
 }
-function oauthCookies(verifier='',flow=''){return [`dua_oauth_verifier=${verifier}`,`dua_oauth_flow=${flow}`].map(value=>`${value}; Path=/api/account; HttpOnly; Secure; SameSite=Lax; Max-Age=${verifier?600:0}`);}
 const validEmail=value=>typeof value==='string'&&value.length<=254&&/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 function cookies(req){return Object.fromEntries((req.headers.get('cookie')||'').split(';').map(value=>value.trim().split('=' )).filter(pair=>pair.length===2));}
 function publicUser(user){if(!user||typeof user.id!=='string'||! /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(user.id))throw Error('Invalid account response');return {id:user.id,email:typeof user.email==='string'?user.email:'',displayName:typeof user.user_metadata?.display_name==='string'?user.user_metadata.display_name.slice(0,80):''};}
@@ -46,27 +45,7 @@ export async function handleAccount(req,env={}){
  }
  try{
   if(url.pathname==='/api/account/session'&&req.method==='GET')return json({configured:true,user:await authenticated()});
-  if(url.pathname==='/api/account/features'&&req.method==='GET')return json({passwordReset:true,googleLogin:!!oauthRedirect(env,req.url),accountDeletion:!!privilegedKey(env.serviceRoleKey)});
-  if(url.pathname==='/api/account/usage'&&req.method==='GET'){
-   const user=await authenticated();if(!user)return json({error:'Sign in from Profile to continue.'},401);
-   const rawLimit=env.dailyRequestLimit??env.DUA_DAILY_REQUEST_LIMIT;
-   const limit=Number(rawLimit);
-   const serviceKey=privilegedKey(env.serviceRoleKey);
-   if((typeof rawLimit!=='number'&&(typeof rawLimit!=='string'||!/^[1-9][0-9]*$/.test(rawLimit.trim())))||!Number.isInteger(limit)||limit<1||limit>100000||!serviceKey)return json({error:'Daily request usage is not configured.'},503);
-   const response=await fetcher(config.url+'/rest/v1/rpc/dua_read_daily_usage',{method:'POST',headers:{apikey:serviceKey,Authorization:'Bearer '+serviceKey,'Content-Type':'application/json'},body:JSON.stringify({account_id:user.id}),signal:AbortSignal.any([req.signal,AbortSignal.timeout(15000)]),redirect:'error'});
-   if(!response.ok)return json({error:'Daily request usage is unavailable. Check setup and retry.'},503);
-   const usage=await readJsonLimited(response,4096);
-   if(!Number.isSafeInteger(usage?.used)||usage.used<0||usage.used>100000||!Number.isSafeInteger(usage.resetAt)||usage.resetAt<=0)throw Error('Invalid usage response');
-   return json({used:usage.used,limit,remaining:Math.max(0,limit-usage.used),resetAt:usage.resetAt});
-  }
-  if(url.pathname==='/api/account/oauth/callback'&&req.method==='GET'){
-   extraCookies=oauthCookies();const redirect=oauthRedirect(env,req.url),verifier=stored.dua_oauth_verifier,flow=stored.dua_oauth_flow,code=url.searchParams.get('code');
-   if(native||!redirect||!verifier||! /^[A-Za-z0-9_-]{43}$/.test(verifier)||!flow||! /^[A-Za-z0-9_-]{32}$/.test(flow)||url.searchParams.get('flow')!==flow||typeof code!=='string'||! /^[A-Za-z0-9._-]{1,2048}$/.test(code))return json({error:'Google sign-in expired or could not be verified. Start again from Profile.'},400);
-   const result=await request('/auth/v1/token?grant_type=pkce','POST',{auth_code:code,code_verifier:verifier});
-   if(!result.response.ok)return json({error:'Google sign-in failed. Start again from Profile.'},401);
-   validSession(result.data);extraCookies=[...oauthCookies(),...sessionCookies(result.data)];
-   const responseHeaders=new Headers({'Cache-Control':'no-store',Location:new URL('/profile.html',redirect).toString()});extraCookies.forEach(value=>responseHeaders.append('Set-Cookie',value));return new Response(null,{status:303,headers:responseHeaders});
-  }
+  if(url.pathname==='/api/account/features'&&req.method==='GET')return json({passwordReset:true,googleLogin:!!googleLoginEnabled(env,req.url),accountDeletion:!!privilegedKey(env.serviceRoleKey)});
   if(!['POST','PATCH','PUT','DELETE'].includes(req.method))return json({error:'Method not allowed.'},405);
   if(!(req.headers.get('content-type')||'').startsWith('application/json'))return json({error:'Use JSON.'},415);
   const raw=await req.text();if(Buffer.byteLength(raw)> (url.pathname==='/api/cloud'?4*1024*1024+1024:16384))return json({error:'Request too large.'},413);
@@ -77,10 +56,6 @@ export async function handleAccount(req,env={}){
    const result=await request('/auth/v1/token?grant_type=id_token','POST',{provider:'google',id_token:body.idToken,...(body.nonce?{nonce:body.nonce}:{})});
    if(!result.response.ok){console.warn('[dua-auth] Google ID token rejected ('+result.response.status+').');return json({error:'Google sign-in failed. Check that this Google account is allowed and try again.'},result.response.status===429?429:401);}
    console.info('[dua-auth] Google native sign-in succeeded.');return json(deliver(result.data));
-  }
-  if(url.pathname==='/api/account/google'&&req.method==='POST'){
-   const redirect=oauthRedirect(env,req.url);if(native)return json({error:'Open the web Profile page for Google sign-in. Native Google sign-in needs a registered Android callback.'},501);if(!redirect)return json({error:'Google login callback is not configured for this site.'},503);
-   const verifier=randomBytes(32).toString('base64url'),flow=randomBytes(24).toString('base64url');redirect.searchParams.set('flow',flow);const authorize=new URL(config.url+'/auth/v1/authorize');authorize.searchParams.set('provider','google');authorize.searchParams.set('redirect_to',redirect.toString());authorize.searchParams.set('code_challenge',createHash('sha256').update(verifier).digest('base64url'));authorize.searchParams.set('code_challenge_method','s256');extraCookies=oauthCookies(verifier,flow);return json({url:authorize.toString()});
   }
   if(url.pathname==='/api/account/reset-password'&&req.method==='POST'){
    if(!validEmail(body.email))return json({error:'Enter a valid email address.'},400);
