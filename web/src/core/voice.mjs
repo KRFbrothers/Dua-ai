@@ -4,6 +4,7 @@
 //        Older apps send only {text}: ElevenLabs when configured, otherwise Grok voice (both MP3, as those apps expect).
 // Keys stay on this server. Every route requires the signed-in owner (Supabase sign-in + DUA_ALLOWED_EMAIL).
 import { readJsonLimited } from './limited-json.mjs';
+import { liveConfiguration, validateSessionRequest, startLiveSession, endLiveSession, readLiveUsage } from './voice-live.mjs';
 import { storageConfig, resolveOwner, StorageError } from './storage.mjs';
 import { XAI_VOICES, GEMINI_VOICES, XAI_LANGUAGES, SPEED, DEFAULT_GEMINI_TTS_MODEL, VoiceError,
   xaiTtsRequest, geminiTtsRequest, elevenLabsTtsRequest, synthesize } from './voice-tts.mjs';
@@ -48,7 +49,7 @@ export function ttsConfiguration(env = {}) {
 
 /** Public voice capabilities for /api/config. Apps that do not find `voice` (older backends) hide the new options. */
 export function voiceConfiguration(env = {}) {
-  return { version: 1, tts: ttsConfiguration(env) };
+  return { version: 1, tts: ttsConfiguration(env), live: liveConfiguration(env, voiceBaseReason(env)) };
 }
 
 /** Old apps only know one "generated audio" switch and expect MP3. */
@@ -97,18 +98,43 @@ async function audioAction(request, ctx) {
   return new Response(audio.bytes, { headers: { ...noStore, 'Content-Type': audio.mimeType, 'Content-Length': String(audio.bytes.length), 'X-Dua-Voice-Provider': valid.provider } });
 }
 
-const ROUTES = { audio: 'POST' };
+const liveConfig = env => storageConfig({ ...env, DUA_FILES: '1', DUA_FILES_BUCKET: 'dua-files' });
+function liveEnabled(env) {
+  const live = liveConfiguration(env, voiceBaseReason(env));
+  if (!live.enabled) throw new VoiceError(live.reason, 503, { code: 'live_off' });
+}
+async function sessionAction(request, ctx) {
+  liveEnabled(ctx.env);
+  let body;
+  try { body = await readJsonLimited(request, 65536); }
+  catch (error) { return json({ error: error.status === 413 ? 'Chat context is too long for live voice.' : 'Invalid request.' }, error.status === 413 ? 413 : 400); }
+  const valid = validateSessionRequest(body);
+  const session = await startLiveSession(valid, { env: ctx.env, fetcher: ctx.fetcher, signal: request.signal, config: liveConfig(ctx.env), token: ctx.token });
+  return json(session);
+}
+async function sessionEndAction(request, ctx) {
+  let body;
+  try { body = await readJsonLimited(request, 4096); } catch { return json({ error: 'Invalid request.' }, 400); }
+  if (!body || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).some(key => key !== 'sessionId')) return json({ error: 'Invalid request.' }, 400);
+  return json(await endLiveSession(body.sessionId, { env: ctx.env, fetcher: ctx.fetcher, signal: request.signal, config: liveConfig(ctx.env), token: ctx.token }));
+}
+async function usageAction(request, ctx) {
+  return json(await readLiveUsage({ env: ctx.env, fetcher: ctx.fetcher, signal: request.signal, config: liveConfig(ctx.env), token: ctx.token }));
+}
+
+const ROUTES = { audio: 'POST', session: 'POST', 'session-end': 'POST', usage: 'GET' };
+const ACTIONS = { audio: audioAction, session: sessionAction, 'session-end': sessionEndAction, usage: usageAction };
 export async function handleVoice(request, { env = process.env, fetcher = fetch } = {}) {
   const action = new URL(request.url).pathname.replace(/^\/api\/voice\//, '');
-  if (!ROUTES[action]) return json({ error: 'Not found.' }, 404);
+  if (!Object.hasOwn(ROUTES, action)) return json({ error: 'Not found.' }, 404);
   if (request.method !== ROUTES[action]) return json({ error: 'Method not allowed.' }, 405);
   const base = voiceBaseReason(env);
   if (base) return json({ error: base }, 503);
-  if (action === 'audio' && !(request.headers.get('content-type') || '').startsWith('application/json')) return json({ error: 'Use JSON.' }, 415);
+  if (request.method === 'POST' && !(request.headers.get('content-type') || '').startsWith('application/json')) return json({ error: 'Use JSON.' }, 415);
   try {
     const { user, token } = await resolveOwner(request, { env, fetcher, feature: 'voice' });
     const ctx = { env, fetcher, user, token };
-    return await audioAction(request, ctx);
+    return await ACTIONS[action](request, ctx);
   } catch (error) {
     if (error instanceof VoiceError) {
       const headers = error.retryAfterSeconds ? { 'Retry-After': String(error.retryAfterSeconds) } : {};
