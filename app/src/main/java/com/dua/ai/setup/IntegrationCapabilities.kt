@@ -7,6 +7,10 @@ data class ProviderCapability(val name: String, val configured: Boolean, val mod
     val attachmentTypes: List<String> = IntegrationCapabilities.legacyAttachmentTypes(name, supportsAttachments),
     /** Shows a Thinking block in Reasoning mode (servers before Reasoning mode omit the field). */
     val supportsReasoning: Boolean = name in IntegrationCapabilities.REASONING_DEFAULT)
+/** Run code (Phase 5): provider-hosted code execution. [providers] are the models that can run code. */
+data class CodeExecutionConfig(val enabled: Boolean, val reason: String = "", val providers: Set<String> = emptySet()) {
+    fun available(model: String) = enabled && model in providers
+}
 data class IntegrationGroup(val id: String, val title: String, val state: String, val requires: List<String>, val limitations: List<String>)
 data class SearchResult(val title: String, val url: String, val snippet: String)
 data class RepositoryResult(val name: String, val url: String, val description: String)
@@ -24,7 +28,9 @@ data class IntegrationState(val groups: List<IntegrationGroup> = emptyList(), va
     /** Imagine (Phase 3) offered by the server; null on older backends, which hides Imagine. */
     val imagine: com.dua.ai.imagine.ImagineConfig? = null,
     /** Voice v2 (Phase 4) catalog; null on older backends, which keeps the single AI-voice switch. */
-    val voice: com.dua.ai.voice.VoiceConfig? = null) {
+    val voice: com.dua.ai.voice.VoiceConfig? = null,
+    /** Run code (Phase 5); null on older backends, which hides the chip. */
+    val codeExecution: CodeExecutionConfig? = null) {
     /** Search works for [model] natively or through Brave. */
     fun searchAvailable(model: String): Boolean = webSearchConfigured || model in nativeSearch
 }
@@ -51,10 +57,16 @@ object IntegrationCapabilities {
             nativeSearch = web?.optJSONArray("nativeSearch")?.let { names -> (0 until names.length()).mapNotNull { names.opt(it) as? String }.filter { it in MODELS }.toSet() } ?: emptySet(),
             xSearchAvailable = web?.opt("xSearch") == true,
             longContext = json.optJSONObject("context")?.opt("summaries") == true,
-            imagine = com.dua.ai.imagine.ImagineCodec.config(json.optJSONObject("imagine")))
+            imagine = com.dua.ai.imagine.ImagineCodec.config(json.optJSONObject("imagine")),
+            codeExecution = codeExecution(json.optJSONObject("code")))
             .let { next -> val voice = com.dua.ai.voice.VoiceCodec.config(json.optJSONObject("voice"))
                 // Phase 4 backends report reply-voice availability here, so it is known without opening Feature setup.
                 next.copy(voice = voice, generatedVoiceConfigured = voice?.ttsEnabled ?: current.generatedVoiceConfigured) }
+    }
+    fun codeExecution(json: JSONObject?): CodeExecutionConfig? {
+        if (json == null) return null
+        val names = json.optJSONArray("providers")?.let { array -> (0 until array.length()).mapNotNull { array.opt(it) as? String }.filter { it in MODELS }.toSet() } ?: emptySet()
+        return CodeExecutionConfig(json.opt("enabled") == true && names.isNotEmpty(), json.optString("reason").take(300), names)
     }
     fun providers(json: JSONObject): List<ProviderCapability> {
         val array = json.optJSONArray("providers") ?: return fallbackProviders.map { it.copy(configured = json.optBoolean("geminiConfigured", true), model = json.optString("model", "Gemini").take(100)) }

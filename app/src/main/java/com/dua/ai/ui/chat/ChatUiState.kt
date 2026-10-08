@@ -57,11 +57,16 @@ data class ChatUiState(
     val imagineOptions: com.dua.ai.imagine.ImagineOptions = com.dua.ai.imagine.ImagineOptions(),
     val imagineConfig: com.dua.ai.imagine.ImagineConfig? = null,
     val imagineUsage: com.dua.ai.imagine.ImagineUsage? = null,
+    /** Run code for the next reply and the server's Run code capability (null hides the chip on older backends). */
+    val runCode: Boolean = false,
+    val codeConfig: com.dua.ai.setup.CodeExecutionConfig? = null,
+    /** "Ran code" blocks shown expanded on first render (previews and screenshots). */
+    val expandedCode: Set<String> = emptySet(),
 ) {
     val canSend: Boolean get() = (draft.isNotBlank() || attachments.isNotEmpty() || uploads.any { it.ref != null }) && !typing && !readingFiles &&
         uploads.none { it.uploading } && recordingSince == null
     val modelLabel: String get() = model
-    val auto: Boolean get() = !reasoning && webMode == null && !xSearch && !imagine
+    val auto: Boolean get() = !reasoning && webMode == null && !xSearch && !imagine && !runCode
     /** Imagine has a photo to edit or animate. */
     val imagineSource: Boolean get() = uploads.any { it.ref != null && it.mimeType.startsWith("image/") }
     val videoAvailable: Boolean get() = imagineConfig?.videoEnabled == true
@@ -103,6 +108,7 @@ class ChatActions(
     val onImagine: (Boolean) -> Unit = {},
     val onImagineOptions: (com.dua.ai.imagine.ImagineOptions) -> Unit = {},
     val imagine: ImagineActions = ImagineActions(),
+    val onRunCode: (Boolean) -> Unit = {},
 )
 
 /** Bottom sheets the chat screen can show. */

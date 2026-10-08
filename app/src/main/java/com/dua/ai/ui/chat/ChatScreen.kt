@@ -129,6 +129,7 @@ fun ChatScreen(
                         onCancelUpload = actions.onCancelUpload,
                         onImagine = actions.onImagine,
                         onImagineOptions = { sheet = ChatSheet.Imagine },
+                        onRunCode = actions.onRunCode,
                     )
                 }
             }

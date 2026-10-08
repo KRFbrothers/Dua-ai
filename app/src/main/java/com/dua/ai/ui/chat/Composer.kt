@@ -35,6 +35,7 @@ import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.Mic
+import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -85,6 +86,7 @@ fun Composer(
     onCancelUpload: (String) -> Unit = {},
     onImagine: (Boolean) -> Unit = {},
     onImagineOptions: () -> Unit = {},
+    onRunCode: (Boolean) -> Unit = {},
 ) {
     val colors = DuaTheme.colors
     val idle = !state.typing && !state.readingFiles
@@ -137,6 +139,14 @@ fun Composer(
                             state.reasoningSupported -> "Think before answering"
                             else -> "Think before answering, not supported by ${state.modelLabel}"
                         }) { onReasoning(!state.reasoning) }
+                    // Run code: the provider runs Python in its own sandbox (shown when the backend offers it).
+                    if (state.codeConfig != null) ModeChip("Run code", Icons.Outlined.Terminal, isSelected = state.runCode, enabled = idle,
+                        description = when {
+                            state.runCode -> "Run code on: the AI can run Python for this reply. Tap to turn off"
+                            state.codeConfig.available(state.model) -> "Let the AI run Python code"
+                            state.codeConfig.enabled -> "Run code, not available for ${state.modelLabel}"
+                            else -> "Run code, turned off on the server"
+                        }) { onRunCode(!state.runCode) }
                     ModeChip("Search", Icons.Outlined.Language, isSelected = state.webMode == "search", enabled = idle,
                         description = if (state.webSearchConfigured) "Search the web" else "Search the web, needs setup") {
                         onWebMode(if (state.webMode == "search") null else "search")

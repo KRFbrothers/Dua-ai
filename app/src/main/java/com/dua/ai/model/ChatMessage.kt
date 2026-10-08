@@ -30,6 +30,8 @@ data class ChatMessage(
     val media: List<com.dua.ai.imagine.GeneratedMedia> = emptyList(),
     /** Model turns: the Imagine request and its progress (video jobs resume from here). Kept on this device. */
     val imagine: com.dua.ai.imagine.ImagineInfo? = null,
+    /** Model turns: code the provider ran for this reply and its output (Run code). Kept in local history only. */
+    val codeRuns: List<CodeRun> = emptyList(),
 ) {
     /** An Imagine reply (generated images or video, finished or not). */
     val isImagine: Boolean get() = !isUser && (imagine != null || media.isNotEmpty())
