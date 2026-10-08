@@ -4,7 +4,7 @@ Dua and Gemini retain the existing Gemini setup and attachment support. ChatGPT,
 
 ## Build mode: read-only repository chat (Phase 5B)
 
-Build mode ties a chat to one of the owner's GitHub repositories. Dua/Gemini answers questions about the code and proposes changes as unified diffs (```diff blocks). It is **strictly read-only**: the server only sends `GET` requests to five allowlisted GitHub paths (repository list, repository info, `git/trees/HEAD?recursive=1`, `contents/{path}`, `search/code` inside the chosen repository). There is no branch, commit, pull request or command tool, so nothing is written to any repository.
+Build mode ties a chat to one of the owner's GitHub repositories. Dua/Gemini answers questions about the code and proposes changes as unified diffs (```diff blocks). It is **strictly read-only**: the server only sends `GET` requests to five allowlisted GitHub paths (repository list, repository info, `git/trees/HEAD?recursive=1`, `contents/{path}`, `search/code` inside the chosen repository). The model has no branch, commit, pull request or command tool. Pull requests (Phase 5C, below) are a separate, opt-in step that only the owner's confirmed tap can trigger.
 
 Request: `"mode": "build", "repository": "owner/name"` on `POST /api/chat` (Dua or Gemini only). Checks run in this order, each with a clear error: server setup (503 with the reason), signed-in owner (`DUA_ALLOWED_EMAIL`, 401/403), then the repository (404 if the token cannot read it). The server loads the repository info and file tree, puts a trimmed file list in the system prompt (all paths if they fit in 12,000 characters, otherwise the shallowest first), and runs a Gemini function-calling loop with three tools:
 
@@ -16,7 +16,7 @@ Request: `"mode": "build", "repository": "owner/name"` on `POST /api/chat` (Dua 
 
 Loop limits: at most `DUA_BUILD_MAX_ROUNDS` Gemini calls per reply (default 6, range 1–12), 8 tool calls per round, `DUA_BUILD_MAX_FILES` files (default 40) and `DUA_BUILD_MAX_KB` characters read in total (default 600). The last round, a used-up budget, or less than 60 s left before the chat deadline (`DUA_CHAT_DEADLINE_SECONDS`, default 280) forces a plain answer (`functionCallingConfig.mode: NONE`). Model turns are echoed back verbatim so Gemini 3 thought signatures are kept. File contents and search results are marked as untrusted repository data in the prompt.
 
-Stream events: `{"type":"build","repository":"owner/name","branch":"main","files":[{"path","bytes","truncated?"}],"rounds":2,"searches":0}` at the start, after each tool round and before the answer text (the latest replaces earlier ones), then `text` and `done`. JSON replies carry `build` with the same shape. Attachments, web search and Run code are not used in Build mode (the reply says so). `/api/config.build` reports `{enabled, reason?, providers, readOnly: true, tools, maxRounds, maxFiles, fileMaxKb, totalMaxKb}`; the app shows `reason` in the Build sheet instead of hiding the mode.
+Stream events: `{"type":"build","repository":"owner/name","branch":"main","files":[{"path","bytes","truncated?"}],"rounds":2,"searches":0}` at the start, after each tool round and before the answer text (the latest replaces earlier ones), then `text` and `done`. JSON replies carry `build` with the same shape. `read_file` also reports the file's blob `sha`, which pull requests use to detect stale proposals. Attachments, web search and Run code are not used in Build mode (the reply says so). `/api/config.build` reports `{enabled, reason?, providers, readOnly: true, tools, maxRounds, maxFiles, fileMaxKb, totalMaxKb}`; the app shows `reason` in the Build sheet instead of hiding the mode.
 
 The GitHub connector route (`POST /api/connectors/github`, owner sign-in required) offers the same read actions: `list-repositories`, `get-tree` (2,000 paths), `get-file` (100 KB) and `search-code`.
 
@@ -33,7 +33,43 @@ The GitHub connector route (`POST /api/connectors/github`, owner sign-in require
 | `DUA_BUILD_MAX_KB` | 600 | optional | Characters read per reply, in KB (16–3000) |
 | `DUA_BUILD_MAX_FILES` | 40 | optional | Files read per reply (1–100) |
 
-Cost: each Build reply makes up to `DUA_BUILD_MAX_ROUNDS` Gemini requests, and every round resends the conversation plus the files read so far. A reply that reads several large files can use a few hundred thousand input tokens. On the free AI Studio key this counts toward the per-minute and per-day request and token limits, so lower `DUA_BUILD_MAX_ROUNDS` or `DUA_BUILD_MAX_KB` if you hit 429s. GitHub API calls are free (5,000 an hour per token; code search about 10 a minute). Creating branches, commits or pull requests and running commands are **not implemented**; see ROADMAP.md.
+Cost: each Build reply makes up to `DUA_BUILD_MAX_ROUNDS` Gemini requests, and every round resends the conversation plus the files read so far. A reply that reads several large files can use a few hundred thousand input tokens. On the free AI Studio key this counts toward the per-minute and per-day request and token limits, so lower `DUA_BUILD_MAX_ROUNDS` or `DUA_BUILD_MAX_KB` if you hit 429s. GitHub API calls are free (5,000 an hour per token; code search about 10 a minute).
+
+## Build mode: pull requests after approval (Phase 5C)
+
+When enabled, Gemini gets one more tool, `propose_changes(title, summary, changes[])`, where each change is `{path, action: create|update|delete, content?}` with the **complete new file content**. The tool only validates the proposal (paths, caps, and that every updated or deleted file was read in full in this reply) and returns it to the app. It has no token and no network access, so the model cannot write to GitHub no matter what it asks. After a proposal the loop forces a plain text answer. Stream event `{"type":"proposal","id","repository","baseBranch","branch":"dua/…","title","summary","createdAt","files":[{"path","action","content?","baseSha?","diff","additions","deletions","truncated?"}]}` (once, before the text); JSON replies carry `proposal`.
+
+The app shows a review card (title, summary, files with coloured diffs and a **Create PR** button). Only the owner's tap, confirmed in a dialog, calls `POST /api/build/pr` (owner sign-in required, same burst group as chat). The server re-checks everything and then:
+
+1. verifies the repository is allowed (below) and is not archived,
+2. checks each file's current blob sha on the default branch against the sha the proposal was based on, and refuses with 409 ("…ask Dua to regenerate") when anything changed, was added or was deleted in between; symlinks, submodules, folders and file/folder clashes are refused,
+3. creates the change with the Git Data API (blobs → tree on top of the current default branch → commit → a new ref) and opens a pull request from the new branch into the default branch.
+
+The branch is always `dua/<slug>-<yymmdd-hhmmss>` (UTC), never the default branch. There is no force-push, merge or branch deletion: the write client is an allowlist of `GET` and `POST` only (no `PATCH`, `PUT` or `DELETE`), and new refs must be `refs/heads/dua/*`. The PR body says it was created by Dua from the owner's request and carries the proposal id. A second tap with the same proposal returns the existing pull request instead of opening another (the commit message contains `Dua-Proposal-Id`). If the repository cannot have draft pull requests, a normal one is opened and the response says so.
+
+Rejected paths: `.github/workflows/**`, `.git/**`, `.gitmodules`, absolute paths, `..`, empty segments, control characters. Caps: `DUA_BUILD_PR_MAX_FILES` files (default 20), `DUA_BUILD_PR_FILE_MAX_KB` per file (default 200 KB) and `DUA_BUILD_PR_MAX_KB` total (default 1 MB), all UTF-8 bytes; text files only. Updates and deletes are limited to files the model read in full in the same reply, so files over `DUA_BUILD_FILE_MAX_KB` (default 100 KB) cannot be changed unless you raise it. `/api/config.build.pr` reports `{enabled, reason?, approval: "owner", draft, restricted, maxFiles, fileMaxKb, totalMaxKb}` and never the token or the repository list. The app shows `reason` on the review card.
+
+### Write token
+
+Create a **separate** fine-grained personal access token (GitHub → Settings → Developer settings → Fine-grained tokens) and keep the existing read-only `GITHUB_CONNECTOR_TOKEN` for reading:
+
+- Resource owner: your account. Repository access: **Only select repositories** (the ones Dua may open pull requests in).
+- Repository permissions: **Contents: Read and write**, **Pull requests: Read and write**, **Metadata: Read-only** (GitHub requires Metadata). Nothing else: no Workflows, Actions, Administration or Secrets permissions.
+- Account permissions: none.
+
+With those permissions the token cannot change Actions workflows (GitHub blocks that unless the token has the Workflows permission, which this design never asks for) and the server rejects workflow paths anyway.
+
+| Variable | Default | Required | Effect |
+| --- | --- | --- | --- |
+| `DUA_BUILD_PR` | off | yes | `1` allows pull requests from Build mode. Off unless this and the write token are both set |
+| `GITHUB_BUILD_WRITE_TOKEN` | — | yes | The fine-grained token above. Separate from `GITHUB_CONNECTOR_TOKEN`; never sent to the app or to Gemini |
+| `DUA_BUILD_PR_REPOS` | unset | optional | Comma-separated `owner/repo` (case-insensitive) that pull requests are allowed in. When unset, only repositories **owned by the write token's account** are allowed, so a token that can also see other people's repositories cannot open pull requests there |
+| `DUA_BUILD_PR_DRAFT` | on | optional | `0` opens pull requests ready for review instead of drafts |
+| `DUA_BUILD_PR_MAX_FILES` | 20 | optional | Files per pull request (1–50) |
+| `DUA_BUILD_PR_FILE_MAX_KB` | 200 | optional | Per-file size in KB (1–1000) |
+| `DUA_BUILD_PR_MAX_KB` | 1024 | optional | Total size of new contents in KB (1–3000) |
+
+`DUA_BUILD=0` turns off the whole of Build mode, including proposals and pull requests. Running commands is still not implemented; see ROADMAP.md.
 
 ## Server variables
 

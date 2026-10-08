@@ -373,6 +373,7 @@ async function handleBuildChat(request, data, provider, { env, fetcher, startedA
       try {
         const result = await run(streamSignal, build => send({ type: 'build', ...build }));
         send({ type: 'build', ...result.build });
+        if (result.proposal) send({ type: 'proposal', ...result.proposal });
         const text = result.text.slice(0, MAX_REPLY_CHARS);
         for (let index = 0; index < text.length; index += 4000) send({ type: 'text', delta: text.slice(index, index + 4000) });
         send({ type: 'done', truncated: Boolean(result.truncated || result.text.length > MAX_REPLY_CHARS), ...(result.usage ? { usage: result.usage } : {}) });
@@ -386,6 +387,6 @@ async function handleBuildChat(request, data, provider, { env, fetcher, startedA
   }
   try {
     const result = await run(signal);
-    return json({ text: result.text.slice(0, MAX_REPLY_CHARS), build: result.build, ...(result.truncated ? { truncated: true } : {}), ...(notice ? { notice } : {}) });
+    return json({ text: result.text.slice(0, MAX_REPLY_CHARS), build: result.build, ...(result.proposal ? { proposal: result.proposal } : {}), ...(result.truncated ? { truncated: true } : {}), ...(notice ? { notice } : {}) });
   } catch (error) { return failure(error, signal); }
 }

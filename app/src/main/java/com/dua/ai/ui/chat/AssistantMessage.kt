@@ -48,6 +48,11 @@ fun AssistantMessage(
     thinkingExpanded: Boolean = false,
     codeExpanded: Boolean = false,
     buildExpanded: Boolean = false,
+    buildPr: BuildPrUiState? = null,
+    buildPrHint: String = "",
+    buildPrDraft: Boolean = true,
+    confirmPr: Boolean = false,
+    onCreatePr: (String) -> Unit = {},
 ) {
     val parts = remember(message.text) { ReplySources.split(message.text) }
     val streaming = message.streaming
@@ -69,6 +74,10 @@ fun AssistantMessage(
         if (streaming && message.text.isEmpty() && message.thinking == null && message.codeRuns.isEmpty() && message.build == null) TypingIndicator()
         if (parts.body.isNotEmpty()) MarkdownMessage(parts.body)
         if (parts.sources.isNotEmpty() && !streaming) SourceChips(parts.sources, Modifier.padding(top = Spacing.md))
+        // Build mode (Phase 5C): the proposed pull request, for review. Only its confirmed Create PR button writes to GitHub.
+        if (!streaming) message.proposal?.let {
+            BuildProposalCard(message.id, it, buildPr, buildPrHint, buildPrDraft, onCreatePr, Modifier.padding(top = Spacing.md), initiallyConfirming = confirmPr)
+        }
         message.notice?.let {
             Text(it, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = Spacing.sm))

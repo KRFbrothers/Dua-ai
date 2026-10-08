@@ -17,6 +17,8 @@ sealed interface ReplyEvent {
     data class Code(val index: Int, val language: String? = null, val code: String? = null, val output: String? = null, val outcome: String? = null) : ReplyEvent
     /** Build mode: the repository and every file read so far (each event replaces the previous one). */
     data class Build(val info: com.dua.ai.model.BuildInfo) : ReplyEvent
+    /** Build mode: a change proposal for the owner to review (nothing was written to GitHub). */
+    data class Proposal(val proposal: com.dua.ai.model.BuildProposal) : ReplyEvent
     data class Done(val truncated: Boolean) : ReplyEvent
     data class Failed(val message: String, val status: Int) : ReplyEvent
 }
@@ -53,7 +55,8 @@ class ChatStreamParser {
     }
 
     companion object {
-        const val MAX_EVENT_CHARS = 1_000_000
+        /** Build proposals carry whole files (server cap 1 MB of content plus capped diffs), so events can be a few MB. */
+        const val MAX_EVENT_CHARS = 4_000_000
 
         private fun sources(json: JSONObject): List<com.dua.ai.model.ReplySource> {
             val array = json.optJSONArray("sources") ?: return emptyList()
@@ -90,6 +93,7 @@ class ChatStreamParser {
                     else ReplyEvent.Code(index, if (json.has("language")) json.optString("language") else null, code, output, outcome)
                 }
                 "build" -> com.dua.ai.model.BuildInfos.fromJson(json)?.let { ReplyEvent.Build(it) }
+                "proposal" -> com.dua.ai.model.BuildProposals.fromJson(json)?.let { ReplyEvent.Proposal(it) }
                 "done" -> ReplyEvent.Done(json.optBoolean("truncated"))
                 "error" -> ReplyEvent.Failed(json.optString("message").takeIf { it.isNotBlank() }?.take(300)
                     ?: "Reply stopped unexpectedly. Partial reply kept; retry.", json.optInt("status", 502))
@@ -107,6 +111,7 @@ class StreamAccumulator(private val startedAt: Long, private val clock: () -> Lo
     private var notice: String? = null
     private var codeRuns: List<com.dua.ai.model.CodeRun> = emptyList()
     private var build: com.dua.ai.model.BuildInfo? = null
+    private var proposal: com.dua.ai.model.BuildProposal? = null
     var finished = false
         private set
 
@@ -120,6 +125,7 @@ class StreamAccumulator(private val startedAt: Long, private val clock: () -> Lo
             }
             is ReplyEvent.Notice -> notice = event.message
             is ReplyEvent.Build -> build = event.info
+            is ReplyEvent.Proposal -> proposal = event.proposal
             is ReplyEvent.Code -> codeRuns = com.dua.ai.model.CodeRuns.merge(codeRuns, event.index, event.language, event.code, event.output, event.outcome)
             is ReplyEvent.Done -> {
                 finished = true
@@ -132,10 +138,11 @@ class StreamAccumulator(private val startedAt: Long, private val clock: () -> Lo
 
     /** Current reply. When [ended] (done, error or stop) thinking time is fixed even without answer text. */
     fun snapshot(ended: Boolean = finished) = StreamSnapshot(text.toString(), thinking.toString().takeIf { it.isNotBlank() },
-        thinkingSeconds ?: if (thinking.isNotEmpty() && ended) elapsedSeconds() else null, notice, finished, codeRuns, build)
+        thinkingSeconds ?: if (thinking.isNotEmpty() && ended) elapsedSeconds() else null, notice, finished, codeRuns, build, proposal)
 
     private fun elapsedSeconds() = (((clock() - startedAt) + 500) / 1000).toInt().coerceIn(1, 86400)
 }
 
 data class StreamSnapshot(val text: String = "", val thinking: String? = null, val thinkingSeconds: Int? = null, val notice: String? = null, val finished: Boolean = false,
-    val codeRuns: List<com.dua.ai.model.CodeRun> = emptyList(), val build: com.dua.ai.model.BuildInfo? = null)
+    val codeRuns: List<com.dua.ai.model.CodeRun> = emptyList(), val build: com.dua.ai.model.BuildInfo? = null,
+    val proposal: com.dua.ai.model.BuildProposal? = null)

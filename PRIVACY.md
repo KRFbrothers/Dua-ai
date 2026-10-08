@@ -138,21 +138,22 @@ API keys are stored server-side (Vercel Functions or Supabase) and are never exp
 - Uses a server-side GitHub token to list up to 30 repositories owned by the signed-in GitHub account. The endpoint requests `affiliation=owner`; it is not restricted in code to the Dua-ai repository.
 - Only the configured owner account (`DUA_ALLOWED_EMAIL`, signed in) can use it.
 - Phase 5B adds read actions: the file tree, file contents (up to 100 KB per file) and code search inside one chosen repository.
-- The feature does not write to repositories or modify code/issues. The server only sends GET requests to an allowlisted set of GitHub paths; there is no code to create branches, commits or pull requests, or to run commands.
+- Reading uses only GET requests to an allowlisted set of GitHub paths.
+- Pull requests (Phase 5C) use a **separate** token (`GITHUB_BUILD_WRITE_TOKEN`), a fine-grained token limited to selected repositories with Contents and Pull requests read/write. The server writes to GitHub only when you tap Create PR and confirm in the app: it creates one new `dua/…` branch, one commit and one pull request in the repository you chose. It cannot merge, force-push, delete branches or change GitHub Actions workflows. The token and the repository allowlist are never sent to the app or to Gemini.
 
 #### Build mode
 - When you use Build mode, the server reads the files Gemini asks for from the repository you picked and sends their contents, the file list and your messages to Google's Gemini API to produce the answer. Up to 40 files and 600 KB per reply by default.
 - Private repositories are included if your token can read them, so their code is sent to Gemini when Build mode reads it. Google's Gemini API terms apply (on the free AI Studio tier, Google may use prompts to improve its products).
-- The app keeps the repository name and the list of files read with the chat in local history on your device. They are not included in exports or cloud snapshots. File contents are not stored by Dua.
+- The app keeps the repository name and the list of files read with the chat in local history on your device. A change proposal (including the proposed file contents, so the pull request can still be created later, and the pull request link once created) is kept in the same local history. None of this is included in exports or cloud snapshots. Dua does not store file contents on the server.
 
 #### Data Shared
 - Repository names, visibility and descriptions returned by GitHub.
-- In Build mode, file contents, paths and search results from the chosen repository, sent to Gemini.
-- The configured GitHub token is sent only by the server to GitHub; its permissions are determined by the token owner and GitHub configuration. It is never sent to the app or to Gemini.
+- In Build mode, file contents, paths and search results from the chosen repository, sent to Gemini. A proposal's file contents are written by Gemini and stay in that reply's conversation with Gemini; they are sent to GitHub only when you confirm Create PR, as the new commit.
+- The configured GitHub tokens (read token and, when set, the separate write token) are sent only by the server to GitHub; their permissions are determined by the token owner and GitHub configuration. Neither is ever sent to the app or to Gemini.
 
 #### Data NOT Shared
 - GitHub account settings.
-- Repository content is read only in Build mode and through the read actions above. Repositories visible to the configured token may appear in the list, including private repositories owned by the account.
+- Repository content is read only in Build mode and through the read actions above, and written only as the branch, commit and pull request you approved. Repositories visible to the configured read token may appear in the list, including private repositories owned by the account.
 
 #### Retention
 - GitHub token is stored securely server-side.

@@ -17,7 +17,10 @@ data class RepositoryResult(val name: String, val url: String, val description: 
 /** The Build picker's repository list (owner's repositories from the read-only connector). */
 data class BuildRepositories(val loading: Boolean = false, val repositories: List<RepositoryResult> = emptyList(), val error: String = "")
 /** Build mode (Phase 5B): read-only repository chat. When not [enabled], [reason] says what setup is missing. */
-data class BuildModeConfig(val enabled: Boolean, val reason: String = "", val providers: Set<String> = setOf("Dua", "Gemini"), val maxFiles: Int = 40) {
+/** Build pull requests (Phase 5C): whether the owner can turn a proposal into a pull request, and why not. */
+data class BuildPrConfig(val enabled: Boolean, val reason: String = "", val draft: Boolean = true)
+data class BuildModeConfig(val enabled: Boolean, val reason: String = "", val providers: Set<String> = setOf("Dua", "Gemini"), val maxFiles: Int = 40,
+    val pr: BuildPrConfig? = null) {
     fun available(model: String) = enabled && model in providers
 }
 data class IntegrationState(val groups: List<IntegrationGroup> = emptyList(), val providers: List<ProviderCapability> = IntegrationCapabilities.fallbackProviders,
@@ -80,7 +83,8 @@ object IntegrationCapabilities {
     fun build(json: JSONObject?): BuildModeConfig? {
         if (json == null) return null
         val names = json.optJSONArray("providers")?.let { array -> (0 until array.length()).mapNotNull { array.opt(it) as? String }.filter { it in MODELS }.toSet() } ?: emptySet()
-        return BuildModeConfig(json.opt("enabled") == true && names.isNotEmpty() && json.opt("readOnly") == true, json.optString("reason").take(300), names, json.optInt("maxFiles", 40).coerceIn(1, 100))
+        val pr = json.optJSONObject("pr")?.let { BuildPrConfig(it.opt("enabled") == true && it.optString("approval") == "owner", it.optString("reason").take(300), it.optBoolean("draft", true)) }
+        return BuildModeConfig(json.opt("enabled") == true && names.isNotEmpty() && json.opt("readOnly") == true, json.optString("reason").take(300), names, json.optInt("maxFiles", 40).coerceIn(1, 100), pr)
     }
     fun providers(json: JSONObject): List<ProviderCapability> {
         val array = json.optJSONArray("providers") ?: return fallbackProviders.map { it.copy(configured = json.optBoolean("geminiConfigured", true), model = json.optString("model", "Gemini").take(100)) }

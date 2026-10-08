@@ -70,6 +70,11 @@ fun MessageList(state: ChatUiState, actions: ChatActions, listState: LazyListSta
                     thinkingExpanded = message.id in state.expandedThinking,
                     codeExpanded = message.id in state.expandedCode,
                     buildExpanded = message.id in state.expandedBuild,
+                    buildPr = state.buildPr[message.id],
+                    buildPrHint = state.buildPrHint,
+                    buildPrDraft = state.buildConfig?.pr?.draft ?: true,
+                    confirmPr = state.confirmPr == message.id,
+                    onCreatePr = { title -> actions.onCreatePr(message.id, title) },
                 )
                 if (message.id == state.summarisedThroughId && message.id != lastId) SummaryDivider(Modifier.padding(top = Spacing.xxl))
             }

@@ -29,6 +29,8 @@ data class ChatMessage(
     val codeRuns: List<CodeRun> = emptyList(),
     /** Model turns: Build mode repository and the files the server read (Phase 5B). Kept in local history only. */
     val build: BuildInfo? = null,
+    /** Model turns: Build mode change proposal and, once the owner approved it, its pull request (Phase 5C). Local history only. */
+    val proposal: BuildProposal? = null,
 ) {
     /** An Imagine reply (generated images or video, finished or not). */
     val isImagine: Boolean get() = !isUser && (imagine != null || media.isNotEmpty())

@@ -53,7 +53,7 @@ Effort scale (one developer working with coding agents): **S** ≤ 2 days, **M**
 | Voices and languages | Settings › Voice: device / Grok / Gemini / ElevenLabs reply voice, voice picker with samples, speed, reply and recognition language; chunked playback with an in-memory cache. Live checks pending | Voice and language pickers (device plus xAI or Gemini TTS) | S–M | 4 |
 | Realtime voice | Live voice over xAI realtime (server-minted client secret, barge-in, microphone foreground service, daily minute cap); half-duplex hands-free as fallback. Live/device checks pending | Speech-to-speech over WebSocket, interrupt by talking | L | 4 |
 | Code execution | Run code chip: Gemini `code_execution` (default on, no extra charge) with collapsible "Ran code" blocks (code, output, copy), kept in local history; ChatGPT/Grok code interpreters opt-in. Live provider check pending | Provider-hosted sandbox tool with collapsible code and output | S–M | 5 |
-| Build mode | Read-only repo-aware Build chat: repository picker, Gemini function calling over tree/file/search (bounded rounds and bytes), diff answers, "files read" chips. Live check pending | Repo-aware chat → PRs after approval → commands via delegation only | M · L · XL | 5 |
+| Build mode | Repo-aware Build chat (read tools, diff answers, "files read" chips) and pull requests after explicit approval: review card, owner-confirmed Create PR, new `dua/…` branch + commit + draft PR with a separate write token. Live check pending | Commands via delegation only | M · L · XL | 5 |
 
 ## Current Status
 
@@ -72,7 +72,7 @@ The repository contains the implementation described below, but this checkout ca
 | Web search and link reading | Yes | Brave key needed for Search; production status unknown | Mocked tests; live retrieval/provider checks pending |
 | Local memory and reviewed proposals | Yes | Local opt-in; no provider setup needed for notes | Automated tests; live prompt behavior pending |
 | GitHub connector | Read-only: repository list, file tree, file contents and code search | Token, owner restriction and feature flag are required; production unknown | Mocked tests; live authorization pending |
-| Build mode (read-only repo chat) | Yes: Gemini function calling over the read-only connector, diffs, files-read chips | Needs the GitHub connector, `DUA_ALLOWED_EMAIL`, sign-in and Gemini (`DUA_BUILD=0` turns it off); production unknown | Mocked GitHub/Gemini tests and Roborazzi screenshots; live Gemini/GitHub and physical-device checks pending |
+| Build mode (repo chat + approved PRs) | Yes: Gemini function calling over the read-only connector, diffs, files-read chips; proposals and owner-approved pull requests when `DUA_BUILD_PR=1` and `GITHUB_BUILD_WRITE_TOKEN` are set | Needs the GitHub connector, `DUA_ALLOWED_EMAIL`, sign-in and Gemini (`DUA_BUILD=0` turns it off). Pull requests also need the separate write token; production unknown | Mocked GitHub/Gemini tests and Roborazzi screenshots; live Gemini/GitHub, live write-API and physical-device checks pending |
 | Appearance and local notifications | Yes | Notification permission is user-controlled | Automated tests; physical delivery/rendering checks pending |
 | Data controls and sharing | Local export/import/delete and reviewed cloud clearing are implemented | Cloud controls require Supabase; production unknown | Automated tests; physical file-picker checks pending |
 | Run code (code execution) | Yes: Gemini `code_execution`, opt-in OpenAI/xAI `code_interpreter` | Needs only the Gemini key (`DUA_CODE_EXECUTION=0` turns it off); production unknown | Mocked provider tests and Roborazzi screenshots; live Gemini and physical-device checks pending |
@@ -208,7 +208,7 @@ Absorbs the former connector, coding-agent and computer-mode items.
 
 *Status (5A): implemented in PR "Phase 5A: Run code" — `"code": true` on `/api/chat` adds Gemini `code_execution` (default on, `DUA_CODE_EXECUTION=0` off) or, opt-in, OpenAI/xAI `code_interpreter`; new `code` stream event and JSON `code[]`; `/api/config.code`; Android Run code chip and collapsible "Ran code" blocks saved in local history. Not automatic in Reasoning mode (Google warns code execution can degrade other output). Charts drawn by code are not shown yet. Live Gemini and physical-device checks remain open.*
 
-*Status (5B): read-only Build chat implemented in PR "Phase 5B: read-only Build mode". `mode: "build"` + `repository` on `/api/chat` (Dua/Gemini, owner-only) runs a bounded Gemini function-calling loop (`list_files`, `read_file`, `search_code`; GitHub GET requests to five allowlisted paths only; 6 rounds, 40 files, 100 KB per file and 600 KB per reply by default; forced answer before the chat deadline). New `build` stream event and `/api/config.build`; the connector route gains `get-tree`, `get-file` and `search-code`. Android: Build chip and repository picker (explains why when unavailable), chat tied to the repository, "Read N files" chips, coloured diffs. Nothing is written to any repository. **Next step, needs the owner's decision:** (1) "Create PR" after approval: a separate, narrowly scoped write token, a branch + commit + PR created only when the owner taps an explicit approval for a shown diff, and (2) running commands only through delegation (GitHub Copilot coding agent or Vercel Sandbox), never on the phone or in a Vercel function. Neither is implemented.*
+*Status (5B, 5C): read-only Build chat implemented in PR "Phase 5B: read-only Build mode" (`mode: "build"` + `repository` on `/api/chat`, owner-only Gemini function-calling loop over `list_files`, `read_file`, `search_code`; GitHub GET requests only; bounded rounds and bytes; "Read N files" chips and coloured diffs). **Approved pull requests implemented in PR "Build mode: create a PR after approval" (owner approved this step):** the model proposes changes with `propose_changes` (validation only, no write path); the app shows a review card and only the owner's confirmed Create PR tap calls `POST /api/build/pr`, which checks paths, sizes and stale files and then creates a new `dua/…` branch, a commit (Git Data API) and a draft pull request with a separate fine-grained write token (`GITHUB_BUILD_WRITE_TOKEN`, off unless `DUA_BUILD_PR=1`). Dua never merges, force-pushes or deletes branches, and workflow files are rejected. **Still deferred, needs the owner's decision:** running commands, only through delegation (GitHub Copilot coding agent or Vercel Sandbox), never on the phone or in a Vercel function.*
 
 **Success:**
 - Nothing is written to a repository without explicit user approval
@@ -255,7 +255,7 @@ Already settled: Dua is personal and owner-only, with no paid tiers and no store
 7. **Language** — English-only UI, or Urdu/Hindi too (Urdu needs right-to-left layout)?
 8. **Search** — keep Brave as a fallback (another key and bill) or rely on provider search?
 9. **Imagine media** — should generated images and video sync to the cloud? Provider usage policies still apply to what is generated.
-10. **Build mode scope** — read-only repo chat is done (Phase 5B). Still open: PRs after approval (needs a separate write-scoped token)? Which repositories? Is handing off to the Copilot coding agent or Vercel Sandbox acceptable for running commands?
+10. **Build mode scope** — read-only repo chat (Phase 5B) and pull requests after approval (Phase 5C, approved) are done. Still open: is handing off to the Copilot coding agent or Vercel Sandbox acceptable for running commands?
 11. **Voice** — keep device voice as the free default? Which paid provider (xAI, Gemini or ElevenLabs)? Is $0.08/min realtime voice acceptable?
 
 ---
@@ -282,7 +282,7 @@ No GitHub Project board has been created.
 | Phase 2 | Files, search and context | Implemented (PRs #68, #69); live and cross-device checks pending |
 | Phase 3 | Imagine (images, then video) | Implemented (PR #70); Gemini video deferred; live checks pending |
 | Phase 4 | Voice v2, then live voice | Implemented (PRs #71, #73); live and device audio checks pending |
-| Phase 5 | Run code, then read-only Build mode | Implemented (PRs #74, #75); "Create PR" and running commands await the owner's decision |
+| Phase 5 | Run code, read-only Build mode, then pull requests after approval | Implemented (PRs #74, #75 and the Build PR); running commands still awaits the owner's decision |
 
 The cross-cutting privacy, security and cost work runs alongside every step.
 
