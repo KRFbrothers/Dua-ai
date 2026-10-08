@@ -53,7 +53,7 @@ Effort scale (one developer working with coding agents): **S** ≤ 2 days, **M**
 | Voices and languages | Settings › Voice: device / Grok / Gemini / ElevenLabs reply voice, voice picker with samples, speed, reply and recognition language; chunked playback with an in-memory cache. Live checks pending | Voice and language pickers (device plus xAI or Gemini TTS) | S–M | 4 |
 | Realtime voice | Half-duplex hands-free loop, foreground only | Speech-to-speech over WebSocket, interrupt by talking | L | 4 |
 | Code execution | Run code chip: Gemini `code_execution` (default on, no extra charge) with collapsible "Ran code" blocks (code, output, copy), kept in local history; ChatGPT/Grok code interpreters opt-in. Live provider check pending | Provider-hosted sandbox tool with collapsible code and output | S–M | 5 |
-| Build mode | GitHub connector lists repositories (read-only) | Repo-aware chat → PRs after approval → commands via delegation only | M · L · XL | 5 |
+| Build mode | Read-only repo-aware Build chat: repository picker, Gemini function calling over tree/file/search (bounded rounds and bytes), diff answers, "files read" chips. Live check pending | Repo-aware chat → PRs after approval → commands via delegation only | M · L · XL | 5 |
 
 ## Current Status
 
@@ -71,7 +71,8 @@ The repository contains the implementation described below, but this checkout ca
 | Gemini and optional AI providers | Adapters and provider selection are implemented | API keys/model IDs are production-controlled; unknown here | Mocked responses; live provider/model checks pending |
 | Web search and link reading | Yes | Brave key needed for Search; production status unknown | Mocked tests; live retrieval/provider checks pending |
 | Local memory and reviewed proposals | Yes | Local opt-in; no provider setup needed for notes | Automated tests; live prompt behavior pending |
-| GitHub connector | Read-only repository listing is implemented | Token, owner restriction and feature flag are required; production unknown | Mocked tests; live authorization pending |
+| GitHub connector | Read-only: repository list, file tree, file contents and code search | Token, owner restriction and feature flag are required; production unknown | Mocked tests; live authorization pending |
+| Build mode (read-only repo chat) | Yes: Gemini function calling over the read-only connector, diffs, files-read chips | Needs the GitHub connector, `DUA_ALLOWED_EMAIL`, sign-in and Gemini (`DUA_BUILD=0` turns it off); production unknown | Mocked GitHub/Gemini tests and Roborazzi screenshots; live Gemini/GitHub and physical-device checks pending |
 | Appearance and local notifications | Yes | Notification permission is user-controlled | Automated tests; physical delivery/rendering checks pending |
 | Data controls and sharing | Local export/import/delete and reviewed cloud clearing are implemented | Cloud controls require Supabase; production unknown | Automated tests; physical file-picker checks pending |
 | Run code (code execution) | Yes: Gemini `code_execution`, opt-in OpenAI/xAI `code_interpreter` | Needs only the Gemini key (`DUA_CODE_EXECUTION=0` turns it off); production unknown | Mocked provider tests and Roborazzi screenshots; live Gemini and physical-device checks pending |
@@ -211,6 +212,8 @@ Absorbs the former connector, coding-agent and computer-mode items.
 
 *Status (5A): implemented in PR "Phase 5A: Run code" — `"code": true` on `/api/chat` adds Gemini `code_execution` (default on, `DUA_CODE_EXECUTION=0` off) or, opt-in, OpenAI/xAI `code_interpreter`; new `code` stream event and JSON `code[]`; `/api/config.code`; Android Run code chip and collapsible "Ran code" blocks saved in local history. Not automatic in Reasoning mode (Google warns code execution can degrade other output). Charts drawn by code are not shown yet. Live Gemini and physical-device checks remain open.*
 
+*Status (5B): read-only Build chat implemented in PR "Phase 5B: read-only Build mode". `mode: "build"` + `repository` on `/api/chat` (Dua/Gemini, owner-only) runs a bounded Gemini function-calling loop (`list_files`, `read_file`, `search_code`; GitHub GET requests to five allowlisted paths only; 6 rounds, 40 files, 100 KB per file and 600 KB per reply by default; forced answer before the chat deadline). New `build` stream event and `/api/config.build`; the connector route gains `get-tree`, `get-file` and `search-code`. Android: Build chip and repository picker (explains why when unavailable), chat tied to the repository, "Read N files" chips, coloured diffs. Nothing is written to any repository. **Next step, needs the owner's decision:** (1) "Create PR" after approval: a separate, narrowly scoped write token, a branch + commit + PR created only when the owner taps an explicit approval for a shown diff, and (2) running commands only through delegation (GitHub Copilot coding agent or Vercel Sandbox), never on the phone or in a Vercel function. Neither is implemented.*
+
 **Success:**
 - Nothing is written to a repository without explicit user approval
 - Connector tokens are narrowly scoped and stay server-side
@@ -256,7 +259,7 @@ Already settled: Dua is personal and owner-only, with no paid tiers and no store
 7. **Language** — English-only UI, or Urdu/Hindi too (Urdu needs right-to-left layout)?
 8. **Search** — keep Brave as a fallback (another key and bill) or rely on provider search?
 9. **Imagine media** — should generated images and video sync to the cloud? Provider usage policies still apply to what is generated.
-10. **Build mode scope** — read-only repo chat, or PRs after approval? Which repositories? Is handing off to the Copilot coding agent or Vercel Sandbox acceptable?
+10. **Build mode scope** — read-only repo chat is done (Phase 5B). Still open: PRs after approval (needs a separate write-scoped token)? Which repositories? Is handing off to the Copilot coding agent or Vercel Sandbox acceptable for running commands?
 11. **Voice** — keep device voice as the free default? Which paid provider (xAI, Gemini or ElevenLabs)? Is $0.08/min realtime voice acceptable?
 
 ---
