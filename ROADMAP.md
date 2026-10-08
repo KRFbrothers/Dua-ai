@@ -172,6 +172,8 @@ Files stay in the conversation, search becomes model-driven with real sources, a
 
 *Status: implemented in PR "Phase 3: Imagine (images and video)" — migration `202610090001_dua_imagine.sql` (video/mp4 + caps RPCs), `/api/imagine/{image,video,status,usage}`, Android Imagine chip, options sheet, image grid, viewer, video card and job resume, Settings › Imagine. Gemini video (Veo) deferred. Live provider and physical-device checks remain open.*
 
+*Status (4B): implemented in PR "Phase 4B: live voice" — `/api/voice/session` mints xAI realtime client secrets after reserving minutes in Postgres (`DUA_VOICE_DAILY_MINUTES`, default 30, migration `202610100001_dua_voice.sql`), `/api/voice/session-end` and `/api/voice/usage`; full-screen live voice with orb, mute, end, live captions and barge-in, microphone foreground service, Bluetooth routing, client-side session timer, transcript saved to the chat, `DUA_VOICE_REALTIME=0` falls back to hands-free. Live xAI sessions and physical-device audio (echo, Bluetooth, background) are not yet verified.*
+
 **Success:**
 - Generated media survives provider URL expiry and can be saved and shared
 - Daily caps keep image and video spend within the owner's budget

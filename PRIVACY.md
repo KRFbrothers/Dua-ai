@@ -12,6 +12,7 @@ Dua is a personal, single-user app: the backend is meant to be restricted to the
 - **Source:** Users initiate voice input via microphone (Android `RecognitionService`).
 - **Scope:** Microphone audio is passed to the operating system's speech-recognition service to produce a transcript. Depending on the device, service and settings, recognition may be processed locally or remotely; Dua cannot guarantee on-device processing. Voice-to-draft does not send audio to Dua's chat API. The transcript is sent to the selected AI provider only if the user sends it as a chat message.
 - **Generated audio:** If an AI voice is chosen in Settings › Voice and a reply (or a voice sample) is explicitly played, the text of that reply, cleaned of links and code, is sent through Dua's backend to the chosen provider (xAI, Google Gemini or ElevenLabs) to generate speech. Generated audio is kept only in memory for replays during the app session and is never written to disk or chat history. Device text-to-speech uses the installed speech service and may have its own processing practices.
+- **Live voice (optional, signed-in owner only):** While a live conversation is running, microphone audio is streamed over an encrypted WebSocket directly from the phone to xAI (Grok Voice Agent) and xAI's spoken reply is streamed back. Audio is sent only between pressing Start and the session ending (End, Close, the notification's End action, the time limit or a lost connection); muting stops sending. The session is configured by Dua's backend with Dua's instructions, your Memory notes (only when Memory is on) and the last few turns of the open chat. Dua does not record or store the audio; the text captions of the conversation are added to that chat when the session ends and are then handled like any other chat message. A foreground notification is shown for the whole session. xAI processes the audio under its own terms.
 - **Recognition language:** The speech-recognition language chosen in Settings › Voice is passed to Android's recognizer; it does not change where audio is processed.
 - **Consent:** Users grant microphone permission at the Android OS level; the app displays a permission notice before first use.
 
@@ -24,6 +25,7 @@ Dua is a personal, single-user app: the backend is meant to be restricted to the
 - Users can disable voice input in Settings.
 - Voice recognition does not automatically send a chat or store raw audio in Dua's chat history. Speech services may process or retain audio under their own terms.
 - Generated reply audio is optional and user-initiated. Dua does not persist the generated audio as chat history.
+- Live voice is optional and starts only when you press Start; End, mute and the notification's End action stop audio leaving the phone. Turn it off on the server with `DUA_VOICE_REALTIME=0`.
 
 ---
 
@@ -87,13 +89,14 @@ Dua is a personal, single-user app: the backend is meant to be restricted to the
 - Email address
 - Account data
 - Other users' conversations
-- Raw audio or voice logs
+- Raw audio or voice logs (except live voice, which streams microphone audio to xAI only while a session runs; see §1)
 - Device identifiers
 
 #### Provider Terms
 Users are responsible for reviewing the privacy and retention policies of selected providers:
 - OpenAI: https://openai.com/policies/privacy-policy
 - Google: https://policies.google.com/privacy
+- xAI: https://x.ai/legal/privacy-policy
 - Anthropic: https://www.anthropic.com/privacy-policy
 - Kimi/Moonshot: https://www.moonshot.cn/privacy
 
