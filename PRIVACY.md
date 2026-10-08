@@ -11,12 +11,13 @@ Dua is a personal, single-user app: the backend is meant to be restricted to the
 #### Collection
 - **Source:** Users initiate voice input via microphone (Android `RecognitionService`).
 - **Scope:** Microphone audio is passed to the operating system's speech-recognition service to produce a transcript. Depending on the device, service and settings, recognition may be processed locally or remotely; Dua cannot guarantee on-device processing. Voice-to-draft does not send audio to Dua's chat API. The transcript is sent to the selected AI provider only if the user sends it as a chat message.
-- **Generated audio:** If enabled and explicitly selected, reply text is sent to the configured audio provider (ElevenLabs) to generate speech. Device text-to-speech uses the installed speech service and may have its own processing practices.
+- **Generated audio:** If an AI voice is chosen in Settings › Voice and a reply (or a voice sample) is explicitly played, the text of that reply, cleaned of links and code, is sent through Dua's backend to the chosen provider (xAI, Google Gemini or ElevenLabs) to generate speech. Generated audio is kept only in memory for replays during the app session and is never written to disk or chat history. Device text-to-speech uses the installed speech service and may have its own processing practices.
+- **Recognition language:** The speech-recognition language chosen in Settings › Voice is passed to Android's recognizer; it does not change where audio is processed.
 - **Consent:** Users grant microphone permission at the Android OS level; the app displays a permission notice before first use.
 
 #### Processing
 - **Speech recognition:** Recognition is provided by Android's selected `RecognitionService`. Processing location and retention depend on that service; review its settings and privacy terms.
-- **Provider transmission:** Chat text, including a reviewed voice transcript, is sent over HTTPS to the selected chat provider when the user sends it. Optional generated reply audio sends the selected reply text over HTTPS to ElevenLabs.
+- **Provider transmission:** Chat text, including a reviewed voice transcript, is sent over HTTPS to the selected chat provider when the user sends it. Optional generated reply audio sends the selected reply text over HTTPS to the chosen voice provider (xAI `/v1/tts`, Google Gemini Interactions with `store: false`, or ElevenLabs).
 - **Provider Retention:** Retention depends on the provider, product/API, account settings and applicable terms, which can change. Review the selected provider's current terms before sending data.
 
 #### User Control

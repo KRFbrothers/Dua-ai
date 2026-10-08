@@ -50,7 +50,7 @@ Effort scale (one developer working with coding agents): **S** ≤ 2 days, **M**
 | Files | JPEG, PNG, WebP, PDF, UTF-8 text/code (256 KB each); 3 files, 2 MB total; text-file content kept on the device for follow-ups, other bytes sent once | Quick win: CSV, MD, JSON and code as text. Then Supabase Storage uploads kept in history; XLSX, DOCX, audio | S + L | 1 (quick win), 2 |
 | Image generation and editing | Imagine chip: Grok Imagine or Gemini (Nano Banana), 1–4 images, aspect ratios, edits from a photo; grid, fullscreen viewer, save, share, "Edit"; durable daily cap. Live provider/device checks pending | `/api/imagine`, image messages, viewer, save and share, daily spend caps | M | 3 |
 | Video | Async Grok Imagine jobs with polling that survives leaving the app; 480p/720p, 1080p gated; MP4 stored in `dua-files`; Media3 playback; durable daily seconds cap. Live checks pending | Async jobs with polling; 480p/720p default, 1080p gated | M–L | 3 |
-| Voices and languages | Device speech follows the phone locale; one fixed ElevenLabs voice | Voice and language pickers (device plus xAI or Gemini TTS) | S–M | 4 |
+| Voices and languages | Settings › Voice: device / Grok / Gemini / ElevenLabs reply voice, voice picker with samples, speed, reply and recognition language; chunked playback with an in-memory cache. Live checks pending | Voice and language pickers (device plus xAI or Gemini TTS) | S–M | 4 |
 | Realtime voice | Half-duplex hands-free loop, foreground only | Speech-to-speech over WebSocket, interrupt by talking | L | 4 |
 | Code execution | None | Provider-hosted sandbox tool with collapsible code and output | S–M | 5 |
 | Build mode | GitHub connector lists repositories (read-only) | Repo-aware chat → PRs after approval → commands via delegation only | M · L · XL | 5 |
@@ -65,7 +65,7 @@ The repository contains the implementation described below, but this checkout ca
 | Local chat history, drafts and search | Yes | N/A | Automated tests; Android backup/restart checks pending |
 | Attachments and photo resizing | Yes | Provider/model capabilities are environment-dependent; production unknown | Automated/mock tests; live providers and physical Android pending |
 | Camera and photo selection | Yes | Device permission is user-controlled | Automated coverage; physical-device checks pending |
-| Voice input, read-aloud and hands-free | Yes | Speech service is device-dependent; generated voice is optional | Automated/mock tests; speech/audio behavior on devices pending |
+| Voice input, read-aloud and hands-free | Yes, with voice/language pickers and Grok/Gemini/ElevenLabs reply voices | Speech service is device-dependent; AI voices need `GROK_API_KEY`/`GEMINI_API_KEY` and the owner lock | Automated/mock tests; speech/audio behavior on devices pending |
 | Accounts and profile | Yes; native Google sign-in is optional | Supabase, SMTP and OAuth settings are production-controlled; unknown here | Mocked tests; live sign-in/recovery pending |
 | Cloud snapshots and foreground sync | Yes, reviewed manual and opt-in foreground flows | Supabase migration/environment and per-device consent are required; production unknown | Automated and migration tests; live cross-device checks pending |
 | Gemini and optional AI providers | Adapters and provider selection are implemented | API keys/model IDs are production-controlled; unknown here | Mocked responses; live provider/model checks pending |
@@ -186,6 +186,8 @@ Absorbs former Phase 6.5 (generated reply voice).
 **Work:**
 - Language picker for speech recognition and TTS, device voice list, and a server `voice` parameter for xAI TTS or Gemini `gemini-3.8-flash-tts` (alongside or instead of ElevenLabs); remove voice-screen placeholders
 - Then realtime speech-to-speech: the server mints ephemeral tokens (`/v1/realtime/client_secrets`) so the key never reaches the phone; WebSocket audio with echo cancellation and server-side turn detection; interrupt by talking; microphone foreground service on Android 14+ for background use
+
+*Status (4A): implemented in PR "Phase 4A: Voice v2" — `/api/voice/audio` takes `provider`, `voice`, `language`, `speed` (xAI `/v1/tts`, Gemini `gemini-3.8-flash-tts`, ElevenLabs), `/api/config.voice` feature flag, Settings › Voice with voice picker and samples, reply and recognition language, chunked prefetching playback and an in-memory cache, markdown-free speech. Live provider and physical-device checks remain open.*
 
 **Success:**
 - The owner can choose voice and language; a realtime session can be interrupted by speaking

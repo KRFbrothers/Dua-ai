@@ -17,6 +17,10 @@ enum class DuaDestination(val route: String) {
     Permissions("settings/permissions"),
     Notifications("settings/notifications"),
     Imagine("settings/imagine"),
+    VoiceSettings("settings/voice"),
+    VoicePicker("settings/voice/voices"),
+    ReplyLanguage("settings/voice/reply-language"),
+    InputLanguage("settings/voice/input-language"),
     FeatureSetup("settings/feature-setup");
 
     companion object {
@@ -36,6 +40,7 @@ enum class DuaDestination(val route: String) {
             "IntegrationSetup", "FeatureSetup" -> FeatureSetup
             "Voice" -> Voice
             "HandsFree" -> HandsFree
+            "VoiceSettings" -> VoiceSettings
             else -> null
         }
     }

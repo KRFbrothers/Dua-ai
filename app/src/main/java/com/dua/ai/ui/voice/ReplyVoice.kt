@@ -17,6 +17,7 @@ import com.dua.ai.viewmodel.ChatViewModel
 import com.dua.ai.voice.GeneratedVoiceSession
 import com.dua.ai.voice.NativeGeneratedAudioOutput
 import com.dua.ai.voice.NativeReplySpeaker
+import com.dua.ai.voice.SpeakableText
 
 /** Reads replies aloud with the device voice or the optional generated (AI) voice. */
 @Stable
@@ -25,7 +26,12 @@ class ReplyVoice internal constructor(val speaker: NativeReplySpeaker, val gener
 
     fun toggle(message: ChatMessage, useGenerated: Boolean) {
         if (useGenerated) { speaker.stop(); generated.toggle(message.id, message.text, message.state == "complete") }
-        else { generated.stop(); speaker.toggle(message.id, message.text) }
+        else { generated.stop(); speaker.toggle(message.id, SpeakableText.clean(message.text).ifBlank { message.text }) }
+    }
+
+    /** Plays [sample] with the saved voice settings; tapping the same preview again stops it. */
+    fun preview(id: String, sample: String, useGenerated: Boolean) {
+        if (useGenerated) { speaker.stop(); generated.toggle(id, sample, true) } else { generated.stop(); speaker.toggle(id, sample) }
     }
 }
 
@@ -44,7 +50,8 @@ fun rememberReplyVoice(viewModel: ChatViewModel): ReplyVoice {
     val generated = remember(viewModel, output, scope) {
         GeneratedVoiceSession(scope, viewModel::generateReplyAudio, output,
             currentOwner = { viewModel.account.state.value.user?.id },
-            configured = { viewModel.localSettings.value.generatedVoice && viewModel.integrations.value.generatedVoiceConfigured })
+            configured = { viewModel.localSettings.value.generatedVoice && viewModel.integrations.value.generatedVoiceConfigured },
+            plan = viewModel::replyVoicePlan)
     }
     val voice = remember(speaker, generated) { ReplyVoice(speaker, generated) }
     val preferences by viewModel.localSettings.collectAsState()
@@ -58,6 +65,9 @@ fun rememberReplyVoice(viewModel: ChatViewModel): ReplyVoice {
         if (account.busy) voice.stopAll()
     }
     LaunchedEffect(generated, preferences.generatedVoice) { voice.stopAll() }
+    LaunchedEffect(speaker, preferences.replyLanguage, preferences.deviceVoice, preferences.voiceSpeed) {
+        speaker.configure(preferences.replyLanguage, preferences.deviceVoice, preferences.voiceSpeed)
+    }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     DisposableEffect(speaker, generated, output, lifecycle) {
         val started = lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)

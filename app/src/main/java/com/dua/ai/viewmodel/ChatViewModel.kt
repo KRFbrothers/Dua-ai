@@ -53,16 +53,37 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val generatedAudioApi = com.dua.ai.voice.GeneratedAudioApi()
     private val _online = MutableStateFlow(false)
     val online = _online.asStateFlow()
+    /** Generated reply audio for this process only (memory, ~12 MB); replays and voice previews are free. */
+    private val replyAudioCache = com.dua.ai.voice.AudioChunkCache()
+    /** Reply voice resolved from Voice settings and the server catalog; null = older backend (single legacy voice). */
+    fun replyTtsOptions(): com.dua.ai.voice.TtsOptions? = localSettings.value.let { settings ->
+        com.dua.ai.voice.VoiceCodec.ttsOptions(_integrations.value.voice, settings.voiceProvider, settings.voiceName, settings.replyLanguage, settings.voiceSpeed)
+    }
+    /** Splits a reply for AI voice: markdown is cleaned first; Phase 4 backends get chunked playback. */
+    fun replyVoicePlan(text: String): List<String> {
+        val spoken = com.dua.ai.voice.SpeakableText.clean(text).ifBlank { text.trim() }
+        val options = replyTtsOptions() ?: return listOf(com.dua.ai.voice.GeneratedVoiceText.validate(spoken, true))
+        val limit = _integrations.value.voice?.provider(options.provider)?.maxCharacters ?: 1000
+        return com.dua.ai.voice.TtsChunker.split(spoken, limit)
+    }
     suspend fun generateReplyAudio(text: String): ByteArray {
         check(_online.value && _integrations.value.generatedVoiceConfigured) { "AI voice setup is unavailable. Try device voice." }
+        val options = replyTtsOptions()
+        val cacheKey = options?.cacheKey(text)?.let { (account.state.value.user?.id ?: "") + "\u0000" + it }
+        cacheKey?.let(replyAudioCache::get)?.let { return it }
         var received: ByteArray? = null
         try {
             return account.withToken { token ->
                 check(token != null) { "Sign in before using AI voice." }
-                generatedAudioApi.generate(text, token).also { received = it }
+                if (options == null) generatedAudioApi.generate(text, token).also { received = it }
+                else {
+                    val limit = _integrations.value.voice?.provider(options.provider)?.maxCharacters ?: 1000
+                    generatedAudioApi.synthesize(text, token, options, limit).bytes.also { received = it; replyAudioCache.put(cacheKey!!, it) }
+                }
             }
         } catch (failure: Exception) { received?.fill(0); throw failure }
     }
+    fun clearReplyAudioCache() = replyAudioCache.clear()
     private val _integrations = MutableStateFlow(com.dua.ai.setup.IntegrationState())
     val integrations = _integrations.asStateFlow()
     private val _searchResults = MutableStateFlow<List<com.dua.ai.setup.SearchResult>>(emptyList())
@@ -113,7 +134,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         _integrations.value = next.copy(busy = true, notice = "Setup status refreshed.",
             webSearchConfigured = current.webSearchConfigured, pageReadingAvailable = current.pageReadingAvailable,
             filesEnabled = current.filesEnabled, filesMaxBytes = current.filesMaxBytes, nativeSearch = current.nativeSearch,
-            xSearchAvailable = current.xSearchAvailable, longContext = current.longContext, imagine = current.imagine)
+            xSearchAvailable = current.xSearchAvailable, longContext = current.longContext, imagine = current.imagine,
+            voice = current.voice, generatedVoiceConfigured = current.voice?.ttsEnabled ?: next.generatedVoiceConfigured)
     }
     fun searchWeb(query: String) = integrationAction {
         require(query.trim().length in 1..500) { "Enter a search up to 500 characters." }
@@ -718,6 +740,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun clearAllChats() {
+        replyAudioCache.clear()
         if (_dataBusy.value) return
         _dataBusy.value = true; refreshSyncBusy()
         _dataStatus.value = "Clearing local history…"

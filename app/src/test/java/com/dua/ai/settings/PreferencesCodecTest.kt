@@ -24,4 +24,17 @@ class PreferencesCodecTest {
         }
         try { PreferencesCodec.decode("corrupt"); fail("Corrupt settings accepted") } catch (_: Exception) { }
     }
+    @Test fun voiceSettingsRoundTripAndOldOrDamagedValuesFallBackToDefaults() {
+        val voice = LocalPreferences(generatedVoice = true, voiceProvider = "gemini", voiceName = "Kore", deviceVoice = "hi-in-x-hia-local",
+            voiceSpeed = 1.25f, replyLanguage = "hi", inputLanguage = "ur-PK")
+        assertEquals(voice, PreferencesCodec.decode(PreferencesCodec.encode(voice)))
+        val old = org.json.JSONObject(PreferencesCodec.encode(LocalPreferences())).apply {
+            listOf("voiceProvider", "voiceName", "deviceVoice", "voiceSpeed", "replyLanguage", "inputLanguage").forEach { remove(it) } }
+        assertEquals(LocalPreferences(), PreferencesCodec.decode(old.toString()))
+        val damaged = old.put("voiceProvider", "other").put("voiceName", "../x").put("voiceSpeed", 9).put("replyLanguage", "<b>").put("inputLanguage", 5)
+        assertEquals(LocalPreferences(), PreferencesCodec.decode(damaged.toString()))
+        for (value in listOf(LocalPreferences(voiceProvider = "other"), LocalPreferences(voiceSpeed = 3f), LocalPreferences(inputLanguage = "hi_IN"))) {
+            try { PreferencesCodec.encode(value); fail("Invalid voice setting accepted") } catch (_: IllegalArgumentException) { }
+        }
+    }
 }

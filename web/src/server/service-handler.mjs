@@ -7,6 +7,7 @@ import { guardChatAccess } from '../core/access-policy.mjs';
 import { envInteger } from '../core/adapters.mjs';
 import { handleFiles } from '../core/files.mjs';
 import { handleImagine } from '../core/imagine.mjs';
+import { handleVoice } from '../core/voice.mjs';
 
 /** DUA_CHAT_DEADLINE_SECONDS: whole-request chat deadline (default 280 s, allowed 10–790 s). */
 export const chatDeadlineMs = env => envInteger(env, 'DUA_CHAT_DEADLINE_SECONDS', 280, 10, 790) * 1000;
@@ -27,9 +28,11 @@ export async function handleService(request,{env=process.env,fetcher=fetch}={}) 
  if(path.startsWith('/api/files/'))return handleFiles(request,{env,fetcher});
  // Imagine (image + video generation): owner-only, daily caps, checked inside handleImagine.
  if(path.startsWith('/api/imagine/'))return handleImagine(request,{env,fetcher});
- if(['/api/chat','/api/search','/api/connectors/github','/api/voice/audio'].includes(path)) {
+ // Voice (reply voices, live voice sessions): owner-only, checked inside handleVoice. Not counted as chat requests.
+ if(path.startsWith('/api/voice/'))return handleVoice(request,{env,fetcher});
+ if(['/api/chat','/api/search','/api/connectors/github'].includes(path)) {
   if(request.method!=='POST')return Response.json({error:'Method not allowed.'},{status:405,headers:{'Cache-Control':'no-store'}});
-  const advanced=path==='/api/connectors/github'||path==='/api/voice/audio';
+  const advanced=path==='/api/connectors/github';
   if(advanced&&!env.DUA_ALLOWED_EMAIL)return Response.json({error:'Set the allowed personal account email before enabling shared integrations.'},{status:503,headers:{'Cache-Control':'no-store'}});
   const access=await guardChatAccess(request,{env:advanced?{...env,DUA_REQUIRE_LOGIN:'1'}:env,fetcher});
   if(!access.allowed)return access.response;

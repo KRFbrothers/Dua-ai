@@ -100,8 +100,9 @@ fun DuaNavHost(viewModel: ChatViewModel, voice: ReplyVoice, notificationRoute: P
         }
         composable(DuaDestination.Voice.route) {
             val draft by viewModel.draft.collectAsState()
+            val settings by viewModel.localSettings.collectAsState()
             VoiceScreen(draft = draft, onBack = navigator::back, onHandsFree = { navigator.open(DuaDestination.HandsFree) },
-                onUse = { text -> viewModel.updateDraft(text); navigator.toChat() })
+                onUse = { text -> viewModel.updateDraft(text); navigator.toChat() }, inputLanguage = settings.inputLanguage)
         }
         composable(DuaDestination.HandsFree.route) {
             HandsFreeScreen(viewModel, onBack = navigator::back, onChat = navigator::toChat)
@@ -127,6 +128,24 @@ fun DuaNavHost(viewModel: ChatViewModel, voice: ReplyVoice, notificationRoute: P
         composable(DuaDestination.Imagine.route) {
             BusyBackGuard(viewModel)
             com.dua.ai.ui.screens.ImagineSettingsScreen(viewModel, onBack = navigator::back)
+        }
+        composable(DuaDestination.VoiceSettings.route) {
+            BusyBackGuard(viewModel)
+            com.dua.ai.ui.voice.VoiceSettingsScreen(viewModel, voice, onBack = navigator::back, onPicker = { kind ->
+                navigator.open(when (kind) {
+                    com.dua.ai.ui.voice.VoicePickerKind.REPLY_LANGUAGE -> DuaDestination.ReplyLanguage
+                    com.dua.ai.ui.voice.VoicePickerKind.INPUT_LANGUAGE -> DuaDestination.InputLanguage
+                    else -> DuaDestination.VoicePicker
+                })
+            })
+        }
+        listOf(DuaDestination.VoicePicker to com.dua.ai.ui.voice.VoicePickerKind.VOICE,
+            DuaDestination.ReplyLanguage to com.dua.ai.ui.voice.VoicePickerKind.REPLY_LANGUAGE,
+            DuaDestination.InputLanguage to com.dua.ai.ui.voice.VoicePickerKind.INPUT_LANGUAGE).forEach { (destination, kind) ->
+            composable(destination.route) {
+                BusyBackGuard(viewModel)
+                com.dua.ai.ui.voice.VoicePickerScreen(viewModel, voice, kind, onBack = navigator::back)
+            }
         }
         composable(DuaDestination.DataControls.route) {
             BusyBackGuard(viewModel)

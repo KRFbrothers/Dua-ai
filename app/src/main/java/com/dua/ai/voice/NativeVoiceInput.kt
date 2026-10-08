@@ -10,7 +10,6 @@ import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import java.util.Locale
 
 data class VoiceInputState(
     val busy: Boolean = false,
@@ -29,6 +28,8 @@ class NativeVoiceInput(private val context: Context) {
     private var generation = 0
     private var closed = false
     private var timeout: Runnable? = null
+    /** Recognition language from Voice settings: "auto" (device language) or a BCP-47 tag such as hi-IN or ur-PK. */
+    var language: String = "auto"
 
     fun permissionDenied() {
         if (closed) return
@@ -84,7 +85,7 @@ class NativeVoiceInput(private val context: Context) {
             timeout = Runnable { if (token == generation) finish("Voice input timed out. Tap mic to retry.") }.also { handler.postDelayed(it, 30000) }
             speech.startListening(Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault().toLanguageTag())
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE, SpeechLanguages.locale(language).toLanguageTag())
                 putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
                 putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
             })
