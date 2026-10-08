@@ -1,6 +1,6 @@
 # Dua AI — Product Roadmap
 
-This roadmap takes Dua from a feature-rich prototype to a clean, professional, Grok-style AI assistant for its owner's personal use. The full gap analysis behind it (code evidence, verified provider APIs, UI review) is in [docs/grok-style-plan.md](docs/grok-style-plan.md).
+This roadmap takes Dua from a feature-rich prototype to a clean, professional, Grok-style AI assistant for its owner's personal use. Phases 1–5 are implemented in the repository (PRs #66–#75); live provider and physical-device checks remain open. The original pre-Phase-1 gap analysis (`docs/grok-style-plan.md`) described code that has since been replaced and was removed; it remains in git history.
 
 ## Product direction
 
@@ -41,17 +41,17 @@ Effort scale (one developer working with coding agents): **S** ≤ 2 days, **M**
 
 | Feature | Today | Target | Effort | Phase |
 | --- | --- | --- | --- | --- |
-| UI and navigation | One large chat screen, hand-built navigation, no design system, template colors, placeholder controls | Design tokens, Navigation Compose, full-width assistant replies, history drawer, regrouped settings, app icon and splash | L | 1 |
+| UI and navigation | Design tokens (DuaTheme, Inter type scale), Navigation Compose, full-width markdown replies with code blocks, new composer with mode chips, history drawer, regrouped settings, adaptive icon | Design tokens, Navigation Compose, full-width assistant replies, history drawer, regrouped settings, app icon and splash | L | 1 |
 | Chat | Works with 6 provider choices; streaming replies (SSE, opt-in) with env-configurable output caps (8k–32k defaults) and a 280 s deadline; markdown | Opt-in streaming (SSE), markdown and code blocks, higher output caps | M | 1 |
 | Reasoning mode | Reasoning chip with a collapsible "Thought for N s" block (Gemini, Grok, ChatGPT); live provider checks pending | Mode switch with a collapsible "Thought for N s" block (Gemini `thinkingLevel`, xAI `reasoning.effort`, OpenAI Responses reasoning) | M | 1 |
-| Long memory / context | Last 39 messages; local notes up to 10 × 200 chars | Per-provider token/byte budget, rolling conversation summary, xAI prompt caching; later, model-proposed notes the user approves | M | 2 |
-| Web search | Brave, one query of the raw prompt, plain-text Sources footer | Provider built-in search tools with Brave as fallback, structured sources as chips, Auto mode | M | 2 |
-| X search | None | xAI `x_search` in Search mode, X post chips | S–M after web search | 2 |
-| Files | JPEG, PNG, WebP, PDF, UTF-8 text/code (256 KB each); 3 files, 2 MB total; text-file content kept on the device for follow-ups, other bytes sent once | Quick win: CSV, MD, JSON and code as text. Then Supabase Storage uploads kept in history; XLSX, DOCX, audio | S + L | 1 (quick win), 2 |
+| Long memory / context | Per-provider context budget with a rolling summary cached with the chat; xAI prompt caching; local notes up to 10 × 200 chars | Per-provider token/byte budget, rolling conversation summary, xAI prompt caching; later, model-proposed notes the user approves | M | 2 |
+| Web search | Provider-native search (Gemini Google Search, OpenAI/xAI `web_search`) with source chips; Brave for Claude/Kimi and as fallback. Live checks pending | Provider built-in search tools with Brave as fallback, structured sources as chips, Auto mode | M | 2 |
+| X search | Grok X toggle (`x_search`, off by default). Live checks pending | xAI `x_search` in Search mode, X post chips | S–M after web search | 2 |
+| Files | Inline JPEG, PNG, WebP, PDF, UTF-8 text/code (256 KB each; 3 files, 2 MB total) plus owner-only stored files up to 50 MB in a private Supabase bucket (PDF, spreadsheets, text, images, audio with transcription), re-attached on follow-ups. DOCX pending | Quick win: CSV, MD, JSON and code as text. Then Supabase Storage uploads kept in history; XLSX, DOCX, audio | S + L | 1 (quick win), 2 |
 | Image generation and editing | Imagine chip: Grok Imagine or Gemini (Nano Banana), 1–4 images, aspect ratios, edits from a photo; grid, fullscreen viewer, save, share, "Edit"; durable daily cap. Live provider/device checks pending | `/api/imagine`, image messages, viewer, save and share, daily spend caps | M | 3 |
 | Video | Async Grok Imagine jobs with polling that survives leaving the app; 480p/720p, 1080p gated; MP4 stored in `dua-files`; Media3 playback; durable daily seconds cap. Live checks pending | Async jobs with polling; 480p/720p default, 1080p gated | M–L | 3 |
 | Voices and languages | Settings › Voice: device / Grok / Gemini / ElevenLabs reply voice, voice picker with samples, speed, reply and recognition language; chunked playback with an in-memory cache. Live checks pending | Voice and language pickers (device plus xAI or Gemini TTS) | S–M | 4 |
-| Realtime voice | Half-duplex hands-free loop, foreground only | Speech-to-speech over WebSocket, interrupt by talking | L | 4 |
+| Realtime voice | Live voice over xAI realtime (server-minted client secret, barge-in, microphone foreground service, daily minute cap); half-duplex hands-free as fallback. Live/device checks pending | Speech-to-speech over WebSocket, interrupt by talking | L | 4 |
 | Code execution | Run code chip: Gemini `code_execution` (default on, no extra charge) with collapsible "Ran code" blocks (code, output, copy), kept in local history; ChatGPT/Grok code interpreters opt-in. Live provider check pending | Provider-hosted sandbox tool with collapsible code and output | S–M | 5 |
 | Build mode | Read-only repo-aware Build chat: repository picker, Gemini function calling over tree/file/search (bounded rounds and bytes), diff answers, "files read" chips. Live check pending | Repo-aware chat → PRs after approval → commands via delegation only | M · L · XL | 5 |
 
@@ -80,10 +80,6 @@ The repository contains the implementation described below, but this checkout ca
 | Login/owner/quota protection | Optional controls and durable daily request quota are implemented | Vercel variables, service key and usage migration are needed; production unknown | Mocked tests; production enforcement not verified |
 | Personal install (APK) | Android source builds; a debug APK needs no signing setup; release signing with a personal key is optional | Not verified here | CI runs JVM tests, not an APK; install on the owner's phone pending |
 
-**How the previous phases map to this plan:** the earlier six phases are folded into the new ones rather than dropped. *Core stability* and *design polish* → Phase 1. *AI provider validation* → Phases 0–1 (search verification in Phase 2). *Cloud, identity and sync* → Phase 2, where stored files depend on it. *Privacy, security and trust* → the [cross-cutting track](#cross-cutting-privacy-security-and-cost). *Advanced features* (#47) → Phases 2–5 or [Deferred](#deferred). At the switch: stability work is implemented in code but awaits physical-device verification; design-polish criteria remain open; provider adapters are not yet validated against live APIs; account, snapshot and foreground-sync code is substantially implemented while deployment and cross-device checks remain open; documentation and privacy accuracy checks are tracked in [RELEASE-CHECKLIST.md](RELEASE-CHECKLIST.md); former Phase 6 shipped selected opt-in features, not the full connector/computer/agent vision.
-
-The separate Google ADK coding-agent component is not present in this repository checkout; its old workflow and documentation references should not be treated as an active feature.
-
 ---
 
 ## Roadmap Phases
@@ -94,7 +90,7 @@ The separate Google ADK coding-agent component is not present in this repository
 Confirm production can support the plan and is not already failing.
 
 **Work:**
-- Vercel: confirm Fluid compute is on and check the plan's function duration (Hobby: 300 s max; Pro: 800 s max). The code still assumes a 60 s function (55 s server deadline), and there is no `vercel.json`.
+- Vercel: confirm Fluid compute is on and check the plan's function duration (Hobby: 300 s max; Pro: 800 s max). `web/vercel.json` sets `maxDuration` to 300 s and the chat deadline defaults to 280 s (`DUA_CHAT_DEADLINE_SECONDS`).
 - Check `GEMINI_MODEL`: `gemini-2.0-flash` is shut down and 2.5 models are limited to existing users, so an old ID may already be failing. Recommended: `gemini-3.8-flash`.
 - Decide which provider keys to fund ([Open decisions](#open-decisions) 1). If xAI is chosen, set `GROK_API_KEY` and `GROK_MODEL=grok-4.7`.
 - Confirm the owner-only lock (`DUA_REQUIRE_LOGIN=1`, `DUA_ALLOWED_EMAIL` = owner) and set provider spending limits using [RELEASE-CHECKLIST.md](RELEASE-CHECKLIST.md).
@@ -174,8 +170,6 @@ Files stay in the conversation, search becomes model-driven with real sources, a
 
 *Status: implemented in PR "Phase 3: Imagine (images and video)" — migration `202610090001_dua_imagine.sql` (video/mp4 + caps RPCs), `/api/imagine/{image,video,status,usage}`, Android Imagine chip, options sheet, image grid, viewer, video card and job resume, Settings › Imagine. Gemini video (Veo) deferred. Live provider and physical-device checks remain open.*
 
-*Status (4B): implemented in PR "Phase 4B: live voice" — `/api/voice/session` mints xAI realtime client secrets after reserving minutes in Postgres (`DUA_VOICE_DAILY_MINUTES`, default 30, migration `202610100001_dua_voice.sql`), `/api/voice/session-end` and `/api/voice/usage`; full-screen live voice with orb, mute, end, live captions and barge-in, microphone foreground service, Bluetooth routing, client-side session timer, transcript saved to the chat, `DUA_VOICE_REALTIME=0` falls back to hands-free. Live xAI sessions and physical-device audio (echo, Bluetooth, background) are not yet verified.*
-
 **Success:**
 - Generated media survives provider URL expiry and can be saved and shared
 - Daily caps keep image and video spend within the owner's budget
@@ -192,6 +186,8 @@ Absorbs former Phase 6.5 (generated reply voice).
 - Then realtime speech-to-speech: the server mints ephemeral tokens (`/v1/realtime/client_secrets`) so the key never reaches the phone; WebSocket audio with echo cancellation and server-side turn detection; interrupt by talking; microphone foreground service on Android 14+ for background use
 
 *Status (4A): implemented in PR "Phase 4A: Voice v2" — `/api/voice/audio` takes `provider`, `voice`, `language`, `speed` (xAI `/v1/tts`, Gemini `gemini-3.8-flash-tts`, ElevenLabs), `/api/config.voice` feature flag, Settings › Voice with voice picker and samples, reply and recognition language, chunked prefetching playback and an in-memory cache, markdown-free speech. Live provider and physical-device checks remain open.*
+
+*Status (4B): implemented in PR "Phase 4B: live voice" — `/api/voice/session` mints xAI realtime client secrets after reserving minutes in Postgres (`DUA_VOICE_DAILY_MINUTES`, default 30, migration `202610100001_dua_voice.sql`), `/api/voice/session-end` and `/api/voice/usage`; full-screen live voice with orb, mute, end, live captions and barge-in, microphone foreground service, Bluetooth routing, client-side session timer, transcript saved to the chat, `DUA_VOICE_REALTIME=0` falls back to hands-free. Live xAI sessions and physical-device audio (echo, Bluetooth, background) are not yet verified.*
 
 **Success:**
 - The owner can choose voice and language; a realtime session can be interrupted by speaking
@@ -246,7 +242,7 @@ Former Phase 6 items not in the current plan: plugin system, Google Drive and ot
 
 ## Open decisions
 
-Only the owner can make these; details are in [docs/grok-style-plan.md §D](docs/grok-style-plan.md#d-open-questions-and-decisions-only-the-owner-fareed-can-make).
+Only the owner can make these.
 
 Already settled: Dua is personal and owner-only, with no paid tiers and no store release; owner sign-in is required for files, Imagine and voice.
 
@@ -275,32 +271,18 @@ Phase scope and success criteria live in this file. GitHub tracking status:
 
 No GitHub Project board has been created.
 
-### Proposed sub-issues (former Phase 6, remapped)
-
-These have not been created yet.
-
-| Proposed issue | Goal | Work items | New phase | Requires |
-| --- | --- | --- | --- | --- |
-| 6.1: Connector Framework | Establish the foundation for connectors | Connector interface; base classes; auth pattern; testing | Phase 5 | Cross-cutting security checks |
-| 6.2: GitHub Connector | Deliver the first production connector | GitHub auth; repository reading; issues integration; testing | Phase 5 (Build mode) | 6.1 |
-| 6.3: Memory & Persistent Context System | Persistent knowledge and custom instructions | Store/retrieve memory; memory UI; edit/delete; testing | Phase 2 (context) | Phase 1 |
-| 6.4: Plugin System & Developer Extensibility | Extend Dua with plugins | Plugin API; registry; sandbox; examples; testing | Deferred | 6.1 |
-| 6.5: Voice Generation & Audio Features | Generated reply voice | API integration; voice selection UI; caching; testing | Phase 4 | None |
-| 6.6: Computer Mode & Collaboration | Screen/file workflows | Command running via delegation in Phase 5; screen capture deferred; team workspaces dropped (single-user) | Phase 5 / Deferred | Phase 2 (cloud) |
-
-When created, each sub-issue should include Android and backend acceptance checks based on real use cases, a review requirement, an effort estimate, the labels `phase-6`, `sub-issue` and `enhancement`, a parent reference to #47, and the new phase it belongs to.
-
 ---
 
 ## Execution Order
 
-| Step | Focus | Effort |
+| Step | Focus | Status |
 | --- | --- | --- |
-| **Now** | Phase 0: configuration checks | ~1 hour |
-| **Next** | Phase 1: UI foundation (PR 1), then reasoning + streaming (PR 2), plus stability and live provider checks | L + M |
-| **Then** | Phase 2: files, search and context; cross-device cloud verification | L + M + M |
-| **Later** | Phase 3: Imagine; Phase 4: Voice v2 | M → M–L; S–M → L |
-| **Last** | Phase 5: code execution, then Build mode | S–M → M → L → XL |
+| Phase 0 | Configuration checks (owner/deployer) | Cannot be verified from this repository |
+| Phase 1 | UI foundation; reasoning + streaming | Implemented (PRs #66, #67); live provider and device checks pending |
+| Phase 2 | Files, search and context | Implemented (PRs #68, #69); live and cross-device checks pending |
+| Phase 3 | Imagine (images, then video) | Implemented (PR #70); Gemini video deferred; live checks pending |
+| Phase 4 | Voice v2, then live voice | Implemented (PRs #71, #73); live and device audio checks pending |
+| Phase 5 | Run code, then read-only Build mode | Implemented (PRs #74, #75); "Create PR" and running commands await the owner's decision |
 
 The cross-cutting privacy, security and cost work runs alongside every step.
 
@@ -336,11 +318,8 @@ A feature is done when:
 
 ## Notes
 
-The codebase is broad and well-structured, but needs depth:
-
 - **Foundation is solid** — state management, safety handling (stop, retry, draft recovery) and accessibility are good
-- **Polish is missing** — no design system, plain-text rendering, placeholder controls
-- **Capability is capped by Dua, not the models** — no streaming, short timeouts, small output caps, message-count history and one-turn attachments
+- **Phases 1–5 closed the earlier gaps in code** — design system, markdown rendering, streaming with longer deadlines, context budgets with summaries, stored files, Imagine, voice and coding features
 - **Validation is pending** — provider APIs, cloud sync and physical-device behavior need real-world testing
 
-Model names, endpoints and prices in this roadmap come from the plan in [docs/grok-style-plan.md](docs/grok-style-plan.md), checked against official documentation in October 2026. Prices change often; re-check before building.
+Model names, endpoints and prices in this roadmap were checked against official provider documentation in October 2026. Prices change often; re-check before building.
