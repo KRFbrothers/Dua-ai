@@ -198,7 +198,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         _integrations.value = next.copy(busy = true, notice = "Setup status refreshed.",
             webSearchConfigured = current.webSearchConfigured, pageReadingAvailable = current.pageReadingAvailable,
             filesEnabled = current.filesEnabled, filesMaxBytes = current.filesMaxBytes, nativeSearch = current.nativeSearch,
-            xSearchAvailable = current.xSearchAvailable, longContext = current.longContext, imagine = current.imagine, codeExecution = current.codeExecution,
+            xSearchAvailable = current.xSearchAvailable, longContext = current.longContext, imagine = current.imagine, codeExecution = current.codeExecution, build = current.build,
             voice = current.voice, generatedVoiceConfigured = current.voice?.ttsEnabled ?: next.generatedVoiceConfigured)
     }
     fun searchWeb(query: String) = integrationAction {
@@ -360,7 +360,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             accumulator.apply(it)
         }.conflate().collect {
             val snapshot = accumulator.snapshot()
-            updateMessage(id) { it.copy(text = snapshot.text, thinking = snapshot.thinking, thinkingSeconds = snapshot.thinkingSeconds, notice = snapshot.notice, codeRuns = snapshot.codeRuns) }
+            updateMessage(id) { it.copy(text = snapshot.text, thinking = snapshot.thinking, thinkingSeconds = snapshot.thinkingSeconds, notice = snapshot.notice, codeRuns = snapshot.codeRuns, build = snapshot.build ?: it.build) }
             delay(STREAM_FRAME_MS)
         }
     }
@@ -386,9 +386,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val _reasoning = MutableStateFlow(false)
     val reasoning = _reasoning.asStateFlow()
     private val replyReasoning = mutableMapOf<String, Boolean>()
-    fun setReasoning(enabled: Boolean) { if (!_isTyping.value) { _reasoning.value = enabled; if (enabled) _imagine.value = false } }
+    fun setReasoning(enabled: Boolean) { if (!_isTyping.value) { _reasoning.value = enabled; if (enabled) { _imagine.value = false; leaveBuild() } } }
     /** Auto chip: plain chat, no web and no Reasoning. */
-    fun selectAuto() { if (_isTyping.value) return; _reasoning.value = false; _xSearch.value = false; _imagine.value = false; _runCode.value = false; setWebMode(null) }
+    fun selectAuto() { if (_isTyping.value) return; _reasoning.value = false; _xSearch.value = false; _imagine.value = false; _runCode.value = false; leaveBuild(); setWebMode(null) }
 
     // Run code (Phase 5): the provider runs Python in its own sandbox. Opt-in per session like Reasoning, never saved.
     private val _runCode = MutableStateFlow(false)
@@ -407,10 +407,62 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             }
             if (reason != null) { _error.value = reason; return }
             _imagine.value = false
+            leaveBuild()
         }
         _runCode.value = enabled
         _error.value = null
     }
+
+    // Build mode (Phase 5B): STRICTLY READ-ONLY chat about one GitHub repository. The repository is tied to the chat
+    // (saved with it on this device); the server reads files with its own token and never writes to GitHub.
+    private val _buildRepo = MutableStateFlow<String?>(null)
+    val buildRepo = _buildRepo.asStateFlow()
+    private val replyBuild = mutableMapOf<String, String>()
+    private val _buildRepositories = MutableStateFlow(com.dua.ai.setup.BuildRepositories())
+    val buildRepositories = _buildRepositories.asStateFlow()
+    private fun buildUsable(model: String = _selectedModel.value) = _integrations.value.build?.available(model) == true
+    /** Why Build mode cannot be used right now (shown in the Build sheet instead of hiding the mode); null when it can. */
+    fun buildUnavailableReason(): String? {
+        val config = _integrations.value.build
+        return when {
+            config == null -> "Build mode needs the latest Dua backend. Deploy it, then refresh Feature setup."
+            !config.enabled -> config.reason.ifBlank { "Build mode is turned off on the server." }
+            account.state.value.user == null -> "Sign in from Profile to use Build mode. Only the owner account can read repositories."
+            _integrations.value.providers.none { it.configured && it.name in config.providers } -> "Build mode works with ${config.providers.sorted().joinToString(" or ")}, and none is configured."
+            else -> null
+        }
+    }
+    /** Loads the owner's repositories (read-only list) for the Build picker; kept until [force]d (connector calls share the chat burst limit). */
+    fun loadBuildRepositories(force: Boolean = false) {
+        if (_buildRepositories.value.loading || (!force && _buildRepositories.value.repositories.isNotEmpty())) return
+        buildUnavailableReason()?.let { _buildRepositories.value = com.dua.ai.setup.BuildRepositories(error = it); return }
+        _buildRepositories.value = _buildRepositories.value.copy(loading = true, error = "")
+        viewModelScope.launch {
+            try {
+                val response = account.request("/api/connectors/github", "POST", org.json.JSONObject().put("action", "list-repositories"), authenticated = true)
+                val repositories = com.dua.ai.setup.IntegrationCapabilities.repositories(response).filter { com.dua.ai.model.BuildInfos.validRepository(it.fullName) }
+                _buildRepositories.value = com.dua.ai.setup.BuildRepositories(repositories = repositories,
+                    error = if (repositories.isEmpty()) "No repositories returned. Check which repositories the connector token can read." else "")
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (failure: Exception) { _buildRepositories.value = com.dua.ai.setup.BuildRepositories(error = failure.message ?: "Repositories could not be loaded. Retry.") }
+        }
+    }
+    /** Ties this chat to [repository] (owner/name), or leaves Build mode with null. Other modes turn off. */
+    fun setBuildRepository(repository: String?) {
+        if (_isTyping.value) return
+        if (repository == null) { leaveBuild(); return }
+        if (!com.dua.ai.model.BuildInfos.validRepository(repository)) return
+        buildUnavailableReason()?.let { _error.value = it; return }
+        if (!buildUsable()) {
+            val config = _integrations.value.build!!
+            _selectedModel.value = listOf("Dua", "Gemini").first { name -> name in config.providers && _integrations.value.providers.any { it.name == name && it.configured } }
+        }
+        _reasoning.value = false; _webMode.value = null; _xSearch.value = false; _runCode.value = false; _imagine.value = false
+        _buildRepo.value = repository
+        _error.value = null
+        saveHistory()
+    }
+    private fun leaveBuild() { if (_buildRepo.value != null) { _buildRepo.value = null; saveHistory() } }
 
     // X search (Grok only, billed per post by xAI) is off by default and, like the web mode, never saved.
     private val _xSearch = MutableStateFlow(false)
@@ -447,7 +499,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         if (_isTyping.value || mode !in listOf(null, "search", "page")) return
         webModeError(mode)?.let { _error.value = it; return }
         _webMode.value = mode
-        if (mode != null) _imagine.value = false
+        if (mode != null) { _imagine.value = false; leaveBuild() }
         _error.value = null
     }
     private fun webModeError(mode: String?, model: String = _selectedModel.value): String? = when {
@@ -994,7 +1046,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         _savedChats.value = if (_messages.value.isEmpty() && _draft.value.isBlank()) others else
             listOf(com.dua.ai.history.ChatSavePolicy.preserveUnchangedTime(previous,
                 SavedChat(activeId, _selectedModel.value, _draft.value, _messages.value, System.currentTimeMillis(),
-                    com.dua.ai.model.ContextWindow.validSummary(_messages.value, _summary.value)))) + others
+                    com.dua.ai.model.ContextWindow.validSummary(_messages.value, _summary.value), _buildRepo.value))) + others
         preferences.edit().putString("history", ChatHistoryCodec.encode(_savedChats.value, activeId)).apply()
     }
 
@@ -1011,11 +1063,12 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         _summary.value = chat.summary
         _webMode.value = null
         _xSearch.value = false
+        _buildRepo.value = chat.buildRepository
         saveHistory()
     }
 
     fun deleteChat(id: String) {
-        _savedChats.value.find { it.id == id }?.messages?.forEach { replyWebModes.remove(it.id); replyReasoning.remove(it.id); replyCode.remove(it.id) }
+        _savedChats.value.find { it.id == id }?.messages?.forEach { replyWebModes.remove(it.id); replyReasoning.remove(it.id); replyCode.remove(it.id); replyBuild.remove(it.id) }
         // Deleting a chat deletes its uploaded files (unless another chat copy still uses them).
         val chatMessages = if (id == activeId) _messages.value else _savedChats.value.find { it.id == id }?.messages.orEmpty()
         val stillUsed = pathsOf(_savedChats.value.filterNot { it.id == id }.flatMap { it.messages } + if (id == activeId) emptyList() else _messages.value).toSet()
@@ -1031,6 +1084,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             _summary.value = null
             _webMode.value = null
             _xSearch.value = false
+            _buildRepo.value = null
         }
         _savedChats.value = _savedChats.value.filterNot { it.id == id }
         saveHistory()
@@ -1068,6 +1122,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         _selectedModel.value = model
         if (model != "Grok") _xSearch.value = false
         if (!codeUsable(model)) _runCode.value = false
+        if (!buildUsable(model)) _buildRepo.value = null
         saveHistory()
     }
 
@@ -1089,6 +1144,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         _summary.value = null
         _webMode.value = null
         _xSearch.value = false
+        _buildRepo.value = null
         saveHistory()
     }
 
@@ -1104,26 +1160,29 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         val requestReasoning = replyReasoning[messageId] ?: (original.thinking != null)
         val requestXSearch = (replyXSearch[messageId] ?: false) && xSearchUsable(plan.model)
         val requestCode = (replyCode[messageId] ?: original.codeRuns.isNotEmpty()) && codeUsable(plan.model)
+        // A Build reply retries in Build mode against the same repository.
+        val requestBuild = replyBuild[messageId] ?: original.build?.repository
+        if (requestBuild != null) (buildUnavailableReason() ?: if (!buildUsable(plan.model)) "Build mode works with Dua or Gemini." else null)?.let { _error.value = it; return }
         webModeError(requestWebMode, plan.model)?.let { _error.value = it; return }
         val request = requestTurns(plan.full, plan.context, inlineFiles = false)
         val currentGeneration = generation
         val startedAt = System.currentTimeMillis()
         _error.value = null; _isTyping.value = true; refreshSyncBusy()
         retryOriginal = original
-        updateMessage(messageId) { it.copy(text = "", thinking = null, thinkingSeconds = null, notice = null, codeSnippet = null, codeRuns = emptyList(), state = ChatMessage.STREAMING, startedAt = startedAt) }
+        updateMessage(messageId) { it.copy(text = "", thinking = null, thinkingSeconds = null, notice = null, codeSnippet = null, codeRuns = emptyList(), build = requestBuild?.let { com.dua.ai.model.BuildInfo(it) }, state = ChatMessage.STREAMING, startedAt = startedAt) }
         replyJob = viewModelScope.launch {
             var accumulator: com.dua.ai.network.StreamAccumulator? = null
             try {
                 account.withToken { token ->
                     val attempt = com.dua.ai.network.StreamAccumulator(startedAt).also { accumulator = it }
-                    collectReply(messageId, attempt, api.streamReply(plan.model, request.turns, emptyList(), com.dua.ai.settings.PreferencesCodec.memoryText(localSettings.value), token, requestWebMode, requestReasoning,
-                        request.historyBytes, request.context, requestXSearch, requestCode), request)
+                    collectReply(messageId, attempt, api.streamReply(plan.model, request.turns, emptyList(), com.dua.ai.settings.PreferencesCodec.memoryText(localSettings.value), token, requestWebMode.takeIf { requestBuild == null }, requestReasoning && requestBuild == null,
+                        request.historyBytes, request.context, requestXSearch && requestBuild == null, requestCode && requestBuild == null, requestBuild), request)
                 }
                 if (accumulator?.snapshot()?.text.isNullOrBlank()) throw DuaApiException(EMPTY_REPLY)
                 if (generation == currentGeneration) {
                     val final = accumulator!!.snapshot(ended = true)
                     retryOriginal = null
-                    updateMessage(messageId) { it.copy(text = final.text, thinking = final.thinking, thinkingSeconds = final.thinkingSeconds, notice = final.notice, codeRuns = final.codeRuns, state = "complete") }
+                    updateMessage(messageId) { it.copy(text = final.text, thinking = final.thinking, thinkingSeconds = final.thinkingSeconds, notice = final.notice, codeRuns = final.codeRuns, build = final.build ?: it.build, state = "complete") }
                 }
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (failure: Exception) {
@@ -1131,7 +1190,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     val partial = accumulator?.snapshot(ended = true)
                     retryOriginal = null
                     if (partial != null && partial.text.isNotBlank()) {
-                        updateMessage(messageId) { it.copy(text = partial.text, thinking = partial.thinking, thinkingSeconds = partial.thinkingSeconds, notice = partial.notice, codeRuns = partial.codeRuns, state = "stopped") }
+                        updateMessage(messageId) { it.copy(text = partial.text, thinking = partial.thinking, thinkingSeconds = partial.thinkingSeconds, notice = partial.notice, codeRuns = partial.codeRuns, build = partial.build ?: it.build, state = "stopped") }
                         _error.value = "Retry interrupted: ${failureText(failure)} Partial reply kept; tap retry."
                     } else {
                         updateMessage(messageId) { original }
@@ -1159,6 +1218,11 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         val responseModel = _selectedModel.value
         val requestXSearch = _xSearch.value && xSearchUsable(responseModel)
         val requestCode = _runCode.value && codeUsable(responseModel)
+        val requestBuild = _buildRepo.value
+        if (requestBuild != null) {
+            (buildUnavailableReason() ?: if (!buildUsable(responseModel)) "Build mode works with Dua or Gemini. Choose one of them or turn Build off." else null)?.let { _error.value = it; return }
+            if (_attachments.value.isNotEmpty() || storedFiles.isNotEmpty()) { _error.value = "Build mode reads the repository, not attachments. Remove them or turn Build off."; return }
+        }
         webModeError(requestWebMode, responseModel)?.let { _error.value = it; return }
         val provider = _integrations.value.providers.firstOrNull { it.name == responseModel && it.configured }
         if (provider == null) {
@@ -1180,13 +1244,15 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         val userMessage = ChatMessage(text = text, isUser = true, model = responseModel, attachmentText = fileText, files = storedFiles)
         val sentPaths = storedFiles.map { it.path }.toSet()
         val startedAt = System.currentTimeMillis()
-        val reply = ChatMessage(text = "", isUser = false, model = responseModel, state = ChatMessage.STREAMING, startedAt = startedAt)
+        val reply = ChatMessage(text = "", isUser = false, model = responseModel, state = ChatMessage.STREAMING, startedAt = startedAt,
+            build = requestBuild?.let { com.dua.ai.model.BuildInfo(it) })
         val request = requestTurns(_messages.value + userMessage, _messages.value.takeLast(38) + userMessage, inlineFiles = files.isNotEmpty())
         val currentGeneration = generation
         replyWebModes[reply.id] = requestWebMode
         replyXSearch[reply.id] = requestXSearch
         replyReasoning[reply.id] = requestReasoning
         replyCode[reply.id] = requestCode
+        requestBuild?.let { replyBuild[reply.id] = it }
         _messages.value = _messages.value + userMessage + reply
         _draft.value = ""
         saveHistory()
@@ -1199,15 +1265,15 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 account.withToken { token ->
                     val attempt = com.dua.ai.network.StreamAccumulator(startedAt).also { accumulator = it }
                     collectReply(reply.id, attempt, api.streamReply(responseModel, request.turns, prepared,
-                        com.dua.ai.settings.PreferencesCodec.memoryText(localSettings.value), token, requestWebMode, requestReasoning,
-                        request.historyBytes, request.context, requestXSearch, requestCode), request)
+                        com.dua.ai.settings.PreferencesCodec.memoryText(localSettings.value), token, requestWebMode.takeIf { requestBuild == null }, requestReasoning && requestBuild == null,
+                        request.historyBytes, request.context, requestXSearch && requestBuild == null, requestCode && requestBuild == null, requestBuild), request)
                 }
                 if (accumulator?.snapshot()?.text.isNullOrBlank()) throw DuaApiException(EMPTY_REPLY)
                 if (generation == currentGeneration) {
                     _uploads.update { list -> list.filterNot { it.ref?.path in sentPaths } }
                     clearAttachments()
                     val final = accumulator!!.snapshot(ended = true)
-                    updateMessage(reply.id) { it.copy(text = final.text, thinking = final.thinking, thinkingSeconds = final.thinkingSeconds, notice = final.notice, codeRuns = final.codeRuns, state = "complete") }
+                    updateMessage(reply.id) { it.copy(text = final.text, thinking = final.thinking, thinkingSeconds = final.thinkingSeconds, notice = final.notice, codeRuns = final.codeRuns, build = final.build ?: it.build, state = "complete") }
                 }
             } catch (cancelled: CancellationException) {
                 throw cancelled
@@ -1218,11 +1284,11 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                         // The request reached the model: keep the turn and its partial reply; Retry regenerates it.
                         _uploads.update { list -> list.filterNot { it.ref?.path in sentPaths } }
                         clearAttachments()
-                        updateMessage(reply.id) { it.copy(text = partial.text, thinking = partial.thinking, thinkingSeconds = partial.thinkingSeconds, notice = partial.notice, codeRuns = partial.codeRuns, state = "stopped") }
+                        updateMessage(reply.id) { it.copy(text = partial.text, thinking = partial.thinking, thinkingSeconds = partial.thinkingSeconds, notice = partial.notice, codeRuns = partial.codeRuns, build = partial.build ?: it.build, state = "stopped") }
                         _error.value = "Reply interrupted: ${failureText(failure)} Partial reply kept; tap retry."
                     } else {
                         _messages.value = _messages.value.filterNot { it.id == userMessage.id || it.id == reply.id }
-                        replyWebModes.remove(reply.id); replyReasoning.remove(reply.id); replyCode.remove(reply.id)
+                        replyWebModes.remove(reply.id); replyReasoning.remove(reply.id); replyCode.remove(reply.id); replyBuild.remove(reply.id)
                         _draft.value = userText
                         _failedPrompt.value = userText
                         _error.value = failureText(failure)
@@ -1256,6 +1322,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         val base = if (_imagine.value) _imagineOptions.value else _imagineOptions.value.copy(aspectRatio = settings.imagineAspect, provider = settings.imagineProvider.ifBlank { null })
         _imagineOptions.value = config!!.normalize(base)
         _reasoning.value = false; _webMode.value = null; _xSearch.value = false; _runCode.value = false
+        leaveBuild()
         _imagine.value = true
         _error.value = null
     }

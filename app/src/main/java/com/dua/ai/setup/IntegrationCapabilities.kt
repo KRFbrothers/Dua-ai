@@ -13,7 +13,13 @@ data class CodeExecutionConfig(val enabled: Boolean, val reason: String = "", va
 }
 data class IntegrationGroup(val id: String, val title: String, val state: String, val requires: List<String>, val limitations: List<String>)
 data class SearchResult(val title: String, val url: String, val snippet: String)
-data class RepositoryResult(val name: String, val url: String, val description: String)
+data class RepositoryResult(val name: String, val url: String, val description: String, val fullName: String = "", val private: Boolean = false)
+/** The Build picker's repository list (owner's repositories from the read-only connector). */
+data class BuildRepositories(val loading: Boolean = false, val repositories: List<RepositoryResult> = emptyList(), val error: String = "")
+/** Build mode (Phase 5B): read-only repository chat. When not [enabled], [reason] says what setup is missing. */
+data class BuildModeConfig(val enabled: Boolean, val reason: String = "", val providers: Set<String> = setOf("Dua", "Gemini"), val maxFiles: Int = 40) {
+    fun available(model: String) = enabled && model in providers
+}
 data class IntegrationState(val groups: List<IntegrationGroup> = emptyList(), val providers: List<ProviderCapability> = IntegrationCapabilities.fallbackProviders,
     val searchConfigured: Boolean = false, val busy: Boolean = false, val notice: String = "", val generatedVoiceConfigured: Boolean = false,
     val webSearchConfigured: Boolean = false, val pageReadingAvailable: Boolean = false,
@@ -30,7 +36,9 @@ data class IntegrationState(val groups: List<IntegrationGroup> = emptyList(), va
     /** Voice v2 (Phase 4) catalog; null on older backends, which keeps the single AI-voice switch. */
     val voice: com.dua.ai.voice.VoiceConfig? = null,
     /** Run code (Phase 5); null on older backends, which hides the chip. */
-    val codeExecution: CodeExecutionConfig? = null) {
+    val codeExecution: CodeExecutionConfig? = null,
+    /** Build mode (Phase 5B); null on older backends, where the Build sheet explains that a backend update is needed. */
+    val build: BuildModeConfig? = null) {
     /** Search works for [model] natively or through Brave. */
     fun searchAvailable(model: String): Boolean = webSearchConfigured || model in nativeSearch
 }
@@ -58,7 +66,8 @@ object IntegrationCapabilities {
             xSearchAvailable = web?.opt("xSearch") == true,
             longContext = json.optJSONObject("context")?.opt("summaries") == true,
             imagine = com.dua.ai.imagine.ImagineCodec.config(json.optJSONObject("imagine")),
-            codeExecution = codeExecution(json.optJSONObject("code")))
+            codeExecution = codeExecution(json.optJSONObject("code")),
+            build = build(json.optJSONObject("build")))
             .let { next -> val voice = com.dua.ai.voice.VoiceCodec.config(json.optJSONObject("voice"))
                 // Phase 4 backends report reply-voice availability here, so it is known without opening Feature setup.
                 next.copy(voice = voice, generatedVoiceConfigured = voice?.ttsEnabled ?: current.generatedVoiceConfigured) }
@@ -67,6 +76,11 @@ object IntegrationCapabilities {
         if (json == null) return null
         val names = json.optJSONArray("providers")?.let { array -> (0 until array.length()).mapNotNull { array.opt(it) as? String }.filter { it in MODELS }.toSet() } ?: emptySet()
         return CodeExecutionConfig(json.opt("enabled") == true && names.isNotEmpty(), json.optString("reason").take(300), names)
+    }
+    fun build(json: JSONObject?): BuildModeConfig? {
+        if (json == null) return null
+        val names = json.optJSONArray("providers")?.let { array -> (0 until array.length()).mapNotNull { array.opt(it) as? String }.filter { it in MODELS }.toSet() } ?: emptySet()
+        return BuildModeConfig(json.opt("enabled") == true && names.isNotEmpty() && json.opt("readOnly") == true, json.optString("reason").take(300), names, json.optInt("maxFiles", 40).coerceIn(1, 100))
     }
     fun providers(json: JSONObject): List<ProviderCapability> {
         val array = json.optJSONArray("providers") ?: return fallbackProviders.map { it.copy(configured = json.optBoolean("geminiConfigured", true), model = json.optString("model", "Gemini").take(100)) }
@@ -133,7 +147,9 @@ object IntegrationCapabilities {
         val array = json.optJSONArray("repositories") ?: json.optJSONArray("results") ?: return emptyList()
         return (0 until array.length()).take(100).mapNotNull { array.optJSONObject(it)?.let { item ->
             safeUrl(item.optString("url", item.optString("html_url")))?.takeIf { URI(it).host == "github.com" }?.let { url ->
-                RepositoryResult(item.optString("name", item.optString("full_name")).take(200), url, item.optString("description").take(1000))
+                val fullName = item.optString("fullName", item.optString("full_name")).takeIf { com.dua.ai.model.BuildInfos.validRepository(it) }
+                    ?: URI(url).path.trim('/').takeIf { com.dua.ai.model.BuildInfos.validRepository(it) }.orEmpty()
+                RepositoryResult(item.optString("name", item.optString("full_name")).take(200), url, item.optString("description").take(1000), fullName, item.optBoolean("private"))
             }
         } }
     }

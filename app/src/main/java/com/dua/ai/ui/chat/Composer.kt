@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Brush
+import androidx.compose.material.icons.outlined.Build
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.AspectRatio
 import androidx.compose.material.icons.outlined.GridView
@@ -87,6 +88,7 @@ fun Composer(
     onImagine: (Boolean) -> Unit = {},
     onImagineOptions: () -> Unit = {},
     onRunCode: (Boolean) -> Unit = {},
+    onBuild: () -> Unit = {},
 ) {
     val colors = DuaTheme.colors
     val idle = !state.typing && !state.readingFiles
@@ -124,6 +126,9 @@ fun Composer(
                 IconButton(onClick = onAttach, enabled = idle) { Icon(Icons.Outlined.Add, contentDescription = "Add photos and files") }
                 Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
                     verticalAlignment = Alignment.CenterVertically) {
+                    // Build mode on: the chat's repository comes first; tap to change it or turn Build off.
+                    if (state.buildRepo != null) ModeChip("Build · ${state.buildRepo.substringAfter('/')}", Icons.Outlined.Build, isSelected = true, enabled = idle,
+                        description = "Build mode on, read-only, repository ${state.buildRepo}. Tap to change", trailing = Icons.Outlined.ExpandMore) { onBuild() }
                     ModeChip("Auto", Icons.Outlined.AutoAwesome, isSelected = state.auto, enabled = idle,
                         description = "Auto mode, reasoning and web off") { onAuto() }
                     // Imagine: image or video generation (shown when the backend offers it).
@@ -147,6 +152,9 @@ fun Composer(
                             state.codeConfig.enabled -> "Run code, not available for ${state.modelLabel}"
                             else -> "Run code, turned off on the server"
                         }) { onRunCode(!state.runCode) }
+                    // Build: read-only repository chat. Always shown; the sheet explains when it is unavailable.
+                    if (state.buildRepo == null) ModeChip("Build", Icons.Outlined.Build, isSelected = false, enabled = idle,
+                        description = if (state.buildHint.isEmpty()) "Build mode: chat about one of your GitHub repositories, read-only" else "Build mode, unavailable: ${state.buildHint}") { onBuild() }
                     ModeChip("Search", Icons.Outlined.Language, isSelected = state.webMode == "search", enabled = idle,
                         description = if (state.webSearchConfigured) "Search the web" else "Search the web, needs setup") {
                         onWebMode(if (state.webMode == "search") null else "search")
@@ -187,6 +195,7 @@ private fun ImagineOptionChips(state: ChatUiState, enabled: Boolean, onClick: ()
 }
 
 internal fun placeholder(state: ChatUiState): String = when {
+    state.buildRepo != null -> "Ask about ${state.buildRepo.substringAfter('/')}"
     !state.imagine -> "Ask anything"
     state.imagineOptions.kind == com.dua.ai.imagine.ImagineInfo.VIDEO -> if (state.imagineSource) "Describe the motion (optional)" else "Describe a video"
     state.imagineSource -> "Describe the edit"

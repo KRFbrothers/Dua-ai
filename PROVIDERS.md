@@ -2,6 +2,39 @@
 
 Dua and Gemini retain the existing Gemini setup and attachment support. ChatGPT, Claude, Grok and Kimi have server adapters for conversations, attachments, history, retry and optional memory context. Their setup remains inactive until provider credentials and a model ID are configured. This change does not provision keys or create subscriptions.
 
+## Build mode: read-only repository chat (Phase 5B)
+
+Build mode ties a chat to one of the owner's GitHub repositories. Dua/Gemini answers questions about the code and proposes changes as unified diffs (```diff blocks). It is **strictly read-only**: the server only sends `GET` requests to five allowlisted GitHub paths (repository list, repository info, `git/trees/HEAD?recursive=1`, `contents/{path}`, `search/code` inside the chosen repository). There is no branch, commit, pull request or command tool, so nothing is written to any repository.
+
+Request: `"mode": "build", "repository": "owner/name"` on `POST /api/chat` (Dua or Gemini only). Checks run in this order, each with a clear error: server setup (503 with the reason), signed-in owner (`DUA_ALLOWED_EMAIL`, 401/403), then the repository (404 if the token cannot read it). The server loads the repository info and file tree, puts a trimmed file list in the system prompt (all paths if they fit in 12,000 characters, otherwise the shallowest first), and runs a Gemini function-calling loop with three tools:
+
+| Tool | GitHub call | Limits |
+| --- | --- | --- |
+| `list_files(path_prefix?)` | from the tree already loaded (no extra call) | 300 paths per call |
+| `read_file(path, start_line?, end_line?)` | `GET /repos/{o}/{r}/contents/{path}` (default branch) | `DUA_BUILD_FILE_MAX_KB` per file (default 100); repeated reads come from a per-reply cache; binary, folder, over-1 MB and `..` paths are refused |
+| `search_code(query)` | `GET /search/code?q=<query> repo:{o}/{r}` | 3 searches per reply (GitHub allows about 10 a minute); `repo:`/`org:`/`user:` qualifiers from the model are stripped so search stays in the chosen repository |
+
+Loop limits: at most `DUA_BUILD_MAX_ROUNDS` Gemini calls per reply (default 6, range 1–12), 8 tool calls per round, `DUA_BUILD_MAX_FILES` files (default 40) and `DUA_BUILD_MAX_KB` characters read in total (default 600). The last round, a used-up budget, or less than 60 s left before the chat deadline (`DUA_CHAT_DEADLINE_SECONDS`, default 280) forces a plain answer (`functionCallingConfig.mode: NONE`). Model turns are echoed back verbatim so Gemini 3 thought signatures are kept. File contents and search results are marked as untrusted repository data in the prompt.
+
+Stream events: `{"type":"build","repository":"owner/name","branch":"main","files":[{"path","bytes","truncated?"}],"rounds":2,"searches":0}` at the start, after each tool round and before the answer text (the latest replaces earlier ones), then `text` and `done`. JSON replies carry `build` with the same shape. Attachments, web search and Run code are not used in Build mode (the reply says so). `/api/config.build` reports `{enabled, reason?, providers, readOnly: true, tools, maxRounds, maxFiles, fileMaxKb, totalMaxKb}`; the app shows `reason` in the Build sheet instead of hiding the mode.
+
+The GitHub connector route (`POST /api/connectors/github`, owner sign-in required) offers the same read actions: `list-repositories`, `get-tree` (2,000 paths), `get-file` (100 KB) and `search-code`.
+
+| Variable | Default | Required | Effect |
+| --- | --- | --- | --- |
+| `ENABLE_GITHUB_CONNECTOR` | off | yes for Build | `1` enables the connector |
+| `GITHUB_CONNECTOR_TOKEN` | — | yes for Build | Server-side token. Use a fine-grained token with **read-only** Contents and Metadata on the repositories you want |
+| `DUA_ALLOWED_EMAIL` | — | yes for Build | Only this signed-in account can use Build mode or the connector |
+| `SUPABASE_URL`, `SUPABASE_ANON_KEY` | — | yes for Build | Sign-in used for the owner check |
+| `GEMINI_API_KEY`, `GEMINI_MODEL` | — | yes for Build | Build mode uses Gemini function calling |
+| `DUA_BUILD` | on | optional | `0` turns Build mode off |
+| `DUA_BUILD_MAX_ROUNDS` | 6 | optional | Gemini calls per reply (1–12) |
+| `DUA_BUILD_FILE_MAX_KB` | 100 | optional | Characters read per file, in KB (4–1000) |
+| `DUA_BUILD_MAX_KB` | 600 | optional | Characters read per reply, in KB (16–3000) |
+| `DUA_BUILD_MAX_FILES` | 40 | optional | Files read per reply (1–100) |
+
+Cost: each Build reply makes up to `DUA_BUILD_MAX_ROUNDS` Gemini requests, and every round resends the conversation plus the files read so far. A reply that reads several large files can use a few hundred thousand input tokens. On the free AI Studio key this counts toward the per-minute and per-day request and token limits, so lower `DUA_BUILD_MAX_ROUNDS` or `DUA_BUILD_MAX_KB` if you hit 429s. GitHub API calls are free (5,000 an hour per token; code search about 10 a minute). Creating branches, commits or pull requests and running commands are **not implemented**; see ROADMAP.md.
+
 ## Server variables
 
 Add variables to Vercel's server environment or a local ignored `.env` file. API keys must never be added to Android resources, public client configuration or GitHub commits.

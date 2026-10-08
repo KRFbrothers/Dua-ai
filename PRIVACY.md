@@ -136,15 +136,23 @@ API keys are stored server-side (Vercel Functions or Supabase) and are never exp
 
 #### Scope
 - Uses a server-side GitHub token to list up to 30 repositories owned by the signed-in GitHub account. The endpoint requests `affiliation=owner`; it is not restricted in code to the Dua-ai repository.
-- The feature does not write to repositories or modify code/issues.
+- Only the configured owner account (`DUA_ALLOWED_EMAIL`, signed in) can use it.
+- Phase 5B adds read actions: the file tree, file contents (up to 100 KB per file) and code search inside one chosen repository.
+- The feature does not write to repositories or modify code/issues. The server only sends GET requests to an allowlisted set of GitHub paths; there is no code to create branches, commits or pull requests, or to run commands.
+
+#### Build mode
+- When you use Build mode, the server reads the files Gemini asks for from the repository you picked and sends their contents, the file list and your messages to Google's Gemini API to produce the answer. Up to 40 files and 600 KB per reply by default.
+- Private repositories are included if your token can read them, so their code is sent to Gemini when Build mode reads it. Google's Gemini API terms apply (on the free AI Studio tier, Google may use prompts to improve its products).
+- The app keeps the repository name and the list of files read with the chat in local history on your device. They are not included in exports or cloud snapshots. File contents are not stored by Dua.
 
 #### Data Shared
 - Repository names, visibility and descriptions returned by GitHub.
-- The configured GitHub token is sent only by the server to GitHub; its permissions are determined by the token owner and GitHub configuration.
+- In Build mode, file contents, paths and search results from the chosen repository, sent to Gemini.
+- The configured GitHub token is sent only by the server to GitHub; its permissions are determined by the token owner and GitHub configuration. It is never sent to the app or to Gemini.
 
 #### Data NOT Shared
 - GitHub account settings.
-- Repository content is not fetched by this listing endpoint, but repositories visible to the configured token may appear, including private repositories owned by the account.
+- Repository content is read only in Build mode and through the read actions above. Repositories visible to the configured token may appear in the list, including private repositories owned by the account.
 
 #### Retention
 - GitHub token is stored securely server-side.

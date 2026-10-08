@@ -113,7 +113,7 @@ test('Grok rejects WebP with a conversion hint even if opted in; text/code files
 test('request validation covers the new optional fields', () => {
   assert.equal(validateChat(body({ stream: true, mode: 'reasoning' })), null);
   assert.deepEqual(validateChat(body({ stream: 'yes' })), ['Invalid stream option.', 400]);
-  assert.deepEqual(validateChat(body({ mode: 'genius' })), ['Choose Auto or Reasoning mode.', 400]);
+  assert.deepEqual(validateChat(body({ mode: 'genius' })), ['Choose Auto, Reasoning or Build mode.', 400]);
   assert.deepEqual(validateChat(body({ extra: 1 })), ['Invalid request.', 400]);
   assert.equal(validateChat(body({ messages: [{ role: 'user', text: 'a', attachmentText: 'x' }, { role: 'model', text: 'b' }, { role: 'user', text: 'c' }] })), null);
   assert.deepEqual(validateChat(body({ messages: [{ role: 'model', text: 'b', attachmentText: 'x' }, { role: 'user', text: 'c' }] })), ['Invalid messages.', 400]);

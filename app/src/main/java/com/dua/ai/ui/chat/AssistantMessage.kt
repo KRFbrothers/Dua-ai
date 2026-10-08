@@ -47,6 +47,7 @@ fun AssistantMessage(
     modifier: Modifier = Modifier,
     thinkingExpanded: Boolean = false,
     codeExpanded: Boolean = false,
+    buildExpanded: Boolean = false,
 ) {
     val parts = remember(message.text) { ReplySources.split(message.text) }
     val streaming = message.streaming
@@ -61,9 +62,11 @@ fun AssistantMessage(
             initiallyExpanded = thinkingExpanded,
             modifier = Modifier.padding(bottom = Spacing.xs),
         )
+        // Build mode: which repository files the server read for this reply (read-only).
+        message.build?.let { BuildFiles(message.id, it, live = streaming, Modifier.padding(bottom = Spacing.sm), initiallyExpanded = buildExpanded) }
         // Run code: what the provider executed, collapsed above the answer (the answer explains the result).
         if (message.codeRuns.isNotEmpty()) CodeRuns(message.id, message.codeRuns, Modifier.padding(bottom = Spacing.sm), initiallyExpanded = codeExpanded)
-        if (streaming && message.text.isEmpty() && message.thinking == null && message.codeRuns.isEmpty()) TypingIndicator()
+        if (streaming && message.text.isEmpty() && message.thinking == null && message.codeRuns.isEmpty() && message.build == null) TypingIndicator()
         if (parts.body.isNotEmpty()) MarkdownMessage(parts.body)
         message.codeSnippet?.let { CodeBlock(code = it, language = null, modifier = Modifier.padding(top = Spacing.sm)) }
         if (parts.sources.isNotEmpty() && !streaming) SourceChips(parts.sources, Modifier.padding(top = Spacing.md))

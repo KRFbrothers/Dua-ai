@@ -56,8 +56,8 @@ class DuaApiClient(
      */
     fun streamReply(model: String, history: List<ChatMessage>, attachments: List<ChatAttachment> = emptyList(), memory: String = "",
         token: String? = null, web: String? = null, reasoning: Boolean = false, historyBytes: Int = MAX_HISTORY_BYTES,
-        context: com.dua.ai.model.ConversationContext? = null, xSearch: Boolean = false, code: Boolean = false): Flow<ReplyEvent> = callbackFlow {
-        val request = withContext(Dispatchers.IO) { buildRequest(model, history, attachments, memory, token, web, reasoning, stream = true, historyBytes = historyBytes, context = context, xSearch = xSearch, code = code) }
+        context: com.dua.ai.model.ConversationContext? = null, xSearch: Boolean = false, code: Boolean = false, build: String? = null): Flow<ReplyEvent> = callbackFlow {
+        val request = withContext(Dispatchers.IO) { buildRequest(model, history, attachments, memory, token, web, reasoning, stream = true, historyBytes = historyBytes, context = context, xSearch = xSearch, code = code, build = build) }
         val call = client.newCall(request)
         call.enqueue(object : Callback {
             override fun onFailure(call: Call, error: IOException) { close(error) }
@@ -111,7 +111,8 @@ class DuaApiClient(
      */
     internal fun buildRequest(model: String, history: List<ChatMessage>, attachments: List<ChatAttachment>, memory: String, token: String?, web: String?,
         reasoning: Boolean, stream: Boolean, historyBytes: Int = MAX_HISTORY_BYTES, context: com.dua.ai.model.ConversationContext? = null, xSearch: Boolean = false,
-        code: Boolean = false): Request {
+        code: Boolean = false, build: String? = null): Request {
+        require(build == null || com.dua.ai.model.BuildInfos.validRepository(build)) { "Choose a repository for Build mode." }
         require(model in com.dua.ai.setup.IntegrationCapabilities.MODELS) { "Supported model select karein." }
         require(memory.length <= 3000) { "Memory notes are too large." }
         require(web == null || web == "search" || web == "page") { "Web mode must be search or page." }
@@ -126,11 +127,13 @@ class DuaApiClient(
             .apply {
                 if (web != null) put("web", web)
                 // Older servers reject unknown fields, so these are only sent by the streaming path.
-                if (stream) put("stream", true).put("mode", if (reasoning) "reasoning" else "auto")
+                // Build mode (Phase 5B, read-only) replaces Auto/Reasoning and names the repository.
+                if (stream) put("stream", true).put("mode", if (build != null) "build" else if (reasoning) "reasoning" else "auto")
+                if (stream && build != null) put("repository", build)
                 if (longContext) put("context", context!!.toJson())
                 if (stream && xSearch && model == "Grok") put("xSearch", true)
                 // Run code (Phase 5): only sent when the server advertised it, so older servers never see the field.
-                if (stream && code) put("code", true)
+                if (stream && code && build == null) put("code", true)
             }
             .toString().toByteArray(Charsets.UTF_8)
         require(body.size <= (if (historyBytes > MAX_HISTORY_BYTES || longContext) 4 else 3) * 1024 * 1024) { "Conversation too large. New chat shuru karein." }
