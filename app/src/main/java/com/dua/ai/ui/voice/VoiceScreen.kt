@@ -63,9 +63,10 @@ import kotlinx.coroutines.delay
 
 /** Dictation: speak, review the transcript, then use it in the chat composer. */
 @Composable
-fun VoiceScreen(draft: String, onBack: () -> Unit, onHandsFree: () -> Unit, onUse: (String) -> Unit) {
+fun VoiceScreen(draft: String, onBack: () -> Unit, onHandsFree: () -> Unit, onUse: (String) -> Unit, inputLanguage: String = "auto") {
     val context = LocalContext.current
     val voice = remember(context) { NativeVoiceInput(context.applicationContext) }
+    LaunchedEffect(voice, inputLanguage) { voice.language = inputLanguage }
     val input by voice.state.collectAsState()
     val listening = input.busy
     var reviewed by rememberSaveable { mutableStateOf("") }
@@ -123,7 +124,7 @@ fun VoiceScreen(draft: String, onBack: () -> Unit, onHandsFree: () -> Unit, onUs
                 Icon(Icons.Outlined.GraphicEq, contentDescription = null, modifier = Modifier.size(18.dp))
                 Text("Hands-free conversation", modifier = Modifier.padding(start = Spacing.sm))
             }
-            Text("Speech recognition uses your device's speech service, which may process audio remotely.",
+            Text("Listening in ${com.dua.ai.voice.SpeechLanguages.name(inputLanguage)} (change in Settings › Voice). Your device's speech service may process audio remotely.",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
         }
     }

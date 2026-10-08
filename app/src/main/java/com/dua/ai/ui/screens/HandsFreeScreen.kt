@@ -30,6 +30,12 @@ fun HandsFreeScreen(viewModel: ChatViewModel, onBack: () -> Unit, onChat: () -> 
     val typing by viewModel.isTyping.collectAsState()
     val error by viewModel.error.collectAsState()
     val messages by viewModel.messages.collectAsState()
+    val preferences by viewModel.localSettings.collectAsState()
+    val selectedModel by viewModel.selectedModel.collectAsState()
+    LaunchedEffect(preferences.inputLanguage) { voice.language = preferences.inputLanguage }
+    LaunchedEffect(preferences.replyLanguage, preferences.deviceVoice, preferences.voiceSpeed) {
+        speaker.configure(preferences.replyLanguage, preferences.deviceVoice, preferences.voiceSpeed)
+    }
     var phase by remember { mutableStateOf("idle") }
     var notice by remember { mutableStateOf("") }
     var started by remember { mutableStateOf(false) }
@@ -42,7 +48,7 @@ fun HandsFreeScreen(viewModel: ChatViewModel, onBack: () -> Unit, onChat: () -> 
             override fun render(value: String) { phase = value }
             override fun listen() { heardBusy = true; voice.start(); if (!voice.state.value.busy) notice = voice.state.value.status }
             override fun send(text: String, version: Int) { token = version; thinkingSeen = true; viewModel.sendMessage(text) }
-            override fun speak(text: String) { spoke = true; speaker.toggle("hands-free-reply", text) }
+            override fun speak(text: String) { spoke = true; speaker.toggle("hands-free-reply", SpeakableText.clean(text).ifBlank { text }) }
             override fun cancel() { voice.stop(); speaker.stop(); if (viewModel.isTyping.value) viewModel.stopReply() }
             override fun notice(text: String) { notice = text }
         })
@@ -87,7 +93,9 @@ fun HandsFreeScreen(viewModel: ChatViewModel, onBack: () -> Unit, onChat: () -> 
         }
     }
     DuaPageScaffold(title = "Hands-free", onBack = onBack) {
-        Text("Start a separate voice chat. Final speech sends automatically to Gemini and replies are read aloud. Keep this screen open. Speech services may process audio remotely.", style = MaterialTheme.typography.bodyMedium)
+        Text("Starts a new chat. When you stop speaking, your words are sent to $selectedModel and the reply is read aloud with the device voice " +
+            "(${SpeechLanguages.name(preferences.replyLanguage)}). Listening in ${SpeechLanguages.name(preferences.inputLanguage)}. Keep this screen open.",
+            style = MaterialTheme.typography.bodyMedium)
         Box(Modifier.fillMaxWidth().height(120.dp), contentAlignment = androidx.compose.ui.Alignment.Center) { AnimatedVoiceCube(phase != "idle", Modifier.size(72.dp)) }
         Text(when (phase) { "listening" -> "Listening…"; "thinking" -> "Dua is thinking…"; "speaking" -> "Reading reply…"; else -> "Ready" }, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
         Text(notice, style = MaterialTheme.typography.bodyMedium)
@@ -96,6 +104,7 @@ fun HandsFreeScreen(viewModel: ChatViewModel, onBack: () -> Unit, onChat: () -> 
         FilledTonalButton(enabled = phase == "idle", onClick = { if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) start() else permission.launch(Manifest.permission.RECORD_AUDIO) }) { Text("Start hands-free") }
         FilledTonalButton(enabled = phase != "idle", onClick = { session.stop() }) { Text("Stop") }
         TextButton(onClick = onChat) { Text("Open conversation in Chat") }
-        Text("Stop, Back or leaving the foreground cancels recording, the pending reply and playback. Previous drafts stay saved. No background listening.", style = MaterialTheme.typography.bodyMedium)
+        Text("Stop, Back or leaving the app cancels listening, the pending reply and playback. Your phone's speech service may process audio remotely. Change languages in Settings › Voice.",
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }

@@ -48,6 +48,8 @@ data class SettingsUiState(
     val version: String = BuildConfig.VERSION_NAME,
     /** Imagine row subtitle; null hides the row (backend without Imagine). */
     val imagine: String? = null,
+    /** Voice settings row subtitle; null keeps the single AI-voice switch (backend before Voice v2). */
+    val voice: String? = null,
 ) {
     val generatedVoiceToggleEnabled: Boolean get() = !busy && (generatedVoice || (generatedVoiceConfigured && email != null))
 }
@@ -67,6 +69,13 @@ fun SettingsScreen(viewModel: ChatViewModel, onBack: () -> Unit, onOpen: (DuaDes
         memoryEnabled = preferences.memoryEnabled, notifications = preferences.notifications,
         generatedVoice = preferences.generatedVoice, generatedVoiceConfigured = integrations.generatedVoiceConfigured,
         busy = integrations.busy,
+        voice = integrations.voice?.let { config ->
+            val options = if (preferences.generatedVoice && account.user != null) com.dua.ai.voice.VoiceCodec.ttsOptions(config, preferences.voiceProvider,
+                preferences.voiceName, preferences.replyLanguage, preferences.voiceSpeed) else null
+            val provider = options?.let { config.provider(it.provider) }
+            if (provider == null || options == null) "Device voice · " + com.dua.ai.voice.SpeechLanguages.name(preferences.replyLanguage)
+            else listOf(com.dua.ai.ui.voice.providerLabel(provider), provider.voice(options.voice).name, provider.language(options.language).name).joinToString(" · ")
+        },
         imagine = integrations.imagine?.let { config ->
             if (!config.enabled) "Off on the server" else listOfNotNull(config.providerName(preferences.imagineProvider.ifBlank { null }),
                 com.dua.ai.imagine.ImagineCodec.aspectLabel(preferences.imagineAspect), if (config.videoEnabled) "video on" else null).joinToString(" · ")
@@ -105,9 +114,10 @@ fun SettingsContent(state: SettingsUiState, onBack: () -> Unit, onOpen: (DuaDest
         SettingsSection("Voice") {
             SettingsRow(Icons.Outlined.Mic, "Voice input", "Dictate, review, then send") { onOpen(DuaDestination.Voice) }
             SettingsDivider()
-            SettingsRow(Icons.Outlined.GraphicEq, "Hands-free conversation", "Speak and hear replies with the device voice") { onOpen(DuaDestination.HandsFree) }
+            SettingsRow(Icons.Outlined.GraphicEq, "Hands-free conversation", "Speak, then hear the reply read aloud") { onOpen(DuaDestination.HandsFree) }
             SettingsDivider()
-            SettingsSwitchRow(Icons.AutoMirrored.Outlined.VolumeUp, "AI reply voice",
+            if (state.voice != null) SettingsRow(Icons.AutoMirrored.Outlined.VolumeUp, "Reply voice & language", state.voice) { onOpen(DuaDestination.VoiceSettings) }
+            else SettingsSwitchRow(Icons.AutoMirrored.Outlined.VolumeUp, "AI reply voice",
                 subtitle = when {
                     !state.generatedVoiceConfigured && !state.generatedVoice -> "Needs backend setup · device voice stays available"
                     state.email == null && !state.generatedVoice -> "Sign in to use a generated voice"
