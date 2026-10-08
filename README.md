@@ -18,7 +18,7 @@ API keys and optional credentials remain server-side. Preparing a feature does n
 
 ## Project roadmap
 
-See [ROADMAP.md](ROADMAP.md) for the product and engineering roadmap: the Grok-style product direction, feature status, phased plan (UI foundation and reasoning, files and search, Imagine, voice, coding/Build mode), privacy and cost controls, and open decisions. The underlying gap analysis is in [docs/grok-style-plan.md](docs/grok-style-plan.md).
+See [ROADMAP.md](ROADMAP.md) for the product and engineering roadmap: the Grok-style product direction, feature status, phased plan (UI foundation and reasoning, files and search, Imagine, voice, coding/Build mode), privacy and cost controls, and open decisions.
 Use [RELEASE-CHECKLIST.md](RELEASE-CHECKLIST.md) to verify the owner-only lock, provider spending limits, device/staging checks, and installing the APK on your own phone. The production configuration cannot be verified from this source checkout alone.
 
 ## Backend API and hosting
@@ -41,6 +41,6 @@ Run source compilation and JVM tests without packaging an APK:
 bash ./gradlew :app:testDebugUnitTest --no-daemon --max-workers=2
 ```
 
-[Project checks](.github/workflows/checks.yml) runs Android compilation and JVM unit tests on PRs, pushes to main and manual runs. It does not assemble or sign an APK. Run the backend's `node:test` suite with `cd web && npm test` (no dependencies or provider keys needed); a CI job for it is proposed in the PR description.
+[Project checks](.github/workflows/checks.yml) runs Android compilation and JVM unit tests on PRs, pushes to main and manual runs. It does not assemble or sign an APK. Run the backend's `node:test` suite with `cd web && npm test` (no dependencies or provider keys needed); it is not part of CI yet.
 
 Android local data is stored in app-private preferences; Android backup/device transfer can include chat history and preferences according to device settings. A Vercel deployment updates the backend only; Android code changes require building and installing a new APK.
