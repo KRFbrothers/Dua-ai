@@ -248,8 +248,14 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
      * Streams into message [id], rendering at most ~30 times a second (latest state wins).
      * Events are applied to [accumulator] as they arrive, so a failure keeps everything received.
      */
-    private suspend fun collectReply(id: String, accumulator: com.dua.ai.network.StreamAccumulator, events: kotlinx.coroutines.flow.Flow<com.dua.ai.network.ReplyEvent>) {
-        events.onEach { if (it is com.dua.ai.network.ReplyEvent.Files) applyTranscripts(it.transcripts); accumulator.apply(it) }.conflate().collect {
+    private suspend fun collectReply(id: String, accumulator: com.dua.ai.network.StreamAccumulator, events: kotlinx.coroutines.flow.Flow<com.dua.ai.network.ReplyEvent>,
+        request: RequestTurns? = null) {
+        val chatId = activeId
+        events.onEach {
+            if (it is com.dua.ai.network.ReplyEvent.Files) applyTranscripts(it.transcripts)
+            if (it is com.dua.ai.network.ReplyEvent.Context && request?.context != null) applySummary(chatId, request.turns, it)
+            accumulator.apply(it)
+        }.conflate().collect {
             val snapshot = accumulator.snapshot()
             updateMessage(id) { it.copy(text = snapshot.text, thinking = snapshot.thinking, thinkingSeconds = snapshot.thinkingSeconds, notice = snapshot.notice) }
             delay(STREAM_FRAME_MS)
@@ -279,15 +285,47 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val replyReasoning = mutableMapOf<String, Boolean>()
     fun setReasoning(enabled: Boolean) { if (!_isTyping.value) _reasoning.value = enabled }
     /** Auto chip: plain chat, no web and no Reasoning. */
-    fun selectAuto() { if (_isTyping.value) return; _reasoning.value = false; setWebMode(null) }
+    fun selectAuto() { if (_isTyping.value) return; _reasoning.value = false; _xSearch.value = false; setWebMode(null) }
+
+    // X search (Grok only, billed per post by xAI) is off by default and, like the web mode, never saved.
+    private val _xSearch = MutableStateFlow(false)
+    val xSearch = _xSearch.asStateFlow()
+    private val replyXSearch = mutableMapOf<String, Boolean>()
+    private fun xSearchUsable(model: String = _selectedModel.value) = model == "Grok" && _integrations.value.xSearchAvailable
+    fun setXSearch(enabled: Boolean) {
+        if (_isTyping.value) return
+        if (enabled && !xSearchUsable()) { _error.value = "X search works with Grok when the server offers it."; return }
+        _xSearch.value = enabled
+        _error.value = null
+    }
+
+    // Long context: the server's summary of this chat's older turns (saved with the chat on this device).
+    private val _summary = MutableStateFlow<com.dua.ai.model.ChatSummary?>(null)
+    val summary = _summary.asStateFlow()
+    internal data class RequestTurns(val turns: List<ChatMessage>, val context: com.dua.ai.model.ConversationContext?, val historyBytes: Int)
+
+    /** Long-context servers get every turn after the cached summary; older servers the last 39 turns as before. */
+    private fun requestTurns(history: List<ChatMessage>, legacy: List<ChatMessage>, inlineFiles: Boolean): RequestTurns {
+        if (!_integrations.value.longContext) return RequestTurns(legacy, null, historyBytes())
+        val budget = if (inlineFiles) DuaApiClient.LONG_HISTORY_BYTES_WITH_FILES else DuaApiClient.LONG_HISTORY_BYTES
+        val selection = com.dua.ai.model.ContextWindow.select(history, _summary.value, budget, DuaApiClient::turnJsonBytes)
+        return RequestTurns(selection.turns, com.dua.ai.model.ConversationContext(activeId, selection.summary?.text), budget + 1024)
+    }
+
+    private fun applySummary(chatId: String, sent: List<ChatMessage>, event: com.dua.ai.network.ReplyEvent.Context) {
+        val next = com.dua.ai.model.ContextWindow.advance(sent, event.covered, event.summary) ?: return
+        if (chatId != activeId) return
+        _summary.value = next
+        saveHistory()
+    }
     fun setWebMode(mode: String?) {
         if (_isTyping.value || mode !in listOf(null, "search", "page")) return
         webModeError(mode)?.let { _error.value = it; return }
         _webMode.value = mode
         _error.value = null
     }
-    private fun webModeError(mode: String?): String? = when {
-        mode == "search" && !_integrations.value.webSearchConfigured -> "Web search needs setup. Open Feature setup to configure search, or choose Off or Read link."
+    private fun webModeError(mode: String?, model: String = _selectedModel.value): String? = when {
+        mode == "search" && !_integrations.value.searchAvailable(model) -> "Web search needs setup for $model. Open Feature setup to configure search, choose a model that searches natively, or choose Off or Read link."
         mode == "page" && !_integrations.value.pageReadingAvailable -> "Read link is unavailable. Refresh Feature setup, or choose Off."
         else -> null
     }
@@ -679,7 +717,10 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     _messages.value = emptyList()
                     _draft.value = ""
                     _savedChats.value = emptyList()
+                    _summary.value = null
                     _webMode.value = null
+                    _xSearch.value = false
+                    replyXSearch.clear()
                     replyWebModes.clear()
                     replyReasoning.clear()
                     clearAttachments()
@@ -723,14 +764,17 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 com.dua.ai.account.CloudSnapshotCodec.encode(snapshot)
                 val settings = localSettings.value
                 val previous = preferences.getString("history", null)
-                val encoded = ChatHistoryCodec.encode(snapshot.chats, activeId)
+                // Summaries are local only: keep them for synced chats that still contain their boundary message.
+                val summaries = _savedChats.value.associate { it.id to it.summary }
+                val chats = snapshot.chats.map { chat -> chat.copy(summary = com.dua.ai.model.ContextWindow.validSummary(chat.messages, summaries[chat.id])) }
+                val encoded = ChatHistoryCodec.encode(chats, activeId)
                 localPreferences.update(settings.copy(memory = snapshot.memory))
                 try {
                     if (!preferences.edit().putString("history", encoded).commit()) {
                         preferences.edit().putString("history", previous).commit()
                         error("Synced chats could not be saved. Local data was kept.")
                     }
-                    _savedChats.value = snapshot.chats
+                    _savedChats.value = chats
                 } catch (failure: Exception) {
                     try { localPreferences.update(settings) }
                     catch (_: Exception) { throw IllegalStateException("Sync interrupted. Review local memories before retrying.", failure) }
@@ -777,6 +821,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     _messages.value = it.messages
                     _selectedModel.value = it.model
                     _draft.value = it.draft
+                    _summary.value = it.summary
                 }
             } catch (_: Exception) {
                 historyReadable = false
@@ -811,7 +856,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         val others = _savedChats.value.filterNot { it.id == activeId }
         _savedChats.value = if (_messages.value.isEmpty() && _draft.value.isBlank()) others else
             listOf(com.dua.ai.history.ChatSavePolicy.preserveUnchangedTime(previous,
-                SavedChat(activeId, _selectedModel.value, _draft.value, _messages.value, System.currentTimeMillis()))) + others
+                SavedChat(activeId, _selectedModel.value, _draft.value, _messages.value, System.currentTimeMillis(),
+                    com.dua.ai.model.ContextWindow.validSummary(_messages.value, _summary.value)))) + others
         preferences.edit().putString("history", ChatHistoryCodec.encode(_savedChats.value, activeId)).apply()
     }
 
@@ -825,7 +871,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         _messages.value = chat.messages
         _selectedModel.value = chat.model
         _draft.value = chat.draft
+        _summary.value = chat.summary
         _webMode.value = null
+        _xSearch.value = false
         saveHistory()
     }
 
@@ -840,7 +888,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             activeId = UUID.randomUUID().toString()
             _messages.value = emptyList()
             _draft.value = ""
+            _summary.value = null
             _webMode.value = null
+            _xSearch.value = false
         }
         _savedChats.value = _savedChats.value.filterNot { it.id == id }
         saveHistory()
@@ -876,6 +926,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     fun setModel(model: String) {
         if (_integrations.value.providers.none { it.name == model && it.configured }) return
         _selectedModel.value = model
+        if (model != "Grok") _xSearch.value = false
         saveHistory()
     }
 
@@ -894,7 +945,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         activeId = UUID.randomUUID().toString()
         _messages.value = emptyList()
         _draft.value = ""
+        _summary.value = null
         _webMode.value = null
+        _xSearch.value = false
         saveHistory()
     }
 
@@ -908,7 +961,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         // retries keep the original request's choice even if the composer has changed.
         val requestWebMode = replyWebModes[messageId]
         val requestReasoning = replyReasoning[messageId] ?: (original.thinking != null)
-        webModeError(requestWebMode)?.let { _error.value = it; return }
+        val requestXSearch = (replyXSearch[messageId] ?: false) && xSearchUsable(plan.model)
+        webModeError(requestWebMode, plan.model)?.let { _error.value = it; return }
+        val request = requestTurns(plan.full, plan.context, inlineFiles = false)
         val currentGeneration = generation
         val startedAt = System.currentTimeMillis()
         _error.value = null; _isTyping.value = true; refreshSyncBusy()
@@ -919,7 +974,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 account.withToken { token ->
                     val attempt = com.dua.ai.network.StreamAccumulator(startedAt).also { accumulator = it }
-                    collectReply(messageId, attempt, api.streamReply(plan.model, plan.context, emptyList(), com.dua.ai.settings.PreferencesCodec.memoryText(localSettings.value), token, requestWebMode, requestReasoning, historyBytes()))
+                    collectReply(messageId, attempt, api.streamReply(plan.model, request.turns, emptyList(), com.dua.ai.settings.PreferencesCodec.memoryText(localSettings.value), token, requestWebMode, requestReasoning,
+                        request.historyBytes, request.context, requestXSearch), request)
                 }
                 if (accumulator?.snapshot()?.text.isNullOrBlank()) throw DuaApiException(EMPTY_REPLY)
                 if (generation == currentGeneration) {
@@ -957,8 +1013,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
         val requestWebMode = _webMode.value
         val requestReasoning = _reasoning.value
-        webModeError(requestWebMode)?.let { _error.value = it; return }
         val responseModel = _selectedModel.value
+        val requestXSearch = _xSearch.value && xSearchUsable(responseModel)
+        webModeError(requestWebMode, responseModel)?.let { _error.value = it; return }
         val provider = _integrations.value.providers.firstOrNull { it.name == responseModel && it.configured }
         if (provider == null) {
             _error.value = "This provider needs backend setup. Choose a configured model."
@@ -978,12 +1035,12 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         val fileText = com.dua.ai.attachments.TextFiles.contextText(files, ChatMessage.MAX_ATTACHMENT_TEXT_CHARS)
         val userMessage = ChatMessage(text = text, isUser = true, model = responseModel, attachmentText = fileText, files = storedFiles)
         val sentPaths = storedFiles.map { it.path }.toSet()
-        val requestHistoryBytes = historyBytes()
         val startedAt = System.currentTimeMillis()
         val reply = ChatMessage(text = "", isUser = false, model = responseModel, state = ChatMessage.STREAMING, startedAt = startedAt)
-        val requestHistory = _messages.value.takeLast(38) + userMessage
+        val request = requestTurns(_messages.value + userMessage, _messages.value.takeLast(38) + userMessage, inlineFiles = files.isNotEmpty())
         val currentGeneration = generation
         replyWebModes[reply.id] = requestWebMode
+        replyXSearch[reply.id] = requestXSearch
         replyReasoning[reply.id] = requestReasoning
         _messages.value = _messages.value + userMessage + reply
         _draft.value = ""
@@ -996,8 +1053,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 val prepared = if (files.any(convert)) withContext(Dispatchers.Default) { PhotoAttachmentReader.convertToJpeg(files, convert) } else files
                 account.withToken { token ->
                     val attempt = com.dua.ai.network.StreamAccumulator(startedAt).also { accumulator = it }
-                    collectReply(reply.id, attempt, api.streamReply(responseModel, requestHistory, prepared,
-                        com.dua.ai.settings.PreferencesCodec.memoryText(localSettings.value), token, requestWebMode, requestReasoning, requestHistoryBytes))
+                    collectReply(reply.id, attempt, api.streamReply(responseModel, request.turns, prepared,
+                        com.dua.ai.settings.PreferencesCodec.memoryText(localSettings.value), token, requestWebMode, requestReasoning,
+                        request.historyBytes, request.context, requestXSearch), request)
                 }
                 if (accumulator?.snapshot()?.text.isNullOrBlank()) throw DuaApiException(EMPTY_REPLY)
                 if (generation == currentGeneration) {

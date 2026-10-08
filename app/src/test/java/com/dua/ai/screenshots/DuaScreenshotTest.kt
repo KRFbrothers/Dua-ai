@@ -23,7 +23,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performScrollTo
 import com.dua.ai.history.SavedChat
 import com.dua.ai.model.ChatMessage
 import com.dua.ai.model.PromptSuggestion
@@ -69,12 +71,16 @@ class DuaScreenshotTest(private val dark: Boolean) {
     private val mode get() = if (dark) "dark" else "light"
     private fun path(name: String) = "build/outputs/roborazzi/${name}_$mode.png"
 
-    private fun shot(name: String, content: @Composable () -> Unit) {
+    private fun shot(name: String, before: () -> Unit = {}, content: @Composable () -> Unit) {
         compose.setContent {
-            DuaTheme(LocalPreferences(theme = mode)) {
-                Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) { content() }
+            androidx.compose.runtime.CompositionLocalProvider(com.dua.ai.ui.chat.LocalFaviconLoader provides ScreenshotData.favicons) {
+                DuaTheme(LocalPreferences(theme = mode)) {
+                    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) { content() }
+                }
             }
         }
+        compose.waitForIdle()
+        before()
         compose.waitForIdle()
         compose.onRoot().captureRoboImage(path(name))
     }
@@ -178,6 +184,18 @@ class DuaScreenshotTest(private val dark: Boolean) {
         }
     }
 
+    @Test fun sourceChips() = shot("16_source_chips") {
+        ChatScreen(ScreenshotData.sources, ChatActions())
+    }
+
+    @Test fun xSearchToggle() = shot("17_x_toggle", before = { compose.onNodeWithText("X").performScrollTo() }) {
+        ChatScreen(ScreenshotData.emptyState.copy(model = "Grok", draft = "What are people saying about the Pixel 11 launch?", webMode = "search", xSearchAvailable = true, xSearch = true), ChatActions())
+    }
+
+    @Test fun earlierMessagesSummarised() = shot("18_summarised") {
+        ChatScreen(ScreenshotData.summarised, ChatActions())
+    }
+
     @Test fun settings() = shot("05_settings") {
         SettingsContent(SettingsUiState(email = "fareed@example.com", theme = mode, haptic = true, notifications = true),
             onBack = {}, onOpen = {}, onHaptic = {}, onGeneratedVoice = {})
@@ -265,6 +283,48 @@ private object ScreenshotData {
         ),
         model = "Gemini",
         reasoning = true,
+    )
+
+    /** Fake favicon for one site (no network in tests); other sites show their letter. */
+    val favicons: suspend (String) -> androidx.compose.ui.graphics.ImageBitmap? = { domain ->
+        if (domain != "bbc.com") null else androidx.compose.ui.graphics.ImageBitmap(32, 32).also { image ->
+            val canvas = androidx.compose.ui.graphics.Canvas(image)
+            val paint = androidx.compose.ui.graphics.Paint()
+            paint.color = Color(0xFFBB1919); canvas.drawRect(0f, 0f, 32f, 32f, paint)
+            paint.color = Color.White; canvas.drawRect(6f, 10f, 26f, 22f, paint)
+        }
+    }
+
+    private val sourcedReply = """
+        Mumbai should stay **humid with heavy showers** through the weekend, around 27–30 °C, with an orange alert for Saturday [1][2]. On X, commuters are reporting waterlogging near Andheri and Sion [3].
+
+        Sources:
+        [1] Mumbai weather – BBC Weather
+        https://www.bbc.com/weather/1275339
+
+        [2] imd.gov.in
+        https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQExample
+
+        [3] Post on X
+        https://x.com/mumbairains/status/1840000000000000000
+    """.trimIndent()
+
+    val sources = emptyState.copy(
+        messages = listOf(
+            ChatMessage(id = "s1", text = "Will it rain in Mumbai this weekend?", isUser = true),
+            ChatMessage(id = "s2", text = sourcedReply, isUser = false, model = "Grok"),
+        ),
+        model = "Grok", webMode = "search", xSearchAvailable = true, xSearch = true,
+    )
+
+    val summarised = emptyState.copy(
+        messages = listOf(
+            ChatMessage(id = "h1", text = "Help me plan the Lahore trip budget.", isUser = true),
+            ChatMessage(id = "h2", text = "Here is a day-by-day budget: travel ₹18,000, stay ₹21,000, food ₹9,000.", isUser = false, model = "Dua"),
+            ChatMessage(id = "h3", text = "Now add a buffer and convert the total to PKR.", isUser = true),
+            ChatMessage(id = "h4", text = "With a 10% buffer the total is **₹52,800**, about **PKR 176,000** at today's rate. I kept the stay and food split from earlier.", isUser = false, model = "Dua"),
+        ),
+        summarisedThroughId = "h2",
     )
 
     private fun chat(id: String, title: String, hoursAgo: Long) = SavedChat(id, "Dua", "",

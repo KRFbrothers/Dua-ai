@@ -93,8 +93,8 @@ test('stream: web search emits sources and keeps the Sources footer the app pars
   const fetcher = mockFetch(
     Response.json({ web: { results: [{ title: 'Example', url: 'https://example.com/a', description: 'Snippet' }] } }),
     sseResponse([sse({ candidates: [{ content: { parts: [{ text: 'Answer [1]' }] }, finishReason: 'STOP' }] })]));
-  const events = await readEvents(await handleChat(chatRequest(body({ stream: true, web: 'search' })), { env: { ...env, BRAVE_SEARCH_API_KEY: 'brave' }, fetcher }));
-  assert.deepEqual(events[0], { type: 'sources', sources: [{ id: 1, title: 'Example', url: 'https://example.com/a' }] });
+  const events = await readEvents(await handleChat(chatRequest(body({ stream: true, web: 'search' })), { env: { ...env, BRAVE_SEARCH_API_KEY: 'brave', DUA_SEARCH_PREFER_BRAVE: '1' }, fetcher }));
+  assert.deepEqual(events[0], { type: 'sources', sources: [{ id: 1, title: 'Example', url: 'https://example.com/a', domain: 'example.com' }] });
   assert.equal(events.filter(e => e.type === 'text').map(e => e.delta).join(''), 'Answer [1]\n\nSources:\n[1] Example\nhttps://example.com/a');
   assert.match(JSON.stringify(fetcher.calls[1].body), /External source material/);
 });

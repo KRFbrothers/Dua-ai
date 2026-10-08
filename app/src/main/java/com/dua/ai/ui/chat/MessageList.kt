@@ -8,6 +8,13 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Compress
+import androidx.compose.material3.Icon
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -46,7 +53,7 @@ fun MessageList(state: ChatUiState, actions: ChatActions, listState: LazyListSta
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         items(state.messages, key = { it.id }, contentType = { if (it.isUser) "user" else "assistant" }) { message ->
-            Box(Modifier.widthIn(max = Sizes.contentMaxWidth).fillMaxWidth()) {
+            Column(Modifier.widthIn(max = Sizes.contentMaxWidth).fillMaxWidth()) {
                 if (message.isUser) UserMessage(message.text, files = message.files, onOpenFile = actions.onOpenFile)
                 else AssistantMessage(
                     message = message,
@@ -60,12 +67,29 @@ fun MessageList(state: ChatUiState, actions: ChatActions, listState: LazyListSta
                     onSpeak = { actions.onSpeak(message) },
                     thinkingExpanded = message.id in state.expandedThinking,
                 )
+                if (message.id == state.summarisedThroughId && message.id != lastId) SummaryDivider(Modifier.padding(top = Spacing.xxl))
             }
         }
         // Streaming replies render their own progress; the dots cover non-streaming waits.
         if (state.typing && state.messages.none { it.streaming }) item(key = "typing") {
             Box(Modifier.widthIn(max = Sizes.contentMaxWidth).fillMaxWidth()) { TypingIndicator() }
         }
+    }
+}
+
+/** Marks where the model's view switches from a summary to the full messages (long context). */
+@Composable
+fun SummaryDivider(modifier: Modifier = Modifier) {
+    val color = MaterialTheme.colorScheme.outlineVariant
+    Row(modifier.fillMaxWidth().semantics(mergeDescendants = true) {
+        contentDescription = "Earlier messages summarised. The model sees a summary of the messages above and the full messages below."
+    }, verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.weight(1f).height(1.dp).background(color))
+        Icon(Icons.Outlined.Compress, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(start = Spacing.md).size(Sizes.iconTiny))
+        Text("Earlier messages summarised", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(start = Spacing.xs, end = Spacing.md))
+        Box(Modifier.weight(1f).height(1.dp).background(color))
     }
 }
 

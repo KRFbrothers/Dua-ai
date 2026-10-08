@@ -33,6 +33,8 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
     val model by viewModel.selectedModel.collectAsState()
     val webMode by viewModel.webMode.collectAsState()
     val reasoning by viewModel.reasoning.collectAsState()
+    val xSearch by viewModel.xSearch.collectAsState()
+    val summary by viewModel.summary.collectAsState()
     val integrations by viewModel.integrations.collectAsState()
     val attachments by viewModel.attachments.collectAsState()
     val readingFiles by viewModel.readingFiles.collectAsState()
@@ -86,7 +88,9 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
     val state = ChatUiState(
         messages = messages, draft = draft, typing = typing, error = error, model = model,
         providers = integrations.providers, webMode = webMode, reasoning = reasoning,
-        webSearchConfigured = integrations.webSearchConfigured, pageReadingAvailable = integrations.pageReadingAvailable,
+        webSearchConfigured = integrations.searchAvailable(model), pageReadingAvailable = integrations.pageReadingAvailable,
+        xSearchAvailable = model == "Grok" && integrations.xSearchAvailable, xSearch = xSearch,
+        summarisedThroughId = summary?.throughId,
         attachments = attachments, readingFiles = readingFiles,
         uploads = uploads, recordingSince = recordingSince,
         storedFiles = integrations.filesEnabled && account.user != null,
@@ -117,6 +121,7 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
             onUseDeviceVoice = { voice.stopAll(); viewModel.updateSettings(viewModel.localSettings.value.copy(generatedVoice = false)) },
             onWebMode = viewModel::setWebMode,
             onReasoning = viewModel::setReasoning,
+            onXSearch = viewModel::setXSearch,
             onAuto = viewModel::selectAuto,
             onSelectModel = viewModel::setModel,
             onNewChat = { pulse(); voice.stopAll(); viewModel.startNewChat(); viewModel.clearAttachments(); attachmentNotice = "" },

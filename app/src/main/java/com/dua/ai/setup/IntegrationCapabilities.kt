@@ -14,7 +14,16 @@ data class IntegrationState(val groups: List<IntegrationGroup> = emptyList(), va
     val searchConfigured: Boolean = false, val busy: Boolean = false, val notice: String = "", val generatedVoiceConfigured: Boolean = false,
     val webSearchConfigured: Boolean = false, val pageReadingAvailable: Boolean = false,
     /** Server supports stored files (Supabase Storage, owner sign-in required). Older servers omit `files`. */
-    val filesEnabled: Boolean = false, val filesMaxBytes: Long = 0)
+    val filesEnabled: Boolean = false, val filesMaxBytes: Long = 0,
+    /** Providers that search natively (Phase 2); Search also works for others when Brave is configured. */
+    val nativeSearch: Set<String> = emptySet(),
+    /** X search toggle (Grok only) offered by the server. */
+    val xSearchAvailable: Boolean = false,
+    /** Server summarises older turns and accepts `context` (Phase 2 long context). */
+    val longContext: Boolean = false) {
+    /** Search works for [model] natively or through Brave. */
+    fun searchAvailable(model: String): Boolean = webSearchConfigured || model in nativeSearch
+}
 
 object IntegrationCapabilities {
     val MODELS = listOf("Dua", "ChatGPT", "Gemini", "Claude", "Grok", "Kimi")
@@ -34,7 +43,10 @@ object IntegrationCapabilities {
             filesEnabled = files?.opt("enabled") == true,
             filesMaxBytes = files?.optLong("maxBytes")?.coerceIn(0, 5L * 1024 * 1024 * 1024) ?: 0,
             webSearchConfigured = web?.opt("searchConfigured") == true,
-            pageReadingAvailable = web?.opt("pageReadingAvailable") == true)
+            pageReadingAvailable = web?.opt("pageReadingAvailable") == true,
+            nativeSearch = web?.optJSONArray("nativeSearch")?.let { names -> (0 until names.length()).mapNotNull { names.opt(it) as? String }.filter { it in MODELS }.toSet() } ?: emptySet(),
+            xSearchAvailable = web?.opt("xSearch") == true,
+            longContext = json.optJSONObject("context")?.opt("summaries") == true)
     }
     fun providers(json: JSONObject): List<ProviderCapability> {
         val array = json.optJSONArray("providers") ?: return fallbackProviders.map { it.copy(configured = json.optBoolean("geminiConfigured", true), model = json.optString("model", "Gemini").take(100)) }

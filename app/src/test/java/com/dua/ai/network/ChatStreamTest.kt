@@ -20,7 +20,7 @@ class ChatStreamTest {
             "event: sources", "data: {\"type\":\"sources\",\"sources\":[{\"title\":\"A\",\"url\":\"https://a.example\"}]}", "",
             "event: done", "data: {\"type\":\"done\",\"truncated\":true}", "",
         )
-        assertEquals(listOf(ReplyEvent.Thinking("Plan"), ReplyEvent.Text("नमस्ते "), ReplyEvent.Sources(1), ReplyEvent.Done(true)), events)
+        assertEquals(listOf(ReplyEvent.Thinking("Plan"), ReplyEvent.Text("नमस्ते "), ReplyEvent.Sources(listOf(com.dua.ai.model.ReplySource(0, "A", "https://a.example"))), ReplyEvent.Done(true)), events)
     }
 
     @Test fun multiLineDataTrailingEventAndErrorsDecode() {

@@ -14,7 +14,9 @@ data class SavedChat(
     val model: String,
     val draft: String,
     val messages: List<ChatMessage>,
-    val updatedAt: Long
+    val updatedAt: Long,
+    /** Server summary of older turns (long context). Local only: not exported or synced. */
+    val summary: com.dua.ai.model.ChatSummary? = null
 ) {
     val title: String get() = messages.firstOrNull { it.isUser }?.text?.take(60) ?: "Draft"
     val preview: String get() = draft.takeIf { it.isNotBlank() }?.let { "Draft: $it" }
@@ -104,7 +106,7 @@ object ChatHistoryCodec {
         return existing + imported.map { chat ->
             var id: String
             do { id = UUID.randomUUID().toString() } while (!used.add(id))
-            chat.copy(id = id, messages = chat.messages.map { it.copy(id = UUID.randomUUID().toString()) })
+            chat.copy(id = id, messages = chat.messages.map { it.copy(id = UUID.randomUUID().toString()) }, summary = null)
         }
     }
 
@@ -126,6 +128,7 @@ object ChatHistoryCodec {
         .put("activeId", activeId).put("chats", JSONArray().apply {
             chats.forEach { chat -> put(JSONObject().put("id", chat.id).put("model", chat.model)
                 .put("draft", chat.draft).put("updatedAt", chat.updatedAt)
+                .apply { chat.summary?.let { put("summary", it.toJson()) } }
                 .put("messages", JSONArray().apply { chat.messages.filter(::persistable).forEach { message ->
                     put(JSONObject().put("id", message.id).put("text", message.text).put("isUser", message.isUser)
                         .put("model", message.model).put("state", savedState(message.state))
@@ -166,7 +169,7 @@ object ChatHistoryCodec {
                         thinkingSeconds = if (message.has("thinkingSeconds")) message.optInt("thinkingSeconds", -1).takeIf { it in 0..86400 } else null,
                         attachmentText = if (message.has("attachmentText")) message.optString("attachmentText").takeIf { it.isNotEmpty() } else null,
                         files = com.dua.ai.files.FileRefCodec.fromArray(message.optJSONArray("files")))
-                }, item.getLong("updatedAt"))
+                }, item.getLong("updatedAt"), com.dua.ai.model.ChatSummary.fromJson(item.optJSONObject("summary")))
         }
         require(chats.all { it.model in com.dua.ai.setup.IntegrationCapabilities.MODELS } && chats.map { it.id }.distinct().size == chats.size)
         return root.getString("activeId") to chats
