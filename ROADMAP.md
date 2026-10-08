@@ -52,7 +52,7 @@ Effort scale (one developer working with coding agents): **S** ≤ 2 days, **M**
 | Video | Async Grok Imagine jobs with polling that survives leaving the app; 480p/720p, 1080p gated; MP4 stored in `dua-files`; Media3 playback; durable daily seconds cap. Live checks pending | Async jobs with polling; 480p/720p default, 1080p gated | M–L | 3 |
 | Voices and languages | Settings › Voice: device / Grok / Gemini / ElevenLabs reply voice, voice picker with samples, speed, reply and recognition language; chunked playback with an in-memory cache. Live checks pending | Voice and language pickers (device plus xAI or Gemini TTS) | S–M | 4 |
 | Realtime voice | Half-duplex hands-free loop, foreground only | Speech-to-speech over WebSocket, interrupt by talking | L | 4 |
-| Code execution | None | Provider-hosted sandbox tool with collapsible code and output | S–M | 5 |
+| Code execution | Run code chip: Gemini `code_execution` (default on, no extra charge) with collapsible "Ran code" blocks (code, output, copy), kept in local history; ChatGPT/Grok code interpreters opt-in. Live provider check pending | Provider-hosted sandbox tool with collapsible code and output | S–M | 5 |
 | Build mode | GitHub connector lists repositories (read-only) | Repo-aware chat → PRs after approval → commands via delegation only | M · L · XL | 5 |
 
 ## Current Status
@@ -74,6 +74,7 @@ The repository contains the implementation described below, but this checkout ca
 | GitHub connector | Read-only repository listing is implemented | Token, owner restriction and feature flag are required; production unknown | Mocked tests; live authorization pending |
 | Appearance and local notifications | Yes | Notification permission is user-controlled | Automated tests; physical delivery/rendering checks pending |
 | Data controls and sharing | Local export/import/delete and reviewed cloud clearing are implemented | Cloud controls require Supabase; production unknown | Automated tests; physical file-picker checks pending |
+| Run code (code execution) | Yes: Gemini `code_execution`, opt-in OpenAI/xAI `code_interpreter` | Needs only the Gemini key (`DUA_CODE_EXECUTION=0` turns it off); production unknown | Mocked provider tests and Roborazzi screenshots; live Gemini and physical-device checks pending |
 | Imagine (images and video) | Yes | Migration, `GROK_API_KEY`/`GEMINI_API_KEY` and caps are production-controlled; unknown here | Mocked provider/Supabase tests and a local smoke script; live generation and device checks pending |
 | Login/owner/quota protection | Optional controls and durable daily request quota are implemented | Vercel variables, service key and usage migration are needed; production unknown | Mocked tests; production enforcement not verified |
 | Personal install (APK) | Android source builds; a debug APK needs no signing setup; release signing with a personal key is optional | Not verified here | CI runs JVM tests, not an APK; install on the owner's phone pending |
@@ -207,6 +208,8 @@ Absorbs the former connector, coding-agent and computer-mode items.
 - Repo-aware Build chat: the GitHub connector gains read actions (tree, file) exposed as function-calling tools in a chat tied to one repository; answers come back as diffs
 - Approved changes: the backend creates a branch, commit and PR with a narrowly scoped token only after the user taps "Create PR"
 - Running commands only through delegation (GitHub Copilot coding agent or Vercel Sandbox) — never on the phone or inside a Vercel function
+
+*Status (5A): implemented in PR "Phase 5A: Run code" — `"code": true` on `/api/chat` adds Gemini `code_execution` (default on, `DUA_CODE_EXECUTION=0` off) or, opt-in, OpenAI/xAI `code_interpreter`; new `code` stream event and JSON `code[]`; `/api/config.code`; Android Run code chip and collapsible "Ran code" blocks saved in local history. Not automatic in Reasoning mode (Google warns code execution can degrade other output). Charts drawn by code are not shown yet. Live Gemini and physical-device checks remain open.*
 
 **Success:**
 - Nothing is written to a repository without explicit user approval

@@ -46,6 +46,7 @@ fun AssistantMessage(
     onSpeak: () -> Unit,
     modifier: Modifier = Modifier,
     thinkingExpanded: Boolean = false,
+    codeExpanded: Boolean = false,
 ) {
     val parts = remember(message.text) { ReplySources.split(message.text) }
     val streaming = message.streaming
@@ -60,7 +61,9 @@ fun AssistantMessage(
             initiallyExpanded = thinkingExpanded,
             modifier = Modifier.padding(bottom = Spacing.xs),
         )
-        if (streaming && message.text.isEmpty() && message.thinking == null) TypingIndicator()
+        // Run code: what the provider executed, collapsed above the answer (the answer explains the result).
+        if (message.codeRuns.isNotEmpty()) CodeRuns(message.id, message.codeRuns, Modifier.padding(bottom = Spacing.sm), initiallyExpanded = codeExpanded)
+        if (streaming && message.text.isEmpty() && message.thinking == null && message.codeRuns.isEmpty()) TypingIndicator()
         if (parts.body.isNotEmpty()) MarkdownMessage(parts.body)
         message.codeSnippet?.let { CodeBlock(code = it, language = null, modifier = Modifier.padding(top = Spacing.sm)) }
         if (parts.sources.isNotEmpty() && !streaming) SourceChips(parts.sources, Modifier.padding(top = Spacing.md))
@@ -72,7 +75,7 @@ fun AssistantMessage(
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = Spacing.sm))
         if (message.state == "complete" || (message.state == "stopped" && message.text.isNotEmpty())) MessageActions(
-            copyText = message.text + (message.codeSnippet?.let { "\n" + it } ?: ""),
+            copyText = message.text + (message.codeSnippet?.let { "\n" + it } ?: "") + com.dua.ai.model.CodeRuns.copyText(message.codeRuns),
             showRetry = isLast,
             retryEnabled = isLast && !typing,
             retryDescription = when (retryWebMode) {

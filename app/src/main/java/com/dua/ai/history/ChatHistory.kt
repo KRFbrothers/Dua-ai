@@ -142,6 +142,8 @@ object ChatHistoryCodec {
                             if (message.isUser && message.files.isNotEmpty()) put("files", com.dua.ai.files.FileRefCodec.array(message.files))
                             putMedia(this, message, local = true)
                             if (!message.isUser) message.imagine?.let { put("imagine", com.dua.ai.imagine.ImagineCodec.infoJson(it)) }
+                            // Code that ran for a reply (Run code) stays local like file references: not exported or synced.
+                            if (!message.isUser && message.codeRuns.isNotEmpty()) put("codeRuns", com.dua.ai.model.CodeRuns.toJson(message.codeRuns))
                         })
                 } })) }
         }).toString()
@@ -180,7 +182,8 @@ object ChatHistoryCodec {
                         attachmentText = if (message.has("attachmentText")) message.optString("attachmentText").takeIf { it.isNotEmpty() } else null,
                         files = com.dua.ai.files.FileRefCodec.fromArray(message.optJSONArray("files")),
                         media = com.dua.ai.imagine.ImagineCodec.mediaFrom(message.optJSONArray("media"), local = true),
-                        imagine = com.dua.ai.imagine.ImagineCodec.infoFrom(message.optJSONObject("imagine")))
+                        imagine = com.dua.ai.imagine.ImagineCodec.infoFrom(message.optJSONObject("imagine")),
+                        codeRuns = if (message.optBoolean("isUser")) emptyList() else com.dua.ai.model.CodeRuns.fromJson(message.optJSONArray("codeRuns")))
                 }, item.getLong("updatedAt"), com.dua.ai.model.ChatSummary.fromJson(item.optJSONObject("summary")))
         }
         require(chats.all { it.model in com.dua.ai.setup.IntegrationCapabilities.MODELS } && chats.map { it.id }.distinct().size == chats.size)

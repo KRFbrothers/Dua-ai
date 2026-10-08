@@ -68,6 +68,7 @@ fun MessageList(state: ChatUiState, actions: ChatActions, listState: LazyListSta
                     onRetry = { actions.onRetry(message.id) },
                     onSpeak = { actions.onSpeak(message) },
                     thinkingExpanded = message.id in state.expandedThinking,
+                    codeExpanded = message.id in state.expandedCode,
                 )
                 if (message.id == state.summarisedThroughId && message.id != lastId) SummaryDivider(Modifier.padding(top = Spacing.xxl))
             }

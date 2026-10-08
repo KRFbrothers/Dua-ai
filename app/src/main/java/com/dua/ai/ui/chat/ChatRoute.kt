@@ -51,6 +51,7 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
     val imagine by viewModel.imagine.collectAsState()
     val imagineOptions by viewModel.imagineOptions.collectAsState()
     val imagineUsage by viewModel.imagineUsage.collectAsState()
+    val runCode by viewModel.runCode.collectAsState()
     val scope = rememberCoroutineScope()
     var attachmentNotice by rememberSaveable { mutableStateOf("") }
     LaunchedEffect(failedPrompt) { failedPrompt?.let { viewModel.consumeFailedPrompt() } }
@@ -107,6 +108,7 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
         generatedVoiceStatus = generatedSpeech.status, generatedVoiceActive = generatedSpeech.activeId != null,
         greeting = greeting, suggestions = viewModel.promptSuggestions,
         imagine = imagine, imagineOptions = imagineOptions, imagineConfig = integrations.imagine, imagineUsage = imagineUsage,
+        runCode = runCode, codeConfig = integrations.codeExecution,
     )
     LaunchedEffect(imagine) { if (imagine) viewModel.loadImagineUsage() }
     // Saving to the gallery on Android 8–9 needs the legacy storage permission; Android 10+ uses MediaStore directly.
@@ -182,6 +184,7 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
             onOpenSetup = onOpenSetup,
             onImagine = viewModel::setImagine,
             onImagineOptions = viewModel::setImagineOptions,
+            onRunCode = viewModel::setRunCode,
             imagine = ImagineActions(
                 onSave = { items ->
                     if (com.dua.ai.imagine.MediaExport.needsPermission() && androidx.core.content.ContextCompat.checkSelfPermission(context,
