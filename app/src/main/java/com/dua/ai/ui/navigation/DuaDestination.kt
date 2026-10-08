@@ -5,6 +5,7 @@ enum class DuaDestination(val route: String) {
     Chat("chat"),
     Voice("voice"),
     HandsFree("voice/hands-free"),
+    LiveVoice("voice/live"),
     Settings("settings"),
     Profile("settings/account/profile"),
     CloudSync("settings/account/cloud-sync"),
@@ -21,6 +22,7 @@ enum class DuaDestination(val route: String) {
     VoicePicker("settings/voice/voices"),
     ReplyLanguage("settings/voice/reply-language"),
     InputLanguage("settings/voice/input-language"),
+    LiveVoicePicker("settings/voice/live-voices"),
     FeatureSetup("settings/feature-setup");
 
     companion object {
@@ -41,6 +43,7 @@ enum class DuaDestination(val route: String) {
             "Voice" -> Voice
             "HandsFree" -> HandsFree
             "VoiceSettings" -> VoiceSettings
+            "LiveVoice" -> LiveVoice
             else -> null
         }
     }

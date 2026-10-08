@@ -12,11 +12,16 @@ import com.dua.ai.settings.LocalPreferences
 import com.dua.ai.ui.settings.SettingsContent
 import com.dua.ai.ui.settings.SettingsUiState
 import com.dua.ai.ui.theme.DuaTheme
+import com.dua.ai.ui.voice.LiveVoiceContent
 import com.dua.ai.ui.voice.PickerItem
 import com.dua.ai.ui.voice.VoicePickerContent
 import com.dua.ai.ui.voice.VoiceSettingsContent
 import com.dua.ai.ui.voice.VoiceSettingsUiState
 import com.dua.ai.voice.VoiceCodec
+import com.dua.ai.voice.live.LiveCaption
+import com.dua.ai.voice.live.LivePhase
+import com.dua.ai.voice.live.LiveState
+import com.dua.ai.voice.live.LiveUsage
 import com.github.takahirom.roborazzi.RobolectricDeviceQualifiers
 import com.github.takahirom.roborazzi.captureRoboImage
 import org.json.JSONArray
@@ -76,6 +81,45 @@ class VoiceScreenshotTest(private val dark: Boolean) {
             items = provider.languages.map { PickerItem(it.id, it.name, it.note) }, selected = "hi", previewing = null, onBack = {}, onSelect = {}, onPreview = null)
     }
 
+    private fun liveShot(name: String, content: @Composable () -> Unit) {
+        // The orb animates forever: drive the clock by hand so the capture is deterministic.
+        compose.mainClock.autoAdvance = false
+        compose.setContent {
+            DuaTheme(LocalPreferences(theme = mode)) {
+                Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) { content() }
+            }
+        }
+        compose.mainClock.advanceTimeBy(800)
+        compose.onRoot().captureRoboImage(path(name))
+    }
+
+    @Test fun liveListening() = liveShot("35_live_listening") {
+        LiveVoiceContent(VoiceData.live(LivePhase.LISTENING, "Listening… just start talking.", level = 0.35f), starting = false, error = "", fallback = false,
+            usage = VoiceData.usage, voiceName = "Ara", onStart = {}, onMute = {}, onEnd = {}, onClose = {}, onHandsFree = {})
+    }
+
+    @Test fun liveSpeaking() = liveShot("36_live_speaking") {
+        LiveVoiceContent(VoiceData.live(LivePhase.SPEAKING, "Speaking… talk anytime to interrupt.", level = 0.7f, speaking = true), starting = false, error = "",
+            fallback = false, usage = VoiceData.usage, voiceName = "Ara", onStart = {}, onMute = {}, onEnd = {}, onClose = {}, onHandsFree = {})
+    }
+
+    @Test fun liveIdle() = liveShot("37_live_start") {
+        LiveVoiceContent(LiveState(), starting = false, error = "", fallback = false, usage = VoiceData.usage, voiceName = "Ara",
+            onStart = {}, onMute = {}, onEnd = {}, onClose = {}, onHandsFree = {})
+    }
+
+    @Test fun liveUnavailable() = liveShot("38_live_fallback") {
+        LiveVoiceContent(LiveState(), starting = false, error = "You've used today's 30 live voice minutes. They reset at midnight UTC.", fallback = true,
+            usage = LiveUsage(1800, 0, 1800, 0), voiceName = "Ara", onStart = {}, onMute = {}, onEnd = {}, onClose = {}, onHandsFree = {})
+    }
+
+    /** Tall screen so the Live conversation section at the end of the page is in the capture. */
+    @Config(qualifiers = "+h1300dp")
+    @Test fun voiceSettingsLive() = shot("39_voice_settings_live") {
+        VoiceSettingsContent(VoiceData.settings.copy(liveUsage = VoiceData.usage, preferences = VoiceData.settings.preferences.copy(liveVoice = "ara")),
+            onBack = {}, onPicker = {}, onProvider = {}, onSpeed = {}, onPreview = {})
+    }
+
     @Test fun settingsVoiceRow() = shot("34_settings_voice_row") {
         SettingsContent(SettingsUiState(email = "fareed@example.com", theme = mode, voice = "Grok voice (xAI) · Ara · Hindi"),
             onBack = {}, onOpen = {}, onHaptic = {}, onGeneratedVoice = {})
@@ -94,7 +138,17 @@ internal object VoiceData {
                 language("ur", "Urdu", "Auto-detected (not on the provider's list)"), language("ar-SA", "Arabic (Saudi Arabia)"), language("bn", "Bengali"), language("fr", "French")))))
         .put(JSONObject().put("id", "gemini").put("name", "Gemini").put("model", "gemini-3.8-flash-tts").put("defaultVoice", "Kore").put("maxCharacters", 1000)
             .put("price", "about $0.00225 per 10 s of audio").put("voices", JSONArray(listOf(voice("Kore", "Firm"), voice("Puck", "Upbeat"))))
-            .put("languages", JSONArray(listOf(language("auto", "Auto (detected from the reply)"))))))))
+            .put("languages", JSONArray(listOf(language("auto", "Auto (detected from the reply)")))))))
+        .put("live", JSONObject().put("enabled", true).put("model", "grok-voice-latest").put("defaultVoice", "eve").put("dailyMinutes", 30).put("maxSessionMinutes", 10)
+            .put("pricePerMinute", "$0.08").put("voices", JSONArray(listOf(voice("eve", "Energetic and upbeat"), voice("ara", "Warm and friendly"), voice("rex", "Confident and clear"))))
+            .put("languages", JSONArray(listOf(language("auto", "Auto"), language("hi", "Hindi"))))))
+    val usage = LiveUsage(usedSeconds = 7 * 60, activeSeconds = 0, limitSeconds = 30 * 60, resetAt = 0)
+    fun live(phase: LivePhase, status: String, level: Float, speaking: Boolean = false) = LiveState(phase = phase, status = status, level = level,
+        elapsedSeconds = 134, maxSeconds = 600, voice = "ara", captions = listOf(
+            LiveCaption("user:1", true, "Kal Delhi mein mausam kaisa rahega?", true),
+            LiveCaption("dua:1", false, "Kal Delhi mein dhoop rahegi, din mein lagbhag 31 degree aur shaam ko halki thandak.", true),
+            LiveCaption("user:2", true, if (speaking) "Aur Lahore mein?" else "Aur Lahore mein", speaking),
+        ) + if (speaking) listOf(LiveCaption("dua:2", false, "Lahore mein bhi mausam saaf rahega, lekin thoda zyada garam —", false)) else emptyList())
     val settings = VoiceSettingsUiState(config = config, signedIn = true,
         preferences = LocalPreferences(generatedVoice = true, voiceProvider = "xai", voiceName = "ara", voiceSpeed = 1.1f, replyLanguage = "hi", inputLanguage = "hi-IN"))
 }
