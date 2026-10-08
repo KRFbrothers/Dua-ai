@@ -2,6 +2,7 @@ import { providerConfiguration } from './providers.mjs';
 import { accountCapabilities } from './account.mjs';
 import { searchConfiguration } from './search.mjs';
 import { advancedConfiguration } from './advanced-integrations.mjs';
+import { filesConfiguration } from './files.mjs';
 
 export function setupConfiguration(env = {}) {
  const providers = providerConfiguration(env);
@@ -9,10 +10,11 @@ export function setupConfiguration(env = {}) {
  const search = searchConfiguration(env);
  const advanced = advancedConfiguration(env);
  const group=(id,title,state,requires,limitations)=>({id,title,state,requires,limitations});
- return {providers,account,search,advanced,groups:[
-  group('providers','AI providers',providers.slice(2).every(p=>p.configured)?'configured':providers.some(p=>p.configured)?'partial':'needs-configuration',['API key and model for each provider'],['All providers accept UTF-8 text and code files (TXT, CSV, MD, JSON, XML, YAML, logs, source code; 256 KB each). Image/PDF support depends on configured model capabilities; Grok accepts JPEG/PNG only (the app converts WebP to JPEG); Grok/Kimi do not accept PDF.','Reasoning mode shows thinking for Dua/Gemini, Grok and ChatGPT reasoning models; Claude and Kimi answer normally.']),
+ const files = filesConfiguration(env);
+ return {providers,account,search,advanced,files,groups:[
+  group('providers','AI providers',providers.slice(2).every(p=>p.configured)?'configured':providers.some(p=>p.configured)?'partial':'needs-configuration',['API key and model for each provider'],['All providers accept UTF-8 text and code files (TXT, CSV, MD, JSON, XML, YAML, logs, source code; 256 KB each). Image/PDF support depends on configured model capabilities; Grok accepts JPEG/PNG only (the app converts WebP to JPEG); Grok/Kimi do not accept inline PDF.','Stored files (signed-in owner only, up to '+Math.floor(files.maxBytes/1048576)+' MB): PDFs, spreadsheets (XLSX/XLS/ODS/CSV, parsed to CSV), text, images and audio (transcribed first). Grok reads stored PDFs through xAI file inputs; Kimi gets extracted PDF text.','Reasoning mode shows thinking for Dua/Gemini, Grok and ChatGPT reasoning models; Claude and Kimi answer normally.']),
   group('search','Web search and page reading',search.configured?'configured':'partial',['Brave Search API key for Search','Public HTTPS URL for Read link'],['Chat Web mode starts Off. Search uses snippets; Read link reads one public text page. Login pages, JavaScript rendering and crawling are unsupported.']),
-  group('sync','Automatic cloud sync',account.configured?'available':'needs-configuration',['Supabase cloud migration','Sign in and enable on this device'],['Defaults off. Conflicts and deletions pause for review. No file or audio bytes.']),
+  group('sync','Automatic cloud sync',account.configured?'available':'needs-configuration',['Supabase cloud migration','Sign in and enable on this device'],['Defaults off. Conflicts and deletions pause for review. No file or audio bytes (stored files live in the private dua-files bucket and stay on this device\'s chat history).']),
   group('memory','Memory suggestions','available',['Enable suggestions and approve each note'],['Explicit remember statements become proposals; saved notes are used only when memory is enabled.']),
   group('connectors','Connectors and plugins',advanced.connectors.github.configured&&env.DUA_ALLOWED_EMAIL?'configured':'needs-configuration',['GitHub read-only token','Allowed personal account email','Enable connector and sign in'],['Only repository listing is supported. Other tools and OAuth require separate implementations.']),
   group('computer','Screen and video','partial',['Device camera app for photo attachments'],['Android can attach a captured photo to a chat. No screen sharing, video upload, recording or remote computer control. Native screen capture and remote sessions remain pending.']),

@@ -21,7 +21,7 @@ export function makeServer({ key = process.env.GEMINI_API_KEY, model = process.e
         const chunks = []; let size = 0;
         for await (const chunk of req) {
           size += chunk.length;
-          if (size > (url.pathname === '/api/cloud' ? 4 * 1024 * 1024 + 1024 : url.pathname.startsWith('/api/account/') ? 16384 : MAX_REQUEST_BYTES)) return json(res, 413, { error: 'Message history is too large.' });
+          if (size > (url.pathname === '/api/cloud' ? 4 * 1024 * 1024 + 1024 : url.pathname.startsWith('/api/account/') || url.pathname.startsWith('/api/files/') ? 65536 : MAX_REQUEST_BYTES)) return json(res, 413, { error: 'Message history is too large.' });
           chunks.push(chunk);
         }
         const body = Buffer.concat(chunks).toString('utf8');

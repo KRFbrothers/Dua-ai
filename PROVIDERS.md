@@ -22,7 +22,7 @@ Redeploy after setting server variables. `/api/config` exposes provider availabi
 
 ## Streaming, Reasoning and output limits
 
-`/api/chat` keeps its JSON reply unless the request opts in with `"stream": true`; then it answers with Server-Sent Events: `thinking`, `text`, `sources`, `notice`, `done` and `error` (each `data:` is JSON with the same `type`), plus a `: ping` comment every 15 seconds. Validation, login, quota and upstream errors that happen before the first byte still return the usual JSON error and status (including `Retry-After`). If an adapter cannot stream, the reply arrives as one `text` event. Web search and Read link work in both modes; the `Sources:` footer arrives as the final text.
+`/api/chat` keeps its JSON reply unless the request opts in with `"stream": true`; then it answers with Server-Sent Events: `thinking`, `text`, `sources`, `notice`, `files` (audio transcripts), `done` and `error` (each `data:` is JSON with the same `type`), plus a `: ping` comment every 15 seconds. Validation, login, quota and upstream errors that happen before the first byte still return the usual JSON error and status (including `Retry-After`). If an adapter cannot stream, the reply arrives as one `text` event. Web search and Read link work in both modes; the `Sources:` footer arrives as the final text.
 
 `"mode": "reasoning"` asks the model to think first. Thinking summaries are only sent in Reasoning mode and are saved with the chat (local history, export and cloud snapshot; older files without them still load).
 
@@ -48,11 +48,29 @@ All providers accept UTF-8 text and code files (TXT, CSV, TSV, MD, JSON, XML, YA
 | Grok | `GROK_ATTACHMENT_TYPES` | TXT; opt-in JPEG, PNG through Responses (xAI has no WebP; the app converts WebP photos to JPEG) |
 | Kimi | `KIMI_ATTACHMENT_TYPES` | TXT; opt-in JPEG, PNG, WebP with a vision-capable model |
 
-For example, set `OPENAI_ATTACHMENT_TYPES=image/jpeg,image/png,image/webp,application/pdf` for an OpenAI model that supports all these formats. Choose only the formats supported by the model in your provider account. This setting advertises your configuration; it does not probe or activate model capabilities. Grok/Kimi PDF ingestion and image-generation output remain pending.
+For example, set `OPENAI_ATTACHMENT_TYPES=image/jpeg,image/png,image/webp,application/pdf` for an OpenAI model that supports all these formats. Choose only the formats supported by the model in your provider account. This setting advertises your configuration; it does not probe or activate model capabilities. Inline PDFs for Grok/Kimi and image-generation output remain pending; stored PDFs work for every provider (see Stored files).
 
 Select up to three files, with a combined decoded size of 2 MB. Each text file must be at most 256 KB. Encoding, MIME type, file signatures and UTF-8 are checked before an upstream request. Validated content is added only to the final user turn. Unsupported selections leave the local draft and files available to change or remove. File bytes are not persisted in chat history or cloud snapshots; retrying a completed reply does not recover earlier file bytes. The Android app keeps the text of attached text files on the device (up to 32,000 characters per message, never exported or synced) and re-sends it as `attachmentText` on earlier turns of the streaming request so follow-up questions can refer to the file.
 
 Schema, validation, cancellation and error tests use mocked provider responses. Live model acceptance still needs verification after you choose to configure credentials. Native capability checks are included in source; installing them requires a later Android release. No APK is built for this change.
+
+## Stored files (Phase 2)
+
+When the owner is signed in and stored files are set up (see SUPABASE.md §1b), the app uploads files of up to 50 MB straight to the private `dua-files` bucket. Chat messages then carry references (`messages[].files: [{path, name, mimeType, size, transcript?}]`) instead of bytes, so follow-ups re-attach the same files. `DUA_HISTORY_FILES` limits how many earlier files are re-sent in full. This is additive: requests without `files` behave exactly as before, and the small inline path (3 files, 2 MB) still works when signed out.
+
+How each provider gets a stored file:
+
+| Kind | Dua / Gemini | ChatGPT (Responses) | Claude (Messages) | Grok (xAI Responses) | Kimi |
+| --- | --- | --- | --- | --- | --- |
+| Image (JPEG/PNG/WebP) | `inlineData` (≤ 18 MB per request), otherwise a Files API upload (`fileData.fileUri`) | `input_image` with a 1-hour signed URL (needs `OPENAI_ATTACHMENT_TYPES`) | `image` with a `url` source (needs `ANTHROPIC_ATTACHMENT_TYPES`) | `input_image` with a signed URL, JPEG/PNG only (needs `GROK_ATTACHMENT_TYPES`) | data URL (needs `KIMI_ATTACHMENT_TYPES`) |
+| PDF | inline or Files API | `input_file` + `file_url` (opt-in), otherwise extracted text | `document` with a `url` source (opt-in), otherwise extracted text | `input_file` + `file_url`; xAI runs `attachment_search` (billed per search; `GROK_FILE_INPUTS=0` sends extracted text instead) | extracted text |
+| Spreadsheet (XLSX/XLS/ODS/CSV) | parsed on the server to CSV text (SheetJS), capped rows/columns with a truncation note | same | same | same | same |
+| Text (TXT/MD/JSON) | UTF-8 text, capped | same | same | same | same |
+| Audio (M4A/AAC/MP3/WAV/OGG/OPUS/WEBM/FLAC) | transcribed first, then the transcript is sent as text | same | same | same | same |
+
+Gemini's Files API keeps uploads for 48 hours; large files are uploaded again on each request that needs them. PDF text extraction uses `unpdf`; scanned PDFs without a text layer get a note suggesting Dua/Gemini.
+
+**Transcription** (`DUA_TRANSCRIBE_PROVIDER`, default `auto`): xAI `POST /v1/stt` with `model=grok-voice-transcribe-2.0` and the signed URL (`url` field; $0.10 per hour of audio), then Gemini `generateContent` with the audio, then OpenAI `/v1/audio/transcriptions` (`gpt-transcribe`, ≤ 25 MB). The streamed reply starts with a `files` event (`{"type":"files","files":[{"path","transcript"}]}`); the JSON path returns `files` too. The app saves the transcript with the message, and later requests send it back, so the audio isn't transcribed again.
 
 ## Web search
 

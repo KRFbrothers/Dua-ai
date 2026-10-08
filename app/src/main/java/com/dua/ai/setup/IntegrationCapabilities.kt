@@ -12,7 +12,9 @@ data class SearchResult(val title: String, val url: String, val snippet: String)
 data class RepositoryResult(val name: String, val url: String, val description: String)
 data class IntegrationState(val groups: List<IntegrationGroup> = emptyList(), val providers: List<ProviderCapability> = IntegrationCapabilities.fallbackProviders,
     val searchConfigured: Boolean = false, val busy: Boolean = false, val notice: String = "", val generatedVoiceConfigured: Boolean = false,
-    val webSearchConfigured: Boolean = false, val pageReadingAvailable: Boolean = false)
+    val webSearchConfigured: Boolean = false, val pageReadingAvailable: Boolean = false,
+    /** Server supports stored files (Supabase Storage, owner sign-in required). Older servers omit `files`. */
+    val filesEnabled: Boolean = false, val filesMaxBytes: Long = 0)
 
 object IntegrationCapabilities {
     val MODELS = listOf("Dua", "ChatGPT", "Gemini", "Claude", "Grok", "Kimi")
@@ -27,7 +29,10 @@ object IntegrationCapabilities {
     }
     fun configuration(json: JSONObject, current: IntegrationState): IntegrationState {
         val web = json.optJSONObject("web")
+        val files = json.optJSONObject("files")
         return current.copy(providers = providers(json),
+            filesEnabled = files?.opt("enabled") == true,
+            filesMaxBytes = files?.optLong("maxBytes")?.coerceIn(0, 5L * 1024 * 1024 * 1024) ?: 0,
             webSearchConfigured = web?.opt("searchConfigured") == true,
             pageReadingAvailable = web?.opt("pageReadingAvailable") == true)
     }

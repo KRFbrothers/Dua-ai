@@ -25,6 +25,15 @@ data class ChatUiState(
     val webSearchConfigured: Boolean = false,
     val pageReadingAvailable: Boolean = false,
     val attachments: List<ChatAttachment> = emptyList(),
+    /** Stored-file uploads for the next message (progress, done or failed). */
+    val uploads: List<com.dua.ai.files.PendingUpload> = emptyList(),
+    /** Stored files available: Phase 2 backend + signed in. */
+    val storedFiles: Boolean = false,
+    /** Why stored files are unavailable (sign in / backend setup); empty when available. */
+    val storedFilesHint: String = "",
+    val storedFilesMaxBytes: Long = 0,
+    /** Voice-note recording start time while recording. */
+    val recordingSince: Long? = null,
     val readingFiles: Boolean = false,
     val attachmentStatus: String = "",
     val savedChats: List<SavedChat> = emptyList(),
@@ -38,7 +47,8 @@ data class ChatUiState(
     val greeting: String = "",
     val suggestions: List<PromptSuggestion> = emptyList(),
 ) {
-    val canSend: Boolean get() = (draft.isNotBlank() || attachments.isNotEmpty()) && !typing && !readingFiles
+    val canSend: Boolean get() = (draft.isNotBlank() || attachments.isNotEmpty() || uploads.any { it.ref != null }) && !typing && !readingFiles &&
+        uploads.none { it.uploading } && recordingSince == null
     val modelLabel: String get() = model
     val auto: Boolean get() = !reasoning && webMode == null
     val reasoningSupported: Boolean get() = providers.firstOrNull { it.name == model }?.supportsReasoning ?: true
@@ -66,10 +76,16 @@ class ChatActions(
     val onPickPhotos: () -> Unit = {},
     val onPickFiles: () -> Unit = {},
     val onClearAttachments: () -> Unit = {},
+    val onCancelUpload: (String) -> Unit = {},
+    val onPickAudio: () -> Unit = {},
+    val onStartRecording: () -> Unit = {},
+    val onStopRecording: () -> Unit = {},
+    val onCancelRecording: () -> Unit = {},
+    val onOpenFile: (com.dua.ai.files.FileRef) -> Unit = {},
     val onOpenSettings: () -> Unit = {},
     val onOpenVoice: () -> Unit = {},
     val onOpenSetup: () -> Unit = {},
 )
 
 /** Bottom sheets the chat screen can show. */
-enum class ChatSheet { Model, Attach }
+enum class ChatSheet { Model, Attach, Audio }

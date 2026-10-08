@@ -47,7 +47,7 @@ fun MessageList(state: ChatUiState, actions: ChatActions, listState: LazyListSta
     ) {
         items(state.messages, key = { it.id }, contentType = { if (it.isUser) "user" else "assistant" }) { message ->
             Box(Modifier.widthIn(max = Sizes.contentMaxWidth).fillMaxWidth()) {
-                if (message.isUser) UserMessage(message.text)
+                if (message.isUser) UserMessage(message.text, files = message.files, onOpenFile = actions.onOpenFile)
                 else AssistantMessage(
                     message = message,
                     isLast = message.id == lastId,

@@ -72,12 +72,16 @@ fun Composer(
     modifier: Modifier = Modifier,
     onReasoning: (Boolean) -> Unit = {},
     onAuto: () -> Unit = { onWebMode(null) },
+    onCancelUpload: (String) -> Unit = {},
 ) {
     val colors = DuaTheme.colors
     val idle = !state.typing && !state.readingFiles
     Surface(shape = DuaShape.composer, color = colors.composer, border = BorderStroke(1.dp, colors.composerBorder),
         modifier = modifier.fillMaxWidth().padding(horizontal = Spacing.md, vertical = Spacing.sm)) {
         Column(Modifier.padding(top = Spacing.sm, start = Spacing.xs, end = Spacing.xs, bottom = Spacing.xs)) {
+            if (state.uploads.isNotEmpty())
+                UploadChips(state.uploads, removeEnabled = !state.typing, onCancel = onCancelUpload,
+                    modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs))
             if (state.attachments.isNotEmpty() || state.attachmentStatus.isNotBlank())
                 AttachmentChips(state.attachments, state.attachmentStatus, removeEnabled = idle, onClear = onClearAttachments,
                     modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs))

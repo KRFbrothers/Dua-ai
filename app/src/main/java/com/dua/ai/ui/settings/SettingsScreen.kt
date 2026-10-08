@@ -105,7 +105,7 @@ fun SettingsContent(state: SettingsUiState, onBack: () -> Unit, onOpen: (DuaDest
                 checked = state.generatedVoice, enabled = state.generatedVoiceToggleEnabled, onCheckedChange = onGeneratedVoice)
         }
         SettingsSection("Data & privacy") {
-            SettingsRow(Icons.Outlined.Storage, "Data controls", "Export, import or clear chats") { onOpen(DuaDestination.DataControls) }
+            SettingsRow(Icons.Outlined.Storage, "Data controls", "Export, import or clear chats and uploaded files") { onOpen(DuaDestination.DataControls) }
             SettingsDivider()
             SettingsRow(Icons.Outlined.Shield, "Privacy", "What stays on this device and what is sent") { onOpen(DuaDestination.Privacy) }
             SettingsDivider()

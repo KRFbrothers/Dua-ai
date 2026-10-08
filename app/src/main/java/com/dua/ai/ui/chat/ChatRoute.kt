@@ -9,6 +9,8 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -42,6 +44,9 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
     val account by viewModel.account.state.collectAsState()
     val speech by voice.speaker.state.collectAsState()
     val generatedSpeech by voice.generated.state.collectAsState()
+    val uploads by viewModel.uploads.collectAsState()
+    val recordingSince by viewModel.recordingSince.collectAsState()
+    val scope = rememberCoroutineScope()
     var attachmentNotice by rememberSaveable { mutableStateOf("") }
     LaunchedEffect(failedPrompt) { failedPrompt?.let { viewModel.consumeFailedPrompt() } }
 
@@ -51,6 +56,12 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
 
     val files = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         if (uris.isNotEmpty()) { attachmentNotice = ""; viewModel.selectAttachments(uris) }
+    }
+    val audioFiles = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+        if (uris.isNotEmpty()) { attachmentNotice = ""; viewModel.selectAttachments(uris) }
+    }
+    val microphone = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) viewModel.startRecording() else attachmentNotice = "Microphone permission is needed to record a voice note. You can choose an audio file instead."
     }
     val captures = remember(context) { CameraCaptureStore(context.cacheDir) }
     var pendingCapture by rememberSaveable { mutableStateOf("") }
@@ -77,6 +88,10 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
         providers = integrations.providers, webMode = webMode, reasoning = reasoning,
         webSearchConfigured = integrations.webSearchConfigured, pageReadingAvailable = integrations.pageReadingAvailable,
         attachments = attachments, readingFiles = readingFiles,
+        uploads = uploads, recordingSince = recordingSince,
+        storedFiles = integrations.filesEnabled && account.user != null,
+        storedFilesHint = remember(integrations.filesEnabled, account.user, integrations.filesMaxBytes) { viewModel.storedFilesHint() },
+        storedFilesMaxBytes = integrations.filesMaxBytes,
         attachmentStatus = if (readingFiles) "Reading files…" else fileError.ifBlank { attachmentNotice },
         savedChats = savedChats,
         speakingId = speech.activeId ?: generatedSpeech.activeId,
@@ -91,7 +106,7 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
             onSend = {
                 pulse(); voice.stopAll()
                 val current = viewModel.draft.value
-                if ((current.isNotBlank() || viewModel.attachments.value.isNotEmpty()) && !viewModel.isTyping.value && !viewModel.readingFiles.value)
+                if ((current.isNotBlank() || viewModel.attachments.value.isNotEmpty() || viewModel.uploads.value.any { it.ref != null }) && !viewModel.isTyping.value && !viewModel.readingFiles.value)
                     viewModel.sendMessage(current)
             },
             onStop = { pulse(); viewModel.stopReply() },
@@ -115,7 +130,25 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
                 }
             },
             onPickPhotos = { pick { files.launch(arrayOf("image/jpeg", "image/png", "image/webp")) } },
-            onPickFiles = { pick { files.launch(AttachmentReader.types) } },
+            onPickFiles = { pick { files.launch(if (viewModel.storedFilesAvailable()) AttachmentReader.types + com.dua.ai.files.StoredFileTypes.PICKER_EXTRA else AttachmentReader.types) } },
+            onPickAudio = { pick { audioFiles.launch(com.dua.ai.files.StoredFileTypes.AUDIO_PICKER) } },
+            onStartRecording = {
+                if (androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED) viewModel.startRecording()
+                else microphone.launch(android.Manifest.permission.RECORD_AUDIO)
+            },
+            onStopRecording = viewModel::stopRecording,
+            onCancelRecording = viewModel::cancelRecording,
+            onCancelUpload = viewModel::cancelUpload,
+            onOpenFile = { ref ->
+                scope.launch {
+                    try {
+                        val url = viewModel.storedFileUrl(ref)
+                        context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url)))
+                    } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+                    catch (_: ActivityNotFoundException) { attachmentNotice = "No app can open this file." }
+                    catch (failure: Exception) { attachmentNotice = failure.message ?: "File could not be opened." }
+                }
+            },
             onClearAttachments = { viewModel.clearAttachments(); attachmentNotice = "" },
             onOpenSettings = onOpenSettings,
             onOpenVoice = onOpenVoice,

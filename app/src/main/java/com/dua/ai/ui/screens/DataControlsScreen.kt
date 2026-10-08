@@ -10,6 +10,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Upload
@@ -33,6 +34,11 @@ fun DataControlsScreen(viewModel: ChatViewModel, onBack: () -> Unit) {
     val status by viewModel.dataStatus.collectAsState()
     val importPreview by viewModel.importPreview.collectAsState()
     var confirm by rememberSaveable { mutableStateOf(false) }
+    var confirmFiles by rememberSaveable { mutableStateOf(false) }
+    val usage by viewModel.storageUsage.collectAsState()
+    val account by viewModel.account.state.collectAsState()
+    val integrations by viewModel.integrations.collectAsState()
+    LaunchedEffect(account.user?.id, integrations.filesEnabled) { if (integrations.filesEnabled) viewModel.loadStorageUsage() }
     val export = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         if (uri == null) viewModel.dataControlNotice("Export cancelled. Your chats are unchanged.")
         else viewModel.exportChats(uri)
@@ -66,6 +72,8 @@ fun DataControlsScreen(viewModel: ChatViewModel, onBack: () -> Unit) {
             Icon(Icons.Default.DeleteOutline, null); Spacer(Modifier.width(16.dp))
             Column(Modifier.weight(1f)) { Text("Clear all chats", style = MaterialTheme.typography.bodyLarge); Text("Remove local chats, drafts and pending files", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
+        StoredFilesSection(signedIn = account.user != null, enabled = integrations.filesEnabled, usage = usage, busy = busy,
+            onRefresh = viewModel::loadStorageUsage, onDeleteAll = { confirmFiles = true })
         Text("Only this device’s history is managed here. Import accepts Dua version 1 JSON up to 4 MiB, 100 chats, 500 messages per chat and 8000-character drafts. Existing chats stay intact; repeated imports create copies. Export includes messages and unsent drafts, without attachment bytes. Cloud accounts, other devices and previously exported files are unchanged.",
             style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
@@ -79,8 +87,42 @@ fun DataControlsScreen(viewModel: ChatViewModel, onBack: () -> Unit) {
         } },
         confirmButton = { TextButton(enabled = !busy, onClick = { viewModel.confirmImport() }) { Text("Import") } },
         dismissButton = { TextButton(enabled = !busy, onClick = { viewModel.cancelImport() }) { Text("Cancel") } })
+    if (confirmFiles) AlertDialog(onDismissRequest = { confirmFiles = false }, title = { Text("Delete all uploaded files?") },
+        text = { Text("Every file you uploaded to your private Dua storage (photos, PDFs, spreadsheets and audio) will be permanently deleted. Chats stay, but their files can no longer be opened or re-read in follow-ups.") },
+        confirmButton = { TextButton(onClick = { confirmFiles = false; viewModel.deleteAllUploadedFiles() }) { Text("Delete files") } },
+        dismissButton = { TextButton(onClick = { confirmFiles = false }) { Text("Cancel") } })
     if (confirm) AlertDialog(onDismissRequest = { confirm = false }, title = { Text("Clear all chats?") },
-        text = { Text("Every chat and draft saved on this device will be deleted. Pending attachments will also be cleared. This cannot be undone. Export first if you want a copy.") },
+        text = { Text("Every chat and draft saved on this device will be deleted, along with the files uploaded in those chats. Pending attachments will also be cleared. This cannot be undone. Export first if you want a copy.") },
         confirmButton = { TextButton(onClick = { confirm = false; viewModel.clearAllChats() }) { Text("Clear all") } },
         dismissButton = { TextButton(onClick = { confirm = false }) { Text("Cancel") } })
+}
+
+/** Settings › Data & privacy › Data controls: storage used in the private bucket and a delete-all action. */
+@Composable
+fun StoredFilesSection(signedIn: Boolean, enabled: Boolean, usage: com.dua.ai.files.StorageUsage?, busy: Boolean, onRefresh: () -> Unit, onDeleteAll: () -> Unit) {
+    Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceContainer, modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.Cloud, null)
+                Spacer(Modifier.width(16.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("Uploaded files", style = MaterialTheme.typography.bodyLarge)
+                    Text(when {
+                        !enabled -> "Stored files are not set up on the Dua backend."
+                        !signedIn -> "Sign in to see and manage uploaded files."
+                        usage == null -> "Checking storage…"
+                        else -> "${usage.files} files · ${com.dua.ai.files.StoredFileTypes.sizeLabel(usage.bytes)} used · up to ${com.dua.ai.files.StoredFileTypes.sizeLabel(usage.maxFileBytes)} per file"
+                    }, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+                }
+                if (enabled && signedIn) TextButton(enabled = !busy, onClick = onRefresh) { Text("Refresh") }
+            }
+            Text("Files are kept in your private Supabase bucket until you delete the chat they were sent in, or delete them all here.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (enabled && signedIn) OutlinedButton(enabled = !busy && (usage?.files ?: 1) > 0, onClick = onDeleteAll, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)) {
+                Icon(Icons.Default.DeleteOutline, null); Spacer(Modifier.width(8.dp)); Text("Delete all uploaded files")
+            }
+        }
+    }
 }

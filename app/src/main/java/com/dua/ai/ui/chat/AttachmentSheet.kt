@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.GraphicEq
 import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.PhotoCamera
 import androidx.compose.material.icons.outlined.PhotoLibrary
@@ -45,10 +46,14 @@ fun AttachmentSheet(
     onFiles: () -> Unit,
     onReadLink: (Boolean) -> Unit,
     onDismiss: () -> Unit,
+    onAudio: () -> Unit = {},
+    storedFiles: Boolean = false,
+    storedFilesHint: String = "",
+    storedFilesMaxBytes: Long = 0,
 ) {
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow) {
-        AttachmentSheetContent(webMode, pageReadingAvailable, enabled, onCamera, onPhotos, onFiles, onReadLink)
+        AttachmentSheetContent(webMode, pageReadingAvailable, enabled, onCamera, onPhotos, onFiles, onReadLink, onAudio, storedFiles, storedFilesHint, storedFilesMaxBytes)
     }
 }
 
@@ -61,6 +66,10 @@ fun AttachmentSheetContent(
     onPhotos: () -> Unit,
     onFiles: () -> Unit,
     onReadLink: (Boolean) -> Unit,
+    onAudio: () -> Unit = {},
+    storedFiles: Boolean = false,
+    storedFilesHint: String = "",
+    storedFilesMaxBytes: Long = 0,
 ) {
     Column(Modifier.fillMaxWidth().padding(horizontal = Spacing.xl).padding(bottom = Spacing.xxl), verticalArrangement = Arrangement.spacedBy(Spacing.lg)) {
         Text("Add to chat", style = MaterialTheme.typography.titleMedium, modifier = Modifier.semantics { heading() })
@@ -68,9 +77,15 @@ fun AttachmentSheetContent(
             SheetTile("Camera", Icons.Outlined.PhotoCamera, enabled, onCamera, Modifier.weight(1f))
             SheetTile("Photos", Icons.Outlined.PhotoLibrary, enabled, onPhotos, Modifier.weight(1f))
             SheetTile("Files", Icons.Outlined.UploadFile, enabled, onFiles, Modifier.weight(1f))
+            SheetTile("Audio", Icons.Outlined.GraphicEq, enabled, onAudio, Modifier.weight(1f))
         }
-        Text("Up to 3 files, 2 MB in total: JPEG, PNG, WebP, PDF or text and code files like TXT, CSV, MD, JSON (256 KB each). Photos and PDFs go with your next message only; text stays on this phone for follow-ups. Large photos are resized to JPEG; originals stay unchanged.",
+        if (storedFiles) Text("Photos and files up to ${com.dua.ai.files.StoredFileTypes.sizeLabel(storedFilesMaxBytes.takeIf { it > 0 } ?: 52428800L)} each — images, PDFs, spreadsheets (XLSX, XLS, ODS, CSV), text and audio — upload to your private storage and stay attached for follow-ups until you delete the chat. Camera photos and code files go with the message directly.",
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        else {
+            Text("Up to 3 files, 2 MB in total: JPEG, PNG, WebP, PDF or text and code files like TXT, CSV, MD, JSON (256 KB each). Photos and PDFs go with your next message only; text stays on this phone for follow-ups. Large photos are resized to JPEG; originals stay unchanged.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (storedFilesHint.isNotBlank()) Text(storedFilesHint, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+        }
         Surface(shape = DuaShape.card, color = MaterialTheme.colorScheme.surfaceContainerHigh) {
             Row(Modifier.fillMaxWidth().heightIn(min = 64.dp)
                 .toggleable(value = webMode == "page", enabled = enabled, role = Role.Switch, onValueChange = onReadLink)

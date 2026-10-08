@@ -24,6 +24,8 @@ data class ChatMessage(
     val startedAt: Long = 0L,
     /** In memory only: non-fatal note from the server, e.g. provider has no visible thinking or output was cut off. */
     val notice: String? = null,
+    /** User turns: files stored in the private Supabase bucket (references only). Kept on this device. */
+    val files: List<com.dua.ai.files.FileRef> = emptyList(),
 ) {
     val streaming: Boolean get() = state == STREAMING
     companion object {

@@ -8,6 +8,8 @@ sealed interface ReplyEvent {
     data class Text(val delta: String) : ReplyEvent
     data class Sources(val count: Int) : ReplyEvent
     data class Notice(val message: String) : ReplyEvent
+    /** Transcripts the server made for stored audio files: storage path -> transcript. */
+    data class Files(val transcripts: Map<String, String>) : ReplyEvent
     data class Done(val truncated: Boolean) : ReplyEvent
     data class Failed(val message: String, val status: Int) : ReplyEvent
 }
@@ -53,6 +55,12 @@ class ChatStreamParser {
                 "text" -> json.optString("delta").takeIf { it.isNotEmpty() }?.let { ReplyEvent.Text(it) }
                 "sources" -> ReplyEvent.Sources(json.optJSONArray("sources")?.length() ?: 0)
                 "notice" -> json.optString("message").takeIf { it.isNotBlank() }?.let { ReplyEvent.Notice(it.take(300)) }
+                "files" -> json.optJSONArray("files")?.let { array ->
+                    (0 until array.length()).mapNotNull { array.optJSONObject(it) }.mapNotNull { item ->
+                        val path = item.optString("path"); val transcript = item.optString("transcript")
+                        if (com.dua.ai.files.StoredFileTypes.PATH.matches(path) && transcript.isNotBlank()) path to transcript.take(com.dua.ai.files.FileRefCodec.MAX_TRANSCRIPT_CHARS) else null
+                    }.toMap().takeIf { it.isNotEmpty() }?.let { ReplyEvent.Files(it) }
+                }
                 "done" -> ReplyEvent.Done(json.optBoolean("truncated"))
                 "error" -> ReplyEvent.Failed(json.optString("message").takeIf { it.isNotBlank() }?.take(300)
                     ?: "Reply stopped unexpectedly. Partial reply kept; retry.", json.optInt("status", 502))
@@ -85,7 +93,7 @@ class StreamAccumulator(private val startedAt: Long, private val clock: () -> Lo
                 if (thinking.isNotEmpty() && thinkingSeconds == null) thinkingSeconds = elapsedSeconds()
                 if (event.truncated) notice = "Reply reached the output limit and may be cut off."
             }
-            is ReplyEvent.Sources, is ReplyEvent.Failed -> Unit
+            is ReplyEvent.Sources, is ReplyEvent.Failed, is ReplyEvent.Files -> Unit
         }
     }
 
