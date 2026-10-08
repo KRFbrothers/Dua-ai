@@ -55,8 +55,8 @@ class DuaApiClient(
      * [IOException] when the connection drops; events already emitted stay valid (partial reply).
      */
     fun streamReply(model: String, history: List<ChatMessage>, attachments: List<ChatAttachment> = emptyList(), memory: String = "",
-        token: String? = null, web: String? = null, reasoning: Boolean = false): Flow<ReplyEvent> = callbackFlow {
-        val request = withContext(Dispatchers.IO) { buildRequest(model, history, attachments, memory, token, web, reasoning, stream = true) }
+        token: String? = null, web: String? = null, reasoning: Boolean = false, historyBytes: Int = MAX_HISTORY_BYTES): Flow<ReplyEvent> = callbackFlow {
+        val request = withContext(Dispatchers.IO) { buildRequest(model, history, attachments, memory, token, web, reasoning, stream = true, historyBytes = historyBytes) }
         val call = client.newCall(request)
         call.enqueue(object : Callback {
             override fun onFailure(call: Call, error: IOException) { close(error) }
@@ -105,13 +105,13 @@ class DuaApiClient(
     }
 
     internal fun buildRequest(model: String, history: List<ChatMessage>, attachments: List<ChatAttachment>, memory: String, token: String?, web: String?,
-        reasoning: Boolean, stream: Boolean): Request {
+        reasoning: Boolean, stream: Boolean, historyBytes: Int = MAX_HISTORY_BYTES): Request {
         require(model in com.dua.ai.setup.IntegrationCapabilities.MODELS) { "Supported model select karein." }
         require(memory.length <= 3000) { "Memory notes are too large." }
         require(web == null || web == "search" || web == "page") { "Web mode must be search or page." }
         val base = URL(baseUrl.trimEnd('/') + "/")
         require(base.protocol == "https") { "Dua backend ke liye HTTPS URL set karein." }
-        val messages = historyJson(history, includeFileText = stream)
+        val messages = historyJson(history, includeFileText = stream, maxBytes = historyBytes)
         val files = JSONArray().apply { attachments.forEach { file ->
             put(JSONObject().put("name", file.name).put("mimeType", file.mimeType).put("data", file.data))
         } }
@@ -122,7 +122,7 @@ class DuaApiClient(
                 if (stream) put("stream", true).put("mode", if (reasoning) "reasoning" else "auto")
             }
             .toString().toByteArray(Charsets.UTF_8)
-        require(body.size <= 3 * 1024 * 1024) { "Conversation too large. New chat shuru karein." }
+        require(body.size <= (if (historyBytes > MAX_HISTORY_BYTES) 4 else 3) * 1024 * 1024) { "Conversation too large. New chat shuru karein." }
         val builder = Request.Builder().url(URL(base, "api/chat"))
             .header("Accept", if (stream) "text/event-stream, application/json" else "application/json")
             .header("x-dua-native", "1")
@@ -167,7 +167,9 @@ class DuaApiClient(
         const val MAX_STREAM_BYTES = 4L * 1024 * 1024
         /** Budget for earlier turns' stored text-file content re-sent with follow-ups. */
         const val FILE_CONTEXT_CHARS = 96_000
-        private const val MAX_HISTORY_BYTES = 262144
+        const val MAX_HISTORY_BYTES = 262144
+        /** Servers with stored files (Phase 2) accept 1 MB of history (file references and transcripts). */
+        const val FILES_HISTORY_BYTES = 1024 * 1024
         /** Server limit for one earlier model turn. */
         private const val MAX_MODEL_TURN_CHARS = 80_000
 
@@ -176,7 +178,7 @@ class DuaApiClient(
          * their stored text-file content, newest first within [FILE_CONTEXT_CHARS], dropping the oldest
          * file text if the server's 256 KB history limit would be exceeded.
          */
-        internal fun historyJson(history: List<ChatMessage>, includeFileText: Boolean): JSONArray {
+        internal fun historyJson(history: List<ChatMessage>, includeFileText: Boolean, maxBytes: Int = MAX_HISTORY_BYTES): JSONArray {
             // Stopped (partial) replies are not sent back as context, same as before streaming.
             val turns = history.filter { it.state == "complete" }.takeLast(39)
             val withText = BooleanArray(turns.size)
@@ -191,10 +193,14 @@ class DuaApiClient(
             }
             fun encode() = JSONArray().apply { turns.forEachIndexed { index, message ->
                 put(JSONObject().put("role", if (message.isUser) "user" else "model").put("text", if (message.isUser) message.text else message.text.take(MAX_MODEL_TURN_CHARS))
-                    .apply { if (withText[index]) put("attachmentText", message.attachmentText) })
+                    .apply {
+                        if (withText[index]) put("attachmentText", message.attachmentText)
+                        // Stored files are re-attached by the server from these references (stream path = Phase 2 servers).
+                        if (includeFileText && message.isUser && message.files.isNotEmpty()) put("files", com.dua.ai.files.FileRefCodec.array(message.files))
+                    })
             } }
             var messages = encode()
-            while (messages.toString().toByteArray(Charsets.UTF_8).size > MAX_HISTORY_BYTES) {
+            while (messages.toString().toByteArray(Charsets.UTF_8).size > maxBytes) {
                 val oldest = withText.indexOfFirst { it }
                 require(oldest >= 0) { "Conversation too large. New chat shuru karein." }
                 withText[oldest] = false

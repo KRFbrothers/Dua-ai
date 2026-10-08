@@ -133,6 +133,8 @@ object ChatHistoryCodec {
                             putThinking(this, message)
                             // Text-file content stays local: it is not exported or synced to the cloud.
                             if (message.isUser && !message.attachmentText.isNullOrEmpty()) put("attachmentText", message.attachmentText.take(ChatMessage.MAX_ATTACHMENT_TEXT_CHARS))
+                            // Stored-file references (and audio transcripts) also stay local.
+                            if (message.isUser && message.files.isNotEmpty()) put("files", com.dua.ai.files.FileRefCodec.array(message.files))
                         })
                 } })) }
         }).toString()
@@ -162,7 +164,8 @@ object ChatHistoryCodec {
                         state = message.optString("state", "complete").let { if (it == ChatMessage.STREAMING) "stopped" else it },
                         thinking = if (message.has("thinking")) message.optString("thinking").takeIf { it.isNotBlank() } else null,
                         thinkingSeconds = if (message.has("thinkingSeconds")) message.optInt("thinkingSeconds", -1).takeIf { it in 0..86400 } else null,
-                        attachmentText = if (message.has("attachmentText")) message.optString("attachmentText").takeIf { it.isNotEmpty() } else null)
+                        attachmentText = if (message.has("attachmentText")) message.optString("attachmentText").takeIf { it.isNotEmpty() } else null,
+                        files = com.dua.ai.files.FileRefCodec.fromArray(message.optJSONArray("files")))
                 }, item.getLong("updatedAt"))
         }
         require(chats.all { it.model in com.dua.ai.setup.IntegrationCapabilities.MODELS } && chats.map { it.id }.distinct().size == chats.size)

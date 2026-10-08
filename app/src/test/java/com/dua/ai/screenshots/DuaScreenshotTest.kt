@@ -32,6 +32,8 @@ import com.dua.ai.ui.chat.ChatActions
 import com.dua.ai.ui.chat.ChatScreen
 import com.dua.ai.ui.chat.ChatSheet
 import com.dua.ai.ui.chat.ChatUiState
+import com.dua.ai.ui.chat.AudioSheetContent
+import com.dua.ai.ui.screens.StoredFilesSection
 import com.dua.ai.ui.settings.SettingsContent
 import com.dua.ai.ui.settings.SettingsUiState
 import com.dua.ai.ui.theme.DuaTheme
@@ -131,6 +133,51 @@ class DuaScreenshotTest(private val dark: Boolean) {
         ChatScreen(ScreenshotData.emptyState.copy(draft = "Plan a 3-day study schedule for physics", reasoning = true), ChatActions())
     }
 
+    @Test fun composerUploadProgress() = shot("10_upload_progress") {
+        ChatScreen(ScreenshotData.emptyState.copy(draft = "Compare these two", storedFiles = true, uploads = ScreenshotData.uploads), ChatActions())
+    }
+
+    @Test fun messageFileChips() = shot("11_file_chips") {
+        ChatScreen(ScreenshotData.files, ChatActions())
+    }
+
+    @OptIn(ExperimentalRoborazziApi::class)
+    @Test fun attachSheetWithStoredFiles() {
+        compose.setContent {
+            DuaTheme(LocalPreferences(theme = mode)) {
+                Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+                    ChatScreen(ScreenshotData.emptyState.copy(storedFiles = true, storedFilesMaxBytes = 52428800), ChatActions(), initialSheet = ChatSheet.Attach)
+                }
+            }
+        }
+        compose.waitForIdle()
+        captureScreenRoboImage(path("12_attach_sheet_stored"))
+    }
+
+    @OptIn(ExperimentalRoborazziApi::class)
+    @Test fun attachSheetSignedOut() {
+        compose.setContent {
+            DuaTheme(LocalPreferences(theme = mode)) {
+                Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+                    ChatScreen(ScreenshotData.emptyState.copy(storedFilesHint = "Sign in from Profile to attach audio, spreadsheets and large files (up to 50 MB each). Without signing in, up to 3 small files (2 MB total) still work."),
+                        ChatActions(), initialSheet = ChatSheet.Attach)
+                }
+            }
+        }
+        compose.waitForIdle()
+        captureScreenRoboImage(path("13_attach_sheet_signed_out"))
+    }
+
+    @Test fun audioRecording() = shot("14_audio_recording") {
+        AudioSheetContent(recordingSince = 0L, available = true, hint = "", onRecord = {}, onStop = {}, onCancel = {}, onPick = {}, now = { 83_000L })
+    }
+
+    @Test fun storageSettings() = shot("15_storage_settings") {
+        androidx.compose.foundation.layout.Column(Modifier.padding(16.dp)) {
+            StoredFilesSection(signedIn = true, enabled = true, usage = com.dua.ai.files.StorageUsage(14, 38_700_000, 52428800), busy = false, onRefresh = {}, onDeleteAll = {})
+        }
+    }
+
     @Test fun settings() = shot("05_settings") {
         SettingsContent(SettingsUiState(email = "fareed@example.com", theme = mode, haptic = true, notifications = true),
             onBack = {}, onOpen = {}, onHaptic = {}, onGeneratedVoice = {})
@@ -144,6 +191,20 @@ private object ScreenshotData {
         PromptSuggestion("Brainstorm concepts", "", "", "Idea"),
         PromptSuggestion("Draft a plan", "", "", "Productivity"),
     )
+
+    private const val UID = "11111111-2222-4333-8444-555555555555"
+    val uploads = listOf(
+        com.dua.ai.files.PendingUpload("u1", "Q3 budget.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", 4_200_000, sent = 2_730_000),
+        com.dua.ai.files.PendingUpload("u2", "Lease agreement.pdf", "application/pdf", 18_400_000, sent = 18_400_000, state = com.dua.ai.files.PendingUpload.DONE,
+            ref = com.dua.ai.files.FileRef("$UID/aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee.pdf", "Lease agreement.pdf", "application/pdf", 18_400_000)),
+    )
+    val files by lazy { ChatUiState(messages = listOf(
+        ChatMessage(id = "f1", text = "What changed between these?\nFiles: Lease agreement.pdf, Q3 budget.xlsx, Voice note 18:42.m4a", isUser = true, files = listOf(
+            com.dua.ai.files.FileRef("$UID/aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee.pdf", "Lease agreement.pdf", "application/pdf", 18_400_000),
+            com.dua.ai.files.FileRef("$UID/bbbbbbbb-bbbb-4ccc-8ddd-eeeeeeeeeeee.xlsx", "Q3 budget.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", 4_200_000),
+            com.dua.ai.files.FileRef("$UID/cccccccc-bbbb-4ccc-8ddd-eeeeeeeeeeee.m4a", "Voice note 18:42.m4a", "audio/mp4", 820_000, "Check whether rent went up."))),
+        ChatMessage(id = "f2", text = "**Rent** rises from ₹42,000 to ₹45,500 from April (clause 4.2). Your Q3 sheet still budgets ₹42,000, so update row 7. Your voice note asked about rent — yes, it went up by 8.3%.", isUser = false, model = "Dua"),
+    ), greeting = "Good evening, Fareed", storedFiles = true) }
 
     val emptyState = ChatUiState(greeting = "Good evening, Fareed", suggestions = suggestions, webSearchConfigured = true, pageReadingAvailable = true)
 

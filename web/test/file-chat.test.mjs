@@ -180,6 +180,17 @@ test('follow-ups re-attach earlier files by path; old ones beyond DUA_HISTORY_FI
   assert.equal(contents[4].parts.length, 1);
 });
 
+test('a deleted earlier file becomes a note; a deleted current file is a clear 404', async () => {
+  const gone = ref(path('99999999-bbbb-4ccc-8ddd-eeeeeeeeeeee', 'pdf'), 'gone.pdf', 'application/pdf');
+  const fetcher = chatFetcher('Dua');
+  const response = await handleChat(authedChat({ model: 'Dua', messages: [{ role: 'user', text: 'old', files: [gone] }, { role: 'model', text: 'ok' }, { role: 'user', text: 'again' }] }), { env: ENV, fetcher });
+  assert.equal(response.status, 200);
+  assert.match(providerBody(fetcher, 'Dua').contents[0].parts[1].text, /"gone\.pdf" is no longer available/);
+  const current = await handleChat(authedChat(ask('Dua', [gone])), { env: ENV, fetcher: chatFetcher('Dua') });
+  assert.equal(current.status, 404);
+  assert.match((await current.json()).error, /not found/);
+});
+
 test('stored files need the signed-in owner, and paths must be in their folder', async () => {
   const noToken = new Request('https://dua.test/api/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(ask('Dua', [pdfRef])) });
   let response = await handleChat(noToken, { env: ENV, fetcher: chatFetcher('Dua') });

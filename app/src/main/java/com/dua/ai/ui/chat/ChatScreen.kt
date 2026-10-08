@@ -120,6 +120,7 @@ fun ChatScreen(
                         onStop = actions.onStop,
                         onReasoning = actions.onReasoning,
                         onAuto = actions.onAuto,
+                        onCancelUpload = actions.onCancelUpload,
                     )
                 }
             }
@@ -140,6 +141,16 @@ fun ChatScreen(
             onFiles = { sheet = null; actions.onPickFiles() },
             onReadLink = { on -> sheet = null; actions.onWebMode(if (on) "page" else null) },
             onDismiss = { sheet = null },
+            onAudio = { sheet = ChatSheet.Audio },
+            storedFiles = state.storedFiles, storedFilesHint = state.storedFilesHint, storedFilesMaxBytes = state.storedFilesMaxBytes,
+        )
+        ChatSheet.Audio -> AudioSheet(
+            recordingSince = state.recordingSince, available = state.storedFiles, hint = state.storedFilesHint,
+            onRecord = actions.onStartRecording,
+            onStop = { actions.onStopRecording(); sheet = null },
+            onCancel = actions.onCancelRecording,
+            onPick = { sheet = null; actions.onPickAudio() },
+            onDismiss = { sheet = null },
         )
         null -> Unit
     }
@@ -148,7 +159,7 @@ fun ChatScreen(
         AlertDialog(
             onDismissRequest = { deletingId = null },
             title = { Text("Delete chat?") },
-            text = { Text("Delete this chat from this device?") },
+            text = { Text("Delete this chat from this device? Files uploaded in this chat are deleted from your storage too.") },
             confirmButton = { TextButton(onClick = { actions.onDeleteChat(id); deletingId = null }) { Text("Delete") } },
             dismissButton = { TextButton(onClick = { deletingId = null }) { Text("Cancel") } },
         )

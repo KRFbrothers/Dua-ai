@@ -112,7 +112,14 @@ export async function resolveChatFiles({ messages, provider, attachmentTypes, re
     return [label, { fileUrl: { mimeType: ref.mimeType, url: await signed(ref) }, name: ref.name }];
   };
   try {
-    const results = await Promise.all(jobs.map(async job => ({ job, parts: await resolve(job) })));
+    const results = await Promise.all(jobs.map(async job => {
+      try { return { job, parts: await resolve(job) }; }
+      catch (error) {
+        // A missing earlier file (deleted elsewhere) must not break the whole conversation.
+        if (!job.current && error instanceof StorageError && error.status === 404) return { job, parts: [{ text: `[Earlier attachment "${job.ref.name}" is no longer available.]` }] };
+        throw error;
+      }
+    }));
     results.sort((a, b) => a.job.index - b.job.index || a.job.position - b.job.position);
     for (const { job, parts } of results) turnParts.set(job.index, [...(turnParts.get(job.index) || []), ...parts]);
   } catch (error) {

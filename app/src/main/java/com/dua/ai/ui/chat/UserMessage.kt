@@ -35,12 +35,13 @@ internal fun splitFileNames(text: String): Pair<String, List<String>> {
 
 /** User turn: subtle right-aligned bubble. */
 @Composable
-fun UserMessage(text: String, modifier: Modifier = Modifier) {
-    val (body, files) = remember(text) { splitFileNames(text) }
+fun UserMessage(text: String, modifier: Modifier = Modifier, files: List<com.dua.ai.files.FileRef> = emptyList(), onOpenFile: (com.dua.ai.files.FileRef) -> Unit = {}) {
+    val (body, names) = remember(text) { splitFileNames(text) }
     Column(modifier.fillMaxWidth().padding(start = Spacing.huge), horizontalAlignment = Alignment.End,
         verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-        if (files.isNotEmpty()) Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-            files.take(3).forEach { name ->
+        if (files.isNotEmpty()) MessageFileChips(names, files, onOpenFile)
+        else if (names.isNotEmpty()) Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+            names.take(3).forEach { name ->
                 Surface(shape = DuaShape.chip, color = MaterialTheme.colorScheme.surfaceContainerHigh) {
                     Row(Modifier.padding(horizontal = Spacing.md, vertical = Spacing.xs), verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Outlined.Description, null, Modifier.size(Sizes.iconTiny), tint = MaterialTheme.colorScheme.onSurfaceVariant)

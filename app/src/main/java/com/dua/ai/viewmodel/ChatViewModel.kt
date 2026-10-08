@@ -37,6 +37,15 @@ import com.dua.ai.account.CloudReview
 import com.dua.ai.setup.AutomaticCloudSync
 import com.dua.ai.setup.AutomaticSyncAccount
 import com.dua.ai.setup.AutomationSyncStore
+import com.dua.ai.files.AudioRecorder
+import com.dua.ai.files.FileRef
+import com.dua.ai.files.PendingFileDeletes
+import com.dua.ai.files.PendingUpload
+import com.dua.ai.files.SignedUpload
+import com.dua.ai.files.StorageUsage
+import com.dua.ai.files.StoredFileClient
+import com.dua.ai.files.StoredFileTypes
+import kotlinx.coroutines.flow.update
 
 class ChatViewModel(application: Application) : AndroidViewModel(application) {
     val account = com.dua.ai.account.AccountRepository(application)
@@ -84,6 +93,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         try {
             val config = setupApi.request("/api/config")
             _integrations.value = com.dua.ai.setup.IntegrationCapabilities.configuration(config, _integrations.value)
+            flushPendingFileDeletes()
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (_: Exception) { integrationNotice("Provider status could not be loaded. Dua and Gemini use the existing backend configuration; refresh Feature setup to retry.") }
     }
@@ -127,7 +137,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             finally { account.busy(false); refreshSyncBusy() }
         }
     }
-    fun loadAccount() = accountAction { account.load(); account.loadFeatures() }
+    fun loadAccount() = accountAction { account.load(); account.loadFeatures(); flushPendingFileDeletes() }
     fun signIn(email: String, password: String, signup: Boolean) = accountAction { _cloudPreview.value = null; account.signIn(email, password, signup) }
     fun signInWithGoogle(idToken: String, nonce: String) = accountAction { _cloudPreview.value = null; account.signInWithGoogle(idToken, nonce) }
     fun logOut() { automaticSync.disable(); accountAction { _cloudPreview.value = null; account.logout() } }
@@ -239,7 +249,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
      * Events are applied to [accumulator] as they arrive, so a failure keeps everything received.
      */
     private suspend fun collectReply(id: String, accumulator: com.dua.ai.network.StreamAccumulator, events: kotlinx.coroutines.flow.Flow<com.dua.ai.network.ReplyEvent>) {
-        events.onEach { accumulator.apply(it) }.conflate().collect {
+        events.onEach { if (it is com.dua.ai.network.ReplyEvent.Files) applyTranscripts(it.transcripts); accumulator.apply(it) }.conflate().collect {
             val snapshot = accumulator.snapshot()
             updateMessage(id) { it.copy(text = snapshot.text, thinking = snapshot.thinking, thinkingSeconds = snapshot.thinkingSeconds, notice = snapshot.notice) }
             delay(STREAM_FRAME_MS)
@@ -302,7 +312,214 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         _attachments.value = emptyList()
         _attachmentError.value = ""
         _readingFiles.value = false
+        discardUploads()
     }
+
+    // ---- Stored files: direct uploads to the private Supabase bucket (owner sign-in required) ----
+    private val fileClient = StoredFileClient()
+    private val filePreferences = application.getSharedPreferences("dua_files", 0)
+    private val pendingDeletes = PendingFileDeletes({ filePreferences.getString("pending_deletes", null) }, { filePreferences.edit().putString("pending_deletes", it).apply() })
+    private val _uploads = MutableStateFlow<List<PendingUpload>>(emptyList())
+    val uploads: StateFlow<List<PendingUpload>> = _uploads.asStateFlow()
+    private val uploadJobs = mutableMapOf<String, Job>()
+    private val recorder = AudioRecorder(application)
+    private val _recordingSince = MutableStateFlow<Long?>(null)
+    val recordingSince: StateFlow<Long?> = _recordingSince.asStateFlow()
+    private val _storageUsage = MutableStateFlow<StorageUsage?>(null)
+    val storageUsage: StateFlow<StorageUsage?> = _storageUsage.asStateFlow()
+
+    /** Stored files need a Phase 2 backend and a signed-in account (the server also requires the owner email). */
+    fun storedFilesAvailable() = _integrations.value.filesEnabled && account.state.value.user != null
+    private fun maxStoredBytes() = _integrations.value.filesMaxBytes.takeIf { it > 0 } ?: (50L * 1024 * 1024)
+    fun storedFilesHint(): String = when {
+        !_integrations.value.filesEnabled -> "Audio, spreadsheets and files over 2 MB need stored files on the Dua backend (see SUPABASE.md). Small images, PDFs and text files still work."
+        account.state.value.user == null -> "Sign in from Profile to attach audio, spreadsheets and large files (up to ${StoredFileTypes.sizeLabel(maxStoredBytes())} each). Without signing in, up to 3 small files (2 MB total) still work."
+        else -> ""
+    }
+    private data class PickedFile(val uri: Uri, val name: String, val type: String, val size: Long?)
+
+    private fun updateUpload(id: String, transform: (PendingUpload) -> PendingUpload) = _uploads.update { list -> list.map { if (it.id == id) transform(it) else it } }
+
+    private fun startUpload(name: String, type: String, size: Long, open: () -> java.io.InputStream, cleanup: () -> Unit = {}) {
+        val id = UUID.randomUUID().toString()
+        _uploads.update { it + PendingUpload(id, name, type, size) }
+        uploadJobs[id] = viewModelScope.launch {
+            try {
+                val signed = SignedUpload.parse(account.request("/api/files/sign", "POST",
+                    org.json.JSONObject().put("name", name).put("mimeType", type).put("size", size), authenticated = true))
+                withContext(Dispatchers.IO) { fileClient.upload(signed, size, open) { sent -> updateUpload(id) { it.copy(sent = sent) } } }
+                val ref = FileRef(signed.path, name, signed.mimeType.ifBlank { type }, size)
+                if (_uploads.value.none { it.id == id }) deleteStoredPaths(listOf(ref.path))
+                else updateUpload(id) { it.copy(state = PendingUpload.DONE, sent = size, ref = ref) }
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (failure: Exception) {
+                updateUpload(id) { it.copy(state = PendingUpload.FAILED, error = when (failure) {
+                    is java.io.IOException -> "Upload interrupted. Check the connection and try again."
+                    else -> failure.message ?: "Upload failed. Try again."
+                }) }
+            } finally { uploadJobs.remove(id); runCatching { cleanup() } }
+        }
+    }
+
+    /** Removes one pending upload; an already uploaded (unsent) file is deleted from storage. */
+    fun cancelUpload(id: String) {
+        val upload = _uploads.value.find { it.id == id } ?: return
+        if (_isTyping.value) return
+        uploadJobs.remove(id)?.cancel()
+        _uploads.update { list -> list.filterNot { it.id == id } }
+        upload.ref?.let { deleteStoredPaths(listOf(it.path)) }
+    }
+
+    private fun discardUploads() {
+        val current = _uploads.value
+        if (current.isEmpty()) return
+        current.forEach { uploadJobs.remove(it.id)?.cancel() }
+        _uploads.value = emptyList()
+        deleteStoredPaths(current.mapNotNull { it.ref?.path })
+    }
+
+    private fun describe(uris: List<Uri>): List<PickedFile> {
+        val resolver = getApplication<Application>().contentResolver
+        return uris.map { uri ->
+            var name = "Selected file"; var size: Long? = null
+            resolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME, android.provider.OpenableColumns.SIZE), null, null, null)?.use {
+                if (it.moveToFirst()) { name = it.getString(0) ?: name; if (!it.isNull(1)) size = it.getLong(1) }
+            }
+            PickedFile(uri, name.take(200), resolver.getType(uri).orEmpty(), size?.takeIf { it >= 0 })
+        }
+    }
+
+    /** Uploads picked files that storage accepts; returns the rest for the small inline path. */
+    private suspend fun uploadPicked(files: List<PickedFile>): List<Uri> {
+        val resolver = getApplication<Application>().contentResolver
+        val inline = mutableListOf<Uri>()
+        var errors = 0
+        for (file in files) {
+            val type = StoredFileTypes.storedType(file.name, file.type)
+            if (type == null) { inline += file.uri; continue }
+            if (_uploads.value.count { it.state != PendingUpload.FAILED } >= MAX_UPLOADS) { _attachmentError.value = "Up to $MAX_UPLOADS stored files per message."; break }
+            var size = file.size
+            var temp: File? = null
+            if (size == null) {
+                // Some providers do not report a size; copy to cache first (capped) so the upload has a length.
+                temp = withContext(Dispatchers.IO) { copyCapped(file.uri, maxStoredBytes()) }
+                size = temp?.length()
+            }
+            when {
+                size == null -> { errors++; _attachmentError.value = "\"${file.name}\" is larger than ${StoredFileTypes.sizeLabel(maxStoredBytes())}." }
+                size == 0L -> { temp?.delete(); errors++; _attachmentError.value = "\"${file.name}\" is empty." }
+                size > maxStoredBytes() -> { temp?.delete(); errors++; _attachmentError.value = "\"${file.name}\" is larger than ${StoredFileTypes.sizeLabel(maxStoredBytes())}. Choose a smaller file." }
+                else -> {
+                    val copy = temp
+                    startUpload(file.name, type, size, open = { copy?.inputStream() ?: resolver.openInputStream(file.uri) ?: throw java.io.IOException("File cannot be read.") },
+                        cleanup = { copy?.delete() })
+                }
+            }
+        }
+        if (errors == 0 && inline.isEmpty()) _attachmentError.value = ""
+        return inline
+    }
+
+    private fun copyCapped(uri: Uri, limit: Long): File? {
+        val dir = File(getApplication<Application>().cacheDir, "upload-staging").apply { mkdirs() }
+        val target = File(dir, UUID.randomUUID().toString())
+        val input = getApplication<Application>().contentResolver.openInputStream(uri) ?: return null
+        var total = 0L
+        input.use { source -> target.outputStream().use { out ->
+            val buffer = ByteArray(64 * 1024)
+            while (true) { val count = source.read(buffer); if (count < 0) break; total += count; if (total > limit) { target.delete(); return null }; out.write(buffer, 0, count) }
+        } }
+        return target
+    }
+
+    /** Deletes storage objects now (or later, if offline / signed out). */
+    private fun deleteStoredPaths(paths: Collection<String>) {
+        if (paths.isEmpty()) return
+        pendingDeletes.add(paths)
+        flushPendingFileDeletes()
+    }
+    private var flushingDeletes = false
+    fun flushPendingFileDeletes() {
+        val user = account.state.value.user ?: return
+        if (flushingDeletes) return
+        val paths = pendingDeletes.forUser(user.id).take(500)
+        if (paths.isEmpty()) return
+        flushingDeletes = true
+        viewModelScope.launch {
+            var again = false
+            try {
+                account.request("/api/files/delete", "POST", org.json.JSONObject().put("paths", org.json.JSONArray(paths)), authenticated = true)
+                pendingDeletes.remove(paths); again = true
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (failure: com.dua.ai.account.AccountException) { if (failure.status == 400) pendingDeletes.remove(paths) }
+            catch (_: Exception) { }
+            finally { flushingDeletes = false }
+            if (again) flushPendingFileDeletes()
+        }
+    }
+    private fun pathsOf(messages: List<ChatMessage>) = messages.flatMap { message -> message.files.map { it.path } }
+
+    /** Opens a stored file with a short-lived signed link (the server checks the owner). */
+    suspend fun storedFileUrl(ref: FileRef): String {
+        val json = account.request("/api/files/url", "POST", org.json.JSONObject().put("path", ref.path), authenticated = true)
+        return com.dua.ai.setup.IntegrationCapabilities.safeUrl(json.optString("url")) ?: error("File link is invalid. Try again.")
+    }
+
+    fun startRecording() {
+        if (_isTyping.value || recorder.recording) return
+        if (!storedFilesAvailable()) { _attachmentError.value = storedFilesHint(); return }
+        try { recorder.start(); _recordingSince.value = recorder.startedAt; _attachmentError.value = "" }
+        catch (failure: Exception) { _attachmentError.value = failure.message ?: "Recording could not start." }
+    }
+    fun stopRecording() {
+        val file = recorder.stop()
+        _recordingSince.value = null
+        if (file == null) { _attachmentError.value = "Recording was too short. Hold on a little longer and try again."; return }
+        val name = "Voice note " + java.time.LocalTime.now().withNano(0).toString().take(5) + ".m4a"
+        startUpload(name, AudioRecorder.MIME, file.length(), open = { file.inputStream() }, cleanup = { file.delete() })
+    }
+    fun cancelRecording() { recorder.cancel(); _recordingSince.value = null }
+
+    fun loadStorageUsage() {
+        if (account.state.value.user == null) { _storageUsage.value = null; return }
+        viewModelScope.launch {
+            try {
+                val json = account.request("/api/files/usage", authenticated = true)
+                _storageUsage.value = StorageUsage(json.optInt("files"), json.optLong("bytes"), json.optLong("maxBytes"))
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (failure: Exception) { _storageUsage.value = null; _dataStatus.value = failure.message ?: "Storage usage could not be loaded." }
+        }
+    }
+
+    /** Deletes every uploaded file for this account. Chats keep the file names but can no longer open or re-read them. */
+    fun deleteAllUploadedFiles() {
+        if (_dataBusy.value || _isTyping.value) return
+        val user = account.state.value.user ?: run { _dataStatus.value = "Sign in to delete uploaded files."; return }
+        _dataBusy.value = true; refreshSyncBusy()
+        _dataStatus.value = "Deleting uploaded files…"
+        viewModelScope.launch {
+            try {
+                val json = account.request("/api/files/delete-all", "POST", org.json.JSONObject(), authenticated = true)
+                discardUploads()
+                pendingDeletes.remove(pendingDeletes.forUser(user.id))
+                _messages.value = _messages.value.map { if (it.files.isEmpty()) it else it.copy(files = emptyList()) }
+                _savedChats.value = _savedChats.value.map { chat -> if (chat.messages.none { it.files.isNotEmpty() }) chat else chat.copy(messages = chat.messages.map { it.copy(files = emptyList()) }) }
+                saveHistory()
+                _storageUsage.value = StorageUsage(0, 0, _storageUsage.value?.maxFileBytes ?: maxStoredBytes())
+                _dataStatus.value = "${json.optInt("deleted")} uploaded files deleted. Chats keep file names only."
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (failure: Exception) { _dataStatus.value = failure.message ?: "Uploaded files could not be deleted. Try again." }
+            finally { _dataBusy.value = false }
+        }
+    }
+
+    private fun applyTranscripts(transcripts: Map<String, String>) {
+        _messages.value = _messages.value.map { message ->
+            if (message.files.none { it.path in transcripts }) message
+            else message.copy(files = message.files.map { ref -> transcripts[ref.path]?.let { ref.copy(transcript = it) } ?: ref })
+        }
+    }
+    private fun historyBytes() = if (_integrations.value.filesEnabled) DuaApiClient.FILES_HISTORY_BYTES else DuaApiClient.MAX_HISTORY_BYTES
 
     private fun loadFiles(cleanup: () -> Unit = {}, loader: () -> List<ChatAttachment>) {
         if (_isTyping.value) { cleanup(); _attachmentError.value = "Reply complete hone ke baad files select karein."; return }
@@ -327,7 +544,21 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun selectAttachments(uris: List<Uri>) = loadFiles {
+    fun selectAttachments(uris: List<Uri>) {
+        if (_isTyping.value) { _attachmentError.value = "Reply complete hone ke baad files select karein."; return }
+        viewModelScope.launch {
+            val picked = try { withContext(Dispatchers.IO) { describe(uris) } } catch (cancelled: CancellationException) { throw cancelled }
+                catch (_: Exception) { _attachmentError.value = "File read nahi hui. Dobara select karein."; return@launch }
+            val inline = if (storedFilesAvailable()) uploadPicked(picked) else {
+                val blocked = picked.filter { StoredFileTypes.needsStorage(it.name, it.type) || (it.size ?: 0) > AttachmentReader.MAX_BYTES }
+                if (blocked.isNotEmpty()) _attachmentError.value = storedFilesHint()
+                picked.filterNot { it in blocked }.map { it.uri }
+            }
+            if (inline.isNotEmpty()) selectInlineAttachments(inline)
+        }
+    }
+
+    private fun selectInlineAttachments(uris: List<Uri>) = loadFiles {
         require(uris.size <= 3) { "Maximum 3 files select karein." }
         val resolver = getApplication<Application>().contentResolver
         val sources = uris.map { uri ->
@@ -442,6 +673,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     success
                 }
                 if (committed) {
+                    deleteStoredPaths(pathsOf(_messages.value + _savedChats.value.flatMap { it.messages }))
                     activeId = nextId
                     historyReadable = true
                     _messages.value = emptyList()
@@ -451,7 +683,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     replyWebModes.clear()
                     replyReasoning.clear()
                     clearAttachments()
-                    _dataStatus.value = "All local chats, drafts and pending files cleared."
+                    _dataStatus.value = "All local chats, drafts and pending files cleared. Their uploaded files are being deleted."
                 } else _dataStatus.value = "Delete could not be saved. Chats are kept in memory; try again."
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (_: Exception) { _dataStatus.value = "Local history could not be cleared. Try again." }
@@ -568,6 +800,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     override fun onCleared() {
+        recorder.cancel()
         automaticSync.close()
         if (networkObserverRegistered) runCatching { connectivity.unregisterNetworkCallback(networkObserver) }
         super.onCleared()
@@ -598,6 +831,10 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     fun deleteChat(id: String) {
         _savedChats.value.find { it.id == id }?.messages?.forEach { replyWebModes.remove(it.id); replyReasoning.remove(it.id) }
+        // Deleting a chat deletes its uploaded files (unless another chat copy still uses them).
+        val chatMessages = if (id == activeId) _messages.value else _savedChats.value.find { it.id == id }?.messages.orEmpty()
+        val stillUsed = pathsOf(_savedChats.value.filterNot { it.id == id }.flatMap { it.messages } + if (id == activeId) emptyList() else _messages.value).toSet()
+        deleteStoredPaths(pathsOf(chatMessages).filterNot { it in stillUsed }.distinct())
         if (id == activeId) {
             cancelReply()
             activeId = UUID.randomUUID().toString()
@@ -682,7 +919,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 account.withToken { token ->
                     val attempt = com.dua.ai.network.StreamAccumulator(startedAt).also { accumulator = it }
-                    collectReply(messageId, attempt, api.streamReply(plan.model, plan.context, emptyList(), com.dua.ai.settings.PreferencesCodec.memoryText(localSettings.value), token, requestWebMode, requestReasoning))
+                    collectReply(messageId, attempt, api.streamReply(plan.model, plan.context, emptyList(), com.dua.ai.settings.PreferencesCodec.memoryText(localSettings.value), token, requestWebMode, requestReasoning, historyBytes()))
                 }
                 if (accumulator?.snapshot()?.text.isNullOrBlank()) throw DuaApiException(EMPTY_REPLY)
                 if (generation == currentGeneration) {
@@ -710,7 +947,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun sendMessage(userText: String) {
-        if ((userText.isBlank() && _attachments.value.isEmpty()) || _isTyping.value || _readingFiles.value) return
+        val storedFiles = _uploads.value.filter { it.state == PendingUpload.DONE }.mapNotNull { it.ref }
+        if ((userText.isBlank() && _attachments.value.isEmpty() && storedFiles.isEmpty()) || _isTyping.value || _readingFiles.value) return
+        if (_uploads.value.any { it.uploading } || _recordingSince.value != null) { _error.value = "Wait for uploads to finish, or remove them."; return }
         _error.value = null
         if (userText.length > 8000) {
             _error.value = "Message 8000 characters se chhota rakhein."
@@ -734,9 +973,12 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
         val prompt = userText.trim().ifBlank { "Describe these files." }
-        val text = prompt + if (files.isEmpty()) "" else "\nFiles: " + files.joinToString(", ") { it.name }
+        val names = files.map { it.name } + storedFiles.map { it.name }
+        val text = prompt + if (names.isEmpty()) "" else "\nFiles: " + names.joinToString(", ")
         val fileText = com.dua.ai.attachments.TextFiles.contextText(files, ChatMessage.MAX_ATTACHMENT_TEXT_CHARS)
-        val userMessage = ChatMessage(text = text, isUser = true, model = responseModel, attachmentText = fileText)
+        val userMessage = ChatMessage(text = text, isUser = true, model = responseModel, attachmentText = fileText, files = storedFiles)
+        val sentPaths = storedFiles.map { it.path }.toSet()
+        val requestHistoryBytes = historyBytes()
         val startedAt = System.currentTimeMillis()
         val reply = ChatMessage(text = "", isUser = false, model = responseModel, state = ChatMessage.STREAMING, startedAt = startedAt)
         val requestHistory = _messages.value.takeLast(38) + userMessage
@@ -755,10 +997,11 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 account.withToken { token ->
                     val attempt = com.dua.ai.network.StreamAccumulator(startedAt).also { accumulator = it }
                     collectReply(reply.id, attempt, api.streamReply(responseModel, requestHistory, prepared,
-                        com.dua.ai.settings.PreferencesCodec.memoryText(localSettings.value), token, requestWebMode, requestReasoning))
+                        com.dua.ai.settings.PreferencesCodec.memoryText(localSettings.value), token, requestWebMode, requestReasoning, requestHistoryBytes))
                 }
                 if (accumulator?.snapshot()?.text.isNullOrBlank()) throw DuaApiException(EMPTY_REPLY)
                 if (generation == currentGeneration) {
+                    _uploads.update { list -> list.filterNot { it.ref?.path in sentPaths } }
                     clearAttachments()
                     val final = accumulator!!.snapshot(ended = true)
                     updateMessage(reply.id) { it.copy(text = final.text, thinking = final.thinking, thinkingSeconds = final.thinkingSeconds, notice = final.notice, state = "complete") }
@@ -770,6 +1013,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     val partial = accumulator?.snapshot(ended = true)
                     if (partial != null && partial.text.isNotBlank()) {
                         // The request reached the model: keep the turn and its partial reply; Retry regenerates it.
+                        _uploads.update { list -> list.filterNot { it.ref?.path in sentPaths } }
                         clearAttachments()
                         updateMessage(reply.id) { it.copy(text = partial.text, thinking = partial.thinking, thinkingSeconds = partial.thinkingSeconds, notice = partial.notice, state = "stopped") }
                         _error.value = "Reply interrupted: ${failureText(failure)} Partial reply kept; tap retry."
@@ -794,5 +1038,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private companion object {
         const val STREAM_FRAME_MS = 33L
         const val EMPTY_REPLY = "Model ne text reply nahi diya. Dobara try karein."
+        const val MAX_UPLOADS = 10
     }
 }
