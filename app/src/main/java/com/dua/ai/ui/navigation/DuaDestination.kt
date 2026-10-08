@@ -2,6 +2,7 @@ package com.dua.ai.ui.navigation
 
 /** Every screen in the app. Routes are plain strings; no screen takes navigation arguments. */
 enum class DuaDestination(val route: String) {
+    Onboarding("onboarding"),
     Chat("chat"),
     Voice("voice"),
     HandsFree("voice/hands-free"),
@@ -9,7 +10,6 @@ enum class DuaDestination(val route: String) {
     Settings("settings"),
     Profile("settings/account/profile"),
     CloudSync("settings/account/cloud-sync"),
-    Logout("settings/account/log-out"),
     Appearance("settings/appearance"),
     Memory("settings/memory"),
     DataControls("settings/data-controls"),
@@ -26,11 +26,8 @@ enum class DuaDestination(val route: String) {
     FeatureSetup("settings/feature-setup");
 
     companion object {
-        /** Maps the page names used inside the account and device settings screens to destinations. */
+        /** Maps the page names used inside the device settings screens to destinations. */
         fun fromPage(name: String): DuaDestination? = when (name) {
-            "Profile" -> Profile
-            "CloudSync" -> CloudSync
-            "Logout" -> Logout
             "ColorMode", "FontStyle", "Appearance" -> Appearance
             "Memory" -> Memory
             "DataControls" -> DataControls

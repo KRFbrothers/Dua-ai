@@ -6,6 +6,7 @@ import androidx.compose.runtime.setValue
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.dua.ai.ui.DuaApp
 
 class MainActivity : ComponentActivity() {
@@ -14,6 +15,8 @@ class MainActivity : ComponentActivity() {
     private fun readRoute(intent: android.content.Intent) { intent.getStringExtra("open_chat_id")?.let { notificationRoute = java.util.UUID.randomUUID().toString() to it } }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Branded launch splash (Theme.App.Starting); it hands over to Theme.Dua once the first frame is drawn.
+        installSplashScreen()
         super.onCreate(savedInstanceState)
         readRoute(intent)
         // Transparent system bars; DuaTheme sets light or dark bar icons to match the theme.

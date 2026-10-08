@@ -1,7 +1,6 @@
 package com.dua.ai.ui.settings
 
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.automirrored.outlined.VolumeUp
 import androidx.compose.material.icons.outlined.Brush
 import androidx.compose.material.icons.outlined.CloudSync
@@ -18,7 +17,6 @@ import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.Storage
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.Vibration
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.collectAsState
@@ -100,8 +98,6 @@ fun SettingsContent(state: SettingsUiState, onBack: () -> Unit, onOpen: (DuaDest
             SettingsRow(Icons.Outlined.PersonOutline, "Profile", state.email ?: "Not signed in · optional") { onOpen(DuaDestination.Profile) }
             SettingsDivider()
             SettingsRow(Icons.Outlined.CloudSync, "Cloud sync", "Back up chats and notes across your devices") { onOpen(DuaDestination.CloudSync) }
-            SettingsDivider()
-            SettingsRow(Icons.AutoMirrored.Outlined.Logout, "Log out", titleColor = MaterialTheme.colorScheme.error) { onOpen(DuaDestination.Logout) }
         }
         SettingsSection("Personalization") {
             SettingsRow(Icons.Outlined.Palette, "Appearance", "${themeLabel(state.theme)} · ${fontLabel(state.font)}") { onOpen(DuaDestination.Appearance) }

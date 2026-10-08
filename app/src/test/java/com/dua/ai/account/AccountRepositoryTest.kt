@@ -28,6 +28,9 @@ class AccountRepositoryTest {
     private fun session(user: AccountUser, access: String = "access-${user.displayName}", expiresAt: Long = System.currentTimeMillis() / 1000 + 3600) = AccountSession(user, access, "refresh-$access", expiresAt)
     private fun json(value: JSONObject) = MockResponse().setHeader("Content-Type", "application/json").setBody(value.toString())
     private fun account(user: AccountUser?) = JSONObject().put("configured", true).put("user", user?.let { JSONObject().put("id", it.id).put("email", it.email).put("displayName", it.displayName) } ?: JSONObject.NULL)
+    /** Opaque stand-ins for a Google ID token and the raw nonce; the mock backend only routes on them. */
+    private fun idToken(user: AccountUser) = "header.${user.displayName}.signature"
+    private val nonce = "raw-nonce-0123456789abcdef"
     private class MemoryStore(var value: AccountSession?) : SessionPersistence {
         override fun read() = value
         override fun write(value: AccountSession?) { this.value = value }
@@ -40,7 +43,7 @@ class AccountRepositoryTest {
         api = AccountApi(server.url("/").toString(), client)
     }
     @After fun teardown() { client.dispatcher.cancelAll(); client.connectionPool.evictAll(); server.shutdown(); client.dispatcher.executorService.shutdown() }
-    private fun delayedDispatcher(path: String, response: MockResponse, arrived: CompletableDeferred<Unit>, release: CountDownLatch, signIn: AccountSession = session(userB), recovery: Boolean = false) {
+    private fun delayedDispatcher(path: String, response: MockResponse, arrived: CompletableDeferred<Unit>, release: CountDownLatch, signIn: AccountSession = session(userB)) {
         server.dispatcher = object : Dispatcher() {
             override fun dispatch(request: RecordedRequest): MockResponse = when {
                 request.path == path && (path != "/api/account/session" || request.getHeader("Authorization") != null) -> {
@@ -48,8 +51,7 @@ class AccountRepositoryTest {
                     if (!release.await(4, TimeUnit.SECONDS)) json(JSONObject().put("error", "Test release timed out")).setResponseCode(500)
                     else response
                 }
-                request.path == "/api/account/signin" -> json(AccountSessionCodec.encode(signIn))
-                request.path == "/api/account/verify-recovery" -> json(AccountSessionCodec.encode(signIn).put("recoveryVerified", recovery))
+                request.path == "/api/account/google-token" -> json(AccountSessionCodec.encode(signIn))
                 request.path == "/api/account/logout" -> json(JSONObject().put("revoked", true))
                 request.path == "/api/account/session" -> json(account(null))
                 else -> json(JSONObject().put("error", "Unexpected test path")).setResponseCode(404)
@@ -61,7 +63,7 @@ class AccountRepositoryTest {
         val arrived = CompletableDeferred<Unit>(); val release = CountDownLatch(1)
         delayedDispatcher("/api/account/session", json(account(userA)), arrived, release, signedIn)
         val oldLoad = async { repository.load() }
-        try { withTimeout(3000) { arrived.await() }; repository.signIn(userB.email, "password", false) } finally { release.countDown() }
+        try { withTimeout(3000) { arrived.await() }; repository.signInWithGoogle(idToken(userB), nonce) } finally { release.countDown() }
         withTimeout(3000) { oldLoad.await() }
         assertEquals(signedIn, store.value); assertEquals(userB, repository.state.value.user)
     }
@@ -70,18 +72,18 @@ class AccountRepositoryTest {
         val arrived = CompletableDeferred<Unit>(); val release = CountDownLatch(1)
         delayedDispatcher("/api/account/session", json(JSONObject().put("error", "Expired")).setResponseCode(401), arrived, release, replacement)
         val oldLoad = async { repository.load() }
-        try { withTimeout(3000) { arrived.await() }; repository.signIn(userB.email, "password", false) } finally { release.countDown() }
+        try { withTimeout(3000) { arrived.await() }; repository.signInWithGoogle(idToken(userB), nonce) } finally { release.countDown() }
         withTimeout(3000) { oldLoad.await() }
         assertEquals(replacement, store.value); assertEquals(userB, repository.state.value.user)
     }
-    @Test fun lateProfileResponseCannotSaveOverRecoveryForAnotherOwner() = runBlocking {
+    @Test fun lateProfileResponseCannotSaveOverANewSignInForAnotherOwner() = runBlocking {
         val replacement = session(userB); val store = MemoryStore(session(userA)); val repository = AccountRepository(api, store)
         val arrived = CompletableDeferred<Unit>(); val release = CountDownLatch(1)
-        delayedDispatcher("/api/account/profile", json(account(userA.copy(displayName = "Updated A"))), arrived, release, replacement, recovery = true)
+        delayedDispatcher("/api/account/profile", json(account(userA.copy(displayName = "Updated A"))), arrived, release, replacement)
         val oldProfile = async { runCatching { repository.profile("Updated A") } }
-        try { withTimeout(3000) { arrived.await() }; repository.verifyRecovery(userB.email, "123456") } finally { release.countDown() }
+        try { withTimeout(3000) { arrived.await() }; repository.signInWithGoogle(idToken(userB), nonce) } finally { release.countDown() }
         assertTrue(withTimeout(3000) { oldProfile.await() }.exceptionOrNull() is IllegalStateException)
-        assertEquals(replacement, store.value); assertEquals(userB, repository.state.value.user); assertTrue(repository.state.value.recoveryVerified)
+        assertEquals(replacement, store.value); assertEquals(userB, repository.state.value.user)
     }
     @Test fun logoutClearsImmediatelyAndLateLoadCannotResurrectSession() = runBlocking {
         val store = MemoryStore(session(userA)); val repository = AccountRepository(api, store)
@@ -96,15 +98,15 @@ class AccountRepositoryTest {
         val arrived = CompletableDeferred<Unit>(); val release = CountDownLatch(1)
         delayedDispatcher("/api/private", json(JSONObject().put("secret", "old login result")), arrived, release, replacement)
         val oldRequest = async { runCatching { repository.request("/api/private", authenticated = true) } }
-        try { withTimeout(3000) { arrived.await() }; repository.signIn(userA.email, "password", false) } finally { release.countDown() }
+        try { withTimeout(3000) { arrived.await() }; repository.signInWithGoogle(idToken(userA), nonce) } finally { release.countDown() }
         assertTrue(withTimeout(3000) { oldRequest.await() }.exceptionOrNull() is IllegalStateException)
         assertEquals(replacement, store.value)
     }
     @Test fun pendingLoginCannotUndoLogout() = runBlocking {
         val oldStore = MemoryStore(session(userA)); val repository = AccountRepository(api, oldStore)
         val arrived = CompletableDeferred<Unit>(); val release = CountDownLatch(1)
-        delayedDispatcher("/api/account/signin", json(AccountSessionCodec.encode(session(userB))), arrived, release)
-        val pending = async { runCatching { repository.signIn(userB.email, "password", false) } }
+        delayedDispatcher("/api/account/google-token", json(AccountSessionCodec.encode(session(userB))), arrived, release)
+        val pending = async { runCatching { repository.signInWithGoogle(idToken(userB), nonce) } }
         try { withTimeout(3000) { arrived.await() }; repository.logout() } finally { release.countDown() }
         assertTrue(withTimeout(3000) { pending.await() }.exceptionOrNull() is IllegalStateException)
         assertNull(oldStore.value); assertNull(repository.state.value.user)
@@ -114,7 +116,7 @@ class AccountRepositoryTest {
         val arrived = CompletableDeferred<Unit>(); val release = CountDownLatch(1)
         server.dispatcher = object : Dispatcher() {
             override fun dispatch(request: RecordedRequest): MockResponse {
-                if (JSONObject(request.body.readUtf8()).getString("email") == userA.email) {
+                if (JSONObject(request.body.readUtf8()).getString("idToken") == idToken(userA)) {
                     arrived.complete(Unit)
                     if (!release.await(4, TimeUnit.SECONDS)) return json(JSONObject().put("error", "Test release timed out")).setResponseCode(500)
                     return json(AccountSessionCodec.encode(session(userA)))
@@ -122,8 +124,8 @@ class AccountRepositoryTest {
                 return json(AccountSessionCodec.encode(replacement))
             }
         }
-        val earlier = async { runCatching { repository.signIn(userA.email, "password", false) } }
-        try { withTimeout(3000) { arrived.await() }; repository.signIn(userB.email, "password", false) } finally { release.countDown() }
+        val earlier = async { runCatching { repository.signInWithGoogle(idToken(userA), nonce) } }
+        try { withTimeout(3000) { arrived.await() }; repository.signInWithGoogle(idToken(userB), nonce) } finally { release.countDown() }
         assertTrue(withTimeout(3000) { earlier.await() }.exceptionOrNull() is IllegalStateException)
         assertEquals(replacement, store.value); assertEquals(userB, repository.state.value.user)
     }
@@ -133,7 +135,7 @@ class AccountRepositoryTest {
         val arrived = CompletableDeferred<Unit>(); val release = CountDownLatch(1)
         delayedDispatcher("/api/account/refresh", json(AccountSessionCodec.encode(session(userA, "late-refreshed-access"))), arrived, release, replacement)
         val pending = async { runCatching { repository.withToken { "private result" } } }
-        try { withTimeout(3000) { arrived.await() }; repository.signIn(userA.email, "password", false) } finally { release.countDown() }
+        try { withTimeout(3000) { arrived.await() }; repository.signInWithGoogle(idToken(userA), nonce) } finally { release.countDown() }
         assertTrue(withTimeout(3000) { pending.await() }.exceptionOrNull() is IllegalStateException)
         assertEquals(replacement, store.value)
     }

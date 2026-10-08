@@ -65,7 +65,7 @@ Dua is a personal, single-user app: the backend is meant to be restricted to the
 
 #### Cloud Account (Opt-In)
 - Required for cloud snapshots, recovery, and multi-device sync.
-- Authenticated via Supabase (email + password; native Google sign-in is optional when configured).
+- Authenticated via Supabase with native Google sign-in (the app has no email/password sign-in).
 - Account data is encrypted and subject to RLS.
 
 #### Retention
@@ -167,7 +167,7 @@ API keys are stored server-side (Vercel Functions or Supabase) and are never exp
 |-----------|-------|-------|-----------|
 | Chat Messages | Android app-private `SharedPreferences` | Opt-in snapshot | Until local deletion/storage removal; Android backup may retain copies; cloud deletion/backup timing is controlled by Supabase |
 | Audio/transcripts | Speech service; transcript may be retained locally as chat text if sent | No raw audio in snapshots | Speech-service terms apply; transcript follows chat retention; generated audio is not retained by Dua |
-| Account Credentials | Encrypted Android session token; passwords not persisted | Supabase | Until logout, expiry or account deletion; provider backup retention may apply |
+| Account Credentials | Encrypted Android session token (Google sign-in; no password is used) | Supabase | Until logout, expiry or account deletion; provider backup retention may apply |
 | API Keys | Server-side only | Server-side only | Until removed or rotated by the deployment operator; never stored on device |
 | Search Queries | None | N/A (Brave) | Per Brave's current privacy policy and service terms |
 | Cloud Snapshots | N/A | Supabase | User-managed; deletion and backup retention depend on Supabase project behavior |

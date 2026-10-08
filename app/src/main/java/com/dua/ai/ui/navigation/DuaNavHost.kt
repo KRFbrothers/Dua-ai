@@ -22,11 +22,13 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.dua.ai.ui.chat.ChatRoute
-import com.dua.ai.ui.screens.AccountScreen
+import com.dua.ai.ui.onboarding.OnboardingScreen
+import com.dua.ai.ui.screens.CloudSyncScreen
 import com.dua.ai.ui.screens.DataControlsScreen
 import com.dua.ai.ui.screens.DeviceSettingsScreen
 import com.dua.ai.ui.screens.HandsFreeScreen
 import com.dua.ai.ui.screens.IntegrationSetupScreen
+import com.dua.ai.ui.screens.ProfileScreen
 import com.dua.ai.ui.settings.SettingsScreen
 import com.dua.ai.ui.voice.ReplyVoice
 import com.dua.ai.ui.voice.VoiceScreen
@@ -55,7 +57,11 @@ class DuaNavigator(private val nav: NavHostController, private val viewModel: Ch
     fun toChat() {
         if (blocked()) return
         pulse()
-        if (!nav.popBackStack(DuaDestination.Chat.route, inclusive = false)) nav.navigate(DuaDestination.Chat.route) { launchSingleTop = true }
+        if (!nav.popBackStack(DuaDestination.Chat.route, inclusive = false)) nav.navigate(DuaDestination.Chat.route) {
+            // Chat is not on the stack only when the app started on the welcome screen; replace it so Back does not return there.
+            popUpTo(nav.graph.id) { inclusive = true }
+            launchSingleTop = true
+        }
     }
 }
 
@@ -71,6 +77,8 @@ fun DuaNavHost(viewModel: ChatViewModel, voice: ReplyVoice, notificationRoute: P
     val haptics = LocalHapticFeedback.current
     val navigator = remember(nav, viewModel, haptics) { DuaNavigator(nav, viewModel, haptics) }
     var attachRequest by remember { mutableIntStateOf(0) }
+    // Decided once per launch: signed-out users who have not skipped it start on the welcome screen.
+    val startDestination = remember { if (viewModel.shouldShowOnboarding()) DuaDestination.Onboarding else DuaDestination.Chat }
     DisposableEffect(nav, voice) {
         val listener = NavController.OnDestinationChangedListener { _, _, _ -> voice.stopAll() }
         nav.addOnDestinationChangedListener(listener)
@@ -83,12 +91,15 @@ fun DuaNavHost(viewModel: ChatViewModel, voice: ReplyVoice, notificationRoute: P
     }
     NavHost(
         navController = nav,
-        startDestination = DuaDestination.Chat.route,
+        startDestination = startDestination.route,
         enterTransition = { fadeIn(tween(180)) },
         exitTransition = { fadeOut(tween(120)) },
         popEnterTransition = { fadeIn(tween(180)) },
         popExitTransition = { fadeOut(tween(120)) },
     ) {
+        composable(DuaDestination.Onboarding.route) {
+            OnboardingScreen(viewModel, onDone = navigator::toChat)
+        }
         composable(DuaDestination.Chat.route) {
             BusyBackGuard(viewModel)
             ChatRoute(viewModel, voice,
@@ -117,11 +128,13 @@ fun DuaNavHost(viewModel: ChatViewModel, voice: ReplyVoice, notificationRoute: P
             BusyBackGuard(viewModel)
             SettingsScreen(viewModel, onBack = navigator::back, onOpen = navigator::open)
         }
-        listOf(DuaDestination.Profile to "Profile", DuaDestination.CloudSync to "CloudSync", DuaDestination.Logout to "Logout").forEach { (destination, page) ->
-            composable(destination.route) {
-                BusyBackGuard(viewModel)
-                AccountScreen(viewModel, page, onBack = navigator::back, onOpen = navigator::openPage)
-            }
+        composable(DuaDestination.Profile.route) {
+            BusyBackGuard(viewModel)
+            ProfileScreen(viewModel, onBack = navigator::back, onCloudSync = { navigator.open(DuaDestination.CloudSync) })
+        }
+        composable(DuaDestination.CloudSync.route) {
+            BusyBackGuard(viewModel)
+            CloudSyncScreen(viewModel, onBack = navigator::back, onProfile = { navigator.open(DuaDestination.Profile) })
         }
         listOf(DuaDestination.Appearance to "Appearance", DuaDestination.Memory to "Memory", DuaDestination.Privacy to "Privacy",
             DuaDestination.Sharing to "Sharing", DuaDestination.Permissions to "Permissions", DuaDestination.Notifications to "Notifications").forEach { (destination, page) ->
