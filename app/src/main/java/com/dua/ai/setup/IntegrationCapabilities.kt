@@ -22,7 +22,9 @@ data class IntegrationState(val groups: List<IntegrationGroup> = emptyList(), va
     /** Server summarises older turns and accepts `context` (Phase 2 long context). */
     val longContext: Boolean = false,
     /** Imagine (Phase 3) offered by the server; null on older backends, which hides Imagine. */
-    val imagine: com.dua.ai.imagine.ImagineConfig? = null) {
+    val imagine: com.dua.ai.imagine.ImagineConfig? = null,
+    /** Voice v2 (Phase 4) catalog; null on older backends, which keeps the single AI-voice switch. */
+    val voice: com.dua.ai.voice.VoiceConfig? = null) {
     /** Search works for [model] natively or through Brave. */
     fun searchAvailable(model: String): Boolean = webSearchConfigured || model in nativeSearch
 }
@@ -50,6 +52,9 @@ object IntegrationCapabilities {
             xSearchAvailable = web?.opt("xSearch") == true,
             longContext = json.optJSONObject("context")?.opt("summaries") == true,
             imagine = com.dua.ai.imagine.ImagineCodec.config(json.optJSONObject("imagine")))
+            .let { next -> val voice = com.dua.ai.voice.VoiceCodec.config(json.optJSONObject("voice"))
+                // Phase 4 backends report reply-voice availability here, so it is known without opening Feature setup.
+                next.copy(voice = voice, generatedVoiceConfigured = voice?.ttsEnabled ?: current.generatedVoiceConfigured) }
     }
     fun providers(json: JSONObject): List<ProviderCapability> {
         val array = json.optJSONArray("providers") ?: return fallbackProviders.map { it.copy(configured = json.optBoolean("geminiConfigured", true), model = json.optString("model", "Gemini").take(100)) }

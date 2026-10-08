@@ -27,6 +27,13 @@ class NativeReplySpeaker(context: Context) {
     private var timeout: Runnable? = null
     private val mutableState = MutableStateFlow(ReadAloudState())
     val state = mutableState.asStateFlow()
+    private val mutableVoices = MutableStateFlow<List<VoiceOption>>(emptyList())
+    /** Installed device voices for the selected language (empty until the engine is ready). */
+    val voices = mutableVoices.asStateFlow()
+    private var ready = false
+    private var language = "auto"
+    private var voiceName = ""
+    private var speed = 1f
     private val session: ReadAloudSession = ReadAloudSession(object : SpeechOutput {
         override fun speak(text: String, utteranceId: String): Boolean {
             if (!focusHeld) {
@@ -50,10 +57,7 @@ class NativeReplySpeaker(context: Context) {
                 handler.post {
                     if (!closed) {
                         if (result != TextToSpeech.SUCCESS) session.availability(false, "Read aloud unavailable. Check device speech settings.")
-                        else {
-                            val language = runCatching { engine?.setLanguage(Locale.getDefault()) ?: TextToSpeech.LANG_NOT_SUPPORTED }.getOrDefault(TextToSpeech.LANG_NOT_SUPPORTED)
-                            session.availability(language >= 0, if (language < 0) "Speech language/data unavailable. Check device speech settings." else "")
-                        }
+                        else { ready = true; apply() }
                     }
                 }
             }.apply {
@@ -69,6 +73,35 @@ class NativeReplySpeaker(context: Context) {
         } catch (_: Exception) { session.availability(false, "Read aloud unavailable. Check device speech settings.") }
     }
 
+    /** Device reply language ("auto" = device language), engine voice name ("" = engine default) and rate (0.5–2.0). */
+    fun configure(language: String, voiceName: String, speed: Float) {
+        if (closed) return
+        val changed = language != this.language || voiceName != this.voiceName || speed != this.speed
+        this.language = language; this.voiceName = voiceName; this.speed = speed.coerceIn(MIN_RATE, MAX_RATE)
+        if (changed && ready) apply()
+    }
+
+    private fun apply() {
+        val tts = engine ?: return
+        val locale = SpeechLanguages.locale(language)
+        var result = runCatching { tts.setLanguage(locale) }.getOrDefault(TextToSpeech.LANG_NOT_SUPPORTED)
+        var status = ""
+        if (result < 0 && language != "auto") {
+            result = runCatching { tts.setLanguage(Locale.getDefault()) }.getOrDefault(TextToSpeech.LANG_NOT_SUPPORTED)
+            status = "${SpeechLanguages.name(language)} speech is not installed on this device; using the device language."
+        }
+        val installed = runCatching { tts.voices.orEmpty().filter { voice ->
+            voice.locale.language == locale.language && TextToSpeech.Engine.KEY_FEATURE_NOT_INSTALLED !in voice.features.orEmpty()
+        }.sortedWith(compareBy({ it.isNetworkConnectionRequired }, { it.name })) }.getOrDefault(emptyList())
+        mutableVoices.value = installed.map { voice ->
+            VoiceOption(voice.name, "${voice.locale.displayName} · ${voice.name.substringAfterLast("-x-").substringBefore('-').ifBlank { voice.name }}",
+                listOfNotNull(if (voice.isNetworkConnectionRequired) "Uses network" else "On device", "quality ${voice.quality}").joinToString(" · "))
+        }
+        installed.firstOrNull { it.name == voiceName }?.let { voice -> runCatching { tts.voice = voice } }
+        runCatching { tts.setSpeechRate(speed) }
+        session.availability(result >= 0, if (result < 0) "Speech language/data unavailable. Check device speech settings." else status)
+    }
+
     fun toggle(id: String, text: String) { if (!closed) session.toggle(id, text) }
     fun stop() { session.stop() }
     fun close() {
@@ -76,5 +109,10 @@ class NativeReplySpeaker(context: Context) {
         session.stop()
         runCatching { engine?.shutdown() }
         engine = null
+    }
+
+    companion object {
+        const val MIN_RATE = 0.5f
+        const val MAX_RATE = 2f
     }
 }

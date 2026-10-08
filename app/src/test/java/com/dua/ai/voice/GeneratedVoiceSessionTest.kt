@@ -89,4 +89,48 @@ class GeneratedVoiceSessionTest {
         assertTrue(stopped); assertArrayEquals(ByteArray(1), bytes); assertEquals(1, calls)
         session.close(); scope.cancel()
     }
+
+    @Test fun chunkedRepliesPrefetchTheNextChunkAndPlayInOrder() {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+        val requested = mutableListOf<String>(); val played = mutableListOf<Byte>(); var finished: ((Boolean) -> Unit)? = null
+        val output = object : GeneratedAudioOutput {
+            override fun play(bytes: ByteArray, onFinished: (Boolean) -> Unit) { played += bytes[0]; finished = onFinished }
+            override fun stop() {}
+        }
+        val session = GeneratedVoiceSession(scope, { requested += it; byteArrayOf(it.last().code.toByte()) }, output, { "owner" }, { true },
+            plan = { listOf("one 1", "two 2", "three 3") })
+        session.setForeground(true); session.setOnline(true)
+        session.toggle("reply", "ignored", true)
+        assertEquals(listOf("one 1", "two 2"), requested)
+        assertEquals("Playing AI voice (1 of 3)", session.state.value.status)
+        finished!!(true); assertEquals(listOf("one 1", "two 2", "three 3"), requested)
+        finished!!(true); finished!!(true)
+        assertEquals(listOf('1'.code.toByte(), '2'.code.toByte(), '3'.code.toByte()), played)
+        assertNull(session.state.value.activeId)
+        session.close(); scope.cancel()
+    }
+
+    @Test fun stoppingDuringAChunkedReplyWipesThePrefetchedChunk() {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+        val chunks = mutableListOf<ByteArray>(); val gate = CompletableDeferred<Unit>()
+        val output = object : GeneratedAudioOutput {
+            override fun play(bytes: ByteArray, onFinished: (Boolean) -> Unit) {}
+            override fun stop() {}
+        }
+        val session = GeneratedVoiceSession(scope, { text -> if (text == "b") withContext(NonCancellable) { gate.await() }; byteArrayOf(7, 7).also { chunks += it } }, output,
+            { "owner" }, { true }, plan = { listOf("a", "b") })
+        session.setForeground(true); session.setOnline(true)
+        session.toggle("reply", "ignored", true)
+        session.stop(); gate.complete(Unit)
+        assertTrue(chunks.all { it.all { byte -> byte == 0.toByte() } })
+        assertNull(session.state.value.activeId)
+        session.close(); scope.cancel()
+    }
+
+    @Test fun planFailuresAreShownWithoutGenerating() {
+        val f = Fixture(); f.ready()
+        val session = GeneratedVoiceSession(f.scope, { f.calls++; byteArrayOf(1) }, f.output, { "owner" }, { true }, plan = { throw IllegalArgumentException("Too long for AI voice.") })
+        session.setForeground(true); session.setOnline(true); session.toggle("a", "x", true)
+        assertEquals("Too long for AI voice.", session.state.value.status); assertEquals(0, f.calls); f.close()
+    }
 }

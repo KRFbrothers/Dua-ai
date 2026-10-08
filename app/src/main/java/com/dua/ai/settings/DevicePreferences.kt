@@ -9,12 +9,23 @@ import org.json.JSONArray
 data class LocalPreferences(val theme: String = "dark", val font: String = "default", val haptic: Boolean = false,
     val notifications: Boolean = false, val memoryEnabled: Boolean = false, val memory: List<String> = emptyList(), val generatedVoice: Boolean = false,
     /** Imagine defaults: image provider ("" = server default, "xai" or "gemini") and aspect ratio. */
-    val imagineProvider: String = "", val imagineAspect: String = "1:1")
+    val imagineProvider: String = "", val imagineAspect: String = "1:1",
+    /**
+     * Voice v2. [generatedVoice] stays the AI-voice consent switch (off = device voice). [voiceProvider] is the AI provider
+     * ("" = server default), [voiceName] the AI voice ("" = provider default), [deviceVoice] the device engine voice
+     * ("" = engine default), [replyLanguage] and [inputLanguage] "auto" or a BCP-47 tag, [voiceSpeed] 0.5–2.0
+     * (AI voices are clamped to the provider's range).
+     */
+    val voiceProvider: String = "", val voiceName: String = "", val deviceVoice: String = "", val voiceSpeed: Float = 1f,
+    val replyLanguage: String = "auto", val inputLanguage: String = "auto")
 
 object PreferencesCodec {
     fun validate(value: LocalPreferences): LocalPreferences {
         require(value.theme in listOf("dark", "light", "system") && value.font in listOf("default", "system", "serif", "monospace"))
         require(value.imagineProvider in listOf("", "xai", "gemini") && value.imagineAspect in com.dua.ai.imagine.ImagineCodec.ASPECTS) { "Invalid Imagine default." }
+        require((value.voiceProvider.isEmpty() || value.voiceProvider in com.dua.ai.voice.VoiceCodec.PROVIDERS) && com.dua.ai.voice.VoiceCodec.validId(value.voiceName)
+            && value.deviceVoice.length <= 200 && value.voiceSpeed in 0.5f..2f && com.dua.ai.voice.VoiceCodec.validLanguage(value.replyLanguage)
+            && com.dua.ai.voice.VoiceCodec.validLanguage(value.inputLanguage)) { "Invalid voice setting." }
         require(value.memory.size <= 10 && value.memory.all { it.isNotBlank() && it.length <= 200 }) { "Save at most 10 memories, each up to 200 characters." }
         return value
     }
@@ -23,7 +34,9 @@ object PreferencesCodec {
         return JSONObject().put("theme", value.theme).put("font", value.font).put("haptic", value.haptic)
             .put("notifications", value.notifications).put("memoryEnabled", value.memoryEnabled)
             .put("memory", JSONArray(value.memory)).put("generatedVoice", value.generatedVoice)
-            .put("imagineProvider", value.imagineProvider).put("imagineAspect", value.imagineAspect).toString()
+            .put("imagineProvider", value.imagineProvider).put("imagineAspect", value.imagineAspect)
+            .put("voiceProvider", value.voiceProvider).put("voiceName", value.voiceName).put("deviceVoice", value.deviceVoice)
+            .put("voiceSpeed", value.voiceSpeed.toDouble()).put("replyLanguage", value.replyLanguage).put("inputLanguage", value.inputLanguage).toString()
     }
     fun decode(raw: String): LocalPreferences {
         val data = JSONObject(raw); val notes = data.getJSONArray("memory")
@@ -31,9 +44,16 @@ object PreferencesCodec {
         // Optional since Imagine; unknown values fall back to the defaults instead of failing all settings.
         val imagineProvider = data.optString("imagineProvider").takeIf { it in listOf("", "xai", "gemini") } ?: ""
         val imagineAspect = data.optString("imagineAspect", "1:1").takeIf { it in com.dua.ai.imagine.ImagineCodec.ASPECTS } ?: "1:1"
+        // Optional since Voice v2, with the same fall-back-to-default rule.
+        val voiceProvider = data.optString("voiceProvider").takeIf { it.isEmpty() || it in com.dua.ai.voice.VoiceCodec.PROVIDERS } ?: ""
+        val voiceName = data.optString("voiceName").takeIf(com.dua.ai.voice.VoiceCodec::validId) ?: ""
+        val deviceVoice = data.optString("deviceVoice").takeIf { it.length <= 200 } ?: ""
+        val voiceSpeed = data.optDouble("voiceSpeed", 1.0).toFloat().takeIf { it in 0.5f..2f } ?: 1f
+        val replyLanguage = data.optString("replyLanguage", "auto").takeIf(com.dua.ai.voice.VoiceCodec::validLanguage) ?: "auto"
+        val inputLanguage = data.optString("inputLanguage", "auto").takeIf(com.dua.ai.voice.VoiceCodec::validLanguage) ?: "auto"
         return validate(LocalPreferences(data.getString("theme"), data.getString("font"), data.getBoolean("haptic"),
             data.getBoolean("notifications"), data.getBoolean("memoryEnabled"), (0 until notes.length()).map { (notes.get(it) as? String ?: error("Invalid memory note")) }, generatedVoice,
-            imagineProvider, imagineAspect))
+            imagineProvider, imagineAspect, voiceProvider, voiceName, deviceVoice, voiceSpeed, replyLanguage, inputLanguage))
     }
     fun memoryText(value: LocalPreferences): String = if (value.memoryEnabled) value.memory.joinToString("\n") { "- $it" } else ""
 }

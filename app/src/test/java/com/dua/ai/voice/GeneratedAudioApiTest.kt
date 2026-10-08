@@ -64,4 +64,20 @@ class GeneratedAudioApiTest {
         val pending = async(start = CoroutineStart.UNDISPATCHED) { api.generate("Reply", "valid") }
         assertNotNull(server.takeRequest(2, TimeUnit.SECONDS)); pending.cancelAndJoin(); assertTrue(pending.isCancelled)
     }
+    @Test fun voiceV2RequestSendsChosenVoiceAndAcceptsMp3OrWav() = runBlocking {
+        val options = TtsOptions("gemini", "Kore", "auto", 1.2f)
+        server.enqueue(audio(byteArrayOf(5)).setHeader("Content-Type", "audio/wav"))
+        val result = api.synthesize(" Chunk ", "valid.token", options, 1000)
+        assertArrayEquals(byteArrayOf(5), result.bytes); assertEquals("audio/wav", result.mimeType)
+        val json = JSONObject(server.takeRequest(2, TimeUnit.SECONDS)!!.body.readUtf8())
+        assertEquals(setOf("text", "provider", "voice", "language", "speed"), json.keys().asSequence().toSet())
+        assertEquals("Chunk", json.getString("text")); assertEquals("gemini", json.getString("provider")); assertEquals(1.2, json.getDouble("speed"), 0.001)
+        server.enqueue(audio()); assertEquals("audio/mpeg", api.synthesize("Chunk", "valid.token", options.copy(provider = "xai", voice = "eve"), 1000).mimeType)
+        // The legacy request still accepts only MP3.
+        server.enqueue(audio().setHeader("Content-Type", "audio/wav")); assertNotNull(runCatching { api.generate("Reply", "valid") }.exceptionOrNull())
+        assertNotNull(runCatching { api.synthesize("x".repeat(1001), "valid", options, 1000) }.exceptionOrNull())
+        server.enqueue(MockResponse().setResponseCode(400).setBody("{\"error\":\"provider detail\"}"))
+        val failure = runCatching { api.synthesize("Chunk", "valid", options, 1000) }.exceptionOrNull() as AccountException
+        assertEquals(400, failure.status); assertFalse(failure.message.orEmpty().contains("provider detail"))
+    }
 }

@@ -114,4 +114,15 @@ class IntegrationCapabilitiesTest {
         assertEquals(mapOf("Gemini" to true, "Grok" to false, "Claude" to false, "ChatGPT" to true), parsed)
         assertTrue(IntegrationCapabilities.fallbackProviders.all { it.supportsReasoning })
     }
+    @Test fun voiceV2ConfigReportsReplyVoiceWithoutFeatureSetupAndOldBackendsKeepLegacyState() {
+        val legacy = IntegrationState(generatedVoiceConfigured = true)
+        val old = IntegrationCapabilities.configuration(JSONObject(), legacy)
+        assertNull(old.voice); assertTrue(old.generatedVoiceConfigured)
+        val voice = JSONObject().put("version", 1).put("tts", JSONObject().put("enabled", true).put("providers", org.json.JSONArray().put(
+            JSONObject().put("id", "xai").put("name", "Grok").put("voices", org.json.JSONArray().put(JSONObject().put("id", "eve").put("name", "Eve"))))))
+        val next = IntegrationCapabilities.configuration(JSONObject().put("voice", voice), IntegrationState())
+        assertTrue(next.generatedVoiceConfigured); assertEquals("xai", next.voice!!.defaultProvider)
+        voice.getJSONObject("tts").put("enabled", false)
+        assertFalse(IntegrationCapabilities.configuration(JSONObject().put("voice", voice), legacy).generatedVoiceConfigured)
+    }
 }
