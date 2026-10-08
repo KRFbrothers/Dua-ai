@@ -84,6 +84,70 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         } catch (failure: Exception) { received?.fill(0); throw failure }
     }
     fun clearReplyAudioCache() = replyAudioCache.clear()
+
+    // ---- Live voice (Phase 4B): xAI realtime session with a server-minted token ----
+    /** Before the session connects: busy while asking the server, or why live voice cannot start. */
+    data class LiveStartState(val busy: Boolean = false, val error: String = "", val fallback: Boolean = false)
+    private val _liveStart = MutableStateFlow(LiveStartState())
+    val liveStart = _liveStart.asStateFlow()
+    private val _liveUsage = MutableStateFlow<com.dua.ai.voice.live.LiveUsage?>(null)
+    val liveUsage = _liveUsage.asStateFlow()
+    /** Live voice is offered by this backend and the owner is signed in. */
+    fun liveVoiceAvailable(): Boolean = _integrations.value.voice?.live?.enabled == true && account.state.value.user != null
+    fun liveOptions(): com.dua.ai.voice.live.LiveOptions? = _integrations.value.voice?.live?.takeIf { it.enabled }?.let { config ->
+        val settings = localSettings.value
+        com.dua.ai.voice.live.LiveVoiceCodec.options(config, settings.liveVoice, settings.replyLanguage, settings.voiceSpeed)
+    }
+    fun loadLiveUsage() = viewModelScope.launch {
+        if (!liveVoiceAvailable()) { _liveUsage.value = null; return@launch }
+        try { _liveUsage.value = com.dua.ai.voice.live.LiveVoiceCodec.usage(account.request("/api/voice/usage", authenticated = true)) }
+        catch (cancelled: CancellationException) { throw cancelled } catch (_: Exception) {}
+    }
+    fun clearLiveError() { _liveStart.value = LiveStartState() }
+    fun startLiveVoice() {
+        if (_liveStart.value.busy || com.dua.ai.voice.live.LiveVoiceController.active) return
+        val options = liveOptions()
+        val reason = when {
+            options == null -> _integrations.value.voice?.live?.reason?.ifBlank { null } ?: "Live voice needs the latest Dua backend. Hands-free mode works now."
+            account.state.value.user == null -> "Sign in from Profile to use live voice."
+            !_online.value -> "You're offline. Connect to the internet to start live voice."
+            _isTyping.value -> "Wait for the current reply to finish, or stop it."
+            else -> null
+        }
+        if (reason != null) { _liveStart.value = LiveStartState(error = reason, fallback = true); return }
+        _liveStart.value = LiveStartState(busy = true)
+        val chatId = activeId
+        viewModelScope.launch {
+            try {
+                val body = com.dua.ai.voice.live.LiveVoiceCodec.sessionRequest(options!!, com.dua.ai.settings.PreferencesCodec.memoryText(localSettings.value), _messages.value)
+                val grant = com.dua.ai.voice.live.LiveVoiceCodec.grant(account.request("/api/voice/session", "POST", body, authenticated = true))
+                _liveUsage.value = grant.usage
+                _liveStart.value = LiveStartState()
+                com.dua.ai.voice.live.LiveVoiceController.begin(getApplication(), grant, options.voice) { end -> finishLiveVoice(chatId, end) }
+            } catch (cancelled: CancellationException) { _liveStart.value = LiveStartState(); throw cancelled }
+            catch (failure: com.dua.ai.account.AccountException) {
+                _liveStart.value = LiveStartState(error = failure.message ?: "Live voice could not start.", fallback = failure.status in setOf(429, 503))
+            } catch (failure: Exception) { _liveStart.value = LiveStartState(error = failure.message ?: "Live voice could not start.", fallback = true) }
+        }
+    }
+    /** Saves the spoken conversation into the chat it started from, then settles the minutes on the server. */
+    private suspend fun finishLiveVoice(chatId: String, end: com.dua.ai.voice.live.LiveEnd) {
+        val messages = com.dua.ai.voice.live.LiveVoiceCodec.messages(end.captions)
+        if (messages.isNotEmpty()) {
+            if (chatId == activeId) { _messages.value = _messages.value + messages; saveHistory() }
+            else _savedChats.value.find { it.id == chatId }?.let { chat ->
+                _savedChats.value = _savedChats.value.map { if (it.id == chatId) it.copy(messages = it.messages + messages, updatedAt = System.currentTimeMillis()) else it }
+                preferences.edit().putString("history", ChatHistoryCodec.encode(_savedChats.value, activeId)).apply()
+            } ?: run { _messages.value = _messages.value + messages; saveHistory() }
+        }
+        try {
+            val settled = account.request("/api/voice/session-end", "POST", org.json.JSONObject().put("sessionId", end.sessionId), authenticated = true)
+            _liveUsage.value = _liveUsage.value?.copy(usedSeconds = settled.optInt("usedSeconds"), activeSeconds = 0)
+        } catch (_: Exception) {
+            // The server charges an unfinished session its reservation once it is overdue; nothing else to do.
+        }
+        loadLiveUsage()
+    }
     private val _integrations = MutableStateFlow(com.dua.ai.setup.IntegrationState())
     val integrations = _integrations.asStateFlow()
     private val _searchResults = MutableStateFlow<List<com.dua.ai.setup.SearchResult>>(emptyList())

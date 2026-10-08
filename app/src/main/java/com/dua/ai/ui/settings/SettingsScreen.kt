@@ -50,6 +50,8 @@ data class SettingsUiState(
     val imagine: String? = null,
     /** Voice settings row subtitle; null keeps the single AI-voice switch (backend before Voice v2). */
     val voice: String? = null,
+    /** Live voice (xAI realtime) is available: the hands-free row opens it. */
+    val liveVoice: Boolean = false,
 ) {
     val generatedVoiceToggleEnabled: Boolean get() = !busy && (generatedVoice || (generatedVoiceConfigured && email != null))
 }
@@ -69,6 +71,7 @@ fun SettingsScreen(viewModel: ChatViewModel, onBack: () -> Unit, onOpen: (DuaDes
         memoryEnabled = preferences.memoryEnabled, notifications = preferences.notifications,
         generatedVoice = preferences.generatedVoice, generatedVoiceConfigured = integrations.generatedVoiceConfigured,
         busy = integrations.busy,
+        liveVoice = integrations.voice?.live?.enabled == true && account.user != null,
         voice = integrations.voice?.let { config ->
             val options = if (preferences.generatedVoice && account.user != null) com.dua.ai.voice.VoiceCodec.ttsOptions(config, preferences.voiceProvider,
                 preferences.voiceName, preferences.replyLanguage, preferences.voiceSpeed) else null
@@ -114,7 +117,8 @@ fun SettingsContent(state: SettingsUiState, onBack: () -> Unit, onOpen: (DuaDest
         SettingsSection("Voice") {
             SettingsRow(Icons.Outlined.Mic, "Voice input", "Dictate, review, then send") { onOpen(DuaDestination.Voice) }
             SettingsDivider()
-            SettingsRow(Icons.Outlined.GraphicEq, "Hands-free conversation", "Speak, then hear the reply read aloud") { onOpen(DuaDestination.HandsFree) }
+            if (state.liveVoice) SettingsRow(Icons.Outlined.GraphicEq, "Live conversation", "Talk with Grok in real time · interrupt any time") { onOpen(DuaDestination.LiveVoice) }
+            else SettingsRow(Icons.Outlined.GraphicEq, "Hands-free conversation", "Speak, then hear the reply read aloud") { onOpen(DuaDestination.HandsFree) }
             SettingsDivider()
             if (state.voice != null) SettingsRow(Icons.AutoMirrored.Outlined.VolumeUp, "Reply voice & language", state.voice) { onOpen(DuaDestination.VoiceSettings) }
             else SettingsSwitchRow(Icons.AutoMirrored.Outlined.VolumeUp, "AI reply voice",

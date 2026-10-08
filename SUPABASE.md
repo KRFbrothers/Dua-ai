@@ -56,6 +56,17 @@ Without this migration the backend refuses Imagine requests with a setup message
 
 **Deploy order:** run the migration, set `GROK_API_KEY` (and optionally `GEMINI_API_KEY`) plus any `DUA_IMAGINE_*` variables (PROVIDERS.md), deploy the backend, then install the new APK.
 
+## 1d. Live voice minutes (Phase 4: realtime voice)
+
+Run `supabase/migrations/202610100001_dua_voice.sql` once (SQL editor → New query → paste → Run, or `supabase db push`). It is safe to run again and does not change earlier tables. It:
+
+- creates `public.dua_voice_usage` (seconds charged per account and UTC day) and `public.dua_voice_sessions` (one row per live session: reserved seconds, start, end, charged seconds); RLS on, no client access;
+- creates `dua_start_voice_session(session_id, reserve_seconds, daily_limit_seconds, min_seconds)`, `dua_end_voice_session(session_id)` and `dua_read_voice_usage()`, `security definer` functions that only act on `auth.uid()`. The backend calls them with your own token (no service-role key). Starting a session reserves minutes under a row lock, so the daily cap holds even with parallel requests; ending charges the time used (never more than reserved); sessions left open are charged their full reservation once overdue.
+
+Without this migration `/api/voice/session` refuses with a setup message and live voice never starts (hands-free mode still works).
+
+**Deploy order:** run the migration, set the `DUA_VOICE_*` variables if you want non-defaults (PROVIDERS.md › Live voice), deploy the backend, then install the new APK.
+
 ## 2. Configure the shared backend
 
 Add these environment variables to Vercel Production and redeploy:

@@ -26,14 +26,14 @@ class PreferencesCodecTest {
     }
     @Test fun voiceSettingsRoundTripAndOldOrDamagedValuesFallBackToDefaults() {
         val voice = LocalPreferences(generatedVoice = true, voiceProvider = "gemini", voiceName = "Kore", deviceVoice = "hi-in-x-hia-local",
-            voiceSpeed = 1.25f, replyLanguage = "hi", inputLanguage = "ur-PK")
+            voiceSpeed = 1.25f, replyLanguage = "hi", inputLanguage = "ur-PK", liveVoice = "ara")
         assertEquals(voice, PreferencesCodec.decode(PreferencesCodec.encode(voice)))
         val old = org.json.JSONObject(PreferencesCodec.encode(LocalPreferences())).apply {
-            listOf("voiceProvider", "voiceName", "deviceVoice", "voiceSpeed", "replyLanguage", "inputLanguage").forEach { remove(it) } }
+            listOf("voiceProvider", "voiceName", "deviceVoice", "voiceSpeed", "replyLanguage", "inputLanguage", "liveVoice").forEach { remove(it) } }
         assertEquals(LocalPreferences(), PreferencesCodec.decode(old.toString()))
-        val damaged = old.put("voiceProvider", "other").put("voiceName", "../x").put("voiceSpeed", 9).put("replyLanguage", "<b>").put("inputLanguage", 5)
+        val damaged = old.put("voiceProvider", "other").put("voiceName", "../x").put("voiceSpeed", 9).put("replyLanguage", "<b>").put("inputLanguage", 5).put("liveVoice", "a b")
         assertEquals(LocalPreferences(), PreferencesCodec.decode(damaged.toString()))
-        for (value in listOf(LocalPreferences(voiceProvider = "other"), LocalPreferences(voiceSpeed = 3f), LocalPreferences(inputLanguage = "hi_IN"))) {
+        for (value in listOf(LocalPreferences(voiceProvider = "other"), LocalPreferences(voiceSpeed = 3f), LocalPreferences(inputLanguage = "hi_IN"), LocalPreferences(liveVoice = "../eve"))) {
             try { PreferencesCodec.encode(value); fail("Invalid voice setting accepted") } catch (_: IllegalArgumentException) { }
         }
     }

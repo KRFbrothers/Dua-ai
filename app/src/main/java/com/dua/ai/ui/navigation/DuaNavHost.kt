@@ -101,8 +101,14 @@ fun DuaNavHost(viewModel: ChatViewModel, voice: ReplyVoice, notificationRoute: P
         composable(DuaDestination.Voice.route) {
             val draft by viewModel.draft.collectAsState()
             val settings by viewModel.localSettings.collectAsState()
-            VoiceScreen(draft = draft, onBack = navigator::back, onHandsFree = { navigator.open(DuaDestination.HandsFree) },
-                onUse = { text -> viewModel.updateDraft(text); navigator.toChat() }, inputLanguage = settings.inputLanguage)
+            val integrations by viewModel.integrations.collectAsState()
+            val live = integrations.voice?.live?.enabled == true
+            VoiceScreen(draft = draft, onBack = navigator::back, onHandsFree = { navigator.open(if (viewModel.liveVoiceAvailable()) DuaDestination.LiveVoice else DuaDestination.HandsFree) },
+                onUse = { text -> viewModel.updateDraft(text); navigator.toChat() }, inputLanguage = settings.inputLanguage, liveAvailable = live)
+        }
+        composable(DuaDestination.LiveVoice.route) {
+            com.dua.ai.ui.voice.LiveVoiceScreen(viewModel, onClose = navigator::back,
+                onHandsFree = { nav.navigate(DuaDestination.HandsFree.route) { popUpTo(DuaDestination.LiveVoice.route) { inclusive = true } } })
         }
         composable(DuaDestination.HandsFree.route) {
             HandsFreeScreen(viewModel, onBack = navigator::back, onChat = navigator::toChat)
@@ -135,13 +141,16 @@ fun DuaNavHost(viewModel: ChatViewModel, voice: ReplyVoice, notificationRoute: P
                 navigator.open(when (kind) {
                     com.dua.ai.ui.voice.VoicePickerKind.REPLY_LANGUAGE -> DuaDestination.ReplyLanguage
                     com.dua.ai.ui.voice.VoicePickerKind.INPUT_LANGUAGE -> DuaDestination.InputLanguage
+                    com.dua.ai.ui.voice.VoicePickerKind.LIVE_VOICE -> DuaDestination.LiveVoicePicker
+                    com.dua.ai.ui.voice.VoicePickerKind.LIVE -> DuaDestination.LiveVoice
                     else -> DuaDestination.VoicePicker
                 })
             })
         }
         listOf(DuaDestination.VoicePicker to com.dua.ai.ui.voice.VoicePickerKind.VOICE,
             DuaDestination.ReplyLanguage to com.dua.ai.ui.voice.VoicePickerKind.REPLY_LANGUAGE,
-            DuaDestination.InputLanguage to com.dua.ai.ui.voice.VoicePickerKind.INPUT_LANGUAGE).forEach { (destination, kind) ->
+            DuaDestination.InputLanguage to com.dua.ai.ui.voice.VoicePickerKind.INPUT_LANGUAGE,
+            DuaDestination.LiveVoicePicker to com.dua.ai.ui.voice.VoicePickerKind.LIVE_VOICE).forEach { (destination, kind) ->
             composable(destination.route) {
                 BusyBackGuard(viewModel)
                 com.dua.ai.ui.voice.VoicePickerScreen(viewModel, voice, kind, onBack = navigator::back)

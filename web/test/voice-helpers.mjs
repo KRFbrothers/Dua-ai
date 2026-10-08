@@ -27,3 +27,38 @@ export function voiceRequest(action, body, { method = 'POST', token = 'user-toke
   return new Request('https://dua.test/api/voice/' + action, { method, headers: { 'content-type': 'application/json', ...(token ? { authorization: 'Bearer ' + token } : {}), ...headers }, ...(method === 'POST' ? { body: JSON.stringify(body ?? {}) } : {}) });
 }
 export { SUPA, UID };
+
+/**
+ * Live voice fakes: the Phase 4 RPCs (a small in-memory model of the SQL) and xAI client secrets.
+ * Options: used/limit state, rpcMissing, secret (handler override). Returns the router with `.state`.
+ */
+export function liveWorld({ usedSeconds = 0, rpcMissing = false, secret, email } = {}) {
+  const state = { usedSeconds, sessions: new Map(), now: () => Date.now() };
+  const missing = () => Response.json({ code: 'PGRST202', message: 'Could not find the function' }, { status: 404 });
+  const resetAt = 1791590400;
+  const fetcher = voiceWorld({ email, routes: [
+    [SUPA + '/rest/v1/rpc/dua_start_voice_session', (url, init, call) => {
+      if (rpcMissing) return missing();
+      const { session_id, reserve_seconds, daily_limit_seconds, min_seconds } = call.json;
+      const active = [...state.sessions.values()].filter(s => !s.ended).reduce((sum, s) => sum + s.reserved, 0);
+      const remaining = Math.max(0, daily_limit_seconds - state.usedSeconds - active);
+      if (remaining < min_seconds) return Response.json({ allowed: false, usedSeconds: state.usedSeconds, activeSeconds: active, limitSeconds: daily_limit_seconds, resetAt });
+      const granted = Math.min(reserve_seconds, remaining);
+      state.sessions.set(session_id, { reserved: granted, started: state.now(), ended: false });
+      return Response.json({ allowed: true, grantedSeconds: granted, usedSeconds: state.usedSeconds, activeSeconds: active + granted, limitSeconds: daily_limit_seconds, resetAt });
+    }],
+    [SUPA + '/rest/v1/rpc/dua_end_voice_session', (url, init, call) => {
+      if (rpcMissing) return missing();
+      const session = state.sessions.get(call.json.session_id);
+      if (!session) return Response.json({ found: false });
+      if (!session.ended) { session.charged = Math.min(session.reserved, Math.ceil((state.now() - session.started) / 1000)); session.ended = true; state.usedSeconds += session.charged; }
+      return Response.json({ found: true, chargedSeconds: session.charged, usedSeconds: state.usedSeconds });
+    }],
+    [SUPA + '/rest/v1/rpc/dua_read_voice_usage', () => rpcMissing ? missing()
+      : Response.json({ usedSeconds: state.usedSeconds, activeSeconds: [...state.sessions.values()].filter(s => !s.ended).reduce((sum, s) => sum + s.reserved, 0), resetAt })],
+    ['https://api.x.ai/v1/realtime/client_secrets', (url, init, call) => secret ? secret(url, init, call)
+      : Response.json({ value: 'xai-realtime-client-secret-test', expires_at: 1791500000 })],
+  ] });
+  fetcher.state = state;
+  return fetcher;
+}

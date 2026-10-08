@@ -126,6 +126,27 @@ Settings › Voice picks how replies are read aloud: the **device voice** (free;
 
 Speech recognition (voice input and hands-free) uses Android's recognizer with the language picked in Settings › Voice (Auto, Hindi `hi-IN`, Urdu `ur-PK`, English `en-IN`, …). Support depends on the phone's speech service.
 
+### Live voice (Phase 4B)
+
+Settings › Hands-free (and the Voice screen) open a full-screen **live conversation** with Grok when the server allows it: you talk, Grok answers with voice, and you can interrupt by talking over it. It uses the xAI Speech to Speech API (Grok Voice Agent, verified on docs.x.ai, October 2026):
+
+- `POST /api/voice/session` (signed-in owner only) reserves minutes, then mints a short-lived **client secret** with `POST https://api.x.ai/v1/realtime/client_secrets` `{"expires_after": {"seconds": N}}` (N = the reserved session length + 60 s, at most 3600). The response carries that secret, the session configuration (Dua's system prompt, Memory notes when Memory is on, the last ≤ 12 turns of the open chat, voice, `server_vad` turn detection, PCM 24 kHz in and out, `grok-transcribe` captions with a language hint, speed) and today's usage. `GROK_API_KEY` never leaves the server.
+- The phone opens `wss://api.x.ai/v1/realtime?model=grok-voice-latest` with the secret (`Authorization: Bearer`), sends `session.update`, streams microphone audio (`input_audio_buffer.append`, echo cancelling, 40 ms frames) and plays `response.output_audio.delta`. Speaking while Grok talks (`input_audio_buffer.speech_started`) flushes playback at once; the rest of that reply is ignored. Captions come from `conversation.item.input_audio_transcription.*` and `response.output_audio_transcript.*`.
+- A microphone **foreground service** keeps the session running with the screen off (notification with an End action). Audio routes to a connected Bluetooth headset when there is one.
+- `POST /api/voice/session-end` `{sessionId}` closes the reservation and charges the time actually used; `GET /api/voice/usage` returns today's minutes. When the session ends, the captions are added to the chat it was started from (an interrupted reply ends with "…").
+- If live voice is off, out of minutes or not set up, the screen offers the turn-based hands-free mode instead.
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `DUA_VOICE_REALTIME` | on (when `GROK_API_KEY` and Supabase are set) | `0` turns live voice off; the app falls back to hands-free mode. |
+| `DUA_VOICE_DAILY_MINUTES` | `30` | Live minutes per UTC day (0–1440; `0` = off). Enforced in Postgres when a session token is minted. |
+| `DUA_VOICE_SESSION_MAX_MINUTES` | `10` | Longest single session (1–120). The phone also stops at this limit. |
+| `DUA_VOICE_REALTIME_MODEL` | `grok-voice-latest` | Realtime model id. |
+
+**Cost and caps.** xAI bills live voice per minute (about **$0.08/min**; 30 min/day ≈ $2.40/day at most). Each session reserves `min(session max, minutes left)` in `dua_voice_sessions` before the token is minted, so parallel or repeated starts cannot exceed the daily cap. Ending a session charges `least(reserved, elapsed)`; a session that is never ended (app killed) is charged its full reservation once it is overdue. Needs the Phase 4 migration (SUPABASE.md §1d); without it `/api/voice/session` answers with a setup message.
+
+Live voice languages follow the reply language: xAI's list needs regional variants for Spanish and Portuguese, and Urdu is not on the list, so Urdu is asked for in the instructions and the caption language is auto-detected.
+
 ## Web search
 
 Chat has a **Web: Off / Search / Read link** control in the Android app, plus an **X** toggle when Grok is selected. Modes start Off for each chat and are not stored or synced.
