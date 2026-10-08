@@ -10,7 +10,9 @@ import androidx.credentials.exceptions.GetCredentialException
 import androidx.credentials.exceptions.NoCredentialException
 import com.dua.ai.BuildConfig
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
+import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
+import java.security.MessageDigest
 import java.security.SecureRandom
 
 data class GoogleIdentity(val idToken: String, val nonce: String)
@@ -19,14 +21,24 @@ data class GoogleIdentity(val idToken: String, val nonce: String)
 object GoogleSignIn {
     fun newNonce(): String = ByteArray(32).also { SecureRandom().nextBytes(it) }.let { Base64.encodeToString(it, Base64.URL_SAFE or Base64.NO_PADDING or Base64.NO_WRAP) }
 
+    /** Lowercase hex SHA-256. Google embeds this in the ID token; Supabase hashes the raw nonce and compares. */
+    fun sha256Hex(value: String): String = MessageDigest.getInstance("SHA-256").digest(value.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
+
     suspend fun requestIdToken(context: Context): GoogleIdentity {
         check(BuildConfig.GOOGLE_WEB_CLIENT_ID.isNotBlank()) { "Google sign-in is not configured for this build." }
-        val nonce = newNonce()
-        val option = GetGoogleIdOption.Builder().setServerClientId(BuildConfig.GOOGLE_WEB_CLIENT_ID).setFilterByAuthorizedAccounts(false).setNonce(nonce).build()
-        val result = CredentialManager.create(context).getCredential(context, GetCredentialRequest.Builder().addCredentialOption(option).build())
+        val rawNonce = newNonce()
+        val hashedNonce = sha256Hex(rawNonce)
+        val manager = CredentialManager.create(context)
+        val googleIdOption = GetGoogleIdOption.Builder().setServerClientId(BuildConfig.GOOGLE_WEB_CLIENT_ID).setFilterByAuthorizedAccounts(false).setNonce(hashedNonce).build()
+        val result = try {
+            manager.getCredential(context, GetCredentialRequest.Builder().addCredentialOption(googleIdOption).build())
+        } catch (_: NoCredentialException) {
+            val signInOption = GetSignInWithGoogleOption.Builder(BuildConfig.GOOGLE_WEB_CLIENT_ID).setNonce(hashedNonce).build()
+            manager.getCredential(context, GetCredentialRequest.Builder().addCredentialOption(signInOption).build())
+        }
         val credential = result.credential
         check(credential is CustomCredential && credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) { "Unexpected Google credential." }
-        return GoogleIdentity(GoogleIdTokenCredential.createFrom(credential.data).idToken, nonce)
+        return GoogleIdentity(GoogleIdTokenCredential.createFrom(credential.data).idToken, rawNonce)
     }
 
     fun friendlyMessage(failure: Throwable): String = when (failure) {

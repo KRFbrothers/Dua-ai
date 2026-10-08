@@ -49,7 +49,7 @@ export async function handleAccount(req,env={}){
    if(!native)return json({error:'Native Google sign-in is only available from the Android app.'},400);
    if(typeof body.idToken!=='string'||! /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(body.idToken)||body.idToken.length>8192||body.nonce!==undefined&&(typeof body.nonce!=='string'||! /^[A-Za-z0-9_-]{16,128}$/.test(body.nonce)))return json({error:'Google sign-in could not be verified. Try again.'},400);
    const result=await request('/auth/v1/token?grant_type=id_token','POST',{provider:'google',id_token:body.idToken,...(body.nonce?{nonce:body.nonce}:{})});
-   if(!result.response.ok){console.warn('[dua-auth] Google ID token rejected ('+result.response.status+').');return json({error:'Google sign-in failed. Check that this Google account is allowed and try again.'},result.response.status===429?429:401);}
+   if(!result.response.ok){const reason=String(result.data?.error_description||result.data?.msg||result.data?.message||result.data?.error||'').replace(/[^\x20-\x7e]/g,' ').slice(0,200);console.warn('[dua-auth] Google ID token rejected ('+result.response.status+')'+(reason?': '+reason:'.'));return json({error:'Google sign-in failed. Check that this Google account is allowed and try again.'},result.response.status===429?429:401);}
    console.info('[dua-auth] Google native sign-in succeeded.');return json(deliver(result.data));
   }
   if(url.pathname==='/api/account/reset-password'&&req.method==='POST'){
