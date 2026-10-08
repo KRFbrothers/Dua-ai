@@ -5,11 +5,6 @@ import com.dua.ai.account.CloudSnapshotCodec
 import com.dua.ai.history.SavedChat
 import java.security.MessageDigest
 
-/** Consent applies to one account on one device. */
-data class AutomationConsent(val enabled: Boolean = false, val accountId: String? = null) {
-    fun permits(currentAccountId: String?): Boolean = enabled && !accountId.isNullOrBlank() && accountId == currentAccountId
-}
-
 /** Only digests/counts are persisted; never duplicate chat or memory plaintext in sync settings. */
 data class AutomationBaseline(val chatMessageCounts: Map<String, Int>, val chatSignatures: Map<String, String>, val memoryDigests: Set<String>)
 data class AutomationSyncRecord(val enabled: Boolean = false, val accountId: String? = null, val revision: Long? = null,

@@ -204,10 +204,10 @@ class DuaScreenshotTest(private val dark: Boolean) {
 
 private object ScreenshotData {
     private val suggestions = listOf(
-        PromptSuggestion("Write code snippet", "", "", "Coding"),
-        PromptSuggestion("Explain simply", "", "", "Learning"),
-        PromptSuggestion("Brainstorm concepts", "", "", "Idea"),
-        PromptSuggestion("Draft a plan", "", "", "Productivity"),
+        PromptSuggestion("Write code snippet", "", "Coding"),
+        PromptSuggestion("Explain simply", "", "Learning"),
+        PromptSuggestion("Brainstorm concepts", "", "Idea"),
+        PromptSuggestion("Draft a plan", "", "Productivity"),
     )
 
     private const val UID = "11111111-2222-4333-8444-555555555555"

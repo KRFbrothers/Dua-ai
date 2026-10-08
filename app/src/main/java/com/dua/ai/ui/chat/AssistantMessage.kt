@@ -68,7 +68,6 @@ fun AssistantMessage(
         if (message.codeRuns.isNotEmpty()) CodeRuns(message.id, message.codeRuns, Modifier.padding(bottom = Spacing.sm), initiallyExpanded = codeExpanded)
         if (streaming && message.text.isEmpty() && message.thinking == null && message.codeRuns.isEmpty() && message.build == null) TypingIndicator()
         if (parts.body.isNotEmpty()) MarkdownMessage(parts.body)
-        message.codeSnippet?.let { CodeBlock(code = it, language = null, modifier = Modifier.padding(top = Spacing.sm)) }
         if (parts.sources.isNotEmpty() && !streaming) SourceChips(parts.sources, Modifier.padding(top = Spacing.md))
         message.notice?.let {
             Text(it, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -78,7 +77,7 @@ fun AssistantMessage(
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = Spacing.sm))
         if (message.state == "complete" || (message.state == "stopped" && message.text.isNotEmpty())) MessageActions(
-            copyText = message.text + (message.codeSnippet?.let { "\n" + it } ?: "") + com.dua.ai.model.CodeRuns.copyText(message.codeRuns),
+            copyText = message.text + com.dua.ai.model.CodeRuns.copyText(message.codeRuns),
             showRetry = isLast,
             retryEnabled = isLast && !typing,
             retryDescription = when (retryWebMode) {

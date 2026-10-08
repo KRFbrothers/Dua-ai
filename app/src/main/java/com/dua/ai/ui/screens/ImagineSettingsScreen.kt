@@ -22,7 +22,6 @@ import com.dua.ai.imagine.ImagineCodec
 import com.dua.ai.imagine.ImagineConfig
 import com.dua.ai.imagine.ImagineUsage
 import com.dua.ai.ui.components.DuaPageScaffold
-import com.dua.ai.ui.components.SettingsDivider
 import com.dua.ai.ui.components.SettingsSection
 import com.dua.ai.ui.theme.Spacing
 import com.dua.ai.viewmodel.ChatViewModel

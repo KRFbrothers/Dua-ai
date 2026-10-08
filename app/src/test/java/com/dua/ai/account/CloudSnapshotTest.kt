@@ -2,7 +2,6 @@ package com.dua.ai.account
 
 import com.dua.ai.history.SavedChat
 import com.dua.ai.model.ChatMessage
-import org.json.JSONObject
 import org.junit.Assert.*
 import org.junit.Test
 

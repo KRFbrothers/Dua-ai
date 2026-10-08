@@ -16,10 +16,6 @@ export const TEXT_TYPES = Object.freeze([
   'text/x-c', 'text/x-c++', 'text/x-go', 'text/x-rust', 'text/x-swift', 'application/sql', 'text/x-sql', 'application/x-sh', 'text/x-shellscript',
   'text/x-log', 'application/toml', 'text/x-toml'
 ]);
-/** File extensions Android offers as text attachments (documented in PROVIDERS.md). */
-export const TEXT_EXTENSIONS = Object.freeze(['txt', 'text', 'csv', 'tsv', 'md', 'markdown', 'json', 'jsonl', 'xml', 'yaml', 'yml', 'toml', 'ini', 'cfg', 'conf', 'env', 'log',
-  'kt', 'kts', 'java', 'js', 'mjs', 'cjs', 'jsx', 'ts', 'tsx', 'py', 'go', 'rs', 'c', 'h', 'cc', 'cpp', 'hpp', 'cs', 'swift', 'rb', 'php', 'dart', 'scala', 'sql',
-  'html', 'htm', 'css', 'scss', 'sh', 'bash', 'zsh', 'ps1', 'bat', 'gradle', 'properties', 'gitignore', 'dockerfile', 'tex', 'r', 'lua', 'pl', 'vue', 'svelte']);
 export const isTextType = type => TEXT_TYPES.includes(type);
 /** Provider allowlists are expressed with text/plain for every text-like file. */
 export const providerType = type => isTextType(type) ? 'text/plain' : type;

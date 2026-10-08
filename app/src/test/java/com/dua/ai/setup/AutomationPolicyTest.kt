@@ -9,13 +9,6 @@ import org.junit.Test
 class AutomationPolicyTest {
     private val chat = SavedChat("saved", "Dua", "", listOf(ChatMessage(text = "Hi", isUser = true)), 1)
 
-    @Test fun `consent is off by default and bound to one account`() {
-        assertFalse(AutomationConsent().permits("account"))
-        assertTrue(AutomationConsent(true, "account").permits("account"))
-        assertFalse(AutomationConsent(true, "account").permits("another"))
-        assertFalse(AutomationConsent(true, "account").permits(null))
-    }
-
     @Test fun `deletions require review and additions do not`() {
         val initial = CloudSnapshot(listOf(chat), listOf("Prefer Hindi"))
         val baseline = AutomationSyncPolicy.baseline(initial)
@@ -41,7 +34,7 @@ class AutomationPolicyTest {
 
     @Test fun `signatures survive imported message ids and contain no plaintext`() {
         val snapshot = CloudSnapshot(listOf(chat), listOf("Personal memory note"))
-        val imported = snapshot.copy(chats = listOf(chat.copy(messages = chat.messages.map { it.copy(id = "different", reaction = com.dua.ai.model.MessageReaction.LIKED) })))
+        val imported = snapshot.copy(chats = listOf(chat.copy(messages = chat.messages.map { it.copy(id = "different") })))
         assertEquals(AutomationSyncPolicy.baseline(snapshot), AutomationSyncPolicy.baseline(imported))
         val baseline = AutomationSyncPolicy.baseline(snapshot)
         assertTrue(baseline.chatSignatures.values.all { it.matches(Regex("[0-9a-f]{64}")) })

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ttsConfiguration, voiceConfiguration, legacyAudioProvider, validateAudioRequest, buildTtsRequest, handleVoice } from '../src/core/voice.mjs';
+import { ttsConfiguration, voiceConfiguration, legacyAudioProvider, validateAudioRequest, buildTtsRequest } from '../src/core/voice.mjs';
 import { xaiTtsRequest, geminiTtsRequest, XAI_VOICES, GEMINI_VOICES, XAI_LANGUAGES, ttsFailure } from '../src/core/voice-tts.mjs';
 import { advancedConfiguration } from '../src/core/advanced-integrations.mjs';
 import { handleService } from '../src/server/service-handler.mjs';
