@@ -1,40 +1,20 @@
 // Optional personal integrations. Credentials never leave this server module.
 // Reply voice audio moved to voice.mjs (/api/voice/*); the legacy `generatedAudio` flag stays for older apps.
 import { legacyAudioProvider } from './voice.mjs';
+import { boundedBytes, githubReady, GitHubError, listRepositories, repositoryFile, repositoryTree, searchRepository } from './github.mjs';
 const noStore = { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' };
 const json = (value, status = 200) => Response.json(value, { status, headers: noStore });
 
-function githubReady(env) {
-  return env.ENABLE_GITHUB_CONNECTOR === '1' && typeof env.GITHUB_CONNECTOR_TOKEN === 'string' && !!env.GITHUB_CONNECTOR_TOKEN.trim();
-}
+// Phase 5B adds read-only tree/file/search actions (also used by Build mode). There are no write actions.
+const GITHUB_ACTIONS = ['list-repositories', 'get-tree', 'get-file', 'search-code'];
+const ACTION_KEYS = { 'list-repositories': [], 'get-tree': ['repository'], 'get-file': ['repository', 'path'], 'search-code': ['repository', 'query'] };
+
 export function advancedConfiguration(env = {}) {
   return {
-    connectors: { github: { configured: githubReady(env), actions: ['list-repositories'], access: 'read-only' } },
+    connectors: { github: { configured: githubReady(env), actions: GITHUB_ACTIONS, access: 'read-only' } },
     voice: { generatedAudio: { configured: Boolean(legacyAudioProvider(env)), provider: legacyAudioProvider(env) || 'elevenlabs', maximumCharacters: 2000 }, foregroundInterrupt: true, backgroundConversation: false, fullDuplex: false },
     media: { localCameraPreview: true, localScreenPreview: true, uploads: false, recording: false, remoteComputerControl: false }
   };
-}
-
-async function boundedBytes(response, limit) {
-  const declared = Number(response.headers.get('content-length'));
-  if (declared > limit) { await response.body?.cancel(); throw Error('Response too large'); }
-  if (!response.body) return new Uint8Array();
-  const reader = response.body.getReader();
-  let size = 0;
-  const chunks = [];
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      size += value.byteLength;
-      if (size > limit) { await reader.cancel(); throw Error('Response too large'); }
-      chunks.push(value);
-    }
-  } finally { reader.releaseLock(); }
-  const bytes = new Uint8Array(size);
-  let offset = 0;
-  for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
-  return bytes;
 }
 
 // The router must verify a signed-in allowed personal account before setting authorized.
@@ -52,21 +32,23 @@ export async function handleAdvanced(req, { env = {}, fetcher = fetch, authorize
   } catch { return json({ error: 'Invalid request or request too large.' }, 400); }
   if (!body || typeof body !== 'object' || Array.isArray(body)) return json({ error: 'Invalid request.' }, 400);
   try {
-    if (body.action !== 'list-repositories' || Object.keys(body).some(key => key !== 'action')) return json({ error: 'Choose the supported read-only repository action.' }, 400);
+    const keys = ACTION_KEYS[body.action];
+    if (!keys || Object.keys(body).some(key => key !== 'action' && !keys.includes(key))) return json({ error: 'Choose a supported read-only repository action.' }, 400);
     if (!githubReady(env)) return json({ error: 'GitHub connector setup is not enabled.' }, 503);
-    const response = await fetcher('https://api.github.com/user/repos?per_page=30&sort=updated&affiliation=owner', {
-      method: 'GET', redirect: 'error', signal: AbortSignal.any([req.signal, AbortSignal.timeout(15000)]),
-      headers: { Authorization: 'Bearer ' + env.GITHUB_CONNECTOR_TOKEN.trim(), Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', 'User-Agent': 'Dua-Personal-Connector' }
-    });
-    if (!response.ok) { await response.body?.cancel(); return json({ error: response.status === 429 || response.status === 403 ? 'GitHub access or rate limit prevented this request.' : 'GitHub connector request failed.' }, 502); }
-    const repositories = JSON.parse(new TextDecoder().decode(await boundedBytes(response, 1024 * 1024)));
-    if (!Array.isArray(repositories) || repositories.length > 30) throw Error('Invalid repository response');
-    const safe = repositories.map(repo => {
-      if (!repo || !/^[A-Za-z0-9_-]{1,100}\/[A-Za-z0-9_.-]{1,100}$/.test(repo.full_name || '')) throw Error('Invalid repository');
-      return { name: repo.full_name.split('/')[1], fullName: repo.full_name, private: repo.private === true, description: typeof repo.description === 'string' ? repo.description.slice(0, 240) : '', url: 'https://github.com/' + repo.full_name };
-    });
-    return json({ repositories: safe, maximumResults: 30, readOnly: true });
+    const options = { env, fetcher, signal: req.signal };
+    if (body.action === 'list-repositories') return json({ repositories: await listRepositories(options), maximumResults: 30, readOnly: true });
+    if (body.action === 'get-tree') {
+      const tree = await repositoryTree(body.repository, { ...options, maxEntries: 2000 });
+      return json({ repository: body.repository, files: tree.files, total: tree.total, truncated: tree.truncated, readOnly: true });
+    }
+    if (body.action === 'get-file') {
+      const file = await repositoryFile(body.repository, body.path, { ...options, maxBytes: 100 * 1024 });
+      return json({ repository: body.repository, path: file.path, size: file.size, text: file.text, truncated: file.truncated, readOnly: true });
+    }
+    const found = await searchRepository(body.repository, body.query, options);
+    return json({ repository: body.repository, ...found, readOnly: true });
   } catch (error) {
+    if (error instanceof GitHubError) return json({ error: error.message }, error.status === 404 || error.status === 400 || error.status === 413 || error.status === 415 ? error.status : 502);
     return json({ error: error?.name === 'AbortError' || error?.name === 'TimeoutError' ? 'Integration request timed out. Retry.' : 'Integration is temporarily unavailable.' }, 502);
   }
 }

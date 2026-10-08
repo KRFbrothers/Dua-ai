@@ -13,6 +13,9 @@ import { filesConfiguration } from './files.mjs';
 import { publicImagineConfiguration } from './imagine.mjs';
 import { voiceConfiguration } from './voice.mjs';
 import { codeExecutionConfiguration, codeExecutionProviders } from './code-execution.mjs';
+import { buildConfiguration, BuildError, prepareRepository, runBuildLoop, validRepository } from './build-chat.mjs';
+import { GitHubError } from './github.mjs';
+import { resolveOwner, StorageError } from './storage.mjs';
 
 const fileTypes = ['text/plain', 'image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
 // `allowed` is what the provider API accepts; non-Gemini vision/document types still need <PREFIX>_ATTACHMENT_TYPES opt-in.
@@ -64,7 +67,7 @@ export const MAX_HISTORY_BYTES = 2.5 * 1024 * 1024;
 export const MAX_MESSAGES = 400;
 export const MAX_FILES_PER_MESSAGE = 10;
 const MAX_FILE_REFS = 400;
-const CHAT_KEYS = ['model', 'messages', 'attachments', 'memory', 'web', 'stream', 'mode', 'context', 'xSearch', 'code'];
+const CHAT_KEYS = ['model', 'messages', 'attachments', 'memory', 'web', 'stream', 'mode', 'context', 'xSearch', 'code', 'repository'];
 export function validateChat(data) {
   if (!data || typeof data !== 'object' || Array.isArray(data) || Object.keys(data).some(key => !CHAT_KEYS.includes(key))) return ['Invalid request.', 400];
   if (!definitions.some(provider => provider.name === data.model)) return ['Select a supported AI model.', 400];
@@ -79,7 +82,10 @@ export function validateChat(data) {
   if (data.attachments !== undefined && !Array.isArray(data.attachments)) return ['Invalid attachments.', 400];
   if (data.web !== undefined && !['search', 'page'].includes(data.web)) return ['Choose Web off, Search or Read link.', 400];
   if (data.stream !== undefined && typeof data.stream !== 'boolean') return ['Invalid stream option.', 400];
-  if (data.mode !== undefined && !['auto', 'reasoning'].includes(data.mode)) return ['Choose Auto or Reasoning mode.', 400];
+  if (data.mode !== undefined && !['auto', 'reasoning', 'build'].includes(data.mode)) return ['Choose Auto, Reasoning or Build mode.', 400];
+  if (data.mode === 'build' && !validRepository(data.repository)) return ['Choose a repository for Build mode.', 400];
+  if (data.mode !== 'build' && data.repository !== undefined) return ['A repository is only used in Build mode.', 400];
+  if (data.mode === 'build' && !['Dua', 'Gemini'].includes(data.model)) return ['Build mode works with Dua or Gemini. Select one of them.', 400];
   if (!validContext(data.context)) return ['Invalid conversation context.', 400];
   if (data.xSearch !== undefined && typeof data.xSearch !== 'boolean') return ['Invalid X search option.', 400];
   if (data.xSearch === true && data.model !== 'Grok') return ['X search works with Grok only. Select Grok or turn X off.', 400];
@@ -190,6 +196,7 @@ export async function relayStream({ provider, response, sources = [], reasoning,
 }
 
 export async function handleChat(request, { env = process.env, fetcher = fetch, pageReader } = {}) {
+  const startedAt = Date.now();
   const url = new URL(request.url);
   if (url.pathname === '/api/config' && request.method === 'GET') {
     const providers = providerConfiguration(env);
@@ -197,7 +204,7 @@ export async function handleChat(request, { env = process.env, fetcher = fetch, 
     const web = { ...chatWebConfiguration(env), nativeSearch: nativeSearchProviders(env, definitions).filter(name => configured.has(name)), xSearch: xSearchAvailable(env) && configured.has('Grok'), preferBrave: preferBrave(env) };
     const context = { summaries: true, budgets: Object.fromEntries(definitions.map(provider => [provider.name, contextBudget(provider.prefix, env)])) };
     return json({ geminiConfigured: providers[0].configured, model: providers[0].model, providers, web, streaming: true, files: filesConfiguration(env), context, imagine: publicImagineConfiguration(env), voice: voiceConfiguration(env),
-      code: codeExecutionConfiguration(env, definitions, configured) });
+      code: codeExecutionConfiguration(env, definitions, configured), build: buildConfiguration(env, configured) });
   }
   if (url.pathname !== '/api/chat' || request.method !== 'POST') return json({ error: 'Method not allowed.' }, 405);
   if (request.headers.get('origin') && request.headers.get('origin') !== url.origin) return json({ error: 'Request origin is not allowed.' }, 403);
@@ -207,6 +214,7 @@ export async function handleChat(request, { env = process.env, fetcher = fetch, 
   const invalid = validateChat(data);
   if (invalid) return json({ error: invalid[0] }, invalid[1]);
   const provider = definitions.find(item => item.name === data.model);
+  if (data.mode === 'build') return handleBuildChat(request, data, provider, { env, fetcher, startedAt });
   let parts;
   try { parts = attachmentParts(data.attachments); }
   catch (error) { return json({ error: error.message }, error.status || 400); }
@@ -320,4 +328,64 @@ export async function handleChat(request, { env = process.env, fetcher = fetch, 
     if (aborted(error, signal)) return json({ error: `${provider.name} response stopped or timed out. Retry.` }, 504);
     return json({ error: `${provider.name} connection or response failed. Retry.` }, 502);
   }
+}
+
+/**
+ * Build mode (Phase 5B): owner-only, read-only repository chat with Dua/Gemini. Checks server setup, then the
+ * signed-in owner (DUA_ALLOWED_EMAIL), then loads the repository before replying, so setup, access and
+ * repository errors return a clear HTTP status. Attachments, web search and Run code are not used here.
+ */
+async function handleBuildChat(request, data, provider, { env, fetcher, startedAt }) {
+  const signal = request.signal;
+  const configured = new Set(providerConfiguration(env).filter(item => item.configured).map(item => item.name));
+  const config = buildConfiguration(env, configured);
+  if (!config.enabled) return json({ error: config.reason }, 503);
+  try { await resolveOwner(request, { env, fetcher, feature: 'Build mode' }); }
+  catch (error) {
+    if (aborted(error, signal)) return json({ error: 'Request stopped.' }, 504);
+    return json({ error: error instanceof StorageError ? error.message : 'Account verification is unavailable. Retry.' }, error instanceof StorageError ? error.status : 503);
+  }
+  const model = publicModel(env[provider.model]);
+  let prepared;
+  try { prepared = await prepareRepository(data.repository, { env, fetcher, signal }); }
+  catch (error) {
+    if (aborted(error, signal)) return json({ error: 'GitHub request stopped or timed out. Retry.' }, 504);
+    if (error instanceof GitHubError) return json({ error: error.message }, [400, 404, 429].includes(error.status) ? error.status : 502);
+    return json({ error: 'GitHub connector request failed. Retry.' }, 502);
+  }
+  const { keepFrom } = planContext(data.messages, contextBudget(provider.prefix, env), { lowWater: false });
+  const messages = data.messages.slice(keepFrom);
+  const notice = [keepFrom > 0 ? 'The oldest messages were left out to fit Build mode.' : null,
+    data.attachments?.length || data.messages.at(-1).files?.length ? 'Attachments are not used in Build mode; it reads the repository instead.' : null,
+    data.web || data.code || data.xSearch ? 'Web search and Run code are off in Build mode.' : null].filter(Boolean).join(' ') || null;
+  const run = (runSignal, onProgress) => runBuildLoop({ model, key: env[provider.key], env, fetcher, signal: runSignal, prepared, messages, memory: data.memory, startedAt, onProgress });
+  const failure = async (error, failSignal) => {
+    if (error instanceof BuildError && error.response) return geminiUpstreamError(error.response, failSignal);
+    if (error instanceof BuildError) return json({ error: error.message }, error.status);
+    if (aborted(error, failSignal)) return json({ error: 'Build mode stopped or timed out. Retry or ask a narrower question.' }, 504);
+    return json({ error: 'Build mode connection or response failed. Retry.' }, 502);
+  };
+  const start = { repository: prepared.repository, branch: prepared.branch, files: [], rounds: 0, searches: 0 };
+  if (data.stream === true) {
+    return eventStreamResponse(async (send, streamSignal) => {
+      send({ type: 'build', ...start });
+      if (notice) send({ type: 'notice', message: notice });
+      try {
+        const result = await run(streamSignal, build => send({ type: 'build', ...build }));
+        send({ type: 'build', ...result.build });
+        const text = result.text.slice(0, MAX_REPLY_CHARS);
+        for (let index = 0; index < text.length; index += 4000) send({ type: 'text', delta: text.slice(index, index + 4000) });
+        send({ type: 'done', truncated: Boolean(result.truncated || result.text.length > MAX_REPLY_CHARS), ...(result.usage ? { usage: result.usage } : {}) });
+      } catch (error) {
+        let failed;
+        try { failed = await failure(error, streamSignal); } catch { failed = json({ error: 'Build mode stopped or timed out. Retry.' }, 504); }
+        const body = await failed.json().catch(() => ({}));
+        send({ type: 'error', message: body.error || 'Build mode failed. Retry.', status: failed.status });
+      }
+    }, { signal, onUnexpected: error => console.error('[dua-build] stream failed', error?.name) });
+  }
+  try {
+    const result = await run(signal);
+    return json({ text: result.text.slice(0, MAX_REPLY_CHARS), build: result.build, ...(result.truncated ? { truncated: true } : {}), ...(notice ? { notice } : {}) });
+  } catch (error) { return failure(error, signal); }
 }
