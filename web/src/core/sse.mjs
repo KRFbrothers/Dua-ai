@@ -10,6 +10,9 @@
  *                    `covered` sent messages are now in `summary`; keep it with the conversation (Phase 2)
  *   event: notice    data: {"type":"notice","message":"..."}        non-fatal note (e.g. provider has no visible thinking)
  *   event: files     data: {"type":"files","files":[{path,transcript}]}  transcripts made for stored audio (keep them with the message)
+ *   event: code      data: {"type":"code","index":0,"language":"python","code":"..."}  code the provider ran in its sandbox (Run code, Phase 5)
+ *                    data: {"type":"code","index":0,"output":"...","outcome":"ok"}       its output for the same index; outcome ok | error | timeout
+ *                    (at most 10 runs per reply; code and output are each capped at 20,000 characters)
  *   event: done      data: {"type":"done","truncated":false,"usage":{...}}  last event of a successful reply
  *   event: error     data: {"type":"error","message":"...","status":504}    last event of a failed reply
  * Lines starting with ":" are heartbeats sent every 15 s so idle-timeouts on the client measure
@@ -21,7 +24,7 @@ export const SSE_HEADERS = Object.freeze({
   'X-Accel-Buffering': 'no',
   'X-Content-Type-Options': 'nosniff'
 });
-const TYPES = new Set(['thinking', 'text', 'sources', 'notice', 'files', 'context', 'done', 'error']);
+const TYPES = new Set(['thinking', 'text', 'sources', 'notice', 'files', 'context', 'code', 'done', 'error']);
 
 export function formatEvent(event) {
   if (!event || !TYPES.has(event.type)) throw new TypeError('Unknown stream event type.');

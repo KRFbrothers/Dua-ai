@@ -2,6 +2,7 @@
 // without network access; providers.mjs does validation, fetching and the HTTP response.
 import { isTextType } from './attachments.mjs';
 import { addCitation, addGroundingCitations, addOutputCitations } from './native-search.mjs';
+import { addCodeCall, addCodeResult, addInterpreterItem, codeRuns } from './code-execution.mjs';
 
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/models/';
 export const MAX_REPLY_CHARS = 100000;
@@ -71,12 +72,13 @@ const geminiPart = part => part.text !== undefined ? { text: part.text } : part.
  * ctx: {model, key, env, systemParts[], messages[{role,text,attachmentText?}], parts[], files[], webContext, reasoning, stream,
  *       turnParts?: Map<messageIndex, part[]>,  (stored-file parts resolved by file-context.mjs, any turn)
  *       search?: {native, x},  (provider-native web search / xAI X search tools, see native-search.mjs)
+ *       code?,  (provider-hosted code execution, see code-execution.mjs)
  *       cacheKey?, maxOutputTokens?}  (xAI prompt_cache_key; output cap override for summaries)
  * Prefix order stays stable for prompt caching: system (base prompt, memory, conversation summary),
  * then earlier turns oldest first, then the latest turn with its files and any web material.
  */
 export function buildRequest(provider, ctx) {
-  const { model, key, env = {}, systemParts, parts = [], files = [], webContext = '', reasoning = false, stream = false, search = {}, cacheKey } = ctx;
+  const { model, key, env = {}, systemParts, parts = [], files = [], webContext = '', reasoning = false, stream = false, search = {}, cacheKey, code = false } = ctx;
   const outputCap = prefix => ctx.maxOutputTokens || maxOutputTokens(prefix, env, reasoning);
   const turns = historyTurns(ctx.messages);
   const lastParts = [...parts, ...(webContext ? [{ text: webContext }] : [])];
@@ -85,13 +87,15 @@ export function buildRequest(provider, ctx) {
   if (provider.type === 'gemini') {
     const maxTokens = outputCap('GEMINI');
     const generationConfig = { ...(maxTokens ? { maxOutputTokens: maxTokens } : {}), ...(reasoning ? { thinkingConfig: geminiThinkingConfig(model, env) } : {}) };
+    // Google Search grounding and code execution can be combined in one request.
+    const geminiTools = [...(search.native ? [{ google_search: {} }] : []), ...(code ? [{ code_execution: {} }] : [])];
     return {
       url: GEMINI_BASE + encodeURIComponent(model) + (stream ? ':streamGenerateContent?alt=sse' : ':generateContent'),
       headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
       body: {
         systemInstruction: { parts: systemParts.map(text => ({ text })) },
         contents: turns.map((m, index) => ({ role: m.role, parts: [{ text: m.text }, ...extraParts(index).map(geminiPart)] })),
-        ...(search.native ? { tools: [{ google_search: {} }] } : {}),
+        ...(geminiTools.length ? { tools: geminiTools } : {}),
         ...(Object.keys(generationConfig).length ? { generationConfig } : {})
       }
     };
@@ -115,9 +119,12 @@ export function buildRequest(provider, ctx) {
     const base = provider.flavor === 'xai' ? { model, input: [{ role: 'system', content: system }, ...messages] } : { model, instructions: system, input: messages };
     const reasoningConfig = effort ? { reasoning: provider.flavor === 'xai' ? { effort } : { effort, summary: 'auto' } } : {};
     // Hosted tools: OpenAI and xAI both name web search `web_search`; `x_search` is xAI only.
-    const tools = [...(search.native ? [{ type: 'web_search' }] : []), ...(search.x && provider.flavor === 'xai' ? [{ type: 'x_search' }] : [])];
+    // Code execution: OpenAI needs an auto container and `include` for the logs; xAI takes the bare tool.
+    const interpreter = code ? [provider.flavor === 'xai' ? { type: 'code_interpreter' } : { type: 'code_interpreter', container: { type: 'auto' } }] : [];
+    const tools = [...(search.native ? [{ type: 'web_search' }] : []), ...(search.x && provider.flavor === 'xai' ? [{ type: 'x_search' }] : []), ...interpreter];
     const caching = provider.flavor === 'xai' && cacheKey ? { prompt_cache_key: cacheKey } : {};
-    return { url: provider.url, headers, body: { ...base, max_output_tokens: maxTokens, store: false, ...reasoningConfig, ...(tools.length ? { tools } : {}), ...caching, ...(stream ? { stream: true } : {}) } };
+    const include = code && provider.flavor !== 'xai' ? { include: ['code_interpreter_call.outputs'] } : {};
+    return { url: provider.url, headers, body: { ...base, max_output_tokens: maxTokens, store: false, ...reasoningConfig, ...(tools.length ? { tools } : {}), ...include, ...caching, ...(stream ? { stream: true } : {}) } };
   }
   return { url: provider.url, headers, body: { model, messages: [{ role: 'system', content: system }, ...messages], max_tokens: maxTokens, ...(stream ? { stream: true } : {}) } };
 }
@@ -140,16 +147,40 @@ function responseCitations(state, response) {
   if (!state.citations?.length && Array.isArray(response?.citations)) for (const url of response.citations) addCitation(state, url, '');
 }
 
-/** Non-streaming body → {text, thinking, truncated, usage, citations?, queries?}. */
+/** Gemini code-execution parts (executableCode, codeExecutionResult, inline chart images) -> Dua code events. */
+function geminiCodeEvents(part, state) {
+  if (part?.executableCode) return [addCodeCall(state, part.executableCode)].filter(Boolean);
+  if (part?.codeExecutionResult) return [addCodeResult(state, part.codeExecutionResult)].filter(Boolean);
+  if (part?.inlineData && state.code?.length) state.codeImages = (state.codeImages || 0) + 1;
+  return [];
+}
+
+/** Answer text; text written after code ran starts a new paragraph (the code itself is shown separately). */
+function geminiText(parts) {
+  let text = '';
+  let gap = false;
+  for (const part of parts) {
+    if (part?.executableCode || part?.codeExecutionResult) { gap = true; continue; }
+    if (part?.thought || typeof part?.text !== 'string') continue;
+    if (gap && text && !text.endsWith('\n\n') && part.text) text += text.endsWith('\n') ? '\n' : '\n\n';
+    gap = false;
+    text += part.text;
+  }
+  return text;
+}
+
+/** Non-streaming body → {text, thinking, truncated, usage, citations?, queries?, code?, codeImages?}. */
 export function extractReply(type, result) {
   if (type === 'gemini') {
     const candidate = result?.candidates?.[0];
     const parts = Array.isArray(candidate?.content?.parts) ? candidate.content.parts : [];
     const cited = {};
     addGroundingCitations(cited, candidate?.groundingMetadata);
+    for (const part of parts) geminiCodeEvents(part, cited);
     return {
       ...(cited.citations ? { citations: cited.citations } : {}), ...(cited.queries ? { queries: cited.queries } : {}),
-      text: parts.filter(p => !p?.thought && typeof p?.text === 'string').map(p => p.text).join(''),
+      ...(cited.code?.length ? { code: codeRuns(cited) } : {}), ...(cited.codeImages ? { codeImages: cited.codeImages } : {}),
+      text: geminiText(parts),
       thinking: parts.filter(p => p?.thought && typeof p.text === 'string').map(p => p.text).join('\n\n'),
       truncated: candidate?.finishReason === 'MAX_TOKENS', usage: usageOf(type, result?.usageMetadata)
     };
@@ -158,8 +189,9 @@ export function extractReply(type, result) {
     const output = Array.isArray(result?.output) ? result.output : [];
     const cited = {};
     responseCitations(cited, result);
+    for (const item of output) addInterpreterItem(cited, item);
     return {
-      ...(cited.citations ? { citations: cited.citations } : {}),
+      ...(cited.citations ? { citations: cited.citations } : {}), ...(cited.code?.length ? { code: codeRuns(cited) } : {}),
       text: output.filter(item => item?.type === 'message' && item.role === 'assistant').flatMap(item => Array.isArray(item.content) ? item.content : []).filter(part => part?.type === 'output_text' && typeof part.text === 'string').map(part => part.text).join('\n'),
       thinking: output.filter(item => item?.type === 'reasoning').flatMap(item => Array.isArray(item.summary) ? item.summary : []).map(part => textOf(part?.text)).filter(Boolean).join('\n\n'),
       truncated: result?.status === 'incomplete' && result?.incomplete_details?.reason === 'max_output_tokens', usage: usageOf(type, result?.usage)
@@ -178,8 +210,8 @@ export function extractReply(type, result) {
 }
 
 /**
- * Maps one upstream SSE record to normalized events. `state` collects {done, truncated, usage, error, citations, queries}.
- * Returns [{type:'thinking'|'text', delta}].
+ * Maps one upstream SSE record to normalized events. `state` collects {done, truncated, usage, error, citations, queries, code, codeImages}.
+ * Returns [{type:'thinking'|'text', delta}] plus ready-to-send code events [{type:'code', index, ...}].
  */
 export function parseStreamRecord(type, record, state) {
   if (record.data === '[DONE]') { state.done = true; return []; }
@@ -191,7 +223,10 @@ export function parseStreamRecord(type, record, state) {
   if (type === 'gemini') {
     if (data.error) { state.error = data.error; return []; }
     const candidate = data.candidates?.[0];
-    for (const part of Array.isArray(candidate?.content?.parts) ? candidate.content.parts : []) push(part?.thought ? 'thinking' : 'text', part?.text);
+    for (const part of Array.isArray(candidate?.content?.parts) ? candidate.content.parts : []) {
+      push(part?.thought ? 'thinking' : 'text', part?.text);
+      events.push(...geminiCodeEvents(part, state));
+    }
     if (candidate?.finishReason) { state.done = true; if (candidate.finishReason === 'MAX_TOKENS') state.truncated = true; }
     if (data.usageMetadata) state.usage = usageOf(type, data.usageMetadata);
     // Streamed grounding metadata only carries chunks not sent before, so citations accumulate.
@@ -204,6 +239,7 @@ export function parseStreamRecord(type, record, state) {
     else if (kind === 'response.reasoning_summary_text.delta' || kind === 'response.reasoning_text.delta') push('thinking', data.delta);
     else if (kind === 'response.reasoning_summary_part.added' && data.summary_index > 0) push('thinking', '\n\n');
     else if (kind === 'response.output_text.annotation.added') { if (data.annotation?.type === 'url_citation') addCitation(state, data.annotation.url, data.annotation.title); }
+    else if (kind === 'response.output_item.done') events.push(...addInterpreterItem(state, data.item));
     else if (kind === 'response.completed' || kind === 'response.incomplete') {
       state.done = true;
       responseCitations(state, data.response);
