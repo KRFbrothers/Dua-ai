@@ -64,16 +64,17 @@ class AccountApiTest {
         assertEquals("Bearer new-access", requests[2].getHeader("Authorization"))
         assertEquals(old.user.id, store.value!!.user.id)
     }
-    @Test fun recoveryUsesEphemeralCodeAndDeletionNeedsExactConfirmation() = runBlocking {
+    @Test fun googleSignInSendsTokenAndRawNonceAndDeletionNeedsExactConfirmation() = runBlocking {
         val repository = AccountRepository(api, MemoryStore(null))
-        val recovered = AccountSession(AccountSessionCodec.user(user), "recovery-access", "recovery-refresh", System.currentTimeMillis() / 1000 + 3600)
-        server.enqueue(json(AccountSessionCodec.encode(recovered).put("recoveryVerified", true)))
-        repository.verifyRecovery("person@example.com", "123456")
-        assertTrue(repository.state.value.recoveryVerified)
-        val verify = server.takeRequest(3, TimeUnit.SECONDS)!!
-        assertEquals("/api/account/verify-recovery", verify.path)
-        assertEquals("123456", JSONObject(verify.body.readUtf8()).getString("token"))
-        assertNull(verify.getHeader("Authorization"))
+        val signedIn = AccountSession(AccountSessionCodec.user(user), "google-access", "google-refresh", System.currentTimeMillis() / 1000 + 3600)
+        server.enqueue(json(AccountSessionCodec.encode(signedIn)))
+        repository.signInWithGoogle("header.payload.signature", "raw-nonce-0123456789abcdef")
+        assertEquals(signedIn.user, repository.state.value.user)
+        val exchange = server.takeRequest(3, TimeUnit.SECONDS)!!
+        assertEquals("/api/account/google-token", exchange.path)
+        val sent = JSONObject(exchange.body.readUtf8())
+        assertEquals("header.payload.signature", sent.getString("idToken")); assertEquals("raw-nonce-0123456789abcdef", sent.getString("nonce"))
+        assertNull(exchange.getHeader("Authorization"))
         val denied = runCatching { repository.deleteAccount("yes") }.exceptionOrNull()
         assertTrue(denied is IllegalArgumentException)
         assertEquals(1, server.requestCount)
@@ -81,14 +82,14 @@ class AccountApiTest {
         assertTrue(switched is IllegalStateException)
         assertEquals(1, server.requestCount)
         server.enqueue(json(JSONObject().put("deleted", true)))
-        repository.deleteAccount("DELETE MY ACCOUNT", recovered.user.id)
+        repository.deleteAccount("DELETE MY ACCOUNT", signedIn.user.id)
         val deletion = server.takeRequest(3, TimeUnit.SECONDS)!!
         val body = JSONObject(deletion.body.readUtf8())
         assertEquals("/api/account/delete", deletion.path)
         assertEquals("DELETE", deletion.method)
         assertEquals("DELETE MY ACCOUNT", body.getString("confirmation"))
-        assertEquals(recovered.user.id, body.getString("expectedAccountId"))
-        assertEquals("Bearer recovery-access", deletion.getHeader("Authorization"))
+        assertEquals(signedIn.user.id, body.getString("expectedAccountId"))
+        assertEquals("Bearer google-access", deletion.getHeader("Authorization"))
         assertNull(repository.state.value.user)
     }
     @Test fun aRefreshCannotReplaceTheSignedInOwner() = runBlocking {

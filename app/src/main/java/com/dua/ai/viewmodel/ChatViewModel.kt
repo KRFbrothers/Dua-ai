@@ -226,8 +226,32 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
     fun loadAccount() = accountAction { account.load(); account.loadFeatures(); flushPendingFileDeletes() }
-    fun signIn(email: String, password: String, signup: Boolean) = accountAction { _cloudPreview.value = null; account.signIn(email, password, signup) }
-    fun signInWithGoogle(idToken: String, nonce: String) = accountAction { _cloudPreview.value = null; account.signInWithGoogle(idToken, nonce) }
+    /** Google sign-in progress for the welcome screen and Profile: busy while the account picker or token exchange runs, plus the last error. */
+    data class GoogleSignInState(val busy: Boolean = false, val error: String? = null)
+    private val _googleSignIn = MutableStateFlow(GoogleSignInState())
+    val googleSignIn = _googleSignIn.asStateFlow()
+    private val onboarding = com.dua.ai.settings.OnboardingStore(application)
+    /** The welcome screen shows at launch only while signed out and not skipped. */
+    fun shouldShowOnboarding(): Boolean = account.state.value.user == null && !onboarding.skipped
+    fun skipOnboarding() { onboarding.skipped = true }
+    /** The account picker needs an Activity, so the UI runs it ([com.dua.ai.auth.GoogleSignIn]) and reports here. */
+    fun googleSignInStarted() { _googleSignIn.value = GoogleSignInState(busy = true) }
+    fun googleSignInFailed(message: String?) { _googleSignIn.value = GoogleSignInState(error = message) }
+    fun signInWithGoogle(idToken: String, nonce: String) {
+        if (_dataBusy.value) { googleSignInFailed("Wait for the current data operation to finish, then try again."); return }
+        _googleSignIn.value = GoogleSignInState(busy = true)
+        account.busy(true)
+        automaticSync.setBusy(true)
+        viewModelScope.launch {
+            try {
+                _cloudPreview.value = null
+                account.signInWithGoogle(idToken, nonce)
+                _googleSignIn.value = GoogleSignInState()
+            } catch (cancelled: CancellationException) { _googleSignIn.value = GoogleSignInState(); throw cancelled }
+            catch (failure: Exception) { googleSignInFailed(failure.message ?: "Google sign-in failed. Try again.") }
+            finally { account.busy(false); refreshSyncBusy() }
+        }
+    }
     fun logOut() { automaticSync.disable(); accountAction { _cloudPreview.value = null; account.logout() } }
     fun cancelCloudReview() { _cloudPreview.value = null; account.notice("Cancelled. Data was not changed.") }
     fun reviewCloud(kind: String) = accountAction {

@@ -11,7 +11,7 @@ Dua is a personal, single-user app: it is built for its owner only and installed
 - Chat Web: Off/Search/Read link modes and clickable source footers. Search requires Brave configuration; public page reading uses the existing chat provider. Web mode starts Off.
 - Copy, retry and speaker reply icons; device speech recognition/TTS and explicit foreground hands-free turns. Optional generated reply audio uses an authenticated, owner-restricted server integration.
 - Appearance, permissions, local notifications, reviewed memory notes/proposals and local privacy controls.
-- Supabase email accounts, reviewed cloud snapshots and opt-in foreground automatic sync. Optional recovery, native Google sign-in, account deletion, owner/login restrictions and durable server-side quotas are prepared.
+- Native Google sign-in (Supabase accounts): a single welcome screen at first launch with **Sign in with Google** or **Skip for now**; sign-in and Log out live in Settings → Profile. Reviewed cloud snapshots and opt-in foreground automatic sync. Optional account deletion, owner/login restrictions and durable server-side quotas are prepared. The Android app has no email/password sign-in.
 - A configured read-only GitHub repository connector.
 
 API keys and optional credentials remain server-side. Preparing a feature does not activate a provider or paid service. OpenAI key setup remains deferred. Background/realtime sync, model-based memory and other advanced integrations remain pending.

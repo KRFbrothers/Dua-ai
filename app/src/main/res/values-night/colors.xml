@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Splash background: DuaTheme dark background (DuaPalette.Neutral4). -->
+    <color name="dua_splash_background">#0E0F11</color>
+</resources>

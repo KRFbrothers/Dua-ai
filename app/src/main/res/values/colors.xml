@@ -3,4 +3,6 @@
     <color name="ic_launcher_background">#151619</color>
     <!-- Matches DuaPalette.Neutral4 (dark background) so launch has no white flash. -->
     <color name="dua_window_background">#0E0F11</color>
+    <!-- Splash background: DuaTheme light background (night variant in values-night). -->
+    <color name="dua_splash_background">#FFFFFF</color>
 </resources>

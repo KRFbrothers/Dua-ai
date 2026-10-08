@@ -9,7 +9,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.json.JSONObject
 
-data class AccountState(val configured: Boolean = false, val user: AccountUser? = null, val busy: Boolean = false, val notice: String = "", val deletionConfigured: Boolean = false, val recoveryVerified: Boolean = false)
+data class AccountState(val configured: Boolean = false, val user: AccountUser? = null, val busy: Boolean = false, val notice: String = "", val deletionConfigured: Boolean = false)
 class AccountRepository(private val api: AccountApi, private val store: SessionPersistence) {
     constructor(context: Context) : this(AccountApi(), AccountSessionStore(context))
     private var session = runCatching { store.read() }.getOrNull()
@@ -28,16 +28,15 @@ class AccountRepository(private val api: AccountApi, private val store: SessionP
     fun busy(value: Boolean) { mutable.update { it.copy(busy = value) } }
     /** Call only while holding sessionLock. Persistence and the generation guard commit together. */
     private fun writeSession(value: AccountSession?, authenticationChange: Boolean = false) {
-        val sameAccount = value != null && value.user.id == session?.user?.id
         store.write(value); session = value; sessionRevision++
         if (authenticationChange) authGeneration++
-        mutable.update { it.copy(user = value?.user, recoveryVerified = sameAccount && it.recoveryVerified) }
+        mutable.update { it.copy(user = value?.user) }
     }
     private fun beginAuthentication() = synchronized(sessionLock) { ++authGeneration }
-    private fun installAuthentication(ticket: Long, value: AccountSession, recovery: Boolean = false) = synchronized(sessionLock) {
+    private fun installAuthentication(ticket: Long, value: AccountSession) = synchronized(sessionLock) {
         check(authGeneration == ticket) { "Account changed. Retry from the current account." }
         writeSession(value, authenticationChange = true)
-        mutable.update { it.copy(configured = true, recoveryVerified = recovery) }
+        mutable.update { it.copy(configured = true) }
         Snapshot(session, authGeneration, sessionRevision)
     }
     private fun noticeIfCurrent(value: Snapshot, text: String) = synchronized(sessionLock) { if (matches(value)) notice(text) }
@@ -84,28 +83,6 @@ class AccountRepository(private val api: AccountApi, private val store: SessionP
         val expected = snapshot()
         if (authenticated) check(expected.value != null) { "Sign in from Profile to continue." }
         return withSnapshot(expected) { access -> api.request(path, method, body, access) }
-    }
-    suspend fun resetPassword(email: String) {
-        val expected = snapshot()
-        api.request("/api/account/reset-password", "POST", JSONObject().put("email", email.trim()))
-        noticeIfCurrent(expected, "If the account exists, a recovery email was requested. Check your inbox and spam folder.")
-    }
-    suspend fun verifyRecovery(email: String, code: String) {
-        val ticket = beginAuthentication()
-        val result = api.request("/api/account/verify-recovery", "POST", JSONObject().put("email", email.trim()).put("token", code.trim()))
-        check(result.optBoolean("recoveryVerified")) { "Recovery code could not be verified." }
-        val installed = installAuthentication(ticket, AccountSessionCodec.decode(result), recovery = true)
-        noticeIfCurrent(installed, "Recovery verified. Choose a new password.")
-    }
-    suspend fun changePassword(password: String, currentPassword: String = "") {
-        val expected = snapshot(); check(expected.value != null) { "Sign in from Profile to continue." }
-        val body = JSONObject().put("password", password)
-        if (currentPassword.isNotBlank()) body.put("currentPassword", currentPassword)
-        withSnapshot(expected) { api.request("/api/account/password", "PUT", body, it) }
-        synchronized(sessionLock) {
-            check(matches(expected)) { "Account changed. Retry from the current account." }
-            mutable.update { it.copy(recoveryVerified = false, notice = "Password updated.") }
-        }
     }
     suspend fun deleteAccount(confirmation: String, expectedAccountId: String? = null) {
         require(confirmation == "DELETE MY ACCOUNT") { "Type DELETE MY ACCOUNT to confirm." }
@@ -160,17 +137,6 @@ class AccountRepository(private val api: AccountApi, private val store: SessionP
         val installed = installAuthentication(ticket, AccountSessionCodec.decode(result))
         noticeIfCurrent(installed, "Signed in with Google. Local data was not uploaded.")
     }
-    suspend fun signIn(email: String, password: String, signup: Boolean) {
-        val ticket = beginAuthentication()
-        val result = api.request(if (signup) "/api/account/signup" else "/api/account/signin", "POST", JSONObject().put("email", email.trim()).put("password", password))
-        if (result.has("session")) {
-            val installed = installAuthentication(ticket, AccountSessionCodec.decode(result))
-            noticeIfCurrent(installed, "Signed in. Local data was not uploaded.")
-        } else synchronized(sessionLock) {
-            check(authGeneration == ticket) { "Account changed. Retry from the current account." }
-            notice("Check your email, confirm your account, then sign in.")
-        }
-    }
     suspend fun profile(name: String) {
         val expected = snapshot(); check(expected.value != null) { "Sign in from Profile to continue." }
         val result = withSnapshot(expected) { api.request("/api/account/profile", "PATCH", JSONObject().put("displayName", name.trim()), it) }
@@ -181,7 +147,7 @@ class AccountRepository(private val api: AccountApi, private val store: SessionP
         }
     }
     suspend fun logout() {
-        // Forget locally before waiting on the network, invalidating pending login/recovery responses too.
+        // Forget locally before waiting on the network, invalidating pending sign-in responses too.
         val (prior, signedOut) = synchronized(sessionLock) {
             val prior = session
             writeSession(null, authenticationChange = true)
