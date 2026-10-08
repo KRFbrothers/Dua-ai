@@ -94,8 +94,10 @@ object ChatHistoryCodec {
                     // Optional since Reasoning mode; exports and cloud snapshots without them stay valid.
                     val thinking = if (role == "model" && message.has("thinking")) text(message, "thinking", 100000) else null
                     val seconds = if (role == "model" && message.has("thinkingSeconds")) integer(message, "thinkingSeconds").also { require(it <= 86400) { invalid } }.toInt() else null
+                    // Optional since Imagine (Phase 3): stored references to generated images and videos.
+                    val media = if (role == "model" && message.has("media")) com.dua.ai.imagine.ImagineCodec.mediaFrom(message.getJSONArray("media"), local = false) else emptyList()
                     ChatMessage(text = text(message, "text", 1048576), isUser = role == "user", model = model, state = state,
-                        thinking = thinking?.takeIf { it.isNotBlank() }, thinkingSeconds = seconds)
+                        thinking = thinking?.takeIf { it.isNotBlank() }, thinkingSeconds = seconds, media = media)
                 }, updatedAt)
             }
         } catch (_: Exception) { throw IllegalArgumentException(invalid) }
@@ -119,7 +121,7 @@ object ChatHistoryCodec {
                         chat.messages.filter(::persistable).forEach { message -> put(JSONObject()
                             .put("role", if (message.isUser) "user" else "model")
                             .put("text", message.text).put("state", savedState(message.state))
-                            .apply { putThinking(this, message) }) }
+                            .apply { putThinking(this, message); putMedia(this, message, local = false) }) }
                     }))
             }
         }).toString(2)
@@ -138,6 +140,8 @@ object ChatHistoryCodec {
                             if (message.isUser && !message.attachmentText.isNullOrEmpty()) put("attachmentText", message.attachmentText.take(ChatMessage.MAX_ATTACHMENT_TEXT_CHARS))
                             // Stored-file references (and audio transcripts) also stay local.
                             if (message.isUser && message.files.isNotEmpty()) put("files", com.dua.ai.files.FileRefCodec.array(message.files))
+                            putMedia(this, message, local = true)
+                            if (!message.isUser) message.imagine?.let { put("imagine", com.dua.ai.imagine.ImagineCodec.infoJson(it)) }
                         })
                 } })) }
         }).toString()
@@ -154,6 +158,12 @@ object ChatHistoryCodec {
         message.thinkingSeconds?.takeIf { it in 0..86400 }?.let { json.put("thinkingSeconds", it) }
     }
 
+    private fun putMedia(json: JSONObject, message: ChatMessage, local: Boolean) {
+        if (message.isUser || message.media.isEmpty()) return
+        val array = com.dua.ai.imagine.ImagineCodec.mediaArray(message.media, local)
+        if (array.length() > 0) json.put("media", array)
+    }
+
     fun decode(raw: String): Pair<String, List<SavedChat>> {
         val root = JSONObject(raw)
         val records = root.getJSONArray("chats")
@@ -168,7 +178,9 @@ object ChatHistoryCodec {
                         thinking = if (message.has("thinking")) message.optString("thinking").takeIf { it.isNotBlank() } else null,
                         thinkingSeconds = if (message.has("thinkingSeconds")) message.optInt("thinkingSeconds", -1).takeIf { it in 0..86400 } else null,
                         attachmentText = if (message.has("attachmentText")) message.optString("attachmentText").takeIf { it.isNotEmpty() } else null,
-                        files = com.dua.ai.files.FileRefCodec.fromArray(message.optJSONArray("files")))
+                        files = com.dua.ai.files.FileRefCodec.fromArray(message.optJSONArray("files")),
+                        media = com.dua.ai.imagine.ImagineCodec.mediaFrom(message.optJSONArray("media"), local = true),
+                        imagine = com.dua.ai.imagine.ImagineCodec.infoFrom(message.optJSONObject("imagine")))
                 }, item.getLong("updatedAt"), com.dua.ai.model.ChatSummary.fromJson(item.optJSONObject("summary")))
         }
         require(chats.all { it.model in com.dua.ai.setup.IntegrationCapabilities.MODELS } && chats.map { it.id }.distinct().size == chats.size)

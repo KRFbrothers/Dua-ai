@@ -7,11 +7,14 @@ import org.json.JSONObject
 import org.json.JSONArray
 
 data class LocalPreferences(val theme: String = "dark", val font: String = "default", val haptic: Boolean = false,
-    val notifications: Boolean = false, val memoryEnabled: Boolean = false, val memory: List<String> = emptyList(), val generatedVoice: Boolean = false)
+    val notifications: Boolean = false, val memoryEnabled: Boolean = false, val memory: List<String> = emptyList(), val generatedVoice: Boolean = false,
+    /** Imagine defaults: image provider ("" = server default, "xai" or "gemini") and aspect ratio. */
+    val imagineProvider: String = "", val imagineAspect: String = "1:1")
 
 object PreferencesCodec {
     fun validate(value: LocalPreferences): LocalPreferences {
         require(value.theme in listOf("dark", "light", "system") && value.font in listOf("default", "system", "serif", "monospace"))
+        require(value.imagineProvider in listOf("", "xai", "gemini") && value.imagineAspect in com.dua.ai.imagine.ImagineCodec.ASPECTS) { "Invalid Imagine default." }
         require(value.memory.size <= 10 && value.memory.all { it.isNotBlank() && it.length <= 200 }) { "Save at most 10 memories, each up to 200 characters." }
         return value
     }
@@ -19,13 +22,18 @@ object PreferencesCodec {
         validate(value)
         return JSONObject().put("theme", value.theme).put("font", value.font).put("haptic", value.haptic)
             .put("notifications", value.notifications).put("memoryEnabled", value.memoryEnabled)
-            .put("memory", JSONArray(value.memory)).put("generatedVoice", value.generatedVoice).toString()
+            .put("memory", JSONArray(value.memory)).put("generatedVoice", value.generatedVoice)
+            .put("imagineProvider", value.imagineProvider).put("imagineAspect", value.imagineAspect).toString()
     }
     fun decode(raw: String): LocalPreferences {
         val data = JSONObject(raw); val notes = data.getJSONArray("memory")
         val generatedVoice = if (!data.has("generatedVoice")) false else data.get("generatedVoice") as? Boolean ?: error("Invalid voice preference")
+        // Optional since Imagine; unknown values fall back to the defaults instead of failing all settings.
+        val imagineProvider = data.optString("imagineProvider").takeIf { it in listOf("", "xai", "gemini") } ?: ""
+        val imagineAspect = data.optString("imagineAspect", "1:1").takeIf { it in com.dua.ai.imagine.ImagineCodec.ASPECTS } ?: "1:1"
         return validate(LocalPreferences(data.getString("theme"), data.getString("font"), data.getBoolean("haptic"),
-            data.getBoolean("notifications"), data.getBoolean("memoryEnabled"), (0 until notes.length()).map { (notes.get(it) as? String ?: error("Invalid memory note")) }, generatedVoice))
+            data.getBoolean("notifications"), data.getBoolean("memoryEnabled"), (0 until notes.length()).map { (notes.get(it) as? String ?: error("Invalid memory note")) }, generatedVoice,
+            imagineProvider, imagineAspect))
     }
     fun memoryText(value: LocalPreferences): String = if (value.memoryEnabled) value.memory.joinToString("\n") { "- $it" } else ""
 }

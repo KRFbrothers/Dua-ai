@@ -26,7 +26,13 @@ data class ChatMessage(
     val notice: String? = null,
     /** User turns: files stored in the private Supabase bucket (references only). Kept on this device. */
     val files: List<com.dua.ai.files.FileRef> = emptyList(),
+    /** Model turns: Imagine results (references into the private bucket, never bytes). Saved, exported and synced. */
+    val media: List<com.dua.ai.imagine.GeneratedMedia> = emptyList(),
+    /** Model turns: the Imagine request and its progress (video jobs resume from here). Kept on this device. */
+    val imagine: com.dua.ai.imagine.ImagineInfo? = null,
 ) {
+    /** An Imagine reply (generated images or video, finished or not). */
+    val isImagine: Boolean get() = !isUser && (imagine != null || media.isNotEmpty())
     val streaming: Boolean get() = state == STREAMING
     companion object {
         const val STREAMING = "streaming"

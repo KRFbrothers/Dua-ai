@@ -87,7 +87,9 @@ object FileRefCodec {
 
 /** A file being uploaded (or uploaded and waiting to be sent) from the composer. */
 data class PendingUpload(val id: String, val name: String, val mimeType: String, val size: Long, val sent: Long = 0,
-    val state: String = UPLOADING, val ref: FileRef? = null, val error: String? = null) {
+    val state: String = UPLOADING, val ref: FileRef? = null, val error: String? = null,
+    /** Already stored for an earlier message (Imagine "Edit"): removing it from the composer must not delete the file. */
+    val shared: Boolean = false) {
     val progress: Float get() = if (size <= 0) 0f else (sent.toFloat() / size).coerceIn(0f, 1f)
     val uploading: Boolean get() = state == UPLOADING
     companion object { const val UPLOADING = "uploading"; const val DONE = "done"; const val FAILED = "failed" }

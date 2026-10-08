@@ -21,6 +21,14 @@ import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.outlined.Brush
+import androidx.compose.material.icons.outlined.ExpandMore
+import androidx.compose.material.icons.outlined.AspectRatio
+import androidx.compose.material.icons.outlined.GridView
+import androidx.compose.material.icons.outlined.HighQuality
+import androidx.compose.material.icons.outlined.Image
+import androidx.compose.material.icons.outlined.Movie
+import androidx.compose.material.icons.outlined.Timer
 import androidx.compose.material.icons.outlined.Psychology
 import androidx.compose.material.icons.outlined.Tag
 import androidx.compose.material.icons.outlined.Close
@@ -75,6 +83,8 @@ fun Composer(
     onAuto: () -> Unit = { onWebMode(null) },
     onXSearch: (Boolean) -> Unit = {},
     onCancelUpload: (String) -> Unit = {},
+    onImagine: (Boolean) -> Unit = {},
+    onImagineOptions: () -> Unit = {},
 ) {
     val colors = DuaTheme.colors
     val idle = !state.typing && !state.readingFiles
@@ -101,17 +111,26 @@ fun Composer(
                     .padding(horizontal = Spacing.md, vertical = Spacing.md).semantics { contentDescription = "Message" },
                 decorationBox = { inner ->
                     Box {
-                        if (state.draft.isEmpty()) Text("Ask anything", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        if (state.draft.isEmpty()) Text(placeholder(state), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         inner()
                     }
                 },
             )
+            if (state.imagine) ImagineOptionChips(state, enabled = idle, onClick = onImagineOptions,
+                modifier = Modifier.padding(start = Spacing.sm, end = Spacing.sm, bottom = Spacing.xs))
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onAttach, enabled = idle) { Icon(Icons.Outlined.Add, contentDescription = "Add photos and files") }
                 Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
                     verticalAlignment = Alignment.CenterVertically) {
                     ModeChip("Auto", Icons.Outlined.AutoAwesome, isSelected = state.auto, enabled = idle,
                         description = "Auto mode, reasoning and web off") { onAuto() }
+                    // Imagine: image or video generation (shown when the backend offers it).
+                    if (state.imagineConfig != null) ModeChip("Imagine", Icons.Outlined.Brush, isSelected = state.imagine, enabled = idle,
+                        description = when {
+                            state.imagine -> "Imagine on. Tap to turn off"
+                            state.imagineConfig.enabled -> "Create images and videos"
+                            else -> "Create images and videos, turned off on the server"
+                        }) { onImagine(!state.imagine) }
                     ModeChip("Reasoning", Icons.Outlined.Psychology, isSelected = state.reasoning, enabled = idle,
                         description = when {
                             state.reasoning -> "Reasoning on. Tap to turn off"
@@ -135,6 +154,33 @@ fun Composer(
             }
         }
     }
+}
+
+/** Imagine options as compact chips above the mode row; each opens the options sheet. */
+@Composable
+private fun ImagineOptionChips(state: ChatUiState, enabled: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val options = state.imagineOptions
+    val video = options.kind == com.dua.ai.imagine.ImagineInfo.VIDEO
+    val labels = buildList {
+        add((if (video) "Video" else "Image") to (if (video) Icons.Outlined.Movie else Icons.Outlined.Image))
+        add(com.dua.ai.imagine.ImagineCodec.aspectLabel(options.aspectRatio) to Icons.Outlined.AspectRatio)
+        if (video) { add("${options.duration} s" to Icons.Outlined.Timer); add(options.resolution to Icons.Outlined.HighQuality) }
+        else if (options.count > 1) add("×${options.count}" to Icons.Outlined.GridView)
+    }
+    Row(modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).semantics(mergeDescendants = true) {
+        contentDescription = "Imagine options: ${imagineSummary(options, state.imagineConfig)}. Tap to change"; role = Role.Button
+    }, horizontalArrangement = Arrangement.spacedBy(Spacing.xs), verticalAlignment = Alignment.CenterVertically) {
+        labels.forEachIndexed { index, (label, icon) ->
+            ModeChip(label, icon, isSelected = index == 0, enabled = enabled, description = label, trailing = if (index == 0) Icons.Outlined.ExpandMore else null, onClick = onClick)
+        }
+    }
+}
+
+internal fun placeholder(state: ChatUiState): String = when {
+    !state.imagine -> "Ask anything"
+    state.imagineOptions.kind == com.dua.ai.imagine.ImagineInfo.VIDEO -> if (state.imagineSource) "Describe the motion (optional)" else "Describe a video"
+    state.imagineSource -> "Describe the edit"
+    else -> "Describe an image"
 }
 
 @Composable

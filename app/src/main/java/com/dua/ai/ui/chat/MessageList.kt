@@ -43,7 +43,8 @@ import com.dua.ai.ui.theme.Sizes
 import com.dua.ai.ui.theme.Spacing
 
 @Composable
-fun MessageList(state: ChatUiState, actions: ChatActions, listState: LazyListState, modifier: Modifier = Modifier) {
+fun MessageList(state: ChatUiState, actions: ChatActions, listState: LazyListState, modifier: Modifier = Modifier,
+    imagineActions: ImagineActions = actions.imagine) {
     val lastId = state.messages.lastOrNull()?.id
     LazyColumn(
         state = listState,
@@ -55,6 +56,7 @@ fun MessageList(state: ChatUiState, actions: ChatActions, listState: LazyListSta
         items(state.messages, key = { it.id }, contentType = { if (it.isUser) "user" else "assistant" }) { message ->
             Column(Modifier.widthIn(max = Sizes.contentMaxWidth).fillMaxWidth()) {
                 if (message.isUser) UserMessage(message.text, files = message.files, onOpenFile = actions.onOpenFile)
+                else if (message.isImagine) ImagineReply(message, imagineActions, videoAvailable = state.videoAvailable)
                 else AssistantMessage(
                     message = message,
                     isLast = message.id == lastId,

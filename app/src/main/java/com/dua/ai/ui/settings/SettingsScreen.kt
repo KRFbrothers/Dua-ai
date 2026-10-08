@@ -3,6 +3,7 @@ package com.dua.ai.ui.settings
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.automirrored.outlined.VolumeUp
+import androidx.compose.material.icons.outlined.Brush
 import androidx.compose.material.icons.outlined.CloudSync
 import androidx.compose.material.icons.outlined.GraphicEq
 import androidx.compose.material.icons.outlined.Info
@@ -45,6 +46,8 @@ data class SettingsUiState(
     val generatedVoiceConfigured: Boolean = false,
     val busy: Boolean = false,
     val version: String = BuildConfig.VERSION_NAME,
+    /** Imagine row subtitle; null hides the row (backend without Imagine). */
+    val imagine: String? = null,
 ) {
     val generatedVoiceToggleEnabled: Boolean get() = !busy && (generatedVoice || (generatedVoiceConfigured && email != null))
 }
@@ -64,6 +67,10 @@ fun SettingsScreen(viewModel: ChatViewModel, onBack: () -> Unit, onOpen: (DuaDes
         memoryEnabled = preferences.memoryEnabled, notifications = preferences.notifications,
         generatedVoice = preferences.generatedVoice, generatedVoiceConfigured = integrations.generatedVoiceConfigured,
         busy = integrations.busy,
+        imagine = integrations.imagine?.let { config ->
+            if (!config.enabled) "Off on the server" else listOfNotNull(config.providerName(preferences.imagineProvider.ifBlank { null }),
+                com.dua.ai.imagine.ImagineCodec.aspectLabel(preferences.imagineAspect), if (config.videoEnabled) "video on" else null).joinToString(" · ")
+        },
     )
     SettingsContent(state, onBack, onOpen,
         onHaptic = { enabled ->
@@ -90,6 +97,10 @@ fun SettingsContent(state: SettingsUiState, onBack: () -> Unit, onOpen: (DuaDest
             SettingsRow(Icons.Outlined.Psychology, "Memory", if (state.memoryEnabled) "On · stored on this device" else "Off · stored on this device") { onOpen(DuaDestination.Memory) }
             SettingsDivider()
             SettingsSwitchRow(Icons.Outlined.Vibration, "Haptic feedback", checked = state.haptic, onCheckedChange = onHaptic)
+            if (state.imagine != null) {
+                SettingsDivider()
+                SettingsRow(Icons.Outlined.Brush, "Imagine", state.imagine) { onOpen(DuaDestination.Imagine) }
+            }
         }
         SettingsSection("Voice") {
             SettingsRow(Icons.Outlined.Mic, "Voice input", "Dictate, review, then send") { onOpen(DuaDestination.Voice) }
