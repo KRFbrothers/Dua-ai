@@ -54,7 +54,7 @@ fun MarkdownMessage(markdown: String, modifier: Modifier = Modifier) {
     val inlineCode = body.copy(fontFamily = FontFamily.Monospace, fontSize = body.fontSize * 0.9f)
     CompositionLocalProvider(LocalUriHandler provides uriHandler) {
         Markdown(
-            content = markdown,
+            content = remember(markdown) { com.dua.ai.model.CitationMarkers.escape(markdown) },
             modifier = modifier.fillMaxWidth(),
             colors = markdownColor(
                 text = scheme.onSurface,

@@ -24,6 +24,7 @@ test('planContext keeps everything that fits, otherwise the newest turns down to
   assert.equal(many[keepFrom].role, 'user');
   const kept = many.slice(keepFrom).reduce((s, m) => s + turnChars(m), 0);
   assert.ok(kept <= 20000 * 0.5, `kept ${kept} within the low-water mark`);
+  assert.ok(kept >= 20000 * 0.25, `kept ${kept}: recent turns stay verbatim even with a small budget`);
   // Without low water (older apps, no summary) the window fills the whole budget.
   const legacy = planContext(many, 20000, { lowWater: false });
   assert.ok(legacy.keepFrom < keepFrom);

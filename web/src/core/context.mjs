@@ -38,7 +38,8 @@ export function planContext(messages, budget, { summaryChars = 0, lowWater = tru
   const sizes = messages.map(turnChars);
   const total = sizes.reduce((sum, size) => sum + size, 0);
   if (total + summaryChars <= budget) return { keepFrom: 0, total };
-  const target = Math.max(0, (lowWater ? budget * LOW_WATER : budget) - (lowWater ? MAX_SUMMARY_CHARS : summaryChars));
+  // After summarising, leave room for a new summary (at most a fifth of the budget so small budgets keep recent turns).
+  const target = Math.max(0, lowWater ? budget * LOW_WATER - Math.min(MAX_SUMMARY_CHARS, budget * 0.2) : budget - summaryChars);
   let keepFrom = messages.length - 1;
   let used = sizes[keepFrom];
   while (keepFrom > 0 && used + sizes[keepFrom - 1] <= target) used += sizes[--keepFrom];

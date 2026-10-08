@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Psychology
+import androidx.compose.material.icons.outlined.Tag
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Link
@@ -72,6 +73,7 @@ fun Composer(
     modifier: Modifier = Modifier,
     onReasoning: (Boolean) -> Unit = {},
     onAuto: () -> Unit = { onWebMode(null) },
+    onXSearch: (Boolean) -> Unit = {},
     onCancelUpload: (String) -> Unit = {},
 ) {
     val colors = DuaTheme.colors
@@ -119,6 +121,11 @@ fun Composer(
                     ModeChip("Search", Icons.Outlined.Language, isSelected = state.webMode == "search", enabled = idle,
                         description = if (state.webSearchConfigured) "Search the web" else "Search the web, needs setup") {
                         onWebMode(if (state.webMode == "search") null else "search")
+                    }
+                    // X posts via xAI x_search: Grok only, off by default, billed by xAI per post returned.
+                    if (state.xSearchAvailable) ModeChip("X", Icons.Outlined.Tag, isSelected = state.xSearch, enabled = idle,
+                        description = if (state.xSearch) "X search on: Grok also searches posts on X. Tap to turn off" else "Search posts on X with Grok") {
+                        onXSearch(!state.xSearch)
                     }
                     if (state.webMode == "page") ModeChip("Read link", Icons.Outlined.Link, isSelected = true, enabled = idle,
                         description = "Read link mode. Tap to turn off", trailing = Icons.Outlined.Close) { onWebMode(null) }

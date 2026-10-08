@@ -112,6 +112,14 @@ API keys are stored server-side (Vercel Functions or Supabase) and are never exp
 - **Data Sent:** Full page content (HTML, text) is fetched via the configured provider's API (e.g., Claude's web reading tool).
 - **Retention:** Provider retention policy applies.
 
+#### Native search and X search
+- **Search with Gemini, ChatGPT or Grok:** the provider's own search tool runs the search (Google Search, OpenAI web search, xAI web search). The provider sees the conversation it is answering and decides the queries; its retention policy applies. Claude and Kimi use Brave.
+- **X search (Grok only):** off for every message unless turned on. Grok searches public X posts through xAI.
+- **Source icons:** to show a site icon on a source chip, the app requests `https://<site>/favicon.ico` directly from that site (no cookies). The site learns your IP address and that its icon was requested.
+
+#### Long conversations
+- When a chat outgrows the selected model's budget, the server asks the same provider to summarise the older turns. The summary is stored with the chat **on your device only** (not in exports or cloud snapshots) and sent with later messages in that chat. Deleting the chat deletes it.
+
 #### User Control
 - Both modes are optional and off by default.
 - Users can disable search/link reading at any time.

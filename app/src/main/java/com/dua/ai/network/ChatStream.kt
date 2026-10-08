@@ -6,7 +6,10 @@ import org.json.JSONObject
 sealed interface ReplyEvent {
     data class Thinking(val delta: String) : ReplyEvent
     data class Text(val delta: String) : ReplyEvent
-    data class Sources(val count: Int) : ReplyEvent
+    /** Web sources (Brave before the text; provider-native search after it). The reply text also ends with a Sources footer. */
+    data class Sources(val sources: List<com.dua.ai.model.ReplySource>) : ReplyEvent { val count: Int get() = sources.size }
+    /** The server summarised the first [covered] sent turns into [summary] (Phase 2 long context). */
+    data class Context(val summary: String, val covered: Int) : ReplyEvent
     data class Notice(val message: String) : ReplyEvent
     /** Transcripts the server made for stored audio files: storage path -> transcript. */
     data class Files(val transcripts: Map<String, String>) : ReplyEvent
@@ -48,12 +51,25 @@ class ChatStreamParser {
     companion object {
         const val MAX_EVENT_CHARS = 1_000_000
 
+        private fun sources(json: JSONObject): List<com.dua.ai.model.ReplySource> {
+            val array = json.optJSONArray("sources") ?: return emptyList()
+            return (0 until minOf(array.length(), 20)).mapNotNull { array.optJSONObject(it) }.mapNotNull { item ->
+                val url = com.dua.ai.setup.IntegrationCapabilities.safeUrl(item.optString("url")) ?: return@mapNotNull null
+                val domain = item.optString("domain").takeIf { Regex("[A-Za-z0-9.-]{1,253}").matches(it) }
+                com.dua.ai.model.ReplySource(item.optInt("id", 0), item.optString("title").take(200), url, domain)
+            }
+        }
+
         fun decode(raw: String): ReplyEvent? {
             val json = runCatching { JSONObject(raw) }.getOrNull() ?: return null
             return when (json.optString("type")) {
                 "thinking" -> json.optString("delta").takeIf { it.isNotEmpty() }?.let { ReplyEvent.Thinking(it) }
                 "text" -> json.optString("delta").takeIf { it.isNotEmpty() }?.let { ReplyEvent.Text(it) }
-                "sources" -> ReplyEvent.Sources(json.optJSONArray("sources")?.length() ?: 0)
+                "sources" -> ReplyEvent.Sources(sources(json))
+                "context" -> {
+                    val summary = json.optString("summary"); val covered = json.optInt("covered", 0)
+                    if (summary.isNotBlank() && summary.length <= com.dua.ai.model.ChatSummary.MAX_CHARS && covered > 0) ReplyEvent.Context(summary, covered) else null
+                }
                 "notice" -> json.optString("message").takeIf { it.isNotBlank() }?.let { ReplyEvent.Notice(it.take(300)) }
                 "files" -> json.optJSONArray("files")?.let { array ->
                     (0 until array.length()).mapNotNull { array.optJSONObject(it) }.mapNotNull { item ->
@@ -93,7 +109,7 @@ class StreamAccumulator(private val startedAt: Long, private val clock: () -> Lo
                 if (thinking.isNotEmpty() && thinkingSeconds == null) thinkingSeconds = elapsedSeconds()
                 if (event.truncated) notice = "Reply reached the output limit and may be cut off."
             }
-            is ReplyEvent.Sources, is ReplyEvent.Failed, is ReplyEvent.Files -> Unit
+            is ReplyEvent.Sources, is ReplyEvent.Failed, is ReplyEvent.Files, is ReplyEvent.Context -> Unit
         }
     }
 

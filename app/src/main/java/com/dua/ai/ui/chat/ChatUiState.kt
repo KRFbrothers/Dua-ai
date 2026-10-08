@@ -22,7 +22,13 @@ data class ChatUiState(
     val reasoning: Boolean = false,
     /** Thinking blocks shown expanded on first render (previews and screenshots). */
     val expandedThinking: Set<String> = emptySet(),
+    /** Search works for the selected model (natively or through Brave). */
     val webSearchConfigured: Boolean = false,
+    /** X search chip: Grok selected and offered by the server. */
+    val xSearchAvailable: Boolean = false,
+    val xSearch: Boolean = false,
+    /** Messages up to this id are summarised for the model (long context); a divider marks the boundary. */
+    val summarisedThroughId: String? = null,
     val pageReadingAvailable: Boolean = false,
     val attachments: List<ChatAttachment> = emptyList(),
     /** Stored-file uploads for the next message (progress, done or failed). */
@@ -50,7 +56,7 @@ data class ChatUiState(
     val canSend: Boolean get() = (draft.isNotBlank() || attachments.isNotEmpty() || uploads.any { it.ref != null }) && !typing && !readingFiles &&
         uploads.none { it.uploading } && recordingSince == null
     val modelLabel: String get() = model
-    val auto: Boolean get() = !reasoning && webMode == null
+    val auto: Boolean get() = !reasoning && webMode == null && !xSearch
     val reasoningSupported: Boolean get() = providers.firstOrNull { it.name == model }?.supportsReasoning ?: true
 }
 
@@ -67,6 +73,7 @@ class ChatActions(
     val onUseDeviceVoice: () -> Unit = {},
     val onWebMode: (String?) -> Unit = {},
     val onReasoning: (Boolean) -> Unit = {},
+    val onXSearch: (Boolean) -> Unit = {},
     val onAuto: () -> Unit = {},
     val onSelectModel: (String) -> Unit = {},
     val onNewChat: () -> Unit = {},

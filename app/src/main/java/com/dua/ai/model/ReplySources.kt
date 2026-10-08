@@ -3,9 +3,22 @@ package com.dua.ai.model
 import com.dua.ai.setup.IntegrationCapabilities
 import java.net.URI
 
-data class ReplySource(val number: Int, val title: String, val url: String) {
-    /** Host without a leading "www.", for compact chips. */
-    val domain: String get() = runCatching { URI(url).host.removePrefix("www.") }.getOrDefault(url)
+data class ReplySource(val number: Int, val title: String, val url: String, private val site: String? = null) {
+    /**
+     * Site shown on the chip and used for its icon: host without "www.". Gemini search returns Google
+     * redirect links whose title is the real site (e.g. "uefa.com"), so that title is used instead.
+     */
+    val domain: String get() = site ?: run {
+        val host = runCatching { URI(url).host.removePrefix("www.") }.getOrNull() ?: return@run url
+        if (host == GOOGLE_REDIRECT && DOMAIN.matches(title)) title.lowercase().removePrefix("www.") else host
+    }
+    /** A real page title (not just the domain repeated), shown above the domain on the chip. */
+    val pageTitle: String? get() = title.takeIf { it.isNotBlank() && !it.equals(domain, ignoreCase = true) }
+
+    companion object {
+        private const val GOOGLE_REDIRECT = "vertexaisearch.cloud.google.com"
+        private val DOMAIN = Regex("^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\\.)+[a-zA-Z]{2,63}$")
+    }
 }
 
 data class ReplyParts(val body: String, val sources: List<ReplySource>)

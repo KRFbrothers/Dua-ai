@@ -120,6 +120,7 @@ fun ChatScreen(
                         onStop = actions.onStop,
                         onReasoning = actions.onReasoning,
                         onAuto = actions.onAuto,
+                        onXSearch = actions.onXSearch,
                         onCancelUpload = actions.onCancelUpload,
                     )
                 }
