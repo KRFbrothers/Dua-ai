@@ -8,6 +8,7 @@ import { envInteger } from '../core/adapters.mjs';
 import { handleFiles } from '../core/files.mjs';
 import { handleImagine } from '../core/imagine.mjs';
 import { handleVoice } from '../core/voice.mjs';
+import { handleBuildPr } from '../core/build-pr.mjs';
 
 /** DUA_CHAT_DEADLINE_SECONDS: whole-request chat deadline (default 280 s, allowed 10–790 s). */
 export const chatDeadlineMs = env => envInteger(env, 'DUA_CHAT_DEADLINE_SECONDS', 280, 10, 790) * 1000;
@@ -30,6 +31,7 @@ export async function handleService(request,{env=process.env,fetcher=fetch}={}) 
  if(path.startsWith('/api/imagine/'))return handleImagine(request,{env,fetcher});
  // Voice (reply voices, live voice sessions): owner-only, checked inside handleVoice. Not counted as chat requests.
  if(path.startsWith('/api/voice/'))return handleVoice(request,{env,fetcher});
+ if(path==='/api/build/pr')return handleBuildPr(request,{env,fetcher});
  if(['/api/chat','/api/search','/api/connectors/github'].includes(path)) {
   if(request.method!=='POST')return Response.json({error:'Method not allowed.'},{status:405,headers:{'Cache-Control':'no-store'}});
   const advanced=path==='/api/connectors/github';

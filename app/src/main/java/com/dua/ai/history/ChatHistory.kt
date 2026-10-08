@@ -148,6 +148,8 @@ object ChatHistoryCodec {
                             if (!message.isUser && message.codeRuns.isNotEmpty()) put("codeRuns", com.dua.ai.model.CodeRuns.toJson(message.codeRuns))
                             // Build mode file lists stay local too (repository paths can be private).
                             if (!message.isUser) message.build?.let { put("build", com.dua.ai.model.BuildInfos.toJson(it)) }
+                            // Build proposals and their pull request links stay local as well (Phase 5C).
+                            if (!message.isUser) message.proposal?.let { put("proposal", com.dua.ai.model.BuildProposals.toJson(it)) }
                         })
                 } })) }
         }).toString()
@@ -188,7 +190,8 @@ object ChatHistoryCodec {
                         media = com.dua.ai.imagine.ImagineCodec.mediaFrom(message.optJSONArray("media"), local = true),
                         imagine = com.dua.ai.imagine.ImagineCodec.infoFrom(message.optJSONObject("imagine")),
                         codeRuns = if (message.optBoolean("isUser")) emptyList() else com.dua.ai.model.CodeRuns.fromJson(message.optJSONArray("codeRuns")),
-                        build = if (message.optBoolean("isUser")) null else com.dua.ai.model.BuildInfos.fromJson(message.optJSONObject("build")))
+                        build = if (message.optBoolean("isUser")) null else com.dua.ai.model.BuildInfos.fromJson(message.optJSONObject("build")),
+                        proposal = if (message.optBoolean("isUser")) null else com.dua.ai.model.BuildProposals.fromJson(message.optJSONObject("proposal")))
                 }, item.getLong("updatedAt"), com.dua.ai.model.ChatSummary.fromJson(item.optJSONObject("summary")),
                 item.optString("buildRepository").takeIf { com.dua.ai.model.BuildInfos.validRepository(it) })
         }

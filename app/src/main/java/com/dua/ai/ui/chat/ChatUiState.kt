@@ -70,6 +70,11 @@ data class ChatUiState(
     val buildRepositories: com.dua.ai.setup.BuildRepositories = com.dua.ai.setup.BuildRepositories(),
     /** "Files read" lists shown expanded on first render (previews and screenshots). */
     val expandedBuild: Set<String> = emptySet(),
+    /** Build pull requests (Phase 5C): per-message Create PR progress/error, why Create PR is unavailable (empty when usable),
+     *  and a message whose confirmation dialog starts open (previews and screenshots). */
+    val buildPr: Map<String, BuildPrUiState> = emptyMap(),
+    val buildPrHint: String = "",
+    val confirmPr: String? = null,
 ) {
     val canSend: Boolean get() = (draft.isNotBlank() || attachments.isNotEmpty() || uploads.any { it.ref != null }) && !typing && !readingFiles &&
         uploads.none { it.uploading } && recordingSince == null
@@ -122,6 +127,8 @@ class ChatActions(
     /** Tie the chat to a repository (owner/name), or null to leave Build mode. */
     val onBuildRepository: (String?) -> Unit = {},
     val onRetryBuildRepositories: () -> Unit = {},
+    /** Owner confirmed Create PR for the proposal on message id, with the (possibly edited) title. */
+    val onCreatePr: (String, String) -> Unit = { _, _ -> },
 )
 
 /** Bottom sheets the chat screen can show. */

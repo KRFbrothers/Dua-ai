@@ -107,7 +107,8 @@ export async function repositoryTree(repository, { maxEntries = 5000, ...options
 
 /**
  * One text file from the default branch (`contents/{path}`), cut to `maxBytes` characters.
- * Returns {path, size, text, truncated}. Directories, binaries and files over GitHub's 1 MB contents limit are refused.
+ * Returns {path, size, sha, text, truncated}; `sha` is the blob sha Build pull requests use to detect stale proposals.
+ * Directories, binaries and files over GitHub's 1 MB contents limit are refused.
  */
 export async function repositoryFile(repository, path, { maxBytes = 100 * 1024, ...options } = {}) {
   const encoded = encodeRepoPath(path);
@@ -120,7 +121,8 @@ export async function repositoryFile(repository, path, { maxBytes = 100 * 1024, 
   if (bytes.subarray(0, 8000).includes(0)) throw new GitHubError('That file is binary, not text.', 415);
   const text = new TextDecoder('utf-8').decode(bytes).replace(/^\uFEFF/, '');
   const truncated = text.length > maxBytes;
-  return { path: typeof file.path === 'string' ? file.path : path, size, text: truncated ? text.slice(0, maxBytes) : text, truncated };
+  const sha = typeof file.sha === 'string' && /^[0-9a-f]{40}(?:[0-9a-f]{24})?$/.test(file.sha) ? file.sha : null;
+  return { path: typeof file.path === 'string' ? file.path : path, size, sha, text: truncated ? text.slice(0, maxBytes) : text, truncated };
 }
 
 /** GitHub code search inside one repository (default branch only; GitHub allows about 10 searches a minute). */

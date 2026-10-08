@@ -358,7 +358,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             accumulator.apply(it)
         }.conflate().collect {
             val snapshot = accumulator.snapshot()
-            updateMessage(id) { it.copy(text = snapshot.text, thinking = snapshot.thinking, thinkingSeconds = snapshot.thinkingSeconds, notice = snapshot.notice, codeRuns = snapshot.codeRuns, build = snapshot.build ?: it.build) }
+            updateMessage(id) { it.copy(text = snapshot.text, thinking = snapshot.thinking, thinkingSeconds = snapshot.thinkingSeconds, notice = snapshot.notice, codeRuns = snapshot.codeRuns, build = snapshot.build ?: it.build, proposal = snapshot.proposal ?: it.proposal) }
             delay(STREAM_FRAME_MS)
         }
     }
@@ -461,6 +461,48 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         saveHistory()
     }
     private fun leaveBuild() { if (_buildRepo.value != null) { _buildRepo.value = null; saveHistory() } }
+
+    // Build pull requests (Phase 5C): the model only proposes; this is the single place that asks the server to write,
+    // and it runs only from the review card's Create PR button after the owner confirms the dialog.
+    private val _buildPr = MutableStateFlow<Map<String, com.dua.ai.ui.chat.BuildPrUiState>>(emptyMap())
+    val buildPr = _buildPr.asStateFlow()
+    /** Why the Create PR button is unavailable (shown on the review card), or null when it can be used. */
+    fun buildPrUnavailableReason(): String? {
+        val pr = _integrations.value.build?.pr
+        return when {
+            pr == null -> "Creating pull requests needs the latest Dua backend. Deploy it, then refresh Feature setup."
+            !pr.enabled -> pr.reason.ifBlank { "Creating pull requests is turned off on the server." }
+            account.state.value.user == null -> "Sign in from Profile to create pull requests. Only the owner account can."
+            else -> null
+        }
+    }
+    /** Sends the approved proposal of [messageId] (with the confirmed [title]) to POST /api/build/pr and saves the PR link. */
+    fun createPullRequest(messageId: String, title: String) {
+        val message = _messages.value.firstOrNull { it.id == messageId } ?: return
+        val proposal = message.proposal ?: return
+        if (proposal.pullRequest != null || _buildPr.value[messageId]?.creating == true) return
+        val setState = { state: com.dua.ai.ui.chat.BuildPrUiState? -> _buildPr.update { if (state == null) it - messageId else it + (messageId to state) } }
+        buildPrUnavailableReason()?.let { setState(com.dua.ai.ui.chat.BuildPrUiState(error = it)); return }
+        val body = try { com.dua.ai.model.BuildProposals.createRequest(proposal, title) }
+            catch (invalid: IllegalArgumentException) { setState(com.dua.ai.ui.chat.BuildPrUiState(error = invalid.message ?: "This proposal cannot be sent.")); return }
+        setState(com.dua.ai.ui.chat.BuildPrUiState(creating = true))
+        viewModelScope.launch {
+            try {
+                val response = account.request("/api/build/pr", "POST", body, authenticated = true)
+                val pr = com.dua.ai.model.BuildProposals.pullRequest(response, proposal.repository)
+                    ?: throw IllegalStateException("The server did not return a pull request link. Check GitHub before retrying.")
+                val withPr = { item: ChatMessage -> if (item.id == messageId) item.copy(proposal = item.proposal?.copy(title = body.getString("title"), pullRequest = pr)) else item }
+                // The owner may have switched chats while GitHub was working: store the link wherever the message is now.
+                if (_messages.value.any { it.id == messageId }) _messages.value = _messages.value.map(withPr)
+                else _savedChats.value = _savedChats.value.map { chat -> if (chat.messages.any { it.id == messageId }) chat.copy(messages = chat.messages.map(withPr)) else chat }
+                setState(null)
+                saveHistory()
+            } catch (cancelled: CancellationException) { setState(null); throw cancelled }
+            catch (failure: Exception) {
+                setState(com.dua.ai.ui.chat.BuildPrUiState(error = failure.message?.take(300)?.takeIf { it.isNotBlank() } ?: "Creating the pull request failed. Retry."))
+            }
+        }
+    }
 
     // X search (Grok only, billed per post by xAI) is off by default and, like the web mode, never saved.
     private val _xSearch = MutableStateFlow(false)
@@ -1163,7 +1205,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         val startedAt = System.currentTimeMillis()
         _error.value = null; _isTyping.value = true; refreshSyncBusy()
         retryOriginal = original
-        updateMessage(messageId) { it.copy(text = "", thinking = null, thinkingSeconds = null, notice = null, codeRuns = emptyList(), build = requestBuild?.let { com.dua.ai.model.BuildInfo(it) }, state = ChatMessage.STREAMING, startedAt = startedAt) }
+        updateMessage(messageId) { it.copy(text = "", thinking = null, thinkingSeconds = null, notice = null, codeRuns = emptyList(), build = requestBuild?.let { com.dua.ai.model.BuildInfo(it) }, proposal = null, state = ChatMessage.STREAMING, startedAt = startedAt) }
         replyJob = viewModelScope.launch {
             var accumulator: com.dua.ai.network.StreamAccumulator? = null
             try {
@@ -1176,7 +1218,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 if (generation == currentGeneration) {
                     val final = accumulator!!.snapshot(ended = true)
                     retryOriginal = null
-                    updateMessage(messageId) { it.copy(text = final.text, thinking = final.thinking, thinkingSeconds = final.thinkingSeconds, notice = final.notice, codeRuns = final.codeRuns, build = final.build ?: it.build, state = "complete") }
+                    updateMessage(messageId) { it.copy(text = final.text, thinking = final.thinking, thinkingSeconds = final.thinkingSeconds, notice = final.notice, codeRuns = final.codeRuns, build = final.build ?: it.build, proposal = final.proposal ?: it.proposal, state = "complete") }
                 }
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (failure: Exception) {
@@ -1184,7 +1226,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     val partial = accumulator?.snapshot(ended = true)
                     retryOriginal = null
                     if (partial != null && partial.text.isNotBlank()) {
-                        updateMessage(messageId) { it.copy(text = partial.text, thinking = partial.thinking, thinkingSeconds = partial.thinkingSeconds, notice = partial.notice, codeRuns = partial.codeRuns, build = partial.build ?: it.build, state = "stopped") }
+                        updateMessage(messageId) { it.copy(text = partial.text, thinking = partial.thinking, thinkingSeconds = partial.thinkingSeconds, notice = partial.notice, codeRuns = partial.codeRuns, build = partial.build ?: it.build, proposal = partial.proposal ?: it.proposal, state = "stopped") }
                         _error.value = "Retry interrupted: ${failureText(failure)} Partial reply kept; tap retry."
                     } else {
                         updateMessage(messageId) { original }
@@ -1267,7 +1309,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     _uploads.update { list -> list.filterNot { it.ref?.path in sentPaths } }
                     clearAttachments()
                     val final = accumulator!!.snapshot(ended = true)
-                    updateMessage(reply.id) { it.copy(text = final.text, thinking = final.thinking, thinkingSeconds = final.thinkingSeconds, notice = final.notice, codeRuns = final.codeRuns, build = final.build ?: it.build, state = "complete") }
+                    updateMessage(reply.id) { it.copy(text = final.text, thinking = final.thinking, thinkingSeconds = final.thinkingSeconds, notice = final.notice, codeRuns = final.codeRuns, build = final.build ?: it.build, proposal = final.proposal ?: it.proposal, state = "complete") }
                 }
             } catch (cancelled: CancellationException) {
                 throw cancelled
@@ -1278,7 +1320,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                         // The request reached the model: keep the turn and its partial reply; Retry regenerates it.
                         _uploads.update { list -> list.filterNot { it.ref?.path in sentPaths } }
                         clearAttachments()
-                        updateMessage(reply.id) { it.copy(text = partial.text, thinking = partial.thinking, thinkingSeconds = partial.thinkingSeconds, notice = partial.notice, codeRuns = partial.codeRuns, build = partial.build ?: it.build, state = "stopped") }
+                        updateMessage(reply.id) { it.copy(text = partial.text, thinking = partial.thinking, thinkingSeconds = partial.thinkingSeconds, notice = partial.notice, codeRuns = partial.codeRuns, build = partial.build ?: it.build, proposal = partial.proposal ?: it.proposal, state = "stopped") }
                         _error.value = "Reply interrupted: ${failureText(failure)} Partial reply kept; tap retry."
                     } else {
                         _messages.value = _messages.value.filterNot { it.id == userMessage.id || it.id == reply.id }

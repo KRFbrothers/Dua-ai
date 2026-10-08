@@ -54,6 +54,7 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
     val runCode by viewModel.runCode.collectAsState()
     val buildRepo by viewModel.buildRepo.collectAsState()
     val buildRepositories by viewModel.buildRepositories.collectAsState()
+    val buildPr by viewModel.buildPr.collectAsState()
     val scope = rememberCoroutineScope()
     var attachmentNotice by rememberSaveable { mutableStateOf("") }
     LaunchedEffect(failedPrompt) { failedPrompt?.let { viewModel.consumeFailedPrompt() } }
@@ -112,6 +113,7 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
         imagine = imagine, imagineOptions = imagineOptions, imagineConfig = integrations.imagine, imagineUsage = imagineUsage,
         runCode = runCode, codeConfig = integrations.codeExecution,
         buildRepo = buildRepo, buildConfig = integrations.build, buildRepositories = buildRepositories,
+        buildPr = buildPr, buildPrHint = remember(integrations.build, account.user) { viewModel.buildPrUnavailableReason().orEmpty() },
         buildHint = remember(integrations.build, integrations.providers, account.user) { viewModel.buildUnavailableReason().orEmpty() },
     )
     LaunchedEffect(imagine) { if (imagine) viewModel.loadImagineUsage() }
@@ -192,6 +194,7 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
             onOpenBuild = { viewModel.loadBuildRepositories() },
             onBuildRepository = viewModel::setBuildRepository,
             onRetryBuildRepositories = { viewModel.loadBuildRepositories(force = true) },
+            onCreatePr = viewModel::createPullRequest,
             imagine = ImagineActions(
                 onSave = { items ->
                     if (com.dua.ai.imagine.MediaExport.needsPermission() && androidx.core.content.ContextCompat.checkSelfPermission(context,
