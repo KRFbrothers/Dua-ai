@@ -4,7 +4,9 @@ import org.json.JSONObject
 import java.net.URI
 
 data class ProviderCapability(val name: String, val configured: Boolean, val model: String, val supportsAttachments: Boolean,
-    val attachmentTypes: List<String> = IntegrationCapabilities.legacyAttachmentTypes(name, supportsAttachments))
+    val attachmentTypes: List<String> = IntegrationCapabilities.legacyAttachmentTypes(name, supportsAttachments),
+    /** Shows a Thinking block in Reasoning mode (servers before Reasoning mode omit the field). */
+    val supportsReasoning: Boolean = name in IntegrationCapabilities.REASONING_DEFAULT)
 data class IntegrationGroup(val id: String, val title: String, val state: String, val requires: List<String>, val limitations: List<String>)
 data class SearchResult(val title: String, val url: String, val snippet: String)
 data class RepositoryResult(val name: String, val url: String, val description: String)
@@ -14,6 +16,7 @@ data class IntegrationState(val groups: List<IntegrationGroup> = emptyList(), va
 
 object IntegrationCapabilities {
     val MODELS = listOf("Dua", "ChatGPT", "Gemini", "Claude", "Grok", "Kimi")
+    val REASONING_DEFAULT = setOf("Dua", "Gemini", "ChatGPT", "Grok")
     val GROUPS = listOf("providers", "search", "sync", "memory", "connectors", "computer", "voice", "account")
     val ATTACHMENT_TYPES = listOf("image/jpeg", "image/png", "image/webp", "application/pdf", "text/plain")
     val fallbackProviders = listOf("Dua", "Gemini").map { ProviderCapability(it, true, "Gemini", true, ATTACHMENT_TYPES) }
@@ -41,7 +44,8 @@ object IntegrationCapabilities {
                         (0 until values.length()).mapNotNull { values.opt(it) as? String }.filter { it in ATTACHMENT_TYPES }.distinct()
                     } ?: emptyList()
                 }
-                ProviderCapability(name, item.optBoolean("configured"), item.optString("model").take(100), supportsAttachments, types)
+                ProviderCapability(name, item.optBoolean("configured"), item.optString("model").take(100), supportsAttachments, types,
+                    if (item.has("reasoning")) item.optBoolean("reasoning") else name in REASONING_DEFAULT)
             }
         } }.distinctBy { it.name }
     }
@@ -57,7 +61,8 @@ object IntegrationCapabilities {
             else -> type
         } }.joinToString(", ")
         return if (extensions.isEmpty()) "${provider.name} does not support file attachments. Remove selected files or choose another configured provider. Your selected files were kept."
-            else "${provider.name} supports $extensions files. Remove unsupported files or choose another configured provider. Your selected files were kept."
+            else "${provider.name} supports $extensions files. Remove unsupported files or choose another configured provider. Your selected files were kept." +
+                if ("text/plain" in supportedTypes) " Text and code files (.csv, .md, .json, .kt, …) count as .txt." else ""
     }
     fun decode(json: JSONObject): IntegrationState {
         val array = json.getJSONArray("groups")

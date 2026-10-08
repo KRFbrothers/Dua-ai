@@ -5,7 +5,7 @@ Updated 8 October 2026. Dua is an Android app (`app/`) backed by a server-side A
 | Order | Feature | Current state | Remaining work |
 | --- | --- | --- | --- |
 | 1 | Persistent chat history | Saved chats, search, reopen, draft/model recovery and confirmed deletion in app-private storage | Physical Android restart/file-picker/import verification |
-| 2 | Attachment processing | Inline JPEG/PNG/WebP/PDF/TXT input with validation, automatic photo resizing and retry/Stop selection retention | Live provider and physical Android verification; larger documents, DOCX and durable/provider file storage |
+| 2 | Attachment processing | Inline JPEG/PNG/WebP/PDF and UTF-8 text/code (TXT, CSV, MD, JSON, source) input with validation, automatic photo resizing and retry/Stop selection retention | Live provider and physical Android verification; larger documents, DOCX and durable/provider file storage |
 | 3 | Camera/photos | Delegated full-photo camera capture and photo/document pickers feed attachment processing | Physical-device camera/picker, compression/EXIF and low-memory verification |
 | 4 | AI voice conversation | Speech-to-draft, explicit reply read-aloud, foreground hands-free turns and optional generated reply voice | Physical speech/TTS/permission verification; full duplex/barge-in and background sessions |
 | 5 | Account sign-in/profile/logout | Supabase email auth, encrypted native sessions, display name, device logout, email recovery code, optional native Google sign-in and optional account deletion | Live email/Google/deletion configuration and physical-device verification |
@@ -27,7 +27,7 @@ Android stores serialized chat records in app-private SharedPreferences. Message
 
 ## Attachments and photos
 
-The app sends at most 3 files / 2 MiB total with the current message; each TXT file is limited to 64 KiB. The backend validates contents and adds inline image/PDF or decoded text parts only to the final user message. Successful replies clear the selection; Stop/errors retain it. History stores filenames and replies without file bytes; pending bytes are held only in memory.
+The app sends at most 3 files / 2 MiB total with the current message; each text/code file is limited to 256 KiB. The backend validates contents and adds inline image/PDF or decoded text parts only to the final user message. Successful replies clear the selection; Stop/errors retain it. History stores filenames and replies without file bytes; pending bytes are held only in memory. The Android app keeps the decoded text of text/code files with the user message on the device (up to 32,000 characters, not exported or synced) so follow-up questions can use it.
 
 Camera capture is delegated to the device camera app through `TakePicture` and a restricted FileProvider cache path, so no CAMERA permission is needed. A cancelled/failed capture keeps the previous selection. Capture files are removed after reading, on failure/cancel or when launch fails; files abandoned by process death are pruned after 24 hours when capture next starts.
 

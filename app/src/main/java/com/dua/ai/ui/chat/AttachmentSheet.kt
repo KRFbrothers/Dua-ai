@@ -69,7 +69,7 @@ fun AttachmentSheetContent(
             SheetTile("Photos", Icons.Outlined.PhotoLibrary, enabled, onPhotos, Modifier.weight(1f))
             SheetTile("Files", Icons.Outlined.UploadFile, enabled, onFiles, Modifier.weight(1f))
         }
-        Text("Up to 3 files, 2 MB in total: JPEG, PNG, WebP, PDF or TXT (64 KB). Files go with your next message only. Large photos are resized to JPEG; originals stay unchanged.",
+        Text("Up to 3 files, 2 MB in total: JPEG, PNG, WebP, PDF or text and code files like TXT, CSV, MD, JSON (256 KB each). Photos and PDFs go with your next message only; text stays on this phone for follow-ups. Large photos are resized to JPEG; originals stay unchanged.",
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Surface(shape = DuaShape.card, color = MaterialTheme.colorScheme.surfaceContainerHigh) {
             Row(Modifier.fillMaxWidth().heightIn(min = 64.dp)

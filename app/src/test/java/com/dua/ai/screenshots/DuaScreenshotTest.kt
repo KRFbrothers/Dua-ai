@@ -119,6 +119,18 @@ class DuaScreenshotTest(private val dark: Boolean) {
         compose.onRoot().captureRoboImage(path("06_launcher_icon"))
     }
 
+    @Test fun chatWithThinkingCollapsed() = shot("07_chat_thinking_collapsed") {
+        ChatScreen(ScreenshotData.reasoning, ChatActions())
+    }
+
+    @Test fun chatWithThinkingExpanded() = shot("08_chat_thinking_expanded") {
+        ChatScreen(ScreenshotData.reasoning.copy(expandedThinking = setOf("a2")), ChatActions())
+    }
+
+    @Test fun composerWithReasoningChip() = shot("09_composer_reasoning") {
+        ChatScreen(ScreenshotData.emptyState.copy(draft = "Plan a 3-day study schedule for physics", reasoning = true), ChatActions())
+    }
+
     @Test fun settings() = shot("05_settings") {
         SettingsContent(SettingsUiState(email = "fareed@example.com", theme = mode, haptic = true, notifications = true),
             onBack = {}, onOpen = {}, onHaptic = {}, onGeneratedVoice = {})
@@ -172,6 +184,26 @@ private object ScreenshotData {
             ChatMessage(id = "a1", text = reply, isUser = false, model = "Dua"),
         ),
         webMode = "search",
+    )
+
+    private val thinking = """
+        **Working out the total**
+
+        The train covers 120 km in 1.5 hours, so its speed is 80 km/h. The return trip is 20% slower: 80 × 0.8 = 64 km/h, which takes 120 / 64 = 1.875 hours.
+
+        **Average speed**
+
+        Total distance is 240 km and total time is 1.5 + 1.875 = 3.375 hours, so the average is 240 / 3.375 ≈ 71.1 km/h — not the simple mean of 80 and 64.
+    """.trimIndent()
+
+    val reasoning = emptyState.copy(
+        messages = listOf(
+            ChatMessage(id = "u2", text = "A train goes 120 km in 90 minutes and returns 20% slower. What's the average speed for the round trip?", isUser = true),
+            ChatMessage(id = "a2", text = "The average speed is about **71.1 km/h**.\n\n- Out: 120 km at 80 km/h → 1.5 h\n- Back: 120 km at 64 km/h → 1.875 h\n- Total: 240 km in 3.375 h\n\nAverage speed is total distance over total time, so it is lower than the simple mean (72 km/h).",
+                isUser = false, model = "Gemini", thinking = thinking, thinkingSeconds = 12),
+        ),
+        model = "Gemini",
+        reasoning = true,
     )
 
     private fun chat(id: String, title: String, hoursAgo: Long) = SavedChat(id, "Dua", "",

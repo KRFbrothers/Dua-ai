@@ -18,6 +18,10 @@ data class ChatUiState(
     val model: String = "Dua",
     val providers: List<ProviderCapability> = IntegrationCapabilities.fallbackProviders,
     val webMode: String? = null,
+    /** Reasoning mode for the next reply; Auto = no reasoning and no web mode. */
+    val reasoning: Boolean = false,
+    /** Thinking blocks shown expanded on first render (previews and screenshots). */
+    val expandedThinking: Set<String> = emptySet(),
     val webSearchConfigured: Boolean = false,
     val pageReadingAvailable: Boolean = false,
     val attachments: List<ChatAttachment> = emptyList(),
@@ -36,6 +40,8 @@ data class ChatUiState(
 ) {
     val canSend: Boolean get() = (draft.isNotBlank() || attachments.isNotEmpty()) && !typing && !readingFiles
     val modelLabel: String get() = model
+    val auto: Boolean get() = !reasoning && webMode == null
+    val reasoningSupported: Boolean get() = providers.firstOrNull { it.name == model }?.supportsReasoning ?: true
 }
 
 /** User actions from the chat surface. Defaults are no-ops so previews and screenshot tests stay small. */
@@ -50,6 +56,8 @@ class ChatActions(
     val onStopSpeech: () -> Unit = {},
     val onUseDeviceVoice: () -> Unit = {},
     val onWebMode: (String?) -> Unit = {},
+    val onReasoning: (Boolean) -> Unit = {},
+    val onAuto: () -> Unit = {},
     val onSelectModel: (String) -> Unit = {},
     val onNewChat: () -> Unit = {},
     val onOpenChat: (String) -> Unit = {},

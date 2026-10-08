@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.outlined.Psychology
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Link
@@ -53,8 +54,9 @@ import com.dua.ai.ui.theme.Spacing
 
 /**
  * Rounded multi-line composer. Bottom row: attach · mode chips · mic · send/stop.
- * Modes map onto the existing web modes: Auto = web off, Search = web search,
- * Read link = read the first HTTPS link (chosen from the attach sheet).
+ * Auto = no reasoning and web off. Reasoning asks the model to think first (shown as a
+ * Thinking block) and combines with Search or Read link (read the first HTTPS link, chosen
+ * from the attach sheet).
  */
 @Composable
 fun Composer(
@@ -68,6 +70,8 @@ fun Composer(
     onSend: () -> Unit,
     onStop: () -> Unit,
     modifier: Modifier = Modifier,
+    onReasoning: (Boolean) -> Unit = {},
+    onAuto: () -> Unit = { onWebMode(null) },
 ) {
     val colors = DuaTheme.colors
     val idle = !state.typing && !state.readingFiles
@@ -100,8 +104,14 @@ fun Composer(
                 IconButton(onClick = onAttach, enabled = idle) { Icon(Icons.Outlined.Add, contentDescription = "Add photos and files") }
                 Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
                     verticalAlignment = Alignment.CenterVertically) {
-                    ModeChip("Auto", Icons.Outlined.AutoAwesome, isSelected = state.webMode == null, enabled = idle,
-                        description = "Auto mode, web off") { onWebMode(null) }
+                    ModeChip("Auto", Icons.Outlined.AutoAwesome, isSelected = state.auto, enabled = idle,
+                        description = "Auto mode, reasoning and web off") { onAuto() }
+                    ModeChip("Reasoning", Icons.Outlined.Psychology, isSelected = state.reasoning, enabled = idle,
+                        description = when {
+                            state.reasoning -> "Reasoning on. Tap to turn off"
+                            state.reasoningSupported -> "Think before answering"
+                            else -> "Think before answering, not supported by ${state.modelLabel}"
+                        }) { onReasoning(!state.reasoning) }
                     ModeChip("Search", Icons.Outlined.Language, isSelected = state.webMode == "search", enabled = idle,
                         description = if (state.webSearchConfigured) "Search the web" else "Search the web, needs setup") {
                         onWebMode(if (state.webMode == "search") null else "search")

@@ -42,12 +42,12 @@ Effort scale (one developer working with coding agents): **S** ≤ 2 days, **M**
 | Feature | Today | Target | Effort | Phase |
 | --- | --- | --- | --- | --- |
 | UI and navigation | One large chat screen, hand-built navigation, no design system, template colors, placeholder controls | Design tokens, Navigation Compose, full-width assistant replies, history drawer, regrouped settings, app icon and splash | L | 1 |
-| Chat | Works with 6 provider choices; no streaming; 2048-token output cap on non-Gemini providers; plain text, no markdown | Opt-in streaming (SSE), markdown and code blocks, higher output caps | M | 1 |
-| Reasoning mode | None; Gemini thoughts are discarded | Mode switch with a collapsible "Thought for N s" block (Gemini `thinkingLevel`, xAI `reasoning.effort`, OpenAI Responses reasoning) | M | 1 |
+| Chat | Works with 6 provider choices; streaming replies (SSE, opt-in) with env-configurable output caps (8k–32k defaults) and a 280 s deadline; markdown | Opt-in streaming (SSE), markdown and code blocks, higher output caps | M | 1 |
+| Reasoning mode | Reasoning chip with a collapsible "Thought for N s" block (Gemini, Grok, ChatGPT); live provider checks pending | Mode switch with a collapsible "Thought for N s" block (Gemini `thinkingLevel`, xAI `reasoning.effort`, OpenAI Responses reasoning) | M | 1 |
 | Long memory / context | Last 39 messages; local notes up to 10 × 200 chars | Per-provider token/byte budget, rolling conversation summary, xAI prompt caching; later, model-proposed notes the user approves | M | 2 |
 | Web search | Brave, one query of the raw prompt, plain-text Sources footer | Provider built-in search tools with Brave as fallback, structured sources as chips, Auto mode | M | 2 |
 | X search | None | xAI `x_search` in Search mode, X post chips | S–M after web search | 2 |
-| Files | JPEG, PNG, WebP, PDF, TXT; 3 files, 2 MB total; sent once, then forgotten | Quick win: CSV, MD, JSON and code as text. Then Supabase Storage uploads kept in history; XLSX, DOCX, audio | S + L | 1 (quick win), 2 |
+| Files | JPEG, PNG, WebP, PDF, UTF-8 text/code (256 KB each); 3 files, 2 MB total; text-file content kept on the device for follow-ups, other bytes sent once | Quick win: CSV, MD, JSON and code as text. Then Supabase Storage uploads kept in history; XLSX, DOCX, audio | S + L | 1 (quick win), 2 |
 | Image generation and editing | None | `/api/imagine`, image messages, viewer, save and share, daily spend caps | M | 3 |
 | Video | None | Async jobs with polling; 480p/720p default, 1080p gated | M–L | 3 |
 | Voices and languages | Device speech follows the phone locale; one fixed ElevenLabs voice | Voice and language pickers (device plus xAI or Gemini TTS) | S–M | 4 |
@@ -116,7 +116,7 @@ Highest impact, lowest risk: make Dua look professional, then add streaming and 
 - Remove "coming soon" placeholders and duplicate entries (Computer mode / Plugins / Capabilities); add adaptive icon and splash screen; inline error cards; one UI language, moved to `strings.xml`
 - Keep stop, retry, draft recovery and sync working and every JVM test passing; move code in one commit, redesign in a later one
 
-**PR 2 — Reasoning mode, streaming, output limits, text files (backend + Android, M):**
+**PR 2 — Reasoning mode, streaming, output limits, text files (backend + Android, M):** *Status: implemented in PR "Reasoning mode and streaming replies" — snapshots stay version 1 with optional `thinking` fields; text files are 256 KB each; Grok WebP is converted to JPEG on the device. Live provider and device checks remain open.*
 - `/api/chat` accepts `mode: "auto" | "reasoning"` and opt-in `stream: true` (SSE); without the flag the JSON response is unchanged, so older APKs keep working
 - Gemini `thinkingConfig {thinkingLevel, includeThoughts: true}`; Grok moves from the legacy `/v1/chat/completions` to `/v1/responses` with `reasoning.effort` and streamed reasoning summaries; OpenAI Responses reasoning effort; Claude and Kimi unchanged
 - Raise output caps from 2048 to 8k or more; make the deadline env-configurable to fit the real Vercel `maxDuration` (`vercel.json`); Android read timeout becomes an idle gap with server heartbeats

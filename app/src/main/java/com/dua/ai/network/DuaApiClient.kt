@@ -3,6 +3,10 @@ package com.dua.ai.network
 import com.dua.ai.BuildConfig
 import com.dua.ai.model.ChatMessage
 import com.dua.ai.attachments.ChatAttachment
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.channels.trySendBlocking
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -25,35 +29,9 @@ class DuaApiClient(
     private val baseUrl: String = BuildConfig.DUA_API_BASE_URL,
     private val client: OkHttpClient = sharedClient
 ) {
+    /** Legacy single-JSON reply (kept for older flows and tests). Chat uses [streamReply]. */
     suspend fun reply(model: String, history: List<ChatMessage>, attachments: List<ChatAttachment> = emptyList(), memory: String = "", token: String? = null, web: String? = null): String {
-        require(model in com.dua.ai.setup.IntegrationCapabilities.MODELS) { "Supported model select karein." }
-        require(memory.length <= 3000) { "Memory notes are too large." }
-        require(web == null || web == "search" || web == "page") { "Web mode must be search or page." }
-        val base = URL(baseUrl.trimEnd('/') + "/")
-        require(base.protocol == "https") { "Dua backend ke liye HTTPS URL set karein." }
-        val request = withContext(Dispatchers.IO) {
-        val messages = JSONArray()
-        history.filter { it.state == "complete" }.takeLast(39).forEach { message ->
-            messages.put(JSONObject().put("role", if (message.isUser) "user" else "model").put("text", message.text))
-        }
-        require(messages.toString().toByteArray(Charsets.UTF_8).size <= 262144) { "Conversation too large. New chat shuru karein." }
-        val files = JSONArray().apply { attachments.forEach { file ->
-            put(JSONObject().put("name", file.name).put("mimeType", file.mimeType).put("data", file.data))
-        } }
-        val body = JSONObject().put("model", model).put("messages", messages).put("attachments", files).put("memory", memory)
-            .apply { if (web != null) put("web", web) }
-            .toString().toByteArray(Charsets.UTF_8)
-        require(body.size <= 3 * 1024 * 1024) { "Conversation too large. New chat shuru karein." }
-        val builder = Request.Builder().url(URL(base, "api/chat"))
-            .header("Accept", "application/json")
-            .header("x-dua-native", "1")
-            .post(body.toRequestBody("application/json; charset=utf-8".toMediaType()))
-        if (token != null) {
-            require(token.length <= 10000 && token.matches(Regex("[A-Za-z0-9._-]+"))) { "Invalid account session." }
-            builder.header("Authorization", "Bearer $token")
-        }
-        builder.build()
-        }
+        val request = withContext(Dispatchers.IO) { buildRequest(model, history, attachments, memory, token, web, reasoning = false, stream = false) }
         return suspendCancellableCoroutine { continuation ->
             val call = client.newCall(request)
             // Cancels the socket even while waiting for headers or reading the body.
@@ -69,6 +47,91 @@ class DuaApiClient(
                 }
             })
         }
+    }
+
+    /**
+     * Streams a reply as [ReplyEvent]s. Cancelling collection cancels the HTTP call. The flow fails
+     * with [DuaApiException] for server errors (before or during the stream) and with an
+     * [IOException] when the connection drops; events already emitted stay valid (partial reply).
+     */
+    fun streamReply(model: String, history: List<ChatMessage>, attachments: List<ChatAttachment> = emptyList(), memory: String = "",
+        token: String? = null, web: String? = null, reasoning: Boolean = false): Flow<ReplyEvent> = callbackFlow {
+        val request = withContext(Dispatchers.IO) { buildRequest(model, history, attachments, memory, token, web, reasoning, stream = true) }
+        val call = client.newCall(request)
+        call.enqueue(object : Callback {
+            override fun onFailure(call: Call, error: IOException) { close(error) }
+
+            override fun onResponse(call: Call, response: Response) {
+                try {
+                    response.use { readStream(it) { event -> trySendBlocking(event).getOrThrow() } }
+                    close()
+                } catch (error: Throwable) { close(error) }
+            }
+        })
+        awaitClose { call.cancel() }
+    }
+
+    private fun readStream(response: Response, emit: (ReplyEvent) -> Unit) {
+        val contentType = response.header("Content-Type").orEmpty()
+        if (!contentType.contains("text/event-stream", ignoreCase = true)) {
+            // Errors before the stream starts (validation, auth, quota) keep the JSON format.
+            val text = readReply(response)
+            emit(ReplyEvent.Text(text))
+            emit(ReplyEvent.Done(false))
+            return
+        }
+        if (response.code !in 200..299) throw DuaApiException("Reply nahi aa saka. Dobara try karein.", response.code)
+        val source = response.body?.source() ?: throw DuaApiException("Dua server se valid response nahi mila.")
+        val parser = ChatStreamParser()
+        var bytes = 0L
+        while (true) {
+            val line = source.readUtf8Line() ?: break
+            bytes += line.length + 1
+            if (bytes > MAX_STREAM_BYTES) throw DuaApiException("Dua response bahut bada hai. Partial reply kept.")
+            when (val event = parser.line(line)) {
+                null -> Unit
+                is ReplyEvent.Failed -> throw DuaApiException(event.message, event.status)
+                is ReplyEvent.Done -> { emit(event); return }
+                else -> emit(event)
+            }
+        }
+        when (val event = parser.finish()) {
+            is ReplyEvent.Done -> { emit(event); return }
+            is ReplyEvent.Failed -> throw DuaApiException(event.message, event.status)
+            null -> Unit
+            else -> emit(event)
+        }
+        throw IOException("Reply stream ended early.")
+    }
+
+    internal fun buildRequest(model: String, history: List<ChatMessage>, attachments: List<ChatAttachment>, memory: String, token: String?, web: String?,
+        reasoning: Boolean, stream: Boolean): Request {
+        require(model in com.dua.ai.setup.IntegrationCapabilities.MODELS) { "Supported model select karein." }
+        require(memory.length <= 3000) { "Memory notes are too large." }
+        require(web == null || web == "search" || web == "page") { "Web mode must be search or page." }
+        val base = URL(baseUrl.trimEnd('/') + "/")
+        require(base.protocol == "https") { "Dua backend ke liye HTTPS URL set karein." }
+        val messages = historyJson(history, includeFileText = stream)
+        val files = JSONArray().apply { attachments.forEach { file ->
+            put(JSONObject().put("name", file.name).put("mimeType", file.mimeType).put("data", file.data))
+        } }
+        val body = JSONObject().put("model", model).put("messages", messages).put("attachments", files).put("memory", memory)
+            .apply {
+                if (web != null) put("web", web)
+                // Older servers reject unknown fields, so these are only sent by the streaming path.
+                if (stream) put("stream", true).put("mode", if (reasoning) "reasoning" else "auto")
+            }
+            .toString().toByteArray(Charsets.UTF_8)
+        require(body.size <= 3 * 1024 * 1024) { "Conversation too large. New chat shuru karein." }
+        val builder = Request.Builder().url(URL(base, "api/chat"))
+            .header("Accept", if (stream) "text/event-stream, application/json" else "application/json")
+            .header("x-dua-native", "1")
+            .post(body.toRequestBody("application/json; charset=utf-8".toMediaType()))
+        if (token != null) {
+            require(token.length <= 10000 && token.matches(Regex("[A-Za-z0-9._-]+"))) { "Invalid account session." }
+            builder.header("Authorization", "Bearer $token")
+        }
+        return builder.build()
     }
 
     private fun readReply(response: Response): String {
@@ -100,12 +163,55 @@ class DuaApiClient(
             ?: throw DuaApiException("Gemini ne text response nahi diya. Dobara try karein.")
     }
 
-    private companion object {
-        val sharedClient = OkHttpClient.Builder()
+    companion object {
+        const val MAX_STREAM_BYTES = 4L * 1024 * 1024
+        /** Budget for earlier turns' stored text-file content re-sent with follow-ups. */
+        const val FILE_CONTEXT_CHARS = 96_000
+        private const val MAX_HISTORY_BYTES = 262144
+        /** Server limit for one earlier model turn. */
+        private const val MAX_MODEL_TURN_CHARS = 80_000
+
+        /**
+         * Completed turns (last 39) as request JSON. With [includeFileText], earlier user turns carry
+         * their stored text-file content, newest first within [FILE_CONTEXT_CHARS], dropping the oldest
+         * file text if the server's 256 KB history limit would be exceeded.
+         */
+        internal fun historyJson(history: List<ChatMessage>, includeFileText: Boolean): JSONArray {
+            // Stopped (partial) replies are not sent back as context, same as before streaming.
+            val turns = history.filter { it.state == "complete" }.takeLast(39)
+            val withText = BooleanArray(turns.size)
+            if (includeFileText) {
+                var budget = FILE_CONTEXT_CHARS
+                for (index in turns.indices.reversed()) {
+                    val text = turns[index].attachmentText
+                    if (index == turns.lastIndex || !turns[index].isUser || text.isNullOrEmpty() || text.length > budget) continue
+                    budget -= text.length
+                    withText[index] = true
+                }
+            }
+            fun encode() = JSONArray().apply { turns.forEachIndexed { index, message ->
+                put(JSONObject().put("role", if (message.isUser) "user" else "model").put("text", if (message.isUser) message.text else message.text.take(MAX_MODEL_TURN_CHARS))
+                    .apply { if (withText[index]) put("attachmentText", message.attachmentText) })
+            } }
+            var messages = encode()
+            while (messages.toString().toByteArray(Charsets.UTF_8).size > MAX_HISTORY_BYTES) {
+                val oldest = withText.indexOfFirst { it }
+                require(oldest >= 0) { "Conversation too large. New chat shuru karein." }
+                withText[oldest] = false
+                messages = encode()
+            }
+            return messages
+        }
+
+        // readTimeout is the longest gap between bytes: the server sends a heartbeat every 15 s while
+        // a reply streams, so a stalled connection fails in ~75 s while long replies can run for the
+        // server's whole deadline (DUA_CHAT_DEADLINE_SECONDS, default 280 s). callTimeout is a backstop.
+        val sharedClient: OkHttpClient = OkHttpClient.Builder()
             .followRedirects(false)
             .followSslRedirects(false)
             .connectTimeout(10, TimeUnit.SECONDS)
-            .readTimeout(60, TimeUnit.SECONDS)
+            .readTimeout(75, TimeUnit.SECONDS)
+            .callTimeout(330, TimeUnit.SECONDS)
             .build()
     }
 }

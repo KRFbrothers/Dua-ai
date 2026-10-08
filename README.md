@@ -7,7 +7,7 @@ Dua is a personal, single-user app: it is built for its owner only and installed
 ## Current features
 
 - Local conversations, drafts, model selection, search, export/import, sharing and data controls.
-- Gemini plus configurable ChatGPT, Claude, Grok and Kimi adapters. TXT attachments work on all providers; images/PDF depend on the selected provider and configured model. See [PROVIDERS.md](PROVIDERS.md).
+- Gemini plus configurable ChatGPT, Claude, Grok and Kimi adapters with streaming replies and a Reasoning mode (collapsible Thinking block on Gemini, Grok and reasoning ChatGPT models). Text and code files (TXT, CSV, MD, JSON, source code) work on all providers; images/PDF depend on the selected provider and configured model. See [PROVIDERS.md](PROVIDERS.md).
 - Chat Web: Off/Search/Read link modes and clickable source footers. Search requires Brave configuration; public page reading uses the existing chat provider. Web mode starts Off.
 - Copy, retry and speaker reply icons; device speech recognition/TTS and explicit foreground hands-free turns. Optional generated reply audio uses an authenticated, owner-restricted server integration.
 - Appearance, permissions, local notifications, reviewed memory notes/proposals and local privacy controls.
@@ -29,7 +29,7 @@ The backend lives in `web/`: Vercel functions in `web/api/` route to `web/src/se
 npm start
 ```
 
-This serves only `/api/*` on `http://localhost:3000`. Local settings go in `web/.env`, which `.gitignore` excludes (`.env` and `.env.*`); never commit it. The backend is deployed on Vercel with Root Directory `web`.
+This serves only `/api/*` on `http://localhost:3000`. Run `npm test` for the backend tests. Local settings go in `web/.env`, which `.gitignore` excludes (`.env` and `.env.*`); never commit it. The backend is deployed on Vercel with Root Directory `web`; `web/vercel.json` only sets function duration (300 s) and response headers. Deploy the backend before installing an APK built from this version: new APKs request streaming, which older backends reject.
 
 ## Android and routine checks
 
@@ -41,6 +41,6 @@ Run source compilation and JVM tests without packaging an APK:
 bash ./gradlew :app:testDebugUnitTest --no-daemon --max-workers=2
 ```
 
-[Project checks](.github/workflows/checks.yml) runs Android compilation and JVM unit tests on PRs, pushes to main and manual runs. It does not assemble or sign an APK. The backend currently has no automated test suite in this repository.
+[Project checks](.github/workflows/checks.yml) runs Android compilation and JVM unit tests on PRs, pushes to main and manual runs. It does not assemble or sign an APK. Run the backend's `node:test` suite with `cd web && npm test` (no dependencies or provider keys needed); a CI job for it is proposed in the PR description.
 
 Android local data is stored in app-private preferences; Android backup/device transfer can include chat history and preferences according to device settings. A Vercel deployment updates the backend only; Android code changes require building and installing a new APK.

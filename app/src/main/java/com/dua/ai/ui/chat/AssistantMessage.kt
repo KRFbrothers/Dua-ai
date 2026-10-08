@@ -45,13 +45,33 @@ fun AssistantMessage(
     onRetry: () -> Unit,
     onSpeak: () -> Unit,
     modifier: Modifier = Modifier,
+    thinkingExpanded: Boolean = false,
 ) {
     val parts = remember(message.text) { ReplySources.split(message.text) }
+    val streaming = message.streaming
     Column(modifier.fillMaxWidth()) {
-        MarkdownMessage(parts.body)
+        if (message.thinking != null) ThinkingBlock(
+            messageId = message.id,
+            thinking = message.thinking,
+            seconds = message.thinkingSeconds,
+            live = streaming,
+            answering = message.text.isNotEmpty(),
+            startedAt = message.startedAt,
+            initiallyExpanded = thinkingExpanded,
+            modifier = Modifier.padding(bottom = Spacing.xs),
+        )
+        if (streaming && message.text.isEmpty() && message.thinking == null) TypingIndicator()
+        if (parts.body.isNotEmpty()) MarkdownMessage(parts.body)
         message.codeSnippet?.let { CodeBlock(code = it, language = null, modifier = Modifier.padding(top = Spacing.sm)) }
-        if (parts.sources.isNotEmpty()) SourceChips(parts.sources, Modifier.padding(top = Spacing.md))
-        if (message.state == "complete") MessageActions(
+        if (parts.sources.isNotEmpty() && !streaming) SourceChips(parts.sources, Modifier.padding(top = Spacing.md))
+        message.notice?.let {
+            Text(it, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = Spacing.sm))
+        }
+        if (message.state == "stopped") Text(if (message.text.isEmpty()) "Stopped" else "Stopped · partial reply",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = Spacing.sm))
+        if (message.state == "complete" || (message.state == "stopped" && message.text.isNotEmpty())) MessageActions(
             copyText = message.text + (message.codeSnippet?.let { "\n" + it } ?: ""),
             showRetry = isLast,
             retryEnabled = isLast && !typing,
@@ -65,8 +85,7 @@ fun AssistantMessage(
             speakDescription = if (speaking) "Stop response voice" else if (generatedVoice) "Generate AI voice for this response" else "Speak response with device voice",
             onRetry = onRetry,
             onSpeak = onSpeak,
-        ) else if (message.state == "stopped") Text("Stopped", style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = Spacing.sm))
+        )
     }
 }
 

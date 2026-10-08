@@ -4,11 +4,16 @@ import { handleAccount, handleCloudRead } from '../core/account.mjs';
 import { handleSetup } from '../core/setup.mjs';
 import { handleAdvanced } from '../core/advanced-integrations.mjs';
 import { guardChatAccess } from '../core/access-policy.mjs';
+import { envInteger } from '../core/adapters.mjs';
+
+/** DUA_CHAT_DEADLINE_SECONDS: whole-request chat deadline (default 280 s, allowed 10–790 s). */
+export const chatDeadlineMs = env => envInteger(env, 'DUA_CHAT_DEADLINE_SECONDS', 280, 10, 790) * 1000;
 
 export async function handleService(request,{env=process.env,fetcher=fetch}={}) {
  const url=new URL(request.url),path=url.pathname;
- // Include authentication/quota work in the chat deadline, before the 60s host limit.
- if(path==='/api/chat')request=new Request(request,{signal:AbortSignal.any([request.signal,AbortSignal.timeout(55000)])});
+ // Include authentication/quota work in the chat deadline. Keep it below the function maxDuration
+ // (web/vercel.json: 300 s, the Hobby maximum with Fluid compute) so the reply can end cleanly.
+ if(path==='/api/chat')request=new Request(request,{signal:AbortSignal.any([request.signal,AbortSignal.timeout(chatDeadlineMs(env))])});
  if(request.headers.get('origin')&&request.headers.get('origin')!==url.origin)return Response.json({error:'Request origin is not allowed.'},{status:403,headers:{'Cache-Control':'no-store'}});
  if(path==='/api/setup')return handleSetup(request,{env});
  if(path==='/api/config')return handleChat(request,{env,fetcher});
