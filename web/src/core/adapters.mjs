@@ -42,28 +42,40 @@ export function historyTurns(messages) {
   return messages.map((m, index) => ({ role: m.role, text: m.attachmentText && index < messages.length - 1 ? m.text + '\n\n' + earlierFiles(m.attachmentText) : m.text }));
 }
 
+/** Maps normalized parts ({text} | {inlineData} | {fileUrl}) to Responses / Anthropic / chat-completions content. */
 export function attachmentContent(text, parts, files, type) {
   const mediaFiles = (files || []).filter(file => !isTextType(file.mimeType));
   let mediaIndex = 0;
   return [{ text }, ...parts].map(part => {
     if (part.text !== undefined) return { type: type === 'responses' ? 'input_text' : 'text', text: part.text };
+    if (part.fileUrl) {
+      const { mimeType, url } = part.fileUrl;
+      const pdf = mimeType === 'application/pdf';
+      if (type === 'anthropic') return { type: pdf ? 'document' : 'image', source: { type: 'url', url } };
+      if (type === 'responses') return pdf ? { type: 'input_file', file_url: url } : { type: 'input_image', image_url: url };
+      return { type: 'image_url', image_url: { url } };
+    }
     const { mimeType, data } = part.inlineData;
-    const filename = mediaFiles[mediaIndex++]?.name || 'attachment';
+    const filename = part.name || mediaFiles[mediaIndex++]?.name || 'attachment';
     if (type === 'anthropic') return { type: mimeType === 'application/pdf' ? 'document' : 'image', source: { type: 'base64', media_type: mimeType, data } };
     const dataUrl = `data:${mimeType};base64,${data}`;
     if (type === 'responses') return mimeType === 'application/pdf' ? { type: 'input_file', filename, file_data: dataUrl } : { type: 'input_image', image_url: dataUrl };
     return { type: 'image_url', image_url: { url: dataUrl } };
   });
 }
+const geminiPart = part => part.text !== undefined ? { text: part.text } : part.inlineData ? { inlineData: part.inlineData } : { fileData: part.fileData };
 
 /**
  * Builds {url, headers, body} for one provider call.
- * ctx: {model, key, env, systemParts[], messages[{role,text,attachmentText?}], parts[], files[], webContext, reasoning, stream}
+ * ctx: {model, key, env, systemParts[], messages[{role,text,attachmentText?}], parts[], files[], webContext, reasoning, stream,
+ *       turnParts?: Map<messageIndex, part[]>}  (stored-file parts resolved by file-context.mjs, any turn)
  */
 export function buildRequest(provider, ctx) {
   const { model, key, env = {}, systemParts, parts = [], files = [], webContext = '', reasoning = false, stream = false } = ctx;
   const turns = historyTurns(ctx.messages);
   const lastParts = [...parts, ...(webContext ? [{ text: webContext }] : [])];
+  const turnParts = ctx.turnParts instanceof Map ? ctx.turnParts : new Map();
+  const extraParts = index => [...(turnParts.get(index) || []), ...(index === turns.length - 1 ? lastParts : [])];
   if (provider.type === 'gemini') {
     const maxTokens = maxOutputTokens('GEMINI', env, reasoning);
     const generationConfig = { ...(maxTokens ? { maxOutputTokens: maxTokens } : {}), ...(reasoning ? { thinkingConfig: geminiThinkingConfig(model, env) } : {}) };
@@ -72,14 +84,17 @@ export function buildRequest(provider, ctx) {
       headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
       body: {
         systemInstruction: { parts: systemParts.map(text => ({ text })) },
-        contents: turns.map((m, index) => ({ role: m.role, parts: [{ text: m.text }, ...(index === turns.length - 1 ? lastParts : [])] })),
+        contents: turns.map((m, index) => ({ role: m.role, parts: [{ text: m.text }, ...extraParts(index).map(geminiPart)] })),
         ...(Object.keys(generationConfig).length ? { generationConfig } : {})
       }
     };
   }
   const system = systemParts.join('\n');
   const messages = turns.map(m => ({ role: m.role === 'model' ? 'assistant' : 'user', content: m.text }));
-  if (lastParts.length) messages.at(-1).content = attachmentContent(messages.at(-1).content, lastParts, files, provider.type);
+  messages.forEach((message, index) => {
+    const extra = extraParts(index);
+    if (extra.length) message.content = attachmentContent(message.content, extra, index === turns.length - 1 ? files : [], provider.type);
+  });
   const maxTokens = maxOutputTokens(provider.prefix, env, reasoning);
   if (provider.type === 'anthropic') return {
     url: provider.url,

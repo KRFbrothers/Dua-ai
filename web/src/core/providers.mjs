@@ -4,6 +4,9 @@ import { attachmentParts, MAX_REQUEST_BYTES, providerType } from './attachments.
 import { chatWebConfiguration, prepareChatWeb, sourcesFooter, WEB_SOURCE_INSTRUCTIONS, WebContextError, withWebSources } from './chat-web.mjs';
 import { buildRequest, extractReply, parseStreamRecord, MAX_REPLY_CHARS, MAX_THINKING_CHARS } from './adapters.mjs';
 import { eventStreamResponse, readSse } from './sse.mjs';
+import { validFileRef } from './file-types.mjs';
+import { resolveChatFiles, FileContextError } from './file-context.mjs';
+import { filesConfiguration } from './files.mjs';
 
 const fileTypes = ['text/plain', 'image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
 // `allowed` is what the provider API accepts; non-Gemini vision/document types still need <PREFIX>_ATTACHMENT_TYPES opt-in.
@@ -29,6 +32,17 @@ function providerAttachmentTypes(provider, env) {
   return provider.allowed.filter(type => type === 'text/plain' || requested.includes(type));
 }
 
+/**
+ * Native input types for stored files. Same as inline, plus PDFs for Grok through xAI file inputs
+ * (input_file + signed URL; xAI runs its attachment_search tool, billed per search). GROK_FILE_INPUTS=0
+ * sends extracted PDF text to Grok instead.
+ */
+export function storedFileTypes(provider, env = {}) {
+  const types = providerAttachmentTypes(provider, env);
+  if (provider.name === 'Grok' && String(env.GROK_FILE_INPUTS ?? '').trim() !== '0') types.push('application/pdf');
+  return types;
+}
+
 // Public configuration contains availability, model IDs and supported MIME types, never credentials.
 export function providerConfiguration(env = {}) {
   return definitions.map(provider => {
@@ -37,15 +51,21 @@ export function providerConfiguration(env = {}) {
   });
 }
 
+export const MAX_HISTORY_BYTES = 1024 * 1024;
+export const MAX_FILES_PER_MESSAGE = 10;
+const MAX_FILE_REFS = 60;
 const CHAT_KEYS = ['model', 'messages', 'attachments', 'memory', 'web', 'stream', 'mode'];
 export function validateChat(data) {
   if (!data || typeof data !== 'object' || Array.isArray(data) || Object.keys(data).some(key => !CHAT_KEYS.includes(key))) return ['Invalid request.', 400];
   if (!definitions.some(provider => provider.name === data.model)) return ['Select a supported AI model.', 400];
-  if (new TextEncoder().encode(JSON.stringify(data.messages)).length > 262144) return ['Message history is too large.', 413];
+  // 1 MB leaves room for stored-file references and audio transcripts (older apps send at most 256 KB).
+  if (new TextEncoder().encode(JSON.stringify(data.messages)).length > MAX_HISTORY_BYTES) return ['Message history is too large.', 413];
   if (!Array.isArray(data.messages) || !data.messages.length || data.messages.length > 40 || data.messages.some(message => !message || typeof message !== 'object' || Array.isArray(message) ||
-    Object.keys(message).some(key => !['role', 'text', 'attachmentText'].includes(key)) || !['user', 'model'].includes(message.role) || typeof message.text !== 'string' || !message.text.trim() ||
+    Object.keys(message).some(key => !['role', 'text', 'attachmentText', 'files'].includes(key)) || !['user', 'model'].includes(message.role) || typeof message.text !== 'string' || !message.text.trim() ||
+    (message.files !== undefined && (message.role !== 'user' || !Array.isArray(message.files) || message.files.length > MAX_FILES_PER_MESSAGE || !message.files.every(validFileRef))) ||
     message.text.length > (message.role === 'user' ? 8000 : 80000) ||
     (message.attachmentText !== undefined && (message.role !== 'user' || typeof message.attachmentText !== 'string' || message.attachmentText.length > 65536))) || data.messages.at(-1).role !== 'user') return ['Invalid messages.', 400];
+  if (data.messages.reduce((sum, message) => sum + (message.files?.length || 0), 0) > MAX_FILE_REFS) return ['Too many files in this conversation. Start a new chat.', 413];
   if (data.memory !== undefined && (typeof data.memory !== 'string' || data.memory.length > 3000)) return ['Invalid memory notes.', 400];
   if (data.attachments !== undefined && !Array.isArray(data.attachments)) return ['Invalid attachments.', 400];
   if (data.web !== undefined && !['search', 'page'].includes(data.web)) return ['Choose Web off, Search or Read link.', 400];
@@ -122,7 +142,7 @@ export async function handleChat(request, { env = process.env, fetcher = fetch, 
   const url = new URL(request.url);
   if (url.pathname === '/api/config' && request.method === 'GET') {
     const providers = providerConfiguration(env);
-    return json({ geminiConfigured: providers[0].configured, model: providers[0].model, providers, web: chatWebConfiguration(env), streaming: true });
+    return json({ geminiConfigured: providers[0].configured, model: providers[0].model, providers, web: chatWebConfiguration(env), streaming: true, files: filesConfiguration(env) });
   }
   if (url.pathname !== '/api/chat' || request.method !== 'POST') return json({ error: 'Method not allowed.' }, 405);
   if (request.headers.get('origin') && request.headers.get('origin') !== url.origin) return json({ error: 'Request origin is not allowed.' }, 403);
@@ -151,7 +171,13 @@ export async function handleChat(request, { env = process.env, fetcher = fetch, 
     if (aborted(error, signal)) return json({ error: 'Web request stopped or timed out. Retry.' }, 504);
     return json({ error: error instanceof WebContextError ? error.message : 'Web request failed. Retry or turn Web off.' }, error instanceof WebContextError ? error.status : 502);
   }
-  const plan = buildRequest(provider, { model, key: env[provider.key], env, systemParts: systemParts(provider, data, web), messages: data.messages, parts, files: data.attachments, webContext: web.context, reasoning, stream: data.stream === true });
+  let stored;
+  try { stored = await resolveChatFiles({ messages: data.messages, provider, attachmentTypes: storedFileTypes(provider, env), request, env, fetcher, signal }); }
+  catch (error) {
+    if (aborted(error, signal)) return json({ error: 'File preparation stopped or timed out. Retry.' }, 504);
+    return json({ error: error instanceof FileContextError ? error.message : 'Stored files could not be prepared. Retry.' }, error instanceof FileContextError ? error.status : 502);
+  }
+  const plan = buildRequest(provider, { model, key: env[provider.key], env, systemParts: systemParts(provider, data, web), messages: data.messages, parts, files: data.attachments, turnParts: stored.turnParts, webContext: web.context, reasoning, stream: data.stream === true });
   let response;
   // Lets a cancelled event stream (client gone) abort the provider body read as well.
   const upstream = new AbortController();
@@ -168,6 +194,7 @@ export async function handleChat(request, { env = process.env, fetcher = fetch, 
   if (data.stream === true) {
     return eventStreamResponse(async (send, streamSignal) => {
       streamSignal.addEventListener('abort', () => upstream.abort(streamSignal.reason), { once: true });
+      if (stored.transcripts.length) send({ type: 'files', files: stored.transcripts });
       if (web.sources.length) send({ type: 'sources', sources: web.sources });
       if (notice) send({ type: 'notice', message: notice });
       await relayStream({ provider, response, sources: web.sources, reasoning, signal: streamSignal, send });
@@ -179,7 +206,7 @@ export async function handleChat(request, { env = process.env, fetcher = fetch, 
     const text = reply.text.trim();
     if (!text || text.length > MAX_REPLY_CHARS) return json({ error: `${provider.name} did not return a usable text response. Retry.` }, 422);
     const thinking = reasoning && reply.thinking ? reply.thinking.slice(0, MAX_THINKING_CHARS) : null;
-    return json({ ...withWebSources(text, web.sources), ...(thinking ? { thinking } : {}), ...(reply.truncated ? { truncated: true } : {}), ...(notice ? { notice } : {}) });
+    return json({ ...withWebSources(text, web.sources), ...(thinking ? { thinking } : {}), ...(reply.truncated ? { truncated: true } : {}), ...(notice ? { notice } : {}), ...(stored.transcripts.length ? { files: stored.transcripts } : {}) });
   } catch (error) {
     if (error instanceof WebContextError) return json({ error: error.message }, error.status);
     if (aborted(error, signal)) return json({ error: `${provider.name} response stopped or timed out. Retry.` }, 504);
