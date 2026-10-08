@@ -52,6 +52,8 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
     val imagineOptions by viewModel.imagineOptions.collectAsState()
     val imagineUsage by viewModel.imagineUsage.collectAsState()
     val runCode by viewModel.runCode.collectAsState()
+    val buildRepo by viewModel.buildRepo.collectAsState()
+    val buildRepositories by viewModel.buildRepositories.collectAsState()
     val scope = rememberCoroutineScope()
     var attachmentNotice by rememberSaveable { mutableStateOf("") }
     LaunchedEffect(failedPrompt) { failedPrompt?.let { viewModel.consumeFailedPrompt() } }
@@ -109,6 +111,8 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
         greeting = greeting, suggestions = viewModel.promptSuggestions,
         imagine = imagine, imagineOptions = imagineOptions, imagineConfig = integrations.imagine, imagineUsage = imagineUsage,
         runCode = runCode, codeConfig = integrations.codeExecution,
+        buildRepo = buildRepo, buildConfig = integrations.build, buildRepositories = buildRepositories,
+        buildHint = remember(integrations.build, integrations.providers, account.user) { viewModel.buildUnavailableReason().orEmpty() },
     )
     LaunchedEffect(imagine) { if (imagine) viewModel.loadImagineUsage() }
     // Saving to the gallery on Android 8–9 needs the legacy storage permission; Android 10+ uses MediaStore directly.
@@ -185,6 +189,9 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
             onImagine = viewModel::setImagine,
             onImagineOptions = viewModel::setImagineOptions,
             onRunCode = viewModel::setRunCode,
+            onOpenBuild = { viewModel.loadBuildRepositories() },
+            onBuildRepository = viewModel::setBuildRepository,
+            onRetryBuildRepositories = { viewModel.loadBuildRepositories(force = true) },
             imagine = ImagineActions(
                 onSave = { items ->
                     if (com.dua.ai.imagine.MediaExport.needsPermission() && androidx.core.content.ContextCompat.checkSelfPermission(context,

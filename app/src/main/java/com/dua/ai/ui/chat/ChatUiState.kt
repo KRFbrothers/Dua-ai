@@ -62,11 +62,19 @@ data class ChatUiState(
     val codeConfig: com.dua.ai.setup.CodeExecutionConfig? = null,
     /** "Ran code" blocks shown expanded on first render (previews and screenshots). */
     val expandedCode: Set<String> = emptySet(),
+    /** Build mode (Phase 5B, read-only): the repository this chat is tied to (null = off), the server capability
+     *  (null on older backends), why it is unavailable (empty when usable) and the picker's repository list. */
+    val buildRepo: String? = null,
+    val buildConfig: com.dua.ai.setup.BuildModeConfig? = null,
+    val buildHint: String = "",
+    val buildRepositories: com.dua.ai.setup.BuildRepositories = com.dua.ai.setup.BuildRepositories(),
+    /** "Files read" lists shown expanded on first render (previews and screenshots). */
+    val expandedBuild: Set<String> = emptySet(),
 ) {
     val canSend: Boolean get() = (draft.isNotBlank() || attachments.isNotEmpty() || uploads.any { it.ref != null }) && !typing && !readingFiles &&
         uploads.none { it.uploading } && recordingSince == null
     val modelLabel: String get() = model
-    val auto: Boolean get() = !reasoning && webMode == null && !xSearch && !imagine && !runCode
+    val auto: Boolean get() = !reasoning && webMode == null && !xSearch && !imagine && !runCode && buildRepo == null
     /** Imagine has a photo to edit or animate. */
     val imagineSource: Boolean get() = uploads.any { it.ref != null && it.mimeType.startsWith("image/") }
     val videoAvailable: Boolean get() = imagineConfig?.videoEnabled == true
@@ -109,7 +117,12 @@ class ChatActions(
     val onImagineOptions: (com.dua.ai.imagine.ImagineOptions) -> Unit = {},
     val imagine: ImagineActions = ImagineActions(),
     val onRunCode: (Boolean) -> Unit = {},
+    /** Build sheet opened: load the repository list. */
+    val onOpenBuild: () -> Unit = {},
+    /** Tie the chat to a repository (owner/name), or null to leave Build mode. */
+    val onBuildRepository: (String?) -> Unit = {},
+    val onRetryBuildRepositories: () -> Unit = {},
 )
 
 /** Bottom sheets the chat screen can show. */
-enum class ChatSheet { Model, Attach, Audio, Imagine }
+enum class ChatSheet { Model, Attach, Audio, Imagine, Build }

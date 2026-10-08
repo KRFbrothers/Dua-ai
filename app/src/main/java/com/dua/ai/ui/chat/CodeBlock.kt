@@ -47,6 +47,8 @@ import kotlinx.coroutines.delay
 private const val MAX_HIGHLIGHT_CHARS = 20_000
 
 internal fun highlightCode(code: String, language: String?, dark: Boolean): AnnotatedString {
+    // Unified diffs (Build mode answers): added lines green, removed red, hunk headers blue.
+    if (language?.trim()?.lowercase() in setOf("diff", "patch")) return highlightDiff(code, dark)
     val syntax = language?.trim()?.lowercase()?.let { name ->
         SyntaxLanguage.getByName(when (name) { "kt", "kts" -> "kotlin"; "js", "jsx", "mjs" -> "javascript"; "ts", "tsx" -> "typescript"; "rb" -> "ruby"; "rs" -> "rust"; "py" -> "python"; "sh", "bash", "zsh", "shell" -> "shell"; "c++" -> "cpp"; "cs", "c#" -> "csharp"; else -> name })
     }
@@ -65,6 +67,30 @@ internal fun highlightCode(code: String, language: String?, dark: Boolean): Anno
             }
         }
     }.getOrElse { AnnotatedString(code) }
+}
+
+/** Line-based unified diff colouring; long diffs stay plain like other code. */
+internal fun highlightDiff(code: String, dark: Boolean): AnnotatedString {
+    if (code.length > MAX_HIGHLIGHT_CHARS) return AnnotatedString(code)
+    val added = if (dark) Color(0xFF7EE787) else Color(0xFF116329)
+    val addedBg = if (dark) Color(0x332EA043) else Color(0x262DA44E)
+    val removed = if (dark) Color(0xFFFF7B72) else Color(0xFF82071E)
+    val removedBg = if (dark) Color(0x33F85149) else Color(0x26FF8182)
+    val hunk = if (dark) Color(0xFF79C0FF) else Color(0xFF0550AE)
+    return buildAnnotatedString {
+        append(code)
+        var start = 0
+        for (line in code.split('\n')) {
+            val end = start + line.length
+            when {
+                line.startsWith("+++") || line.startsWith("---") || line.startsWith("diff ") || line.startsWith("index ") -> addStyle(SpanStyle(fontWeight = FontWeight.Bold), start, end)
+                line.startsWith("@@") -> addStyle(SpanStyle(color = hunk), start, end)
+                line.startsWith("+") -> addStyle(SpanStyle(color = added, background = addedBg), start, end)
+                line.startsWith("-") -> addStyle(SpanStyle(color = removed, background = removedBg), start, end)
+            }
+            start = end + 1
+        }
+    }
 }
 
 /** Fenced code: language label, copy button, monospace text that scrolls sideways instead of wrapping. */

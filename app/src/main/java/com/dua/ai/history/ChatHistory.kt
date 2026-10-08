@@ -16,7 +16,9 @@ data class SavedChat(
     val messages: List<ChatMessage>,
     val updatedAt: Long,
     /** Server summary of older turns (long context). Local only: not exported or synced. */
-    val summary: com.dua.ai.model.ChatSummary? = null
+    val summary: com.dua.ai.model.ChatSummary? = null,
+    /** Build mode repository this chat is tied to (owner/name). Local only: not exported or synced. */
+    val buildRepository: String? = null
 ) {
     val title: String get() = messages.firstOrNull { it.isUser }?.text?.take(60) ?: "Draft"
     val preview: String get() = draft.takeIf { it.isNotBlank() }?.let { "Draft: $it" }
@@ -130,7 +132,7 @@ object ChatHistoryCodec {
         .put("activeId", activeId).put("chats", JSONArray().apply {
             chats.forEach { chat -> put(JSONObject().put("id", chat.id).put("model", chat.model)
                 .put("draft", chat.draft).put("updatedAt", chat.updatedAt)
-                .apply { chat.summary?.let { put("summary", it.toJson()) } }
+                .apply { chat.summary?.let { put("summary", it.toJson()) }; chat.buildRepository?.let { put("buildRepository", it) } }
                 .put("messages", JSONArray().apply { chat.messages.filter(::persistable).forEach { message ->
                     put(JSONObject().put("id", message.id).put("text", message.text).put("isUser", message.isUser)
                         .put("model", message.model).put("state", savedState(message.state))
@@ -144,6 +146,8 @@ object ChatHistoryCodec {
                             if (!message.isUser) message.imagine?.let { put("imagine", com.dua.ai.imagine.ImagineCodec.infoJson(it)) }
                             // Code that ran for a reply (Run code) stays local like file references: not exported or synced.
                             if (!message.isUser && message.codeRuns.isNotEmpty()) put("codeRuns", com.dua.ai.model.CodeRuns.toJson(message.codeRuns))
+                            // Build mode file lists stay local too (repository paths can be private).
+                            if (!message.isUser) message.build?.let { put("build", com.dua.ai.model.BuildInfos.toJson(it)) }
                         })
                 } })) }
         }).toString()
@@ -183,8 +187,10 @@ object ChatHistoryCodec {
                         files = com.dua.ai.files.FileRefCodec.fromArray(message.optJSONArray("files")),
                         media = com.dua.ai.imagine.ImagineCodec.mediaFrom(message.optJSONArray("media"), local = true),
                         imagine = com.dua.ai.imagine.ImagineCodec.infoFrom(message.optJSONObject("imagine")),
-                        codeRuns = if (message.optBoolean("isUser")) emptyList() else com.dua.ai.model.CodeRuns.fromJson(message.optJSONArray("codeRuns")))
-                }, item.getLong("updatedAt"), com.dua.ai.model.ChatSummary.fromJson(item.optJSONObject("summary")))
+                        codeRuns = if (message.optBoolean("isUser")) emptyList() else com.dua.ai.model.CodeRuns.fromJson(message.optJSONArray("codeRuns")),
+                        build = if (message.optBoolean("isUser")) null else com.dua.ai.model.BuildInfos.fromJson(message.optJSONObject("build")))
+                }, item.getLong("updatedAt"), com.dua.ai.model.ChatSummary.fromJson(item.optJSONObject("summary")),
+                item.optString("buildRepository").takeIf { com.dua.ai.model.BuildInfos.validRepository(it) })
         }
         require(chats.all { it.model in com.dua.ai.setup.IntegrationCapabilities.MODELS } && chats.map { it.id }.distinct().size == chats.size)
         return root.getString("activeId") to chats

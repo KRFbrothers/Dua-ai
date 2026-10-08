@@ -130,6 +130,7 @@ fun ChatScreen(
                         onImagine = actions.onImagine,
                         onImagineOptions = { sheet = ChatSheet.Imagine },
                         onRunCode = actions.onRunCode,
+                        onBuild = { sheet = ChatSheet.Build; actions.onOpenBuild() },
                     )
                 }
             }
@@ -165,6 +166,14 @@ fun ChatScreen(
             ImagineSheet(options = state.imagineOptions, config = config, usage = state.imagineUsage, hasSource = state.imagineSource,
                 onChange = actions.onImagineOptions, onDismiss = { sheet = null })
         }
+        ChatSheet.Build -> BuildSheet(
+            current = state.buildRepo, hint = state.buildHint, repositories = state.buildRepositories, enabled = !state.typing,
+            onSelect = { repository -> sheet = null; actions.onBuildRepository(repository) },
+            onTurnOff = { sheet = null; actions.onBuildRepository(null) },
+            onRetry = actions.onRetryBuildRepositories,
+            onOpenSetup = { sheet = null; actions.onOpenSetup() },
+            onDismiss = { sheet = null },
+        )
         null -> Unit
     }
 
