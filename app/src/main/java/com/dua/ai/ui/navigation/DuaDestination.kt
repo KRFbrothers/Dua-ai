@@ -16,6 +16,7 @@ enum class DuaDestination(val route: String) {
     Sharing("settings/sharing"),
     Permissions("settings/permissions"),
     Notifications("settings/notifications"),
+    Imagine("settings/imagine"),
     FeatureSetup("settings/feature-setup");
 
     companion object {
@@ -31,6 +32,7 @@ enum class DuaDestination(val route: String) {
             "Sharing" -> Sharing
             "Permissions" -> Permissions
             "Notifications" -> Notifications
+            "Imagine" -> Imagine
             "IntegrationSetup", "FeatureSetup" -> FeatureSetup
             "Voice" -> Voice
             "HandsFree" -> HandsFree

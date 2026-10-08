@@ -48,8 +48,8 @@ Effort scale (one developer working with coding agents): **S** ≤ 2 days, **M**
 | Web search | Brave, one query of the raw prompt, plain-text Sources footer | Provider built-in search tools with Brave as fallback, structured sources as chips, Auto mode | M | 2 |
 | X search | None | xAI `x_search` in Search mode, X post chips | S–M after web search | 2 |
 | Files | JPEG, PNG, WebP, PDF, UTF-8 text/code (256 KB each); 3 files, 2 MB total; text-file content kept on the device for follow-ups, other bytes sent once | Quick win: CSV, MD, JSON and code as text. Then Supabase Storage uploads kept in history; XLSX, DOCX, audio | S + L | 1 (quick win), 2 |
-| Image generation and editing | None | `/api/imagine`, image messages, viewer, save and share, daily spend caps | M | 3 |
-| Video | None | Async jobs with polling; 480p/720p default, 1080p gated | M–L | 3 |
+| Image generation and editing | Imagine chip: Grok Imagine or Gemini (Nano Banana), 1–4 images, aspect ratios, edits from a photo; grid, fullscreen viewer, save, share, "Edit"; durable daily cap. Live provider/device checks pending | `/api/imagine`, image messages, viewer, save and share, daily spend caps | M | 3 |
+| Video | Async Grok Imagine jobs with polling that survives leaving the app; 480p/720p, 1080p gated; MP4 stored in `dua-files`; Media3 playback; durable daily seconds cap. Live checks pending | Async jobs with polling; 480p/720p default, 1080p gated | M–L | 3 |
 | Voices and languages | Device speech follows the phone locale; one fixed ElevenLabs voice | Voice and language pickers (device plus xAI or Gemini TTS) | S–M | 4 |
 | Realtime voice | Half-duplex hands-free loop, foreground only | Speech-to-speech over WebSocket, interrupt by talking | L | 4 |
 | Code execution | None | Provider-hosted sandbox tool with collapsible code and output | S–M | 5 |
@@ -74,6 +74,7 @@ The repository contains the implementation described below, but this checkout ca
 | GitHub connector | Read-only repository listing is implemented | Token, owner restriction and feature flag are required; production unknown | Mocked tests; live authorization pending |
 | Appearance and local notifications | Yes | Notification permission is user-controlled | Automated tests; physical delivery/rendering checks pending |
 | Data controls and sharing | Local export/import/delete and reviewed cloud clearing are implemented | Cloud controls require Supabase; production unknown | Automated tests; physical file-picker checks pending |
+| Imagine (images and video) | Yes | Migration, `GROK_API_KEY`/`GEMINI_API_KEY` and caps are production-controlled; unknown here | Mocked provider/Supabase tests and a local smoke script; live generation and device checks pending |
 | Login/owner/quota protection | Optional controls and durable daily request quota are implemented | Vercel variables, service key and usage migration are needed; production unknown | Mocked tests; production enforcement not verified |
 | Personal install (APK) | Android source builds; a debug APK needs no signing setup; release signing with a personal key is optional | Not verified here | CI runs JVM tests, not an APK; install on the owner's phone pending |
 
@@ -168,6 +169,8 @@ Files stay in the conversation, search becomes model-driven with real sources, a
 - Android: image message, full-screen viewer, save to gallery, share, "Edit this image"
 - Then async video: submit returns a request id and the app polls, so no function runs long; `grok-imagine-video-1.5`, 480p/720p by default, 1080p gated; MP4 copied to Storage; Media3/ExoPlayer playback
 - Owner sign-in required; daily image and video caps
+
+*Status: implemented in PR "Phase 3: Imagine (images and video)" — migration `202610090001_dua_imagine.sql` (video/mp4 + caps RPCs), `/api/imagine/{image,video,status,usage}`, Android Imagine chip, options sheet, image grid, viewer, video card and job resume, Settings › Imagine. Gemini video (Veo) deferred. Live provider and physical-device checks remain open.*
 
 **Success:**
 - Generated media survives provider URL expiry and can be saved and shared

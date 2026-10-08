@@ -48,6 +48,9 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
     val generatedSpeech by voice.generated.state.collectAsState()
     val uploads by viewModel.uploads.collectAsState()
     val recordingSince by viewModel.recordingSince.collectAsState()
+    val imagine by viewModel.imagine.collectAsState()
+    val imagineOptions by viewModel.imagineOptions.collectAsState()
+    val imagineUsage by viewModel.imagineUsage.collectAsState()
     val scope = rememberCoroutineScope()
     var attachmentNotice by rememberSaveable { mutableStateOf("") }
     LaunchedEffect(failedPrompt) { failedPrompt?.let { viewModel.consumeFailedPrompt() } }
@@ -103,7 +106,26 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
         deviceVoiceStatus = speech.status, deviceVoiceActive = speech.activeId != null,
         generatedVoiceStatus = generatedSpeech.status, generatedVoiceActive = generatedSpeech.activeId != null,
         greeting = greeting, suggestions = viewModel.promptSuggestions,
+        imagine = imagine, imagineOptions = imagineOptions, imagineConfig = integrations.imagine, imagineUsage = imagineUsage,
     )
+    LaunchedEffect(imagine) { if (imagine) viewModel.loadImagineUsage() }
+    // Saving to the gallery on Android 8–9 needs the legacy storage permission; Android 10+ uses MediaStore directly.
+    var pendingSave by remember { mutableStateOf<List<com.dua.ai.imagine.GeneratedMedia>>(emptyList()) }
+    fun saveMedia(items: List<com.dua.ai.imagine.GeneratedMedia>) {
+        scope.launch {
+            try {
+                val files = items.map { item -> (viewModel.mediaCache.file(item) ?: error("This file is no longer available.")) to item }
+                files.forEachIndexed { index, (file, item) -> com.dua.ai.imagine.MediaExport.saveToGallery(context, file, item, index) }
+                val video = items.all { it.isVideo }
+                attachmentNotice = (if (items.size == 1) (if (video) "Video" else "Image") else "${items.size} files") + " saved to " + (if (video) "Movies/Dua." else "Pictures/Dua.")
+            } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+            catch (failure: Exception) { attachmentNotice = failure.message ?: "Could not save to the gallery." }
+        }
+    }
+    val storagePermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        val items = pendingSave; pendingSave = emptyList()
+        if (granted) saveMedia(items) else attachmentNotice = "Storage permission is needed to save on this Android version."
+    }
     val actions = remember(viewModel, voice) {
         ChatActions(
             onDraftChange = viewModel::updateDraft,
@@ -158,9 +180,39 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
             onOpenSettings = onOpenSettings,
             onOpenVoice = onOpenVoice,
             onOpenSetup = onOpenSetup,
+            onImagine = viewModel::setImagine,
+            onImagineOptions = viewModel::setImagineOptions,
+            imagine = ImagineActions(
+                onSave = { items ->
+                    if (com.dua.ai.imagine.MediaExport.needsPermission() && androidx.core.content.ContextCompat.checkSelfPermission(context,
+                            android.Manifest.permission.WRITE_EXTERNAL_STORAGE) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                        pendingSave = items; storagePermission.launch(android.Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                    } else saveMedia(items)
+                },
+                onShare = { items ->
+                    scope.launch {
+                        try {
+                            val files = items.map { item -> (viewModel.mediaCache.file(item) ?: error("This file is no longer available.")) to item }
+                            context.startActivity(com.dua.ai.imagine.MediaExport.shareIntent(context, files))
+                        } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+                        catch (_: ActivityNotFoundException) { attachmentNotice = "No app can share this file." }
+                        catch (failure: Exception) { attachmentNotice = failure.message ?: "Could not share." }
+                    }
+                },
+                onEdit = { media -> attachmentNotice = ""; viewModel.useGeneratedImage(media) },
+                onAnimate = { media -> attachmentNotice = ""; viewModel.useGeneratedImage(media, com.dua.ai.imagine.ImagineInfo.VIDEO) },
+                onCancelVideo = viewModel::cancelVideo,
+                onReuse = { info ->
+                    viewModel.setImagine(true)
+                    viewModel.setImagineOptions(viewModel.imagineOptions.value.copy(kind = info.kind, aspectRatio = info.aspectRatio))
+                    viewModel.updateDraft(info.prompt)
+                },
+            ),
         )
     }
-    ChatScreen(state, actions, attachRequest = attachRequest, onAttachRequestHandled = onAttachRequestHandled)
+    androidx.compose.runtime.CompositionLocalProvider(LocalMediaLoader provides viewModel.mediaCache) {
+        ChatScreen(state, actions, attachRequest = attachRequest, onAttachRequestHandled = onAttachRequestHandled)
+    }
 }
 
 private fun discardPending(captures: CameraCaptureStore, name: String) { if (name.isNotEmpty()) captures.discard(name) }

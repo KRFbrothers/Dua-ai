@@ -126,6 +126,9 @@ dependencies {
     implementation(libs.androidx.navigation.compose)
     implementation(libs.markdown.renderer.m3)
     implementation(libs.markdown.renderer.code)
+    // Imagine: inline and fullscreen playback of generated videos.
+    implementation(libs.androidx.media3.exoplayer)
+    implementation(libs.androidx.media3.ui)
 
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)

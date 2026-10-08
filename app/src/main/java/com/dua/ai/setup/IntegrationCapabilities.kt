@@ -20,7 +20,9 @@ data class IntegrationState(val groups: List<IntegrationGroup> = emptyList(), va
     /** X search toggle (Grok only) offered by the server. */
     val xSearchAvailable: Boolean = false,
     /** Server summarises older turns and accepts `context` (Phase 2 long context). */
-    val longContext: Boolean = false) {
+    val longContext: Boolean = false,
+    /** Imagine (Phase 3) offered by the server; null on older backends, which hides Imagine. */
+    val imagine: com.dua.ai.imagine.ImagineConfig? = null) {
     /** Search works for [model] natively or through Brave. */
     fun searchAvailable(model: String): Boolean = webSearchConfigured || model in nativeSearch
 }
@@ -46,7 +48,8 @@ object IntegrationCapabilities {
             pageReadingAvailable = web?.opt("pageReadingAvailable") == true,
             nativeSearch = web?.optJSONArray("nativeSearch")?.let { names -> (0 until names.length()).mapNotNull { names.opt(it) as? String }.filter { it in MODELS }.toSet() } ?: emptySet(),
             xSearchAvailable = web?.opt("xSearch") == true,
-            longContext = json.optJSONObject("context")?.opt("summaries") == true)
+            longContext = json.optJSONObject("context")?.opt("summaries") == true,
+            imagine = com.dua.ai.imagine.ImagineCodec.config(json.optJSONObject("imagine")))
     }
     fun providers(json: JSONObject): List<ProviderCapability> {
         val array = json.optJSONArray("providers") ?: return fallbackProviders.map { it.copy(configured = json.optBoolean("geminiConfigured", true), model = json.optString("model", "Gemini").take(100)) }

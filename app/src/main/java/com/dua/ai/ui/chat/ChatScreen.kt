@@ -48,6 +48,8 @@ fun ChatScreen(
     actions: ChatActions,
     initialDrawerValue: DrawerValue = DrawerValue.Closed,
     initialSheet: ChatSheet? = null,
+    /** Fullscreen media viewer: message id and index (screenshots open it directly). */
+    initialViewer: Pair<String, Int>? = null,
     attachRequest: Int = 0,
     onAttachRequestHandled: () -> Unit = {},
 ) {
@@ -55,6 +57,9 @@ fun ChatScreen(
     val scope = rememberCoroutineScope()
     var sheet by rememberSaveable { mutableStateOf(initialSheet) }
     var deletingId by rememberSaveable { mutableStateOf<String?>(null) }
+    var viewer by remember { mutableStateOf(initialViewer) }
+    val mediaActions = remember(actions) { ImagineActions(onOpen = { id, index -> viewer = id to index }, onSave = actions.imagine.onSave, onShare = actions.imagine.onShare,
+        onEdit = actions.imagine.onEdit, onAnimate = actions.imagine.onAnimate, onCancelVideo = actions.imagine.onCancelVideo, onReuse = actions.imagine.onReuse) }
     val listState = rememberLazyListState()
     val inputFocus = remember { FocusRequester() }
     LaunchedEffect(attachRequest) { if (attachRequest > 0) { sheet = ChatSheet.Attach; onAttachRequestHandled() } }
@@ -102,7 +107,7 @@ fun ChatScreen(
                         runCatching { inputFocus.requestFocus() }
                     })
                 } else {
-                    MessageList(state = state, actions = actions, listState = listState)
+                    MessageList(state = state, actions = actions, listState = listState, imagineActions = mediaActions)
                 }
             }
             Column(Modifier.fillMaxWidth().imePadding().navigationBarsPadding(), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -122,6 +127,8 @@ fun ChatScreen(
                         onAuto = actions.onAuto,
                         onXSearch = actions.onXSearch,
                         onCancelUpload = actions.onCancelUpload,
+                        onImagine = actions.onImagine,
+                        onImagineOptions = { sheet = ChatSheet.Imagine },
                     )
                 }
             }
@@ -153,14 +160,23 @@ fun ChatScreen(
             onPick = { sheet = null; actions.onPickAudio() },
             onDismiss = { sheet = null },
         )
+        ChatSheet.Imagine -> state.imagineConfig?.let { config ->
+            ImagineSheet(options = state.imagineOptions, config = config, usage = state.imagineUsage, hasSource = state.imagineSource,
+                onChange = actions.onImagineOptions, onDismiss = { sheet = null })
+        }
         null -> Unit
+    }
+
+    viewer?.let { (id, index) ->
+        val media = state.messages.firstOrNull { it.id == id }?.media.orEmpty()
+        if (media.isNotEmpty()) MediaViewer(media, index, mediaActions, state.videoAvailable, onDismiss = { viewer = null })
     }
 
     deletingId?.let { id ->
         AlertDialog(
             onDismissRequest = { deletingId = null },
             title = { Text("Delete chat?") },
-            text = { Text("Delete this chat from this device? Files uploaded in this chat are deleted from your storage too.") },
+            text = { Text("Delete this chat from this device? Files uploaded or generated in this chat are deleted from your storage too.") },
             confirmButton = { TextButton(onClick = { actions.onDeleteChat(id); deletingId = null }) { Text("Delete") } },
             dismissButton = { TextButton(onClick = { deletingId = null }) { Text("Cancel") } },
         )

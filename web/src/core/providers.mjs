@@ -10,6 +10,7 @@ import { eventStreamResponse, readSse } from './sse.mjs';
 import { validFileRef } from './file-types.mjs';
 import { resolveChatFiles, FileContextError } from './file-context.mjs';
 import { filesConfiguration } from './files.mjs';
+import { publicImagineConfiguration } from './imagine.mjs';
 
 const fileTypes = ['text/plain', 'image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
 // `allowed` is what the provider API accepts; non-Gemini vision/document types still need <PREFIX>_ATTACHMENT_TYPES opt-in.
@@ -178,7 +179,7 @@ export async function handleChat(request, { env = process.env, fetcher = fetch, 
     const configured = new Set(providers.filter(provider => provider.configured).map(provider => provider.name));
     const web = { ...chatWebConfiguration(env), nativeSearch: nativeSearchProviders(env, definitions).filter(name => configured.has(name)), xSearch: xSearchAvailable(env) && configured.has('Grok'), preferBrave: preferBrave(env) };
     const context = { summaries: true, budgets: Object.fromEntries(definitions.map(provider => [provider.name, contextBudget(provider.prefix, env)])) };
-    return json({ geminiConfigured: providers[0].configured, model: providers[0].model, providers, web, streaming: true, files: filesConfiguration(env), context });
+    return json({ geminiConfigured: providers[0].configured, model: providers[0].model, providers, web, streaming: true, files: filesConfiguration(env), context, imagine: publicImagineConfiguration(env) });
   }
   if (url.pathname !== '/api/chat' || request.method !== 'POST') return json({ error: 'Method not allowed.' }, 405);
   if (request.headers.get('origin') && request.headers.get('origin') !== url.origin) return json({ error: 'Request origin is not allowed.' }, 403);

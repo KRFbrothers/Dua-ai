@@ -124,6 +124,10 @@ fun DuaNavHost(viewModel: ChatViewModel, voice: ReplyVoice, notificationRoute: P
                     onAttachments = { attachRequest++; navigator.toChat() })
             }
         }
+        composable(DuaDestination.Imagine.route) {
+            BusyBackGuard(viewModel)
+            com.dua.ai.ui.screens.ImagineSettingsScreen(viewModel, onBack = navigator::back)
+        }
         composable(DuaDestination.DataControls.route) {
             BusyBackGuard(viewModel)
             DataControlsScreen(viewModel, onBack = navigator::back)
