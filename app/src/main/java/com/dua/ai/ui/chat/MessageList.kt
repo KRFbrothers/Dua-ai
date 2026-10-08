@@ -58,10 +58,12 @@ fun MessageList(state: ChatUiState, actions: ChatActions, listState: LazyListSta
                     retryWebMode = actions.retryWebMode(message.id),
                     onRetry = { actions.onRetry(message.id) },
                     onSpeak = { actions.onSpeak(message) },
+                    thinkingExpanded = message.id in state.expandedThinking,
                 )
             }
         }
-        if (state.typing) item(key = "typing") {
+        // Streaming replies render their own progress; the dots cover non-streaming waits.
+        if (state.typing && state.messages.none { it.streaming }) item(key = "typing") {
             Box(Modifier.widthIn(max = Sizes.contentMaxWidth).fillMaxWidth()) { TypingIndicator() }
         }
     }

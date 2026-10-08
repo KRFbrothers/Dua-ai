@@ -89,7 +89,11 @@ object ChatHistoryCodec {
                     val role = text(message, "role", 10)
                     val state = text(message, "state", 10)
                     require(role in listOf("user", "model") && state in listOf("complete", "stopped")) { invalid }
-                    ChatMessage(text = text(message, "text", 1048576), isUser = role == "user", model = model, state = state)
+                    // Optional since Reasoning mode; exports and cloud snapshots without them stay valid.
+                    val thinking = if (role == "model" && message.has("thinking")) text(message, "thinking", 100000) else null
+                    val seconds = if (role == "model" && message.has("thinkingSeconds")) integer(message, "thinkingSeconds").also { require(it <= 86400) { invalid } }.toInt() else null
+                    ChatMessage(text = text(message, "text", 1048576), isUser = role == "user", model = model, state = state,
+                        thinking = thinking?.takeIf { it.isNotBlank() }, thinkingSeconds = seconds)
                 }, updatedAt)
             }
         } catch (_: Exception) { throw IllegalArgumentException(invalid) }
@@ -110,9 +114,10 @@ object ChatHistoryCodec {
             chats.sortedByDescending { it.updatedAt }.forEach { chat ->
                 put(JSONObject().put("id", chat.id).put("model", chat.model).put("draft", chat.draft)
                     .put("updatedAt", chat.updatedAt).put("messages", JSONArray().apply {
-                        chat.messages.forEach { message -> put(JSONObject()
+                        chat.messages.filter(::persistable).forEach { message -> put(JSONObject()
                             .put("role", if (message.isUser) "user" else "model")
-                            .put("text", message.text).put("state", message.state)) }
+                            .put("text", message.text).put("state", savedState(message.state))
+                            .apply { putThinking(this, message) }) }
                     }))
             }
         }).toString(2)
@@ -121,11 +126,28 @@ object ChatHistoryCodec {
         .put("activeId", activeId).put("chats", JSONArray().apply {
             chats.forEach { chat -> put(JSONObject().put("id", chat.id).put("model", chat.model)
                 .put("draft", chat.draft).put("updatedAt", chat.updatedAt)
-                .put("messages", JSONArray().apply { chat.messages.forEach { message ->
+                .put("messages", JSONArray().apply { chat.messages.filter(::persistable).forEach { message ->
                     put(JSONObject().put("id", message.id).put("text", message.text).put("isUser", message.isUser)
-                        .put("model", message.model).put("state", message.state))
+                        .put("model", message.model).put("state", savedState(message.state))
+                        .apply {
+                            putThinking(this, message)
+                            // Text-file content stays local: it is not exported or synced to the cloud.
+                            if (message.isUser && !message.attachmentText.isNullOrEmpty()) put("attachmentText", message.attachmentText.take(ChatMessage.MAX_ATTACHMENT_TEXT_CHARS))
+                        })
                 } })) }
         }).toString()
+
+    /** An empty reply placeholder that is still streaming is not saved. */
+    private fun persistable(message: ChatMessage) = !(message.state == ChatMessage.STREAMING && message.text.isBlank())
+
+    /** A reply still streaming when the app saves is restored as a stopped partial reply. */
+    private fun savedState(state: String) = if (state == ChatMessage.STREAMING) "stopped" else state
+
+    private fun putThinking(json: JSONObject, message: ChatMessage) {
+        if (message.isUser) return
+        message.thinking?.takeIf { it.isNotBlank() }?.let { json.put("thinking", it.take(ChatMessage.MAX_THINKING_CHARS)) }
+        message.thinkingSeconds?.takeIf { it in 0..86400 }?.let { json.put("thinkingSeconds", it) }
+    }
 
     fun decode(raw: String): Pair<String, List<SavedChat>> {
         val root = JSONObject(raw)
@@ -136,7 +158,11 @@ object ChatHistoryCodec {
             SavedChat(item.getString("id"), item.getString("model"), item.optString("draft"),
                 (0 until messages.length()).map { i -> val message = messages.getJSONObject(i)
                     ChatMessage(id = message.getString("id"), text = message.getString("text"),
-                        isUser = message.getBoolean("isUser"), model = message.getString("model"), state = message.optString("state", "complete"))
+                        isUser = message.getBoolean("isUser"), model = message.getString("model"),
+                        state = message.optString("state", "complete").let { if (it == ChatMessage.STREAMING) "stopped" else it },
+                        thinking = if (message.has("thinking")) message.optString("thinking").takeIf { it.isNotBlank() } else null,
+                        thinkingSeconds = if (message.has("thinkingSeconds")) message.optInt("thinkingSeconds", -1).takeIf { it in 0..86400 } else null,
+                        attachmentText = if (message.has("attachmentText")) message.optString("attachmentText").takeIf { it.isNotEmpty() } else null)
                 }, item.getLong("updatedAt"))
         }
         require(chats.all { it.model in com.dua.ai.setup.IntegrationCapabilities.MODELS } && chats.map { it.id }.distinct().size == chats.size)

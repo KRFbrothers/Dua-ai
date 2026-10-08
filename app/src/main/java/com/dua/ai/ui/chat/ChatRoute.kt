@@ -30,6 +30,7 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
     val savedChats by viewModel.savedChats.collectAsState()
     val model by viewModel.selectedModel.collectAsState()
     val webMode by viewModel.webMode.collectAsState()
+    val reasoning by viewModel.reasoning.collectAsState()
     val integrations by viewModel.integrations.collectAsState()
     val attachments by viewModel.attachments.collectAsState()
     val readingFiles by viewModel.readingFiles.collectAsState()
@@ -73,7 +74,7 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
     val greeting = remember(account.user?.displayName) { greetingFor(LocalTime.now().hour, account.user?.displayName) }
     val state = ChatUiState(
         messages = messages, draft = draft, typing = typing, error = error, model = model,
-        providers = integrations.providers, webMode = webMode,
+        providers = integrations.providers, webMode = webMode, reasoning = reasoning,
         webSearchConfigured = integrations.webSearchConfigured, pageReadingAvailable = integrations.pageReadingAvailable,
         attachments = attachments, readingFiles = readingFiles,
         attachmentStatus = if (readingFiles) "Reading files…" else fileError.ifBlank { attachmentNotice },
@@ -100,6 +101,8 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
             onStopSpeech = voice::stopAll,
             onUseDeviceVoice = { voice.stopAll(); viewModel.updateSettings(viewModel.localSettings.value.copy(generatedVoice = false)) },
             onWebMode = viewModel::setWebMode,
+            onReasoning = viewModel::setReasoning,
+            onAuto = viewModel::selectAuto,
             onSelectModel = viewModel::setModel,
             onNewChat = { pulse(); voice.stopAll(); viewModel.startNewChat(); viewModel.clearAttachments(); attachmentNotice = "" },
             onOpenChat = { id -> pulse(); voice.stopAll(); viewModel.openChat(id); viewModel.clearAttachments() },

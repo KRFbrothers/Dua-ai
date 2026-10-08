@@ -1,0 +1,99 @@
+package com.dua.ai.network
+
+import org.json.JSONObject
+
+/** Events of the opt-in `/api/chat` stream (see web/src/core/sse.mjs for the wire format). */
+sealed interface ReplyEvent {
+    data class Thinking(val delta: String) : ReplyEvent
+    data class Text(val delta: String) : ReplyEvent
+    data class Sources(val count: Int) : ReplyEvent
+    data class Notice(val message: String) : ReplyEvent
+    data class Done(val truncated: Boolean) : ReplyEvent
+    data class Failed(val message: String, val status: Int) : ReplyEvent
+}
+
+/**
+ * Incremental SSE parser: feed one line at a time (without the newline). Returns an event when a
+ * blank line completes one. Comment lines (heartbeats) and unknown event types are ignored.
+ */
+class ChatStreamParser {
+    private val data = StringBuilder()
+
+    fun line(line: String): ReplyEvent? {
+        if (line.isEmpty()) return flush()
+        if (line.startsWith(":")) return null
+        val field = line.substringBefore(':')
+        var value = if (line.contains(':')) line.substringAfter(':') else ""
+        if (value.startsWith(" ")) value = value.substring(1)
+        if (field == "data") {
+            if (data.isNotEmpty()) data.append('\n')
+            require(data.length + value.length <= MAX_EVENT_CHARS) { "Reply stream event is too large." }
+            data.append(value)
+        }
+        return null
+    }
+
+    /** Completes a trailing event when the stream ends without a final blank line. */
+    fun finish(): ReplyEvent? = flush()
+
+    private fun flush(): ReplyEvent? {
+        if (data.isEmpty()) return null
+        val raw = data.toString()
+        data.setLength(0)
+        return decode(raw)
+    }
+
+    companion object {
+        const val MAX_EVENT_CHARS = 1_000_000
+
+        fun decode(raw: String): ReplyEvent? {
+            val json = runCatching { JSONObject(raw) }.getOrNull() ?: return null
+            return when (json.optString("type")) {
+                "thinking" -> json.optString("delta").takeIf { it.isNotEmpty() }?.let { ReplyEvent.Thinking(it) }
+                "text" -> json.optString("delta").takeIf { it.isNotEmpty() }?.let { ReplyEvent.Text(it) }
+                "sources" -> ReplyEvent.Sources(json.optJSONArray("sources")?.length() ?: 0)
+                "notice" -> json.optString("message").takeIf { it.isNotBlank() }?.let { ReplyEvent.Notice(it.take(300)) }
+                "done" -> ReplyEvent.Done(json.optBoolean("truncated"))
+                "error" -> ReplyEvent.Failed(json.optString("message").takeIf { it.isNotBlank() }?.take(300)
+                    ?: "Reply stopped unexpectedly. Partial reply kept; retry.", json.optInt("status", 502))
+                else -> null
+            }
+        }
+    }
+}
+
+/** Running state of one streamed reply; [snapshot] is what the chat shows. */
+class StreamAccumulator(private val startedAt: Long, private val clock: () -> Long = System::currentTimeMillis) {
+    private val text = StringBuilder()
+    private val thinking = StringBuilder()
+    private var thinkingSeconds: Int? = null
+    private var notice: String? = null
+    var finished = false
+        private set
+
+    /** Applies one event; cheap (no copies) so it can run per delta. Read [snapshot] when rendering. */
+    fun apply(event: ReplyEvent) {
+        when (event) {
+            is ReplyEvent.Thinking -> if (thinking.length < com.dua.ai.model.ChatMessage.MAX_THINKING_CHARS) thinking.append(event.delta)
+            is ReplyEvent.Text -> {
+                if (thinking.isNotEmpty() && thinkingSeconds == null) thinkingSeconds = elapsedSeconds()
+                text.append(event.delta)
+            }
+            is ReplyEvent.Notice -> notice = event.message
+            is ReplyEvent.Done -> {
+                finished = true
+                if (thinking.isNotEmpty() && thinkingSeconds == null) thinkingSeconds = elapsedSeconds()
+                if (event.truncated) notice = "Reply reached the output limit and may be cut off."
+            }
+            is ReplyEvent.Sources, is ReplyEvent.Failed -> Unit
+        }
+    }
+
+    /** Current reply. When [ended] (done, error or stop) thinking time is fixed even without answer text. */
+    fun snapshot(ended: Boolean = finished) = StreamSnapshot(text.toString(), thinking.toString().takeIf { it.isNotBlank() },
+        thinkingSeconds ?: if (thinking.isNotEmpty() && ended) elapsedSeconds() else null, notice, finished)
+
+    private fun elapsedSeconds() = (((clock() - startedAt) + 500) / 1000).toInt().coerceIn(1, 86400)
+}
+
+data class StreamSnapshot(val text: String = "", val thinking: String? = null, val thinkingSeconds: Int? = null, val notice: String? = null, val finished: Boolean = false)

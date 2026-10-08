@@ -25,6 +25,21 @@ object PhotoAttachmentReader {
         }
     }
 
+    /** Re-encodes the selected files as JPEG (white background) within the 2 MB total; others are unchanged. */
+    fun convertToJpeg(files: List<ChatAttachment>, convert: (ChatAttachment) -> Boolean): List<ChatAttachment> {
+        val targets = files.count(convert)
+        if (targets == 0) return files
+        val others = files.filterNot(convert).sumOf { Base64.getDecoder().decode(it.data).size }
+        val budget = (AttachmentReader.MAX_BYTES - others) / targets
+        require(budget > 0) { "Attachments total 2 MB se chhote rakhein. Use fewer files." }
+        return files.map { file ->
+            if (!convert(file)) file else {
+                val converted = resize(AttachmentSource(file.name, file.mimeType, Base64.getDecoder().decode(file.data)), budget)
+                ChatAttachment(converted.name.removeSuffix("-resized.jpg") + ".jpg", "image/jpeg", Base64.getEncoder().encodeToString(converted.bytes))
+            }
+        }
+    }
+
     private fun resize(source: AttachmentSource, budget: Int): AttachmentSource {
         var decoded: Bitmap? = null
         var oriented: Bitmap? = null

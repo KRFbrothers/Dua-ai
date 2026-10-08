@@ -23,7 +23,7 @@ class PhotoPolicyTest {
         val bytes = ByteArray(AttachmentReader.MAX_BYTES + 1) { 7 }
         val photo = PhotoPolicy.readSource("photo.png", "image/png", ByteArrayInputStream(bytes))
         assertArrayEquals(bytes, photo.bytes)
-        for ((mime, size) in listOf("image/png" to (PhotoPolicy.MAX_SOURCE_BYTES + 1), "application/pdf" to (AttachmentReader.MAX_BYTES + 1), "text/plain" to 65537, "image/jpeg" to 0)) {
+        for ((mime, size) in listOf("image/png" to (PhotoPolicy.MAX_SOURCE_BYTES + 1), "application/pdf" to (AttachmentReader.MAX_BYTES + 1), "text/plain" to (TextFiles.MAX_BYTES + 1), "image/jpeg" to 0)) {
             assertThrows(IllegalArgumentException::class.java) { PhotoPolicy.readSource("file", mime, ByteArrayInputStream(ByteArray(size))) }
         }
         assertThrows(IllegalArgumentException::class.java) { PhotoPolicy.readSource("x.gif", "image/gif", ByteArrayInputStream(byteArrayOf(1))) }

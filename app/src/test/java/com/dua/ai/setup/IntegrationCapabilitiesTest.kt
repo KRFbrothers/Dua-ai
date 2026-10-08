@@ -107,4 +107,11 @@ class IntegrationCapabilitiesTest {
         val results = IntegrationCapabilities.repositories(JSONObject("""{"repositories":[{"name":"good","url":"https://github.com/example/project"},{"name":"bad","url":"https://example.org"}]}"""))
         assertEquals(listOf("good"), results.map { it.name })
     }
+    @Test fun reasoningSupportComesFromTheServerWithSafeDefaults() {
+        val json = JSONObject("""{"providers":[{"name":"Gemini","configured":true},{"name":"Grok","configured":true,"reasoning":false},
+            {"name":"Claude","configured":true},{"name":"ChatGPT","configured":true,"reasoning":true}]}""")
+        val parsed = IntegrationCapabilities.providers(json).associate { it.name to it.supportsReasoning }
+        assertEquals(mapOf("Gemini" to true, "Grok" to false, "Claude" to false, "ChatGPT" to true), parsed)
+        assertTrue(IntegrationCapabilities.fallbackProviders.all { it.supportsReasoning })
+    }
 }

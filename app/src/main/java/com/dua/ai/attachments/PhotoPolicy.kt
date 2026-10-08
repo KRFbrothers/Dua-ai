@@ -27,9 +27,10 @@ object PhotoPolicy {
         return files.map { if (it.mimeType.startsWith("image/")) budget else it.bytes.size }
     }
     fun readSource(name: String, mimeType: String, input: InputStream): AttachmentSource {
-        require(mimeType in AttachmentReader.types) { "JPEG, PNG, WebP, PDF ya TXT file select karein." }
-        val image = mimeType.startsWith("image/")
-        val limit = if (image) MAX_SOURCE_BYTES else if (mimeType == "text/plain") 65536 else AttachmentReader.MAX_BYTES
+        val type = AttachmentReader.normalizedType(name, mimeType) ?: throw IllegalArgumentException(TextFiles.UNSUPPORTED)
+        val image = type.startsWith("image/")
+        val text = type == "text/plain"
+        val limit = if (image) MAX_SOURCE_BYTES else if (text) TextFiles.MAX_BYTES else AttachmentReader.MAX_BYTES
         val output = ByteArrayOutputStream()
         val buffer = ByteArray(8192)
         while (true) {
@@ -37,13 +38,14 @@ object PhotoPolicy {
             if (count < 0) break
             require(output.size() + count <= limit) {
                 if (image) "Photos must be 10 MiB or smaller before resizing."
-                else if (mimeType == "text/plain") "TXT file 64 KB se chhoti rakhein."
+                else if (text) "Text file \"${name.take(60)}\" is larger than 256 KB. Shorten it or split it."
                 else "Attachments total 2 MB se chhote rakhein."
             }
             output.write(buffer, 0, count)
         }
         require(output.size() > 0) { "Empty file select nahi kar sakte." }
-        return AttachmentSource(name.take(200), mimeType, output.toByteArray())
+        if (text) TextFiles.decode(name, output.toByteArray())
+        return AttachmentSource(name.take(200), type, output.toByteArray())
     }
     fun resizedName(name: String): String = name.substringBeforeLast('.', name).take(188) + "-resized.jpg"
 }

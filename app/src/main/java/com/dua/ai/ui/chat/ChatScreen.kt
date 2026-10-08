@@ -1,5 +1,6 @@
 package com.dua.ai.ui.chat
 
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -61,6 +62,13 @@ fun ChatScreen(
     LaunchedEffect(state.messages.size, state.typing) {
         if (state.messages.isNotEmpty()) listState.animateScrollToItem(state.messages.lastIndex)
     }
+    // Follow a streaming reply as it grows, unless the reader has scrolled up to earlier messages.
+    val streamingSize = state.messages.lastOrNull()?.takeIf { it.streaming }?.let { it.text.length + (it.thinking?.length ?: 0) } ?: -1
+    LaunchedEffect(streamingSize) {
+        if (streamingSize <= 0) return@LaunchedEffect
+        val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: return@LaunchedEffect
+        if (lastVisible >= listState.layoutInfo.totalItemsCount - 1 && listState.canScrollForward) listState.scrollBy(STREAM_FOLLOW_PX)
+    }
     fun closeDrawerThen(action: () -> Unit) { scope.launch { drawerState.close() }; action() }
 
     ModalNavigationDrawer(
@@ -110,6 +118,8 @@ fun ChatScreen(
                         onMic = actions.onOpenVoice,
                         onSend = actions.onSend,
                         onStop = actions.onStop,
+                        onReasoning = actions.onReasoning,
+                        onAuto = actions.onAuto,
                     )
                 }
             }
@@ -144,3 +154,6 @@ fun ChatScreen(
         )
     }
 }
+
+/** Scrolls to the end of the growing reply; LazyColumn clamps at the content end. */
+private const val STREAM_FOLLOW_PX = 100_000f

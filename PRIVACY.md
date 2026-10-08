@@ -75,7 +75,8 @@ Dua is a personal, single-user app: the backend is meant to be restricted to the
 
 #### What Dua Shares with Providers
 - **Text Messages:** User prompts and chat history (if using a configured provider).
-- **Attachments:** Images, PDFs, TXT files (provider-dependent; not all providers support all formats).
+- **Attachments:** Images, PDFs, text/code files (provider-dependent; not all providers support all formats). Text from attached text/code files is kept in local chat history on the device and re-sent with later messages in the same chat; it is not included in exports or cloud snapshots.
+- **Reasoning:** In Reasoning mode the model's thinking summary is saved with the reply in local history, exports and cloud snapshots.
 - **Metadata:** Timestamp, model name, message count (to API endpoints).
 
 #### What Dua Does NOT Share

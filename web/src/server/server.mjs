@@ -34,7 +34,20 @@ export function makeServer({ key = process.env.GEMINI_API_KEY, model = process.e
         const response = await handleService(request,{env:{...env,GEMINI_API_KEY:key,GEMINI_MODEL:model,SUPABASE_URL:supabaseUrl,SUPABASE_ANON_KEY:supabaseKey},fetcher});
         if (res.destroyed) return;
         const headers=Object.fromEntries(response.headers);const cookies=response.headers.getSetCookie();if(cookies.length)headers['set-cookie']=cookies;res.writeHead(response.status, headers);
-        return res.end(Buffer.from(await response.arrayBuffer()));
+        if (!response.body) return res.end();
+        // Stream bodies (SSE chat replies) through as they are produced.
+        const reader = response.body.getReader();
+        const stop = () => reader.cancel().catch(() => {});
+        controller.signal.addEventListener('abort', stop, { once: true });
+        try {
+          while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            if (res.destroyed) { stop(); break; }
+            res.write(value);
+          }
+        } finally { controller.signal.removeEventListener('abort', stop); }
+        return res.end();
       }
       // Local development server for the backend API only; the web client was removed.
       return json(res, 404, { error: 'Not found.' });
