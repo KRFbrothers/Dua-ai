@@ -4,6 +4,7 @@ import { searchConfiguration } from './search.mjs';
 import { advancedConfiguration } from './advanced-integrations.mjs';
 import { filesConfiguration } from './files.mjs';
 import { publicImagineConfiguration } from './imagine.mjs';
+import { voiceConfiguration } from './voice.mjs';
 
 export function setupConfiguration(env = {}) {
  const providers = providerConfiguration(env);
@@ -13,15 +14,17 @@ export function setupConfiguration(env = {}) {
  const group=(id,title,state,requires,limitations)=>({id,title,state,requires,limitations});
  const files = filesConfiguration(env);
  const imagine = publicImagineConfiguration(env);
+ const voice = voiceConfiguration(env);
+ const ttsLine = voice.tts.enabled ? 'AI reply voices (signed-in owner only): '+voice.tts.providers.map(p=>p.name+' ('+p.voices.length+(p.voices.length===1?' voice':' voices')+')').join(', ')+'. Long replies play in short chunks and are cached on the device for this session.' : 'AI reply voices are off: '+voice.tts.reason;
  const imagineLine = !imagine.image.enabled&&!imagine.video.enabled&&imagine.image.reason===imagine.video.reason ? 'Imagine is off: '+imagine.image.reason : 'Imagine (signed-in owner only): '+(imagine.image.enabled?'images with '+imagine.image.providers.map(p=>p.name).join(' or ')+' (up to '+imagine.image.dailyLimit+' a day)':'images off. '+imagine.image.reason)+' · '+(imagine.video.enabled?'video with Grok Imagine (up to '+imagine.video.dailyLimit+' seconds a day, '+imagine.video.resolutions.join('/')+')':'video off. '+imagine.video.reason)+' Results are saved to the private dua-files bucket.';
- return {providers,account,search,advanced,files,imagine,groups:[
+ return {providers,account,search,advanced,files,imagine,voice,groups:[
   group('providers','AI providers',providers.slice(2).every(p=>p.configured)?'configured':providers.some(p=>p.configured)?'partial':'needs-configuration',['API key and model for each provider'],['All providers accept UTF-8 text and code files (TXT, CSV, MD, JSON, XML, YAML, logs, source code; 256 KB each). Image/PDF support depends on configured model capabilities; Grok accepts JPEG/PNG only (the app converts WebP to JPEG); Grok/Kimi do not accept inline PDF.','Stored files (signed-in owner only, up to '+Math.floor(files.maxBytes/1048576)+' MB): PDFs, spreadsheets (XLSX/XLS/ODS/CSV, parsed to CSV), text, images and audio (transcribed first). Grok reads stored PDFs through xAI file inputs; Kimi gets extracted PDF text.','Reasoning mode shows thinking for Dua/Gemini, Grok and ChatGPT reasoning models; Claude and Kimi answer normally.',imagineLine]),
   group('search','Web search and page reading',search.configured?'configured':'partial',['Brave Search API key for Search with Claude/Kimi (and as fallback)','Public HTTPS URL for Read link'],['Chat Web mode starts Off. Dua/Gemini, ChatGPT and Grok search natively (Google Search grounding / web_search, billed by the provider per search); Claude and Kimi use Brave snippets. DUA_SEARCH_PREFER_BRAVE=1 uses Brave everywhere. X search (Grok only, about $5 per 1,000 posts) is off per message by default; DUA_X_SEARCH=0 removes it. Read link reads one public text page. Login pages, JavaScript rendering and crawling are unsupported.']),
   group('sync','Automatic cloud sync',account.configured?'available':'needs-configuration',['Supabase cloud migration','Sign in and enable on this device'],['Defaults off. Conflicts and deletions pause for review. No file or audio bytes (stored files live in the private dua-files bucket and stay on this device\'s chat history).']),
   group('memory','Memory suggestions','available',['Enable suggestions and approve each note'],['Explicit remember statements become proposals; saved notes are used only when memory is enabled.']),
   group('connectors','Connectors and plugins',advanced.connectors.github.configured&&env.DUA_ALLOWED_EMAIL?'configured':'needs-configuration',['GitHub read-only token','Allowed personal account email','Enable connector and sign in'],['Only repository listing is supported. Other tools and OAuth require separate implementations.']),
   group('computer','Screen and video','partial',['Device camera app for photo attachments'],['Android can attach a captured photo to a chat. No screen sharing, video upload, recording or remote computer control. Native screen capture and remote sessions remain pending.']),
-  group('voice','Advanced voice','partial',['Device speech service','Optional generated voice key, voice ID and sign in'],['Foreground device speech works. Generated audio is explicit. Full duplex and background sessions remain pending.']),
+  group('voice','Voice',voice.tts.enabled?'configured':'partial',['Device speech service','GROK_API_KEY and/or GEMINI_API_KEY (or ElevenLabs settings) for AI reply voices','Allowed personal account email and sign in'],['Device speech recognition and device voices work everywhere, with a chosen language. '+ttsLine]),
   group('account','Account and access protection',account.configured?'partial':'needs-configuration',['Supabase email configuration','Optional Google provider and deletion service key','Optional owner and daily request policy'],['Email recovery is available after SMTP setup. Google sign-in uses native Android Google Sign-In verified by the backend. Request limits are not currency spending limits.'])
  ]};
 }
