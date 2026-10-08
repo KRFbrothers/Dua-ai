@@ -39,7 +39,6 @@ object RealtimeProtocol {
     fun appendAudio(pcm: ByteArray, length: Int = pcm.size): String =
         JSONObject().put("type", "input_audio_buffer.append").put("audio", Base64.getEncoder().encodeToString(if (length == pcm.size) pcm else pcm.copyOf(length))).toString()
     fun clearInput(): String = JSONObject().put("type", "input_audio_buffer.clear").toString()
-    fun cancelResponse(): String = JSONObject().put("type", "response.cancel").toString()
 
     fun decode(raw: String): RealtimeEvent {
         if (raw.length > MAX_MESSAGE_CHARS) return RealtimeEvent.Error("Live voice message was too large.", "too_large")

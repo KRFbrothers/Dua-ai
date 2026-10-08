@@ -17,7 +17,6 @@ class RealtimeProtocolTest {
         assertEquals("input_audio_buffer.append", append.getString("type"))
         assertArrayEquals(byteArrayOf(1, 2, 3, 4), Base64.getDecoder().decode(append.getString("audio")))
         assertEquals("input_audio_buffer.clear", JSONObject(RealtimeProtocol.clearInput()).getString("type"))
-        assertEquals("response.cancel", JSONObject(RealtimeProtocol.cancelResponse()).getString("type"))
     }
 
     @Test fun serverEventsDecode() {

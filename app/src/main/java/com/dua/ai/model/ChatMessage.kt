@@ -6,12 +6,7 @@ data class ChatMessage(
     val id: String = UUID.randomUUID().toString(),
     val text: String,
     val isUser: Boolean,
-    val timestamp: String = "Just now",
     val model: String = "Dua 2.0 Flash",
-    val hasCode: Boolean = false,
-    val codeSnippet: String? = null,
-    val codeLanguage: String = "Kotlin",
-    val reaction: MessageReaction = MessageReaction.NONE,
     /** "complete", "stopped" (kept partial or stopped reply) or, in memory only, "streaming". */
     val state: String = "complete",
     /** Reasoning summary shown in the collapsible Thinking block (Reasoning mode). Saved with the chat. */
@@ -45,21 +40,9 @@ data class ChatMessage(
     }
 }
 
-enum class MessageReaction {
-    NONE, LIKED, DISLIKED
-}
-
 data class PromptSuggestion(
     val title: String,
-    val description: String,
     val prompt: String,
     val category: String
-)
-
-data class ChatSession(
-    val id: String,
-    val title: String,
-    val category: String = "General",
-    val timestamp: String = "Today"
 )
 

@@ -6,7 +6,7 @@ import { buildRequest } from '../src/core/adapters.mjs';
 import { PROVIDER_DEFINITIONS } from '../src/core/providers.mjs';
 import { transcribeOrder, transcribe } from '../src/core/transcribe.mjs';
 import { readEvents, sseResponse, sse } from './helpers.mjs';
-import { SUPA, UID, OTHER, filesEnv, path, router, storageRoutes, authedChat, makePdf } from './files-helpers.mjs';
+import { SUPA, OTHER, filesEnv, path, router, storageRoutes, authedChat, makePdf } from './files-helpers.mjs';
 
 const PDF = path('aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee', 'pdf');
 const PNG = path('bbbbbbbb-bbbb-4ccc-8ddd-eeeeeeeeeeee', 'png');

@@ -14,7 +14,6 @@ const json = (data, status = 200, headers = {}) => Response.json(data, { status,
 const hasKey = value => typeof value === 'string' && Boolean(value.trim());
 const off = value => ['0', 'false'].includes(String(value ?? '').trim().toLowerCase());
 const modelId = (value, fallback) => typeof value === 'string' && /^[a-zA-Z0-9][a-zA-Z0-9._:/-]{0,119}$/.test(value.trim()) && !/^(?:sk-|AIza|xai-)/.test(value.trim()) ? value.trim() : fallback;
-export const PROVIDER_IDS = Object.freeze(['xai', 'gemini', 'elevenlabs']);
 
 export function elevenLabsReady(env = {}) {
   return env.ENABLE_GENERATED_VOICE === '1' && hasKey(env.ELEVENLABS_API_KEY) && /^[A-Za-z0-9_-]{1,64}$/.test(env.ELEVENLABS_VOICE_ID || '');

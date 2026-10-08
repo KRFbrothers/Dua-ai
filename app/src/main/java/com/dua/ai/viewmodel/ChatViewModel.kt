@@ -16,7 +16,6 @@ import java.io.File
 import com.dua.ai.attachments.CameraCaptureStore
 import androidx.lifecycle.viewModelScope
 import com.dua.ai.model.ChatMessage
-import com.dua.ai.model.ChatSession
 import com.dua.ai.model.PromptSuggestion
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.CancellationException
@@ -83,7 +82,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             }
         } catch (failure: Exception) { received?.fill(0); throw failure }
     }
-    fun clearReplyAudioCache() = replyAudioCache.clear()
 
     // ---- Live voice (Phase 4B): xAI realtime session with a server-minted token ----
     /** Before the session connects: busy while asking the server, or why live voice cannot start. */
@@ -1093,25 +1091,21 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     val promptSuggestions = listOf(
         PromptSuggestion(
             title = "Write code snippet",
-            description = "Clean Jetpack Compose UI component",
             prompt = "How do I build an elegant, modern Card component in Jetpack Compose?",
             category = "Coding"
         ),
         PromptSuggestion(
             title = "Brainstorm concepts",
-            description = "Innovative product ideas for developers",
             prompt = "Give me 4 unique mobile app ideas leveraging modern AI and edge computing.",
             category = "Idea"
         ),
         PromptSuggestion(
             title = "Explain simply",
-            description = "Deep concepts made straightforward",
             prompt = "Explain how transformer neural networks generate text in simple terms.",
             category = "Learning"
         ),
         PromptSuggestion(
             title = "Draft a plan",
-            description = "Structured step-by-step roadmap",
             prompt = "Draft a 4-week learning roadmap to master Kotlin and Jetpack Compose.",
             category = "Productivity"
         )
@@ -1169,7 +1163,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         val startedAt = System.currentTimeMillis()
         _error.value = null; _isTyping.value = true; refreshSyncBusy()
         retryOriginal = original
-        updateMessage(messageId) { it.copy(text = "", thinking = null, thinkingSeconds = null, notice = null, codeSnippet = null, codeRuns = emptyList(), build = requestBuild?.let { com.dua.ai.model.BuildInfo(it) }, state = ChatMessage.STREAMING, startedAt = startedAt) }
+        updateMessage(messageId) { it.copy(text = "", thinking = null, thinkingSeconds = null, notice = null, codeRuns = emptyList(), build = requestBuild?.let { com.dua.ai.model.BuildInfo(it) }, state = ChatMessage.STREAMING, startedAt = startedAt) }
         replyJob = viewModelScope.launch {
             var accumulator: com.dua.ai.network.StreamAccumulator? = null
             try {
