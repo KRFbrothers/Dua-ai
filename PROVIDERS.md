@@ -72,6 +72,38 @@ Gemini's Files API keeps uploads for 48 hours; large files are uploaded again on
 
 **Transcription** (`DUA_TRANSCRIBE_PROVIDER`, default `auto`): xAI `POST /v1/stt` with `model=grok-voice-transcribe-2.0` and the signed URL (`url` field; $0.10 per hour of audio), then Gemini `generateContent` with the audio, then OpenAI `/v1/audio/transcriptions` (`gpt-transcribe`, ≤ 25 MB). The streamed reply starts with a `files` event (`{"type":"files","files":[{"path","transcript"}]}`); the JSON path returns `files` too. The app saves the transcript with the message, and later requests send it back, so the audio isn't transcribed again.
 
+## Imagine: images and video (Phase 3)
+
+The composer's **Imagine** chip creates images and short videos. It needs the signed-in owner (`DUA_ALLOWED_EMAIL`), stored files (SUPABASE.md §1b) and the Imagine migration (SUPABASE.md §1c). Keys stay on the server. Results are saved to the owner's folder in the private `dua-files` bucket with the owner's own token, so the app never handles provider URLs or base64 through Vercel. `/api/config.imagine` tells new apps what is on; older apps ignore it, and new apps on an older backend hide the chip.
+
+| Feature | Provider and endpoint | Default model (env to change) | Price (provider docs, October 2026) |
+| --- | --- | --- | --- |
+| Images (create) | xAI `POST /v1/images/generations` (`response_format: b64_json`, `aspect_ratio`, `n` 1–4) | `grok-imagine-image-2.0` (`DUA_IMAGINE_XAI_IMAGE_MODEL`) | $0.04 per image (`grok-imagine-image` $0.02, `grok-imagine-image-quality` $0.05) |
+| Images (edit) | xAI `POST /v1/images/edits` (JSON; source photos as data URIs, up to 3) | same | billed for input and output images |
+| Images (alternative) | Gemini Interactions API `POST /v1beta/interactions` (`response_format: {type: "image"}`, `store: false`) | `gemini-nano-banana-2.1` (`DUA_IMAGINE_GEMINI_IMAGE_MODEL`) | about $0.034 per 1K image |
+| Video | xAI `POST /v1/videos/generations`, then `GET /v1/videos/{request_id}` | `grok-imagine-video-1.5` (`DUA_IMAGINE_XAI_VIDEO_MODEL`) | $0.08 per second (`-1.5-lite` $0.02/s, `grok-imagine-video` $0.05/s) |
+
+Prices change; check docs.x.ai and ai.google.dev before raising caps. The image provider is chosen per request (Settings › Imagine sets the default). If the chosen provider is down (5xx, 429, missing key or model), the other configured one is tried once, unless `DUA_IMAGINE_IMAGE_FALLBACK=0`. Content-policy refusals are never retried: the app shows "The provider declined this request under its content policy…" (HTTP 422, `code: "content_policy"`). Gemini video (Veo) is not wired up yet.
+
+**Video jobs:** `POST /api/imagine/video` returns a signed job token straight away (HMAC with a key derived from `GROK_API_KEY`, bound to the owner, valid 48 hours). The app polls `POST /api/imagine/status` every ~5 s, also after leaving the chat or restarting the app. When xAI reports `done`, the backend downloads the MP4 once and stores it (up to the storage limit, 50 MB on Free); later polls reuse the stored file. Bigger videos are returned as xAI's temporary link with a notice. xAI has no cancel call: Cancel in the app stops waiting, but the job may still finish and be billed.
+
+**Spend caps** are durable (Supabase RPC, UTC day) and counted when a request is accepted, before the provider is called. Failed or refused requests still count, which keeps spend conservative.
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `DUA_IMAGINE_IMAGE` | on | `0` turns image creation off (the chip says why). |
+| `DUA_IMAGINE_VIDEO` | on | `0` turns video off. Polling for already started jobs keeps working. |
+| `DUA_IMAGINE_DAILY_IMAGES` | `20` | Images per day (0–1000). `0` turns images off. |
+| `DUA_IMAGINE_DAILY_VIDEO_SECONDS` | `60` | Video seconds per day (0–3600). `0` turns video off. |
+| `DUA_IMAGINE_IMAGE_PROVIDER` | `xai` | Default image provider when both keys exist: `xai` or `gemini`. |
+| `DUA_IMAGINE_IMAGE_FALLBACK` | on | `0` disables trying the other image provider on outages. |
+| `DUA_IMAGINE_VIDEO_1080P` | off | `1` offers 1080p (only on `grok-imagine-video-1.5`). 480p and 720p are always offered. |
+| `DUA_IMAGINE_VIDEO_MAX_SECONDS` | `15` | Longest video the app may ask for (1–15). |
+| `DUA_IMAGINE_MAX_SOURCE_MB` | `15` | Largest source photo sent for edits or image-to-video (1–20). |
+| `GROK_API_KEY` / `GEMINI_API_KEY` | — | xAI is needed for video and Grok images; Gemini is optional for images. |
+
+API routes (owner sign-in required): `POST /api/imagine/image`, `POST /api/imagine/video`, `POST /api/imagine/status`, `GET /api/imagine/usage`. A burst guard allows 30 requests a minute per instance. Local smoke test without keys: `cd web && node scripts/imagine-smoke.mjs` (fake providers and Supabase).
+
 ## Web search
 
 Chat has a **Web: Off / Search / Read link** control in the Android app, plus an **X** toggle when Grok is selected. Modes start Off for each chat and are not stored or synced.

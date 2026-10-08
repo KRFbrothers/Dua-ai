@@ -42,6 +42,20 @@ API routes: `POST /api/files/sign`, `POST /api/files/url`, `POST /api/files/dele
 
 **Deploy order:** apply the migration, set the variables, deploy the backend, then install the new APK. Old APKs keep working unchanged: they never send file references.
 
+## 1c. Imagine (Phase 3: generated images and videos)
+
+Run `supabase/migrations/202610090001_dua_imagine.sql` once, after the §1b migration (SQL editor → New query → paste → Run, or `supabase db push`). It is safe to run again. It:
+
+- adds `video/mp4` to the `dua-files` bucket's allowed MIME list (nothing else about the bucket changes: still private, 50 MB per file, owner-folder policies);
+- creates `public.dua_imagine_usage` (per account and UTC day: images and video seconds; RLS on, no client access);
+- creates `dua_consume_imagine(feature, amount, daily_limit)` and `dua_read_imagine_usage()`, `security definer` functions that only act on `auth.uid()`. The backend calls them with your own token, so no service-role key is needed. They can only add usage, never reset it.
+
+Generated files live next to your uploads under `<your user id>/`. Deleting a chat deletes them, and **Delete all uploaded files** removes them too. Cloud snapshots keep references to generated images and videos (paths only, never bytes).
+
+Without this migration the backend refuses Imagine requests with a setup message instead of generating without caps; video storage fails with a "run the Phase 3 migration" message.
+
+**Deploy order:** run the migration, set `GROK_API_KEY` (and optionally `GEMINI_API_KEY`) plus any `DUA_IMAGINE_*` variables (PROVIDERS.md), deploy the backend, then install the new APK.
+
 ## 2. Configure the shared backend
 
 Add these environment variables to Vercel Production and redeploy:
