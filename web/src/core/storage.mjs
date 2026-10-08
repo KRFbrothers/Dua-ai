@@ -39,18 +39,18 @@ export function userToken(request) {
  * Stored files are an owner-only feature: requires Supabase sign-in and DUA_ALLOWED_EMAIL.
  * Returns {user, token} or throws StorageError with a user-facing message.
  */
-export async function resolveOwner(request, { env = {}, fetcher = fetch } = {}) {
+export async function resolveOwner(request, { env = {}, fetcher = fetch, feature = 'stored files' } = {}) {
   const owner = String(env.DUA_ALLOWED_EMAIL || '').trim().toLowerCase();
-  if (!owner) throw new StorageError('Set DUA_ALLOWED_EMAIL (your personal account) before enabling stored files.', 503);
+  if (!owner) throw new StorageError(`Set DUA_ALLOWED_EMAIL (your personal account) before enabling ${feature}.`, 503);
   const token = userToken(request);
-  if (!token) throw new StorageError('Sign in from Profile to upload and use stored files.', 401);
+  if (!token) throw new StorageError(feature === 'stored files' ? 'Sign in from Profile to upload and use stored files.' : `Sign in from Profile to use ${feature}.`, 401);
   const session = await handleAccount(new Request(new URL('/api/account/session', request.url), { headers: { authorization: 'Bearer ' + token, 'x-dua-native': '1' }, signal: request.signal }),
     { url: env.SUPABASE_URL, key: env.SUPABASE_ANON_KEY, fetcher });
   let details;
   try { details = await session.json(); } catch { throw new StorageError('Account verification is unavailable. Retry.', 503); }
   if (!session.ok || !details?.configured) throw new StorageError('Account verification is unavailable. Retry.', 503);
-  if (!details.user) throw new StorageError('Session expired. Sign in again to use stored files.', 401);
-  if (String(details.user.email).toLowerCase() !== owner) throw new StorageError('Only the configured personal account can use stored files.', 403);
+  if (!details.user) throw new StorageError(`Session expired. Sign in again to use ${feature}.`, 401);
+  if (String(details.user.email).toLowerCase() !== owner) throw new StorageError(`Only the configured personal account can use ${feature}.`, 403);
   return { user: details.user, token };
 }
 
@@ -142,4 +142,23 @@ export async function downloadSigned(url, maxBytes, { fetcher = fetch, signal } 
     chunks.push(value);
   }
   return Buffer.concat(chunks, size);
+}
+
+/**
+ * Server-side upload with the owner's own access token (Imagine results), so the bucket's row-level
+ * security still decides access. Objects are immutable (x-upsert: false). With `allowExisting`, an
+ * object that already exists at `path` counts as stored (a concurrent status poll saved it first).
+ */
+export async function uploadObject(config, token, path, bytes, mimeType, { fetcher = fetch, signal, allowExisting = false } = {}) {
+  const response = await fetcher(`${config.url}/storage/v1/object/${encodeURIComponent(config.bucket)}/${encodePath(path)}`, {
+    method: 'POST', redirect: 'error', signal: AbortSignal.any([signal || new AbortController().signal, AbortSignal.timeout(120000)]),
+    headers: { apikey: config.key, Authorization: 'Bearer ' + token, 'Content-Type': mimeType, 'x-upsert': 'false', 'Cache-Control': 'max-age=3600' },
+    body: bytes
+  });
+  let data = null;
+  try { data = await readJsonLimited(response, 65536); } catch {}
+  if (response.ok) return { path, size: bytes.byteLength, existed: false };
+  const text = `${data?.statusCode || ''} ${data?.error || ''} ${data?.message || ''}`.toLowerCase();
+  if (allowExisting && (response.status === 409 || text.includes('409') || text.includes('duplicate') || text.includes('already exists'))) return { path, size: bytes.byteLength, existed: true };
+  throw storageFailure(response.status, data);
 }

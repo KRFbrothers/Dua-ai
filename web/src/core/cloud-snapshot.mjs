@@ -1,9 +1,15 @@
+import { STORED_PATH } from './file-types.mjs';
+// Imagine results: references to objects in the owner's private bucket (never bytes).
+const MEDIA_TYPES=['image/jpeg','image/png','image/webp','video/mp4'];
+const validMedia=v=>v&&typeof v==='object'&&!Array.isArray(v)&&Object.keys(v).every(k=>['path','mimeType','size','duration'].includes(k))&&typeof v.path==='string'&&STORED_PATH.test(v.path)&&MEDIA_TYPES.includes(v.mimeType)&&(v.size===undefined||Number.isSafeInteger(v.size)&&v.size>=0)&&(v.duration===undefined||Number.isSafeInteger(v.duration)&&v.duration>=0&&v.duration<=60);
 export function validateCloudSnapshot(data){
  const fail=()=>{throw Error('Invalid cloud snapshot. Local data was kept.');};const integer=v=>Number.isSafeInteger(v)&&v>=0;
  if(!data||data.format!=='dua-cloud-snapshot'||data.version!==1||!Array.isArray(data.chats)||data.chats.length>100||!Array.isArray(data.memory)||data.memory.length>10||data.memory.some(v=>typeof v!=='string'||!v.trim()||v.length>200))fail();
  const ids=new Set();const chats=data.chats.map(chat=>{if(!chat||typeof chat.id!=='string'||!chat.id.trim()||chat.id.length>200||ids.has(chat.id)||!integer(chat.updatedAt)||!['Dua','Gemini','ChatGPT','Claude','Grok','Kimi'].includes(chat.model)||typeof chat.draft!=='string'||chat.draft.length>8000||!Array.isArray(chat.messages)||chat.messages.length>500)fail();ids.add(chat.id);const messages=chat.messages.map(m=>{if(!m||!['user','model'].includes(m.role)||typeof m.text!=='string'||m.text.length>1048576||!['complete','stopped'].includes(m.state))fail();
   // Optional reasoning fields (added with Reasoning mode); older apps ignore them, older snapshots omit them.
   if(m.thinking!==undefined&&(m.role!=='model'||typeof m.thinking!=='string'||m.thinking.length>100000))fail();if(m.thinkingSeconds!==undefined&&(!integer(m.thinkingSeconds)||m.thinkingSeconds>86400))fail();
-  return {role:m.role,text:m.text,state:m.state,...(m.thinking!==undefined?{thinking:m.thinking}:{}),...(m.thinkingSeconds!==undefined?{thinkingSeconds:m.thinkingSeconds}:{})};});return {id:chat.id,updatedAt:chat.updatedAt,model:chat.model,draft:chat.draft,messages};});
+  // Optional Imagine media references (Phase 3) on model turns.
+  if(m.media!==undefined&&(m.role!=='model'||!Array.isArray(m.media)||m.media.length>4||!m.media.every(validMedia)))fail();
+  return {role:m.role,text:m.text,state:m.state,...(m.thinking!==undefined?{thinking:m.thinking}:{}),...(m.thinkingSeconds!==undefined?{thinkingSeconds:m.thinkingSeconds}:{}),...(m.media!==undefined?{media:m.media.map(v=>({path:v.path,mimeType:v.mimeType,...(v.size!==undefined?{size:v.size}:{}),...(v.duration!==undefined?{duration:v.duration}:{})}))}:{})};});return {id:chat.id,updatedAt:chat.updatedAt,model:chat.model,draft:chat.draft,messages};});
  const value={format:'dua-cloud-snapshot',version:1,chats,memory:data.memory.slice()};if(new TextEncoder().encode(JSON.stringify(value)).length>4*1024*1024)fail();return value;
 }
