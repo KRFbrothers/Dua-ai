@@ -1,6 +1,7 @@
 // Provider request builders and response/stream parsers. Pure functions so they can be tested
 // without network access; providers.mjs does validation, fetching and the HTTP response.
 import { isTextType } from './attachments.mjs';
+import { addCitation, addGroundingCitations, addOutputCitations } from './native-search.mjs';
 
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/models/';
 export const MAX_REPLY_CHARS = 100000;
@@ -68,16 +69,21 @@ const geminiPart = part => part.text !== undefined ? { text: part.text } : part.
 /**
  * Builds {url, headers, body} for one provider call.
  * ctx: {model, key, env, systemParts[], messages[{role,text,attachmentText?}], parts[], files[], webContext, reasoning, stream,
- *       turnParts?: Map<messageIndex, part[]>}  (stored-file parts resolved by file-context.mjs, any turn)
+ *       turnParts?: Map<messageIndex, part[]>,  (stored-file parts resolved by file-context.mjs, any turn)
+ *       search?: {native, x},  (provider-native web search / xAI X search tools, see native-search.mjs)
+ *       cacheKey?, maxOutputTokens?}  (xAI prompt_cache_key; output cap override for summaries)
+ * Prefix order stays stable for prompt caching: system (base prompt, memory, conversation summary),
+ * then earlier turns oldest first, then the latest turn with its files and any web material.
  */
 export function buildRequest(provider, ctx) {
-  const { model, key, env = {}, systemParts, parts = [], files = [], webContext = '', reasoning = false, stream = false } = ctx;
+  const { model, key, env = {}, systemParts, parts = [], files = [], webContext = '', reasoning = false, stream = false, search = {}, cacheKey } = ctx;
+  const outputCap = prefix => ctx.maxOutputTokens || maxOutputTokens(prefix, env, reasoning);
   const turns = historyTurns(ctx.messages);
   const lastParts = [...parts, ...(webContext ? [{ text: webContext }] : [])];
   const turnParts = ctx.turnParts instanceof Map ? ctx.turnParts : new Map();
   const extraParts = index => [...(turnParts.get(index) || []), ...(index === turns.length - 1 ? lastParts : [])];
   if (provider.type === 'gemini') {
-    const maxTokens = maxOutputTokens('GEMINI', env, reasoning);
+    const maxTokens = outputCap('GEMINI');
     const generationConfig = { ...(maxTokens ? { maxOutputTokens: maxTokens } : {}), ...(reasoning ? { thinkingConfig: geminiThinkingConfig(model, env) } : {}) };
     return {
       url: GEMINI_BASE + encodeURIComponent(model) + (stream ? ':streamGenerateContent?alt=sse' : ':generateContent'),
@@ -85,6 +91,7 @@ export function buildRequest(provider, ctx) {
       body: {
         systemInstruction: { parts: systemParts.map(text => ({ text })) },
         contents: turns.map((m, index) => ({ role: m.role, parts: [{ text: m.text }, ...extraParts(index).map(geminiPart)] })),
+        ...(search.native ? { tools: [{ google_search: {} }] } : {}),
         ...(Object.keys(generationConfig).length ? { generationConfig } : {})
       }
     };
@@ -95,7 +102,7 @@ export function buildRequest(provider, ctx) {
     const extra = extraParts(index);
     if (extra.length) message.content = attachmentContent(message.content, extra, index === turns.length - 1 ? files : [], provider.type);
   });
-  const maxTokens = maxOutputTokens(provider.prefix, env, reasoning);
+  const maxTokens = outputCap(provider.prefix);
   if (provider.type === 'anthropic') return {
     url: provider.url,
     headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
@@ -107,7 +114,10 @@ export function buildRequest(provider, ctx) {
     // xAI documents the system prompt as a system-role input item; OpenAI uses `instructions`.
     const base = provider.flavor === 'xai' ? { model, input: [{ role: 'system', content: system }, ...messages] } : { model, instructions: system, input: messages };
     const reasoningConfig = effort ? { reasoning: provider.flavor === 'xai' ? { effort } : { effort, summary: 'auto' } } : {};
-    return { url: provider.url, headers, body: { ...base, max_output_tokens: maxTokens, store: false, ...reasoningConfig, ...(stream ? { stream: true } : {}) } };
+    // Hosted tools: OpenAI and xAI both name web search `web_search`; `x_search` is xAI only.
+    const tools = [...(search.native ? [{ type: 'web_search' }] : []), ...(search.x && provider.flavor === 'xai' ? [{ type: 'x_search' }] : [])];
+    const caching = provider.flavor === 'xai' && cacheKey ? { prompt_cache_key: cacheKey } : {};
+    return { url: provider.url, headers, body: { ...base, max_output_tokens: maxTokens, store: false, ...reasoningConfig, ...(tools.length ? { tools } : {}), ...caching, ...(stream ? { stream: true } : {}) } };
   }
   return { url: provider.url, headers, body: { model, messages: [{ role: 'system', content: system }, ...messages], max_tokens: maxTokens, ...(stream ? { stream: true } : {}) } };
 }
@@ -124,12 +134,21 @@ function usageOf(type, raw) {
   return Object.keys(clean).length ? clean : undefined;
 }
 
-/** Non-streaming body → {text, thinking, truncated, usage}. */
+/** url_citation annotations; xAI's `citations` list (every source seen) only when nothing was annotated. */
+function responseCitations(state, response) {
+  addOutputCitations(state, response?.output);
+  if (!state.citations?.length && Array.isArray(response?.citations)) for (const url of response.citations) addCitation(state, url, '');
+}
+
+/** Non-streaming body → {text, thinking, truncated, usage, citations?, queries?}. */
 export function extractReply(type, result) {
   if (type === 'gemini') {
     const candidate = result?.candidates?.[0];
     const parts = Array.isArray(candidate?.content?.parts) ? candidate.content.parts : [];
+    const cited = {};
+    addGroundingCitations(cited, candidate?.groundingMetadata);
     return {
+      ...(cited.citations ? { citations: cited.citations } : {}), ...(cited.queries ? { queries: cited.queries } : {}),
       text: parts.filter(p => !p?.thought && typeof p?.text === 'string').map(p => p.text).join(''),
       thinking: parts.filter(p => p?.thought && typeof p.text === 'string').map(p => p.text).join('\n\n'),
       truncated: candidate?.finishReason === 'MAX_TOKENS', usage: usageOf(type, result?.usageMetadata)
@@ -137,7 +156,10 @@ export function extractReply(type, result) {
   }
   if (type === 'responses') {
     const output = Array.isArray(result?.output) ? result.output : [];
+    const cited = {};
+    responseCitations(cited, result);
     return {
+      ...(cited.citations ? { citations: cited.citations } : {}),
       text: output.filter(item => item?.type === 'message' && item.role === 'assistant').flatMap(item => Array.isArray(item.content) ? item.content : []).filter(part => part?.type === 'output_text' && typeof part.text === 'string').map(part => part.text).join('\n'),
       thinking: output.filter(item => item?.type === 'reasoning').flatMap(item => Array.isArray(item.summary) ? item.summary : []).map(part => textOf(part?.text)).filter(Boolean).join('\n\n'),
       truncated: result?.status === 'incomplete' && result?.incomplete_details?.reason === 'max_output_tokens', usage: usageOf(type, result?.usage)
@@ -156,7 +178,7 @@ export function extractReply(type, result) {
 }
 
 /**
- * Maps one upstream SSE record to normalized events. `state` collects {done, truncated, usage, error}.
+ * Maps one upstream SSE record to normalized events. `state` collects {done, truncated, usage, error, citations, queries}.
  * Returns [{type:'thinking'|'text', delta}].
  */
 export function parseStreamRecord(type, record, state) {
@@ -172,6 +194,8 @@ export function parseStreamRecord(type, record, state) {
     for (const part of Array.isArray(candidate?.content?.parts) ? candidate.content.parts : []) push(part?.thought ? 'thinking' : 'text', part?.text);
     if (candidate?.finishReason) { state.done = true; if (candidate.finishReason === 'MAX_TOKENS') state.truncated = true; }
     if (data.usageMetadata) state.usage = usageOf(type, data.usageMetadata);
+    // Streamed grounding metadata only carries chunks not sent before, so citations accumulate.
+    addGroundingCitations(state, candidate?.groundingMetadata);
     return events;
   }
   if (type === 'responses') {
@@ -179,8 +203,10 @@ export function parseStreamRecord(type, record, state) {
     if (kind === 'response.output_text.delta') push('text', data.delta);
     else if (kind === 'response.reasoning_summary_text.delta' || kind === 'response.reasoning_text.delta') push('thinking', data.delta);
     else if (kind === 'response.reasoning_summary_part.added' && data.summary_index > 0) push('thinking', '\n\n');
+    else if (kind === 'response.output_text.annotation.added') { if (data.annotation?.type === 'url_citation') addCitation(state, data.annotation.url, data.annotation.title); }
     else if (kind === 'response.completed' || kind === 'response.incomplete') {
       state.done = true;
+      responseCitations(state, data.response);
       state.usage = usageOf(type, data.response?.usage);
       if (data.response?.incomplete_details?.reason === 'max_output_tokens') state.truncated = true;
     } else if (kind === 'response.failed' || kind === 'error') state.error = data.response?.error || data.error || data;

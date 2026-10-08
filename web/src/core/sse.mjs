@@ -4,7 +4,10 @@
  * Server-Sent Events, one JSON object per event; the SSE `event:` name always equals `type`:
  *   event: thinking  data: {"type":"thinking","delta":"..."}       reasoning summary text (Reasoning mode only)
  *   event: text      data: {"type":"text","delta":"..."}           answer text
- *   event: sources   data: {"type":"sources","sources":[{id,title,url}]}  web sources (Search / Read link)
+ *   event: sources   data: {"type":"sources","sources":[{id,title,url,domain}]}  web sources: before the text for Brave
+ *                    search / Read link, after it for provider-native search (citations arrive with the answer)
+ *   event: context   data: {"type":"context","summary":"...","covered":12}  older turns were summarised: the first
+ *                    `covered` sent messages are now in `summary`; keep it with the conversation (Phase 2)
  *   event: notice    data: {"type":"notice","message":"..."}        non-fatal note (e.g. provider has no visible thinking)
  *   event: files     data: {"type":"files","files":[{path,transcript}]}  transcripts made for stored audio (keep them with the message)
  *   event: done      data: {"type":"done","truncated":false,"usage":{...}}  last event of a successful reply
@@ -18,7 +21,7 @@ export const SSE_HEADERS = Object.freeze({
   'X-Accel-Buffering': 'no',
   'X-Content-Type-Options': 'nosniff'
 });
-const TYPES = new Set(['thinking', 'text', 'sources', 'notice', 'files', 'done', 'error']);
+const TYPES = new Set(['thinking', 'text', 'sources', 'notice', 'files', 'context', 'done', 'error']);
 
 export function formatEvent(event) {
   if (!event || !TYPES.has(event.type)) throw new TypeError('Unknown stream event type.');
