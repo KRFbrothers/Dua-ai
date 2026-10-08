@@ -41,6 +41,6 @@ Run source compilation and JVM tests without packaging an APK:
 bash ./gradlew :app:testDebugUnitTest --no-daemon --max-workers=2
 ```
 
-[Project checks](.github/workflows/checks.yml) runs Android compilation and JVM unit tests on PRs, pushes to main and manual runs. It does not assemble or sign an APK. It also runs the backend's `node:test` suite (`cd web && npm test`, no dependencies or provider keys needed).
+[Project checks](.github/workflows/checks.yml) runs Android compilation and JVM unit tests on PRs, pushes to main and manual runs. It does not assemble or sign an APK. Run the backend's `node:test` suite with `cd web && npm test` (no dependencies or provider keys needed); a CI job for it is proposed in the PR description.
 
 Android local data is stored in app-private preferences; Android backup/device transfer can include chat history and preferences according to device settings. A Vercel deployment updates the backend only; Android code changes require building and installing a new APK.
