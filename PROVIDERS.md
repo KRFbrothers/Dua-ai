@@ -104,6 +104,28 @@ Prices change; check docs.x.ai and ai.google.dev before raising caps. The image 
 
 API routes (owner sign-in required): `POST /api/imagine/image`, `POST /api/imagine/video`, `POST /api/imagine/status`, `GET /api/imagine/usage`. A burst guard allows 30 requests a minute per instance. Local smoke test without keys: `cd web && node scripts/imagine-smoke.mjs` (fake providers and Supabase).
 
+## Voice v2: reply voices and languages (Phase 4)
+
+Settings › Voice picks how replies are read aloud: the **device voice** (free; language and installed voice chosen in the app, speed 0.5–2×) or an **AI voice** from the server. AI voices need the signed-in owner (`DUA_ALLOWED_EMAIL` plus Supabase sign-in); keys stay on the server. `/api/config.voice` lists the providers, voices, languages and speed range that are on, so a new app on an older backend keeps the single "AI reply voice" switch, and an older app on this backend keeps working (a text-only request still gets the old ElevenLabs/Grok MP3).
+
+| Provider | Endpoint (verified against provider docs, October 2026) | Voices | Languages | Speed | Price |
+| --- | --- | --- | --- | --- | --- |
+| Grok (xAI) | `POST https://api.x.ai/v1/tts` with `text`, `voice_id`, `language` (BCP-47 or `auto`), `output_format {codec: mp3, sample_rate: 24000, bit_rate: 64000}`, `speed` | 28 (Eve default; Ara, Rex, Sal, Leo, …) | Auto plus the provider list (English, Hindi, Arabic, Bengali, …). Urdu is not on xAI's list, so it is sent as `auto` and detected from the text | 0.7–1.5 | $15 per 1M characters |
+| Gemini | Interactions API `POST /v1beta/interactions` with `response_format {type: audio, mime_type: audio/wav}`, `generation_config.speech_config [{voice}]`, `store: false` | 30 prebuilt (Kore default; Puck, Charon, Zephyr, …) | Detected from the text (Hindi supported; Urdu is not on Google's list) | Sent as a speaking-style hint (slowly / quickly) | about $0.00225 per 10 s of audio |
+| ElevenLabs | Existing `text-to-speech/{voice}` call | The one voice in `ELEVENLABS_VOICE_ID` | Multilingual model | Fixed | Your ElevenLabs plan |
+
+`POST /api/voice/audio` accepts `{text, provider?, voice?, language?, speed?}` and returns `audio/mpeg` (Grok, ElevenLabs) or `audio/wav` (Gemini, 24 kHz mono). The app cleans markdown, links, code and citations out of the reply, then asks for a short first chunk (~220 characters) and larger later chunks (≤ 600, never above the provider's per-request limit) so playback starts quickly; the next chunk is fetched while the current one plays. Generated chunks are cached in memory (about 12 MB, per provider/voice/language/speed/text) so replays and voice previews are free; nothing is written to disk. Voice requests have their own burst window (40 per minute) and do not use the daily chat request quota.
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `DUA_VOICE_TTS` | on | `0` turns the Grok and Gemini reply voices off (ElevenLabs keeps its own switch). |
+| `DUA_VOICE_TTS_PROVIDER` | first available (`xai`, then `gemini`, then `elevenlabs`) | Default AI voice provider. |
+| `DUA_VOICE_GEMINI_TTS_MODEL` | `gemini-3.8-flash-tts` | Gemini speech model. |
+| `GROK_API_KEY` / `GEMINI_API_KEY` | — | Turn on the Grok / Gemini voices. |
+| `ENABLE_GENERATED_VOICE`, `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID` | — | Optional ElevenLabs voice (unchanged). |
+
+Speech recognition (voice input and hands-free) uses Android's recognizer with the language picked in Settings › Voice (Auto, Hindi `hi-IN`, Urdu `ur-PK`, English `en-IN`, …). Support depends on the phone's speech service.
+
 ## Web search
 
 Chat has a **Web: Off / Search / Read link** control in the Android app, plus an **X** toggle when Grok is selected. Modes start Off for each chat and are not stored or synced.
