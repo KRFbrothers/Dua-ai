@@ -22,7 +22,7 @@ Redeploy after setting server variables. `/api/config` exposes provider availabi
 
 ## Streaming, Reasoning and output limits
 
-`/api/chat` keeps its JSON reply unless the request opts in with `"stream": true`; then it answers with Server-Sent Events: `context` (a new conversation summary, sent first), `thinking`, `text`, `sources`, `notice`, `files` (audio transcripts), `done` and `error` (each `data:` is JSON with the same `type`), plus a `: ping` comment every 15 seconds. Validation, login, quota and upstream errors that happen before the first byte still return the usual JSON error and status (including `Retry-After`). If an adapter cannot stream, the reply arrives as one `text` event. Web search and Read link work in both modes; the `Sources:` footer arrives as the final text.
+`/api/chat` keeps its JSON reply unless the request opts in with `"stream": true`; then it answers with Server-Sent Events: `context` (a new conversation summary, sent first), `thinking`, `text`, `sources`, `notice`, `files` (audio transcripts), `done` and `error` (each `data:` is JSON with the same `type`), plus `code` (Run code, see below) and a `: ping` comment every 15 seconds. Validation, login, quota and upstream errors that happen before the first byte still return the usual JSON error and status (including `Retry-After`). If an adapter cannot stream, the reply arrives as one `text` event. Web search and Read link work in both modes; the `Sources:` footer arrives as the final text.
 
 `"mode": "reasoning"` asks the model to think first. Thinking summaries are only sent in Reasoning mode and are saved with the chat (local history, export and cloud snapshot; older files without them still load).
 
@@ -35,6 +35,21 @@ Redeploy after setting server variables. `/api/config` exposes provider availabi
 | Kimi | Shows `reasoning_content` when the model returns it | — | `KIMI_MAX_OUTPUT_TOKENS` (8192) |
 
 Output caps accept 256–1,000,000; output tokens include thinking tokens. A reply that hits the cap ends with `done.truncated` and the app shows a note. `DUA_CHAT_DEADLINE_SECONDS` (10–790) must stay below the Vercel function duration: `web/vercel.json` sets `maxDuration: 300` for `api/**/*.js` (Hobby with Fluid compute allows 300 s; Pro allows up to 800 s). The Android app allows 75 s between bytes and 330 s per call.
+
+## Run code: hosted code execution (Phase 5)
+
+The Run code chip asks the provider to run Python in **its own sandbox**; Dua never executes code on the phone or in the Vercel function. Request field: `"code": true` (streaming path; older servers never receive it). `/api/config.code` reports `{enabled, reason?, providers, language, maxRuns, maxChars}`.
+
+| Choice | Tool sent | Default | Cost and limits (provider docs, Oct 2026) |
+| --- | --- | --- | --- |
+| Dua / Gemini | `tools: [{ code_execution: {} }]` → parts `executableCode` / `codeExecutionResult` | On when `GEMINI_API_KEY` + `GEMINI_MODEL` are set | No extra charge: code and output are billed as normal tokens, so it works on the free AI Studio key (free-tier rate limits still apply, and code turns use more tokens). Python only, 30 s per run, the model may retry a failing run up to 5 times; libraries such as pandas, numpy, matplotlib, openpyxl; no custom installs |
+| ChatGPT | `{ type: 'code_interpreter', container: { type: 'auto' } }` + `include: ['code_interpreter_call.outputs']` | Off; `OPENAI_CODE_EXECUTION=1` | OpenAI bills a container per session in addition to tokens |
+| Grok | `{ type: 'code_interpreter' }` (xAI SDK name `code_execution`) | Off; `GROK_CODE_EXECUTION=1` | xAI bills per tool call (about $5 per 1,000) in addition to tokens |
+| Claude, Kimi | — | — | The reply answers without code and says so |
+
+Variables: `DUA_CODE_EXECUTION` (default on; `0` removes Run code everywhere), `GEMINI_CODE_EXECUTION` (default on; `0` turns off Gemini only), `OPENAI_CODE_EXECUTION` / `GROK_CODE_EXECUTION` (default off; `1` turns on). Code execution and Google Search grounding can run in the same Gemini request.
+
+Stream events: `{"type":"code","index":0,"language":"python","code":"…"}` when code runs, then `{"type":"code","index":0,"output":"…","outcome":"ok"}` (`ok`, `error` or `timeout`). JSON replies carry `code: [{language, code, output, outcome}]`. At most 10 runs per reply; code and output are each capped at 20,000 characters. Charts that code draws (inline images) are not shown yet; the reply gets a note instead. If the model rejects the tool with HTTP 400, the request is sent again without it and the reply carries a notice. Run code is not switched on automatically in Reasoning mode: Google notes that code execution can make other output (for example stories) worse, so it stays an explicit choice. The xAI and OpenAI paths are implemented from their docs and covered only by mocked tests.
 
 ## Attachments
 
