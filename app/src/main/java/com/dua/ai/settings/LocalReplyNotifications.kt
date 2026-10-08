@@ -21,7 +21,7 @@ object LocalReplyNotifications {
         }
         val pending = PendingIntent.getActivity(context, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         try {
-            manager.notify(1, NotificationCompat.Builder(context, "dua-replies").setSmallIcon(android.R.drawable.ic_dialog_info)
+            manager.notify(1, NotificationCompat.Builder(context, "dua-replies").setSmallIcon(com.dua.ai.R.drawable.ic_stat_dua)
                 .setContentTitle("Dua").setContentText("Reply ready. Open Dua to read it.")
                 .setVisibility(NotificationCompat.VISIBILITY_PRIVATE).setAutoCancel(true).setContentIntent(pending).build())
         } catch (_: SecurityException) { }

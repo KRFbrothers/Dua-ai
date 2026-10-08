@@ -1,5 +1,6 @@
 package com.dua.ai.ui.screens
 
+import com.dua.ai.ui.components.DuaPageScaffold
 import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -85,18 +86,16 @@ fun HandsFreeScreen(viewModel: ChatViewModel, onBack: () -> Unit, onChat: () -> 
             else if (spoke || current.status.isNotBlank()) { if (current.status.isNotBlank()) session.stop(current.status) else session.spoken() }
         }
     }
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        TextButton(onClick = onBack) { Text("‹ Back") }
-        Text("Hands-free", fontSize = 22.sp)
-        Text("Start a separate voice chat. Final speech sends automatically to Gemini and replies are read aloud. Keep this screen open. Speech services may process audio remotely.", fontSize = 14.sp)
+    DuaPageScaffold(title = "Hands-free", onBack = onBack) {
+        Text("Start a separate voice chat. Final speech sends automatically to Gemini and replies are read aloud. Keep this screen open. Speech services may process audio remotely.", style = MaterialTheme.typography.bodyMedium)
         Box(Modifier.fillMaxWidth().height(120.dp), contentAlignment = androidx.compose.ui.Alignment.Center) { AnimatedVoiceCube(phase != "idle", Modifier.size(72.dp)) }
         Text(when (phase) { "listening" -> "Listening…"; "thinking" -> "Dua is thinking…"; "speaking" -> "Reading reply…"; else -> "Ready" }, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
-        Text(notice, fontSize = 14.sp)
+        Text(notice, style = MaterialTheme.typography.bodyMedium)
         if (phase == "listening") Text(input.partial.ifBlank { input.transcript })
         if (started) messages.takeLast(2).forEach { Text((if (it.isUser) "You: " else "Dua: ") + it.text) }
         FilledTonalButton(enabled = phase == "idle", onClick = { if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) start() else permission.launch(Manifest.permission.RECORD_AUDIO) }) { Text("Start hands-free") }
         FilledTonalButton(enabled = phase != "idle", onClick = { session.stop() }) { Text("Stop") }
         TextButton(onClick = onChat) { Text("Open conversation in Chat") }
-        Text("Stop, Back or leaving the foreground cancels recording, the pending reply and playback. Previous drafts stay saved. No background listening.", fontSize = 14.sp)
+        Text("Stop, Back or leaving the foreground cancels recording, the pending reply and playback. Previous drafts stay saved. No background listening.", style = MaterialTheme.typography.bodyMedium)
     }
 }

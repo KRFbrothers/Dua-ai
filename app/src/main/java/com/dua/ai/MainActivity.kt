@@ -6,8 +6,7 @@ import androidx.compose.runtime.setValue
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.core.view.WindowCompat
-import com.dua.ai.ui.screens.ChatScreen
+import com.dua.ai.ui.DuaApp
 
 class MainActivity : ComponentActivity() {
     private var notificationRoute by androidx.compose.runtime.mutableStateOf<Pair<String, String>?>(null)
@@ -17,13 +16,10 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         readRoute(intent)
+        // Transparent system bars; DuaTheme sets light or dark bar icons to match the theme.
         enableEdgeToEdge()
-        WindowCompat.getInsetsController(window, window.decorView).apply {
-            isAppearanceLightStatusBars = false
-            isAppearanceLightNavigationBars = false
-        }
         setContent {
-            ChatScreen(notificationRoute = notificationRoute)
+            DuaApp(notificationRoute = notificationRoute)
         }
     }
 }

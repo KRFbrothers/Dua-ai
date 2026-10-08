@@ -5,6 +5,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.roborazzi)
     id("com.google.gms.google-services")
     id("com.google.firebase.crashlytics")
 }
@@ -87,6 +88,17 @@ android {
         compose = true
         buildConfig = true
     }
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+    }
+}
+
+// Roborazzi screenshot tests (src/test/.../screenshots) need Robolectric's Android runtime
+// download and are slow, so the default test run skips them. Record with:
+//   ./gradlew :app:recordRoborazziDebug -Pdua.screenshots
+val screenshotTestsEnabled = providers.gradleProperty("dua.screenshots").isPresent
+tasks.withType<Test>().configureEach {
+    if (!screenshotTestsEnabled) exclude("**/screenshots/**")
 }
 
 dependencies {
@@ -111,6 +123,16 @@ dependencies {
     implementation(libs.androidx.material3)
     implementation(libs.androidx.material.icons.extended)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation(libs.androidx.navigation.compose)
+    implementation(libs.markdown.renderer.m3)
+    implementation(libs.markdown.renderer.code)
 
     debugImplementation(libs.androidx.ui.tooling)
+    debugImplementation(libs.androidx.ui.test.manifest)
+    testImplementation(platform(libs.androidx.compose.bom))
+    testImplementation(libs.androidx.ui.test.junit4)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.roborazzi)
+    testImplementation(libs.roborazzi.compose)
+    testImplementation(libs.roborazzi.junit.rule)
 }
