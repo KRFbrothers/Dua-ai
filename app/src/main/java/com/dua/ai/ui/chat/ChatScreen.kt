@@ -114,6 +114,7 @@ fun ChatScreen(
             .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))) {
             ChatTopBar(
                 newChatEnabled = !state.typing,
+                showComputer = home,
                 onMenu = { scope.launch { drawerState.open() } },
                 onComputer = actions.onOpenComputer,
                 onNewChat = actions.onNewChat,

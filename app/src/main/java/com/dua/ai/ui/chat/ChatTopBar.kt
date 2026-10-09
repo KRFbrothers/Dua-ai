@@ -32,20 +32,22 @@ import com.dua.ai.ui.theme.DuaTheme
 import com.dua.ai.ui.theme.Sizes
 import com.dua.ai.ui.theme.Spacing
 
-/** Round history-menu button · "Computer" pill (opens the Computer screen) · round new-chat button. The model picker lives in the composer's model pill. */
+/** Round history-menu button · "Computer" pill only on a new chat · round new-chat button. The model picker lives in the composer's model pill. */
 @Composable
-fun ChatTopBar(newChatEnabled: Boolean, onMenu: () -> Unit, onComputer: () -> Unit, onNewChat: () -> Unit) {
+fun ChatTopBar(newChatEnabled: Boolean, showComputer: Boolean, onMenu: () -> Unit, onComputer: () -> Unit, onNewChat: () -> Unit) {
     Row(Modifier.fillMaxWidth().statusBarsPadding().height(Sizes.topBarHeight).padding(horizontal = Spacing.lg),
         verticalAlignment = Alignment.CenterVertically) {
         RoundBarButton(Icons.Outlined.Menu, "Open chat history", enabled = true, onClick = onMenu)
         Spacer(Modifier.weight(1f))
-        Surface(onClick = onComputer, shape = DuaShape.chip, color = DuaTheme.colors.composer,
-            contentColor = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(horizontal = Spacing.sm).semantics { contentDescription = "Computer, coming soon"; role = Role.Button }) {
-            Row(Modifier.height(Sizes.topBarButton).padding(start = Spacing.lg, end = Spacing.lg + Spacing.xxs), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Outlined.DesktopWindows, contentDescription = null, modifier = Modifier.size(Sizes.icon), tint = MaterialTheme.colorScheme.onSurface.copy(alpha = .86f))
-                Text("Computer", style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(start = Spacing.sm))
+        if (showComputer) {
+            Surface(onClick = onComputer, shape = DuaShape.chip, color = DuaTheme.colors.composer,
+                contentColor = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.padding(horizontal = Spacing.sm).semantics { contentDescription = "Computer, coming soon"; role = Role.Button }) {
+                Row(Modifier.height(Sizes.topBarButton).padding(start = Spacing.lg, end = Spacing.lg + Spacing.xxs), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Outlined.DesktopWindows, contentDescription = null, modifier = Modifier.size(Sizes.icon), tint = MaterialTheme.colorScheme.onSurface.copy(alpha = .86f))
+                    Text("Computer", style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(start = Spacing.sm))
+                }
             }
         }
         Spacer(Modifier.weight(1f))
