@@ -60,7 +60,7 @@ private fun RoundBarButton(icon: ImageVector, description: String, enabled: Bool
     // 44 dp visual inside a 48 dp touch target.
     Box(Modifier.size(Sizes.touchTarget), contentAlignment = Alignment.Center) {
         Surface(onClick = onClick, enabled = enabled, shape = CircleShape, color = DuaTheme.colors.composer,
-            contentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = if (enabled) .86f else .38f),
+            contentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = if (enabled) 1f else .38f),
             modifier = Modifier.size(Sizes.topBarButton).semantics { contentDescription = description; role = Role.Button }) {
             Box(contentAlignment = Alignment.Center) { Icon(icon, contentDescription = null, modifier = Modifier.size(Sizes.icon)) }
         }
