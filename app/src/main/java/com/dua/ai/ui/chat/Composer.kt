@@ -163,7 +163,7 @@ fun Composer(
             if (state.imagine) ImagineOptionChips(state, enabled = idle, onClick = onImagineOptions,
                 modifier = Modifier.padding(start = Spacing.sm, end = Spacing.sm, bottom = Spacing.xs))
             Row(Modifier.fillMaxWidth().padding(start = Spacing.xxs, end = Spacing.xs), verticalAlignment = Alignment.CenterVertically) {
-                RoundComposerButton(Icons.Outlined.Add, "Add photos and files", enabled = idle, onClick = onAttach)
+                RoundComposerButton(Icons.Outlined.Add, "Add photos and files", enabled = idle, onClick = onAttach, contentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = if (idle) 1f else .38f))
                 ModelPill(model = state.model, enabled = idle, onClick = onModel)
                 Spacer(Modifier.weight(1f))
                 // Empty field: voice mode. Once there is something to send (or a reply to stop) it becomes Send/Stop.
