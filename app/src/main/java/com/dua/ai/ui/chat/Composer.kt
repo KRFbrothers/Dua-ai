@@ -68,7 +68,6 @@ import androidx.compose.material.icons.outlined.Tag
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Link
-import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material.icons.outlined.Lightbulb
 import androidx.compose.material3.Icon
@@ -105,7 +104,7 @@ import com.dua.ai.ui.theme.Sizes
 import com.dua.ai.ui.theme.Spacing
 
 /**
- * Rounded multi-line composer. Bottom row: attach (+) · model pill (Auto / model ⌄) · mic · send/stop.
+ * Rounded multi-line composer. Bottom row: attach (+) · model pill (Auto / model ⌄) · voice mode or send/stop.
  * The mode chips (Run code, Reasoning, Search, …) sit above it in [ModeChipRow].
  */
 @Composable
@@ -167,7 +166,6 @@ fun Composer(
                 RoundComposerButton(Icons.Outlined.Add, "Add photos and files", enabled = idle, onClick = onAttach)
                 ModelPill(model = state.model, enabled = idle, onClick = onModel)
                 Spacer(Modifier.weight(1f))
-                RoundComposerButton(Icons.Outlined.Mic, "Dictate", enabled = true, onClick = onMic)
                 // Empty field: voice mode. Once there is something to send (or a reply to stop) it becomes Send/Stop.
                 if (state.typing || state.canSend || state.draft.isNotBlank()) SendButton(typing = state.typing, canSend = state.canSend, onSend = onSend, onStop = onStop)
                 else VoiceModeButton(onVoiceMode)
