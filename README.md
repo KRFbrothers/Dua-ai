@@ -18,6 +18,8 @@ API keys and optional credentials remain server-side. Preparing a feature does n
 
 ## Project roadmap
 
+Google Drive backup is available from Settings → Cloud sync with separate Google consent. Daily background snapshots include chats, drafts and memory notes; restore previews and merges the latest backup. See [Google Drive setup and verification](GOOGLE-DRIVE-BACKUP.md).
+
 See [ROADMAP.md](ROADMAP.md) for the product and engineering roadmap: the Grok-style product direction, feature status, phased plan (UI foundation and reasoning, files and search, Imagine, voice, coding/Build mode), privacy and cost controls, and open decisions.
 Use [RELEASE-CHECKLIST.md](RELEASE-CHECKLIST.md) to verify the owner-only lock, provider spending limits, device/staging checks, and installing the APK on your own phone. The production configuration cannot be verified from this source checkout alone.
 

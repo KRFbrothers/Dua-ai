@@ -252,7 +252,48 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             finally { account.busy(false); refreshSyncBusy() }
         }
     }
-    fun logOut() { automaticSync.disable(); accountAction { _cloudPreview.value = null; account.logout() } }
+    fun logOut() { com.dua.ai.backup.DriveBackup.disable(getApplication()); automaticSync.disable(); accountAction { _cloudPreview.value = null; account.logout() } }
+
+    fun prepareDriveBackup() {
+        check(!_dataBusy.value && !_isTyping.value) { "Wait for the current operation to finish." }
+        check(historyReadable) { "Saved chats could not be read. Resolve local data recovery before backing up." }
+        flushHistory()
+        localPreferences.requireReadable()
+    }
+
+    suspend fun restoreDriveBackup(snapshot: CloudSnapshot, email: String): String {
+        check(account.state.value.user?.email == email) { "Account changed. Review the backup again." }
+        check(!_dataBusy.value && !_isTyping.value) { "Wait for the current operation to finish." }
+        check(historyReadable) { "Saved chats could not be read. Resolve local data recovery before restoring." }
+        com.dua.ai.account.CloudSnapshotCodec.encode(snapshot)
+        _dataBusy.value = true
+        refreshSyncBusy()
+        try {
+            flushHistory()
+            localPreferences.requireReadable()
+            val oldSettings = localSettings.value
+            val notes = (oldSettings.memory + snapshot.memory).distinct()
+            require(notes.size <= 10) { "Merged memories exceed 10 notes. Remove some notes before restoring." }
+            val merged = com.dua.ai.account.CloudSnapshotCodec.merge(_savedChats.value, snapshot.chats)
+            val encoded = ChatHistoryCodec.encode(merged.chats, activeId)
+            val previous = preferences.getString("history", null)
+            localPreferences.update(oldSettings.copy(memory = notes))
+            try {
+                // Finish the transaction on the UI dispatcher before another edit can change the snapshot.
+                val saved = historyWriter.writeDirectly {
+                    preferences.edit().putString("history", encoded).commit().also { ok ->
+                        if (!ok) preferences.edit().putString("history", previous).apply()
+                    }
+                }
+                check(saved) { "Backup could not be restored. Try again." }
+                _savedChats.value = merged.chats
+            } catch (failure: Exception) {
+                localPreferences.update(oldSettings)
+                throw failure
+            }
+            return "${merged.added} chats restored; ${merged.conflicts} conflicts kept as copies."
+        } finally { _dataBusy.value = false; refreshSyncBusy() }
+    }
     fun cancelCloudReview() { _cloudPreview.value = null; account.notice("Cancelled. Data was not changed.") }
     fun reviewCloud(kind: String) = accountAction {
         val remote = account.cloud()
@@ -1103,6 +1144,16 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             }.distinctUntilChanged().collect { refreshSyncBusy() }
         }
         viewModelScope.launch { account.state.map { it.user?.id }.distinctUntilChanged().collect { automaticSync.accountChanged(); resumeImagineJobs() } }
+        viewModelScope.launch {
+            account.state.map { it.user?.email }.distinctUntilChanged().collect { email ->
+                val drive = com.dua.ai.backup.DriveBackup.preferences(application)
+                val connected = drive.getString("email", null)
+                if (connected != null && connected != email) {
+                    runCatching { com.dua.ai.backup.DriveBackup.disable(application) }
+                        .onFailure { account.notice("Drive backup could not be disabled. Retry from Cloud sync.") }
+                }
+            }
+        }
         viewModelScope.launch {
             combine(_savedChats, localSettings) { chats, settings -> CloudSnapshot(chats, settings.memory) }
                 .distinctUntilChanged().collect { automaticSync.localChanged() }
