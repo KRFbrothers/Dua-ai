@@ -17,6 +17,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         // Branded launch splash (Theme.App.Starting); it hands over to Theme.Dua once the first frame is drawn.
         installSplashScreen()
+        // Fresh launch: read and decode saved chats in the background while the UI starts (ChatViewModel takes the result).
+        if (savedInstanceState == null) com.dua.ai.history.ChatHistoryPreload.start(getSharedPreferences("dua_chat_history", MODE_PRIVATE))
         super.onCreate(savedInstanceState)
         readRoute(intent)
         // Transparent system bars; DuaTheme sets light or dark bar icons to match the theme.

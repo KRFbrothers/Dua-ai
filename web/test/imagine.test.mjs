@@ -286,8 +286,18 @@ test('video status: moderation, failures, expiry, forged or foreign jobs, storag
   assert.equal((await (await status(world({ videoStatus: () => Response.json({ status: 'expired' }) }), token())).json()).status, 'expired');
   assert.equal((await (await status(world({ videoStatus: () => Response.json({ code: 'not found' }, { status: 404 }) }), token())).json()).status, 'expired');
   assert.equal((await (await status(world(), token({ t: Math.floor(Date.now() / 1000) - 49 * 3600 }))).json()).status, 'expired');
-  const forged = token().replace(/.$/, c => c === 'A' ? 'B' : 'A');
-  assert.equal((await status(world(), forged)).status, 404);
+  // Change a middle signature character: the last one carries 2 padding bits that decoders ignore,
+  // so editing it could leave the signature bytes unchanged (this made the test flaky).
+  const flip = (value, index) => value.slice(0, index) + (value[index] === 'A' ? 'B' : 'A') + value.slice(index + 1);
+  const valid = token();
+  assert.equal((await status(world(), flip(valid, valid.length - 20))).status, 404);
+  assert.equal((await status(world(), flip(valid, 5))).status, 404);
+  // A non-canonical spelling of the genuine signature (same bytes, different padding bits) is rejected too.
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+  const last = alphabet.indexOf(valid.at(-1));
+  const respelled = valid.slice(0, -1) + alphabet[last ^ 1];
+  assert.deepEqual(Buffer.from(respelled.split('.')[1], 'base64url'), Buffer.from(valid.split('.')[1], 'base64url'));
+  assert.equal((await status(world(), respelled)).status, 404);
   assert.equal((await status(world(), signJob({ r: 'x', p: `${OTHER}/bbbbbbbb-bbbb-4ccc-8ddd-eeeeeeeeeeee.mp4`, s: 5, u: OTHER, t: Math.floor(Date.now() / 1000) }, secret))).status, 404);
   assert.equal((await status(world(), signJob({ r: 'x', p: `${UID}/bbbbbbbb-bbbb-4ccc-8ddd-eeeeeeeeeeee.mp4`, s: 5, u: UID, t: Math.floor(Date.now() / 1000) }, 'another-key'))).status, 404);
   const refused = await status(world({ mimeRefused: true }), token());

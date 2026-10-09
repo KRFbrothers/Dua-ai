@@ -31,6 +31,7 @@ fun DeviceSettingsScreen(viewModel: ChatViewModel, page: String, onBack: () -> U
     val settings by viewModel.localSettings.collectAsState()
     val status by viewModel.settingsStatus.collectAsState()
     val chats by viewModel.savedChats.collectAsState()
+    val account by viewModel.account.state.collectAsState()
     val context = LocalContext.current
     var editing by rememberSaveable { mutableIntStateOf(-1) }
     var note by rememberSaveable { mutableStateOf("") }
@@ -107,7 +108,7 @@ fun DeviceSettingsScreen(viewModel: ChatViewModel, page: String, onBack: () -> U
             }
             "Privacy" -> {
                 Text("Chats, settings and memory notes are local. Chat history is excluded from Android backups. Sending forwards messages, selected file contents and enabled memory notes to the configured AI provider. Device/browser speech services may process speech remotely. Account sessions are encrypted on this device and excluded from backup.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text("Local deletion does not delete provider records, exports or other devices. Reviewed Cloud sync uploads store drafts, messages and saved notes in your Supabase account. Logout does not erase local or cloud data. Clear cloud separately in Settings → Cloud sync. Account deletion is not available.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("Local deletion does not delete provider records, exports or other devices. Reviewed Cloud sync uploads store drafts, messages and saved notes in your Supabase account. Logout does not erase local or cloud data. Clear cloud separately in Settings → Cloud sync. " + if (account.deletionConfigured) "To delete your account and its cloud data, use Delete account in Settings → Profile." else "Account deletion is not configured on this server.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 TextButton(onClick = { onPage("DataControls") }) { Text("Manage local chats") }
                 TextButton(onClick = { onPage("Memory") }) { Text("Manage local memories") }
                 TextButton(onClick = { resetting = true }) { Text("Reset local settings and memories") }

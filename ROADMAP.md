@@ -66,7 +66,7 @@ The repository contains the implementation described below, but this checkout ca
 | Attachments and photo resizing | Yes | Provider/model capabilities are environment-dependent; production unknown | Automated/mock tests; live providers and physical Android pending |
 | Camera and photo selection | Yes | Device permission is user-controlled | Automated coverage; physical-device checks pending |
 | Voice input, read-aloud and hands-free | Yes, with voice/language pickers and Grok/Gemini/ElevenLabs reply voices | Speech service is device-dependent; AI voices need `GROK_API_KEY`/`GEMINI_API_KEY` and the owner lock | Automated/mock tests; speech/audio behavior on devices pending |
-| Accounts and profile | Yes; native Google sign-in is optional | Supabase, SMTP and OAuth settings are production-controlled; unknown here | Mocked tests; live sign-in/recovery pending |
+| Accounts and profile | Yes; native Google sign-in only (no email/password); owner-locked by `DUA_ALLOWED_EMAIL` | Supabase Google provider and OAuth settings are production-controlled; unknown here | Mocked tests; owner verifies live Google sign-in on his phone |
 | Cloud snapshots and foreground sync | Yes, reviewed manual and opt-in foreground flows | Supabase migration/environment and per-device consent are required; production unknown | Automated and migration tests; live cross-device checks pending |
 | Gemini and optional AI providers | Adapters and provider selection are implemented | API keys/model IDs are production-controlled; unknown here | Mocked responses; live provider/model checks pending |
 | Web search and link reading | Yes | Brave key needed for Search; production status unknown | Mocked tests; live retrieval/provider checks pending |

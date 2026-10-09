@@ -1,6 +1,9 @@
 package com.dua.ai.ui
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -18,6 +21,13 @@ fun DuaApp(viewModel: ChatViewModel = viewModel(), notificationRoute: Pair<Strin
         viewModel.loadProviderConfiguration(); viewModel.loadIntegrations()
         // Refresh a saved session so the greeting picks up the current Google account name.
         if (viewModel.account.state.value.user != null) viewModel.loadAccount()
+    }
+    // Write a debounced draft and queued history when the app leaves the foreground, before Android may kill the process.
+    val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
+    DisposableEffect(lifecycle, viewModel) {
+        val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_STOP) viewModel.flushHistory() }
+        lifecycle.addObserver(observer)
+        onDispose { lifecycle.removeObserver(observer) }
     }
     DuaTheme(preferences) {
         val voice = rememberReplyVoice(viewModel)

@@ -5,7 +5,7 @@ Supabase provides Google-backed accounts, device logout, reviewed chat/memory sn
 ## 1. Create and configure the project
 
 1. Reuse the existing Supabase project for this app. Create a project only when setting up a separate installation, retaining its database password securely.
-2. In Authentication → Providers, enable Google (see [Native Google sign-in](#native-google-sign-in)). The Android app no longer offers email/password sign-in, sign-up or password recovery, so the Email provider is not needed by the app. The backend still has the old `/api/account/signin`, `/signup`, `/reset-password`, `/verify-recovery` and `/password` routes; disable the Email provider if you do not use them.
+2. In Authentication → Providers, enable Google (see [Native Google sign-in](#native-google-sign-in)). Dua signs in with Google only: the app has no email/password UI and the backend no longer serves email/password routes (sign-in, sign-up, password reset or recovery). **Turn the Email provider off** so nobody can create an email account on the project directly.
 3. In Authentication → URL Configuration, review Site URL and the allowed redirect URLs. The removed web client used `https://YOUR-SITE/profile.html` (and the web Google OAuth flow used `/api/account/oauth/callback`); neither page exists any more, so remove those redirect entries. The Android app does not consume confirmation or redirect links (native Google sign-in needs none). Set Site URL to an HTTPS page you control (for example your backend origin); the confirmation itself succeeds regardless of where the browser lands afterwards.
 4. Run `supabase/migrations/202610040001_dua_cloud.sql` in the SQL editor. It creates the snapshot table, owner-only read policy and authenticated revision-checked write function. Do not disable RLS or grant direct snapshot writes to app users.
 
@@ -20,13 +20,13 @@ Run `supabase/migrations/202610080001_dua_files_storage.sql` once (SQL editor �
 
 The backend talks to Storage with **your own access token** plus the public anon key, so RLS decides every access. No service-role key is used for files. The app uploads straight to Storage with a signed upload URL (valid 2 hours), which avoids Vercel's 4.5 MB request body limit.
 
-Because only your account should use this personal app, turn off new sign-ups after creating your account (Authentication → Providers → Google, and Email if enabled → "Allow new users to sign up" off). The backend already refuses file routes for anyone except `DUA_ALLOWED_EMAIL`, but someone else who signed up could still upload to their own folder directly through Storage with the public key.
+Because only your account should use this personal app, turn off new sign-ups after creating your account (Authentication → Providers → Google, and Email if enabled → "Allow new users to sign up" off). The backend refuses Google sign-in, session refresh, cloud snapshots, account deletion, chat and file routes for anyone except `DUA_ALLOWED_EMAIL`, but someone else who signed up could still upload to their own folder directly through Storage with the public key.
 
 Stored-file variables (Vercel):
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `DUA_ALLOWED_EMAIL` | — (required) | Stored files are owner-only. Must be your sign-in email. |
+| `DUA_ALLOWED_EMAIL` | — (required) | Owner lock: only this Google account can sign in, refresh, use cloud snapshots, stored files and online AI, or delete the account. Must be your sign-in email. |
 | `DUA_FILES` | on | Set `0` to turn stored files off (the app falls back to small inline files). |
 | `DUA_FILES_BUCKET` | `dua-files` | Bucket name, if you renamed it in the migration. |
 | `DUA_FILES_MAX_MB` | `50` | Per-file limit the backend enforces. Keep it ≤ the bucket limit. |

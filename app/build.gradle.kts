@@ -38,11 +38,14 @@ gradle.taskGraph.whenReady({
         task.name == "assembleRelease" || task.name == "bundleRelease" || task.name.startsWith("packageRelease")
     }
     if (releaseArtifactRequested) {
-        require(releaseSigningConfigured) {
-            "Release APK/AAB tasks require signing credentials from environment variables or Gradle properties; unsigned release artifacts are not produced."
-        }
-        require(File(releaseStoreFile!!).isFile) {
-            "DUA_RELEASE_STORE_FILE must point to an existing keystore file."
+        if (releaseSigningConfigured) {
+            require(File(releaseStoreFile!!).isFile) {
+                "DUA_RELEASE_STORE_FILE must point to an existing keystore file."
+            }
+        } else {
+            // Personal install: sign with this machine's Android debug key, so the release APK updates an
+            // installed debug build in place and keeps the Google sign-in SHA-1 registered for it.
+            logger.warn("Dua: no release keystore configured; signing the release build with the Android debug key.")
         }
     }
 })
@@ -55,8 +58,8 @@ android {
         applicationId = "com.dua.ai"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.0.1"
         manifestPlaceholders["crashlyticsCollectionEnabled"] = "false"
         buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"" + googleWebClientId + "\"")
         buildConfigField("String", "DUA_API_BASE_URL", "\"" + duaApiBaseUrl + "\"")
@@ -65,16 +68,23 @@ android {
     buildTypes {
         release {
             manifestPlaceholders["crashlyticsCollectionEnabled"] = "true"
-            isMinifyEnabled = false
-            if (releaseSigningConfigured) {
-                signingConfig = signingConfigs.create("release").apply {
+            // R8 removes unused code (most of material-icons-extended) and unused resources.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            signingConfig = if (releaseSigningConfigured) {
+                signingConfigs.create("release").apply {
                     storeFile = File(releaseStoreFile!!)
                     storePassword = releaseStorePassword!!
                     keyAlias = releaseKeyAlias!!
                     keyPassword = releaseKeyPassword!!
                 }
+            } else {
+                // No personal release key: use the debug key (~/.android/debug.keystore), see the task graph check above.
+                signingConfigs.getByName("debug")
             }
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
+            // Names are kept (-dontobfuscate), so there is no mapping file to upload to Crashlytics.
+            configure<com.google.firebase.crashlytics.buildtools.gradle.CrashlyticsExtension> { mappingFileUploadEnabled = false }
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
     compileOptions {

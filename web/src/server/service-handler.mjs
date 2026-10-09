@@ -21,9 +21,10 @@ export async function handleService(request,{env=process.env,fetcher=fetch}={}) 
  if(request.headers.get('origin')&&request.headers.get('origin')!==url.origin)return Response.json({error:'Request origin is not allowed.'},{status:403,headers:{'Cache-Control':'no-store'}});
  if(path==='/api/setup')return handleSetup(request,{env});
  if(path==='/api/config')return handleChat(request,{env,fetcher});
- if(path==='/api/cloud'||/^\/api\/account\/(session|signin|signup|refresh|logout|features|reset-password|verify-recovery|password|google-token|delete)$/.test(path)) {
+ // Account and cloud routes: owner-locked by DUA_ALLOWED_EMAIL inside handleAccount (session, features and logout stay open).
+ if(path==='/api/cloud'||/^\/api\/account\/(session|refresh|logout|features|google-token|delete)$/.test(path)) {
   const handler=path==='/api/cloud'&&request.method==='GET'?handleCloudRead:handleAccount;
-  return handler(request,{url:env.SUPABASE_URL,key:env.SUPABASE_ANON_KEY,serviceRoleKey:env.SUPABASE_SERVICE_ROLE_KEY,filesBucket:env.DUA_FILES_BUCKET,fetcher});
+  return handler(request,{url:env.SUPABASE_URL,key:env.SUPABASE_ANON_KEY,serviceRoleKey:env.SUPABASE_SERVICE_ROLE_KEY,filesBucket:env.DUA_FILES_BUCKET,allowedEmail:env.DUA_ALLOWED_EMAIL,fetcher});
  }
  // Stored files: owner-only (Supabase sign-in + DUA_ALLOWED_EMAIL), checked inside handleFiles.
  if(path.startsWith('/api/files/'))return handleFiles(request,{env,fetcher});

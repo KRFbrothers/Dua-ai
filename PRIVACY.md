@@ -64,7 +64,7 @@ Dua is a personal, single-user app: the backend is meant to be restricted to the
 - No email or sign-up required for basic chat.
 
 #### Cloud Account (Opt-In)
-- Required for cloud snapshots, recovery, and multi-device sync.
+- Required for cloud snapshots and multi-device sync.
 - Authenticated via Supabase with native Google sign-in (the app has no email/password sign-in).
 - Account data is encrypted and subject to RLS.
 

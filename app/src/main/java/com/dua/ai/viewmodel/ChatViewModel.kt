@@ -135,7 +135,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             if (chatId == activeId) { _messages.value = _messages.value + messages; saveHistory() }
             else _savedChats.value.find { it.id == chatId }?.let { chat ->
                 _savedChats.value = _savedChats.value.map { if (it.id == chatId) it.copy(messages = it.messages + messages, updatedAt = System.currentTimeMillis()) else it }
-                preferences.edit().putString("history", ChatHistoryCodec.encode(_savedChats.value, activeId)).apply()
+                historyWriter.save(_savedChats.value, activeId)
             } ?: run { _messages.value = _messages.value + messages; saveHistory() }
         }
         try {
@@ -256,6 +256,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     fun cancelCloudReview() { _cloudPreview.value = null; account.notice("Cancelled. Data was not changed.") }
     fun reviewCloud(kind: String) = accountAction {
         val remote = account.cloud()
+        draftSaver.runNow()
         val snapshot = if (kind == "upload") com.dua.ai.account.CloudSnapshot(_savedChats.value.toList(), localSettings.value.memory.toList()) else remote.snapshot
         com.dua.ai.account.CloudSnapshotCodec.encode(snapshot)
         _cloudPreview.value = CloudPreview(kind, account.state.value.user?.id ?: error("Sign in again."), remote.copy(snapshot = snapshot))
@@ -270,6 +271,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             "upload" -> account.notice("Uploaded cloud revision ${account.upload(preview.review)}. Local data stays unchanged.")
             "delete" -> { account.upload(preview.review, clear = true); account.notice("Cloud snapshot cleared. Local data stays unchanged.") }
             "download" -> {
+                flushHistory()
                 val oldSettings = localSettings.value
                 val notes = (oldSettings.memory + preview.review.snapshot.memory).distinct()
                 require(notes.size <= 10) { "Merged memories exceed 10 notes. Remove some local notes and review again." }
@@ -278,8 +280,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 val previous = preferences.getString("history", null)
                 localPreferences.update(oldSettings.copy(memory = notes))
                 try {
-                    val committed = withContext(Dispatchers.IO) { preferences.edit().putString("history", encoded).commit() }
-                    if (!committed) { preferences.edit().putString("history", previous).apply(); error("Cloud chats could not be saved. Retry.") }
+                    val committed = withContext(Dispatchers.IO) { historyWriter.writeDirectly { preferences.edit().putString("history", encoded).commit().also { ok -> if (!ok) preferences.edit().putString("history", previous).apply() } } }
+                    if (!committed) error("Cloud chats could not be saved. Retry.")
                     _savedChats.value = result.chats
                 } catch (failure: Exception) {
                     try { localPreferences.update(oldSettings) } catch (_: Exception) { throw IllegalStateException("Import interrupted and memory rollback failed. Inspect local memories before retrying.", failure) }
@@ -576,6 +578,12 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     val isTyping: StateFlow<Boolean> = _isTyping.asStateFlow()
 
     private val preferences = application.getSharedPreferences("dua_chat_history", 0)
+    // Encodes and writes history off the main thread; see ChatHistoryWriter for ordering guarantees.
+    private val historyWriter = com.dua.ai.history.ChatHistoryWriter(viewModelScope, Dispatchers.Default) { encoded ->
+        preferences.edit().putString("history", encoded).apply()
+    }
+    // Debounced save of the draft being typed (see updateDraft).
+    private val draftSaver = com.dua.ai.history.Debouncer(viewModelScope, DRAFT_SAVE_DELAY_MS)
     private var activeId = UUID.randomUUID().toString()
     private val _savedChats = MutableStateFlow<List<SavedChat>>(emptyList())
     val savedChats: StateFlow<List<SavedChat>> = _savedChats.asStateFlow()
@@ -900,17 +908,18 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         _dataBusy.value = true; refreshSyncBusy()
         _dataStatus.value = "Saving imported chats…"
         cancelReply()
+        flushHistory()
         // Use the latest local records at confirmation, keeping the active draft/selection.
         val merged = ChatHistoryCodec.importCopies(_savedChats.value, imported)
         val encoded = ChatHistoryCodec.encode(merged, activeId)
         viewModelScope.launch {
             try {
-                val committed = withContext(Dispatchers.IO) {
+                val committed = withContext(Dispatchers.IO) { historyWriter.writeDirectly {
                     val previous = preferences.getString("history", null)
                     val success = preferences.edit().putString("history", encoded).commit()
                     if (!success) preferences.edit().putString("history", previous).apply()
                     success
-                }
+                } }
                 if (committed) {
                     _savedChats.value = merged
                     _importPreview.value = null
@@ -924,6 +933,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     fun exportChats(uri: Uri) {
         if (_dataBusy.value) return
+        draftSaver.runNow()
         val records = _savedChats.value.toList()
         _dataBusy.value = true; refreshSyncBusy()
         _dataStatus.value = "Creating export…"
@@ -947,10 +957,11 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         _dataBusy.value = true; refreshSyncBusy()
         _dataStatus.value = "Clearing local history…"
         cancelReply()
+        flushHistory()
         val nextId = UUID.randomUUID().toString()
         viewModelScope.launch {
             try {
-                val committed = withContext(Dispatchers.IO) {
+                val committed = withContext(Dispatchers.IO) { historyWriter.writeDirectly {
                     val previous = preferences.getString("history", null)
                     val backup = preferences.getString("unreadable_history_backup", null)
                     val success = preferences.edit().putString("history", ChatHistoryCodec.encode(emptyList(), nextId))
@@ -959,7 +970,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                         .putString("unreadable_history_backup", backup).apply()
                     if (success) runCatching { File(getApplication<Application>().cacheDir, "camera-captures").listFiles()?.forEach { it.delete() } }
                     success
-                }
+                } }
                 if (committed) {
                     deleteStoredPaths(pathsOf(_messages.value + _savedChats.value.flatMap { it.messages }))
                     pollJobs.values.forEach { it.cancel() }; pollJobs.clear()
@@ -1013,6 +1024,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             // remain authoritative; the controller keeps changed cloud chats as separate copies.
             override fun commit(snapshot: CloudSnapshot) {
                 check(!syncBlocked()) { "Sync paused during a reply or manual review." }
+                // Persist queued saves first (no list changes here; a pending draft save runs afterwards and keeps the live draft).
+                historyWriter.flush()
                 com.dua.ai.account.CloudSnapshotCodec.encode(snapshot)
                 val settings = localSettings.value
                 val previous = preferences.getString("history", null)
@@ -1022,10 +1035,11 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 val encoded = ChatHistoryCodec.encode(chats, activeId)
                 localPreferences.update(settings.copy(memory = snapshot.memory))
                 try {
-                    if (!preferences.edit().putString("history", encoded).commit()) {
-                        preferences.edit().putString("history", previous).commit()
-                        error("Synced chats could not be saved. Local data was kept.")
+                    // Kept synchronous: the sync controller expects the commit to finish before it records the revision.
+                    val saved = historyWriter.writeDirectly {
+                        preferences.edit().putString("history", encoded).commit().also { ok -> if (!ok) preferences.edit().putString("history", previous).apply() }
                     }
+                    if (!saved) error("Synced chats could not be saved. Local data was kept.")
                     _savedChats.value = chats
                 } catch (failure: Exception) {
                     try { localPreferences.update(settings) }
@@ -1066,7 +1080,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     init {
         preferences.getString("history", null)?.let { raw ->
             try {
-                val (id, records) = ChatHistoryCodec.decode(raw)
+                val (id, records) = com.dua.ai.history.ChatHistoryPreload.take(raw)
                 activeId = id
                 _savedChats.value = records
                 records.find { it.id == id }?.let {
@@ -1097,6 +1111,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     override fun onCleared() {
+        flushHistory()
         recorder.cancel()
         pollJobs.values.forEach { it.cancel() }
         automaticSync.close()
@@ -1105,18 +1120,30 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun saveHistory() {
+        draftSaver.cancel()
         val previous = _savedChats.value.find { it.id == activeId }
         val others = _savedChats.value.filterNot { it.id == activeId }
         _savedChats.value = if (_messages.value.isEmpty() && _draft.value.isBlank()) others else
             listOf(com.dua.ai.history.ChatSavePolicy.preserveUnchangedTime(previous,
                 SavedChat(activeId, _selectedModel.value, _draft.value, _messages.value, System.currentTimeMillis(),
                     com.dua.ai.model.ContextWindow.validSummary(_messages.value, _summary.value), _buildRepo.value))) + others
-        preferences.edit().putString("history", ChatHistoryCodec.encode(_savedChats.value, activeId)).apply()
+        historyWriter.save(_savedChats.value, activeId)
     }
 
-    fun updateDraft(value: String) { _draft.value = value; saveHistory() }
+    /** Typing updates the draft at once; saving it (list update + disk) is debounced so each keystroke stays cheap. */
+    fun updateDraft(value: String) {
+        _draft.value = value
+        draftSaver.schedule(::saveHistory)
+    }
+
+    /** Saves a pending draft and writes queued history now (app stopped, ViewModel cleared, before transactional writes). */
+    fun flushHistory() {
+        draftSaver.runNow()
+        historyWriter.flush()
+    }
 
     fun openChat(id: String) {
+        draftSaver.runNow() // Save the current chat's typed draft before switching away from it.
         val chat = _savedChats.value.find { it.id == id } ?: return
         cancelReply()
         clearAttachments()
@@ -1132,6 +1159,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun deleteChat(id: String) {
+        draftSaver.runNow()
         _savedChats.value.find { it.id == id }?.messages?.forEach { replyWebModes.remove(it.id); replyReasoning.remove(it.id); replyCode.remove(it.id); replyBuild.remove(it.id) }
         // Deleting a chat deletes its uploaded files (unless another chat copy still uses them).
         val chatMessages = if (id == activeId) _messages.value else _savedChats.value.find { it.id == id }?.messages.orEmpty()
@@ -1196,6 +1224,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun startNewChat() {
+        draftSaver.runNow()
         cancelReply()
         clearAttachments()
         activeId = UUID.randomUUID().toString()
@@ -1598,5 +1627,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         const val STREAM_FRAME_MS = 33L
         const val EMPTY_REPLY = "Model ne text reply nahi diya. Dobara try karein."
         const val MAX_UPLOADS = 10
+        /** Draft typing is saved this long after the last keystroke (and at once on stop or send). */
+        const val DRAFT_SAVE_DELAY_MS = 500L
     }
 }
