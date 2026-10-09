@@ -78,7 +78,7 @@ fun EmptyState(modifier: Modifier = Modifier, shimmerPreview: Float? = null) {
         // About 44% of the free height, between 96 dp and the full size; hidden below 220 dp (keyboard open, landscape).
         val logoHeight = (maxHeight * 0.44f).coerceIn(96.dp, Sizes.homeLogoHeight)
         val showLogo = maxHeight >= 220.dp
-        val logoGap = if (maxHeight > 480.dp) Spacing.xxl + Spacing.lg else Spacing.xl
+        val logoGap = if (maxHeight > 480.dp) Spacing.lg else Spacing.md
         val minHeight = maxHeight
         val taglineSize = if (maxWidth < 360.dp) 21.sp else 23.sp
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
