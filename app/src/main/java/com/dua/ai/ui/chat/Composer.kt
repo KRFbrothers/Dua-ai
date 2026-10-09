@@ -155,7 +155,7 @@ fun Composer(
                     .padding(start = Spacing.md + Spacing.xxs, end = Spacing.md, top = Spacing.md, bottom = Spacing.md).semantics { contentDescription = "Message" },
                 decorationBox = { inner ->
                     Box {
-                        if (state.draft.isEmpty()) Text(placeholder(state), style = inputStyle, color = scheme.onSurfaceVariant)
+                        if (state.draft.isEmpty()) Text(placeholder(state), style = inputStyle, color = scheme.onSurface.copy(alpha = .62f))
                         inner()
                     }
                 },
