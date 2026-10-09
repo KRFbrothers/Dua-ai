@@ -84,9 +84,11 @@ class DriveBackupApi(
         val metadata = JSONObject().put("name", "dua-backup-${System.currentTimeMillis()}-${UUID.randomUUID()}.json")
             .put("parents", org.json.JSONArray(listOf("appDataFolder")))
             .put("appProperties", JSONObject().put("duaBackup", "1"))
+        // OkHttp generates each part's Content-Type from its body and rejects that header in addPart.
+        val jsonType = "application/json; charset=UTF-8".toMediaType()
         val body = MultipartBody.Builder().setType("multipart/related".toMediaType())
-            .addPart(Headers.headersOf("Content-Type", "application/json; charset=UTF-8"), metadata.toString().toRequestBody())
-            .addPart(Headers.headersOf("Content-Type", "application/json; charset=UTF-8"), payload.toRequestBody()).build()
+            .addPart(metadata.toString().toRequestBody(jsonType))
+            .addPart(payload.toRequestBody(jsonType)).build()
         execute(request(token, "/upload/drive/v3/files?uploadType=multipart&fields=id").post(body).build())
     }
     fun downloadLatest(token: String): CloudSnapshot {
