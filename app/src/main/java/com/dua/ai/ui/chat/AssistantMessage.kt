@@ -121,7 +121,7 @@ fun MessageActions(
     LaunchedEffect(copied) { if (copied) { delay(2000); copied = false } }
     val tint = MaterialTheme.colorScheme.onSurface.copy(alpha = .86f)
     // Pull the row left so the first icon lines up with the text above it.
-    Row(Modifier.padding(top = Spacing.xs).offset(x = -Spacing.md), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.offset(x = -Spacing.md, y = -Spacing.sm), verticalAlignment = Alignment.CenterVertically) {
         IconButton(onClick = { clipboard.setText(AnnotatedString(copyText)); copied = true }) {
             Icon(if (copied) Icons.Outlined.Check else Icons.Outlined.ContentCopy, if (copied) "Response copied" else "Copy response",
                 tint = tint, modifier = Modifier.size(Sizes.iconSmall))
