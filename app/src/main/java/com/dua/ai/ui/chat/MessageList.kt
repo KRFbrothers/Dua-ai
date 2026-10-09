@@ -49,8 +49,8 @@ fun MessageList(state: ChatUiState, actions: ChatActions, listState: LazyListSta
     LazyColumn(
         state = listState,
         modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = Spacing.lg, vertical = Spacing.lg),
-        verticalArrangement = Arrangement.spacedBy(Spacing.xxl),
+        contentPadding = PaddingValues(horizontal = Spacing.lg, vertical = Spacing.md),
+        verticalArrangement = Arrangement.spacedBy(Spacing.md),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         items(state.messages, key = { it.id }, contentType = { if (it.isUser) "user" else "assistant" }) { message ->
@@ -76,7 +76,7 @@ fun MessageList(state: ChatUiState, actions: ChatActions, listState: LazyListSta
                     confirmPr = state.confirmPr == message.id,
                     onCreatePr = { title -> actions.onCreatePr(message.id, title) },
                 )
-                if (message.id == state.summarisedThroughId && message.id != lastId) SummaryDivider(Modifier.padding(top = Spacing.xxl))
+                if (message.id == state.summarisedThroughId && message.id != lastId) SummaryDivider(Modifier.padding(top = Spacing.md))
             }
         }
         // Streaming replies render their own progress; the dots cover non-streaming waits.
