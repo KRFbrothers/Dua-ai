@@ -14,7 +14,7 @@ The owner-only lock is the permanent access model: it keeps the server-side keys
 - [ ] Check `GET https://YOUR-PRODUCTION-DOMAIN/api/setup`. Confirm `account.requireLogin` and `account.ownerRestricted` are `true`; confirm `account.dailyRequestLimit` is the intended positive limit when using the durable quota. This endpoint reports configuration, not proof that the quota's database RPC works.
 - [ ] In a separate staging deployment, verify an anonymous request is denied, the owner can use online AI, a different (disposable) signed-in account is denied, and the daily quota returns `429` after the configured number of attempts. Failed upstream attempts consume quota. Avoid quota-exhaustion or provider-billing tests against production.
 - [ ] In each enabled AI, search, and generated-audio provider dashboard, set usage/spending alerts or hard limits where available. The app's daily quota counts requests, not tokens or currency; one chat can trigger both search and a model call. Vercel's IP burst guard is per instance and is not a spending limit.
-- [ ] Review Supabase Auth signup/SMTP limits and recovery settings. Confirm that server-only credentials are configured only in the production environment and that preview credentials are separate.
+- [ ] Confirm only the Google provider is enabled in Supabase Auth (Email provider off; new sign-ups off after the owner account exists) and that `DUA_ALLOWED_EMAIL` is set. Confirm that server-only credentials are configured only in the production environment and that preview credentials are separate.
 - [ ] Review the tracked Firebase client configuration and restrict its API key in Google Cloud to the required APIs and Android application where supported. A client Firebase key is not a server secret, but it should not be left unrestricted.
 
 **Production status:** Not verified from this repository session. The status endpoint could not be reached from the audit environment; check these values directly in Vercel and validate behavior in staging before marking the roadmap configured/verified.
@@ -65,7 +65,10 @@ The app is installed directly on the owner's device(s); there is no store upload
 - [ ] Install with `adb install -r app/build/outputs/apk/debug/app-debug.apk`, or copy the APK to the phone and allow installing from that source.
 - [ ] Confirm the app reaches the intended backend (default `https://dua-cyan.vercel.app`; override with `duaApiBaseUrl` / `DUA_API_BASE_URL` at build time) and that signing in with the owner account works.
 
-**Release APK with a personal key (optional).** Release builds read signing values from Gradle properties or environment variables; credentials are intentionally not checked in. `assembleRelease` fails unless a complete signing configuration and existing keystore are supplied. Crashlytics collection is enabled in release builds.
+**Release APK (smaller, recommended).** `bash ./gradlew :app:assembleRelease --no-daemon` builds a shrunk APK (R8 code shrinking and optimization plus resource shrinking; class names are kept with `-dontobfuscate`, so Crashlytics traces stay readable and no mapping file is uploaded). Output: `app/build/outputs/apk/release/app-release.apk`. Crashlytics collection is enabled in release builds.
+
+- With **no release keystore configured**, the release build is signed with the build machine's Android debug key (`~/.android/debug.keystore`, Gradle prints a warning). It therefore installs over an existing debug build from the same machine without uninstalling, and Google sign-in keeps working because the signing SHA-1 is unchanged.
+- With a personal key, set all four values below; a partial set fails the build.
 
 - `DUA_RELEASE_STORE_FILE` — path to the keystore file.
 - `DUA_RELEASE_STORE_PASSWORD`
@@ -75,9 +78,9 @@ The app is installed directly on the owner's device(s); there is no store upload
 The matching Gradle properties are `duaReleaseStoreFile`, `duaReleaseStorePassword`, `duaReleaseKeyAlias`, and `duaReleaseKeyPassword`. Prefer environment variables. Do not commit the keystore or place passwords in tracked `gradle.properties`.
 
 - [ ] Create a personal keystore and back it up privately.
-- [ ] Run `bash ./gradlew :app:assembleRelease --no-daemon` with the signing values present, then install the APK as above.
+- [ ] Run `bash ./gradlew :app:assembleRelease --no-daemon`, then install the APK as above (`apksigner verify --print-certs` shows the signing SHA-1).
 - [ ] Check the version code/name, permissions, backend URL and Crashlytics behavior.
 
-**Updates.** Android only installs an update signed with the same key as the installed app. Switching between debug and release builds, or building on a machine with a different debug key, requires uninstalling first, which deletes local chats. Export chats (or sync to the cloud) before uninstalling.
+**Updates.** Android only installs an update signed with the same key as the installed app. Switching to a different key (a personal release key, or another machine's debug key) requires uninstalling first, which deletes local chats. Export chats (or sync to the cloud) before uninstalling.
 
 No signing keys, Android release workflow or signed artifacts are supplied by this repository.
