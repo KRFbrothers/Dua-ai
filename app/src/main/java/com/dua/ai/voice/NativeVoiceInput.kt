@@ -16,13 +16,18 @@ data class VoiceInputState(
     val transcript: String = "",
     val partial: String = "",
     val status: String = "Tap mic to speak. Review before sending.",
-    val permissionDenied: Boolean = false
+    val permissionDenied: Boolean = false,
+    /** SpeechRecognizer error code of the last session (null after a result or a manual stop). */
+    val error: Int? = null,
 )
 
 /** Owns one foreground, user-started speech recognition session; never sends an AI request. */
 class NativeVoiceInput(private val context: Context) {
     private val mutableState = MutableStateFlow(VoiceInputState())
     val state = mutableState.asStateFlow()
+    private val mutableLevel = MutableStateFlow(0f)
+    /** Microphone input level while listening, 0..1 (from onRmsChanged; drives the voice-mode glow). */
+    val level = mutableLevel.asStateFlow()
     private var recognizer: SpeechRecognizer? = null
     private val handler = Handler(Looper.getMainLooper())
     private var generation = 0
@@ -50,16 +55,16 @@ class NativeVoiceInput(private val context: Context) {
             val speech = SpeechRecognizer.createSpeechRecognizer(context)
             recognizer = speech
             fun update(value: VoiceInputState) { if (token == generation) mutableState.value = value }
-            fun finish(status: String, transcript: String = "", denied: Boolean = false) {
+            fun finish(status: String, transcript: String = "", denied: Boolean = false, error: Int? = null) {
                 if (token != generation) return
                 generation++
                 release()
-                mutableState.value = VoiceInputState(transcript = transcript, status = status, permissionDenied = denied)
+                mutableState.value = VoiceInputState(transcript = transcript, status = status, permissionDenied = denied, error = error)
             }
             speech.setRecognitionListener(object : RecognitionListener {
                 override fun onReadyForSpeech(params: Bundle?) { update(mutableState.value.copy(status = "Listening… Tap mic to stop.")) }
                 override fun onBeginningOfSpeech() {}
-                override fun onRmsChanged(rmsdB: Float) {}
+                override fun onRmsChanged(rmsdB: Float) { if (token == generation) mutableLevel.value = ((rmsdB + 2f) / 12f).coerceIn(0f, 1f) }
                 override fun onBufferReceived(buffer: ByteArray?) {}
                 override fun onEndOfSpeech() { update(mutableState.value.copy(status = "Processing speech…")) }
                 override fun onError(error: Int) {
@@ -70,7 +75,7 @@ class NativeVoiceInput(private val context: Context) {
                         SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "Speech service is busy. Tap mic to retry."
                         else -> "Voice input unavailable. Tap mic to retry or type in Chat."
                     }
-                    finish(status, denied = error == SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS)
+                    finish(status, denied = error == SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS, error = error)
                 }
                 override fun onResults(results: Bundle?) {
                     val words = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull().orEmpty()
@@ -82,7 +87,7 @@ class NativeVoiceInput(private val context: Context) {
                 }
                 override fun onEvent(eventType: Int, params: Bundle?) {}
             })
-            timeout = Runnable { if (token == generation) finish("Voice input timed out. Tap mic to retry.") }.also { handler.postDelayed(it, 30000) }
+            timeout = Runnable { if (token == generation) finish("Voice input timed out. Tap mic to retry.", error = SpeechRecognizer.ERROR_SPEECH_TIMEOUT) }.also { handler.postDelayed(it, 30000) }
             speech.startListening(Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE, SpeechLanguages.locale(language).toLanguageTag())
@@ -102,6 +107,7 @@ class NativeVoiceInput(private val context: Context) {
     fun close() { closed = true; stop() }
 
     private fun release() {
+        mutableLevel.value = 0f
         timeout?.let(handler::removeCallbacks)
         timeout = null
         val previous = recognizer

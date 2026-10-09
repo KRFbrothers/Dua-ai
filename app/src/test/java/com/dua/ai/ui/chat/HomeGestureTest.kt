@@ -27,7 +27,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
-/** Mic tap / long-press, swipe-up to the + sheet, and the light haptics on mode toggles. */
+/** Mic tap (dictation), the voice-mode/send button, swipe-up to the + sheet, and the light haptics on mode toggles. */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], qualifiers = "w411dp-h914dp-xxhdpi")
 class HomeGestureTest {
@@ -42,7 +42,8 @@ class HomeGestureTest {
     private val events = mutableListOf<String>()
     private val actions = ChatActions(
         onOpenVoice = { events += "dictate" },
-        onOpenHandsFree = { events += "hands-free" },
+        onOpenVoiceMode = { events += "voice-mode" },
+        onSend = { events += "send" },
         onReasoning = { events += "reasoning:$it" },
         onWebMode = { events += "web:$it" },
         haptic = { events += "haptic:$it" },
@@ -55,14 +56,34 @@ class HomeGestureTest {
 
     @Test fun micTapDictates() {
         show()
-        compose.onNodeWithContentDescription("Voice input", substring = true).performClick()
+        compose.onNodeWithContentDescription("Dictate").performClick()
         assertEquals(listOf("dictate"), events)
     }
 
-    @Test fun micLongPressStartsHandsFreeWithHaptic() {
+    @Test fun micLongPressDoesNothingExtra() {
         show()
-        compose.onNodeWithContentDescription("Long-press: hands-free voice", substring = true).performTouchInput { longClick() }
-        assertEquals(listOf("haptic:LongPress", "hands-free"), events)
+        compose.onNodeWithContentDescription("Dictate").performTouchInput { longClick() }
+        assertTrue("voice-mode" !in events)
+    }
+
+    @Test fun emptyFieldShowsVoiceModeButtonWithHaptic() {
+        show()
+        compose.onNodeWithContentDescription("Send message").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Voice mode").performClick()
+        assertEquals(listOf("haptic:Tap", "voice-mode"), events)
+    }
+
+    @Test fun typingTurnsVoiceButtonIntoSend() {
+        show(home.copy(draft = "Hello"))
+        compose.onNodeWithContentDescription("Voice mode").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Send message").performClick()
+        assertEquals(listOf("send"), events)
+    }
+
+    @Test fun replyInProgressShowsStop() {
+        show(conversation.copy(typing = true))
+        compose.onNodeWithContentDescription("Voice mode").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Stop response").assertExists()
     }
 
     @Test fun swipeUpOnInputCardOpensPlusSheet() {

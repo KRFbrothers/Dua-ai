@@ -150,7 +150,7 @@ fun ChatScreen(
                         onAttach = { sheet = ChatSheet.Attach },
                         onClearAttachments = actions.onClearAttachments,
                         onMic = actions.onOpenVoice,
-                        onMicLongPress = { actions.haptic(ChatHaptic.LongPress); actions.onOpenHandsFree() },
+                        onVoiceMode = { actions.haptic(ChatHaptic.Tap); actions.onOpenVoiceMode() },
                         onTextFieldFocus = { inputFocused = it },
                         onTextFieldBounds = { inputBounds = it },
                         onSend = actions.onSend,

@@ -119,8 +119,8 @@ class ChatActions(
     val onOpenVoice: () -> Unit = {},
     /** Top-bar "Computer" pill: opens the Computer (coming soon) screen. */
     val onOpenComputer: () -> Unit = {},
-    /** Long-press on the mic: the device-speech hands-free voice mode. */
-    val onOpenHandsFree: () -> Unit = {},
+    /** The composer's voice-mode button: live voice when available, else the device-speech voice mode. */
+    val onOpenVoiceMode: () -> Unit = {},
     /** Light haptic (only when Haptic feedback is on in Settings; the system setting applies too). */
     val haptic: (ChatHaptic) -> Unit = {},
     val onOpenSetup: () -> Unit = {},

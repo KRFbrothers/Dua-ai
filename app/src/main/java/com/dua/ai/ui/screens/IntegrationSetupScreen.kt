@@ -81,7 +81,7 @@ fun IntegrationSetupScreen(viewModel: ChatViewModel, onBack: () -> Unit, onProfi
                             }
                             if (!state.generatedVoiceConfigured) Text("AI voice backend setup is required. Device voice stays available.", style = MaterialTheme.typography.bodyMedium)
                             else if (account.user == null) TextButton(onClick = onProfile) { Text("Sign in for AI voice") }
-                            Text("AI voice supports replies up to 2000 characters. Audio stays in memory and is released on Stop, navigation, backgrounding or sign-in changes. Hands-free keeps using device speech.", style = MaterialTheme.typography.bodyMedium)
+                            Text("AI voice supports replies up to 2000 characters. Audio stays in memory and is released on Stop, navigation, backgrounding or sign-in changes. Voice mode uses it when enabled, else device speech.", style = MaterialTheme.typography.bodyMedium)
                         }
                         "account" -> TextButton(onClick = onProfile) { Text("Profile and account controls") }
                     }

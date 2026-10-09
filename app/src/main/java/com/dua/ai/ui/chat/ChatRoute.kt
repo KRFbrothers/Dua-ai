@@ -27,7 +27,7 @@ import java.time.LocalTime
 @Composable
 fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () -> Unit, onOpenVoice: () -> Unit, onOpenSetup: () -> Unit,
     onOpenComputer: () -> Unit = {},
-    onOpenHandsFree: () -> Unit = {},
+    onOpenVoiceMode: () -> Unit = {},
     attachRequest: Int = 0, onAttachRequestHandled: () -> Unit = {}) {
     val preferences by viewModel.localSettings.collectAsState()
     val draft by viewModel.draft.collectAsState()
@@ -192,7 +192,7 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
             onOpenSettings = onOpenSettings,
             onOpenVoice = onOpenVoice,
             onOpenComputer = onOpenComputer,
-            onOpenHandsFree = onOpenHandsFree,
+            onOpenVoiceMode = onOpenVoiceMode,
             haptic = { kind -> if (viewModel.localSettings.value.haptic) view.performChatHaptic(kind) },
             onOpenSetup = onOpenSetup,
             onImagine = viewModel::setImagine,

@@ -173,7 +173,7 @@ fun VoiceSettingsContent(state: VoiceSettingsUiState, onBack: () -> Unit, onPick
                 onPicker(VoicePickerKind.REPLY_LANGUAGE)
             }
             SettingsDivider()
-            SettingsRow(Icons.Outlined.Mic, "Speech recognition", SpeechLanguages.name(state.preferences.inputLanguage) + " · voice input and hands-free") {
+            SettingsRow(Icons.Outlined.Mic, "Speech recognition", SpeechLanguages.name(state.preferences.inputLanguage) + " · dictation and voice mode") {
                 onPicker(VoicePickerKind.INPUT_LANGUAGE)
             }
         }
@@ -291,7 +291,7 @@ fun VoicePickerScreen(viewModel: ChatViewModel, voice: ReplyVoice, kind: String,
                 previewing = null, onBack = onBack, onSelect = { id -> update { it.copy(liveVoice = id) } }, onPreview = null)
         }
         else -> VoicePickerContent(title = "Speech recognition",
-            intro = "Language your phone listens for in voice input and hands-free mode. Your phone's speech service must support it.",
+            intro = "Language your phone listens for in dictation and voice mode. Your phone's speech service must support it.",
             items = SpeechLanguages.INPUT.map { PickerItem(it.id, it.name) }, selected = state.preferences.inputLanguage, previewing = null, onBack = onBack,
             onSelect = { id -> update { it.copy(inputLanguage = id) } }, onPreview = null)
     }

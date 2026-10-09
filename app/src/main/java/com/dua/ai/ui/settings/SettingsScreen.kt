@@ -114,7 +114,7 @@ fun SettingsContent(state: SettingsUiState, onBack: () -> Unit, onOpen: (DuaDest
             SettingsRow(Icons.Outlined.Mic, "Voice input", "Dictate, review, then send") { onOpen(DuaDestination.Voice) }
             SettingsDivider()
             if (state.liveVoice) SettingsRow(Icons.Outlined.GraphicEq, "Live conversation", "Talk with Grok in real time · interrupt any time") { onOpen(DuaDestination.LiveVoice) }
-            else SettingsRow(Icons.Outlined.GraphicEq, "Hands-free conversation", "Speak, then hear the reply read aloud") { onOpen(DuaDestination.HandsFree) }
+            else SettingsRow(Icons.Outlined.GraphicEq, "Voice mode", "Talk with Dua and hear the reply out loud") { onOpen(DuaDestination.HandsFree) }
             SettingsDivider()
             if (state.voice != null) SettingsRow(Icons.AutoMirrored.Outlined.VolumeUp, "Reply voice & language", state.voice) { onOpen(DuaDestination.VoiceSettings) }
             else SettingsSwitchRow(Icons.AutoMirrored.Outlined.VolumeUp, "AI reply voice",

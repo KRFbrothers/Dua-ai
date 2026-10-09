@@ -125,9 +125,15 @@ class HomeScreenshotTest(private val dark: Boolean) {
     /** +, mic and send keep their 36-38 dp look but take taps across a full 48 dp. */
     @Test fun composerTouchTargets() {
         compose.setContent { DuaTheme(LocalPreferences(theme = mode)) { ChatScreen(home.copy(draft = "Hi"), ChatActions()) } }
-        listOf("Add photos and files", "Voice input", "Send message").forEach {
+        listOf("Add photos and files", "Dictate", "Send message").forEach {
             compose.onNodeWithContentDescription(it, substring = true).assertWidthIsAtLeast(48.dp).assertHeightIsAtLeast(48.dp)
         }
+    }
+
+    /** The voice-mode button (empty field) keeps the same 48 dp target. */
+    @Test fun voiceModeButtonTouchTarget() {
+        compose.setContent { DuaTheme(LocalPreferences(theme = mode)) { ChatScreen(home, ChatActions()) } }
+        compose.onNodeWithContentDescription("Voice mode").assertWidthIsAtLeast(48.dp).assertHeightIsAtLeast(48.dp)
     }
 
     @Test fun homeWithDraft() = shot("home_draft") { ChatScreen(home.copy(draft = "Plan a 3-day study schedule for physics", reasoning = true), ChatActions()) }

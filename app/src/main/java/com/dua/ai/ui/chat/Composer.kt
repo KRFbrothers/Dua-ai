@@ -52,6 +52,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.GraphicEq
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Brush
 import androidx.compose.material.icons.outlined.Build
@@ -119,7 +120,8 @@ fun Composer(
     onStop: () -> Unit,
     modifier: Modifier = Modifier,
     onModel: () -> Unit = {},
-    onMicLongPress: (() -> Unit)? = null,
+    /** Opens full-screen voice mode; the round waveform button shows while the field is empty. */
+    onVoiceMode: () -> Unit = {},
     /** Text field focus and its bounds in the root, so the swipe-up gesture can leave the text field alone while typing. */
     onTextFieldFocus: (Boolean) -> Unit = {},
     onTextFieldBounds: (Rect) -> Unit = {},
@@ -165,9 +167,10 @@ fun Composer(
                 RoundComposerButton(Icons.Outlined.Add, "Add photos and files", enabled = idle, onClick = onAttach)
                 ModelPill(model = state.model, enabled = idle, onClick = onModel)
                 Spacer(Modifier.weight(1f))
-                RoundComposerButton(Icons.Outlined.Mic, if (onMicLongPress != null) "Voice input. Tap: dictate. Long-press: hands-free voice" else "Voice input. Tap: dictate",
-                    enabled = true, onClick = onMic, onLongClick = onMicLongPress, onLongClickLabel = "Hands-free voice")
-                SendButton(typing = state.typing, canSend = state.canSend, onSend = onSend, onStop = onStop)
+                RoundComposerButton(Icons.Outlined.Mic, "Dictate", enabled = true, onClick = onMic)
+                // Empty field: voice mode. Once there is something to send (or a reply to stop) it becomes Send/Stop.
+                if (state.typing || state.canSend || state.draft.isNotBlank()) SendButton(typing = state.typing, canSend = state.canSend, onSend = onSend, onStop = onStop)
+                else VoiceModeButton(onVoiceMode)
             }
         }
     }
@@ -432,6 +435,13 @@ private fun ModelPill(model: String, enabled: Boolean, onClick: () -> Unit) {
 }
 
 /** Round send button: dimmed while there is nothing to send; a stop button while a reply streams. 48 dp touch target. */
+@Composable
+private fun VoiceModeButton(onClick: () -> Unit) {
+    val colors = DuaTheme.colors
+    RoundComposerButton(Icons.Outlined.GraphicEq, "Voice mode", enabled = true, onClick = onClick, visualSize = Sizes.sendButton,
+        container = colors.action, contentColor = colors.onAction, iconSize = Sizes.iconSmall + 2.dp)
+}
+
 @Composable
 private fun SendButton(typing: Boolean, canSend: Boolean, onSend: () -> Unit, onStop: () -> Unit) {
     val colors = DuaTheme.colors
