@@ -113,7 +113,9 @@ fun DuaNavHost(viewModel: ChatViewModel, voice: ReplyVoice, notificationRoute: P
             val draft by viewModel.draft.collectAsState()
             val settings by viewModel.localSettings.collectAsState()
             val integrations by viewModel.integrations.collectAsState()
-            val live = integrations.voice?.live?.enabled == true
+            val account by viewModel.account.state.collectAsState()
+            // Same condition as viewModel.liveVoiceAvailable(), so the label matches where the button goes.
+            val live = integrations.voice?.live?.enabled == true && account.user != null
             VoiceScreen(draft = draft, onBack = navigator::back, onHandsFree = { navigator.open(if (viewModel.liveVoiceAvailable()) DuaDestination.LiveVoice else DuaDestination.HandsFree) },
                 onUse = { text -> viewModel.updateDraft(text); navigator.toChat() }, inputLanguage = settings.inputLanguage, liveAvailable = live)
         }

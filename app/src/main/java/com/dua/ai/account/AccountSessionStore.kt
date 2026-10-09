@@ -12,7 +12,7 @@ import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
-/** Tokens stay encrypted on this installation. Passwords are never persisted. */
+/** Session tokens stay encrypted on this installation and are excluded from backup. */
 class AccountSessionStore(context: Context) : SessionPersistence {
     private val storage = context.getSharedPreferences("dua_account_session", Context.MODE_PRIVATE)
     private fun key(): SecretKey {

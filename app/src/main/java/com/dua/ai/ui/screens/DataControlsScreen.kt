@@ -75,14 +75,15 @@ fun DataControlsScreen(viewModel: ChatViewModel, onBack: () -> Unit) {
         if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
         if (status.isNotBlank()) Text(status, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
     }
-    if (importPreview != null) AlertDialog(onDismissRequest = { viewModel.cancelImport() }, title = { Text("Import chats?") },
+    // Capture the preview once: the dialog content recomposes separately and must not re-read a cleared state.
+    importPreview?.let { preview -> AlertDialog(onDismissRequest = { viewModel.cancelImport() }, title = { Text("Import chats?") },
         text = { Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("Add ${importPreview!!.size} chats as separate copies? Existing chats and drafts will be kept. Importing the same file again creates additional copies.")
+            Text("Add ${preview.size} chats as separate copies? Existing chats and drafts will be kept. Importing the same file again creates additional copies.")
             if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
             Text(status, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
         } },
         confirmButton = { TextButton(enabled = !busy, onClick = { viewModel.confirmImport() }) { Text("Import") } },
-        dismissButton = { TextButton(enabled = !busy, onClick = { viewModel.cancelImport() }) { Text("Cancel") } })
+        dismissButton = { TextButton(enabled = !busy, onClick = { viewModel.cancelImport() }) { Text("Cancel") } }) }
     if (confirmFiles) AlertDialog(onDismissRequest = { confirmFiles = false }, title = { Text("Delete all uploaded files?") },
         text = { Text("Every file you uploaded to your private Dua storage (photos, PDFs, spreadsheets and audio) will be permanently deleted. Chats stay, but their files can no longer be opened or re-read in follow-ups.") },
         confirmButton = { TextButton(onClick = { confirmFiles = false; viewModel.deleteAllUploadedFiles() }) { Text("Delete files") } },
