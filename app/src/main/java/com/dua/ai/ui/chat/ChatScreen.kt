@@ -56,6 +56,8 @@ fun ChatScreen(
     val drawerState = rememberDrawerState(initialDrawerValue)
     val scope = rememberCoroutineScope()
     var sheet by rememberSaveable { mutableStateOf(initialSheet) }
+    /** Empty Home (new chat): logo and tagline, full mode chip row. */
+    val home = state.messages.isEmpty() && !state.typing
     var deletingId by rememberSaveable { mutableStateOf<String?>(null) }
     var viewer by remember { mutableStateOf(initialViewer) }
     val mediaActions = remember(actions) { ImagineActions(onOpen = { id, index -> viewer = id to index }, onSave = actions.imagine.onSave, onShare = actions.imagine.onShare,
@@ -101,11 +103,8 @@ fun ChatScreen(
                 onNewChat = actions.onNewChat,
             )
             Box(Modifier.weight(1f).fillMaxWidth()) {
-                if (state.messages.isEmpty() && !state.typing) {
-                    EmptyState(greeting = state.greeting, suggestions = state.suggestions, onSuggestion = { prompt ->
-                        actions.onDraftChange(prompt)
-                        runCatching { inputFocus.requestFocus() }
-                    })
+                if (home) {
+                    EmptyState()
                 } else {
                     MessageList(state = state, actions = actions, listState = listState, imagineActions = mediaActions)
                 }
@@ -113,24 +112,28 @@ fun ChatScreen(
             Column(Modifier.fillMaxWidth().imePadding().navigationBarsPadding(), horizontalAlignment = Alignment.CenterHorizontally) {
                 Column(Modifier.widthIn(max = Sizes.contentMaxWidth).fillMaxWidth()) {
                     ChatNotices(state = state, actions = actions)
+                    ModeChipRow(
+                        state = state,
+                        onWebMode = actions.onWebMode,
+                        onReasoning = actions.onReasoning,
+                        onXSearch = actions.onXSearch,
+                        onImagine = actions.onImagine,
+                        onRunCode = actions.onRunCode,
+                        onBuild = { sheet = ChatSheet.Build; actions.onOpenBuild() },
+                        home = home,
+                    )
                     Composer(
                         state = state,
                         focusRequester = inputFocus,
                         onDraftChange = actions.onDraftChange,
-                        onWebMode = actions.onWebMode,
                         onAttach = { sheet = ChatSheet.Attach },
                         onClearAttachments = actions.onClearAttachments,
                         onMic = actions.onOpenVoice,
                         onSend = actions.onSend,
                         onStop = actions.onStop,
-                        onReasoning = actions.onReasoning,
                         onAuto = actions.onAuto,
-                        onXSearch = actions.onXSearch,
                         onCancelUpload = actions.onCancelUpload,
-                        onImagine = actions.onImagine,
                         onImagineOptions = { sheet = ChatSheet.Imagine },
-                        onRunCode = actions.onRunCode,
-                        onBuild = { sheet = ChatSheet.Build; actions.onOpenBuild() },
                     )
                 }
             }
@@ -153,6 +156,14 @@ fun ChatScreen(
             onDismiss = { sheet = null },
             onAudio = { sheet = ChatSheet.Audio },
             storedFiles = state.storedFiles, storedFilesHint = state.storedFilesHint, storedFilesMaxBytes = state.storedFilesMaxBytes,
+            modes = AttachModes(
+                imagine = state.imagineConfig?.let { config -> if (config.enabled) "Create images from your message" else config.imageReason.ifBlank { "Turned off on the server" } },
+                imagineOn = state.imagine,
+                build = state.buildHint.ifEmpty { if (state.buildRepo != null) "On: ${state.buildRepo}" else "Chat about one of your GitHub repositories, read-only" },
+                toggles = if (home) emptyList() else modeToggles(state, actions),
+            ),
+            onImagine = { on -> sheet = null; actions.onImagine(on) },
+            onBuild = { sheet = ChatSheet.Build; actions.onOpenBuild() },
         )
         ChatSheet.Audio -> AudioSheet(
             recordingSince = state.recordingSince, available = state.storedFiles, hint = state.storedFilesHint,
