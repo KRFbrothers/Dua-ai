@@ -11,6 +11,8 @@ import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertWidthIsAtLeast
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeUp
 import androidx.compose.ui.unit.dp
 import com.dua.ai.model.ChatMessage
 import com.dua.ai.setup.ProviderCapability
@@ -96,6 +98,26 @@ class HomeScreenshotTest(private val dark: Boolean) {
 
     @Test fun computer() = shot("computer") { ComputerScreen(onBack = {}) }
 
+    /** The logo's light sweep part-way through (9 s idle + 0.55 s into the 1.2 s sweep), on the real clock. */
+    @Test fun homeShimmer() {
+        compose.mainClock.autoAdvance = false
+        compose.setContent {
+            DuaTheme(LocalPreferences(theme = mode)) {
+                Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) { ChatScreen(home, ChatActions()) }
+            }
+        }
+        compose.mainClock.advanceTimeBy(9_000L + 550L)
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/home/home_shimmer_$mode.png")
+    }
+
+    /** Swipe up on the input card opens the + sheet. */
+    @Test fun plusSheetBySwipe() {
+        compose.setContent { DuaTheme(LocalPreferences(theme = mode)) { ChatScreen(home, ChatActions()) } }
+        compose.onNodeWithContentDescription("Message").performTouchInput { swipeUp(startY = centerY, endY = centerY - 300f) }
+        compose.waitForIdle()
+        captureScreenRoboImage("build/outputs/roborazzi/home/plus_sheet_swipe_$mode.png")
+    }
+
     @Test fun conversationOneMode() = shot("conversation_search") { ChatScreen(conversation, ChatActions()) }
 
     @Test fun plusSheet() = screen("plus_sheet") { ChatScreen(conversation, ChatActions(), initialSheet = ChatSheet.Attach) }
@@ -104,7 +126,7 @@ class HomeScreenshotTest(private val dark: Boolean) {
     @Test fun composerTouchTargets() {
         compose.setContent { DuaTheme(LocalPreferences(theme = mode)) { ChatScreen(home.copy(draft = "Hi"), ChatActions()) } }
         listOf("Add photos and files", "Voice input", "Send message").forEach {
-            compose.onNodeWithContentDescription(it).assertWidthIsAtLeast(48.dp).assertHeightIsAtLeast(48.dp)
+            compose.onNodeWithContentDescription(it, substring = true).assertWidthIsAtLeast(48.dp).assertHeightIsAtLeast(48.dp)
         }
     }
 

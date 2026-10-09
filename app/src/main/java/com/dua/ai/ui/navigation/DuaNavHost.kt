@@ -44,12 +44,12 @@ class DuaNavigator(private val nav: NavHostController, private val viewModel: Ch
     private fun pulse() { if (viewModel.localSettings.value.haptic) haptics.performHapticFeedback(HapticFeedbackType.LongPress) }
     private fun blocked() = viewModel.dataBusy.value
 
-    fun open(destination: DuaDestination) {
+    fun open(destination: DuaDestination, haptic: Boolean = true) {
         if (blocked()) return
-        pulse()
+        if (haptic) pulse()
         nav.navigate(destination.route) { launchSingleTop = true }
     }
-    fun openPage(name: String) { DuaDestination.fromPage(name)?.let(::open) }
+    fun openPage(name: String) { DuaDestination.fromPage(name)?.let { open(it) } }
     fun back() {
         if (blocked()) return
         if (!nav.popBackStack()) toChat()
@@ -107,6 +107,8 @@ fun DuaNavHost(viewModel: ChatViewModel, voice: ReplyVoice, notificationRoute: P
                 onOpenVoice = { navigator.open(DuaDestination.Voice) },
                 onOpenSetup = { navigator.open(DuaDestination.FeatureSetup) },
                 onOpenComputer = { navigator.open(DuaDestination.Computer) },
+                // The mic long-press already gave its own haptic.
+                onOpenHandsFree = { navigator.open(DuaDestination.HandsFree, haptic = false) },
                 attachRequest = attachRequest,
                 onAttachRequestHandled = { attachRequest = 0 })
         }

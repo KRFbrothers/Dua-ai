@@ -1,5 +1,11 @@
 package com.dua.ai.ui.chat
 
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
@@ -64,6 +70,17 @@ fun ChatScreen(
         onEdit = actions.imagine.onEdit, onAnimate = actions.imagine.onAnimate, onCancelVideo = actions.imagine.onCancelVideo, onReuse = actions.imagine.onReuse) }
     val listState = rememberLazyListState()
     val inputFocus = remember { FocusRequester() }
+    // Mode toggles (chips and + sheet switches) give a light haptic.
+    val tap = { actions.haptic(ChatHaptic.Tap) }
+    val onWebMode: (String?) -> Unit = { tap(); actions.onWebMode(it) }
+    val onReasoning: (Boolean) -> Unit = { tap(); actions.onReasoning(it) }
+    val onXSearch: (Boolean) -> Unit = { tap(); actions.onXSearch(it) }
+    val onImagine: (Boolean) -> Unit = { tap(); actions.onImagine(it) }
+    val onRunCode: (Boolean) -> Unit = { tap(); actions.onRunCode(it) }
+    // Swipe up on the input card or the chips above it opens the + sheet, except from inside the text field while typing.
+    var inputFocused by remember { mutableStateOf(false) }
+    var inputBounds by remember { mutableStateOf(Rect.Zero) }
+    var bottomCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
     LaunchedEffect(attachRequest) { if (attachRequest > 0) { sheet = ChatSheet.Attach; onAttachRequestHandled() } }
     BackHandler(enabled = drawerState.isOpen) { scope.launch { drawerState.close() } }
     LaunchedEffect(state.messages.size, state.typing) {
@@ -109,15 +126,20 @@ fun ChatScreen(
                 }
             }
             Column(Modifier.fillMaxWidth().imePadding().navigationBarsPadding(), horizontalAlignment = Alignment.CenterHorizontally) {
-                Column(Modifier.widthIn(max = Sizes.contentMaxWidth).fillMaxWidth()) {
+                Column(Modifier.widthIn(max = Sizes.contentMaxWidth).fillMaxWidth()
+                    .onGloballyPositioned { bottomCoordinates = it }
+                    .swipeUpToOpen(enabled = sheet == null && !state.typing,
+                        isExcluded = { local -> inputFocused && bottomCoordinates?.let { inputBounds.contains(it.localToRoot(local)) } == true },
+                        onSwipeUp = { tap(); sheet = ChatSheet.Attach })
+                    .semantics { customActions = listOf(CustomAccessibilityAction("Open add to chat") { sheet = ChatSheet.Attach; true }) }) {
                     ChatNotices(state = state, actions = actions)
                     ModeChipRow(
                         state = state,
-                        onWebMode = actions.onWebMode,
-                        onReasoning = actions.onReasoning,
-                        onXSearch = actions.onXSearch,
-                        onImagine = actions.onImagine,
-                        onRunCode = actions.onRunCode,
+                        onWebMode = onWebMode,
+                        onReasoning = onReasoning,
+                        onXSearch = onXSearch,
+                        onImagine = onImagine,
+                        onRunCode = onRunCode,
                         onBuild = { sheet = ChatSheet.Build; actions.onOpenBuild() },
                         home = home,
                     )
@@ -128,6 +150,9 @@ fun ChatScreen(
                         onAttach = { sheet = ChatSheet.Attach },
                         onClearAttachments = actions.onClearAttachments,
                         onMic = actions.onOpenVoice,
+                        onMicLongPress = { actions.haptic(ChatHaptic.LongPress); actions.onOpenHandsFree() },
+                        onTextFieldFocus = { inputFocused = it },
+                        onTextFieldBounds = { inputBounds = it },
                         onSend = actions.onSend,
                         onStop = actions.onStop,
                         onModel = { sheet = ChatSheet.Model },
@@ -151,7 +176,7 @@ fun ChatScreen(
             onCamera = { sheet = null; actions.onPickCamera() },
             onPhotos = { sheet = null; actions.onPickPhotos() },
             onFiles = { sheet = null; actions.onPickFiles() },
-            onReadLink = { on -> sheet = null; actions.onWebMode(if (on) "page" else null) },
+            onReadLink = { on -> sheet = null; onWebMode(if (on) "page" else null) },
             onDismiss = { sheet = null },
             onAudio = { sheet = ChatSheet.Audio },
             storedFiles = state.storedFiles, storedFilesHint = state.storedFilesHint, storedFilesMaxBytes = state.storedFilesMaxBytes,
@@ -159,10 +184,10 @@ fun ChatScreen(
                 imagine = state.imagineConfig?.let { config -> if (config.enabled) "Create images from your message" else config.imageReason.ifBlank { "Turned off on the server" } },
                 imagineOn = state.imagine,
                 build = state.buildHint.ifEmpty { if (state.buildRepo != null) "On: ${state.buildRepo}" else "Chat about one of your GitHub repositories, read-only" },
-                toggles = if (home) emptyList() else modeToggles(state, actions),
+                toggles = if (home) emptyList() else modeToggles(state, onWebMode, onReasoning, onXSearch, onRunCode),
             ),
             onTurnOffModes = if (state.auto) null else ({ sheet = null; actions.onAuto() }),
-            onImagine = { on -> sheet = null; actions.onImagine(on) },
+            onImagine = { on -> sheet = null; onImagine(on) },
             onBuild = { sheet = ChatSheet.Build; actions.onOpenBuild() },
         )
         ChatSheet.Audio -> AudioSheet(

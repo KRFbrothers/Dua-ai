@@ -1,6 +1,12 @@
 package com.dua.ai.ui.chat
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.animation.AnimatedVisibility
@@ -113,6 +119,10 @@ fun Composer(
     onStop: () -> Unit,
     modifier: Modifier = Modifier,
     onModel: () -> Unit = {},
+    onMicLongPress: (() -> Unit)? = null,
+    /** Text field focus and its bounds in the root, so the swipe-up gesture can leave the text field alone while typing. */
+    onTextFieldFocus: (Boolean) -> Unit = {},
+    onTextFieldBounds: (Rect) -> Unit = {},
     onCancelUpload: (String) -> Unit = {},
     onImagineOptions: () -> Unit = {},
 ) {
@@ -140,6 +150,7 @@ fun Composer(
                 keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = ImeAction.Send),
                 keyboardActions = KeyboardActions(onSend = { onSend() }),
                 modifier = Modifier.fillMaxWidth().heightIn(min = Sizes.touchTarget).focusRequester(focusRequester)
+                    .onFocusChanged { onTextFieldFocus(it.isFocused) }.onGloballyPositioned { onTextFieldBounds(it.boundsInRoot()) }
                     .padding(start = Spacing.md + Spacing.xxs, end = Spacing.md, top = Spacing.md, bottom = Spacing.md).semantics { contentDescription = "Message" },
                 decorationBox = { inner ->
                     Box {
@@ -154,7 +165,8 @@ fun Composer(
                 RoundComposerButton(Icons.Outlined.Add, "Add photos and files", enabled = idle, onClick = onAttach)
                 ModelPill(model = state.model, enabled = idle, onClick = onModel)
                 Spacer(Modifier.weight(1f))
-                RoundComposerButton(Icons.Outlined.Mic, "Voice input", enabled = true, onClick = onMic)
+                RoundComposerButton(Icons.Outlined.Mic, if (onMicLongPress != null) "Voice input. Tap: dictate. Long-press: hands-free voice" else "Voice input. Tap: dictate",
+                    enabled = true, onClick = onMic, onLongClick = onMicLongPress, onLongClickLabel = "Hands-free voice")
                 SendButton(typing = state.typing, canSend = state.canSend, onSend = onSend, onStop = onStop)
             }
         }
@@ -197,8 +209,9 @@ fun ModeChipRow(
 }
 
 /** Mode switches for the + sheet in a conversation: Run code (when offered), Reasoning, Search and X (Grok only). */
-internal fun modeToggles(state: ChatUiState, actions: ChatActions): List<ModeToggle> =
-    modeChipSpecs(state, actions.onWebMode, actions.onReasoning, actions.onXSearch, actions.onImagine, actions.onRunCode, {})
+internal fun modeToggles(state: ChatUiState, onWebMode: (String?) -> Unit, onReasoning: (Boolean) -> Unit, onXSearch: (Boolean) -> Unit,
+    onRunCode: (Boolean) -> Unit): List<ModeToggle> =
+    modeChipSpecs(state, onWebMode, onReasoning, onXSearch, {}, onRunCode, {})
         .mapNotNull { spec ->
             val detail = when (spec.key) {
                 "code" -> "Let the AI run Python code"
@@ -368,14 +381,16 @@ private fun ModeChip(label: String, icon: ImageVector, isSelected: Boolean, enab
  * Round button in the composer (+, mic, send): a 36-38 dp circle drawn inside a 48 dp touch target, so the
  * whole 48 dp area takes the tap while the visual size matches the design.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun RoundComposerButton(icon: ImageVector, description: String, enabled: Boolean, onClick: () -> Unit,
     visualSize: Dp = Sizes.composerButton, container: Color = MaterialTheme.colorScheme.surfaceContainerHigh,
-    contentColor: Color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (enabled) .86f else .38f), iconSize: Dp = Sizes.icon) {
+    contentColor: Color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (enabled) .86f else .38f), iconSize: Dp = Sizes.icon,
+    onLongClick: (() -> Unit)? = null, onLongClickLabel: String? = null) {
     Box(
         Modifier.minimumInteractiveComponentSize().size(Sizes.touchTarget)
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = ripple(bounded = false, radius = Sizes.touchTarget / 2),
-                enabled = enabled, role = Role.Button, onClick = onClick)
+            .combinedClickable(interactionSource = remember { MutableInteractionSource() }, indication = ripple(bounded = false, radius = Sizes.touchTarget / 2),
+                enabled = enabled, role = Role.Button, onLongClickLabel = onLongClickLabel, onLongClick = onLongClick, onClick = onClick)
             .semantics { contentDescription = description },
         contentAlignment = Alignment.Center,
     ) {
