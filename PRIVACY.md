@@ -54,8 +54,8 @@ Dua is a personal, single-user app: the backend is meant to be restricted to the
 ### 3. User Account Data
 
 #### Data Stored
-- Email (for login & recovery)
-- Account display name (optional)
+- Email (from the Google account)
+- Account name (from the Google account)
 - Local notification, appearance and provider selections are stored in app settings, not Supabase cloud snapshots.
 - Provider API keys are configured server-side and are not stored in the app's local account profile.
 

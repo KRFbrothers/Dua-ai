@@ -76,15 +76,6 @@ class AccountRepositoryTest {
         withTimeout(3000) { oldLoad.await() }
         assertEquals(replacement, store.value); assertEquals(userB, repository.state.value.user)
     }
-    @Test fun lateProfileResponseCannotSaveOverANewSignInForAnotherOwner() = runBlocking {
-        val replacement = session(userB); val store = MemoryStore(session(userA)); val repository = AccountRepository(api, store)
-        val arrived = CompletableDeferred<Unit>(); val release = CountDownLatch(1)
-        delayedDispatcher("/api/account/profile", json(account(userA.copy(displayName = "Updated A"))), arrived, release, replacement)
-        val oldProfile = async { runCatching { repository.profile("Updated A") } }
-        try { withTimeout(3000) { arrived.await() }; repository.signInWithGoogle(idToken(userB), nonce) } finally { release.countDown() }
-        assertTrue(withTimeout(3000) { oldProfile.await() }.exceptionOrNull() is IllegalStateException)
-        assertEquals(replacement, store.value); assertEquals(userB, repository.state.value.user)
-    }
     @Test fun logoutClearsImmediatelyAndLateLoadCannotResurrectSession() = runBlocking {
         val store = MemoryStore(session(userA)); val repository = AccountRepository(api, store)
         val arrived = CompletableDeferred<Unit>(); val release = CountDownLatch(1)

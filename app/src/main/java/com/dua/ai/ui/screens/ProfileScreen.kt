@@ -14,8 +14,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Logout
-import androidx.compose.material.icons.outlined.Badge
-import androidx.compose.material.icons.outlined.CloudSync
 import androidx.compose.material.icons.outlined.PersonOutline
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
@@ -44,9 +42,6 @@ import androidx.compose.ui.unit.dp
 import com.dua.ai.ui.auth.GoogleSignInButton
 import com.dua.ai.ui.auth.rememberGoogleSignIn
 import com.dua.ai.ui.components.DuaPageScaffold
-import com.dua.ai.ui.components.SettingsDivider
-import com.dua.ai.ui.components.SettingsRow
-import com.dua.ai.ui.components.SettingsSection
 import com.dua.ai.ui.theme.DuaShape
 import com.dua.ai.ui.theme.Spacing
 import com.dua.ai.viewmodel.ChatViewModel
@@ -66,14 +61,12 @@ data class ProfileUiState(
 class ProfileActions(
     val onSignIn: () -> Unit = {},
     val onLogOut: () -> Unit = {},
-    val onSaveName: (String) -> Unit = {},
-    val onCloudSync: () -> Unit = {},
     val onDeleteAccount: (String) -> Unit = {},
 )
 
-/** Profile: Google account and the app's only Log out entry point. */
+/** Profile: the Google account card and the app's only Log out entry point. Cloud sync is reached from Settings. */
 @Composable
-fun ProfileScreen(viewModel: ChatViewModel, onBack: () -> Unit, onCloudSync: () -> Unit) {
+fun ProfileScreen(viewModel: ChatViewModel, onBack: () -> Unit) {
     val account by viewModel.account.state.collectAsState()
     val google by viewModel.googleSignIn.collectAsState()
     val signIn = rememberGoogleSignIn(viewModel)
@@ -83,8 +76,6 @@ fun ProfileScreen(viewModel: ChatViewModel, onBack: () -> Unit, onCloudSync: () 
     ProfileContent(state, ProfileActions(
         onSignIn = signIn,
         onLogOut = viewModel::logOut,
-        onSaveName = { name -> viewModel.accountAction { viewModel.account.profile(name) } },
-        onCloudSync = onCloudSync,
         onDeleteAccount = { confirmation ->
             val owner = account.user?.id
             viewModel.accountAction { viewModel.account.deleteAccount(confirmation, owner) }
@@ -100,11 +91,6 @@ fun ProfileContent(state: ProfileUiState, actions: ProfileActions, onBack: () ->
         if (state.email == null) {
             GoogleSignInButton(busy = state.signingIn, error = state.signInError, onClick = actions.onSignIn, modifier = Modifier.padding(top = Spacing.sm))
         } else {
-            SettingsSection(null) {
-                SettingsRow(Icons.Outlined.Badge, "Name", state.displayName.ifBlank { "Not set · used in greetings" }, enabled = !state.busy) { dialog = ProfileDialog.Name }
-                SettingsDivider()
-                SettingsRow(Icons.Outlined.CloudSync, "Cloud sync", "Back up chats and notes across your devices", onClick = actions.onCloudSync)
-            }
             OutlinedButton(onClick = { dialog = ProfileDialog.LogOut }, enabled = !state.busy, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp).padding(top = Spacing.sm),
                 shape = MaterialTheme.shapes.extraLarge, colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)) {
                 Icon(Icons.AutoMirrored.Outlined.Logout, contentDescription = null, modifier = Modifier.size(20.dp))
@@ -125,14 +111,6 @@ fun ProfileContent(state: ProfileUiState, actions: ProfileActions, onBack: () ->
             text = { Text("Your chats and memories stay on this device, and your cloud copy is kept.") },
             confirmButton = { TextButton(onClick = { dialog = null; actions.onLogOut() }) { Text("Log out", color = MaterialTheme.colorScheme.error) } },
             dismissButton = { TextButton(onClick = { dialog = null }) { Text("Cancel") } })
-        ProfileDialog.Name -> {
-            var name by rememberSaveable { mutableStateOf(state.displayName) }
-            AlertDialog(onDismissRequest = { dialog = null },
-                title = { Text("Name") },
-                text = { OutlinedTextField(name, { name = it.take(80) }, label = { Text("Name used in greetings") }, singleLine = true, modifier = Modifier.fillMaxWidth()) },
-                confirmButton = { TextButton(enabled = name.isNotBlank() && name.trim() != state.displayName, onClick = { dialog = null; actions.onSaveName(name) }) { Text("Save") } },
-                dismissButton = { TextButton(onClick = { dialog = null }) { Text("Cancel") } })
-        }
         ProfileDialog.Delete -> {
             var confirmation by rememberSaveable { mutableStateOf("") }
             AlertDialog(onDismissRequest = { dialog = null },
@@ -151,7 +129,7 @@ fun ProfileContent(state: ProfileUiState, actions: ProfileActions, onBack: () ->
     }
 }
 
-enum class ProfileDialog { LogOut, Name, Delete }
+enum class ProfileDialog { LogOut, Delete }
 
 @Composable
 private fun AccountHeader(email: String?, displayName: String) {
