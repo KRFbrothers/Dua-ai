@@ -107,7 +107,7 @@ fun SummaryDivider(modifier: Modifier = Modifier) {
 fun TypingIndicator(modifier: Modifier = Modifier) {
     val transition = rememberInfiniteTransition(label = "typing")
     val phase = transition.animateFloat(0f, 3f, infiniteRepeatable(tween(1200), RepeatMode.Restart), label = "phase")
-    Row(modifier.heightIn(min = Sizes.touchTarget).clearAndSetSemantics {
+    Row(modifier.clearAndSetSemantics {
         contentDescription = "Dua is thinking"; liveRegion = LiveRegionMode.Polite
     }, verticalAlignment = Alignment.CenterVertically) {
         repeat(3) { index ->
