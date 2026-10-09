@@ -16,8 +16,10 @@ export function signJob(job, secret) {
 export function verifyJob(token, secret, { userId, now = Date.now() } = {}) {
   if (typeof token !== 'string' || token.length > 2000 || !/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]{43}$/.test(token)) return null;
   const [payload, mac] = token.split('.');
-  const expected = createHmac('sha256', keyFor(secret)).update(payload).digest();
-  const given = Buffer.from(mac, 'base64url');
+  // Compare the canonical base64url text, not decoded bytes: the last character's low bits are ignored
+  // when decoding, so byte comparison would accept up to four spellings of the same signature.
+  const expected = Buffer.from(createHmac('sha256', keyFor(secret)).update(payload).digest('base64url'));
+  const given = Buffer.from(mac);
   if (given.length !== expected.length || !timingSafeEqual(given, expected)) return null;
   let job;
   try { job = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')); } catch { return null; }
