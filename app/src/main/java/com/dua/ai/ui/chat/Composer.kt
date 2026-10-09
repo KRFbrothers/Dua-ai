@@ -423,9 +423,9 @@ private fun ModelPill(model: String, enabled: Boolean, onClick: () -> Unit) {
             modifier = Modifier.padding(start = Spacing.xs).semantics { contentDescription = hint; role = Role.Button }) {
             Row(Modifier.height(Sizes.composerButton).padding(start = Spacing.md, end = Spacing.sm), verticalAlignment = Alignment.CenterVertically) {
                 Icon(DuaIcons.Sparkle, contentDescription = null, modifier = Modifier.size(Sizes.iconSmall))
-                Text(label, maxLines = 1, style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                Text(label, maxLines = 1, color = scheme.onSurface, style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
                     modifier = Modifier.padding(start = Spacing.sm).widthIn(max = 120.dp), overflow = TextOverflow.Ellipsis)
-                Icon(Icons.Outlined.ExpandMore, contentDescription = null, tint = scheme.onSurfaceVariant,
+                Icon(Icons.Outlined.ExpandMore, contentDescription = null, tint = scheme.onSurface.copy(alpha = .86f),
                     modifier = Modifier.padding(start = Spacing.xxs).size(Sizes.iconSmall))
             }
         }
