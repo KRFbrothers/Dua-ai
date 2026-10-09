@@ -9,6 +9,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
+import androidx.compose.material.icons.outlined.Brush
+import androidx.compose.material.icons.outlined.Build
 import androidx.compose.material.icons.outlined.GraphicEq
 import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.PhotoCamera
@@ -50,10 +53,14 @@ fun AttachmentSheet(
     storedFiles: Boolean = false,
     storedFilesHint: String = "",
     storedFilesMaxBytes: Long = 0,
+    modes: AttachModes? = null,
+    onImagine: (Boolean) -> Unit = {},
+    onBuild: () -> Unit = {},
 ) {
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow) {
-        AttachmentSheetContent(webMode, pageReadingAvailable, enabled, onCamera, onPhotos, onFiles, onReadLink, onAudio, storedFiles, storedFilesHint, storedFilesMaxBytes)
+        AttachmentSheetContent(webMode, pageReadingAvailable, enabled, onCamera, onPhotos, onFiles, onReadLink, onAudio, storedFiles, storedFilesHint, storedFilesMaxBytes,
+            modes, onImagine, onBuild)
     }
 }
 
@@ -70,6 +77,9 @@ fun AttachmentSheetContent(
     storedFiles: Boolean = false,
     storedFilesHint: String = "",
     storedFilesMaxBytes: Long = 0,
+    modes: AttachModes? = null,
+    onImagine: (Boolean) -> Unit = {},
+    onBuild: () -> Unit = {},
 ) {
     Column(Modifier.fillMaxWidth().padding(horizontal = Spacing.xl).padding(bottom = Spacing.xxl), verticalArrangement = Arrangement.spacedBy(Spacing.lg)) {
         Text("Add to chat", style = MaterialTheme.typography.titleMedium, modifier = Modifier.semantics { heading() })
@@ -99,8 +109,38 @@ fun AttachmentSheetContent(
                 Switch(checked = webMode == "page", onCheckedChange = null, enabled = enabled)
             }
         }
+        // Imagine and Build live here (the chip row above the composer keeps Run code, Reasoning and Search).
+        modes?.imagine?.let { detail ->
+            Surface(shape = DuaShape.card, color = MaterialTheme.colorScheme.surfaceContainerHigh) {
+                Row(Modifier.fillMaxWidth().heightIn(min = 64.dp)
+                    .toggleable(value = modes.imagineOn, enabled = enabled, role = Role.Switch, onValueChange = onImagine)
+                    .padding(horizontal = Spacing.lg, vertical = Spacing.md), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Outlined.Brush, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Column(Modifier.weight(1f).padding(horizontal = Spacing.lg)) {
+                        Text("Imagine", style = MaterialTheme.typography.bodyLarge)
+                        Text(detail, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Switch(checked = modes.imagineOn, onCheckedChange = null, enabled = enabled)
+                }
+            }
+        }
+        modes?.build?.let { detail ->
+            Surface(onClick = onBuild, enabled = enabled, shape = DuaShape.card, color = MaterialTheme.colorScheme.surfaceContainerHigh) {
+                Row(Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(horizontal = Spacing.lg, vertical = Spacing.md), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Outlined.Build, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Column(Modifier.weight(1f).padding(horizontal = Spacing.lg)) {
+                        Text("Build", style = MaterialTheme.typography.bodyLarge)
+                        Text(detail, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        }
     }
 }
+
+/** Mode rows in the + sheet: Imagine (null hides it; text explains its state) and Build (null hides it). */
+data class AttachModes(val imagine: String? = null, val imagineOn: Boolean = false, val build: String? = null)
 
 @Composable
 private fun SheetTile(label: String, icon: ImageVector, enabled: Boolean, onClick: () -> Unit, modifier: Modifier) {

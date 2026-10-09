@@ -7,9 +7,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onRoot
-import androidx.compose.ui.test.performScrollTo
 import com.dua.ai.model.BuildFile
 import com.dua.ai.model.BuildInfo
 import com.dua.ai.model.ChatMessage
@@ -78,12 +76,9 @@ class BuildScreenshotTest(private val dark: Boolean) {
 
     @Test fun buildChat() = shot("45_build_chat_diff") { ChatScreen(BuildData.chat, ChatActions()) }
 
-    @Test fun buildChip() {
-        compose.setContent { Themed { ChatScreen(BuildData.base.copy(buildRepo = null, draft = "Explain how streaming works"), ChatActions()) } }
-        compose.waitForIdle()
-        compose.onNodeWithContentDescription("Build mode:", substring = true).performScrollTo()
-        compose.waitForIdle()
-        compose.onRoot().captureRoboImage(path("47_build_mode_chip"))
+    // Build is started from the + sheet (the chip row above the composer shows Build only while it is on).
+    @Test fun buildChip() = screen("47_build_mode_entry") {
+        ChatScreen(BuildData.base.copy(buildRepo = null, draft = "Explain how streaming works"), ChatActions(), initialSheet = ChatSheet.Attach)
     }
 
     @Test fun buildChatAllFiles() = shot("46_build_chat_files_expanded") { ChatScreen(BuildData.chat.copy(expandedBuild = setOf("m1")), ChatActions()) }

@@ -35,6 +35,10 @@ internal object DuaPalette {
     val Ink = Color(0xFF111214)
     val InkMuted = Color(0xFF575A61)
 
+    // Gold: the Home tagline sparkle only.
+    val Gold80 = Color(0xFFE8C46A)
+    val Gold40 = Color(0xFFA67C1E)
+
     // Accent: one restrained teal, used for links, focus, selection and switches only.
     val Teal80 = Color(0xFF79D4C3)
     val Teal20 = Color(0xFF00382F)
@@ -145,6 +149,8 @@ data class DuaColors(
     val action: Color,
     val onAction: Color,
     val voiceCubeStroke: Color,
+    /** Small gold accent (the Home tagline sparkle). Decorative only. */
+    val sparkle: Color,
     val isDark: Boolean,
 )
 
@@ -160,6 +166,7 @@ internal val DuaDarkColors = DuaColors(
     action = DuaPalette.Neutral93,
     onAction = DuaPalette.Neutral4,
     voiceCubeStroke = DuaPalette.Neutral72,
+    sparkle = DuaPalette.Gold80,
     isDark = true,
 )
 
@@ -175,5 +182,6 @@ internal val DuaLightColors = DuaColors(
     action = DuaPalette.Ink,
     onAction = DuaPalette.Neutral100,
     voiceCubeStroke = DuaPalette.Neutral45,
+    sparkle = DuaPalette.Gold40,
     isDark = false,
 )
