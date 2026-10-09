@@ -287,7 +287,6 @@ internal enum class ChipFit { Full, Tight, Icon }
 private fun AdaptiveChipRow(specs: List<ModeChipSpec>, fill: Boolean, enabled: Boolean, modifier: Modifier = Modifier) {
     BoxWithConstraints(modifier) {
         val pad = Spacing.lg
-        val narrow = maxWidth < 360.dp
         val available = with(LocalDensity.current) { (maxWidth - pad * 2).roundToPx() }
         SubcomposeLayout(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = pad)) { constraints ->
             val gapPx = Spacing.sm.roundToPx()
