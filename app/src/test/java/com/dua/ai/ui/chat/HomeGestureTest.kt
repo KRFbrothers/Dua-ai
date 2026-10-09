@@ -7,7 +7,6 @@ import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performClick
@@ -54,16 +53,10 @@ class HomeGestureTest {
 
     private fun sheetShown() = compose.onAllNodesWithText("Add to chat").fetchSemanticsNodes().isNotEmpty()
 
-    @Test fun micTapDictates() {
+    @Test fun voiceModeButtonOpensVoiceMode() {
         show()
-        compose.onNodeWithContentDescription("Dictate").performClick()
-        assertEquals(listOf("dictate"), events)
-    }
-
-    @Test fun micLongPressDoesNothingExtra() {
-        show()
-        compose.onNodeWithContentDescription("Dictate").performTouchInput { longClick() }
-        assertTrue("voice-mode" !in events)
+        compose.onNodeWithContentDescription("Voice mode").performClick()
+        assertEquals(listOf("haptic:Tap", "voice-mode"), events)
     }
 
     @Test fun emptyFieldShowsVoiceModeButtonWithHaptic() {
@@ -131,7 +124,7 @@ class HomeGestureTest {
         show(conversation, ChatSheet.Attach)
         compose.waitForIdle()
         // Semantics click: the sheet's window doesn't take injected touches reliably under Robolectric.
-        compose.onNode(isToggleable() and hasText("Reasoning")).performSemanticsAction(SemanticsActions.OnClick)
+        compose.onNode(isToggleable() and hasText("Think")).performSemanticsAction(SemanticsActions.OnClick)
         assertEquals(listOf("haptic:Tap", "reasoning:true"), events)
     }
 
