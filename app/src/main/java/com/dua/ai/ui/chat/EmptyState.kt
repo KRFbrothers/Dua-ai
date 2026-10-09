@@ -108,7 +108,7 @@ fun EmptyState(modifier: Modifier = Modifier, shimmerPreview: Float? = null) {
                             style = TextStyle(fontFamily = MontserratFontFamily, fontWeight = FontWeight.Medium,
                                 fontSize = taglineSize, lineHeight = 30.sp))
                         Icon(DuaIcons.Sparkle, contentDescription = null, tint = DuaTheme.colors.sparkle,
-                            modifier = Modifier.padding(start = Spacing.sm).size(Sizes.iconSmall + 2.dp))
+                            modifier = Modifier.padding(start = Spacing.xxs).size(Sizes.iconSmall + 2.dp))
                     }
                 }
             }
