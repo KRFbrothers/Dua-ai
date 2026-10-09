@@ -44,8 +44,8 @@ fun ChatTopBar(newChatEnabled: Boolean, showComputer: Boolean, onMenu: () -> Uni
                 contentColor = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.padding(horizontal = Spacing.sm).semantics { contentDescription = "Computer, coming soon"; role = Role.Button }) {
                 Row(Modifier.height(Sizes.topBarButton).padding(start = Spacing.lg, end = Spacing.lg + Spacing.xxs), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Outlined.DesktopWindows, contentDescription = null, modifier = Modifier.size(Sizes.icon), tint = MaterialTheme.colorScheme.onSurface.copy(alpha = .86f))
-                    Text("Computer", style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    Icon(Icons.Outlined.DesktopWindows, contentDescription = null, modifier = Modifier.size(Sizes.icon), tint = MaterialTheme.colorScheme.onSurface)
+                    Text("Computer", color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.padding(start = Spacing.sm))
                 }
             }
