@@ -9,6 +9,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.ToggleOff
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.SwitchDefaults
 import com.dua.ai.ui.theme.DuaTheme
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.foundation.verticalScroll
@@ -60,11 +64,12 @@ fun AttachmentSheet(
     modes: AttachModes? = null,
     onImagine: (Boolean) -> Unit = {},
     onBuild: () -> Unit = {},
+    onTurnOffModes: (() -> Unit)? = null,
 ) {
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow) {
         AttachmentSheetContent(webMode, pageReadingAvailable, enabled, onCamera, onPhotos, onFiles, onReadLink, onAudio, storedFiles, storedFilesHint, storedFilesMaxBytes,
-            modes, onImagine, onBuild)
+            modes, onImagine, onBuild, onTurnOffModes)
     }
 }
 
@@ -84,6 +89,7 @@ fun AttachmentSheetContent(
     modes: AttachModes? = null,
     onImagine: (Boolean) -> Unit = {},
     onBuild: () -> Unit = {},
+    onTurnOffModes: (() -> Unit)? = null,
 ) {
     Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = Spacing.xl).padding(bottom = Spacing.xxl), verticalArrangement = Arrangement.spacedBy(Spacing.lg)) {
         Text("Add to chat", style = MaterialTheme.typography.titleMedium, modifier = Modifier.semantics { heading() })
@@ -110,7 +116,7 @@ fun AttachmentSheetContent(
                     Text(if (pageReadingAvailable) "Reads the first HTTPS link in your message" else "Unavailable until setup is refreshed",
                         style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                Switch(checked = webMode == "page", onCheckedChange = null, enabled = enabled)
+                Switch(checked = webMode == "page", onCheckedChange = null, enabled = enabled, colors = duaSwitchColors())
             }
         }
         // In a conversation the chip row only shows modes that are on, so every mode can be switched here.
@@ -126,7 +132,7 @@ fun AttachmentSheetContent(
                         Text("Imagine", style = MaterialTheme.typography.bodyLarge)
                         Text(detail, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    Switch(checked = modes.imagineOn, onCheckedChange = null, enabled = enabled)
+                    Switch(checked = modes.imagineOn, onCheckedChange = null, enabled = enabled, colors = duaSwitchColors())
                 }
             }
         }
@@ -142,8 +148,23 @@ fun AttachmentSheetContent(
                 }
             }
         }
+        // Shown only while a mode is on: one tap back to a plain reply (what the old "Auto" pill used to do).
+        if (onTurnOffModes != null) TextButton(onClick = onTurnOffModes, enabled = enabled, modifier = Modifier.align(Alignment.CenterHorizontally),
+            colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurface)) {
+            Icon(Icons.Outlined.ToggleOff, contentDescription = null, modifier = Modifier.size(Sizes.iconSmall))
+            Text("Turn off all modes", modifier = Modifier.padding(start = Spacing.sm))
+        }
     }
 }
+
+/** Switches in the + sheet use the selected-chip palette: silver (dark) or ink (light) track with a gold thumb. */
+@Composable
+private fun duaSwitchColors() = SwitchDefaults.colors(
+    checkedTrackColor = DuaTheme.colors.chipSelected,
+    checkedBorderColor = DuaTheme.colors.chipSelected,
+    checkedThumbColor = DuaTheme.colors.chipSelectedIcon,
+    checkedIconColor = DuaTheme.colors.chipSelected,
+)
 
 /**
  * Mode rows in the + sheet: [toggles] (Run code, Reasoning, Search, X; shown in conversations), Imagine
@@ -168,7 +189,7 @@ private fun ModeToggleGroup(toggles: List<ModeToggle>, enabled: Boolean) {
                         Text(toggle.label, style = MaterialTheme.typography.bodyLarge)
                         Text(toggle.detail, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    Switch(checked = toggle.on, onCheckedChange = null, enabled = enabled)
+                    Switch(checked = toggle.on, onCheckedChange = null, enabled = enabled, colors = duaSwitchColors())
                 }
             }
         }

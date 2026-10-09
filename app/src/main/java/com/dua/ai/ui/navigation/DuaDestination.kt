@@ -5,6 +5,7 @@ enum class DuaDestination(val route: String) {
     Onboarding("onboarding"),
     Chat("chat"),
     Voice("voice"),
+    Computer("computer"),
     HandsFree("voice/hands-free"),
     LiveVoice("voice/live"),
     Settings("settings"),

@@ -30,6 +30,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.dua.ai.setup.ProviderCapability
 import com.dua.ai.ui.theme.DuaShape
+import com.dua.ai.ui.theme.DuaTheme
 import com.dua.ai.ui.theme.Spacing
 
 private val MODEL_ORDER = listOf("Dua", "ChatGPT", "Gemini", "Claude", "Grok", "Kimi")
@@ -61,11 +62,11 @@ fun ModelPickerSheet(current: String, providers: List<ProviderCapability>, onSel
                             }
                         }
                         Column(Modifier.weight(1f).padding(start = Spacing.md)) {
-                            Text(name, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface.copy(alpha = alpha))
+                            Text(if (name == AUTO_MODEL) "$name · Auto" else name, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface.copy(alpha = alpha))
                             Text(if (available) "$provider · ${capability?.model.orEmpty()}" else "$provider · Setup required",
                                 style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha))
                         }
-                        if (selected) Icon(Icons.Filled.CheckCircle, contentDescription = "Selected", tint = MaterialTheme.colorScheme.primary)
+                        if (selected) Icon(Icons.Filled.CheckCircle, contentDescription = "Selected", tint = DuaTheme.colors.sparkle)
                     }
                 }
             }

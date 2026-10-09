@@ -106,7 +106,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         if (_liveStart.value.busy || com.dua.ai.voice.live.LiveVoiceController.active) return
         val options = liveOptions()
         val reason = when {
-            options == null -> _integrations.value.voice?.live?.reason?.ifBlank { null } ?: "Live voice needs the latest Dua backend. Hands-free mode works now."
+            options == null -> _integrations.value.voice?.live?.reason?.ifBlank { null } ?: "Live voice needs the latest Dua backend. Voice mode works now."
             account.state.value.user == null -> "Sign in from Profile to use live voice."
             !_online.value -> "You're offline. Connect to the internet to start live voice."
             _isTyping.value -> "Wait for the current reply to finish, or stop it."

@@ -26,7 +26,6 @@ import com.dua.ai.ui.onboarding.OnboardingScreen
 import com.dua.ai.ui.screens.CloudSyncScreen
 import com.dua.ai.ui.screens.DataControlsScreen
 import com.dua.ai.ui.screens.DeviceSettingsScreen
-import com.dua.ai.ui.screens.HandsFreeScreen
 import com.dua.ai.ui.screens.IntegrationSetupScreen
 import com.dua.ai.ui.screens.ProfileScreen
 import com.dua.ai.ui.settings.SettingsScreen
@@ -44,12 +43,12 @@ class DuaNavigator(private val nav: NavHostController, private val viewModel: Ch
     private fun pulse() { if (viewModel.localSettings.value.haptic) haptics.performHapticFeedback(HapticFeedbackType.LongPress) }
     private fun blocked() = viewModel.dataBusy.value
 
-    fun open(destination: DuaDestination) {
+    fun open(destination: DuaDestination, haptic: Boolean = true) {
         if (blocked()) return
-        pulse()
+        if (haptic) pulse()
         nav.navigate(destination.route) { launchSingleTop = true }
     }
-    fun openPage(name: String) { DuaDestination.fromPage(name)?.let(::open) }
+    fun openPage(name: String) { DuaDestination.fromPage(name)?.let { open(it) } }
     fun back() {
         if (blocked()) return
         if (!nav.popBackStack()) toChat()
@@ -106,8 +105,14 @@ fun DuaNavHost(viewModel: ChatViewModel, voice: ReplyVoice, notificationRoute: P
                 onOpenSettings = { navigator.open(DuaDestination.Settings) },
                 onOpenVoice = { navigator.open(DuaDestination.Voice) },
                 onOpenSetup = { navigator.open(DuaDestination.FeatureSetup) },
+                onOpenComputer = { navigator.open(DuaDestination.Computer) },
+                // The mic long-press already gave its own haptic.
+                onOpenVoiceMode = { navigator.open(if (viewModel.liveVoiceAvailable()) DuaDestination.LiveVoice else DuaDestination.HandsFree, haptic = false) },
                 attachRequest = attachRequest,
                 onAttachRequestHandled = { attachRequest = 0 })
+        }
+        composable(DuaDestination.Computer.route) {
+            com.dua.ai.ui.screens.ComputerScreen(onBack = navigator::back)
         }
         composable(DuaDestination.Voice.route) {
             val draft by viewModel.draft.collectAsState()
@@ -124,7 +129,8 @@ fun DuaNavHost(viewModel: ChatViewModel, voice: ReplyVoice, notificationRoute: P
                 onHandsFree = { nav.navigate(DuaDestination.HandsFree.route) { popUpTo(DuaDestination.LiveVoice.route) { inclusive = true } } })
         }
         composable(DuaDestination.HandsFree.route) {
-            HandsFreeScreen(viewModel, onBack = navigator::back, onChat = navigator::toChat)
+            // Voice mode (device speech loop). The route keeps its old name so saved navigation state still resolves.
+            com.dua.ai.ui.voice.VoiceModeScreen(viewModel, voice, onClose = navigator::back, onOpenChat = navigator::toChat)
         }
         composable(DuaDestination.Settings.route) {
             BusyBackGuard(viewModel)

@@ -117,6 +117,12 @@ class ChatActions(
     val onOpenFile: (com.dua.ai.files.FileRef) -> Unit = {},
     val onOpenSettings: () -> Unit = {},
     val onOpenVoice: () -> Unit = {},
+    /** Top-bar "Computer" pill: opens the Computer (coming soon) screen. */
+    val onOpenComputer: () -> Unit = {},
+    /** The composer's voice-mode button: live voice when available, else the device-speech voice mode. */
+    val onOpenVoiceMode: () -> Unit = {},
+    /** Light haptic (only when Haptic feedback is on in Settings; the system setting applies too). */
+    val haptic: (ChatHaptic) -> Unit = {},
     val onOpenSetup: () -> Unit = {},
     val onImagine: (Boolean) -> Unit = {},
     val onImagineOptions: (com.dua.ai.imagine.ImagineOptions) -> Unit = {},

@@ -10,7 +10,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.outlined.DesktopWindows
 import androidx.compose.material.icons.outlined.EditNote
 import androidx.compose.material.icons.outlined.Menu
 import androidx.compose.material3.Icon
@@ -25,7 +25,6 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.dua.ai.ui.theme.DuaShape
@@ -33,20 +32,20 @@ import com.dua.ai.ui.theme.DuaTheme
 import com.dua.ai.ui.theme.Sizes
 import com.dua.ai.ui.theme.Spacing
 
-/** Round history-menu button · current model (opens the model picker) · round new-chat button. */
+/** Round history-menu button · "Computer" pill (opens the Computer screen) · round new-chat button. The model picker lives in the composer's model pill. */
 @Composable
-fun ChatTopBar(model: String, newChatEnabled: Boolean, onMenu: () -> Unit, onModel: () -> Unit, onNewChat: () -> Unit) {
+fun ChatTopBar(newChatEnabled: Boolean, onMenu: () -> Unit, onComputer: () -> Unit, onNewChat: () -> Unit) {
     Row(Modifier.fillMaxWidth().statusBarsPadding().height(Sizes.topBarHeight).padding(horizontal = Spacing.lg),
         verticalAlignment = Alignment.CenterVertically) {
         RoundBarButton(Icons.Outlined.Menu, "Open chat history", enabled = true, onClick = onMenu)
         Spacer(Modifier.weight(1f))
-        Surface(onClick = onModel, shape = DuaShape.chip, color = MaterialTheme.colorScheme.background,
-            modifier = Modifier.padding(horizontal = Spacing.sm).semantics { contentDescription = "Model: $model. Change model"; role = Role.Button }) {
-            Row(Modifier.padding(start = Spacing.md, end = Spacing.sm, top = Spacing.sm, bottom = Spacing.sm), verticalAlignment = Alignment.CenterVertically) {
-                Text(model, style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Icon(Icons.Filled.KeyboardArrowDown, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = Spacing.xs).size(Sizes.icon))
+        Surface(onClick = onComputer, shape = DuaShape.chip, color = DuaTheme.colors.composer,
+            contentColor = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(horizontal = Spacing.sm).semantics { contentDescription = "Computer, coming soon"; role = Role.Button }) {
+            Row(Modifier.height(Sizes.topBarButton).padding(start = Spacing.lg, end = Spacing.lg + Spacing.xxs), verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Outlined.DesktopWindows, contentDescription = null, modifier = Modifier.size(Sizes.icon), tint = MaterialTheme.colorScheme.onSurface.copy(alpha = .86f))
+                Text("Computer", style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(start = Spacing.sm))
             }
         }
         Spacer(Modifier.weight(1f))

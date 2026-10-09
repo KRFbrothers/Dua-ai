@@ -26,6 +26,8 @@ import java.time.LocalTime
 /** Binds [ChatScreen] to [ChatViewModel]. Activity-result launchers live here so they survive sheets closing. */
 @Composable
 fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () -> Unit, onOpenVoice: () -> Unit, onOpenSetup: () -> Unit,
+    onOpenComputer: () -> Unit = {},
+    onOpenVoiceMode: () -> Unit = {},
     attachRequest: Int = 0, onAttachRequestHandled: () -> Unit = {}) {
     val preferences by viewModel.localSettings.collectAsState()
     val draft by viewModel.draft.collectAsState()
@@ -61,6 +63,7 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
 
     val context = LocalContext.current
     val haptics = LocalHapticFeedback.current
+    val view = androidx.compose.ui.platform.LocalView.current
     fun pulse() { if (viewModel.localSettings.value.haptic) haptics.performHapticFeedback(HapticFeedbackType.LongPress) }
 
     val files = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
@@ -138,7 +141,8 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
         ChatActions(
             onDraftChange = viewModel::updateDraft,
             onSend = {
-                pulse(); voice.stopAll()
+                if (viewModel.localSettings.value.haptic) view.performChatHaptic(ChatHaptic.Confirm)
+                voice.stopAll()
                 val current = viewModel.draft.value
                 if ((current.isNotBlank() || viewModel.attachments.value.isNotEmpty() || viewModel.uploads.value.any { it.ref != null }) && !viewModel.isTyping.value && !viewModel.readingFiles.value)
                     viewModel.sendMessage(current)
@@ -187,6 +191,9 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
             onClearAttachments = { viewModel.clearAttachments(); attachmentNotice = "" },
             onOpenSettings = onOpenSettings,
             onOpenVoice = onOpenVoice,
+            onOpenComputer = onOpenComputer,
+            onOpenVoiceMode = onOpenVoiceMode,
+            haptic = { kind -> if (viewModel.localSettings.value.haptic) view.performChatHaptic(kind) },
             onOpenSetup = onOpenSetup,
             onImagine = viewModel::setImagine,
             onImagineOptions = viewModel::setImagineOptions,
