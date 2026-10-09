@@ -103,7 +103,7 @@ fun AssistantMessage(
     }
 }
 
-/** Copy · retry · read aloud, as quiet icons with 48-dp touch targets. */
+/** Copy · retry · read aloud. Dark enough to see, 48-dp touch targets. */
 @Composable
 fun MessageActions(
     copyText: String,
@@ -119,7 +119,7 @@ fun MessageActions(
     val clipboard = LocalClipboardManager.current
     var copied by remember { mutableStateOf(false) }
     LaunchedEffect(copied) { if (copied) { delay(2000); copied = false } }
-    val tint = MaterialTheme.colorScheme.onSurfaceVariant
+    val tint = MaterialTheme.colorScheme.onSurface.copy(alpha = .86f)
     // Pull the row left so the first icon lines up with the text above it.
     Row(Modifier.padding(top = Spacing.xs).offset(x = -Spacing.md), verticalAlignment = Alignment.CenterVertically) {
         IconButton(onClick = { clipboard.setText(AnnotatedString(copyText)); copied = true }) {
