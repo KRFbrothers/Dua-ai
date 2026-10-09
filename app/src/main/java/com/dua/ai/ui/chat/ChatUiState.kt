@@ -117,6 +117,8 @@ class ChatActions(
     val onOpenFile: (com.dua.ai.files.FileRef) -> Unit = {},
     val onOpenSettings: () -> Unit = {},
     val onOpenVoice: () -> Unit = {},
+    /** Top-bar "Computer" pill: opens the Computer (coming soon) screen. */
+    val onOpenComputer: () -> Unit = {},
     val onOpenSetup: () -> Unit = {},
     val onImagine: (Boolean) -> Unit = {},
     val onImagineOptions: (com.dua.ai.imagine.ImagineOptions) -> Unit = {},

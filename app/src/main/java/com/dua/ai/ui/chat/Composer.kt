@@ -1,6 +1,8 @@
 package com.dua.ai.ui.chat
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.tween
@@ -96,9 +98,8 @@ import com.dua.ai.ui.theme.Sizes
 import com.dua.ai.ui.theme.Spacing
 
 /**
- * Rounded multi-line composer. Bottom row: attach (+) · Auto · mic · send/stop.
+ * Rounded multi-line composer. Bottom row: attach (+) · model pill (Auto / model ⌄) · mic · send/stop.
  * The mode chips (Run code, Reasoning, Search, …) sit above it in [ModeChipRow].
- * Auto = no reasoning, web, code, Imagine or Build for the next reply.
  */
 @Composable
 fun Composer(
@@ -111,7 +112,7 @@ fun Composer(
     onSend: () -> Unit,
     onStop: () -> Unit,
     modifier: Modifier = Modifier,
-    onAuto: () -> Unit = {},
+    onModel: () -> Unit = {},
     onCancelUpload: (String) -> Unit = {},
     onImagineOptions: () -> Unit = {},
 ) {
@@ -151,7 +152,7 @@ fun Composer(
                 modifier = Modifier.padding(start = Spacing.sm, end = Spacing.sm, bottom = Spacing.xs))
             Row(Modifier.fillMaxWidth().padding(start = Spacing.xxs, end = Spacing.xs), verticalAlignment = Alignment.CenterVertically) {
                 RoundComposerButton(Icons.Outlined.Add, "Add photos and files", enabled = idle, onClick = onAttach)
-                AutoPill(selected = state.auto, enabled = idle, onClick = onAuto)
+                ModelPill(model = state.model, enabled = idle, onClick = onModel)
                 Spacer(Modifier.weight(1f))
                 RoundComposerButton(Icons.Outlined.Mic, "Voice input", enabled = true, onClick = onMic)
                 SendButton(typing = state.typing, canSend = state.canSend, onSend = onSend, onStop = onStop)
@@ -384,30 +385,32 @@ private fun RoundComposerButton(icon: ImageVector, description: String, enabled:
     }
 }
 
+/** Label for the composer's model pill: "Auto" for the default model (Dua), otherwise the model's short name. */
+internal fun modelPillLabel(model: String): String = if (model == AUTO_MODEL) "Auto" else model
+
+/** The default model; the pill shows it as "Auto". */
+internal const val AUTO_MODEL = "Dua"
+
 /**
- * "Auto" pill. Auto means a plain reply: no Reasoning, Search, X, Run code, Imagine, Build or Read link.
- * It is filled while no mode is on; when a mode is on it is outlined and a tap turns every mode off.
- * The modes stay as chosen until changed (they aren't reset per reply). Long-press (or hover) shows a
- * short hint, and TalkBack reads the same explanation.
+ * Model pill (replaces the old top-bar "Dua ⌄" title): shows "Auto" or the chosen model with a chevron and
+ * opens the model picker. Long-press (or hover) shows a short hint; TalkBack reads the same.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun AutoPill(selected: Boolean, enabled: Boolean, onClick: () -> Unit) {
+private fun ModelPill(model: String, enabled: Boolean, onClick: () -> Unit) {
     val scheme = MaterialTheme.colorScheme
-    val hint = if (selected) "Auto: a normal reply, no extra modes on" else "Auto: tap to turn off all modes for a normal reply"
+    val label = modelPillLabel(model)
+    val hint = if (model == AUTO_MODEL) "Model: Auto (Dua). Tap to choose a model" else "Model: $model. Tap to choose a model"
     TooltipBox(positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(), tooltip = { PlainTooltip { Text(hint) } },
         state = rememberTooltipState()) {
-        Surface(onClick = onClick, enabled = enabled, shape = DuaShape.chip,
-            color = if (selected) scheme.surfaceContainerHighest else Color.Transparent,
-            contentColor = scheme.onSurface,
-            border = if (selected) null else BorderStroke(1.dp, DuaTheme.colors.composerBorder),
-            modifier = Modifier.padding(start = Spacing.xs).semantics {
-                contentDescription = if (selected) "Auto, on: normal reply, no extra modes" else "Auto: turn off all modes"
-                this.selected = selected; role = Role.RadioButton
-            }) {
-            Row(Modifier.height(Sizes.composerButton).padding(start = Spacing.md, end = Spacing.lg), verticalAlignment = Alignment.CenterVertically) {
+        Surface(onClick = onClick, enabled = enabled, shape = DuaShape.chip, color = scheme.surfaceContainerHighest, contentColor = scheme.onSurface,
+            modifier = Modifier.padding(start = Spacing.xs).semantics { contentDescription = hint; role = Role.Button }) {
+            Row(Modifier.height(Sizes.composerButton).padding(start = Spacing.md, end = Spacing.sm), verticalAlignment = Alignment.CenterVertically) {
                 Icon(DuaIcons.Sparkle, contentDescription = null, modifier = Modifier.size(Sizes.iconSmall))
-                Text("Auto", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold), modifier = Modifier.padding(start = Spacing.sm))
+                Text(label, maxLines = 1, style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                    modifier = Modifier.padding(start = Spacing.sm).widthIn(max = 120.dp), overflow = TextOverflow.Ellipsis)
+                Icon(Icons.Outlined.ExpandMore, contentDescription = null, tint = scheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = Spacing.xxs).size(Sizes.iconSmall))
             }
         }
     }

@@ -106,8 +106,12 @@ fun DuaNavHost(viewModel: ChatViewModel, voice: ReplyVoice, notificationRoute: P
                 onOpenSettings = { navigator.open(DuaDestination.Settings) },
                 onOpenVoice = { navigator.open(DuaDestination.Voice) },
                 onOpenSetup = { navigator.open(DuaDestination.FeatureSetup) },
+                onOpenComputer = { navigator.open(DuaDestination.Computer) },
                 attachRequest = attachRequest,
                 onAttachRequestHandled = { attachRequest = 0 })
+        }
+        composable(DuaDestination.Computer.route) {
+            com.dua.ai.ui.screens.ComputerScreen(onBack = navigator::back)
         }
         composable(DuaDestination.Voice.route) {
             val draft by viewModel.draft.collectAsState()

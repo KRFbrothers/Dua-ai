@@ -96,10 +96,9 @@ fun ChatScreen(
         Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
             .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))) {
             ChatTopBar(
-                model = state.modelLabel,
                 newChatEnabled = !state.typing,
                 onMenu = { scope.launch { drawerState.open() } },
-                onModel = { sheet = ChatSheet.Model },
+                onComputer = actions.onOpenComputer,
                 onNewChat = actions.onNewChat,
             )
             Box(Modifier.weight(1f).fillMaxWidth()) {
@@ -131,7 +130,7 @@ fun ChatScreen(
                         onMic = actions.onOpenVoice,
                         onSend = actions.onSend,
                         onStop = actions.onStop,
-                        onAuto = actions.onAuto,
+                        onModel = { sheet = ChatSheet.Model },
                         onCancelUpload = actions.onCancelUpload,
                         onImagineOptions = { sheet = ChatSheet.Imagine },
                     )
@@ -162,6 +161,7 @@ fun ChatScreen(
                 build = state.buildHint.ifEmpty { if (state.buildRepo != null) "On: ${state.buildRepo}" else "Chat about one of your GitHub repositories, read-only" },
                 toggles = if (home) emptyList() else modeToggles(state, actions),
             ),
+            onTurnOffModes = if (state.auto) null else ({ sheet = null; actions.onAuto() }),
             onImagine = { on -> sheet = null; actions.onImagine(on) },
             onBuild = { sheet = ChatSheet.Build; actions.onOpenBuild() },
         )

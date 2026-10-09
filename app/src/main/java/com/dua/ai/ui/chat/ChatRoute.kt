@@ -26,6 +26,7 @@ import java.time.LocalTime
 /** Binds [ChatScreen] to [ChatViewModel]. Activity-result launchers live here so they survive sheets closing. */
 @Composable
 fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () -> Unit, onOpenVoice: () -> Unit, onOpenSetup: () -> Unit,
+    onOpenComputer: () -> Unit = {},
     attachRequest: Int = 0, onAttachRequestHandled: () -> Unit = {}) {
     val preferences by viewModel.localSettings.collectAsState()
     val draft by viewModel.draft.collectAsState()
@@ -187,6 +188,7 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
             onClearAttachments = { viewModel.clearAttachments(); attachmentNotice = "" },
             onOpenSettings = onOpenSettings,
             onOpenVoice = onOpenVoice,
+            onOpenComputer = onOpenComputer,
             onOpenSetup = onOpenSetup,
             onImagine = viewModel::setImagine,
             onImagineOptions = viewModel::setImagineOptions,
