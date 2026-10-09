@@ -250,14 +250,14 @@ private fun modeChipSpecs(
     // Imagine on (started from the + sheet): tap to turn it off.
     if (state.imagine) add(ModeChipSpec("imagine", "Imagine", Icons.Outlined.Brush, true, "Imagine on. Tap to turn off", Icons.Outlined.Close) { onImagine(false) })
     // Run code: the provider runs Python in its own sandbox (shown when the backend offers it).
-    if (state.codeConfig != null) add(ModeChipSpec("code", "Run code", Icons.Outlined.Terminal, state.runCode,
+    if (state.codeConfig != null) add(ModeChipSpec("code", "Code", Icons.Outlined.Terminal, state.runCode,
         when {
             state.runCode -> "Run code on: the AI can run Python for this reply. Tap to turn off"
             state.codeConfig.available(state.model) -> "Let the AI run Python code"
             state.codeConfig.enabled -> "Run code, not available for ${state.modelLabel}"
             else -> "Run code, turned off on the server"
         }) { onRunCode(!state.runCode) })
-    add(ModeChipSpec("reasoning", "Reasoning", Icons.Outlined.Lightbulb, state.reasoning,
+    add(ModeChipSpec("reasoning", "Think", Icons.Outlined.Lightbulb, state.reasoning,
         when {
             state.reasoning -> "Reasoning on. Tap to turn off"
             state.reasoningSupported -> "Think before answering"
@@ -292,7 +292,7 @@ private fun AdaptiveChipRow(specs: List<ModeChipSpec>, fill: Boolean, enabled: B
         SubcomposeLayout(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = pad)) { constraints ->
             val gapPx = Spacing.sm.roundToPx()
             val gaps = gapPx * (specs.size - 1).coerceAtLeast(0)
-            val fits = if (narrow) listOf(ChipFit.Tight, ChipFit.Icon) else ChipFit.entries
+            val fits = listOf(ChipFit.Full, ChipFit.Tight)
             var measurables: List<Measurable> = emptyList()
             var widths: List<Int> = emptyList()
             for (fit in fits) {
