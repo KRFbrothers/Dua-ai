@@ -10,6 +10,9 @@ import androidx.compose.ui.unit.sp
 import com.dua.ai.R
 
 /** Inter (SIL OFL 1.1, see assets/licenses/Inter-OFL.txt), bundled as a Latin subset. */
+/** Montserrat Medium (SIL OFL 1.1, see assets/licenses/Montserrat-OFL.txt), Latin subset: the Home tagline only. */
+val MontserratFontFamily = FontFamily(Font(R.font.montserrat_medium, FontWeight.Medium))
+
 val InterFontFamily = FontFamily(
     Font(R.font.inter_regular, FontWeight.Normal),
     Font(R.font.inter_medium, FontWeight.Medium),

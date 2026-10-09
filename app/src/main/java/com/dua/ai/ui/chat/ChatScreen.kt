@@ -56,6 +56,8 @@ fun ChatScreen(
     val drawerState = rememberDrawerState(initialDrawerValue)
     val scope = rememberCoroutineScope()
     var sheet by rememberSaveable { mutableStateOf(initialSheet) }
+    /** Empty Home (new chat): logo and tagline, full mode chip row. */
+    val home = state.messages.isEmpty() && !state.typing
     var deletingId by rememberSaveable { mutableStateOf<String?>(null) }
     var viewer by remember { mutableStateOf(initialViewer) }
     val mediaActions = remember(actions) { ImagineActions(onOpen = { id, index -> viewer = id to index }, onSave = actions.imagine.onSave, onShare = actions.imagine.onShare,
@@ -101,7 +103,7 @@ fun ChatScreen(
                 onNewChat = actions.onNewChat,
             )
             Box(Modifier.weight(1f).fillMaxWidth()) {
-                if (state.messages.isEmpty() && !state.typing) {
+                if (home) {
                     EmptyState()
                 } else {
                     MessageList(state = state, actions = actions, listState = listState, imagineActions = mediaActions)
@@ -118,6 +120,7 @@ fun ChatScreen(
                         onImagine = actions.onImagine,
                         onRunCode = actions.onRunCode,
                         onBuild = { sheet = ChatSheet.Build; actions.onOpenBuild() },
+                        home = home,
                     )
                     Composer(
                         state = state,
@@ -157,6 +160,7 @@ fun ChatScreen(
                 imagine = state.imagineConfig?.let { config -> if (config.enabled) "Create images from your message" else config.imageReason.ifBlank { "Turned off on the server" } },
                 imagineOn = state.imagine,
                 build = state.buildHint.ifEmpty { if (state.buildRepo != null) "On: ${state.buildRepo}" else "Chat about one of your GitHub repositories, read-only" },
+                toggles = if (home) emptyList() else modeToggles(state, actions),
             ),
             onImagine = { on -> sheet = null; actions.onImagine(on) },
             onBuild = { sheet = ChatSheet.Build; actions.onOpenBuild() },

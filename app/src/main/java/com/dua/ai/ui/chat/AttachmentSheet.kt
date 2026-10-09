@@ -9,6 +9,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material.icons.Icons
+import com.dua.ai.ui.theme.DuaTheme
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Brush
 import androidx.compose.material.icons.outlined.Build
@@ -81,7 +85,7 @@ fun AttachmentSheetContent(
     onImagine: (Boolean) -> Unit = {},
     onBuild: () -> Unit = {},
 ) {
-    Column(Modifier.fillMaxWidth().padding(horizontal = Spacing.xl).padding(bottom = Spacing.xxl), verticalArrangement = Arrangement.spacedBy(Spacing.lg)) {
+    Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = Spacing.xl).padding(bottom = Spacing.xxl), verticalArrangement = Arrangement.spacedBy(Spacing.lg)) {
         Text("Add to chat", style = MaterialTheme.typography.titleMedium, modifier = Modifier.semantics { heading() })
         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
             SheetTile("Camera", Icons.Outlined.PhotoCamera, enabled, onCamera, Modifier.weight(1f))
@@ -109,7 +113,9 @@ fun AttachmentSheetContent(
                 Switch(checked = webMode == "page", onCheckedChange = null, enabled = enabled)
             }
         }
-        // Imagine and Build live here (the chip row above the composer keeps Run code, Reasoning and Search).
+        // In a conversation the chip row only shows modes that are on, so every mode can be switched here.
+        if (!modes?.toggles.isNullOrEmpty()) ModeToggleGroup(modes!!.toggles, enabled)
+        // Imagine and Build live here (the Home chip row keeps Run code, Reasoning and Search).
         modes?.imagine?.let { detail ->
             Surface(shape = DuaShape.card, color = MaterialTheme.colorScheme.surfaceContainerHigh) {
                 Row(Modifier.fillMaxWidth().heightIn(min = 64.dp)
@@ -139,8 +145,35 @@ fun AttachmentSheetContent(
     }
 }
 
-/** Mode rows in the + sheet: Imagine (null hides it; text explains its state) and Build (null hides it). */
-data class AttachModes(val imagine: String? = null, val imagineOn: Boolean = false, val build: String? = null)
+/**
+ * Mode rows in the + sheet: [toggles] (Run code, Reasoning, Search, X; shown in conversations), Imagine
+ * (null hides it; text explains its state) and Build (null hides it).
+ */
+data class AttachModes(val imagine: String? = null, val imagineOn: Boolean = false, val build: String? = null, val toggles: List<ModeToggle> = emptyList())
+
+/** One mode switch in the + sheet. */
+data class ModeToggle(val label: String, val detail: String, val icon: ImageVector, val on: Boolean, val onChange: (Boolean) -> Unit)
+
+@Composable
+private fun ModeToggleGroup(toggles: List<ModeToggle>, enabled: Boolean) {
+    Surface(shape = DuaShape.card, color = MaterialTheme.colorScheme.surfaceContainerHigh) {
+        Column {
+            toggles.forEachIndexed { index, toggle ->
+                if (index > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, modifier = Modifier.padding(start = 56.dp))
+                Row(Modifier.fillMaxWidth().heightIn(min = 56.dp)
+                    .toggleable(value = toggle.on, enabled = enabled, role = Role.Switch, onValueChange = toggle.onChange)
+                    .padding(horizontal = Spacing.lg, vertical = Spacing.sm), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(toggle.icon, contentDescription = null, tint = if (toggle.on) DuaTheme.colors.sparkle else MaterialTheme.colorScheme.onSurfaceVariant)
+                    Column(Modifier.weight(1f).padding(horizontal = Spacing.lg)) {
+                        Text(toggle.label, style = MaterialTheme.typography.bodyLarge)
+                        Text(toggle.detail, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Switch(checked = toggle.on, onCheckedChange = null, enabled = enabled)
+                }
+            }
+        }
+    }
+}
 
 @Composable
 private fun SheetTile(label: String, icon: ImageVector, enabled: Boolean, onClick: () -> Unit, modifier: Modifier) {
