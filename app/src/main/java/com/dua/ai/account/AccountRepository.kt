@@ -137,15 +137,6 @@ class AccountRepository(private val api: AccountApi, private val store: SessionP
         val installed = installAuthentication(ticket, AccountSessionCodec.decode(result))
         noticeIfCurrent(installed, "Signed in with Google. Local data was not uploaded.")
     }
-    suspend fun profile(name: String) {
-        val expected = snapshot(); check(expected.value != null) { "Sign in from Profile to continue." }
-        val result = withSnapshot(expected) { api.request("/api/account/profile", "PATCH", JSONObject().put("displayName", name.trim()), it) }
-        val user = AccountSessionCodec.user(result.getJSONObject("user"))
-        synchronized(sessionLock) {
-            check(matches(expected) && user.id == expected.value.user.id) { "Account changed. Retry from the current account." }
-            writeSession(session!!.copy(user = user)); notice("Profile updated.")
-        }
-    }
     suspend fun logout() {
         // Forget locally before waiting on the network, invalidating pending sign-in responses too.
         val (prior, signedOut) = synchronized(sessionLock) {

@@ -40,7 +40,7 @@ class LoginScreenshotTest(private val dark: Boolean) {
         fun modes() = listOf(arrayOf<Any>(true), arrayOf<Any>(false))
 
         private const val ERROR = "Google sign-in failed. Check that this Google account is allowed and try again."
-        private val signedIn = ProfileUiState(email = "fareed@example.com", displayName = "Fareed")
+        private val signedIn = ProfileUiState(email = "fareed@example.com", displayName = "Fareed Ahmad")
     }
 
     @get:Rule val compose = createComposeRule()

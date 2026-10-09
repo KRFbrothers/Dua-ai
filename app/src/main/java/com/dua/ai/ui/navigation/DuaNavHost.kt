@@ -130,7 +130,7 @@ fun DuaNavHost(viewModel: ChatViewModel, voice: ReplyVoice, notificationRoute: P
         }
         composable(DuaDestination.Profile.route) {
             BusyBackGuard(viewModel)
-            ProfileScreen(viewModel, onBack = navigator::back, onCloudSync = { navigator.open(DuaDestination.CloudSync) })
+            ProfileScreen(viewModel, onBack = navigator::back)
         }
         composable(DuaDestination.CloudSync.route) {
             BusyBackGuard(viewModel)

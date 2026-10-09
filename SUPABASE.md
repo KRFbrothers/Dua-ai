@@ -90,8 +90,8 @@ Google is the app's only sign-in method. Android uses native Google Sign-In (Cre
 
 ## 3. Verify after deployment
 
-- On a fresh install, the welcome screen shows **Sign in with Google**. Sign in and check the app opens chat. Settings → Profile shows the Google email and a single **Log out** button. Edit the name used in greetings there.
-- Open Cloud sync from Profile. Review an upload before confirming it. Automatic sync starts only after device/account consent; sign-in alone does not enable it.
+- On a fresh install, the welcome screen shows **Sign in with Google**. Sign in and check the app opens chat. Settings → Profile shows the account card (Google name and email) and a single **Log out** button. Chat greetings use the first word of the Google account name (`full_name`, then `name`; an older saved `display_name` is the fallback).
+- Open Settings → Cloud sync. Review an upload before confirming it. Automatic sync starts only after device/account consent; sign-in alone does not enable it.
 - Sign into the same account on another device, review Download, then confirm the merge. Check drafts and explicitly saved memory notes.
 - Test two accounts: account B must not read account A's snapshot.
 - Review an upload on both devices, upload from one, then confirm the older review on the other. The latter must report a conflict instead of overwriting silently.

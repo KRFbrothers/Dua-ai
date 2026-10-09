@@ -21,7 +21,9 @@ export function accountCapabilities(env={}){
 }
 const validEmail=value=>typeof value==='string'&&value.length<=254&&/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 function cookies(req){return Object.fromEntries((req.headers.get('cookie')||'').split(';').map(value=>value.trim().split('=' )).filter(pair=>pair.length===2));}
-function publicUser(user){if(!user||typeof user.id!=='string'||! /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(user.id))throw Error('Invalid account response');return {id:user.id,email:typeof user.email==='string'?user.email:'',displayName:typeof user.user_metadata?.display_name==='string'?user.user_metadata.display_name.slice(0,80):''};}
+// Greeting/profile name: the Google account name (full_name, then name) wins; an older saved display_name is the fallback.
+function metadataName(metadata){for(const key of ['full_name','name','display_name']){const value=metadata?.[key];if(typeof value==='string'&&value.trim())return value.trim().slice(0,80);}return '';}
+function publicUser(user){if(!user||typeof user.id!=='string'||! /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(user.id))throw Error('Invalid account response');return {id:user.id,email:typeof user.email==='string'?user.email:'',displayName:metadataName(user.user_metadata)};}
 function sessionCookies(session,clear=false){return [cookieNames.access,cookieNames.refresh].map((name,index)=>`${name}=${clear?'':index===0?session.access_token:session.refresh_token}; Path=/api; HttpOnly; Secure; SameSite=Strict; Max-Age=${clear?0:index===0?Math.min(86400,Math.max(60,session.expires_in||3600)):2592000}`);}
 function validSession(data){if(!data||typeof data.access_token!=='string'||typeof data.refresh_token!=='string'||! /^[A-Za-z0-9._-]+$/.test(data.access_token)||! /^[A-Za-z0-9._-]+$/.test(data.refresh_token)||data.access_token.length>10000||data.refresh_token.length>10000)throw Error('Invalid session response');publicUser(data.user);return data;}
 export async function handleAccount(req,env={}){
@@ -41,7 +43,7 @@ export async function handleAccount(req,env={}){
  try{
   if(url.pathname==='/api/account/session'&&req.method==='GET')return json({configured:true,user:await authenticated()});
   if(url.pathname==='/api/account/features'&&req.method==='GET')return json({passwordReset:true,accountDeletion:!!privilegedKey(env.serviceRoleKey)});
-  if(!['POST','PATCH','PUT','DELETE'].includes(req.method))return json({error:'Method not allowed.'},405);
+  if(!['POST','PUT','DELETE'].includes(req.method))return json({error:'Method not allowed.'},405);
   if(!(req.headers.get('content-type')||'').startsWith('application/json'))return json({error:'Use JSON.'},415);
   const raw=await req.text();if(Buffer.byteLength(raw)> (url.pathname==='/api/cloud'?4*1024*1024+1024:16384))return json({error:'Request too large.'},413);
   let body;try{body=JSON.parse(raw||'{}');}catch{return json({error:'Invalid request.'},400);}if(!body||typeof body!=='object'||Array.isArray(body))return json({error:'Invalid request.'},400);
@@ -88,10 +90,6 @@ export async function handleAccount(req,env={}){
    try{const storage=await import('./storage.mjs');const files=storage.storageConfig({SUPABASE_URL:config.url,SUPABASE_ANON_KEY:config.key,DUA_FILES_BUCKET:env.filesBucket});if(files.enabled&&token){const list=await storage.listOwnerFiles(files,token,user.id.toLowerCase(),{fetcher,signal:req.signal});if(list.length)await storage.removeFiles(files,token,list.map(file=>file.path),{fetcher,signal:req.signal});}}catch{}
    // Only this verified user's id is used. Never accept an owner id from request JSON.
    const result=await fetcher(config.url+'/auth/v1/admin/users/'+encodeURIComponent(user.id),{method:'DELETE',headers:{apikey:serviceKey,Authorization:'Bearer '+serviceKey,'Content-Type':'application/json'},body:JSON.stringify({should_soft_delete:false}),signal:AbortSignal.any([req.signal,AbortSignal.timeout(15000)]),redirect:'error'});if(!result.ok)return json({error:'Account deletion failed. The account and local data may still be available. Check Profile before retrying.'},502);if(!native)extraCookies=sessionCookies(null,true);return json({user:null,deleted:true,message:'Account deleted. Its cloud snapshot and request usage were deleted. Local chats and memories stay on this device.'});
-  }
-  if(url.pathname==='/api/account/profile'&&req.method==='PATCH'){
-   if(typeof body.displayName!=='string'||!body.displayName.trim()||body.displayName.length>80)return json({error:'Enter a display name up to 80 characters.'},400);
-   const result=await request('/auth/v1/user','PUT',{data:{display_name:body.displayName.trim()}},token);return result.response.ok?json({user:publicUser(result.data)}):json({error:'Profile could not be updated.'},502);
   }
   if(url.pathname==='/api/cloud'&&(req.method==='PUT'||req.method==='DELETE')){
    if(body.expectedAccountId!==undefined&&body.expectedAccountId!==user.id)return json({error:'Account changed. Review the cloud snapshot again.'},409);
