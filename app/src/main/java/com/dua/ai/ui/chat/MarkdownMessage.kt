@@ -50,7 +50,7 @@ fun MarkdownMessage(markdown: String, modifier: Modifier = Modifier) {
     val type = MaterialTheme.typography
     val scheme = MaterialTheme.colorScheme
     val colors = DuaTheme.colors
-    val body = type.bodyLarge
+    val body = type.bodyLarge.copy(lineHeight = type.bodyLarge.fontSize * 1.55f)
     val inlineCode = body.copy(fontFamily = FontFamily.Monospace, fontSize = body.fontSize * 0.9f)
     CompositionLocalProvider(LocalUriHandler provides uriHandler) {
         Markdown(
@@ -75,7 +75,7 @@ fun MarkdownMessage(markdown: String, modifier: Modifier = Modifier) {
                 quote = body.copy(fontStyle = FontStyle.Italic, color = scheme.onSurfaceVariant),
                 link = body.copy(color = scheme.primary, textDecoration = TextDecoration.Underline),
             ),
-            padding = markdownPadding(block = 5.dp, list = 4.dp, listItemBottom = 4.dp, indentList = 8.dp),
+            padding = markdownPadding(block = 8.dp, list = 4.dp, listItemBottom = 6.dp, indentList = 12.dp),
             dimens = markdownDimens(codeBackgroundCornerSize = 6.dp, tableCellWidth = 140.dp, tableCellPadding = 12.dp, tableCornerSize = 10.dp),
             components = markdownComponents(
                 codeFence = { model -> MarkdownCodeFence(model.content, model.node) { code, language -> CodeBlock(code, language) } },
