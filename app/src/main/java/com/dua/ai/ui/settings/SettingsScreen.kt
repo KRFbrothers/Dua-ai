@@ -57,7 +57,7 @@ data class SettingsUiState(
 internal fun themeLabel(theme: String) = when (theme) { "light" -> "Light"; "system" -> "Match system"; else -> "Dark" }
 internal fun fontLabel(font: String) = when (font) { "system" -> "Device font"; "serif" -> "Serif"; "monospace" -> "Monospace"; else -> "Inter" }
 
-/** Settings home: five groups, one entry per page. */
+/** Settings home: five groups, one entry per page. Server-first copy. */
 @Composable
 fun SettingsScreen(viewModel: ChatViewModel, onBack: () -> Unit, onOpen: (DuaDestination) -> Unit) {
     val preferences by viewModel.localSettings.collectAsState()
@@ -95,14 +95,14 @@ fun SettingsContent(state: SettingsUiState, onBack: () -> Unit, onOpen: (DuaDest
     onHaptic: (Boolean) -> Unit, onGeneratedVoice: (Boolean) -> Unit) {
     DuaPageScaffold(title = "Settings", onBack = onBack, backLabel = "Back to chat") {
         SettingsSection("Account") {
-            SettingsRow(Icons.Outlined.PersonOutline, "Profile", state.email ?: "Not signed in · optional") { onOpen(DuaDestination.Profile) }
+            SettingsRow(Icons.Outlined.PersonOutline, "Profile", state.email ?: "Not signed in") { onOpen(DuaDestination.Profile) }
             SettingsDivider()
-            SettingsRow(Icons.Outlined.CloudSync, "Cloud sync", "Back up chats and notes across your devices") { onOpen(DuaDestination.CloudSync) }
+            SettingsRow(Icons.Outlined.CloudSync, "Sync", "Chats and notes follow your account") { onOpen(DuaDestination.CloudSync) }
         }
         SettingsSection("Personalization") {
             SettingsRow(Icons.Outlined.Palette, "Appearance", "${themeLabel(state.theme)} · ${fontLabel(state.font)}") { onOpen(DuaDestination.Appearance) }
             SettingsDivider()
-            SettingsRow(Icons.Outlined.Psychology, "Memory", if (state.memoryEnabled) "On · stored on this device" else "Off · stored on this device") { onOpen(DuaDestination.Memory) }
+            SettingsRow(Icons.Outlined.Psychology, "Memory", if (state.memoryEnabled) "On · stored with your account" else "Off · stored with your account") { onOpen(DuaDestination.Memory) }
             SettingsDivider()
             SettingsSwitchRow(Icons.Outlined.Vibration, "Haptic feedback", checked = state.haptic, onCheckedChange = onHaptic)
             if (state.imagine != null) {
@@ -125,10 +125,10 @@ fun SettingsContent(state: SettingsUiState, onBack: () -> Unit, onOpen: (DuaDest
                 },
                 checked = state.generatedVoice, enabled = state.generatedVoiceToggleEnabled, onCheckedChange = onGeneratedVoice)
         }
-        SettingsSection("Data & privacy") {
-            SettingsRow(Icons.Outlined.Storage, "Data controls", "Export, import or clear chats and uploaded files") { onOpen(DuaDestination.DataControls) }
+        SettingsSection("Data") {
+            SettingsRow(Icons.Outlined.Storage, "Data controls", "Export, import or clear chats and files") { onOpen(DuaDestination.DataControls) }
             SettingsDivider()
-            SettingsRow(Icons.Outlined.Shield, "Privacy", "What stays on this device and what is sent") { onOpen(DuaDestination.Privacy) }
+            SettingsRow(Icons.Outlined.Shield, "Your data", "Chats and memory live with your account") { onOpen(DuaDestination.Privacy) }
             SettingsDivider()
             SettingsRow(Icons.Outlined.IosShare, "Sharing", "Share a conversation as text") { onOpen(DuaDestination.Sharing) }
             SettingsDivider()
