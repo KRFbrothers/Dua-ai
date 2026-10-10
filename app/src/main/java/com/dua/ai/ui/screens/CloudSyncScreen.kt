@@ -29,7 +29,7 @@ fun CloudSyncScreen(viewModel: ChatViewModel, onBack: () -> Unit, onProfile: () 
                     }, enabled = sync.phase != "checking" && !state.busy && !dataBusy && (sync.enabled || (state.configured && state.user != null && preview == null)),
                         modifier = Modifier.semantics { contentDescription = "Automatic cloud sync on this device" })
                 }
-                Text("When enabled, saved chats, drafts and memory notes sync while this app is open and online. File/audio bytes stay on the device. Sync pauses during replies and manual reviews.", style = MaterialTheme.typography.bodyMedium)
+                Text("When enabled, saved chats, drafts, memory and chat metadata sync while this app is open and online. Raw file/audio bytes stay in private Storage. Sync pauses during replies and manual reviews.", style = MaterialTheme.typography.bodyMedium)
                 Text(sync.message, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
                 if (sync.phase == "checking") {
                     TextButton(onClick = { viewModel.disableAutomaticSync() }) { Text("Cancel sync setup") }

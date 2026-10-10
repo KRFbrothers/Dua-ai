@@ -3,6 +3,8 @@ package com.dua.ai.setup
 import com.dua.ai.account.CloudSnapshot
 import com.dua.ai.account.CloudSnapshotCodec
 import com.dua.ai.history.SavedChat
+import com.dua.ai.history.ChatHistoryCodec
+import org.json.JSONObject
 import java.security.MessageDigest
 
 /** Only digests/counts are persisted; never duplicate chat or memory plaintext in sync settings. */
@@ -15,10 +17,15 @@ object AutomationSyncPolicy {
     private val accountPattern = Regex("[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}")
     private val digestPattern = Regex("[a-f0-9]{64}")
     fun digest(text: String): String = MessageDigest.getInstance("SHA-256").digest(text.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it.toInt() and 255) }
-    private fun canonical(chat: SavedChat): String = buildString {
-        fun part(text: String) { append(text.length); append(':'); append(text) }
-        part(chat.updatedAt.toString()); part(chat.model); part(chat.draft)
-        chat.messages.forEach { part(if (it.isUser) "user" else "model"); part(it.text); part(it.state) }
+    private fun canonical(chat: SavedChat): String {
+        // Hash the complete server-backed representation, but omit IDs so imported copies do not
+        // look like content edits. The plaintext exists only transiently for the digest.
+        val json = JSONObject(ChatHistoryCodec.export(listOf(chat), exportedAt = 0, includeServerFields = true))
+        val item = json.getJSONArray("chats").getJSONObject(0)
+        item.remove("id")
+        val messages = item.getJSONArray("messages")
+        for (index in 0 until messages.length()) messages.getJSONObject(index).remove("id")
+        return json.toString()
     }
     fun signature(chat: SavedChat): String = digest(canonical(chat))
     fun validate(snapshot: CloudSnapshot): CloudSnapshot { CloudSnapshotCodec.encode(snapshot); return snapshot }
