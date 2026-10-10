@@ -3,7 +3,7 @@ package com.dua.ai.ui.chat
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.offset
+import androidx.compose.material3.TextButton
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
@@ -85,7 +85,7 @@ fun AssistantMessage(
         if (message.state == "stopped") Text(if (message.text.isEmpty()) "Stopped" else "Stopped · partial reply",
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = Spacing.sm))
-        if (message.state == "complete" || (message.state == "stopped" && message.text.isNotEmpty())) MessageActions(
+        if (message.state == "complete" || message.state == "stopped") MessageActions(
             copyText = message.text + com.dua.ai.model.CodeRuns.copyText(message.codeRuns),
             showRetry = isLast,
             retryEnabled = isLast && !typing,
@@ -117,17 +117,19 @@ fun MessageActions(
     onSpeak: () -> Unit,
 ) {
     val clipboard = LocalClipboardManager.current
-    var copied by remember { mutableStateOf(false) }
+    var copied by remember(copyText) { mutableStateOf(false) }
     LaunchedEffect(copied) { if (copied) { delay(2000); copied = false } }
     val tint = MaterialTheme.colorScheme.onSurface.copy(alpha = .86f)
-    // Pull the row left so the first icon lines up with the text above it.
-    Row(Modifier.offset(x = -Spacing.md, y = -Spacing.sm), verticalAlignment = Alignment.CenterVertically) {
-        IconButton(onClick = { clipboard.setText(AnnotatedString(copyText)); copied = true }) {
+    val copyTint = if (copyText.isNotBlank()) tint else tint.copy(alpha = .38f)
+    Row(Modifier.padding(top = Spacing.xs), verticalAlignment = Alignment.CenterVertically) {
+        TextButton(onClick = { clipboard.setText(AnnotatedString(copyText)); copied = true }, enabled = copyText.isNotBlank()) {
             Icon(if (copied) Icons.Outlined.Check else Icons.Outlined.ContentCopy, if (copied) "Response copied" else "Copy response",
-                tint = tint, modifier = Modifier.size(Sizes.iconSmall))
+                tint = copyTint, modifier = Modifier.size(Sizes.iconSmall))
+            Text(if (copied) "Copied" else "Copy", color = copyTint, modifier = Modifier.padding(start = Spacing.xs))
         }
-        if (showRetry) IconButton(onClick = onRetry, enabled = retryEnabled) {
+        if (showRetry) TextButton(onClick = onRetry, enabled = retryEnabled) {
             Icon(Icons.Outlined.Refresh, retryDescription, tint = if (retryEnabled) tint else tint.copy(alpha = .38f), modifier = Modifier.size(Sizes.iconSmall))
+            Text("Retry", modifier = Modifier.padding(start = Spacing.xs))
         }
         IconButton(onClick = onSpeak, enabled = speakEnabled) {
             Icon(if (speaking) Icons.Outlined.StopCircle else Icons.AutoMirrored.Outlined.VolumeUp, speakDescription,

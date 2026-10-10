@@ -13,7 +13,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import androidx.compose.material3.TextButton
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -31,6 +32,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.dua.ai.ui.theme.CodeTextStyle
 import com.dua.ai.ui.theme.DuaShape
@@ -98,7 +100,7 @@ internal fun highlightDiff(code: String, dark: Boolean): AnnotatedString {
 fun CodeBlock(code: String, language: String?, modifier: Modifier = Modifier) {
     val colors = DuaTheme.colors
     val clipboard = LocalClipboardManager.current
-    var copied by remember { mutableStateOf(false) }
+    var copied by remember(code) { mutableStateOf(false) }
     LaunchedEffect(copied) { if (copied) { delay(2000); copied = false } }
     val text = remember(code, language, colors.isDark) { highlightCode(code.trimEnd('\n'), language, colors.isDark) }
     Surface(shape = DuaShape.codeBlock, color = colors.codeBackground, border = BorderStroke(1.dp, colors.codeBorder),
@@ -106,14 +108,17 @@ fun CodeBlock(code: String, language: String?, modifier: Modifier = Modifier) {
         Column {
             Row(Modifier.fillMaxWidth().background(colors.codeHeader).padding(start = Spacing.md), verticalAlignment = Alignment.CenterVertically) {
                 Text(language?.trim()?.takeIf { it.isNotEmpty() } ?: "code", style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
-                IconButton(onClick = { clipboard.setText(AnnotatedString(code)); copied = true }) {
+                    color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                TextButton(onClick = { clipboard.setText(AnnotatedString(code)); copied = true }) {
                     Icon(if (copied) Icons.Outlined.Check else Icons.Outlined.ContentCopy, if (copied) "Code copied" else "Copy code",
                         tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(Sizes.iconTiny + 2.dp))
+                    Text(if (copied) "Copied" else "Copy", modifier = Modifier.padding(start = Spacing.xs), style = MaterialTheme.typography.labelMedium)
                 }
             }
-            Text(text, style = CodeTextStyle, color = colors.onCode, softWrap = false,
-                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(Spacing.md))
+            SelectionContainer {
+                Text(text, style = CodeTextStyle, color = colors.onCode, softWrap = false,
+                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(Spacing.md))
+            }
         }
     }
 }
