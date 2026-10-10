@@ -179,7 +179,7 @@ object ImagineCodec {
 
     // ---- Persistence ----
 
-    /** Local history keeps temporary provider links too; exports and cloud snapshots keep stored references only. */
+    /** The server snapshot and phone cache keep temporary provider links; exports keep stored references only. */
     fun mediaArray(items: List<GeneratedMedia>, local: Boolean): JSONArray = JSONArray().apply {
         items.take(MAX_MEDIA).forEach { item ->
             if (item.path == null && !local) return@forEach

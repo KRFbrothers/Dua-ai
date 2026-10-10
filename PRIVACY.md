@@ -33,11 +33,11 @@ Dua is a personal, single-user app: the backend is meant to be restricted to the
 
 #### Collection
 - **Scope:** The server is the source of truth for chat messages and memory notes; the phone keeps only a disposable cache for offline viewing and speed.
-- **Cloud Sync (Optional):** Users explicitly opt-in to cloud snapshots. Signing in is what makes the server copy authoritative; the phone cache is replaced by the server copy on sync.
+- **Server-backed storage:** For the owner’s signed-in account, the server snapshot is the source of truth for chat messages and memory notes. The phone keeps a disposable cache for offline viewing and startup; sync refreshes that cache from the server. Without an account, chat is temporary cache-only mode and cannot become authoritative.
 
 #### On-device cache
 - **Android:** A cache of chat history and app preferences is stored in app-private `SharedPreferences`; they are not encrypted by the app. Android OS sandboxing protects app-private files, but this is not equivalent to an encrypted database.
-- **Backup:** Android app backup and device transfer are enabled. The account-session and automatic-sync preference files are excluded, but chat history and other app preferences are not excluded by the checked-in backup rules. Whether a backup is created or restored depends on Android/device backup settings and the user's account. Users should not assume local chats remain only on one device.
+- **Backup:** Android app backup and device transfer are enabled. The account-session and automatic-sync preference files are excluded, but chat history and other app preferences are not excluded by the checked-in backup rules. Whether a backup is created or restored depends on Android/device backup settings and the user's account. Users should not assume the phone cache is the authoritative copy.
 - **Retention:** Retained until the user deletes the data, clears app storage, uninstalls the app, or an enabled device backup restores it. Backup copies may have separate retention.
 
 #### Cloud Storage (Opt-In)
@@ -59,7 +59,7 @@ Dua is a personal, single-user app: the backend is meant to be restricted to the
 - Local notification, appearance and provider selections are stored in app settings, not Supabase cloud snapshots.
 - Provider API keys are configured server-side and are not stored in the app's local account profile.
 
-#### Local Account (No Cloud)
+#### Signed-out cache mode
 - Users can chat without creating an account (local-only mode).
 - No email or sign-up required for basic chat.
 
@@ -70,7 +70,7 @@ Dua is a personal, single-user app: the backend is meant to be restricted to the
 
 #### Retention
 - Account data is retained as long as the account is active.
-- Account deletion removes the Supabase account and associated cloud data when the configured deletion flow succeeds. It does not clear local chats, drafts, preferences or memories; users must delete those separately. Supabase backup retention is outside Dua's control.
+- Account deletion removes the Supabase account and associated server data when the configured deletion flow succeeds. A phone cache may remain until cleared; clear it separately if needed. Supabase backup retention is outside Dua's control.
 
 ---
 
@@ -82,8 +82,8 @@ Dua is a personal, single-user app: the backend is meant to be restricted to the
 - **Stored files (signed-in owner only):** Larger files, spreadsheets and audio are uploaded from the phone straight to a private Supabase Storage bucket (`dua-files`) in a folder named after your account ID; file names are not part of the stored path. For each reply that uses them, the backend either downloads the file and sends it to the provider (Gemini; Kimi images), gives the provider a link that expires after one hour (OpenAI, xAI/Grok, Claude), or extracts text itself (spreadsheets as CSV, text files, PDFs for providers without PDF input). Gemini may keep a copy for 48 hours when large files go through its Files API. xAI handles attached PDFs with its document search tool.
 - **Audio:** Audio files and recorded voice notes are transcribed (by default xAI speech-to-text, then Gemini, then OpenAI, depending on which keys are configured). The transcript is sent to the chat provider and kept with the message on the device, so follow-ups don't transcribe the audio again.
 - **Imagine (signed-in owner only):** Your description and any photo you attach for editing or animating are sent to xAI (Grok Imagine) or Google (Gemini, with `store: false`). Photos are read from your private bucket by the backend and sent as inline data, not as public links. Generated images come back as data; finished videos are downloaded by the backend from xAI's temporary link. Both are saved to your folder in the private `dua-files` bucket, and the app downloads them into its cache to show, save or share them. Saving copies a file into your phone's gallery (Pictures/Dua or Movies/Dua); sharing hands it to the app you pick. Daily usage counts (not prompts) are stored in Supabase to enforce caps.
-- **Run code:** When you turn on Run code, the provider writes and runs Python in its own hosted sandbox (Google for Dua/Gemini; OpenAI or xAI only if the owner enabled them). The code works on what is already in the conversation, including spreadsheets and text files you attached. Nothing runs on your phone or on Dua's server. The code and its output are shown in the reply and saved with it in local history on your device; they are not included in exports or cloud snapshots.
-- **Reasoning:** In Reasoning mode the model's thinking summary is saved with the reply in local history, exports and cloud snapshots.
+- **Run code:** When you turn on Run code, the provider writes and runs Python in its own hosted sandbox (Google for Dua/Gemini; OpenAI or xAI only if the owner enabled them). The code works on what is already in the conversation, including spreadsheets and text files you attached. Nothing runs on your phone or on Dua's server. The code and its output are shown in the reply and saved in the server snapshot and phone cache; exports remain user-initiated.
+- **Reasoning:** In Reasoning mode the model's thinking summary is saved with the reply in the server snapshot, phone cache and exports.
 - **Metadata:** Timestamp, model name, message count (to API endpoints).
 
 #### What Dua Does NOT Share
@@ -124,7 +124,7 @@ API keys are stored server-side (Vercel Functions or Supabase) and are never exp
 - **Source icons:** to show a site icon on a source chip, the app requests `https://<site>/favicon.ico` directly from that site (no cookies). The site learns your IP address and that its icon was requested.
 
 #### Long conversations
-- When a chat outgrows the selected model's budget, the server asks the same provider to summarise the older turns. The summary is stored with the chat **on your device only** (not in exports or cloud snapshots) and sent with later messages in that chat. Deleting the chat deletes it.
+- When a chat outgrows the selected model's budget, the server asks the same provider to summarise the older turns. The summary is stored with the chat in the server snapshot and phone cache; exports remain user-initiated and sent with later messages in that chat. Deleting the chat deletes it.
 
 #### User Control
 - Both modes are optional and off by default.
@@ -144,7 +144,7 @@ API keys are stored server-side (Vercel Functions or Supabase) and are never exp
 #### Build mode
 - When you use Build mode, the server reads the files Gemini asks for from the repository you picked and sends their contents, the file list and your messages to Google's Gemini API to produce the answer. Up to 40 files and 600 KB per reply by default.
 - Private repositories are included if your token can read them, so their code is sent to Gemini when Build mode reads it. Google's Gemini API terms apply (on the free AI Studio tier, Google may use prompts to improve its products).
-- The app keeps the repository name and the list of files read with the chat in local history on your device. A change proposal (including the proposed file contents, so the pull request can still be created later, and the pull request link once created) is kept in the same local history. None of this is included in exports or cloud snapshots. Dua does not store file contents on the server.
+- The app keeps the repository name and the list of files read with the chat in the server snapshot and phone cache. A change proposal (including the proposed file contents, so the pull request can still be created later, and the pull request link once created) is kept in the same server snapshot and phone cache. Export remains user-initiated; these records are not provider API payloads unless the chat is sent. Dua does not store file contents on the server.
 
 #### Data Shared
 - Repository names, visibility and descriptions returned by GitHub.
@@ -190,7 +190,7 @@ API keys are stored server-side (Vercel Functions or Supabase) and are never exp
 - **Local Data:** Users can use in-app data controls or clear app storage. Android backup may retain or restore app data according to device settings.
 - **Uploaded files:** Deleting a chat deletes the files uploaded in it. Settings → Data & privacy → Data controls shows storage used and has **Delete all uploaded files**. Clearing all chats deletes their files too. Clearing app storage without deleting chats first leaves files in the bucket; use Delete all uploaded files after signing in again.
 - **Cloud Data:** Users can delete snapshots manually or request full account deletion.
-- **Account Deletion:** Available from Profile when configured. It removes the account/cloud data on successful completion, and first tries to delete your uploaded files; it does not remove local chats or memories. Supabase backup-retention timing is outside Dua's control.
+- **Account Deletion:** Available from Profile when configured. It removes the account/cloud data on successful completion, and first tries to delete your uploaded files; it does not remove the phone cache; clear the cache separately if you want the device copy removed. Supabase backup-retention timing is outside Dua's control.
 
 ### Portability
 - Users can export chat history and settings in standard JSON format.

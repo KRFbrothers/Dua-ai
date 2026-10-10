@@ -1,6 +1,6 @@
 # Supabase account and cloud sync setup
 
-Supabase provides Google-backed accounts, device logout, reviewed chat/memory snapshot transfers and opt-in foreground automatic sync for the Android app. The app signs in only with native Google sign-in (see below); it has no email/password UI. Production uses the Vercel backend at `https://dua-cyan.vercel.app`; deployed settings must be verified in the hosting dashboard. Credentials remain in server configuration. Native Google sign-in, deletion and account protection are described below.
+Supabase provides Google-backed accounts, device logout, the authoritative server snapshot for chats and memory, reviewed transfers and optional foreground cache refresh for the Android app. The app signs in only with native Google sign-in (see below); it has no email/password UI. Production uses the Vercel backend at `https://dua-cyan.vercel.app`; deployed settings must be verified in the hosting dashboard. Credentials remain in server configuration. Native Google sign-in, deletion and account protection are described below.
 
 ## 1. Create and configure the project
 
@@ -96,7 +96,7 @@ Google is the app's only sign-in method. Android uses native Google Sign-In (Cre
 - Test two accounts: account B must not read account A's snapshot.
 - Review an upload on both devices, upload from one, then confirm the older review on the other. The latter must report a conflict instead of overwriting silently.
 - Stored files: sign in as the owner, attach a PDF over 2 MB, check the upload progress, send, then ask a follow-up about it. Delete the chat and check Storage → `dua-files` → your folder no longer has the file. Try `GET /api/files/usage` as a different account: it must return 403.
-- Log out from Profile (the only place it exists), confirm the dialog, and check the session clears while local chats and memories remain. Clearing local data does not clear cloud data; use the separate reviewed Clear cloud snapshot action.
+- Log out from Profile, confirm the dialog, and check the session clears while the server snapshot remains authoritative. The phone cache may remain until cleared; use the separate reviewed Clear server snapshot action to delete server data.
 
 ## Data and security behavior
 
@@ -104,11 +104,11 @@ Cloud storage uses whole snapshots with revision checks. Manual uploads replace 
 
 Limits: 100 chats per snapshot, 500 messages per chat, 8,000 draft characters, 1,048,576 message characters, 10 memory notes of 200 characters each, and 4 MiB of normalized app JSON. PostgreSQL's JSON representation includes spaces, so snapshots near the limit may need to be reduced. File/audio bytes, stored-file references, audio transcripts, local settings and provider keys are not synced. Saved memory notes are included even if memory use is currently switched off; download preserves that opt-in switch. The review shows drafts and notes before upload.
 
-Local data belongs to the device, not a separate per-account local namespace. Logout retains it. On shared devices, inspect the review before uploading local data to a different account and clear local data when appropriate.
+The phone cache is disposable and is separate from the signed-in server snapshot. Logout does not delete server data; clear the cache when appropriate on a shared device. Never treat a restored cache as authoritative before signing in and syncing the owner account.
 
 For non-native callers the backend still issues Secure, HttpOnly, SameSite=Strict cookies scoped to `/api`. Android encrypts tokens with Android Keystore and excludes session preferences from cloud backup and device transfer. Logout attempts server revocation and always permits local native session removal; if revocation cannot be confirmed, an already issued JWT may remain usable until expiry.
 
-Cloud storage is protected by user-token RLS and revision checks; it is not end-to-end encrypted. Optional account deletion and native Google sign-in are implemented with separate setup. Model-based automatic memory extraction, server push and background/realtime synchronization remain pending. Reviewed local memory proposals and foreground sync are available.
+Cloud storage is protected by user-token RLS and revision checks; it is not end-to-end encrypted. Account deletion and native Google sign-in are implemented with separate setup. Model-based automatic memory extraction, server push and background/realtime synchronization remain pending. Reviewed memory proposals and foreground cache refresh are available.
 
 ## Validation status
 

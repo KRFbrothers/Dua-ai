@@ -93,7 +93,7 @@ class AccountRepository(private val api: AccountApi, private val store: SessionP
         synchronized(sessionLock) {
             check(matches(expected)) { "Account changed. Review account deletion again." }
             writeSession(null, authenticationChange = true)
-            notice("Account and its cloud data deleted. Local chats and memories stay on this device.")
+            notice("Account and its server data deleted. The phone cache remains until cleared.")
         }
     }
     private fun applyLoadedUser(expected: Snapshot, user: AccountUser?): Boolean = synchronized(sessionLock) {

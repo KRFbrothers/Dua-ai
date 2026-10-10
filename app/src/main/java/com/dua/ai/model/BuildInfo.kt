@@ -23,7 +23,7 @@ object BuildInfos {
     const val MAX_FILES = 100
     fun validRepository(value: String?): Boolean = value != null && REPOSITORY.matches(value)
 
-    /** Lenient: the server's `build` event / JSON, or local history. Invalid entries are dropped. */
+    /** Lenient: the server's `build` event / JSON, or the server snapshot and phone cache. Invalid entries are dropped. */
     fun fromJson(json: JSONObject?): BuildInfo? {
         val repository = json?.optString("repository")?.takeIf { validRepository(it) } ?: return null
         val branch = json.optString("branch").takeIf { BRANCH.matches(it) }.orEmpty()
