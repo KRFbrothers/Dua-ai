@@ -101,3 +101,11 @@ The matching Gradle properties are `duaReleaseStoreFile`, `duaReleaseStorePasswo
 **Updates.** Android only installs an update signed with the same key as the installed app. Switching to a different key (a personal release key, or another machine's debug key) requires uninstalling first, which deletes the phone cache. Confirm the authoritative server snapshot is synced before uninstalling.
 
 No signing keys, Android release workflow or signed artifacts are supplied by this repository.
+
+## Phase 6 repository validation record (2026-10-10)
+
+- [x] `:app:assembleDebug` completed successfully with the documented Android/Gradle cache environment. APK: `app/build/outputs/apk/debug/app-debug.apk` (25 MB).
+- [x] Core Android JVM tests for `history`, `network`, `account`, `setup`, and `model` completed successfully (31 tests).
+- [ ] The full Android JVM suite is not green in this environment: 40 Roborazzi/Compose interaction tests fail before assertions in `MavenDependencyResolver` with `FileNotFoundException`. Re-run with a writable, fully populated Maven/Gradle cache before treating this as an app regression.
+- [ ] Backend tests could not be completed because `npm ci` was blocked fetching the locked SheetJS tarball from `cdn.sheetjs.com` (HTTP 403). The prior import error for `xlsx` is therefore an environment/dependency-install issue, not a verified production failure.
+- [ ] Physical-device, staging-provider, Supabase, owner-lock, and live Vercel checks remain required; this validation was repository/build-only.
