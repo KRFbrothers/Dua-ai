@@ -348,7 +348,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         if (changed) saveHistory()
     }
 
-    /** A stopped stream keeps its partial text; an empty one disappears (or a retried reply comes back). */
+    /** Keep chat turns for Retry; unfinished Imagine placeholders still disappear on Stop. */
     private fun finalizeStreaming(): Boolean {
         val original = retryOriginal
         retryOriginal = null
@@ -356,9 +356,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         _messages.value = _messages.value.mapNotNull { message ->
             when {
                 !message.streaming -> message
-                message.text.isNotBlank() -> message.copy(state = "stopped", thinkingSeconds = message.thinkingSeconds ?: elapsedThinking(message))
-                original != null && original.id == message.id -> original
-                else -> null
+                original != null && original.id == message.id && message.text.isBlank() -> original
+                message.isImagine && message.text.isBlank() -> null
+                else -> message.copy(state = "stopped", thinkingSeconds = message.thinkingSeconds ?: elapsedThinking(message))
             }
         }
         return true

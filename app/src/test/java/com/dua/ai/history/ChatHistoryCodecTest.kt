@@ -21,6 +21,15 @@ class ChatHistoryCodecTest {
         assertEquals("new", active)
         assertEquals(listOf(first), restored)
     }
+    @Test fun stoppedBeforeFirstTokenSurvivesReloadAndKeepsPromptPreview() {
+        val prompt = ChatMessage(text = "Explain this", isUser = true)
+        val stopped = ChatMessage(text = "", isUser = false, state = "stopped")
+        val chat = SavedChat("stopped", "Dua", "", listOf(prompt, stopped), 20)
+        val restored = ChatHistoryCodec.decode(ChatHistoryCodec.encode(listOf(chat), chat.id)).second.single()
+        assertEquals(listOf(prompt, stopped), restored.messages)
+        assertEquals(prompt.text, restored.preview)
+        assertEquals("Draft: Try another question", restored.copy(draft = "Try another question").preview)
+    }
     @Test fun deletedChatStaysDeletedAfterReload() {
         val records = listOf(first, first.copy(id = "two"))
         val restored = ChatHistoryCodec.decode(ChatHistoryCodec.encode(records.filterNot { it.id == "one" }, "two")).second

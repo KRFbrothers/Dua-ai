@@ -22,7 +22,7 @@ data class SavedChat(
 ) {
     val title: String get() = messages.firstOrNull { it.isUser }?.text?.take(60) ?: "Draft"
     val preview: String get() = draft.takeIf { it.isNotBlank() }?.let { "Draft: $it" }
-        ?: messages.lastOrNull()?.text.orEmpty()
+        ?: messages.lastOrNull { it.text.isNotBlank() }?.text.orEmpty()
 }
 
 object ChatHistoryCodec {

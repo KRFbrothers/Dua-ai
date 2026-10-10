@@ -1,7 +1,9 @@
 package com.dua.ai.ui.chat
 
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.TextButton
 import androidx.compose.foundation.layout.padding
@@ -22,7 +24,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
@@ -70,7 +71,7 @@ fun AssistantMessage(
         // Build mode: which repository files the server read for this reply (read-only).
         message.build?.let { BuildFiles(message.id, it, live = streaming, Modifier.padding(bottom = Spacing.sm), initiallyExpanded = buildExpanded) }
         // Run code: what the provider executed, collapsed above the answer (the answer explains the result).
-        if (message.codeRuns.isNotEmpty()) CodeRuns(message.id, message.codeRuns, Modifier.padding(bottom = Spacing.sm), initiallyExpanded = codeExpanded)
+        if (message.codeRuns.isNotEmpty()) CodeRuns(message.id, message.codeRuns, Modifier.padding(bottom = Spacing.sm), initiallyExpanded = codeExpanded, live = streaming)
         if (streaming && message.text.isEmpty() && message.thinking == null && message.codeRuns.isEmpty() && message.build == null) TypingIndicator()
         if (parts.body.isNotEmpty()) MarkdownMessage(parts.body)
         if (parts.sources.isNotEmpty() && !streaming) SourceChips(parts.sources, Modifier.padding(top = Spacing.md))
@@ -95,7 +96,7 @@ fun AssistantMessage(
                 else -> "Retry response with web off"
             },
             speaking = speaking,
-            speakEnabled = speakEnabled,
+            speakEnabled = speakEnabled && (speaking || message.text.isNotBlank()),
             speakDescription = if (speaking) "Stop response voice" else if (generatedVoice) "Generate AI voice for this response" else "Speak response with device voice",
             onRetry = onRetry,
             onSpeak = onSpeak,
@@ -103,7 +104,8 @@ fun AssistantMessage(
     }
 }
 
-/** Copy · retry · read aloud. Dark enough to see, 48-dp touch targets. */
+/** Copy · retry · read aloud. Actions wrap when a large font needs more room. */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun MessageActions(
     copyText: String,
@@ -121,7 +123,9 @@ fun MessageActions(
     LaunchedEffect(copied) { if (copied) { delay(2000); copied = false } }
     val tint = MaterialTheme.colorScheme.onSurface.copy(alpha = .86f)
     val copyTint = if (copyText.isNotBlank()) tint else tint.copy(alpha = .38f)
-    Row(Modifier.padding(top = Spacing.xs), verticalAlignment = Alignment.CenterVertically) {
+    FlowRow(Modifier.fillMaxWidth().padding(top = Spacing.xs),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
+        verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
         TextButton(onClick = { clipboard.setText(AnnotatedString(copyText)); copied = true }, enabled = copyText.isNotBlank()) {
             Icon(if (copied) Icons.Outlined.Check else Icons.Outlined.ContentCopy, if (copied) "Response copied" else "Copy response",
                 tint = copyTint, modifier = Modifier.size(Sizes.iconSmall))
@@ -131,7 +135,7 @@ fun MessageActions(
             Icon(Icons.Outlined.Refresh, retryDescription, tint = if (retryEnabled) tint else tint.copy(alpha = .38f), modifier = Modifier.size(Sizes.iconSmall))
             Text("Retry", modifier = Modifier.padding(start = Spacing.xs))
         }
-        IconButton(onClick = onSpeak, enabled = speakEnabled) {
+        IconButton(onClick = onSpeak, enabled = speakEnabled, modifier = Modifier.size(Sizes.touchTarget)) {
             Icon(if (speaking) Icons.Outlined.StopCircle else Icons.AutoMirrored.Outlined.VolumeUp, speakDescription,
                 tint = if (speakEnabled) tint else tint.copy(alpha = .38f), modifier = Modifier.size(Sizes.iconSmall))
         }
