@@ -46,6 +46,21 @@ No live provider or staging checks were performed as part of this repository cha
 
 Use non-production test data on an emulator or the owner's phone; do not use real conversations for backup or deletion experiments. Current app backup is enabled; chat history and ordinary app preferences are not excluded by the checked-in backup rules.
 
+### Server-first restore sequence
+
+Use two owner-controlled installations, or clear app data between each step:
+
+1. On installation A, sign in and enable Cloud Sync for that device.
+2. Create a chat containing a draft, memory note, text attachment context, stored-file reference/transcript, Run code result, Build metadata, Imagine state, and a long-context summary where available.
+3. Upload/review the snapshot and record its revision.
+4. On installation B, sign in to the same owner account and sync. Confirm the server snapshot restores the chat state without relying on installation A's cache.
+5. Edit the same chat offline on A while changing the server copy on B. Sync A and confirm the server copy remains authoritative while the offline edit is retained as one clearly labelled `unsynced-*` copy.
+6. Delete a memory note on A and sync. Confirm the documented memory-deletion policy removes that note from the server snapshot; add a new note and confirm it is retained.
+7. Import a JSON export while signed out. Confirm it is labelled/treated as phone-cache data until an authenticated sync.
+8. Clear app storage on B, sign in again, and confirm the server snapshot restores the intended state. Log out and confirm the server snapshot remains intact while signed-out chats are temporary cache-only data.
+
+Record the Android version, app version, backend deployment, snapshot revision, and pass/fail result. Do not record prompts, tokens, file contents, or account credentials.
+
 - [ ] Create chats, drafts and local memory; force-stop/restart the app and verify expected persistence.
 - [ ] Verify Android backup/device-transfer behavior with a test profile, including what data is restored.
 - [ ] Test sign-in, token refresh, expiry, logout, and that a non-owner account is denied. Confirm the phone cache is clearly separate from the authoritative server snapshot after logout; signed-out chats must be described as temporary cache-only data.
