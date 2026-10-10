@@ -38,7 +38,7 @@ We will acknowledge reports within 48 hours and aim to provide an update within 
   - Passed to the selected Android recognition service; processing may be local or remote depending on that service and its settings.
   - Not automatically sent to the chat provider. A reviewed transcript is sent only when the user submits it.
   - Subject to the selected speech service's own privacy and retention terms.
-- Optional generated reply audio sends selected reply text to the configured ElevenLabs service.
+- Optional generated reply audio sends selected reply text to the configured xAI, Google Gemini, or ElevenLabs service.
 
 #### Server-backed Chat and Memory
 - Signed-in chat history and memory are authoritative in the owner’s Supabase snapshot; the phone keeps a disposable cache for startup and offline viewing.
@@ -46,6 +46,11 @@ We will acknowledge reports within 48 hours and aim to provide an update within 
 - Snapshots use Supabase RLS and per-user access controls. They are not end-to-end encrypted by Dua.
 - Users can delete snapshots manually; post-deletion backup retention depends on Supabase project policy and has not been verified here.
 - Users can request full data export/deletion via account settings.
+
+#### Owner Lock and Storage Verification
+- Production access depends on both `DUA_REQUIRE_LOGIN=1` and the exact `DUA_ALLOWED_EMAIL` value. Login-required mode alone does not make the server owner-only.
+- Stored-file paths are account-scoped and must be checked against the verified Supabase user before signing, opening, deleting, or re-attaching a file.
+- A private `dua-files` bucket, RLS policies, signed-link expiry, and account deletion cleanup require live staging verification; repository tests cannot prove deployed project settings.
 
 #### Device Cache
 - Android cache data remains in app-private storage for offline viewing and fast startup; it is not the authoritative copy.
@@ -63,7 +68,7 @@ We will acknowledge reports within 48 hours and aim to provide an update within 
 - Repository/org settings such as branch protection, required reviews/checks, secret scanning and Dependabot are not verifiable from this checkout.
 
 ### Testing & CI/CD
-- Backend (`web/`): no automated test suite is currently checked in; CI does not test the backend.
+- Backend (`web/`): Node tests cover authentication, owner access, storage, account deletion, providers and sync behavior. Run `cd web && npm test`.
 - Android: Gradle JVM unit tests and source compilation; no APK or instrumented tests in CI.
 - The checked-in workflows do not run dependency or secret scanning. Verify any GitHub-hosted scanning configuration separately.
 
