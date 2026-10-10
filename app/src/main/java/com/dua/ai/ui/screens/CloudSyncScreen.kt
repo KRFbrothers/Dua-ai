@@ -36,7 +36,7 @@ fun CloudSyncScreen(viewModel: ChatViewModel, onBack: () -> Unit, onProfile: () 
                 } else if (sync.phase == "storage-error") {
                     TextButton(enabled = !state.busy && !dataBusy,
                         onClick = { viewModel.resetAutomaticSync() }) { Text("Reset automatic sync settings") }
-                    Text("Reset clears sync consent and guards on this device. Chats and memories stay saved. Review both copies before enabling again.", style = MaterialTheme.typography.bodyMedium)
+                    Text("Reset clears sync consent and guards on this device. Cached chats and memories stay until the next server sync. Review both copies before enabling again.", style = MaterialTheme.typography.bodyMedium)
                 } else if (sync.reviewRequired) {
                     Text("Use the manual actions below to inspect local and cloud data. Resume only after checking the changes; remaining local data can be uploaded again.", style = MaterialTheme.typography.bodyMedium)
                     FilledTonalButton(enabled = state.user != null && !state.busy && !dataBusy && preview == null,
@@ -47,7 +47,7 @@ fun CloudSyncScreen(viewModel: ChatViewModel, onBack: () -> Unit, onProfile: () 
                 }
             }
         }
-        Text("Manually upload a snapshot or download and merge another device's snapshot. Includes saved drafts and memory notes; no file/audio bytes. Conflicting chats stay as copies. Local or cloud deletion does not automatically delete the other copy.", style = MaterialTheme.typography.bodyMedium)
+        Text("Manually upload a snapshot or download the server copy; the server copy always wins over this phone's cache. Includes saved drafts and memory notes; no file/audio bytes. Chats and memory notes on the server replace the phone's cached copies.", style = MaterialTheme.typography.bodyMedium)
         listOf("upload" to "Review upload", "download" to "Review download", "delete" to "Clear cloud snapshot").forEach { (kind, title) ->
             FilledTonalButton(enabled = state.configured && state.user != null && !state.busy, onClick = { viewModel.reviewCloud(kind) }) { Text(title) }
         }

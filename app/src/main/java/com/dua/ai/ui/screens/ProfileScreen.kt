@@ -108,7 +108,7 @@ fun ProfileContent(state: ProfileUiState, actions: ProfileActions, onBack: () ->
         ProfileDialog.LogOut -> AlertDialog(onDismissRequest = { dialog = null },
             icon = { Icon(Icons.AutoMirrored.Outlined.Logout, contentDescription = null) },
             title = { Text("Log out?") },
-            text = { Text("Your chats and memories stay on this device, and your cloud copy is kept.") },
+            text = { Text("Your chats and memories are kept on the server until you delete them; this phone only holds a cache.") },
             confirmButton = { TextButton(onClick = { dialog = null; actions.onLogOut() }) { Text("Log out", color = MaterialTheme.colorScheme.error) } },
             dismissButton = { TextButton(onClick = { dialog = null }) { Text("Cancel") } })
         ProfileDialog.Delete -> {
@@ -117,7 +117,7 @@ fun ProfileContent(state: ProfileUiState, actions: ProfileActions, onBack: () ->
                 title = { Text("Delete account?") },
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
-                        Text("This permanently deletes the account and its cloud snapshot. Local chats and memories stay on this device. Type DELETE MY ACCOUNT to confirm.")
+                        Text("This permanently deletes the account and its cloud snapshot. The cached chats and memories on this phone stay until cleared. Type DELETE MY ACCOUNT to confirm.")
                         OutlinedTextField(confirmation, { confirmation = it.take(32) }, label = { Text("Confirmation") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                     }
                 },
@@ -148,7 +148,7 @@ private fun AccountHeader(email: String?, displayName: String) {
                     Text(email, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 } else {
                     Text("Not signed in", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
-                    Text("Sign in to sync across devices. Local chat works without an account.", style = MaterialTheme.typography.bodyMedium,
+                    Text("Sign in to sync across devices. Chats and memory are stored on the server; without an account the phone only holds a temporary cache.", style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }

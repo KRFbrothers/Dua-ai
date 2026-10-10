@@ -40,33 +40,47 @@ object AutomationSyncPolicy {
     fun requiresDeletionReview(previous: AutomationBaseline?, snapshot: CloudSnapshot): Boolean {
         if (previous == null) return false
         val current = baseline(snapshot)
-        return previous.chatMessageCounts.any { (id, count) -> current.chatMessageCounts[id]?.let { it < count } ?: true } ||
-            previous.memoryDigests.any { it !in current.memoryDigests }
+        // Memory deletions are intentional and propagate to the server through merge; only chat loss needs review.
+        return previous.chatMessageCounts.any { (id, count) -> current.chatMessageCounts[id]?.let { it < count } ?: true }
     }
 
+    /**
+     * Server-first merge: the cloud copy is authoritative. A chat that exists on the server replaces the
+     * phone's cached copy with the same id. If the phone copy was edited since the last sync (an offline
+     * edit), it is kept as a separate "unsynced-" copy so nothing is lost silently. Chats that exist only
+     * on the phone are kept so they can upload. Memory follows the server; notes the user deleted on the
+     * phone since the last sync are removed from the server copy too, and notes added on the phone are kept.
+     */
     fun merge(local: CloudSnapshot, remote: CloudSnapshot, previous: AutomationBaseline?): AutomationMergePlan {
         validate(local); validate(remote)
-        val chats = local.chats.toMutableList()
-        val usedIds = chats.map { it.id }.toMutableSet()
-        val signatures = chats.map(::signature).toMutableSet()
-        var review = false
-        remote.chats.sortedBy { it.id }.forEach { chat ->
-            val remoteSignature = signature(chat)
-            if (previous?.chatSignatures?.get(chat.id) == remoteSignature || remoteSignature in signatures) return@forEach
-            val here = local.chats.firstOrNull { it.id == chat.id }
-            var next = chat
-            if (here != null) {
-                val oldSignature = previous?.chatSignatures?.get(chat.id)
-                if (oldSignature == null || oldSignature != signature(here) && oldSignature != remoteSignature) review = true
-                val stem = "auto-" + digest(chat.id + ":" + remoteSignature)
+        val remoteById = remote.chats.associateBy { it.id }
+        val usedIds = (local.chats.map { it.id } + remote.chats.map { it.id }).toMutableSet()
+        val chats = mutableListOf<SavedChat>()
+        val copies = mutableListOf<SavedChat>()
+        local.chats.forEach { here ->
+            val server = remoteById[here.id]
+            if (server == null) { chats += here; return@forEach }
+            chats += server
+            val hereSignature = signature(here)
+            val editedOffline = previous?.chatSignatures?.get(here.id).let { it != null && it != hereSignature }
+            if (editedOffline && hereSignature != signature(server)) {
+                val stem = "unsynced-" + digest(here.id + ":" + hereSignature).take(16)
                 var id = stem; var suffix = 0
                 while (id in usedIds) id = "$stem-${++suffix}"
-                next = chat.copy(id = id)
+                usedIds += id; copies += here.copy(id = id)
             }
-            usedIds += next.id; signatures += remoteSignature; chats += next
         }
-        val merged = validate(CloudSnapshot(chats, (local.memory + remote.memory.sorted()).distinct()))
-        return AutomationMergePlan(merged, review)
+        val localIds = local.chats.map { it.id }.toSet()
+        remote.chats.sortedBy { it.id }.filter { it.id !in localIds }.forEach { chats += it }
+        chats += copies
+        val memory = if (previous == null && remote.memory.isEmpty() && remote.chats.isEmpty()) local.memory
+        else if (previous == null) remote.memory
+        else {
+            val localDigests = local.memory.map(::digest).toSet()
+            val kept = remote.memory.filter { digest(it) !in previous.memoryDigests || digest(it) in localDigests }
+            (kept + local.memory.filter { digest(it) !in previous.memoryDigests }).distinct()
+        }
+        return AutomationMergePlan(validate(CloudSnapshot(chats, memory.distinct())), false)
     }
 
     /** Stop after five failures; retry should require an explicit user action thereafter. */

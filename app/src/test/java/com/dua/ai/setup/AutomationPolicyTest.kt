@@ -13,7 +13,7 @@ class AutomationPolicyTest {
         val initial = CloudSnapshot(listOf(chat), listOf("Prefer Hindi"))
         val baseline = AutomationSyncPolicy.baseline(initial)
         assertTrue(AutomationSyncPolicy.requiresDeletionReview(baseline, initial.copy(chats = emptyList())))
-        assertTrue(AutomationSyncPolicy.requiresDeletionReview(baseline, initial.copy(memory = emptyList())))
+        assertFalse(AutomationSyncPolicy.requiresDeletionReview(baseline, initial.copy(memory = emptyList())))
         assertTrue(AutomationSyncPolicy.requiresDeletionReview(baseline, initial.copy(chats = listOf(chat.copy(messages = emptyList())))))
         assertFalse(AutomationSyncPolicy.requiresDeletionReview(baseline, initial.copy(memory = initial.memory + "Prefer short replies")))
     }
@@ -42,15 +42,38 @@ class AutomationPolicyTest {
         assertNotEquals(AutomationSyncPolicy.signature(chat), AutomationSyncPolicy.signature(chat.copy(draft = "Changed draft")))
     }
 
-    @Test fun `stable conflict copies require review and repeated merge is idempotent`() {
-        val local = CloudSnapshot(listOf(chat), emptyList())
-        val remote = local.copy(chats = listOf(chat.copy(messages = listOf(ChatMessage(text = "Other prompt", isUser = true)))))
-        val first = AutomationSyncPolicy.merge(local, remote, null)
-        assertTrue(first.requiresContentReview)
-        assertEquals(2, first.snapshot.chats.size)
-        assertTrue(first.snapshot.chats.last().id.startsWith("auto-"))
-        val repeated = AutomationSyncPolicy.merge(first.snapshot, remote, null)
-        assertFalse(repeated.requiresContentReview)
-        assertTrue(AutomationSyncPolicy.same(first.snapshot, repeated.snapshot))
+    @Test fun `server wins over the phone cache for the same chat and for memory`() {
+        val local = CloudSnapshot(listOf(chat), listOf("Local note"))
+        val remote = CloudSnapshot(listOf(chat.copy(messages = listOf(ChatMessage(text = "Other prompt", isUser = true)))), listOf("Server note"))
+        val plan = AutomationSyncPolicy.merge(local, remote, null)
+        assertFalse(plan.requiresContentReview)
+        assertTrue(AutomationSyncPolicy.same(remote, plan.snapshot))
+        assertTrue(AutomationSyncPolicy.same(plan.snapshot, AutomationSyncPolicy.merge(plan.snapshot, remote, null).snapshot))
+    }
+
+    @Test fun `phone-only chats and memory are kept only while the server is empty`() {
+        val local = CloudSnapshot(listOf(chat), listOf("Local note"))
+        val empty = AutomationSyncPolicy.merge(local, CloudSnapshot(emptyList(), emptyList()), null)
+        assertEquals(listOf("Local note"), empty.snapshot.memory)
+        val synced = AutomationSyncPolicy.merge(local, CloudSnapshot(emptyList(), listOf("Server note")), null)
+        assertEquals(listOf("Server note"), synced.snapshot.memory)
+        assertEquals(1, synced.snapshot.chats.size)
+    }
+
+    @Test fun `offline edit is kept as an unsynced copy while the server copy wins`() {
+        val base = AutomationSyncPolicy.baseline(CloudSnapshot(listOf(chat), emptyList()))
+        val edited = chat.copy(messages = chat.messages + ChatMessage(text = "Offline", isUser = true))
+        val remote = CloudSnapshot(listOf(chat.copy(messages = listOf(ChatMessage(text = "Server", isUser = true)))), emptyList())
+        val plan = AutomationSyncPolicy.merge(CloudSnapshot(listOf(edited), emptyList()), remote, base)
+        assertEquals(2, plan.snapshot.chats.size)
+        assertEquals("Server", plan.snapshot.chats.first { it.id == "saved" }.messages.single().text)
+        assertTrue(plan.snapshot.chats.any { it.id.startsWith("unsynced-") && it.messages.size == 2 })
+        assertEquals(plan.snapshot.chats.map { it.id }, AutomationSyncPolicy.merge(plan.snapshot, remote, base).snapshot.chats.map { it.id }.take(2))
+    }
+
+    @Test fun `memory deleted on the phone is deleted from the server copy and new notes are kept`() {
+        val base = AutomationSyncPolicy.baseline(CloudSnapshot(emptyList(), listOf("A", "B")))
+        val plan = AutomationSyncPolicy.merge(CloudSnapshot(emptyList(), listOf("B", "New")), CloudSnapshot(emptyList(), listOf("A", "B", "C")), base)
+        assertEquals(listOf("B", "C", "New"), plan.snapshot.memory)
     }
 }

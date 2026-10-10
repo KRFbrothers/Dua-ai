@@ -114,10 +114,10 @@ class AutomaticCloudSyncTest {
         p.close(sync)
     }
 
-    @Test fun `remote deletion cannot be silently uploaded again after restore`() = runBlocking {
+    @Test fun `server memory deletion is applied to the phone and never uploaded back`() = runBlocking {
         val original = snapshot(listOf(chat()), listOf("Prefer Hindi")); val record = AutomationSyncRecord(true, ownerA, 2, AutomationSyncPolicy.baseline(original))
         val p = Fixture(original, snapshot(listOf(chat())), record); p.revision = 3; val sync = p.controller(); sync.restore()?.join()
-        assertTrue(sync.state.value.reviewRequired); assertEquals(0, p.uploadCalls); assertEquals(0, p.commits)
+        assertFalse(sync.state.value.reviewRequired); assertEquals(0, p.uploadCalls); assertEquals(1, p.commits); assertTrue(p.here.memory.isEmpty())
         p.close(sync)
     }
 
@@ -151,10 +151,10 @@ class AutomaticCloudSyncTest {
         p.close(sync)
     }
 
-    @Test fun `content conflicts preserve stable copies and pause before first upload`() = runBlocking {
+    @Test fun `server copy replaces a differing phone cache without review`() = runBlocking {
         val p = Fixture(snapshot(listOf(chat(text = "Local"))), snapshot(listOf(chat(text = "Remote")))); val sync = p.controller(); sync.enable()?.join()
-        assertTrue(sync.state.value.reviewRequired); assertEquals(2, p.here.chats.size); assertEquals(0, p.uploadCalls)
-        val copyId = p.here.chats.last().id; sync.resumeAfterReview()?.join(); assertFalse(sync.state.value.reviewRequired); assertEquals(2, p.remote.chats.size); assertEquals(copyId, p.here.chats.last().id)
+        assertFalse(sync.state.value.reviewRequired); assertEquals(1, p.here.chats.size); assertEquals(0, p.uploadCalls)
+        assertEquals(AutomationSyncPolicy.signature(p.remote.chats.single()), AutomationSyncPolicy.signature(p.here.chats.single()))
         p.close(sync)
     }
 

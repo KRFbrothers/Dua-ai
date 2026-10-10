@@ -20,7 +20,7 @@ Dua is becoming a **Grok-style assistant**: one clean, professional Android app 
 
 **Still core to Dua** (unchanged from the original vision)
 
-- **Local-first** — conversations, drafts and history live on the device by default
+- **Server-first** — conversations, drafts, history and memory live on the server; the device keeps only a disposable cache
 - **Multiple AI providers** — Gemini, ChatGPT, Claude, Grok and Kimi today; the final lineup is an [open decision](#open-decisions)
 - **Privacy and data control** — local export, import and delete; the Supabase account and cloud sync stay optional and opt-in, and exist to back up and sync his own devices
 
@@ -306,7 +306,7 @@ A feature is done when:
 ## Guiding Principles
 
 1. **Quality over speed** — Dua should feel polished and trustworthy, not rushed
-2. **Privacy by default** — The owner's data stays local first; cloud is optional and only syncs his own devices
+2. **Privacy by default** — The owner's data is authoritative on the server; the phone only caches it; sync is optional and only syncs his own devices
 3. **Consistency** — Android screens and backend behavior feel like one product
 4. **Real validation** — Features are tested live, not just mocked
 5. **Built for one person** — Design decisions follow the owner's actual daily use, not hypothetical users

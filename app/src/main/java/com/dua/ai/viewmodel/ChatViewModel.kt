@@ -167,7 +167,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             val notes = com.dua.ai.setup.AutomationMemoryCandidates.confirm(note, settings.memory)
             localPreferences.update(settings.copy(memory = notes))
             _memoryCandidates.value = _memoryCandidates.value.filterNot { it == note }
-            integrationNotice("Note saved locally. Notes are sent with chat only when Memory is enabled.")
+            integrationNotice("Note saved and cached on this phone; the server copy wins on sync. Notes are sent with chat only when Memory is enabled.")
         } catch (failure: Exception) { integrationNotice(failure.message ?: "Memory could not be saved.") }
     }
     fun dismissMemoryNote(note: String) { _memoryCandidates.value = _memoryCandidates.value.filterNot { it == note } }
@@ -273,8 +273,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             "download" -> {
                 flushHistory()
                 val oldSettings = localSettings.value
-                val notes = (oldSettings.memory + preview.review.snapshot.memory).distinct()
-                require(notes.size <= 10) { "Merged memories exceed 10 notes. Remove some local notes and review again." }
+                val notes = preview.review.snapshot.memory.distinct()
                 val result = com.dua.ai.account.CloudSnapshotCodec.merge(_savedChats.value, preview.review.snapshot.chats)
                 val encoded = ChatHistoryCodec.encode(result.chats, activeId)
                 val previous = preferences.getString("history", null)
@@ -959,7 +958,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         replyAudioCache.clear()
         if (_dataBusy.value) return
         _dataBusy.value = true; refreshSyncBusy()
-        _dataStatus.value = "Clearing local history…"
+        _dataStatus.value = "Clearing cached chats…"
         cancelReply()
         flushHistory()
         val nextId = UUID.randomUUID().toString()
@@ -994,7 +993,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     _dataStatus.value = "All local chats, drafts and pending files cleared. Their uploaded files are being deleted."
                 } else _dataStatus.value = "Delete could not be saved. Chats are kept in memory; try again."
             } catch (cancelled: CancellationException) { throw cancelled }
-            catch (_: Exception) { _dataStatus.value = "Local history could not be cleared. Try again." }
+            catch (_: Exception) { _dataStatus.value = "Cached chats could not be cleared. Try again." }
             finally { _dataBusy.value = false }
         }
     }
@@ -1025,7 +1024,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 return CloudSnapshot(_savedChats.value.toList(), localSettings.value.memory.toList())
             }
             // Called without suspension on the main dispatcher. Active edit buffers and attachments
-            // remain authoritative; the controller keeps changed cloud chats as separate copies.
+            // stay visible, but the server copy wins for chats and memory; the phone only caches it.
             override fun commit(snapshot: CloudSnapshot) {
                 check(!syncBlocked()) { "Sync paused during a reply or manual review." }
                 // Persist queued saves first (no list changes here; a pending draft save runs afterwards and keeps the live draft).

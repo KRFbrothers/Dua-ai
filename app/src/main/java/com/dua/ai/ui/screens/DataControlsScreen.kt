@@ -44,7 +44,7 @@ fun DataControlsScreen(viewModel: ChatViewModel, onBack: () -> Unit) {
         else viewModel.reviewImport(uri)
     }
     DuaPageScaffold(title = "Data controls", onBack = onBack, backEnabled = !busy, backLabel = "Back to settings") {
-        Text("${chats.size} saved chats · this device", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("${chats.size} cached chats · server is the source of truth", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         FilledTonalButton(enabled = !busy && chats.isNotEmpty(), shape = RoundedCornerShape(16.dp),
             colors = ButtonDefaults.filledTonalButtonColors(containerColor = MaterialTheme.colorScheme.surfaceContainer, contentColor = MaterialTheme.colorScheme.onSurface), modifier = Modifier.fillMaxWidth().heightIn(min = 72.dp), onClick = {
             try { export.launch("dua-chats-${Instant.now().toString().take(10)}.json") }
@@ -66,11 +66,11 @@ fun DataControlsScreen(viewModel: ChatViewModel, onBack: () -> Unit) {
         FilledTonalButton(enabled = !busy, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth().heightIn(min = 72.dp),
             colors = ButtonDefaults.filledTonalButtonColors(containerColor = MaterialTheme.colorScheme.surfaceContainer, contentColor = MaterialTheme.colorScheme.error), onClick = { confirm = true }) {
             Icon(Icons.Default.DeleteOutline, null); Spacer(Modifier.width(16.dp))
-            Column(Modifier.weight(1f)) { Text("Clear all chats", style = MaterialTheme.typography.bodyLarge); Text("Remove local chats, drafts and pending files", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            Column(Modifier.weight(1f)) { Text("Clear all chats", style = MaterialTheme.typography.bodyLarge); Text("Remove cached chats, drafts and pending files from this phone", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
         StoredFilesSection(signedIn = account.user != null, enabled = integrations.filesEnabled, usage = usage, busy = busy,
             onRefresh = viewModel::loadStorageUsage, onDeleteAll = { confirmFiles = true })
-        Text("Only this device’s history is managed here. Import accepts Dua version 1 JSON up to 4 MiB, 100 chats, 500 messages per chat and 8000-character drafts. Existing chats stay intact; repeated imports create copies. Export includes messages and unsent drafts, without attachment bytes. Cloud accounts, other devices and previously exported files are unchanged.",
+        Text("Only this phone's cache is managed here; the server copy is the source of truth and is restored on the next sync. Import accepts Dua version 1 JSON up to 4 MiB, 100 chats, 500 messages per chat and 8000-character drafts. Existing chats stay intact; repeated imports create copies. Export includes messages and unsent drafts, without attachment bytes. Cloud accounts, other devices and previously exported files are unchanged.",
             style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
         if (status.isNotBlank()) Text(status, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
@@ -89,7 +89,7 @@ fun DataControlsScreen(viewModel: ChatViewModel, onBack: () -> Unit) {
         confirmButton = { TextButton(onClick = { confirmFiles = false; viewModel.deleteAllUploadedFiles() }) { Text("Delete files") } },
         dismissButton = { TextButton(onClick = { confirmFiles = false }) { Text("Cancel") } })
     if (confirm) AlertDialog(onDismissRequest = { confirm = false }, title = { Text("Clear all chats?") },
-        text = { Text("Every chat and draft saved on this device will be deleted, along with the files uploaded in those chats. Pending attachments will also be cleared. This cannot be undone. Export first if you want a copy.") },
+        text = { Text("Every cached chat and draft on this phone will be deleted, along with the files uploaded in those chats. Pending attachments will also be cleared. This cannot be undone. Export first if you want a copy.") },
         confirmButton = { TextButton(onClick = { confirm = false; viewModel.clearAllChats() }) { Text("Clear all") } },
         dismissButton = { TextButton(onClick = { confirm = false }) { Text("Cancel") } })
 }

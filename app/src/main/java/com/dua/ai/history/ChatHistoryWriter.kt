@@ -7,8 +7,9 @@ import kotlinx.coroutines.launch
 import java.util.concurrent.FutureTask
 
 /**
- * Persists chat history off the main thread. The in-memory chat list stays authoritative; only the
- * JSON encode and the SharedPreferences write move to [dispatcher].
+ * Writes the on-device chat CACHE off the main thread. The server is the source of truth; this cache
+ * only serves offline viewing and fast startup, is disposable and is replaced by the server copy on
+ * sync. Only the JSON encode and the SharedPreferences write move to [dispatcher].
  *
  * - [save] queues the latest list. A newer save supersedes an older one, so an older encode that
  *   finishes late is dropped and never overwrites newer data.
