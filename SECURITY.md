@@ -40,15 +40,16 @@ We will acknowledge reports within 48 hours and aim to provide an update within 
   - Subject to the selected speech service's own privacy and retention terms.
 - Optional generated reply audio sends selected reply text to the configured ElevenLabs service.
 
-#### Cloud Snapshots & Sync
-- Cloud sync is opt-in; users explicitly enable it.
+#### Server-backed Chat and Memory
+- Signed-in chat history and memory are authoritative in the owner’s Supabase snapshot; the phone keeps a disposable cache for startup and offline viewing.
+- Automatic foreground refresh is opt-in per device. Signed-out use is cache-only and cannot write an authoritative server history.
 - Snapshots use Supabase RLS and per-user access controls. They are not end-to-end encrypted by Dua.
 - Users can delete snapshots manually; post-deletion backup retention depends on Supabase project policy and has not been verified here.
 - Users can request full data export/deletion via account settings.
 
-#### Local Data
-- Android local data remains on the device; it is not automatically uploaded or synced without explicit opt-in.
-- Export/import are user-initiated.
+#### Device Cache
+- Android cache data remains in app-private storage for offline viewing and fast startup; it is not the authoritative copy.
+- Export/import operate on the cached view. Deleting the cache does not delete the signed-in server snapshot.
 
 ### Secrets Scanning
 - GitHub secret scanning and push-protection status are controlled by repository/org settings and must be checked by an administrator.

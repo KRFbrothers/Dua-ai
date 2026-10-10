@@ -57,7 +57,7 @@ object BuildProposals {
     const val MAX_TITLE = 120
     const val MAX_SUMMARY = 4000
     const val MAX_DIFF_CHARS = 60_000
-    /** Diff text kept per file in local history. */
+    /** Diff text kept per file in the server snapshot and phone cache. */
     const val SAVED_DIFF_CHARS = 20_000
     /** File contents are kept in history (to create the PR later) only up to this many characters in total. */
     const val SAVED_CONTENT_CHARS = 512 * 1024
@@ -70,7 +70,7 @@ object BuildProposals {
         return !path.lowercase().startsWith(".github/workflows/") && !path.equals(".gitmodules", ignoreCase = true)
     }
 
-    /** Lenient decode of the server's `proposal` event / JSON field, or local history. Returns null when anything is unsafe. */
+    /** Lenient decode of the server's `proposal` event / JSON field, or the server snapshot and phone cache. Returns null when anything is unsafe. */
     fun fromJson(json: JSONObject?): BuildProposal? {
         json ?: return null
         val id = json.optString("id").takeIf { ID.matches(it) } ?: return null

@@ -38,7 +38,7 @@ fun CloudSyncScreen(viewModel: ChatViewModel, onBack: () -> Unit, onProfile: () 
                         onClick = { viewModel.resetAutomaticSync() }) { Text("Reset automatic sync settings") }
                     Text("Reset clears sync consent and guards on this device. Cached chats and memories stay until the next server sync. Review both copies before enabling again.", style = MaterialTheme.typography.bodyMedium)
                 } else if (sync.reviewRequired) {
-                    Text("Use the manual actions below to inspect local and cloud data. Resume only after checking the changes; remaining local data can be uploaded again.", style = MaterialTheme.typography.bodyMedium)
+                    Text("Use the manual actions below to inspect the server snapshot and this phone’s cache. Resume only after checking the changes; remaining local data can be uploaded again.", style = MaterialTheme.typography.bodyMedium)
                     FilledTonalButton(enabled = state.user != null && !state.busy && !dataBusy && preview == null,
                         onClick = { viewModel.resumeAutomaticSyncAfterReview() }) { Text("Resume after review") }
                 } else if (sync.enabled) {

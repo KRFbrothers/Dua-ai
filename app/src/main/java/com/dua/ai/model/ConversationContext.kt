@@ -4,7 +4,7 @@ import org.json.JSONObject
 
 /**
  * Server-made summary of the earlier part of one chat (Phase 2 long context). It covers every message
- * up to and including [throughId]; later turns are sent in full. Saved with the chat on this device only.
+ * up to and including [throughId]; later turns are sent in full. Saved with the chat in the server snapshot and phone cache.
  */
 data class ChatSummary(val text: String, val throughId: String) {
     companion object {

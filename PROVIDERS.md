@@ -93,7 +93,7 @@ Redeploy after setting server variables. `/api/config` exposes provider availabi
 
 `/api/chat` keeps its JSON reply unless the request opts in with `"stream": true`; then it answers with Server-Sent Events: `context` (a new conversation summary, sent first), `thinking`, `text`, `sources`, `notice`, `files` (audio transcripts), `done` and `error` (each `data:` is JSON with the same `type`), plus `code` (Run code, see below) and a `: ping` comment every 15 seconds. Validation, login, quota and upstream errors that happen before the first byte still return the usual JSON error and status (including `Retry-After`). If an adapter cannot stream, the reply arrives as one `text` event. Web search and Read link work in both modes; the `Sources:` footer arrives as the final text.
 
-`"mode": "reasoning"` asks the model to think first. Thinking summaries are only sent in Reasoning mode and are saved with the chat (local history, export and cloud snapshot; older files without them still load).
+`"mode": "reasoning"` asks the model to think first. Thinking summaries are only sent in Reasoning mode and are saved with the chat in the server snapshot, phone cache and export; older files without them still load.
 
 | Choice | Reasoning | Effort variable (default) | Output cap variable (Auto / Reasoning default) |
 | --- | --- | --- | --- |

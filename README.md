@@ -6,12 +6,12 @@ Dua is a personal, single-user app: it is built for its owner only and installed
 
 ## Current features
 
-- Local conversations, drafts, model selection, search, export/import, sharing and data controls.
+- Server-backed conversations, drafts and memory with an app-private cache for offline viewing, search, export/import, sharing and data controls.
 - Gemini plus configurable ChatGPT, Claude, Grok and Kimi adapters with streaming replies and a Reasoning mode (collapsible Thinking block on Gemini, Grok and reasoning ChatGPT models). Text and code files (TXT, CSV, MD, JSON, source code) work on all providers; images/PDF depend on the selected provider and configured model. See [PROVIDERS.md](PROVIDERS.md).
 - Chat Web: Off/Search/Read link modes and clickable source footers. Search requires Brave configuration; public page reading uses the existing chat provider. Web mode starts Off.
 - Copy, retry and speaker reply icons; device speech recognition/TTS and explicit foreground hands-free turns. Optional generated reply audio uses an authenticated, owner-restricted server integration.
-- Appearance, permissions, local notifications, reviewed memory notes/proposals and local privacy controls.
-- Native Google sign-in (Supabase accounts): a single welcome screen at first launch with **Sign in with Google** or **Skip for now**; sign-in and Log out live in Settings → Profile. Reviewed cloud snapshots and opt-in foreground automatic sync. Optional account deletion, owner/login restrictions and durable server-side quotas are prepared. The Android app has no email/password sign-in.
+- Appearance, permissions, local notifications, reviewed server-backed memory notes/proposals and privacy controls for the cache and account.
+- Native Google sign-in (Supabase accounts): a single welcome screen at first launch with **Sign in with Google** or **Skip for now**; sign-in and Log out live in Settings → Profile. Signed-in chats and memory use the server as the source of truth; the phone keeps a disposable cache and foreground sync refreshes it. Without an account, the phone-only cache is temporary and cannot become authoritative. The Android app has no email/password sign-in.
 - A configured read-only GitHub repository connector.
 
 API keys and optional credentials remain server-side. Preparing a feature does not activate a provider or paid service. OpenAI key setup remains deferred. Background/realtime sync, model-based memory and other advanced integrations remain pending.
@@ -43,4 +43,4 @@ bash ./gradlew :app:testDebugUnitTest --no-daemon --max-workers=2
 
 [Project checks](.github/workflows/checks.yml) runs Android compilation and JVM unit tests on PRs, pushes to main and manual runs. It does not assemble or sign an APK. Run the backend's `node:test` suite with `cd web && npm test` (no dependencies or provider keys needed); it is not part of CI yet.
 
-Android local data is stored in app-private preferences; Android backup/device transfer can include chat history and preferences according to device settings. A Vercel deployment updates the backend only; Android code changes require building and installing a new APK.
+The Android cache is stored in app-private preferences; Android backup/device transfer can include cached history and preferences according to device settings. Signed-in server data remains authoritative and is not replaced by a restored cache. A Vercel deployment updates the backend only; Android code changes require building and installing a new APK.

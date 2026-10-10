@@ -46,7 +46,7 @@ Use non-production test data on an emulator or the owner's phone; do not use rea
 
 - [ ] Create chats, drafts and local memory; force-stop/restart the app and verify expected persistence.
 - [ ] Verify Android backup/device-transfer behavior with a test profile, including what data is restored.
-- [ ] Test sign-in, token refresh, expiry, logout, and that a non-owner account is denied. Confirm local chats remain on logout and are not uploaded without explicit sync consent.
+- [ ] Test sign-in, token refresh, expiry, logout, and that a non-owner account is denied. Confirm the phone cache is clearly separate from the authoritative server snapshot after logout; signed-out chats must be described as temporary cache-only data.
 - [ ] Test microphone permission allow/deny/revoke, speech-service unavailable, transcript review, hands-free Stop/background behavior, and text-to-speech. Confirm the device speech service may process audio remotely.
 - [ ] Test camera capture and photo/document pickers, cancellation, rotation/background interruption, oversized image resizing, and cleanup.
 - [ ] Test JSON export/import using Hindi/emoji, malformed/oversized input, cancel, duplicate import, and storage failure. Confirm import does not silently replace existing chats.
@@ -81,6 +81,6 @@ The matching Gradle properties are `duaReleaseStoreFile`, `duaReleaseStorePasswo
 - [ ] Run `bash ./gradlew :app:assembleRelease --no-daemon`, then install the APK as above (`apksigner verify --print-certs` shows the signing SHA-1).
 - [ ] Check the version code/name, permissions, backend URL and Crashlytics behavior.
 
-**Updates.** Android only installs an update signed with the same key as the installed app. Switching to a different key (a personal release key, or another machine's debug key) requires uninstalling first, which deletes local chats. Export chats (or sync to the cloud) before uninstalling.
+**Updates.** Android only installs an update signed with the same key as the installed app. Switching to a different key (a personal release key, or another machine's debug key) requires uninstalling first, which deletes the phone cache. Confirm the authoritative server snapshot is synced before uninstalling.
 
 No signing keys, Android release workflow or signed artifacts are supplied by this repository.
