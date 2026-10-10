@@ -15,9 +15,9 @@ data class SavedChat(
     val draft: String,
     val messages: List<ChatMessage>,
     val updatedAt: Long,
-    /** Server summary of older turns (long context). Local only: not exported or synced. */
+    /** Server summary of older turns (long context). Included in the signed-in cloud snapshot. */
     val summary: com.dua.ai.model.ChatSummary? = null,
-    /** Build mode repository this chat is tied to (owner/name). Local only: not exported or synced. */
+    /** Build mode repository this chat is tied to (owner/name). Included in the signed-in cloud snapshot. */
     val buildRepository: String? = null
 ) {
     val title: String get() = messages.firstOrNull { it.isUser }?.text?.take(60) ?: "Draft"
@@ -43,7 +43,7 @@ object ChatHistoryCodec {
         return parseImport(raw)
     }
 
-    fun parseImport(raw: String): List<SavedChat> {
+    fun parseImport(raw: String, includeServerFields: Boolean = false): List<SavedChat> {
         require(raw.toByteArray(Charsets.UTF_8).size <= MAX_IMPORT_BYTES) { "Choose a Dua JSON export up to 4 MiB." }
         var depth = 0
         var quoted = false
@@ -98,9 +98,18 @@ object ChatHistoryCodec {
                     val seconds = if (role == "model" && message.has("thinkingSeconds")) integer(message, "thinkingSeconds").also { require(it <= 86400) { invalid } }.toInt() else null
                     // Optional since Imagine (Phase 3): stored references to generated images and videos.
                     val media = if (role == "model" && message.has("media")) com.dua.ai.imagine.ImagineCodec.mediaFrom(message.getJSONArray("media"), local = false) else emptyList()
-                    ChatMessage(text = text(message, "text", 1048576), isUser = role == "user", model = model, state = state,
-                        thinking = thinking?.takeIf { it.isNotBlank() }, thinkingSeconds = seconds, media = media)
-                }, updatedAt)
+                    ChatMessage(id = if (includeServerFields) message.optString("id").takeIf { it.isNotBlank() && it.length <= 100 } ?: UUID.randomUUID().toString() else UUID.randomUUID().toString(),
+                        text = text(message, "text", 1048576), isUser = role == "user", model = model, state = state,
+                        thinking = thinking?.takeIf { it.isNotBlank() }, thinkingSeconds = seconds, media = media,
+                        attachmentText = if (includeServerFields && role == "user") message.optString("attachmentText").takeIf { it.isNotEmpty() }?.take(ChatMessage.MAX_ATTACHMENT_TEXT_CHARS) else null,
+                        files = if (includeServerFields && role == "user") com.dua.ai.files.FileRefCodec.fromArray(message.optJSONArray("files")) else emptyList(),
+                        imagine = if (includeServerFields && role == "model") com.dua.ai.imagine.ImagineCodec.infoFrom(message.optJSONObject("imagine")) else null,
+                        codeRuns = if (includeServerFields && role == "model") com.dua.ai.model.CodeRuns.fromJson(message.optJSONArray("codeRuns")) else emptyList(),
+                        build = if (includeServerFields && role == "model") com.dua.ai.model.BuildInfos.fromJson(message.optJSONObject("build")) else null,
+                        proposal = if (includeServerFields && role == "model") com.dua.ai.model.BuildProposals.fromJson(message.optJSONObject("proposal")) else null)
+                }, updatedAt,
+                    if (includeServerFields) com.dua.ai.model.ChatSummary.fromJson(chat.optJSONObject("summary")) else null,
+                    if (includeServerFields) chat.optString("buildRepository").takeIf { com.dua.ai.model.BuildInfos.validRepository(it) } else null)
             }
         } catch (_: Exception) { throw IllegalArgumentException(invalid) }
     }
@@ -114,16 +123,30 @@ object ChatHistoryCodec {
         }
     }
 
-    fun export(chats: List<SavedChat>, exportedAt: Long = System.currentTimeMillis()): String = JSONObject()
+    fun export(chats: List<SavedChat>, exportedAt: Long = System.currentTimeMillis(), includeServerFields: Boolean = false): String = JSONObject()
         .put("format", "dua-chat-export").put("version", 1).put("exportedAt", exportedAt)
         .put("chats", JSONArray().apply {
             chats.sortedByDescending { it.updatedAt }.forEach { chat ->
                 put(JSONObject().put("id", chat.id).put("model", chat.model).put("draft", chat.draft)
+                    .apply { if (includeServerFields) { chat.summary?.let { put("summary", it.toJson()) }; chat.buildRepository?.let { put("buildRepository", it) } } }
                     .put("updatedAt", chat.updatedAt).put("messages", JSONArray().apply {
                         chat.messages.filter(::persistable).forEach { message -> put(JSONObject()
                             .put("role", if (message.isUser) "user" else "model")
                             .put("text", message.text).put("state", savedState(message.state))
-                            .apply { putThinking(this, message); putMedia(this, message, local = false) }) }
+                            .apply {
+                                if (includeServerFields) put("id", message.id)
+                                putThinking(this, message); putMedia(this, message, local = false)
+                                if (includeServerFields && message.isUser) {
+                                    message.attachmentText?.takeIf { it.isNotEmpty() }?.let { put("attachmentText", it.take(ChatMessage.MAX_ATTACHMENT_TEXT_CHARS)) }
+                                    if (message.files.isNotEmpty()) put("files", com.dua.ai.files.FileRefCodec.array(message.files))
+                                }
+                                if (includeServerFields && !message.isUser) {
+                                    message.imagine?.let { put("imagine", com.dua.ai.imagine.ImagineCodec.infoJson(it)) }
+                                    if (message.codeRuns.isNotEmpty()) put("codeRuns", com.dua.ai.model.CodeRuns.toJson(message.codeRuns))
+                                    message.build?.let { put("build", com.dua.ai.model.BuildInfos.toJson(it)) }
+                                    message.proposal?.let { put("proposal", com.dua.ai.model.BuildProposals.toJson(it)) }
+                                }
+                            }) }
                     }))
             }
         }).toString(2)

@@ -2,6 +2,11 @@ package com.dua.ai.account
 
 import com.dua.ai.history.SavedChat
 import com.dua.ai.model.ChatMessage
+import com.dua.ai.model.BuildInfo
+import com.dua.ai.model.BuildFile
+import com.dua.ai.model.ChatSummary
+import com.dua.ai.model.CodeRun
+import com.dua.ai.files.FileRef
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -28,5 +33,26 @@ class CloudSnapshotTest {
         val value = AccountSession(AccountUser("11111111-1111-4111-8111-111111111111", "person@example.com", "Dua"), "fake-access", "fake-refresh", 123)
         assertEquals(value, AccountSessionCodec.decode(AccountSessionCodec.encode(value)))
         try { AccountSessionCodec.decode(AccountSessionCodec.encode(value.copy(accessToken = "bad\nheader"))); fail("Bad token accepted") } catch (_: IllegalArgumentException) { }
+    }
+
+    @Test fun serverSnapshotRestoresExtendedChatStateWithoutFileBytes() {
+        val user = ChatMessage(text = "Review this file", isUser = true, attachmentText = "a,b\n1,2",
+            files = listOf(FileRef("11111111-1111-4111-8111-111111111111/22222222-2222-4222-8222-222222222222.csv", "file.csv", "text/csv", 12, "a,b\n1,2")))
+        val reply = ChatMessage(text = "Done", isUser = false,
+            codeRuns = listOf(CodeRun(code = "print(2 + 2)", output = "4", outcome = "ok")),
+            build = BuildInfo("owner/repo", "main", listOf(BuildFile("src/Main.kt", 42))),
+            imagine = com.dua.ai.imagine.ImagineInfo("image", "owner/job"))
+        val original = SavedChat("extended", "Dua", "draft", listOf(user, reply), 123,
+            ChatSummary("Earlier context", user.id), "owner/repo")
+        val restored = CloudSnapshotCodec.decode(CloudSnapshotCodec.encode(CloudSnapshot(listOf(original), emptyList()))).chats.single()
+        assertEquals(original.summary, restored.summary)
+        assertEquals(original.buildRepository, restored.buildRepository)
+        assertEquals(user.id, restored.messages[0].id)
+        assertEquals(user.attachmentText, restored.messages[0].attachmentText)
+        assertEquals(user.files, restored.messages[0].files)
+        assertEquals(reply.id, restored.messages[1].id)
+        assertEquals(reply.codeRuns, restored.messages[1].codeRuns)
+        assertEquals(reply.build, restored.messages[1].build)
+        assertEquals(reply.imagine, restored.messages[1].imagine)
     }
 }
