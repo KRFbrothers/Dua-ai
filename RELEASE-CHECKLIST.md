@@ -26,8 +26,10 @@ The owner-only lock is the permanent access model: it keeps the server-side keys
 3. Apply reviewed Supabase migrations before enabling their dependent features. Verify RLS, grants, and function permissions in the Supabase SQL editor; do not grant clients direct snapshot writes or access to daily usage rows.
 4. After deployment, smoke-check `/api/config`, `/api/setup`, and `/api/account/session`. (There is no web client; `/` is not served.) Confirm that responses contain no API keys, service-role key, or owner email. `/api/setup` may expose feature availability and access-policy booleans.
 5. In staging, check the owner lock with the owner account and one disposable non-owner account: sign-in, refresh, logout, cloud ownership/conflicts, and quota enforcement. Test account deletion only with the disposable account.
-6. For a failed backend deployment, redeploy the last known-good Vercel deployment. Treat database migrations separately: do not assume rolling back the backend deployment reverses schema changes.
-7. Mark a feature configured only after checking deployed environment values, and verified only after successful live/staging behavior. Keep those labels separate from repository unit/mock test results.
+6. In staging, with two separate accounts, verify that `/api/files/sign`, `/api/files/url`, `/api/files/delete`, `/api/files/delete-all`, `/api/files/usage`, `/api/cloud`, `/api/imagine/*`, and `/api/voice/*` cannot read or mutate the other account's data. Verify a signed file URL expires and cannot be reused after expiry.
+7. With the disposable account, create a cloud snapshot and upload a file, then run account deletion. Confirm the snapshot row, Storage objects, and account are gone; repeat the owner check afterward to ensure the configured owner still works.
+8. For a failed backend deployment, redeploy the last known-good Vercel deployment. Treat database migrations separately: do not assume rolling back the backend deployment reverses schema changes.
+9. Mark a feature configured only after checking deployed environment values, and verified only after successful live/staging behavior. Keep those labels separate from repository unit/mock test results.
 
 ## Staging provider checks
 
