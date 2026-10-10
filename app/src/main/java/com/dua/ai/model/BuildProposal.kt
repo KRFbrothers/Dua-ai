@@ -27,7 +27,7 @@ data class BuildPullRequest(val url: String, val number: Int, val draft: Boolean
 /**
  * A change proposal from Build mode: the model's `propose_changes` call, returned by the server for review.
  * Nothing was written to GitHub; only the owner's confirmed Create PR tap sends it to POST /api/build/pr.
- * Saved in local chat history only (not exported or synced), with the resulting [pullRequest] link.
+ * Saved in the signed-in server snapshot and phone cache, with the resulting [pullRequest] link.
  */
 data class BuildProposal(
     val id: String,
