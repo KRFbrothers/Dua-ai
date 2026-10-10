@@ -43,6 +43,12 @@ captures/
 # Keystore files
 *.jks
 *.keystore
+*.p12
+*.pfx
+*.jks.b64
+*.keystore.b64
+/private-signing/
+/personal-apk/
 
 # OS specific files
 .DS_Store

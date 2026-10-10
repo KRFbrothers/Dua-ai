@@ -1,5 +1,7 @@
-import org.gradle.api.execution.TaskExecutionGraph
 import java.io.File
+import java.security.KeyStore
+import java.security.MessageDigest
+import java.util.Properties
 
 plugins {
     alias(libs.plugins.android.application)
@@ -17,7 +19,10 @@ require(duaApiBaseUrl.startsWith("https://") && !duaApiBaseUrl.contains('"')) {
     "duaApiBaseUrl must be an HTTPS URL"
 }
 
-val googleWebClientId = (providers.gradleProperty("duaGoogleWebClientId").orElse(providers.environmentVariable("GOOGLE_CLIENT_ID")).orNull ?: "").trim()
+val googleWebClientId = providers.gradleProperty("duaGoogleWebClientId")
+    .orElse(providers.environmentVariable("GOOGLE_CLIENT_ID"))
+    .orElse(providers.gradleProperty("duaDefaultGoogleWebClientId"))
+    .orElse("").get().trim()
 require(googleWebClientId.matches(Regex("[A-Za-z0-9._-]*"))) { "GOOGLE_CLIENT_ID contains invalid characters." }
 
 fun releaseSetting(propertyName: String, environmentName: String) =
@@ -33,20 +38,49 @@ require(releaseSigningValues.all { it.isNullOrBlank() } || releaseSigningConfigu
     "Release signing requires DUA_RELEASE_STORE_FILE, DUA_RELEASE_STORE_PASSWORD, DUA_RELEASE_KEY_ALIAS, and DUA_RELEASE_KEY_PASSWORD."
 }
 
+// Public certificate only. The private keystore and its passwords stay outside the repository.
+val ownerCertificate = Properties().apply {
+    file("signing-certificate.properties").inputStream().use { load(it) }
+}
+val ownerCertificateSha256 = ownerCertificate.getProperty("sha256").replace(":", "").uppercase()
+require(ownerCertificateSha256.matches(Regex("[0-9A-F]{64}"))) {
+    "signing-certificate.properties must contain the owner's SHA-256 certificate fingerprint."
+}
+
+fun validatePersonalReleaseSigning() {
+    require(releaseSigningConfigured) {
+        "Personal release builds require the permanent keystore and all four DUA_RELEASE_* signing values. See SIGNING.md."
+    }
+    require(googleWebClientId.matches(Regex("[A-Za-z0-9._-]+\\.apps\\.googleusercontent\\.com"))) {
+        "A release APK requires the Google OAuth web client ID. See SIGNING.md."
+    }
+    val keyFile = File(releaseStoreFile!!)
+    require(keyFile.isFile) { "DUA_RELEASE_STORE_FILE must point to the permanent keystore." }
+    val store = KeyStore.getInstance(keyFile, releaseStorePassword!!.toCharArray())
+    require(store.isKeyEntry(releaseKeyAlias!!)) { "The configured signing alias has no private key." }
+    require(store.getKey(releaseKeyAlias, releaseKeyPassword!!.toCharArray()) != null) {
+        "The configured signing key could not be unlocked."
+    }
+    val certificate = store.getCertificate(releaseKeyAlias)
+    val actual = MessageDigest.getInstance("SHA-256").digest(certificate.encoded)
+        .joinToString("") { "%02X".format(it) }
+    require(actual == ownerCertificateSha256) {
+        "Signing certificate does not match the permanent owner certificate. Restore the original keystore; do not generate a replacement."
+    }
+}
+
+tasks.register("validatePersonalReleaseSigning") {
+    group = "verification"
+    description = "Checks the permanent signing certificate and Google OAuth client before a personal release."
+    doLast { validatePersonalReleaseSigning() }
+}
+
 gradle.taskGraph.whenReady({
     val releaseArtifactRequested = allTasks.any { task ->
         task.name == "assembleRelease" || task.name == "bundleRelease" || task.name.startsWith("packageRelease")
     }
     if (releaseArtifactRequested) {
-        if (releaseSigningConfigured) {
-            require(File(releaseStoreFile!!).isFile) {
-                "DUA_RELEASE_STORE_FILE must point to an existing keystore file."
-            }
-        } else {
-            // Personal install: sign with this machine's Android debug key, so the release APK updates an
-            // installed debug build in place and keeps the Google sign-in SHA-1 registered for it.
-            logger.warn("Dua: no release keystore configured; signing the release build with the Android debug key.")
-        }
+        validatePersonalReleaseSigning()
     }
 })
 
@@ -58,8 +92,8 @@ android {
         applicationId = "com.dua.ai"
         minSdk = 26
         targetSdk = 35
-        versionCode = 7
-        versionName = "1.0.6"
+        versionCode = 11
+        versionName = "1.0.10"
         manifestPlaceholders["crashlyticsCollectionEnabled"] = "false"
         buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"" + googleWebClientId + "\"")
         buildConfigField("String", "DUA_API_BASE_URL", "\"" + duaApiBaseUrl + "\"")
@@ -79,8 +113,8 @@ android {
                     keyPassword = releaseKeyPassword!!
                 }
             } else {
-                // No personal release key: use the debug key (~/.android/debug.keystore), see the task graph check above.
-                signingConfigs.getByName("debug")
+                // Missing keys are rejected before any release packaging task runs.
+                null
             }
             // Names are kept (-dontobfuscate), so there is no mapping file to upload to Crashlytics.
             configure<com.google.firebase.crashlytics.buildtools.gradle.CrashlyticsExtension> { mappingFileUploadEnabled = false }
