@@ -43,6 +43,8 @@ Run source compilation and JVM tests without packaging an APK:
 bash ./gradlew :app:testDebugUnitTest --no-daemon --max-workers=2
 ```
 
-[Project checks](.github/workflows/checks.yml) runs Android compilation and JVM unit tests on PRs, pushes to main and manual runs. It does not assemble or sign an APK. Run the backend's `node:test` suite with `cd web && npm ci && npm test`. Install the locked dependencies first (`unpdf` and SheetJS); provider keys are not needed for these tests. SheetJS is fetched from `cdn.sheetjs.com`, which must be accessible from the build environment. Backend tests are not part of CI yet.
+[Project checks](.github/workflows/checks.yml) runs Android compilation/JVM tests and the backend's full `node:test` suite in separate jobs on PRs, pushes to main and manual runs. It does not assemble or sign an APK. The backend job uses Node 24, installs locked dependencies and saves a JUnit report even when tests fail. It requires no provider keys or signing credentials.
+
+Run backend tests locally with `cd web && npm ci && npm test`; `npm run test:ci` runs the same suite with console output and a `backend-test-results.xml` report. Install the locked dependencies first (`unpdf` and SheetJS). SheetJS is fetched from `cdn.sheetjs.com`, which must be accessible from the build environment.
 
 The Android cache is stored in app-private preferences; Android backup/device transfer can include cached history and preferences according to device settings. Signed-in server data remains authoritative and is not replaced by a restored cache. A Vercel deployment updates the backend only; Android code changes require building and installing a new APK.
