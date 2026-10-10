@@ -13,23 +13,23 @@ data class ChatMessage(
     val thinking: String? = null,
     /** Seconds from send until the answer started (or finished) when thinking was shown. Saved. */
     val thinkingSeconds: Int? = null,
-    /** User turns: UTF-8 text of attached text/code files, size-capped, kept on this device for follow-ups. */
+    /** User turns: UTF-8 text of attached text/code files, size-capped, retained in the signed-in snapshot. */
     val attachmentText: String? = null,
     /** In memory only: when the streaming request started (for the live "Thinking… Ns" timer). */
     val startedAt: Long = 0L,
     /** In memory only: non-fatal note from the server, e.g. provider has no visible thinking or output was cut off. */
     val notice: String? = null,
-    /** User turns: files stored in the private Supabase bucket (references only). Kept in the server snapshot and phone cache. */
+    /** User turns: files stored in the private Supabase bucket (references only). */
     val files: List<com.dua.ai.files.FileRef> = emptyList(),
     /** Model turns: Imagine results (references into the private bucket, never bytes). Saved, exported and synced. */
     val media: List<com.dua.ai.imagine.GeneratedMedia> = emptyList(),
-    /** Model turns: the Imagine request and its progress (video jobs resume from here). Kept in the server snapshot and phone cache. */
+    /** Model turns: the Imagine request and its progress (video jobs resume from here). */
     val imagine: com.dua.ai.imagine.ImagineInfo? = null,
-    /** Model turns: code the provider ran for this reply and its output (Run code). Kept in the server snapshot and phone cache. */
+    /** Model turns: code the provider ran for this reply and its output (Run code). */
     val codeRuns: List<CodeRun> = emptyList(),
-    /** Model turns: Build mode repository and the files the server read (Phase 5B). Kept in local history only. */
+    /** Model turns: Build mode repository and the files the server read (Phase 5B). */
     val build: BuildInfo? = null,
-    /** Model turns: Build mode change proposal and, once the owner approved it, its pull request (Phase 5C). Server snapshot and phone cache. */
+    /** Model turns: Build mode change proposal and, once the owner approved it, its pull request (Phase 5C). */
     val proposal: BuildProposal? = null,
 ) {
     /** An Imagine reply (generated images or video, finished or not). */
