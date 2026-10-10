@@ -21,7 +21,7 @@ The owner-only lock is the permanent access model: it keeps the server-side keys
 
 ## API and deployment runbook
 
-1. Review the change and ensure the `Project checks` workflow passes. Run `bash ./gradlew :app:testDebugUnitTest --no-daemon --max-workers=2` from the repository root.
+1. Review the change and ensure both `Project checks` jobs (Android and Backend tests) pass. Run `bash ./gradlew :app:testDebugUnitTest --no-daemon --max-workers=2` from the repository root and `npm ci && npm test` from `web/`. CI retains Android test reports and a backend JUnit report; backend tests use fake provider responses and require no real provider keys.
 2. Deploy the backend API (`web/`) from the intended branch with Vercel Root Directory `web`, Node.js 24, and the production-only secrets configured in Vercel. Never copy secret values into Android resources or client configuration.
 3. Apply reviewed Supabase migrations before enabling their dependent features. Verify RLS, grants, and function permissions in the Supabase SQL editor; do not grant clients direct snapshot writes or access to daily usage rows.
 4. After deployment, smoke-check `/api/config`, `/api/setup`, and `/api/account/session`. (There is no web client; `/` is not served.) Confirm that responses contain no API keys, service-role key, or owner email. `/api/setup` may expose feature availability and access-policy booleans.
@@ -115,4 +115,10 @@ No private signing keys are supplied by this repository. The manual `Build perso
 - **Automated:** [Project checks on main](https://github.com/KRFbrothers/Dua-ai/actions/runs/38072957524) passed on commit `4e7140c`. This later CI result resolves the local Android suite blocker above for that commit; the earlier environment failure remains recorded for reference.
 - **Automated:** [Build personal APK](https://github.com/KRFbrothers/Dua-ai/actions/runs/38076223122) passed on the same commit, including release signing and APK certificate verification. The [personal release](https://github.com/KRFbrothers/Dua-ai/releases/tag/personal-apk-38076223122-1) contains the APK, checksum and public certificate fingerprints.
 - **Owner-reported device check:** Google sign-in and chat replies worked after installing the permanently signed APK. This was reported by the owner, not observed through an attached device by the audit agent.
-- **Still pending:** Backend test completion and the remaining staging, owner-lock, quota, backup/restore and provider checks above. Successful login and a chat reply do not verify every production control.
+- **Still pending:** The remaining staging, owner-lock, quota, backup/restore and provider checks above. Successful login and a chat reply do not verify every production control.
+
+## Backend CI verification (2026-10-11, Asia/Calcutta)
+
+- [x] The Backend tests job in [Project checks for PR #117](https://github.com/KRFbrothers/Dua-ai/actions/runs/38078632200) installed the locked dependencies on Node 24 and passed all 148 tests, with zero failures or skipped tests, on commit `91628f5`.
+- [x] The `backend-unit-test-report` JUnit artifact was uploaded successfully. This resolves the earlier full-backend-suite verification gap using GitHub's runner; the local SheetJS network restriction remains an environment limitation.
+- This is automated regression coverage using fake upstream responses, not live verification of deployed providers, Supabase policies or the owner lock.
