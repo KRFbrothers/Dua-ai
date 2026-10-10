@@ -584,7 +584,11 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     }
     // Debounced save of the draft being typed (see updateDraft).
     private val draftSaver = com.dua.ai.history.Debouncer(viewModelScope, DRAFT_SAVE_DELAY_MS)
-    private var activeId = UUID.randomUUID().toString()
+    private val _activeChatId = MutableStateFlow(UUID.randomUUID().toString())
+    val activeChatId: StateFlow<String> = _activeChatId.asStateFlow()
+    private var activeId: String
+        get() = _activeChatId.value
+        set(value) { _activeChatId.value = value }
     private val _savedChats = MutableStateFlow<List<SavedChat>>(emptyList())
     val savedChats: StateFlow<List<SavedChat>> = _savedChats.asStateFlow()
     private val _attachments = MutableStateFlow<List<ChatAttachment>>(emptyList())

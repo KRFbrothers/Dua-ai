@@ -11,6 +11,8 @@ import com.dua.ai.setup.ProviderCapability
 /** Everything the chat surface renders. Built from ChatViewModel flows in [ChatRoute]. */
 @Immutable
 data class ChatUiState(
+    /** Identity of the active conversation, independent of its message count. */
+    val chatId: String = "",
     val messages: List<ChatMessage> = emptyList(),
     val draft: String = "",
     val typing: Boolean = false,
