@@ -270,27 +270,55 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         when (preview.kind) {
             "upload" -> account.notice("Uploaded cloud revision ${account.upload(preview.review)}. Local data stays unchanged.")
             "delete" -> { account.upload(preview.review, clear = true); account.notice("Cloud snapshot cleared. Local data stays unchanged.") }
-            "download" -> {
-                flushHistory()
-                val oldSettings = localSettings.value
-                val notes = preview.review.snapshot.memory.distinct()
-                val result = com.dua.ai.account.CloudSnapshotCodec.merge(_savedChats.value, preview.review.snapshot.chats)
-                val encoded = ChatHistoryCodec.encode(result.chats, activeId)
-                val previous = preferences.getString("history", null)
-                localPreferences.update(oldSettings.copy(memory = notes))
-                try {
-                    val committed = withContext(Dispatchers.IO) { historyWriter.writeDirectly { preferences.edit().putString("history", encoded).commit().also { ok -> if (!ok) preferences.edit().putString("history", previous).apply() } } }
-                    if (!committed) error("Cloud chats could not be saved. Retry.")
-                    _savedChats.value = result.chats
-                } catch (failure: Exception) {
-                    try { localPreferences.update(oldSettings) } catch (_: Exception) { throw IllegalStateException("Import interrupted and memory rollback failed. Inspect local memories before retrying.", failure) }
-                    throw failure
-                }
-                account.notice("${result.added} chats merged; ${result.conflicts} conflicts kept as copies.")
-            }
+            "download" -> downloadCloudSnapshot(preview.review.snapshot)
         }
         _cloudPreview.value = null
         } finally { _dataBusy.value = false }
+    }
+
+    /** Prepare off Main, then commit without suspension after checking that the cache is still current. */
+    private suspend fun downloadCloudSnapshot(remote: com.dua.ai.account.CloudSnapshot) {
+        check(!_isTyping.value && _buildPr.value.values.none { it.creating }) { "Wait for the reply or pull request to finish before downloading." }
+        flushHistory()
+        val oldSettings = localSettings.value
+        val local = com.dua.ai.account.CloudSnapshot(_savedChats.value.toList(), oldSettings.memory.toList())
+        val selectedId = activeId
+        val (result, encoded) = withContext(Dispatchers.Default) {
+            val merged = com.dua.ai.account.CloudSnapshotCodec.mergeDownload(local, remote)
+            merged to ChatHistoryCodec.encode(merged.snapshot.chats, selectedId)
+        }
+        check(activeId == selectedId && _savedChats.value == local.chats && localSettings.value == oldSettings &&
+            !_isTyping.value && _buildPr.value.values.none { it.creating } && !draftSaver.pending) {
+            "The phone cache changed while preparing the download. Review and retry. No downloaded data was applied."
+        }
+        val chats = result.snapshot.chats
+        val previous = preferences.getString("history", null)
+        localPreferences.update(oldSettings.copy(memory = result.snapshot.memory))
+        try {
+            val committed = historyWriter.writeDirectly {
+                preferences.edit().putString("history", encoded).commit().also { ok ->
+                    if (!ok) preferences.edit().putString("history", previous).apply()
+                }
+            }
+            check(committed) { "Cloud chats could not be saved. Retry." }
+        } catch (failure: Exception) {
+            try { localPreferences.update(oldSettings) } catch (_: Exception) {
+                throw IllegalStateException("Download interrupted and memory rollback failed. Inspect cached memories before retrying.", failure)
+            }
+            throw failure
+        }
+        _savedChats.value = chats
+        // Rebind the open chat too: saveHistory uses these buffers, not just the cached chat list.
+        chats.find { it.id == activeId }?.let { chat ->
+            _messages.value = chat.messages
+            _selectedModel.value = chat.model
+            _draft.value = chat.draft
+            _summary.value = chat.summary
+            _buildRepo.value = chat.buildRepository
+            _webMode.value = null
+            _xSearch.value = false
+        }
+        account.notice("${result.added} server chats added; ${result.conflicts} phone versions kept as unsynced copies. Server memories restored.")
     }
     private val api = DuaApiClient()
 

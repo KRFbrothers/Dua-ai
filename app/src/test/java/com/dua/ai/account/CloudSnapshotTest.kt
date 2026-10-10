@@ -28,9 +28,67 @@ class CloudSnapshotTest {
     }
     @Test fun mergePreservesLocalConflictsAndDoesNotDuplicateRepeatedDownloads() {
         val remote = chat.copy(draft = "Remote draft")
-        val merged = CloudSnapshotCodec.merge(listOf(chat), listOf(remote)) { "copy" }
-        assertEquals(1, merged.conflicts); assertEquals("Local draft", merged.chats[0].draft); assertEquals("Remote draft", merged.chats[1].draft)
-        assertEquals(0, CloudSnapshotCodec.merge(merged.chats, listOf(remote)).added)
+        val server = CloudSnapshot(listOf(remote), listOf("Server memory"))
+        val merged = CloudSnapshotCodec.mergeDownload(CloudSnapshot(listOf(chat), listOf("Phone memory")), server)
+        assertEquals(1, merged.conflicts)
+        assertEquals(0, merged.added)
+        assertEquals(remote, merged.snapshot.chats.first())
+        val copy = merged.snapshot.chats.last()
+        assertTrue(copy.id.startsWith("unsynced-"))
+        assertEquals(chat.copy(id = copy.id), copy)
+        assertEquals(server.memory, merged.snapshot.memory)
+        val repeated = CloudSnapshotCodec.mergeDownload(merged.snapshot, server)
+        assertEquals(0, repeated.added)
+        assertEquals(0, repeated.conflicts)
+        assertEquals(merged.snapshot, repeated.snapshot)
+    }
+    @Test fun separateServerIdsWithIdenticalContentRemainSeparateChats() {
+        val server = CloudSnapshot(listOf(chat, chat.copy(id = "other")), emptyList())
+        val merged = CloudSnapshotCodec.mergeDownload(CloudSnapshot(listOf(chat), emptyList()), server)
+        assertEquals(server, merged.snapshot)
+        assertEquals(1, merged.added)
+        assertEquals(0, merged.conflicts)
+    }
+    @Test fun downloadKeepsPhoneOnlyChatsAndRestoresAnEmptyServerMemory() {
+        val local = CloudSnapshot(listOf(chat), listOf("Phone note"))
+        val merged = CloudSnapshotCodec.mergeDownload(local, CloudSnapshot(emptyList(), emptyList()))
+        assertEquals(local.chats, merged.snapshot.chats)
+        assertTrue(merged.snapshot.memory.isEmpty())
+        assertEquals(listOf("Phone note"), local.memory)
+    }
+    @Test fun conflictingCopyRetainsExtendedMetadataAndDoesNotOverwriteACollidingId() {
+        val raw = javaClass.getResourceAsStream("/cloud-snapshot-v1.json")!!.bufferedReader().use { it.readText() }
+        val local = CloudSnapshotCodec.decode(org.json.JSONObject(raw))
+        val original = local.chats.first()
+        val remote = local.copy(chats = listOf(original.copy(draft = "New server draft")))
+        val first = CloudSnapshotCodec.mergeDownload(local, remote)
+        val copy = first.snapshot.chats.single { it.id.startsWith("unsynced-") }
+        assertEquals(original.copy(id = copy.id), copy)
+        val collision = chat.copy(id = copy.id, draft = "Unrelated chat")
+        val merged = CloudSnapshotCodec.mergeDownload(local.copy(chats = local.chats + collision), remote)
+        assertEquals(collision, merged.snapshot.chats.single { it.id == copy.id })
+        assertEquals(original.copy(id = copy.id + "-1"), merged.snapshot.chats.single { it.id == copy.id + "-1" })
+    }
+    @Test fun oversizedUnionAndConflictCopyFailWithoutMutatingInputs() {
+        val local = CloudSnapshot((0 until 100).map { chat.copy(id = "chat-$it") }, listOf("Phone note"))
+        for (remote in listOf(
+            CloudSnapshot(listOf(chat.copy(id = "new")), listOf("Server note")),
+            CloudSnapshot(listOf(local.chats.first().copy(draft = "Conflicting draft")), listOf("Server note")))) {
+            try { CloudSnapshotCodec.mergeDownload(local, remote); fail("Oversized union accepted") }
+            catch (_: IllegalArgumentException) { }
+            assertEquals(100, local.chats.size)
+            assertEquals("Local draft", local.chats.first().draft)
+            assertEquals(listOf("Phone note"), local.memory)
+        }
+    }
+    @Test fun individuallyValidSnapshotsCannotExceedCombinedByteLimit() {
+        val messages = (0 until 3).map { ChatMessage(id = "message-$it", text = "x".repeat(800000), isUser = true) }
+        val local = CloudSnapshot(listOf(chat.copy(messages = messages)), emptyList())
+        val remote = CloudSnapshot(listOf(chat.copy(id = "other", messages = messages)), emptyList())
+        CloudSnapshotCodec.encode(local)
+        CloudSnapshotCodec.encode(remote)
+        try { CloudSnapshotCodec.mergeDownload(local, remote); fail("Oversized bytes accepted") }
+        catch (_: IllegalArgumentException) { }
     }
     @Test fun malformedOrOversizedSnapshotsAreRejectedBeforeLocalChanges() {
         for (snapshot in listOf(CloudSnapshot(listOf(chat, chat), emptyList()), CloudSnapshot(listOf(chat.copy(draft = "x".repeat(8001))), emptyList()), CloudSnapshot(listOf(chat), List(11) { "note" }), CloudSnapshot(listOf(chat), listOf("x".repeat(201))))) {

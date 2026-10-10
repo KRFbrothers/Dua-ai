@@ -47,7 +47,7 @@ fun CloudSyncScreen(viewModel: ChatViewModel, onBack: () -> Unit, onProfile: () 
                 }
             }
         }
-        Text("Manually upload a snapshot or download the server copy; the server copy always wins over this phone's cache. Includes saved drafts and memory notes; no file/audio bytes. Chats and memory notes on the server replace the phone's cached copies.", style = MaterialTheme.typography.bodyMedium)
+        Text("Download restores server chats at their original IDs, including the open chat. Different phone versions stay as unsynced copies, and phone-only chats stay cached. Server memory notes replace cached notes. Upload replaces the server snapshot after review. Includes saved drafts and chat metadata; no file/audio bytes.", style = MaterialTheme.typography.bodyMedium)
         listOf("upload" to "Review upload", "download" to "Review download", "delete" to "Clear cloud snapshot").forEach { (kind, title) ->
             FilledTonalButton(enabled = state.configured && state.user != null && !state.busy, onClick = { viewModel.reviewCloud(kind) }) { Text(title) }
         }
