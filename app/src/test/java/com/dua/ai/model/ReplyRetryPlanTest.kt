@@ -12,13 +12,26 @@ class ReplyRetryPlanTest {
         assertEquals(listOf(user), result.context)
         assertEquals("Old reply", reply.text)
     }
-    @Test fun rejectsEarlierEmptyStoppedStreamingAndFileBackedResponses() {
+    @Test fun rejectsEarlierStreamingAndFileBackedResponses() {
         val user = ChatMessage(text = "Hi", isUser = true)
         val reply = ChatMessage(text = "Reply", isUser = false)
-        val cases = listOf(listOf(user, reply, user), listOf(user, reply.copy(state = "stopped", text = "")), listOf(user, reply.copy(state = ChatMessage.STREAMING)), listOf(user.copy(text = "Describe\nFiles: doc.pdf"), reply))
+        val cases = listOf(listOf(user, reply, user), listOf(user, reply.copy(state = ChatMessage.STREAMING)), listOf(user.copy(text = "Describe\nFiles: doc.pdf"), reply))
         for (messages in cases) {
             try { ReplyRetryPlan.create(messages, reply.id); fail("Invalid retry accepted") } catch (_: IllegalArgumentException) { }
         }
+    }
+    @Test fun stoppedBeforeAnyTextKeepsTheOriginalPromptOnce() {
+        val user = ChatMessage(text = "Tell a story", isUser = true)
+        val reply = ChatMessage(text = "", isUser = false, model = "Gemini", state = "stopped")
+        val plan = ReplyRetryPlan.create(listOf(user, reply), reply.id)
+        assertEquals("Gemini", plan.model)
+        assertEquals(listOf(user), plan.context)
+        assertEquals(listOf(user), plan.full)
+    }
+    @Test fun stoppedReplyStillRequiresItsOriginalUserPrompt() {
+        val reply = ChatMessage(text = "", isUser = false, state = "stopped")
+        assertThrows(IllegalArgumentException::class.java) { ReplyRetryPlan.create(listOf(reply), reply.id) }
+        assertThrows(IllegalArgumentException::class.java) { ReplyRetryPlan.create(listOf(reply.copy(id = "earlier"), reply), reply.id) }
     }
     @Test fun stoppedPartialReplyCanBeRetried() {
         val user = ChatMessage(text = "Hi", isUser = true)
