@@ -1,0 +1,72 @@
+{
+  "format": "dua-cloud-snapshot", "version": 1, "memory": ["Prefer Hindi"],
+  "chats": [{
+    "id": "restored-chat", "updatedAt": 123, "model": "Dua", "draft": "Continue reviewing",
+    "summary": {"text": "Earlier discussion", "throughId": "user-turn"},
+    "buildRepository": "KRFbrothers/Dua-ai",
+    "messages": [{
+      "id": "user-turn", "role": "user", "text": "Review these files", "state": "complete",
+      "attachmentText": "a,b\n1,2",
+      "files": [{
+        "path": "11111111-1111-4111-8111-111111111111/22222222-2222-4222-8222-222222222222.csv",
+        "name": "table.csv", "mimeType": "text/csv", "size": 12
+      }, {
+        "path": "11111111-1111-4111-8111-111111111111/33333333-3333-4333-8333-333333333333.m4a",
+        "name": "voice.m4a", "mimeType": "audio/mp4", "size": 120, "transcript": "Please review the code"
+      }]
+    }, {
+      "id": "model-turn", "role": "model", "text": "The result is four. Here is the proposed change.", "state": "complete",
+      "thinking": "Check the arithmetic", "thinkingSeconds": 2,
+      "codeRuns": [{"language": "python", "code": "print(2 + 2)", "output": "4", "outcome": "ok"}],
+      "build": {
+        "repository": "KRFbrothers/Dua-ai", "branch": "main",
+        "files": [{"path": "src/main.kt", "bytes": 42, "truncated": true},
+          {"path": ".github/workflows/checks.yml", "bytes": 100}]
+      },
+      "media": [{
+        "path": "11111111-1111-4111-8111-111111111111/44444444-4444-4444-8444-444444444444.png",
+        "mimeType": "image/png", "size": 456
+      }],
+      "imagine": {
+        "kind": "image", "prompt": "A diagram", "aspectRatio": "1:1",
+        "count": 1, "status": "done", "progress": 100, "startedAt": 100,
+        "edit": false, "provider": "xai", "model": "image-model"
+      },
+      "proposal": {
+        "id": "55555555-5555-4555-8555-555555555555", "repository": "KRFbrothers/Dua-ai",
+        "baseBranch": "main", "branch": "dua/snapshot-fix",
+        "title": "Preserve snapshot fields", "summary": "Keep metadata",
+        "files": [{
+          "path": "src/new.kt", "action": "create", "content": "fun answer() = 4",
+          "diff": "+fun answer() = 4", "additions": 1, "deletions": 0
+        }, {
+          "path": "src/main.kt", "action": "update", "content": "fun main() = answer()",
+          "baseSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "diff": "-old\n+new", "additions": 1, "deletions": 1, "truncated": true
+        }]
+      }
+    }, {
+      "id": "created-pr-turn", "role": "model", "text": "PR created", "state": "complete",
+      "proposal": {
+        "id": "66666666-6666-4666-8666-666666666666", "repository": "KRFbrothers/Dua-ai",
+        "baseBranch": "main", "branch": "dua/created-change",
+        "title": "Completed change", "summary": "Link retained",
+        "files": [{
+          "path": "src/old.kt", "action": "delete",
+          "baseSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "diff": "-old", "additions": 0, "deletions": 1
+        }],
+        "pullRequest": {
+          "url": "https://github.com/KRFbrothers/Dua-ai/pull/123",
+          "number": 123, "draft": true, "branch": "dua/created-change", "notice": "Review first"
+        }
+      },
+      "imagine": {
+        "kind": "video", "prompt": "A short diagram animation", "aspectRatio": "16:9",
+        "count": 1, "status": "pending", "progress": 40, "startedAt": 123,
+        "edit": false, "provider": "xai", "model": "video-model",
+        "seconds": 5, "resolution": "720p", "jobId": "signed-job-token-0123456789"
+      }
+    }]
+  }]
+}

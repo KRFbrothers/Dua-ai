@@ -144,11 +144,11 @@ API keys are stored server-side (Vercel Functions or Supabase) and are never exp
 #### Build mode
 - When you use Build mode, the server reads the files Gemini asks for from the repository you picked and sends their contents, the file list and your messages to Google's Gemini API to produce the answer. Up to 40 files and 600 KB per reply by default.
 - Private repositories are included if your token can read them, so their code is sent to Gemini when Build mode reads it. Google's Gemini API terms apply (on the free AI Studio tier, Google may use prompts to improve its products).
-- The app keeps the repository name and the list of files read with the chat in the server snapshot and phone cache. A change proposal (including the proposed file contents, so the pull request can still be created later, and the pull request link once created) is kept in the same server snapshot and phone cache. Export remains user-initiated; these records are not provider API payloads unless the chat is sent. Dua does not store file contents on the server.
+- The app keeps the repository name and the list of files read with the chat in the server snapshot and phone cache. A change proposal and its eventual pull-request link are kept in the same snapshot and cache. Pending proposal contents are retained up to 512 Ki characters in total; contents are omitted after a PR exists or when that limit is exceeded. Saved diffs are capped at 20,000 characters per file. Repository file bytes read for a reply are not separately archived, but bounded proposal text is stored in the owner's server snapshot. Export remains user-initiated.
 
 #### Data Shared
 - Repository names, visibility and descriptions returned by GitHub.
-- In Build mode, file contents, paths and search results from the chosen repository, sent to Gemini. A proposal's file contents are written by Gemini and stay in that reply's conversation with Gemini; they are sent to GitHub only when you confirm Create PR, as the new commit.
+- In Build mode, file contents, paths and search results from the chosen repository are sent to Gemini. The model's bounded proposed file contents are also retained in the owner's Supabase snapshot when synced. They are sent to GitHub only when you confirm Create PR, as the new commit.
 - The configured GitHub tokens (read token and, when set, the separate write token) are sent only by the server to GitHub; their permissions are determined by the token owner and GitHub configuration. Neither is ever sent to the app or to Gemini.
 
 #### Data NOT Shared

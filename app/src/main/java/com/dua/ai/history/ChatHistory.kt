@@ -161,17 +161,17 @@ object ChatHistoryCodec {
                         .put("model", message.model).put("state", savedState(message.state))
                         .apply {
                             putThinking(this, message)
-                            // Text-file content stays local: it is not exported or synced to the cloud.
+                            // Cache the same bounded text context included in the server snapshot.
                             if (message.isUser && !message.attachmentText.isNullOrEmpty()) put("attachmentText", message.attachmentText.take(ChatMessage.MAX_ATTACHMENT_TEXT_CHARS))
-                            // Stored-file references (and audio transcripts) also stay local.
+                            // Cache stored-file references/transcripts; raw bytes stay in private Storage.
                             if (message.isUser && message.files.isNotEmpty()) put("files", com.dua.ai.files.FileRefCodec.array(message.files))
                             putMedia(this, message, local = true)
                             if (!message.isUser) message.imagine?.let { put("imagine", com.dua.ai.imagine.ImagineCodec.infoJson(it)) }
-                            // Code that ran for a reply (Run code) stays local like file references: not exported or synced.
+                            // Cache Run code results as well as preserving them in the server snapshot.
                             if (!message.isUser && message.codeRuns.isNotEmpty()) put("codeRuns", com.dua.ai.model.CodeRuns.toJson(message.codeRuns))
-                            // Build mode file lists stay local too (repository paths can be private).
+                            // Build file metadata is retained in the server snapshot and this cache.
                             if (!message.isUser) message.build?.let { put("build", com.dua.ai.model.BuildInfos.toJson(it)) }
-                            // Build proposals and their pull request links stay local as well (Phase 5C).
+                            // Build proposals/PR links use the same bounded codec in both copies.
                             if (!message.isUser) message.proposal?.let { put("proposal", com.dua.ai.model.BuildProposals.toJson(it)) }
                         })
                 } })) }

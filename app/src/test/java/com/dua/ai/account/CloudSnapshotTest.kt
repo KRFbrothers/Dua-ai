@@ -11,6 +11,14 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class CloudSnapshotTest {
+    @Test fun sharedBackendFixtureSurvivesAndroidDecodeAndReencode() {
+        val raw = javaClass.getResourceAsStream("/cloud-snapshot-v1.json")!!.bufferedReader().use { it.readText() }
+        val expected = org.json.JSONObject(raw)
+        val restored = CloudSnapshotCodec.decode(expected)
+        val actual = CloudSnapshotCodec.encode(restored)
+        assertTrue("Android and backend must preserve the same snapshot fields", expected.similar(actual))
+    }
+
     private val chat = SavedChat("id", "Dua", "Local draft", listOf(ChatMessage(text = "Hi", isUser = true)), 123)
     @Test fun snapshotsRoundTripDraftsAndMemoriesWithoutAttachmentBytes() {
         val snapshot = CloudSnapshot(listOf(chat), listOf("Prefer Hindi")); val json = CloudSnapshotCodec.encode(snapshot)
