@@ -115,4 +115,10 @@ No private signing keys are supplied by this repository. The manual `Build perso
 - **Automated:** [Project checks on main](https://github.com/KRFbrothers/Dua-ai/actions/runs/38072957524) passed on commit `4e7140c`. This later CI result resolves the local Android suite blocker above for that commit; the earlier environment failure remains recorded for reference.
 - **Automated:** [Build personal APK](https://github.com/KRFbrothers/Dua-ai/actions/runs/38076223122) passed on the same commit, including release signing and APK certificate verification. The [personal release](https://github.com/KRFbrothers/Dua-ai/releases/tag/personal-apk-38076223122-1) contains the APK, checksum and public certificate fingerprints.
 - **Owner-reported device check:** Google sign-in and chat replies worked after installing the permanently signed APK. This was reported by the owner, not observed through an attached device by the audit agent.
-- **Still pending:** Backend test completion and the remaining staging, owner-lock, quota, backup/restore and provider checks above. Successful login and a chat reply do not verify every production control.
+- **Still pending:** The remaining staging, owner-lock, quota, backup/restore and provider checks above. Successful login and a chat reply do not verify every production control.
+
+## Backend CI verification (2026-10-11, Asia/Calcutta)
+
+- [x] The Backend tests job in [Project checks for PR #117](https://github.com/KRFbrothers/Dua-ai/actions/runs/38078632200) installed the locked dependencies on Node 24 and passed all 148 tests, with zero failures or skipped tests, on commit `91628f5`.
+- [x] The `backend-unit-test-report` JUnit artifact was uploaded successfully. This resolves the earlier full-backend-suite verification gap using GitHub's runner; the local SheetJS network restriction remains an environment limitation.
+- This is automated regression coverage using fake upstream responses, not live verification of deployed providers, Supabase policies or the owner lock.
