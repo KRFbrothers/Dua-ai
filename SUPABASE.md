@@ -84,6 +84,7 @@ Google is the app's only sign-in method. Android uses native Google Sign-In (Cre
 
 - In Supabase Authentication → Providers, enable Google with the OAuth web client ID.
 - Build the app with that web client ID via the `duaGoogleWebClientId` Gradle property or the `GOOGLE_CLIENT_ID` environment variable.
+- In the existing Google Cloud Android OAuth client, register package `com.dua.ai` and the permanent signing certificate's SHA-1 from `app/signing-certificate.properties`. Use the saved key for every update; see [SIGNING.md](SIGNING.md). A different build machine's debug certificate will not match this client.
 - The **Sign in with Google** button appears on the first-launch welcome screen and in Settings → Profile. Without a web client ID the button reports that sign-in is not configured for the build. **Skip for now** on the welcome screen goes straight to local chat and is remembered on the device.
 
 `SUPABASE_AUTH_REDIRECT_URL` was only used by the removed web OAuth redirect flow and is no longer read; it can be deleted from Vercel.

@@ -76,16 +76,16 @@ These checks require a device/emulator and are not covered by the current JVM-on
 
 The app is installed directly on the owner's device(s); there is no store upload.
 
-**Debug APK (simplest).** No signing setup is needed; Gradle signs with the build machine's Android debug key. Crashlytics collection is disabled in debug builds.
+**Debug APK (development).** Gradle signs with the build machine's Android debug key. Crashlytics collection is disabled in debug builds. Use the permanent personal release signer for the owner's installed app; a different debug certificate will not match the registered Android OAuth client or an installed release APK.
 
 - [ ] Build with `bash ./gradlew :app:assembleDebug --no-daemon` (output: `app/build/outputs/apk/debug/app-debug.apk`), or use Android Studio's Run.
 - [ ] Install with `adb install -r app/build/outputs/apk/debug/app-debug.apk`, or copy the APK to the phone and allow installing from that source.
 - [ ] Confirm the app reaches the intended backend (default `https://dua-cyan.vercel.app`; override with `duaApiBaseUrl` / `DUA_API_BASE_URL` at build time) and that signing in with the owner account works.
 
-**Release APK (smaller, recommended).** `bash ./gradlew :app:assembleRelease --no-daemon` builds a shrunk APK (R8 code shrinking and optimization plus resource shrinking; class names are kept with `-dontobfuscate`, so Crashlytics traces stay readable and no mapping file is uploaded). Output: `app/build/outputs/apk/release/app-release.apk`. Crashlytics collection is enabled in release builds.
+**Release APK (personal install).** [SIGNING.md](SIGNING.md) describes permanent key storage and GitHub builds. `bash ./gradlew :app:assembleRelease --no-daemon` builds a shrunk APK (R8 code shrinking and optimization plus resource shrinking; class names are kept with `-dontobfuscate`, so Crashlytics traces stay readable and no mapping file is uploaded). Output: `app/build/outputs/apk/release/app-release.apk`. Crashlytics collection is enabled in release builds.
 
-- With **no release keystore configured**, the release build is signed with the build machine's Android debug key (`~/.android/debug.keystore`, Gradle prints a warning). It therefore installs over an existing debug build from the same machine without uninstalling, and Google sign-in keeps working because the signing SHA-1 is unchanged.
-- With a personal key, set all four values below; a partial set fails the build.
+- Every release requires the permanent personal keystore. Missing credentials, incorrect alias/password, and a SHA-256 certificate different from `app/signing-certificate.properties` fail the build before packaging. There is no debug-key fallback.
+- Set all four values below; a partial set fails the build.
 
 - `DUA_RELEASE_STORE_FILE` — path to the keystore file.
 - `DUA_RELEASE_STORE_PASSWORD`
@@ -94,13 +94,13 @@ The app is installed directly on the owner's device(s); there is no store upload
 
 The matching Gradle properties are `duaReleaseStoreFile`, `duaReleaseStorePassword`, `duaReleaseKeyAlias`, and `duaReleaseKeyPassword`. Prefer environment variables. Do not commit the keystore or place passwords in tracked `gradle.properties`.
 
-- [ ] Create a personal keystore and back it up privately.
+- [ ] Save the original personal keystore and its passwords in a password manager and a separate encrypted backup. Test restoration; use that same key for every update.
 - [ ] Run `bash ./gradlew :app:assembleRelease --no-daemon`, then install the APK as above (`apksigner verify --print-certs` shows the signing SHA-1).
 - [ ] Check the version code/name, permissions, backend URL and Crashlytics behavior.
 
 **Updates.** Android only installs an update signed with the same key as the installed app. Switching to a different key (a personal release key, or another machine's debug key) requires uninstalling first, which deletes the phone cache. Confirm the authoritative server snapshot is synced before uninstalling.
 
-No signing keys, Android release workflow or signed artifacts are supplied by this repository.
+No private signing keys are supplied by this repository. The manual `Build personal APK` workflow requires configured Actions Secrets and publishes an APK, checksum, and public certificate fingerprints in repository Releases. It does not upload signing secrets.
 
 ## Phase 6 repository validation record (2026-10-10)
 
