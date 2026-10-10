@@ -5,6 +5,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -12,6 +13,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.Check
@@ -21,10 +23,10 @@ import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -42,6 +44,7 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.dua.ai.model.CodeRun
 import com.dua.ai.ui.theme.CodeTextStyle
@@ -83,7 +86,6 @@ fun CodeRunBlock(messageId: String, index: Int, total: Int, run: CodeRun, modifi
     var expanded by rememberSaveable(messageId, index) { mutableStateOf(initiallyExpanded) }
     val rotation by animateFloatAsState(if (expanded) 180f else 0f, label = "chevron")
     val label = codeRunLabel(run, index, total)
-    val code = remember(run.code, run.language, colors.isDark) { highlightCode(run.code.trimEnd('\n'), run.language, colors.isDark) }
     Surface(shape = DuaShape.codeBlock, color = colors.codeBackground, border = BorderStroke(1.dp, colors.codeBorder),
         modifier = modifier.fillMaxWidth().padding(vertical = Spacing.xs)) {
         Column {
@@ -100,13 +102,15 @@ fun CodeRunBlock(messageId: String, index: Int, total: Int, run: CodeRun, modifi
                         else -> Icon(Icons.Outlined.Terminal, contentDescription = null, modifier = Modifier.size(Sizes.iconTiny))
                     }
                     Text(label, style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(start = Spacing.sm).weight(1f))
-                    Text(run.language, style = MaterialTheme.typography.labelMedium, color = scheme.onSurfaceVariant)
+                    Text(run.language, style = MaterialTheme.typography.labelMedium, color = scheme.onSurfaceVariant,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(.6f, fill = false))
                     Icon(Icons.Filled.KeyboardArrowDown, contentDescription = null, modifier = Modifier.padding(start = Spacing.xs).size(Sizes.iconSmall).rotate(rotation))
                 }
             }
             AnimatedVisibility(visible = expanded) {
+                val code = rememberHighlightedCode(run.code.trimEnd('\n'), run.language, colors.isDark)
                 Column {
-                    CopyableMono(code, run.code, "Copy code", "Code copied")
+                    CopyableMono(code, run.code, "Copy code")
                     HorizontalDivider(color = colors.codeBorder)
                     val output = run.output
                     Row(Modifier.fillMaxWidth().background(colors.codeHeader.copy(alpha = .5f)).padding(start = Spacing.md), verticalAlignment = Alignment.CenterVertically) {
@@ -117,7 +121,7 @@ fun CodeRunBlock(messageId: String, index: Int, total: Int, run: CodeRun, modifi
                         output == null -> Unit
                         output.isBlank() -> Text(if (run.outcome == "timeout") "The code ran out of time before printing anything." else "No output.",
                             style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant, modifier = Modifier.padding(Spacing.md))
-                        else -> CopyableMono(AnnotatedString(output.trimEnd('\n')), output, "Copy output", "Output copied")
+                        else -> CopyableMono(AnnotatedString(output.trimEnd('\n')), output, "Copy output")
                     }
                 }
             }
@@ -125,18 +129,24 @@ fun CodeRunBlock(messageId: String, index: Int, total: Int, run: CodeRun, modifi
     }
 }
 
-/** Monospace text that scrolls sideways, with a copy button in its top-right corner. */
+/** Selectable monospace text that scrolls sideways, with a labeled copy button above it. */
 @Composable
-private fun CopyableMono(text: AnnotatedString, copy: String, description: String, copiedDescription: String) {
+private fun CopyableMono(text: AnnotatedString, copy: String, copyLabel: String) {
     val clipboard = LocalClipboardManager.current
-    var copied by remember { mutableStateOf(false) }
+    var copied by remember(copy) { mutableStateOf(false) }
     LaunchedEffect(copied) { if (copied) { delay(2000); copied = false } }
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
-        Text(text, style = CodeTextStyle, color = DuaTheme.colors.onCode, softWrap = false,
-            modifier = Modifier.weight(1f).horizontalScroll(rememberScrollState()).padding(start = Spacing.md, top = Spacing.md, bottom = Spacing.md))
-        IconButton(onClick = { clipboard.setText(AnnotatedString(copy)); copied = true }) {
-            Icon(if (copied) Icons.Outlined.Check else Icons.Outlined.ContentCopy, if (copied) copiedDescription else description,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(Sizes.iconTiny + 2.dp))
+    Column(Modifier.fillMaxWidth()) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            TextButton(onClick = { clipboard.setText(AnnotatedString(copy)); copied = true }) {
+                Icon(if (copied) Icons.Outlined.Check else Icons.Outlined.ContentCopy, contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(Sizes.iconTiny + 2.dp))
+                Text(if (copied) "Copied" else copyLabel, style = MaterialTheme.typography.labelMedium,
+                    modifier = Modifier.padding(start = Spacing.xs))
+            }
+        }
+        SelectionContainer {
+            Text(text, style = CodeTextStyle, color = DuaTheme.colors.onCode, softWrap = false,
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(Spacing.md))
         }
     }
 }
