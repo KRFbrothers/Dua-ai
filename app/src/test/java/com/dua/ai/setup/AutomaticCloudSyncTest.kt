@@ -114,10 +114,10 @@ class AutomaticCloudSyncTest {
         p.close(sync)
     }
 
-    @Test fun `remote deletion cannot be silently uploaded again after restore`() = runBlocking {
+    @Test fun `server memory deletion is applied to the phone and never uploaded back`() = runBlocking {
         val original = snapshot(listOf(chat()), listOf("Prefer Hindi")); val record = AutomationSyncRecord(true, ownerA, 2, AutomationSyncPolicy.baseline(original))
         val p = Fixture(original, snapshot(listOf(chat())), record); p.revision = 3; val sync = p.controller(); sync.restore()?.join()
-        assertTrue(sync.state.value.reviewRequired); assertEquals(0, p.uploadCalls); assertEquals(0, p.commits)
+        assertFalse(sync.state.value.reviewRequired); assertEquals(0, p.uploadCalls); assertEquals(1, p.commits); assertTrue(p.here.memory.isEmpty())
         p.close(sync)
     }
 
