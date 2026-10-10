@@ -102,7 +102,7 @@ fun CodeBlock(code: String, language: String?, modifier: Modifier = Modifier) {
     val clipboard = LocalClipboardManager.current
     var copied by remember(code) { mutableStateOf(false) }
     LaunchedEffect(copied) { if (copied) { delay(2000); copied = false } }
-    val text = remember(code, language, colors.isDark) { highlightCode(code.trimEnd('\n'), language, colors.isDark) }
+    val text = rememberHighlightedCode(code.trimEnd('\n'), language, colors.isDark)
     Surface(shape = DuaShape.codeBlock, color = colors.codeBackground, border = BorderStroke(1.dp, colors.codeBorder),
         modifier = modifier.fillMaxWidth().padding(vertical = Spacing.xs)) {
         Column {
