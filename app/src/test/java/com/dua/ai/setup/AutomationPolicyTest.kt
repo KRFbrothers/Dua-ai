@@ -42,15 +42,21 @@ class AutomationPolicyTest {
         assertNotEquals(AutomationSyncPolicy.signature(chat), AutomationSyncPolicy.signature(chat.copy(draft = "Changed draft")))
     }
 
-    @Test fun `stable conflict copies require review and repeated merge is idempotent`() {
-        val local = CloudSnapshot(listOf(chat), emptyList())
-        val remote = local.copy(chats = listOf(chat.copy(messages = listOf(ChatMessage(text = "Other prompt", isUser = true)))))
-        val first = AutomationSyncPolicy.merge(local, remote, null)
-        assertTrue(first.requiresContentReview)
-        assertEquals(2, first.snapshot.chats.size)
-        assertTrue(first.snapshot.chats.last().id.startsWith("auto-"))
-        val repeated = AutomationSyncPolicy.merge(first.snapshot, remote, null)
-        assertFalse(repeated.requiresContentReview)
-        assertTrue(AutomationSyncPolicy.same(first.snapshot, repeated.snapshot))
+    @Test fun `server wins over the phone cache for the same chat and for memory`() {
+        val local = CloudSnapshot(listOf(chat), listOf("Local note"))
+        val remote = CloudSnapshot(listOf(chat.copy(messages = listOf(ChatMessage(text = "Other prompt", isUser = true)))), listOf("Server note"))
+        val plan = AutomationSyncPolicy.merge(local, remote, null)
+        assertFalse(plan.requiresContentReview)
+        assertTrue(AutomationSyncPolicy.same(remote, plan.snapshot))
+        assertTrue(AutomationSyncPolicy.same(plan.snapshot, AutomationSyncPolicy.merge(plan.snapshot, remote, null).snapshot))
+    }
+
+    @Test fun `phone-only chats and memory are kept only while the server is empty`() {
+        val local = CloudSnapshot(listOf(chat), listOf("Local note"))
+        val empty = AutomationSyncPolicy.merge(local, CloudSnapshot(emptyList(), emptyList()), null)
+        assertEquals(listOf("Local note"), empty.snapshot.memory)
+        val synced = AutomationSyncPolicy.merge(local, CloudSnapshot(emptyList(), listOf("Server note")), null)
+        assertEquals(listOf("Server note"), synced.snapshot.memory)
+        assertEquals(1, synced.snapshot.chats.size)
     }
 }

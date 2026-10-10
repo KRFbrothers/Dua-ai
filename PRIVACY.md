@@ -32,11 +32,11 @@ Dua is a personal, single-user app: the backend is meant to be restricted to the
 ### 2. Chat History & Conversations
 
 #### Collection
-- **Scope:** Chat messages (text and metadata) are stored locally on-device by default.
-- **Cloud Sync (Optional):** Users explicitly opt-in to cloud snapshots. No syncing occurs without user action.
+- **Scope:** The server is the source of truth for chat messages and memory notes; the phone keeps only a disposable cache for offline viewing and speed.
+- **Cloud Sync (Optional):** Users explicitly opt-in to cloud snapshots. Signing in is what makes the server copy authoritative; the phone cache is replaced by the server copy on sync.
 
-#### Local Storage
-- **Android:** Chat history and app preferences are stored in app-private `SharedPreferences`; they are not encrypted by the app. Android OS sandboxing protects app-private files, but this is not equivalent to an encrypted database.
+#### On-device cache
+- **Android:** A cache of chat history and app preferences is stored in app-private `SharedPreferences`; they are not encrypted by the app. Android OS sandboxing protects app-private files, but this is not equivalent to an encrypted database.
 - **Backup:** Android app backup and device transfer are enabled. The account-session and automatic-sync preference files are excluded, but chat history and other app preferences are not excluded by the checked-in backup rules. Whether a backup is created or restored depends on Android/device backup settings and the user's account. Users should not assume local chats remain only on one device.
 - **Retention:** Retained until the user deletes the data, clears app storage, uninstalls the app, or an enabled device backup restores it. Backup copies may have separate retention.
 

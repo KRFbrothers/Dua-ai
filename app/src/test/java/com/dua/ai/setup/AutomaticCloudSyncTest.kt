@@ -151,10 +151,10 @@ class AutomaticCloudSyncTest {
         p.close(sync)
     }
 
-    @Test fun `content conflicts preserve stable copies and pause before first upload`() = runBlocking {
+    @Test fun `server copy replaces a differing phone cache without review`() = runBlocking {
         val p = Fixture(snapshot(listOf(chat(text = "Local"))), snapshot(listOf(chat(text = "Remote")))); val sync = p.controller(); sync.enable()?.join()
-        assertTrue(sync.state.value.reviewRequired); assertEquals(2, p.here.chats.size); assertEquals(0, p.uploadCalls)
-        val copyId = p.here.chats.last().id; sync.resumeAfterReview()?.join(); assertFalse(sync.state.value.reviewRequired); assertEquals(2, p.remote.chats.size); assertEquals(copyId, p.here.chats.last().id)
+        assertFalse(sync.state.value.reviewRequired); assertEquals(1, p.here.chats.size); assertEquals(0, p.uploadCalls)
+        assertEquals(AutomationSyncPolicy.signature(p.remote.chats.single()), AutomationSyncPolicy.signature(p.here.chats.single()))
         p.close(sync)
     }
 

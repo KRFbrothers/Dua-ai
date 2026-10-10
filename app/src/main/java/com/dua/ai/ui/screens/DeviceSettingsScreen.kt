@@ -67,8 +67,8 @@ fun DeviceSettingsScreen(viewModel: ChatViewModel, page: String, onBack: () -> U
                 }
             }
             "Memory" -> {
-                Row(Modifier.fillMaxWidth().heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically) { Text("Use local memory in replies", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f)); Switch(settings.memoryEnabled, { viewModel.updateSettings(settings.copy(memoryEnabled = it)) }) }
-                Text("Off by default. Enabled notes are sent to Gemini with new prompts. Chats do not automatically create memories. Stored only on this device.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Row(Modifier.fillMaxWidth().heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically) { Text("Use memory in replies", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f)); Switch(settings.memoryEnabled, { viewModel.updateSettings(settings.copy(memoryEnabled = it)) }) }
+                Text("Off by default. Enabled notes are sent to Gemini with new prompts. Chats do not automatically create memories. The server copy is the source of truth; this phone keeps a cache.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 OutlinedTextField(note, { if (it.length <= 200) note = it }, label = { Text("New memory") }, modifier = Modifier.fillMaxWidth())
                 FilledTonalButton(onClick = { if (note.isBlank()) notice("Write a memory first.") else { viewModel.updateSettings(settings.copy(memory = if (editing < 0) settings.memory + note.trim() else settings.memory.mapIndexed { index, text -> if (index == editing) note.trim() else text })); if (viewModel.localSettings.value.memory.contains(note.trim())) { note = ""; editing = -1 } } }) { Text(if (editing < 0) "Save note" else "Save edit") }
                 if (editing >= 0) TextButton(onClick = { editing = -1; note = "" }) { Text("Cancel edit") }
@@ -107,10 +107,10 @@ fun DeviceSettingsScreen(viewModel: ChatViewModel, page: String, onBack: () -> U
                 TextButton(enabled = current?.messages?.any { it.state == "complete" } == true, onClick = { (context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager).setPrimaryClip(android.content.ClipData.newPlainText("Dua conversation", text)); notice("Copied conversation.") }) { Text("Copy conversation") }
             }
             "Privacy" -> {
-                Text("Chats, settings and memory notes are local. Chat history is excluded from Android backups. Sending forwards messages, selected file contents and enabled memory notes to the configured AI provider. Device/browser speech services may process speech remotely. Account sessions are encrypted on this device and excluded from backup.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text("Local deletion does not delete provider records, exports or other devices. Reviewed Cloud sync uploads store drafts, messages and saved notes in your Supabase account. Logout does not erase local or cloud data. Clear cloud separately in Settings → Cloud sync. " + if (account.deletionConfigured) "To delete your account and its cloud data, use Delete account in Settings → Profile." else "Account deletion is not configured on this server.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                TextButton(onClick = { onPage("DataControls") }) { Text("Manage local chats") }
-                TextButton(onClick = { onPage("Memory") }) { Text("Manage local memories") }
+                Text("Chats and memory notes live on the server; this phone keeps a disposable cache. Chat history is excluded from Android backups. Sending forwards messages, selected file contents and enabled memory notes to the configured AI provider. Device/browser speech services may process speech remotely. Account sessions are encrypted on this device and excluded from backup.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("Deleting the cache does not delete server data, provider records or exports. Your drafts, messages and saved notes are authoritative in your Supabase account. Logout does not erase cached or server data. Clear cloud separately in Settings → Cloud sync. " + if (account.deletionConfigured) "To delete your account and its cloud data, use Delete account in Settings → Profile." else "Account deletion is not configured on this server.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                TextButton(onClick = { onPage("DataControls") }) { Text("Manage cached chats") }
+                TextButton(onClick = { onPage("Memory") }) { Text("Manage cached memories") }
                 TextButton(onClick = { resetting = true }) { Text("Reset local settings and memories") }
             }
         }
@@ -121,7 +121,7 @@ fun DeviceSettingsScreen(viewModel: ChatViewModel, page: String, onBack: () -> U
         Text(status, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
     }
     if (resetting) AlertDialog(onDismissRequest = { resetting = false }, title = { Text("Reset settings and memories?") }, text = { Text("Appearance, notifications and memories reset. Chats stay saved.") }, confirmButton = { TextButton(onClick = { resetting = false; viewModel.resetSettings() }) { Text("Reset") } }, dismissButton = { TextButton(onClick = { resetting = false }) { Text("Cancel") } })
-    if (confirming) AlertDialog(onDismissRequest = { confirming = false }, title = { Text("Delete all memories?") }, text = { Text("Remove every memory stored on this device. Chats remain unchanged.") }, confirmButton = { TextButton(onClick = { confirming = false; viewModel.updateSettings(settings.copy(memory = emptyList())) }) { Text("Delete") } }, dismissButton = { TextButton(onClick = { confirming = false }) { Text("Cancel") } })
+    if (confirming) AlertDialog(onDismissRequest = { confirming = false }, title = { Text("Delete all memories?") }, text = { Text("Remove every cached memory on this device. Memory on the server is not deleted here and is restored on the next sync. Chats remain unchanged.") }, confirmButton = { TextButton(onClick = { confirming = false; viewModel.updateSettings(settings.copy(memory = emptyList())) }) { Text("Delete") } }, dismissButton = { TextButton(onClick = { confirming = false }) { Text("Cancel") } })
 }
 
 @Composable

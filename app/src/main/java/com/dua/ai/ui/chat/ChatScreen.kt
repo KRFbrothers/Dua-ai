@@ -286,7 +286,7 @@ fun ChatScreen(
         AlertDialog(
             onDismissRequest = { deletingId = null },
             title = { Text("Delete chat?") },
-            text = { Text("Delete this chat from this device? Files uploaded or generated in this chat are deleted from your storage too.") },
+            text = { Text("Delete this chat? Files uploaded or generated in this chat are deleted from your storage too.") },
             confirmButton = { TextButton(onClick = { actions.onDeleteChat(id); deletingId = null }) { Text("Delete") } },
             dismissButton = { TextButton(onClick = { deletingId = null }) { Text("Cancel") } },
         )

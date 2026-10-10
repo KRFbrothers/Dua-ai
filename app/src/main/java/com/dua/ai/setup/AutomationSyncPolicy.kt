@@ -44,29 +44,20 @@ object AutomationSyncPolicy {
             previous.memoryDigests.any { it !in current.memoryDigests }
     }
 
+    /**
+     * Server-first merge: the cloud copy is authoritative. A chat that exists on the server replaces the
+     * phone's cached copy with the same id (no conflict copies, no review). Chats that exist only on the
+     * phone are kept so they can be uploaded; memory comes from the server once the server has any state.
+     */
     fun merge(local: CloudSnapshot, remote: CloudSnapshot, previous: AutomationBaseline?): AutomationMergePlan {
         validate(local); validate(remote)
-        val chats = local.chats.toMutableList()
-        val usedIds = chats.map { it.id }.toMutableSet()
-        val signatures = chats.map(::signature).toMutableSet()
-        var review = false
-        remote.chats.sortedBy { it.id }.forEach { chat ->
-            val remoteSignature = signature(chat)
-            if (previous?.chatSignatures?.get(chat.id) == remoteSignature || remoteSignature in signatures) return@forEach
-            val here = local.chats.firstOrNull { it.id == chat.id }
-            var next = chat
-            if (here != null) {
-                val oldSignature = previous?.chatSignatures?.get(chat.id)
-                if (oldSignature == null || oldSignature != signature(here) && oldSignature != remoteSignature) review = true
-                val stem = "auto-" + digest(chat.id + ":" + remoteSignature)
-                var id = stem; var suffix = 0
-                while (id in usedIds) id = "$stem-${++suffix}"
-                next = chat.copy(id = id)
-            }
-            usedIds += next.id; signatures += remoteSignature; chats += next
-        }
-        val merged = validate(CloudSnapshot(chats, (local.memory + remote.memory.sorted()).distinct()))
-        return AutomationMergePlan(merged, review)
+        val remoteById = remote.chats.associateBy { it.id }
+        val chats = local.chats.map { remoteById[it.id] ?: it }.toMutableList()
+        val localIds = local.chats.map { it.id }.toSet()
+        remote.chats.sortedBy { it.id }.filter { it.id !in localIds }.forEach { chats += it }
+        val serverHasState = previous != null || remote.chats.isNotEmpty() || remote.memory.isNotEmpty()
+        val memory = if (serverHasState) remote.memory.distinct() else local.memory
+        return AutomationMergePlan(validate(CloudSnapshot(chats, memory)), false)
     }
 
     /** Stop after five failures; retry should require an explicit user action thereafter. */

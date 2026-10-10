@@ -1,7 +1,7 @@
 // Long conversations (Phase 2): a per-provider character budget replaces the old 39-message cut.
 // When the turns sent by the app exceed the budget, older turns are summarised by the current
-// provider and the summary travels back to the app (SSE `context` event), which caches it with the
-// conversation and sends it with later requests. Only turns not yet covered are summarised again.
+// provider and the summary travels back to the app (SSE `context` event), which stores it with the
+// conversation (the server snapshot is authoritative; the phone only caches it) and sends it with later requests. Only turns not yet covered are summarised again.
 import { createHash } from 'node:crypto';
 import { envInteger } from './adapters.mjs';
 
