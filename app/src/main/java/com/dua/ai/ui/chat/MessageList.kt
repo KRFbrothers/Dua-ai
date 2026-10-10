@@ -33,6 +33,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -48,7 +49,7 @@ fun MessageList(state: ChatUiState, actions: ChatActions, listState: LazyListSta
     val lastId = state.messages.lastOrNull()?.id
     LazyColumn(
         state = listState,
-        modifier = modifier.fillMaxSize(),
+        modifier = modifier.fillMaxSize().testTag("chat-messages"),
         contentPadding = PaddingValues(horizontal = Spacing.lg, vertical = Spacing.md),
         verticalArrangement = Arrangement.spacedBy(Spacing.md),
         horizontalAlignment = Alignment.CenterHorizontally,

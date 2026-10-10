@@ -7,6 +7,17 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.foundation.gestures.scrollBy
+import androidx.compose.foundation.interaction.DragInteraction
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.ArrowDownward
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.Icon
+import androidx.compose.runtime.key
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.semantics.contentDescription
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -42,6 +53,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import com.dua.ai.ui.history.HistoryDrawer
 import com.dua.ai.ui.theme.Sizes
+import com.dua.ai.ui.theme.Spacing
 import kotlinx.coroutines.launch
 
 /**
@@ -68,7 +80,26 @@ fun ChatScreen(
     var viewer by remember { mutableStateOf(initialViewer) }
     val mediaActions = remember(actions) { ImagineActions(onOpen = { id, index -> viewer = id to index }, onSave = actions.imagine.onSave, onShare = actions.imagine.onShare,
         onEdit = actions.imagine.onEdit, onAnimate = actions.imagine.onAnimate, onCancelVideo = actions.imagine.onCancelVideo, onReuse = actions.imagine.onReuse) }
-    val listState = rememberLazyListState()
+    val conversationKey = state.chatId.ifEmpty { state.messages.firstOrNull()?.id.orEmpty() }
+    val listState = key(conversationKey) {
+        rememberLazyListState(initialFirstVisibleItemIndex = state.messages.lastIndex.coerceAtLeast(0))
+    }
+    var followTail by remember(conversationKey) { mutableStateOf(true) }
+    var automaticScroll by remember(conversationKey) { mutableStateOf(false) }
+    var dragging by remember(conversationKey) { mutableStateOf(false) }
+    suspend fun goToLatest() {
+        if (automaticScroll || dragging) return
+        val latestIndex = listState.layoutInfo.totalItemsCount - 1
+        if (latestIndex < 0) return
+        automaticScroll = true
+        try {
+            listState.scrollToItem(latestIndex)
+            // A large code block can exceed one scroll step; continue to its actual end.
+            while (listState.canScrollForward) {
+                if (listState.scrollBy(STREAM_FOLLOW_PX) <= 0f) break
+            }
+        } finally { automaticScroll = false }
+    }
     val inputFocus = remember { FocusRequester() }
     // Mode toggles (chips and + sheet switches) give a light haptic.
     val tap = { actions.haptic(ChatHaptic.Tap) }
@@ -83,88 +114,120 @@ fun ChatScreen(
     var bottomCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
     LaunchedEffect(attachRequest) { if (attachRequest > 0) { sheet = ChatSheet.Attach; onAttachRequestHandled() } }
     BackHandler(enabled = drawerState.isOpen) { scope.launch { drawerState.close() } }
-    LaunchedEffect(state.messages.size, state.typing) {
-        if (state.messages.isNotEmpty()) listState.animateScrollToItem(state.messages.lastIndex)
-    }
-    // Follow a streaming reply as it grows, unless the reader has scrolled up to earlier messages.
-    val streamingSize = state.messages.lastOrNull()?.takeIf { it.streaming }?.let { it.text.length + (it.thinking?.length ?: 0) } ?: -1
-    LaunchedEffect(streamingSize) {
-        if (streamingSize <= 0) return@LaunchedEffect
-        val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: return@LaunchedEffect
-        if (lastVisible >= listState.layoutInfo.totalItemsCount - 1 && listState.canScrollForward) listState.scrollBy(STREAM_FOLLOW_PX)
-    }
-    fun closeDrawerThen(action: () -> Unit) { scope.launch { drawerState.close() }; action() }
-
-    ModalNavigationDrawer(
-        drawerState = drawerState,
-        // Only swipe to close: an edge swipe to open would fight horizontal scrolling in code blocks.
-        gesturesEnabled = drawerState.isOpen,
-        drawerContent = {
-            HistoryDrawer(
-                chats = state.savedChats,
-                newChatEnabled = !state.typing,
-                onNewChat = { closeDrawerThen(actions.onNewChat) },
-                onOpenChat = { id -> closeDrawerThen { actions.onOpenChat(id) } },
-                onDeleteChat = { id -> deletingId = id },
-                onOpenSettings = { closeDrawerThen(actions.onOpenSettings) },
-            )
-        },
-    ) {
-        Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
-            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))) {
-            ChatTopBar(
-                newChatEnabled = !state.typing,
-                showComputer = home,
-                onMenu = { scope.launch { drawerState.open() } },
-                onComputer = actions.onOpenComputer,
-                onNewChat = actions.onNewChat,
-            )
-            Box(Modifier.weight(1f).fillMaxWidth()) {
-                if (home) {
-                    EmptyState()
-                } else {
-                    MessageList(state = state, actions = actions, listState = listState, imagineActions = mediaActions)
-                }
-            }
-            Column(Modifier.fillMaxWidth().imePadding().navigationBarsPadding(), horizontalAlignment = Alignment.CenterHorizontally) {
-                Column(Modifier.widthIn(max = Sizes.contentMaxWidth).fillMaxWidth()
-                    .onGloballyPositioned { bottomCoordinates = it }
-                    .swipeUpToOpen(enabled = sheet == null && !state.typing,
-                        isExcluded = { local -> inputFocused && bottomCoordinates?.let { inputBounds.contains(it.localToRoot(local)) } == true },
-                        onSwipeUp = { tap(); sheet = ChatSheet.Attach })
-                    .semantics { customActions = listOf(CustomAccessibilityAction("Open add to chat") { sheet = ChatSheet.Attach; true }) }) {
-                    ChatNotices(state = state, actions = actions)
-                    ModeChipRow(
-                        state = state,
-                        onWebMode = onWebMode,
-                        onReasoning = onReasoning,
-                        onXSearch = onXSearch,
-                        onImagine = onImagine,
-                        onRunCode = onRunCode,
-                        onBuild = { sheet = ChatSheet.Build; actions.onOpenBuild() },
-                        home = home,
-                    )
-                    Composer(
-                        state = state,
-                        focusRequester = inputFocus,
-                        onDraftChange = actions.onDraftChange,
-                        onAttach = { sheet = ChatSheet.Attach },
-                        onClearAttachments = actions.onClearAttachments,
-                        onMic = actions.onOpenVoice,
-                        onVoiceMode = { actions.haptic(ChatHaptic.Tap); actions.onOpenVoiceMode() },
-                        onTextFieldFocus = { inputFocused = it },
-                        onTextFieldBounds = { inputBounds = it },
-                        onSend = actions.onSend,
-                        onStop = actions.onStop,
-                        onModel = { sheet = ChatSheet.Model },
-                        onCancelUpload = actions.onCancelUpload,
-                        onImagineOptions = { sheet = ChatSheet.Imagine },
-                    )
-                }
+    LaunchedEffect(listState) {
+        listState.interactionSource.interactions.collect { interaction ->
+            when (interaction) {
+                is DragInteraction.Start -> { dragging = true; followTail = false }
+                is DragInteraction.Stop, is DragInteraction.Cancel -> dragging = false
             }
         }
     }
+    LaunchedEffect(listState) {
+        snapshotFlow { listOf(listState.isScrollInProgress, listState.canScrollForward, automaticScroll, dragging) }
+            .collect { (scrolling, moreBelow, automatic, userDragging) ->
+                if (scrolling && !automatic) followTail = false
+                if (!scrolling && !userDragging && !moreBelow) followTail = true
+                // Markdown/media can grow after the initial message layout, even without a new token.
+                if (followTail && moreBelow && !scrolling && !automatic && !userDragging) goToLatest()
+            }
+    }
+    // Stop/completion never move a reader who has scrolled up.
+    val lastUserId = state.messages.lastOrNull { it.isUser }?.id
+    var previousUserId by remember(conversationKey) { mutableStateOf(lastUserId) }
+    val streamingSize = state.messages.lastOrNull()?.takeIf { it.streaming }?.let { it.text.length + (it.thinking?.length ?: 0) } ?: -1
+    val lastMessageId = state.messages.lastOrNull()?.id
+    LaunchedEffect(conversationKey, lastUserId, lastMessageId, streamingSize) {
+        val newPrompt = lastUserId != previousUserId
+        if (newPrompt) {
+            previousUserId = lastUserId
+            followTail = true
+        }
+        if (followTail && (!listState.isScrollInProgress || newPrompt)) goToLatest()
+    }
+    fun closeDrawerThen(action: () -> Unit) { scope.launch { drawerState.close() }; action() }
 
+    key(conversationKey) {
+        ModalNavigationDrawer(
+            drawerState = drawerState,
+            // Only swipe to close: an edge swipe to open would fight horizontal scrolling in code blocks.
+            gesturesEnabled = drawerState.isOpen,
+            drawerContent = {
+                HistoryDrawer(
+                    chats = state.savedChats,
+                    newChatEnabled = !state.typing,
+                    onNewChat = { closeDrawerThen(actions.onNewChat) },
+                    onOpenChat = { id -> closeDrawerThen { actions.onOpenChat(id) } },
+                    onDeleteChat = { id -> deletingId = id },
+                    onOpenSettings = { closeDrawerThen(actions.onOpenSettings) },
+                )
+            },
+        ) {
+            Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
+                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))) {
+                ChatTopBar(
+                    newChatEnabled = !state.typing,
+                    showComputer = home,
+                    onMenu = { scope.launch { drawerState.open() } },
+                    onComputer = actions.onOpenComputer,
+                    onNewChat = actions.onNewChat,
+                )
+                Box(Modifier.weight(1f).fillMaxWidth()) {
+                    if (home) {
+                        EmptyState()
+                    } else {
+                        key(conversationKey) {
+                            MessageList(state = state, actions = actions, listState = listState, imagineActions = mediaActions)
+                        }
+                        if (!followTail && listState.canScrollForward) FilledTonalButton(
+                            onClick = { scope.launch { followTail = true; goToLatest() } },
+                            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = Spacing.md)
+                                .heightIn(min = Sizes.touchTarget).semantics { contentDescription = "Go to latest reply" },
+                        ) {
+                            Icon(Icons.Outlined.ArrowDownward, contentDescription = null, modifier = Modifier.size(Sizes.iconSmall))
+                            Text("Latest reply", modifier = Modifier.padding(start = Spacing.xs))
+                        }
+                    }
+                }
+                Column(Modifier.fillMaxWidth().imePadding().navigationBarsPadding(), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Column(Modifier.widthIn(max = Sizes.contentMaxWidth).fillMaxWidth()
+                        .onGloballyPositioned { bottomCoordinates = it }
+                        .swipeUpToOpen(enabled = sheet == null && !state.typing,
+                            isExcluded = { local -> inputFocused && bottomCoordinates?.let { inputBounds.contains(it.localToRoot(local)) } == true },
+                            onSwipeUp = { tap(); sheet = ChatSheet.Attach })
+                        .semantics { customActions = listOf(CustomAccessibilityAction("Open add to chat") { sheet = ChatSheet.Attach; true }) }) {
+                        ChatNotices(state = state, actions = actions)
+                        ModeChipRow(
+                            state = state,
+                            onWebMode = onWebMode,
+                            onReasoning = onReasoning,
+                            onXSearch = onXSearch,
+                            onImagine = onImagine,
+                            onRunCode = onRunCode,
+                            onBuild = { sheet = ChatSheet.Build; actions.onOpenBuild() },
+                            home = home,
+                        )
+                        Composer(
+                            state = state,
+                            focusRequester = inputFocus,
+                            onDraftChange = actions.onDraftChange,
+                            onAttach = { sheet = ChatSheet.Attach },
+                            onClearAttachments = actions.onClearAttachments,
+                            onMic = actions.onOpenVoice,
+                            onVoiceMode = { actions.haptic(ChatHaptic.Tap); actions.onOpenVoiceMode() },
+                            onTextFieldFocus = { inputFocused = it },
+                            onTextFieldBounds = { inputBounds = it },
+                            onSend = actions.onSend,
+                            onStop = actions.onStop,
+                            onModel = { sheet = ChatSheet.Model },
+                            onCancelUpload = actions.onCancelUpload,
+                            onImagineOptions = { sheet = ChatSheet.Imagine },
+                        )
+                    }
+                }
+            }
+        }
+
+    }
     when (sheet) {
         ChatSheet.Model -> ModelPickerSheet(
             current = state.model, providers = state.providers,

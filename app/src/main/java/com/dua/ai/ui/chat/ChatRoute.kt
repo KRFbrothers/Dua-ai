@@ -30,6 +30,7 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
     onOpenVoiceMode: () -> Unit = {},
     attachRequest: Int = 0, onAttachRequestHandled: () -> Unit = {}) {
     val preferences by viewModel.localSettings.collectAsState()
+    val chatId by viewModel.activeChatId.collectAsState()
     val draft by viewModel.draft.collectAsState()
     val savedChats by viewModel.savedChats.collectAsState()
     val model by viewModel.selectedModel.collectAsState()
@@ -96,7 +97,7 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
 
     val greeting = remember(account.user?.displayName) { greetingFor(LocalTime.now().hour, account.user?.displayName) }
     val state = ChatUiState(
-        messages = messages, draft = draft, typing = typing, error = error, model = model,
+        chatId = chatId, messages = messages, draft = draft, typing = typing, error = error, model = model,
         providers = integrations.providers, webMode = webMode, reasoning = reasoning,
         webSearchConfigured = integrations.searchAvailable(model), pageReadingAvailable = integrations.pageReadingAvailable,
         xSearchAvailable = model == "Grok" && integrations.xSearchAvailable, xSearch = xSearch,
