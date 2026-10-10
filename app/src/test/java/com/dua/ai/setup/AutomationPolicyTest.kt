@@ -42,6 +42,14 @@ class AutomationPolicyTest {
         assertNotEquals(AutomationSyncPolicy.signature(chat), AutomationSyncPolicy.signature(chat.copy(draft = "Changed draft")))
     }
 
+    @Test fun `signatures include server-backed metadata`() {
+        val base = AutomationSyncPolicy.signature(chat)
+        val withSummary = chat.copy(summary = com.dua.ai.model.ChatSummary("Earlier", chat.messages.first().id))
+        val withBuild = chat.copy(buildRepository = "owner/repo")
+        assertNotEquals(base, AutomationSyncPolicy.signature(withSummary))
+        assertNotEquals(base, AutomationSyncPolicy.signature(withBuild))
+    }
+
     @Test fun `server wins over the phone cache for the same chat and for memory`() {
         val local = CloudSnapshot(listOf(chat), listOf("Local note"))
         val remote = CloudSnapshot(listOf(chat.copy(messages = listOf(ChatMessage(text = "Other prompt", isUser = true)))), listOf("Server note"))

@@ -926,7 +926,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 if (committed) {
                     _savedChats.value = merged
                     _importPreview.value = null
-                    _dataStatus.value = "${imported.size} chats imported. Existing chats and drafts were kept."
+                    _dataStatus.value = "${imported.size} chats imported into the phone cache. Sign in and sync to make them server-backed. Existing chats and drafts were kept."
                 } else _dataStatus.value = "Import could not be saved. No chats were changed. Try again."
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (_: Exception) { _dataStatus.value = "Import could not be saved. No chats were changed. Try again." }
@@ -1032,9 +1032,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 com.dua.ai.account.CloudSnapshotCodec.encode(snapshot)
                 val settings = localSettings.value
                 val previous = preferences.getString("history", null)
-                // Summaries are local only: keep them for synced chats that still contain their boundary message.
-                val summaries = _savedChats.value.associate { it.id to it.summary }
-                val chats = snapshot.chats.map { chat -> chat.copy(summary = com.dua.ai.model.ContextWindow.validSummary(chat.messages, summaries[chat.id])) }
+                // The server snapshot is authoritative, including long-context summaries.
+                val chats = snapshot.chats
                 val encoded = ChatHistoryCodec.encode(chats, activeId)
                 localPreferences.update(settings.copy(memory = snapshot.memory))
                 try {
