@@ -27,6 +27,7 @@ Use [SIGNING.md](SIGNING.md) to store the permanent personal signing key and run
 The backend lives in `web/`: Vercel functions in `web/api/` route to `web/src/server/vercel-handler.mjs`, with shared logic in `web/src/core/`. To run the API locally, use Node 24+ from `web/`:
 
 ```sh
+npm ci
 npm start
 ```
 
@@ -42,6 +43,6 @@ Run source compilation and JVM tests without packaging an APK:
 bash ./gradlew :app:testDebugUnitTest --no-daemon --max-workers=2
 ```
 
-[Project checks](.github/workflows/checks.yml) runs Android compilation and JVM unit tests on PRs, pushes to main and manual runs. It does not assemble or sign an APK. Run the backend's `node:test` suite with `cd web && npm test` (no dependencies or provider keys needed); it is not part of CI yet.
+[Project checks](.github/workflows/checks.yml) runs Android compilation and JVM unit tests on PRs, pushes to main and manual runs. It does not assemble or sign an APK. Run the backend's `node:test` suite with `cd web && npm ci && npm test`. Install the locked dependencies first (`unpdf` and SheetJS); provider keys are not needed for these tests. SheetJS is fetched from `cdn.sheetjs.com`, which must be accessible from the build environment. Backend tests are not part of CI yet.
 
 The Android cache is stored in app-private preferences; Android backup/device transfer can include cached history and preferences according to device settings. Signed-in server data remains authoritative and is not replaced by a restored cache. A Vercel deployment updates the backend only; Android code changes require building and installing a new APK.

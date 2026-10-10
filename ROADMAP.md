@@ -306,7 +306,7 @@ A feature is done when:
 ## Guiding Principles
 
 1. **Quality over speed** — Dua should feel polished and trustworthy, not rushed
-2. **Privacy by default** — The owner's data is authoritative on the server; the phone only caches it; sync is optional and only syncs his own devices
+2. **Privacy by default** — The owner's data is authoritative on the server; the phone only caches it. Automatic foreground refresh is optional per device; authenticated sync exchanges only the owner's data
 3. **Consistency** — Android screens and backend behavior feel like one product
 4. **Real validation** — Features are tested live, not just mocked
 5. **Built for one person** — Design decisions follow the owner's actual daily use, not hypothetical users
