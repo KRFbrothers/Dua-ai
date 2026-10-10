@@ -6,7 +6,7 @@ The public Google OAuth web client ID has a repository default. `duaGoogleWebCli
 
 ## Store the key once
 
-1. Save the permanent keystore, alias, and passwords in a password manager that supports file attachments.
+1. Save the alias and passwords in a password manager. If it supports file attachments, store the permanent keystore there too; otherwise store the keystore inside an encrypted backup as described below. Google Password Manager can hold the passwords and notes, but cannot store the keystore file itself.
 2. Keep a second encrypted backup on a USB drive or private Drive. The prepared backup uses AES-256 ZIP encryption; use a compatible ZIP tool and keep its backup password separately. Test that it decrypts and restores the original keystore.
 3. Keep a local working copy outside this repository with restricted permissions. A cloud development workspace can disappear and is not a permanent backup.
 4. Never commit the keystore, password files, base64 encoding, or decrypted backup. Only public certificate fingerprints belong in the repository. GitHub Actions Secrets are a build copy, not a recoverable backup.

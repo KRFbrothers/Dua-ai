@@ -105,7 +105,14 @@ No private signing keys are supplied by this repository. The manual `Build perso
 ## Phase 6 repository validation record (2026-10-10)
 
 - [x] `:app:assembleDebug` completed successfully with the documented Android/Gradle cache environment. APK: `app/build/outputs/apk/debug/app-debug.apk` (25 MB).
-- [x] Core Android JVM tests for `history`, `network`, `account`, `setup`, and `model` completed successfully (31 tests).
+- [x] Core Android JVM tests for `history`, `network`, `account`, `setup`, and `model` completed successfully (164 tests across 25 test classes, zero failures/errors in the saved JUnit XML). The previously reported 31 was the Gradle task count, not the test count.
 - [ ] The full Android JVM suite is not green in this environment: 40 Roborazzi/Compose interaction tests fail before assertions in `MavenDependencyResolver` with `FileNotFoundException`. Re-run with a writable, fully populated Maven/Gradle cache before treating this as an app regression.
 - [ ] Backend tests could not be completed because `npm ci` was blocked fetching the locked SheetJS tarball from `cdn.sheetjs.com` (HTTP 403). The prior import error for `xlsx` is therefore an environment/dependency-install issue, not a verified production failure.
 - [ ] Physical-device, staging-provider, Supabase, owner-lock, and live Vercel checks remain required; this validation was repository/build-only.
+
+## Later validation with permanent signing (2026-10-10)
+
+- **Automated:** [Project checks on main](https://github.com/KRFbrothers/Dua-ai/actions/runs/38072957524) passed on commit `4e7140c`. This later CI result resolves the local Android suite blocker above for that commit; the earlier environment failure remains recorded for reference.
+- **Automated:** [Build personal APK](https://github.com/KRFbrothers/Dua-ai/actions/runs/38076223122) passed on the same commit, including release signing and APK certificate verification. The [personal release](https://github.com/KRFbrothers/Dua-ai/releases/tag/personal-apk-38076223122-1) contains the APK, checksum and public certificate fingerprints.
+- **Owner-reported device check:** Google sign-in and chat replies worked after installing the permanently signed APK. This was reported by the owner, not observed through an attached device by the audit agent.
+- **Still pending:** Backend test completion and the remaining staging, owner-lock, quota, backup/restore and provider checks above. Successful login and a chat reply do not verify every production control.
