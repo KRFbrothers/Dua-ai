@@ -41,6 +41,8 @@ The sidebar is at most 360dp wide; Aura expands to at most 520dp and is constrai
 
 Automated tests cover DataStore restart persistence, independent theme/accent writes, migration, reset defaults, all six accents in both themes (text contrast at least 4.5:1), fixed sidebar/Aura controls during list scrolling, real project/account/sync/Imagine routes and logout confirmation. Compose UI checks run in both appearances at 360dp and at 320 × 568dp with 2× font scaling. CI records those UI renders in the Android test-report artifact; they use fixture chats and an example account, never production data.
 
+Local validation on 2026-10-11: debug APK packaging and 454 Android tests passed, including 20 Compose UI checks and 20 render PNGs. The extra interaction check for the existing delete-account dialog encountered Robolectric idling; its dialog interaction remains a physical-device check.
+
 These are code/build/automated rendering checks. Physical-device Google login, live production, keyboard behavior and TalkBack remain device checks; this UI change does not claim to have verified them.
 
 Run locally:

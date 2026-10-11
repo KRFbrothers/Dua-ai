@@ -92,7 +92,7 @@ class ApprovedNavigationUiTest(private val dark: Boolean, private val small: Boo
     }
     @Test fun profileKeepsExistingRoutesAndLogoutRequiresConfirmation() {
         var destination: DuaDestination? = null; var logouts = 0
-        content { SettingsContent(SettingsUiState(email = "fareed@example.com", displayName = "Fareed", theme = preferences.theme,
+        content { SettingsContent(SettingsUiState(email = "fareed@example.com", displayName = "Fareed", theme = preferences.theme, accent = com.dua.ai.settings.AccentPreset.defaultFor(dark).label,
             imagine = "Image generation", voice = "Device voice"), {}, { destination = it }, onGeneratedVoice = {}, onLogOut = { logouts++ }) }
         capture("profile")
         compose.onNodeWithText("Account").performClick()
