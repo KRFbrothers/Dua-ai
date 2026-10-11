@@ -39,6 +39,31 @@ import org.robolectric.annotation.GraphicsMode
 class MessageActionsInteractionTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun shareOpensAndroidChooserWithTheFullReplyAndExecutedCode() {
+        val reply = ChatMessage(text = "**Sample answer**", isUser = false,
+            codeRuns = listOf(CodeRun(code = "print(1)", output = "1", outcome = "ok")))
+        lateinit var context: android.content.Context
+        compose.setContent {
+            context = androidx.compose.ui.platform.LocalContext.current
+            DuaTheme(LocalPreferences()) {
+                AssistantMessage(reply, isLast = true, typing = false, speaking = false, speakEnabled = false,
+                    generatedVoice = false, retryWebMode = null, onRetry = {}, onSpeak = {})
+            }
+        }
+        compose.onNodeWithContentDescription("Share response").assertIsEnabled().performClick()
+        compose.runOnIdle {
+            var base = context
+            while (base is android.content.ContextWrapper && base !is android.app.Activity) base = base.baseContext
+            val chooser = org.robolectric.Shadows.shadowOf(base as android.app.Activity).nextStartedActivity
+            assertEquals(android.content.Intent.ACTION_CHOOSER, chooser.action)
+            @Suppress("DEPRECATION")
+            val send = chooser.getParcelableExtra<android.content.Intent>(android.content.Intent.EXTRA_INTENT)!!
+            assertEquals(android.content.Intent.ACTION_SEND, send.action)
+            assertEquals("text/plain", send.type)
+            assertEquals(reply.text + CodeRuns.copyText(reply.codeRuns), send.getStringExtra(android.content.Intent.EXTRA_TEXT))
+        }
+    }
+
     @Test fun fullReplyCopyKeepsMarkdownAndExecutedCode() {
         val reply = ChatMessage(text = "**Answer**\n\n```python\nprint(1)\n```\n", isUser = false,
             codeRuns = listOf(CodeRun(code = "print(1)\n", output = "1\n", outcome = "ok")))

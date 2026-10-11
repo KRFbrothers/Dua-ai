@@ -2,6 +2,19 @@
 
 Reference: [Dua AI tldraw board](https://www.tldraw.com/f/6aV_i2gXeMVcvKMTbg7NP).
 
+## Owner-requested compact styling
+
+After trying the approved-navigation APK on the phone, the owner requested a compact ChatGPT-like Home, Sidebar and Projects presentation. The navigation placements and existing actions remain, with these visual adjustments:
+
+- Home uses a single header: history, Dua AI/current-project selector, Computer shortcut and New chat. The orange project row is removed. The full original logo is smaller, with a quieter tagline; its artwork is unchanged.
+- Sidebar/Aura use the existing 16sp body scale and 48dp menu targets. The footer New chat is neutral rather than a large accent block; only recent chats scroll.
+- Projects have left-aligned names in grouped cards, a subtle selected state, neutral Edit/Memory/Tasks actions and a short explanation. Daily planner, project editing/archive, tasks and project memory remain available.
+- The composer model control is neutral and can shrink to fit beside the attachment and voice/send controls at large font sizes. Code/Think/Search modes remain available.
+
+Six accent presets and independent persisted appearance still work; the accent is used selectively for selection and theme controls rather than every navigation action. This owner feedback supersedes the earlier large-label/accent-footer styling, not the approved navigation flow.
+
+See [ANDROID_UI_GUIDE.md](ANDROID_UI_GUIDE.md) for actual Light/Dark previews, the sample-conversation debug entry point, setup and remaining features from the expanded Android UI brief.
+
 Read Page 1, **Dua AI — Navigation Flow**, and **Dua AI — Complete UI Map** before implementation. The approved Sidebar, expanded Aura, Profile & Settings, accent and appearance mockups define the layout. The additive GitHub source gallery describes the earlier source inventory (304014a); it is not the target design. The latest source also has planner, history search and editable project memory, which remain available. No `AGENTS.md` or `Dua_AI_UI_Placement_List.md` was present in this checkout.
 
 ## Placement and real actions
@@ -30,7 +43,7 @@ Dedicated Images gallery, Library, AI Agent, Work, Plugins, General, Usage and l
 - Appearance (`system`, `light`, `dark`) and optional accent override use separate keys in Preferences DataStore `dua_appearance`. Fresh installs use System default; an existing valid appearance is copied once from the legacy JSON without deleting or modifying its memory/projects.
 - Presets: Purple `#AA4FF6`, Orange `#FF6308`, Blue `#2979FF`, Green `#16A34A`, Pink `#E84393`, Teal `#00897B`.
 - An override applies in both themes. **Reset to default** removes only the accent key; it keeps the appearance choice. Without an override Light uses Purple and Dark uses Orange. Device settings reset also resets appearance to System default and clears the override.
-- Exact preset colors are used for swatches and New chat. Default page text/icons use the theme foreground; foreground colors and Material text roles are adjusted for contrast, while original neutral/error/code/brand tokens in `Color.kt` stay intact. The full original logo assets and Home/Onboarding image rendering are untouched; the artwork is never recolored with the accent.
+- Exact preset colors are used for swatches and accent previews. Default page text/icons use the theme foreground; foreground colors and Material text roles are adjusted for contrast, while original neutral/error/code/brand tokens in `Color.kt` stay intact. The full original logo assets are untouched; Home uses a smaller placement, and the artwork is never recolored with the accent.
 - These are device appearance preferences, not server history or memory. They are not part of a cloud snapshot. DataStore failures show a storage/retry notice.
 
 ## Responsive behavior

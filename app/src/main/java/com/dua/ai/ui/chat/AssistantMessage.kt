@@ -1,5 +1,8 @@
 package com.dua.ai.ui.chat
 
+import android.content.Intent
+import android.content.ActivityNotFoundException
+
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -14,6 +17,7 @@ import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.StopCircle
+import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -26,6 +30,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import com.dua.ai.model.ChatMessage
 import com.dua.ai.model.ReplySources
@@ -119,7 +124,9 @@ fun MessageActions(
     onSpeak: () -> Unit,
 ) {
     val clipboard = LocalClipboardManager.current
+    val context = LocalContext.current
     var copied by remember(copyText) { mutableStateOf(false) }
+    var shareError by remember(copyText) { mutableStateOf<String?>(null) }
     LaunchedEffect(copied) { if (copied) { delay(2000); copied = false } }
     val tint = MaterialTheme.colorScheme.onSurface.copy(alpha = .86f)
     val copyTint = if (copyText.isNotBlank()) tint else tint.copy(alpha = .38f)
@@ -135,9 +142,21 @@ fun MessageActions(
             Icon(Icons.Outlined.Refresh, retryDescription, tint = if (retryEnabled) tint else tint.copy(alpha = .38f), modifier = Modifier.size(Sizes.iconSmall))
             Text("Retry", modifier = Modifier.padding(start = Spacing.xs))
         }
+        IconButton(onClick = {
+            try {
+                context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(Intent.EXTRA_TEXT, copyText)
+                }, "Share reply"))
+                shareError = null
+            } catch (_: ActivityNotFoundException) { shareError = "No app is available to share this reply." }
+        }, enabled = copyText.isNotBlank(), modifier = Modifier.size(Sizes.touchTarget)) {
+            Icon(Icons.Outlined.Share, "Share response", tint = copyTint, modifier = Modifier.size(Sizes.iconSmall))
+        }
         IconButton(onClick = onSpeak, enabled = speakEnabled, modifier = Modifier.size(Sizes.touchTarget)) {
             Icon(if (speaking) Icons.Outlined.StopCircle else Icons.AutoMirrored.Outlined.VolumeUp, speakDescription,
                 tint = if (speakEnabled) tint else tint.copy(alpha = .38f), modifier = Modifier.size(Sizes.iconSmall))
         }
     }
+    shareError?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
 }

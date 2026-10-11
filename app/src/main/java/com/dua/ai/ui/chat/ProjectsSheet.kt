@@ -1,6 +1,13 @@
 package com.dua.ai.ui.chat
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.FolderOpen
+import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Today
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
@@ -11,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.dp
 import com.dua.ai.projects.ChatProject
 import com.dua.ai.projects.ProjectCodec
 import com.dua.ai.ui.theme.Spacing
@@ -27,6 +35,7 @@ fun ProjectsSheet(projects: List<ChatProject>, selected: String, notice: String,
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun ProjectsContent(projects: List<ChatProject>, selected: String, notice: String, enabled: Boolean,
     onSelect: (String) -> Unit, onSave: (String?, String, String, Boolean) -> Boolean,
@@ -35,19 +44,23 @@ internal fun ProjectsContent(projects: List<ChatProject>, selected: String, noti
     memoryEnabled: Boolean = false, onSaveMemory: (String, Boolean, List<String>) -> Boolean = { _, _, _ -> false }) {
     var memoryProjectId by rememberSaveable { mutableStateOf<String?>(null) }
     projects.find { it.id == memoryProjectId }?.let { project ->
-        ProjectMemoryContent(project, notice, enabled && memoryEnabled && !project.archived,
-            if (project.archived) "Restore this project to edit its memory." else if (!memoryEnabled) "Refresh setup after deploying project memory to edit notes." else "",
-            onSaveMemory, onBack = { memoryProjectId = null })
+        key("memory", project.id) {
+            ProjectMemoryContent(project, notice, enabled && memoryEnabled && !project.archived,
+                if (project.archived) "Restore this project to edit its memory." else if (!memoryEnabled) "Refresh setup after deploying project memory to edit notes." else "",
+                onSaveMemory, onBack = { memoryProjectId = null })
+        }
         return
     }
     var tasksProjectId by rememberSaveable { mutableStateOf<String?>(null) }
     var plannerOpen by rememberSaveable { mutableStateOf(false) }
     val plannerState = rememberSaveableStateHolder()
     projects.find { it.id == tasksProjectId }?.let { project ->
-        ProjectTasksContent(project, notice, enabled && tasksEnabled && !project.archived,
-            if (project.archived) "Restore this project to edit its tasks." else if (!tasksEnabled) "Refresh setup after deploying the Tasks backend to edit tasks." else "",
-            onSaveTask, onToggleTask, onDeleteTask, onBack = { tasksProjectId = null }, dueDatesEnabled = dueDatesEnabled,
-            backLabel = if (plannerOpen) "Back to planner" else "Back to projects")
+        key("tasks", project.id) {
+            ProjectTasksContent(project, notice, enabled && tasksEnabled && !project.archived,
+                if (project.archived) "Restore this project to edit its tasks." else if (!tasksEnabled) "Refresh setup after deploying the Tasks backend to edit tasks." else "",
+                onSaveTask, onToggleTask, onDeleteTask, onBack = { tasksProjectId = null }, dueDatesEnabled = dueDatesEnabled,
+                backLabel = if (plannerOpen) "Back to planner" else "Back to projects")
+        }
         return
     }
     if (plannerOpen) {
@@ -69,7 +82,8 @@ internal fun ProjectsContent(projects: List<ChatProject>, selected: String, noti
     Column(Modifier.fillMaxWidth().imePadding().verticalScroll(rememberScrollState())
         .padding(horizontal = Spacing.lg).padding(bottom = Spacing.xxl), verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
         Text(if (editing) "Project settings" else "Projects", style = MaterialTheme.typography.titleLarge, modifier = Modifier.semantics { heading() })
-        Text("Each project has its own chats, instructions and memory. Sync changes before using them in replies. Personal notes are managed in Settings → Memory.",
+        Text(if (editing) "Instructions and memory stay within this project. Sync edits before using them in replies."
+            else "Separate spaces for your chats, instructions and memory.",
             style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         if (notice.isNotBlank()) Text(notice, style = MaterialTheme.typography.bodyMedium)
         if (editing) {
@@ -86,21 +100,46 @@ internal fun ProjectsContent(projects: List<ChatProject>, selected: String, noti
                 TextButton(onClick = { editing = false }) { Text("Cancel") }
             }
         } else {
-            OutlinedButton(onClick = { plannerOpen = true }) { Text("Daily planner") }
+            OutlinedButton(onClick = { plannerOpen = true }, colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface)) {
+                Icon(Icons.Outlined.Today, null, Modifier.size(18.dp))
+                Text("Daily planner", Modifier.padding(start = Spacing.sm))
+            }
             projects.forEach { project ->
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    TextButton(onClick = { onSelect(project.id) }, enabled = enabled && !project.archived, modifier = Modifier.weight(1f)) {
-                        Text("${if (project.id == selected) "✓ " else ""}${project.name}${if (project.archived) " (archived)" else ""}")
+                val current = project.id == selected
+                Surface(shape = RoundedCornerShape(16.dp),
+                    color = if (current) MaterialTheme.colorScheme.surfaceContainerHigh else MaterialTheme.colorScheme.surface,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant), modifier = Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs)) {
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            TextButton(onClick = { onSelect(project.id) }, enabled = enabled && !project.archived,
+                                modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = Spacing.sm),
+                                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurface)) {
+                                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Outlined.FolderOpen, null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text("${project.name}${if (project.archived) " (archived)" else ""}",
+                                        Modifier.weight(1f).padding(start = Spacing.sm), style = MaterialTheme.typography.titleSmall)
+                                    if (current) Icon(Icons.Outlined.Check, "Selected project", Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
+                                }
+                            }
+                            TextButton(onClick = { edit(project) }, enabled = enabled,
+                                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant)) { Text("Edit") }
+                        }
+                        FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+                            if (project.id != ProjectCodec.PERSONAL) TextButton(onClick = { memoryProjectId = project.id },
+                                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant)) { Text("Memory · ${project.name}") }
+                            TextButton(onClick = { tasksProjectId = project.id },
+                                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant)) { Text("Tasks (${project.tasks.count { !it.completed }})") }
+                        }
                     }
-                    TextButton(onClick = { edit(project) }, enabled = enabled) { Text("Edit") }
-                }
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-                    if (project.id != ProjectCodec.PERSONAL) TextButton(onClick = { memoryProjectId = project.id }) { Text("Memory · ${project.name}") }
-                    TextButton(onClick = { tasksProjectId = project.id }) { Text("Tasks (${project.tasks.count { !it.completed }})") }
                 }
             }
-            TextButton(onClick = { edit(null) }, enabled = enabled && projects.size < ProjectCodec.MAX_PROJECTS) { Text("New project") }
-            Text("Selecting another project starts a new chat there. Its history is available from the menu. Attached files stay with their chat.", style = MaterialTheme.typography.bodySmall)
+            TextButton(onClick = { edit(null) }, enabled = enabled && projects.size < ProjectCodec.MAX_PROJECTS,
+                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurface)) {
+                Icon(Icons.Outlined.Add, null, Modifier.size(18.dp))
+                Text("New project", Modifier.padding(start = Spacing.sm))
+            }
+            Text("Switching projects starts a new chat. Personal notes are in Profile → Memory.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
