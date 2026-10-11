@@ -6,6 +6,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.semantics.heading
@@ -31,10 +32,20 @@ internal fun ProjectsContent(projects: List<ChatProject>, selected: String, noti
     tasksEnabled: Boolean = false, onSaveTask: (String, String?, String, Long?) -> Boolean = { _, _, _, _ -> false },
     onToggleTask: (String, String) -> Boolean = { _, _ -> false }, onDeleteTask: (String, String) -> Boolean = { _, _ -> false }, dueDatesEnabled: Boolean = false) {
     var tasksProjectId by rememberSaveable { mutableStateOf<String?>(null) }
+    var plannerOpen by rememberSaveable { mutableStateOf(false) }
+    val plannerState = rememberSaveableStateHolder()
     projects.find { it.id == tasksProjectId }?.let { project ->
         ProjectTasksContent(project, notice, enabled && tasksEnabled && !project.archived,
             if (project.archived) "Restore this project to edit its tasks." else if (!tasksEnabled) "Refresh setup after deploying the Tasks backend to edit tasks." else "",
-            onSaveTask, onToggleTask, onDeleteTask, onBack = { tasksProjectId = null }, dueDatesEnabled = dueDatesEnabled)
+            onSaveTask, onToggleTask, onDeleteTask, onBack = { tasksProjectId = null }, dueDatesEnabled = dueDatesEnabled,
+            backLabel = if (plannerOpen) "Back to planner" else "Back to projects")
+        return
+    }
+    if (plannerOpen) {
+        plannerState.SaveableStateProvider("daily-planner") {
+            DailyPlannerScreen(projects, notice, enabled, tasksEnabled, onToggleTask,
+                onOpenTasks = { tasksProjectId = it }, onBack = { plannerOpen = false })
+        }
         return
     }
     var editing by rememberSaveable { mutableStateOf(false) }
@@ -66,6 +77,7 @@ internal fun ProjectsContent(projects: List<ChatProject>, selected: String, noti
                 TextButton(onClick = { editing = false }) { Text("Cancel") }
             }
         } else {
+            OutlinedButton(onClick = { plannerOpen = true }) { Text("Daily planner") }
             projects.forEach { project ->
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     TextButton(onClick = { onSelect(project.id) }, enabled = enabled && !project.archived, modifier = Modifier.weight(1f)) {

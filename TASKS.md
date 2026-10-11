@@ -1,6 +1,6 @@
 # Project tasks
 
-This first to-do version keeps Fareed's Personal, Coding, Business and custom project tasks separate. It adds a project list. Optional due dates and device reminder notifications are now implemented in the next increment; see [REMINDERS.md](REMINDERS.md). A daily planner remains pending.
+This first to-do version keeps Fareed's Personal, Coding, Business and custom project tasks separate. It adds a project list. Optional due dates and device reminder notifications are implemented in the following increment ([REMINDERS.md](REMINDERS.md)); a deadline-based daily planner is implemented in the next source change ([PLANNER.md](PLANNER.md)).
 
 ## Use
 
@@ -9,7 +9,7 @@ This first to-do version keeps Fareed's Personal, Coding, Business and custom pr
 3. Enable foreground automatic Cloud Sync, or use **Cloud sync → Review upload → Confirm**. The phone caches edits; the owner server snapshot is authoritative after sync.
 4. Completed tasks stay visible below open tasks. Archived projects keep their readable tasks; restore the project to edit them.
 
-Each project allows 100 tasks including completed ones, with titles up to 200 UTF-16 code units. Delete a finished task to make room. Titles are plain text. Tasks are not automatically sent to the AI provider or changed by AI chat. Optional due dates and device notifications are described in [REMINDERS.md](REMINDERS.md). Recurring tasks and a planner remain follow-ups.
+Each project allows 100 tasks including completed ones, with titles up to 200 UTF-16 code units. Delete a finished task to make room. Titles are plain text. Tasks are not automatically sent to the AI provider or changed by AI chat. Optional due dates and device notifications are described in [REMINDERS.md](REMINDERS.md). **Projects → Daily planner** provides a filtered day view of the same tasks ([PLANNER.md](PLANNER.md)). Recurring tasks and separate planned dates remain follow-ups.
 
 ## Persistence and recovery
 

@@ -33,7 +33,7 @@ The phone keeps a disposable cache. Projects and instructions are part of the au
 
 Text chat, chat search/history, summaries, retries, Build chat, hands-free Voice mode, cloud snapshots and JSON backup carry project context. Global enabled memory and reviewed memory suggestions are Personal-only. Other projects use their instructions for context; dedicated editable memory per project is future work.
 
-Files currently belong to the chats where they were attached. The model is not automatically given another project’s history or files. A dedicated project file library, per-project connected-tool configuration, daily planner/recurring tasks, calendar/email integration and recurring business workflows are follow-ups. Existing GitHub writes still require the owner’s diff review and explicit confirmation.
+Files currently belong to the chats where they were attached. The model is not automatically given another project’s history or files. Project tasks, due dates/device reminders and a deadline-based daily planner are implemented in follow-up source changes; see [TASKS.md](TASKS.md), [REMINDERS.md](REMINDERS.md) and [PLANNER.md](PLANNER.md). A dedicated project file library, per-project connected-tool configuration, recurring tasks, calendar/email integration and recurring business workflows remain pending. Existing GitHub writes still require the owner’s diff review and explicit confirmation.
 
 Live realtime voice currently works only in Personal with no custom instructions. Other projects use hands-free Voice mode so project instructions go through the scoped chat endpoint. Imagine prompts retain their chat’s project when saved but do not apply text-chat custom instructions to image/video generation.
 
