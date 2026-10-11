@@ -10,7 +10,7 @@ This first Projects version organizes Fareed’s one owner account into Personal
 4. Enable automatic foreground Cloud Sync, or use **Cloud sync → Review upload → Confirm**. New project definitions and instructions must reach the server before they apply to replies. The editor shows a reminder to sync.
 5. Archive a finished project to keep its chats while blocking new replies; Edit can restore it. At least one project must remain active.
 
-The phone keeps a disposable cache. Projects and instructions are part of the authoritative owner snapshot. Clearing chat cache retains project settings; resetting all preferences clears cached project settings too. Restore from the server before using chats whose project definitions are missing.
+The phone keeps a disposable cache. Projects and instructions are part of the authoritative owner snapshot. Clearing chat cache retains project settings; resetting appearance and memory preserves readable cached project settings. If damaged preferences lost project definitions, reviewed cloud download restores matching server definitions before using those chats.
 
 ## API and compatibility
 

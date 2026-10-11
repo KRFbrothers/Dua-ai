@@ -39,8 +39,11 @@ object CloudSnapshotCodec {
 
     /** Reviewed downloads keep server IDs authoritative and preserve differing phone versions as copies. */
     fun mergeDownload(local: CloudSnapshot, remote: CloudSnapshot): CloudDownloadResult {
-        encode(local)
         encode(remote)
+        // A damaged/reset settings cache can lack definitions while retaining chat references.
+        // Restore known server definitions before validating; never strip the cached chats.
+        val restoredDefinitions = local.projects + remote.projects.filter { server -> local.projects.none { it.id == server.id } }
+        encode(local.copy(projects = restoredDefinitions))
         val serverById = remote.chats.associateBy { it.id }
         val localIds = local.chats.map { it.id }.toSet()
         val added = remote.chats.filter { it.id !in localIds }

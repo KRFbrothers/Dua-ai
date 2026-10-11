@@ -69,6 +69,13 @@ class ProjectsTest {
         assertEquals(projects.last(), merged.projects.last())
         assertEquals("Use Kotlin", merged.projects.find { it.id == "coding" }!!.instructions)
     }
+    @Test fun reviewedDownloadRepairsMissingCachedDefinitionsFromTheServerWithoutDiscardingChats() {
+        val damagedSettingsCache = snapshot(ProjectCodec.defaults)
+        val remote = snapshot(projects)
+        assertEquals(remote, CloudSnapshotCodec.mergeDownload(damagedSettingsCache, remote).snapshot)
+        // A definition absent from both copies must still fail closed.
+        rejects { CloudSnapshotCodec.mergeDownload(damagedSettingsCache, CloudSnapshot(emptyList(), emptyList())) }
+    }
     @Test fun importingDifferentInstructionsCreatesProjectCopiesInsteadOfChangingExistingChats() {
         val incoming = projects.map { if (it.id == "client") it.copy(instructions = "Different context") else it }
         val imported = ProjectImports.prepare(projects, ChatBackup(listOf(chat), incoming))

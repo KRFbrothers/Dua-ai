@@ -89,4 +89,13 @@ class ProjectSwitchingTest {
         assertTrue(model.messages.value.isEmpty())
         assertTrue(model.error.value!!.contains("Projects backend"))
     }
+    @Test fun resettingAppearanceAndMemoryKeepsProjectsReferencedBySavedChats() {
+        assertTrue(model.saveProject("coding", "Coding", "Use Kotlin", false))
+        model.selectProject("coding"); model.updateDraft("Keep draft"); model.flushHistory()
+        val projects = model.localSettings.value.projects
+        model.resetSettings()
+        assertEquals(projects, model.localSettings.value.projects)
+        assertTrue(model.localSettings.value.memory.isEmpty())
+        assertEquals("coding", persisted().first().projectId)
+    }
 }
