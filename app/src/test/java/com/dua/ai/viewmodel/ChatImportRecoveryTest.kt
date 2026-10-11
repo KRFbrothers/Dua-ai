@@ -99,6 +99,23 @@ class ChatImportRecoveryTest {
         assertNotNull(model.importPreview.value)
         assertFalse(model.dataBusy.value)
     }
+    @Test fun importedProjectInstructionsSurviveRestartWithoutChangingExistingProjects() {
+        val original = chat()
+        seed(listOf(original))
+        val projects = com.dua.ai.projects.ProjectCodec.defaults + com.dua.ai.projects.ChatProject("client", "Client", "Cite invoice numbers")
+        ChatViewModel::class.java.getDeclaredField("importProjects").apply { isAccessible = true }.set(model, projects)
+        preview(listOf(original.copy(projectId = "client")))
+        model.confirmImport()
+        waitForImport()
+        model.flushHistory()
+        val restored = ChatHistoryCodec.decode(application.getSharedPreferences("dua_chat_history", 0).getString("history", null)!!).second
+        val imported = restored.single { it.id != original.id }
+        val settings = com.dua.ai.settings.DevicePreferences(application).state.value.projects
+        assertEquals(com.dua.ai.projects.ProjectCodec.defaults, settings.take(3))
+        assertEquals("Cite invoice numbers", settings.single { it.id == imported.projectId }.instructions)
+        assertEquals("personal", restored.single { it.id == original.id }.projectId)
+        assertNull(model.importPreview.value)
+    }
 
     @Test fun draftChangedWhilePreparingImportIsKeptAndStopsTheStaleImport() {
         val original = chat()
