@@ -5,6 +5,13 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class IntegrationCapabilitiesTest {
+    @Test fun dueDatesRequireNewBackendCapabilityAlongsideOwnerTasks() {
+        fun enabled(raw: String) = IntegrationCapabilities.configuration(JSONObject(raw), IntegrationState()).taskDueDatesEnabled
+        assertFalse(enabled("""{"projects":{"enabled":true,"tasks":true}}"""))
+        assertFalse(enabled("""{"projects":{"enabled":true,"tasks":true,"dueDates":"true"}}"""))
+        assertFalse(enabled("""{"projects":{"enabled":false,"tasks":true,"dueDates":true}}"""))
+        assertTrue(enabled("""{"projects":{"enabled":true,"tasks":true,"dueDates":true}}"""))
+    }
     @Test fun tasksRequireExplicitServerSupportAndAnEnabledOwnerProjectBackend() {
         fun read(raw: String) = IntegrationCapabilities.configuration(JSONObject(raw), IntegrationState(projectTasksEnabled = true))
         assertFalse(read("{}").projectTasksEnabled)

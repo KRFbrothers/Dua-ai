@@ -3,11 +3,12 @@ export const defaultProjects = () => ['Personal', 'Coding', 'Business'].map(name
 export const validProjectId = id => typeof id === 'string' && /^[A-Za-z0-9_-]{1,100}$/.test(id);
 function validateTasks(tasks) {
   if (!Array.isArray(tasks) || tasks.length > 100 || new Set(tasks.map(t => t?.id)).size !== tasks.length ||
-      !tasks.every(t => t && typeof t === 'object' && !Array.isArray(t) && Object.keys(t).sort().join(',') === 'completed,id,title' &&
-        validProjectId(t.id) && typeof t.title === 'string' && t.title.trim() && t.title.length <= 200 && typeof t.completed === 'boolean')) {
+      !tasks.every(t => t && typeof t === 'object' && !Array.isArray(t) && ['completed,id,title', 'completed,dueAt,id,title'].includes(Object.keys(t).sort().join(',')) &&
+        validProjectId(t.id) && typeof t.title === 'string' && t.title.trim() && t.title.length <= 200 && typeof t.completed === 'boolean' &&
+        (t.dueAt === undefined || Number.isSafeInteger(t.dueAt) && t.dueAt >= 1 && t.dueAt <= 253402300799999))) {
     throw new Error('Invalid tasks. Keep at most 100 per project with titles up to 200 characters.');
   }
-  return tasks.map(t => ({ id: t.id, title: t.title, completed: t.completed }));
+  return tasks.map(t => ({ id: t.id, title: t.title, completed: t.completed, ...(t.dueAt !== undefined ? { dueAt: t.dueAt } : {}) }));
 }
 export function validateProjects(value) {
   const valid = Array.isArray(value) && value.length >= 1 && value.length <= 20 &&

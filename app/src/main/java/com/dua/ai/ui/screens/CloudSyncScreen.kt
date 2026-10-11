@@ -58,7 +58,7 @@ fun CloudSyncScreen(viewModel: ChatViewModel, onBack: () -> Unit, onProfile: () 
                     if (reviewed.kind != "delete") {
                         reviewed.review.snapshot.projects.forEach { project ->
                             Text("Project: ${project.name}${if (project.archived) " (archived)" else ""}\nInstructions: ${project.instructions.ifBlank { "None" }}", style = MaterialTheme.typography.bodyMedium)
-                            project.tasks.forEach { task -> Text("${if (task.completed) "✓" else "○"} ${task.title}", style = MaterialTheme.typography.bodyMedium) }
+                            project.tasks.forEach { task -> Text("${if (task.completed) "✓" else "○"} ${task.title}${task.dueAt?.let { "\nDue: ${com.dua.ai.tasks.TaskDates.display(it)} · ${java.time.ZoneId.systemDefault().id}" }.orEmpty()}", style = MaterialTheme.typography.bodyMedium) }
                         }
                         reviewed.review.snapshot.chats.forEach { chat -> Text("${chat.title}: ${chat.messages.size} messages\nDraft: ${chat.draft}", style = MaterialTheme.typography.bodyMedium) }
                         Text("Memories:\n" + reviewed.review.snapshot.memory.joinToString("\n"), style = MaterialTheme.typography.bodyMedium)

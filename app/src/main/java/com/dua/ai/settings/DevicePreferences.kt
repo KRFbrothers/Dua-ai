@@ -66,12 +66,14 @@ object PreferencesCodec {
 }
 
 class DevicePreferences(context: Context) {
+    private val context = context.applicationContext
     private val storage = context.getSharedPreferences("dua_preferences", Context.MODE_PRIVATE)
     private var damaged = false
     private val mutable = MutableStateFlow(runCatching { storage.getString("preferences", null)?.let(PreferencesCodec::decode) ?: LocalPreferences() }.getOrElse { damaged = true; LocalPreferences() })
     val state = mutable.asStateFlow()
     fun requireReadable() { check(!damaged) { "Saved settings could not be read. Reset settings in Privacy before syncing." } }
     fun reset() {
+        com.dua.ai.tasks.TaskReminders.reset(context)
         val projects = mutable.value.projects
         damaged = false
         try { update(LocalPreferences(projects = projects)) } catch (error: Exception) { damaged = true; throw error }
@@ -85,5 +87,6 @@ class DevicePreferences(context: Context) {
             error("Settings could not be saved. Try again.")
         }
         mutable.value = value
+        com.dua.ai.tasks.TaskReminders.refresh(context)
     }
 }

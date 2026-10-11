@@ -18,10 +18,41 @@ import org.robolectric.annotation.Config
 @Config(sdk = [34], qualifiers = "w411dp-h914dp-xxhdpi")
 class ProjectTasksInteractionTest {
     @get:Rule val compose = createComposeRule()
+    @Test fun invalidPartialDueDateKeepsEditorAndValidDateIsPassedToSave() {
+        var savedAt: Long? = null
+        var saves = 0
+        compose.setContent { DuaTheme(LocalPreferences()) { ProjectTasksContent(ProjectCodec.defaults[1], "", true, "",
+            { _, _, _, at -> savedAt = at; saves++; true }, { _, _ -> true }, { _, _ -> true }, {}, dueDatesEnabled = true) } }
+        compose.onNodeWithText("Add task").performClick()
+        compose.onNodeWithText("Task title").performTextInput("Timed task")
+        compose.onNodeWithText("Due date (YYYY-MM-DD)").performTextInput("2030-01-01")
+        compose.onNodeWithText("Save task").performScrollTo().performClick()
+        compose.runOnIdle { assertEquals(0, saves) }
+        compose.onNodeWithText("Use YYYY-MM-DD and 24-hour HH:mm, or clear both fields.").assertExists()
+        compose.onNodeWithText("Time (HH:mm)").performScrollTo().performTextInput("10:30")
+        compose.onNodeWithText("Save task").performScrollTo().performClick()
+        compose.runOnIdle { assertEquals(1, saves); assertNotNull(savedAt) }
+    }
+    @Test fun titleOnlyEditPreservesExactTimestampAndRemoveDateClearsIt() {
+        val original = 1893456000123L
+        val project = mutableStateOf(ProjectCodec.defaults[1].copy(tasks = listOf(ProjectTask("dated", "Dated task", dueAt = original))))
+        var savedAt: Long? = null
+        compose.setContent { DuaTheme(LocalPreferences()) { ProjectTasksContent(project.value, "", true, "",
+            { _, _, title, at -> savedAt = at; project.value = project.value.copy(tasks = listOf(ProjectTask("dated", title, dueAt = at))); true },
+            { _, _ -> true }, { _, _ -> true }, {}, dueDatesEnabled = true) } }
+        compose.onNodeWithContentDescription("Edit task: Dated task").performClick()
+        compose.onNodeWithText("Task title").performTextReplacement("Edited title")
+        compose.onNodeWithText("Save task").performScrollTo().performClick()
+        compose.runOnIdle { assertEquals(original, savedAt) }
+        compose.onNodeWithContentDescription("Edit task: Edited title").performScrollTo().performClick()
+        compose.onNodeWithText("Remove due date").performScrollTo().performClick()
+        compose.onNodeWithText("Save task").performScrollTo().performClick()
+        compose.runOnIdle { assertNull(savedAt) }
+    }
     @Test fun projectPickerOpensOnlyThatProjectsTasksAndAddsThenCompletesATask() {
         val projects = mutableStateOf(ProjectCodec.defaults)
         compose.setContent { DuaTheme(LocalPreferences()) { ProjectsContent(projects.value, "personal", "", true, {}, { _, _, _, _ -> true },
-            tasksEnabled = true, onSaveTask = { projectId, _, title ->
+            tasksEnabled = true, onSaveTask = { projectId, _, title, _ ->
                 projects.value = projects.value.map { if (it.id == projectId) it.copy(tasks = it.tasks + ProjectTask("new-task", title)) else it }; true
             }, onToggleTask = { projectId, taskId ->
                 projects.value = projects.value.map { if (it.id == projectId) it.copy(tasks = it.tasks.map { t -> if (t.id == taskId) t.copy(completed = !t.completed) else t }) else it }; true
@@ -41,11 +72,11 @@ class ProjectTasksInteractionTest {
     @Test fun failedEditKeepsTypedTitleAndDeleteRequiresConfirmation() {
         val project = mutableStateOf(ProjectCodec.defaults[1].copy(tasks = listOf(ProjectTask("task-1", "Review diff"))))
         var deletes = 0
-        compose.setContent { DuaTheme(LocalPreferences()) { ProjectTasksContent(project.value, "", true, "", { _, _, _ -> false }, { _, _ -> true },
+        compose.setContent { DuaTheme(LocalPreferences()) { ProjectTasksContent(project.value, "", true, "", { _, _, _, _ -> false }, { _, _ -> true },
             { _, id -> deletes++; project.value = project.value.copy(tasks = project.value.tasks.filterNot { it.id == id }); true }, {}) } }
         compose.onNodeWithContentDescription("Edit task: Review diff").performClick()
         compose.onNodeWithText("Task title").performTextReplacement("Keep unsaved edit")
-        compose.onNodeWithText("Save task").performClick()
+        compose.onNodeWithText("Save task").performScrollTo().performClick()
         compose.onNodeWithText("Keep unsaved edit").assertExists()
         compose.onNodeWithText("Cancel").performClick()
         compose.onNodeWithContentDescription("Delete task: Review diff").performClick()
@@ -59,7 +90,7 @@ class ProjectTasksInteractionTest {
     @Test fun unavailableTasksRemainReadableButCannotBeEdited() {
         val project = ProjectCodec.defaults[1].copy(tasks = listOf(ProjectTask("task-1", "Saved task")))
         compose.setContent { DuaTheme(LocalPreferences()) { ProjectTasksContent(project, "", false, "Restore this project to edit its tasks.",
-            { _, _, _ -> fail("Disabled save"); false }, { _, _ -> fail("Disabled toggle"); false }, { _, _ -> fail("Disabled delete"); false }, {}) } }
+            { _, _, _, _ -> fail("Disabled save"); false }, { _, _ -> fail("Disabled toggle"); false }, { _, _ -> fail("Disabled delete"); false }, {}) } }
         compose.onNodeWithText("Saved task").assertExists()
         compose.onNodeWithText("Add task").assertIsNotEnabled()
         compose.onNodeWithContentDescription("Complete task: Saved task").assertIsNotEnabled()

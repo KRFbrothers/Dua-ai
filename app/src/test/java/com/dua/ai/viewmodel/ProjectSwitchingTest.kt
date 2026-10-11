@@ -39,9 +39,20 @@ class ProjectSwitchingTest {
     @After fun teardown() { store.clear() }
     private fun persisted() = ChatHistoryCodec.decode(app.getSharedPreferences("dua_chat_history", 0).getString("history", null)!!).second
     @Suppress("UNCHECKED_CAST")
-    private fun enableTasks() {
+    private fun enableTasks(dueDates: Boolean = false) {
         val flow = ChatViewModel::class.java.getDeclaredField("_integrations").apply { isAccessible = true }.get(model) as MutableStateFlow<IntegrationState>
-        flow.value = flow.value.copy(projectsEnabled = true, projectTasksEnabled = true)
+        flow.value = flow.value.copy(projectsEnabled = true, projectTasksEnabled = true, taskDueDatesEnabled = dueDates)
+    }
+    @Test fun dueDatesRequireBackendSupportAndSurviveCompletionAndSettingsReset() {
+        enableTasks()
+        val at = 1893456000000L
+        assertFalse(model.saveTask("coding", null, "Dated", at))
+        enableTasks(dueDates = true)
+        assertTrue(model.saveTask("coding", null, "Dated", at))
+        val task = model.localSettings.value.projects[1].tasks.single()
+        assertTrue(model.toggleTask("coding", task.id))
+        model.resetSettings()
+        assertEquals(at, DevicePreferences(app).state.value.projects[1].tasks.single().dueAt)
     }
     @Test fun tasksStayWithProjectAndSurviveSettingsEditsResetAndViewModelRestart() {
         enableTasks()

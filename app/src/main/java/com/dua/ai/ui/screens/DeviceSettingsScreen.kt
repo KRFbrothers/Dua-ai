@@ -46,6 +46,13 @@ fun DeviceSettingsScreen(viewModel: ChatViewModel, page: String, onBack: () -> U
         if (granted && LocalReplyNotifications.available(context)) viewModel.updateSettings(settings.copy(notifications = true))
         else viewModel.settingsNotice("Notifications not granted. Allow them in app Settings.")
     }
+    val reminderPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        permissionVersion++
+        try {
+            if (granted) com.dua.ai.tasks.TaskReminders.setEnabled(context, true)
+            viewModel.settingsNotice(com.dua.ai.tasks.TaskReminders.status(context))
+        } catch (failure: Exception) { viewModel.settingsNotice(failure.message ?: "Task reminders could not be enabled.") }
+    }
     DuaPageScaffold(title = when (page) { "ColorMode", "FontStyle", "Appearance" -> "Appearance"; else -> page }, onBack = onBack) {
         fun notice(text: String) = viewModel.settingsNotice(text)
         when (page) {
@@ -85,6 +92,26 @@ fun DeviceSettingsScreen(viewModel: ChatViewModel, page: String, onBack: () -> U
                 }) }
                 Text("Notify when a reply completes in the background while Dua is still running. No chat text is shown. No push service is connected; Android can stop the background process.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 FilledTonalButton(onClick = { if (settings.notifications && LocalReplyNotifications.available(context)) { LocalReplyNotifications.show(context, chats.firstOrNull()?.id.orEmpty()); notice("Test notification requested.") } else notice("Enable notifications first.") }) { Text("Send test notification") }
+                val remindersEnabled = remember(permissionVersion) { com.dua.ai.tasks.TaskReminders.enabled(context) }
+                Row(Modifier.fillMaxWidth().heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("Task reminders on this phone", modifier = Modifier.weight(1f))
+                    Switch(remindersEnabled, { requested ->
+                        try {
+                            if (requested && Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) reminderPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                            else { com.dua.ai.tasks.TaskReminders.setEnabled(context, requested); permissionVersion++ }
+                        } catch (failure: Exception) { notice(failure.message ?: "Task reminders could not be changed.") }
+                    }, modifier = Modifier.semantics { contentDescription = "Task reminders on this phone" })
+                }
+                Text("Off by default. Uses cached task due dates, including overdue tasks once. No task titles appear in notifications. Reminders work without an online connection; Android battery saving and force-stop can delay or prevent delivery.", style = MaterialTheme.typography.bodyMedium)
+                Text(com.dua.ai.tasks.TaskReminders.status(context), style = MaterialTheme.typography.bodyMedium)
+                TextButton(onClick = {
+                    try { com.dua.ai.tasks.TaskReminders.refresh(context); permissionVersion++; notice(com.dua.ai.tasks.TaskReminders.status(context)) }
+                    catch (_: Exception) { notice("Task reminders could not be checked.") }
+                }) { Text("Check task reminders") }
+                TextButton(onClick = {
+                    try { com.dua.ai.tasks.TaskReminders.reset(context); permissionVersion++; notice("Task reminder settings reset. Task dates are kept.") }
+                    catch (_: Exception) { notice("Task reminder settings could not be reset.") }
+                }) { Text("Reset task reminder settings") }
             }
             "Permissions" -> {
                 val granted = remember(permissionVersion) { ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED }

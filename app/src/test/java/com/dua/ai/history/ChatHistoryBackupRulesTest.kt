@@ -16,6 +16,18 @@ class ChatHistoryBackupRulesTest {
         assertTrue(hasChatHistoryExclusion(extractionRules.getElementsByTagName("cloud-backup").item(0) as Element))
         assertTrue(hasChatHistoryExclusion(extractionRules.getElementsByTagName("device-transfer").item(0) as Element))
     }
+    @Test fun deviceReminderConsentAndDeliveryHistoryAreExcludedFromBackupAndTransfer() {
+        val rulesDirectory = File("src/main/res/xml")
+        val legacy = parseRules(File(rulesDirectory, "account_backup_rules.xml"))
+        val extraction = parseRules(File(rulesDirectory, "account_data_extraction_rules.xml"))
+        for (scope in listOf(legacy.documentElement, extraction.getElementsByTagName("cloud-backup").item(0) as Element,
+            extraction.getElementsByTagName("device-transfer").item(0) as Element)) {
+            val entries = scope.getElementsByTagName("exclude")
+            assertTrue((0 until entries.length).any { index -> (entries.item(index) as Element).let {
+                it.getAttribute("domain") == "sharedpref" && it.getAttribute("path") == "dua_task_reminders.xml"
+            } })
+        }
+    }
 
     private fun parseRules(file: File) = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(file)
 

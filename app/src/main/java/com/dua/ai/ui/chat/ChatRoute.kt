@@ -111,7 +111,7 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
         storedFilesMaxBytes = integrations.filesMaxBytes,
         attachmentStatus = if (readingFiles) "Reading files…" else fileError.ifBlank { attachmentNotice },
         savedChats = savedChats,
-        projects = preferences.projects, projectId = projectId, projectNotice = projectNotice, projectTasksEnabled = integrations.projectTasksEnabled,
+        projects = preferences.projects, projectId = projectId, projectNotice = projectNotice, projectTasksEnabled = integrations.projectTasksEnabled, taskDueDatesEnabled = integrations.taskDueDatesEnabled,
         speakingId = speech.activeId ?: generatedSpeech.activeId,
         speechAvailable = speech.available, generatedVoice = preferences.generatedVoice,
         deviceVoiceStatus = speech.status, deviceVoiceActive = speech.activeId != null,
