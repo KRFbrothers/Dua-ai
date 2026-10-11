@@ -81,6 +81,7 @@ test('file endpoints are owner-only and map storage errors to clear messages', a
 
 test('preview URLs and deletes only touch the caller\'s own folder', async () => {
   const fetcher = router([
+    [SUPA + '/rest/v1/dua_cloud_snapshots?', () => Response.json([])],
     [SUPA + '/storage/v1/object/sign/dua-files/', url => Response.json({ signedURL: new URL(url).pathname.replace('/storage/v1', '') + '?token=dl' })],
     [(url, init) => url === SUPA + '/storage/v1/object/dua-files' && init.method === 'DELETE', (url, init) => Response.json(JSON.parse(init.body).prefixes.map(name => ({ name })))]
   ]);

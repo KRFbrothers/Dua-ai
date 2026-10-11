@@ -55,7 +55,7 @@ import java.time.ZoneId
 
 /**
  * History drawer: new chat, search, chats grouped by date, and Settings.
- * Long-press a chat (or use the accessibility action) to delete it.
+ * Long-press a chat (or use the accessibility action) to remove its cached copy.
  */
 @Composable
 fun HistoryDrawer(
@@ -129,13 +129,13 @@ private fun HistoryRow(chat: SavedChat, onOpen: () -> Unit, onDelete: () -> Unit
     Box {
         Row(Modifier.fillMaxWidth().clip(DuaShape.card)
             .combinedClickableCompat(onClick = onOpen, onLongClick = { menu = true }, onLongClickLabel = "Chat options")
-            .semantics { customActions = listOf(CustomAccessibilityAction("Delete chat") { onDelete(); true }) }
+            .semantics { customActions = listOf(CustomAccessibilityAction("Remove cached chat") { onDelete(); true }) }
             .heightIn(min = Sizes.touchTarget).padding(horizontal = Spacing.md, vertical = Spacing.sm),
             verticalAlignment = Alignment.CenterVertically) {
             Text(chat.title, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-            DropdownMenuItem(text = { Text("Delete") }, leadingIcon = { Icon(Icons.Outlined.DeleteOutline, contentDescription = null) },
+            DropdownMenuItem(text = { Text("Remove cached chat") }, leadingIcon = { Icon(Icons.Outlined.DeleteOutline, contentDescription = null) },
                 onClick = { menu = false; onDelete() })
         }
     }

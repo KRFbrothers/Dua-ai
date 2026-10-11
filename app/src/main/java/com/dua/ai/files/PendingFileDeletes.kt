@@ -3,8 +3,9 @@ package com.dua.ai.files
 import org.json.JSONArray
 
 /**
- * Storage paths waiting to be deleted (chat deleted while offline or signed out). Persisted so a
- * deleted chat's files are removed on the next successful attempt.
+ * Discarded unsent upload paths waiting for cleanup while offline or signed out.
+ * The backend retains paths still referenced by the authoritative server snapshot,
+ * including paths queued by older app versions when a cached chat was deleted.
  */
 class PendingFileDeletes(private val read: () -> String?, private val write: (String) -> Unit) {
     @Synchronized fun all(): List<String> = runCatching {

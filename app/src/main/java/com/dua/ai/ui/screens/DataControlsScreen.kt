@@ -66,11 +66,11 @@ fun DataControlsScreen(viewModel: ChatViewModel, onBack: () -> Unit) {
         FilledTonalButton(enabled = !busy, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth().heightIn(min = 72.dp),
             colors = ButtonDefaults.filledTonalButtonColors(containerColor = MaterialTheme.colorScheme.surfaceContainer, contentColor = MaterialTheme.colorScheme.error), onClick = { confirm = true }) {
             Icon(Icons.Default.DeleteOutline, null); Spacer(Modifier.width(16.dp))
-            Column(Modifier.weight(1f)) { Text("Clear all chats", style = MaterialTheme.typography.bodyLarge); Text("Remove cached chats, drafts and pending files from this phone", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            Column(Modifier.weight(1f)) { Text("Clear cached chats", style = MaterialTheme.typography.bodyLarge); Text("Remove cached chats, drafts and pending files from this phone", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
         StoredFilesSection(signedIn = account.user != null, enabled = integrations.filesEnabled, usage = usage, busy = busy,
             onRefresh = viewModel::loadStorageUsage, onDeleteAll = { confirmFiles = true })
-        Text("Only this phone's cache is managed here; the server copy is the source of truth and is restored on the next sync. Import accepts Dua version 1 JSON up to 4 MiB, 100 chats, 500 messages per chat and 8000-character drafts. Existing chats stay intact; repeated imports create copies. Export includes messages and unsent drafts, without attachment bytes. Cloud accounts, other devices and previously exported files are unchanged.",
+        Text("Chat controls manage this phone's cache; the separate uploaded-files action manages private server storage. The server chat copy is restored on sync. Import accepts Dua version 1 JSON up to 4 MiB, 100 chats, 500 messages per chat and 8000-character drafts. Existing chats stay intact; repeated imports create copies. Export includes messages and unsent drafts, without attachment bytes. Cache clearing keeps server chats, their stored files and previously exported files.",
             style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
         if (status.isNotBlank()) Text(status, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
@@ -88,8 +88,8 @@ fun DataControlsScreen(viewModel: ChatViewModel, onBack: () -> Unit) {
         text = { Text("Every file you uploaded to your private Dua storage (photos, PDFs, spreadsheets and audio) will be permanently deleted. Chats stay, but their files can no longer be opened or re-read in follow-ups.") },
         confirmButton = { TextButton(onClick = { confirmFiles = false; viewModel.deleteAllUploadedFiles() }) { Text("Delete files") } },
         dismissButton = { TextButton(onClick = { confirmFiles = false }) { Text("Cancel") } })
-    if (confirm) AlertDialog(onDismissRequest = { confirm = false }, title = { Text("Clear all chats?") },
-        text = { Text("Every cached chat and draft on this phone will be deleted, along with the files uploaded in those chats. Pending attachments will also be cleared. This cannot be undone. Export first if you want a copy.") },
+    if (confirm) AlertDialog(onDismissRequest = { confirm = false }, title = { Text("Clear cached chats?") },
+        text = { Text("Remove cached chats and drafts from this phone. Server chats and their stored files remain available to restore. Phone-only chats and unsynced edits need an export or sync first. Pending attachments are discarded; unsent uploads may be deleted from storage.") },
         confirmButton = { TextButton(onClick = { confirm = false; viewModel.clearAllChats() }) { Text("Clear all") } },
         dismissButton = { TextButton(onClick = { confirm = false }) { Text("Cancel") } })
 }
@@ -114,7 +114,7 @@ fun StoredFilesSection(signedIn: Boolean, enabled: Boolean, usage: com.dua.ai.fi
                 }
                 if (enabled && signedIn) TextButton(enabled = !busy, onClick = onRefresh) { Text("Refresh") }
             }
-            Text("Files are kept in your private Supabase bucket until you delete the chat they were sent in, or delete them all here.",
+            Text("Clearing cached chats keeps their files in your private Supabase bucket. Delete all uploaded files permanently removes those files, including files needed by server chats. Discarded unsent uploads are cleaned up separately.",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             if (enabled && signedIn) OutlinedButton(enabled = !busy && (usage?.files ?: 1) > 0, onClick = onDeleteAll, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)) {

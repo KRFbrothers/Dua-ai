@@ -5,6 +5,7 @@
 //   POST /api/files/delete-all  {}                      -> {deleted}
 //   GET  /api/files/usage                               -> {files, bytes, maxBytes, bucket}
 import { randomUUID } from 'node:crypto';
+import { handleCloudRead } from './account.mjs';
 import { readJsonLimited } from './limited-json.mjs';
 import { storedType, fileKind, ownsPath, STORED_TYPES, STORED_MIME_TYPES } from './file-types.mjs';
 import { storageConfig, resolveOwner, signUpload, signDownload, listOwnerFiles, removeFiles, StorageError } from './storage.mjs';
@@ -57,7 +58,20 @@ export async function handleFiles(request, { env = process.env, fetcher = fetch 
     }
     if (action === 'delete') {
       if (!Array.isArray(body.paths) || !body.paths.length || body.paths.length > 500 || body.paths.some(path => !ownsPath(path, user.id))) return json({ error: 'Invalid file list.' }, 400);
-      return json({ deleted: await removeFiles(config, token, [...new Set(body.paths)], { fetcher, signal }) });
+      // Old APKs also queue per-file deletes when clearing cached chats. Keep server references alive.
+      const cloud = await handleCloudRead(new Request(new URL('/api/cloud', request.url), {
+        headers: { authorization: 'Bearer ' + token, 'x-dua-native': '1' }, signal
+      }), { url: config.url, key: config.key, allowedEmail: env.DUA_ALLOWED_EMAIL, fetcher });
+      if (!cloud.ok) throw new StorageError('Server file references could not be checked. No files were deleted. Retry.', cloud.status);
+      const review = await cloud.json();
+      if (review.ownerId !== user.id) throw new StorageError('Cloud account changed. No files were deleted. Retry.', 409);
+      const referenced = new Set(review.snapshot.chats.flatMap(chat => chat.messages.flatMap(message =>
+        [...(message.files || []), ...(message.media || [])].map(file => file.path))));
+      const requested = [...new Set(body.paths)];
+      const removable = requested.filter(path => !referenced.has(path));
+      const retained = requested.length - removable.length;
+      const deleted = removable.length ? await removeFiles(config, token, removable, { fetcher, signal }) : 0;
+      return json({ deleted, ...(retained ? { retained } : {}) });
     }
     const files = await listOwnerFiles(config, token, user.id.toLowerCase(), { fetcher, signal });
     if (action === 'usage') return json({ files: files.length, bytes: files.reduce((sum, file) => sum + file.size, 0), maxBytes: config.maxBytes, bucket: config.bucket });

@@ -1003,7 +1003,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     success
                 } }
                 if (committed) {
-                    deleteStoredPaths(pathsOf(_messages.value + _savedChats.value.flatMap { it.messages }))
+                    // Cached references are disposable; their server-backed files must remain restorable.
                     pollJobs.values.forEach { it.cancel() }; pollJobs.clear()
                     runCatching { mediaCache.clear() }
                     activeId = nextId
@@ -1012,13 +1012,14 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     _draft.value = ""
                     _savedChats.value = emptyList()
                     _summary.value = null
+                    _buildRepo.value = null
                     _webMode.value = null
                     _xSearch.value = false
                     replyXSearch.clear()
                     replyWebModes.clear()
                     replyReasoning.clear()
                     clearAttachments()
-                    _dataStatus.value = "All local chats, drafts and pending files cleared. Their uploaded files are being deleted."
+                    _dataStatus.value = "Cached chats, drafts and pending attachments cleared. Server chats and their stored files remain. Discarded unsent uploads are cleaned up separately."
                 } else _dataStatus.value = "Delete could not be saved. Chats are kept in memory; try again."
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (_: Exception) { _dataStatus.value = "Cached chats could not be cleared. Try again." }
@@ -1191,11 +1192,10 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     fun deleteChat(id: String) {
         draftSaver.runNow()
         _savedChats.value.find { it.id == id }?.messages?.forEach { replyWebModes.remove(it.id); replyReasoning.remove(it.id); replyCode.remove(it.id); replyBuild.remove(it.id) }
-        // Deleting a chat deletes its uploaded files (unless another chat copy still uses them).
+        // Remove cached references/media only. The server snapshot may still need the stored files.
         val chatMessages = if (id == activeId) _messages.value else _savedChats.value.find { it.id == id }?.messages.orEmpty()
         val stillUsed = pathsOf(_savedChats.value.filterNot { it.id == id }.flatMap { it.messages } + if (id == activeId) emptyList() else _messages.value).toSet()
         val removed = pathsOf(chatMessages).filterNot { it in stillUsed }.distinct()
-        deleteStoredPaths(removed)
         runCatching { mediaCache.forget(removed) }
         chatMessages.forEach { message -> pollJobs.remove(message.id)?.cancel() }
         if (id == activeId) {
