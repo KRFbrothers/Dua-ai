@@ -45,7 +45,9 @@ fun SidebarPanel(aura: Boolean, onAura: (Boolean) -> Unit, query: String, onQuer
             val compact = maxHeight < if (aura) 440.dp else 610.dp
             Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
                 Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).testTag("sidebar-header"), verticalAlignment = Alignment.CenterVertically) {
-                    if (aura) IconButton(onClick = { onAura(false) }, modifier = Modifier.size(48.dp)) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Back to sidebar") }
+                    if (aura) FilledTonalIconButton(onClick = { onAura(false) }, modifier = Modifier.size(48.dp),
+                        colors = IconButtonDefaults.filledTonalIconButtonColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            contentColor = MaterialTheme.colorScheme.onSurface)) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Back to sidebar") }
                     Icon(if (aura) Icons.Outlined.AutoAwesome else SidebarCube, null,
                         tint = if (aura) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(24.dp))
                     Text(if (aura) "Aura" else "Dua AI", Modifier.padding(start = 12.dp).weight(1f),
