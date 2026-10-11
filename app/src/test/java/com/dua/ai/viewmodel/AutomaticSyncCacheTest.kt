@@ -124,6 +124,52 @@ class AutomaticSyncCacheTest {
         } finally { sync.close(); scope.cancel() }
     }
 
+    @Test fun firstEnableKeepsPendingTypingDuringCloudReadWhileRebindingTheServerChat() = runBlocking {
+        val owner = "11111111-2222-4333-8444-555555555555"
+        var record = AutomationSyncRecord()
+        var cloud = CloudSnapshot(listOf(remote), listOf("Server note"))
+        var serverRevision = 2L
+        var uploads = 0
+        val gate = CompletableDeferred<Unit>()
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+        val account = object : AutomaticCloudSync.AccountPort {
+            override fun currentAccountId() = owner
+            override suspend fun load() = AutomaticSyncAccount(true, owner)
+            override suspend fun cloud(expectedAccountId: String): CloudReview {
+                val reply = CloudReview(serverRevision, cloud, owner)
+                gate.await()
+                return reply
+            }
+            override suspend fun upload(expectedAccountId: String, revision: Long, snapshot: CloudSnapshot): Long {
+                assertEquals(serverRevision, revision)
+                uploads++; cloud = snapshot; return ++serverRevision
+            }
+        }
+        val records = object : AutomaticCloudSync.StorePort {
+            override fun read() = record
+            override fun write(value: AutomationSyncRecord) { record = value }
+        }
+        val sync = AutomaticCloudSync(scope, account, port, records, sleep = { awaitCancellation() })
+        try {
+            sync.setForeground(true)
+            val job = sync.enable()
+            model.updateDraft("First-sync pending edit")
+            gate.complete(Unit); job?.join()
+            assertEquals("synced", sync.state.value.phase)
+            val copy = persisted().single { it.id.startsWith("unsynced-") }
+            assertEquals("First-sync pending edit", copy.draft)
+            assertEquals(local.messages, copy.messages)
+            assertEquals(local.summary, copy.summary)
+            assertEquals(local.buildRepository, copy.buildRepository)
+            assertEquals(remote, persisted().single { it.id == remote.id })
+            assertEquals(remote.messages, model.messages.value)
+            assertEquals(remote.draft, model.draft.value)
+            assertEquals(listOf("Server note"), model.localSettings.value.memory)
+            model.flushHistory(); sync.syncNow()?.join()
+            assertEquals(1, uploads); assertEquals(2, persisted().size)
+        } finally { sync.close(); scope.cancel() }
+    }
+
     @Test fun draftTypedAfterReadBlocksCommitWithoutChangingHistoryMemoryOrBuffers() {
         port.read()
         val previous = application.getSharedPreferences("dua_chat_history", 0).getString("history", null)
