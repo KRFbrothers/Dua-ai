@@ -42,7 +42,7 @@ data class IntegrationState(val groups: List<IntegrationGroup> = emptyList(), va
     val codeExecution: CodeExecutionConfig? = null,
     /** Build mode (Phase 5B); null on older backends, where the Build sheet explains that a backend update is needed. */
     val build: BuildModeConfig? = null,
-    val projectsEnabled: Boolean = false, val projectTasksEnabled: Boolean = false, val taskDueDatesEnabled: Boolean = false) {
+    val projectsEnabled: Boolean = false, val projectTasksEnabled: Boolean = false, val taskDueDatesEnabled: Boolean = false, val projectMemoryEnabled: Boolean = false) {
     /** Search works for [model] natively or through Brave. */
     fun searchAvailable(model: String): Boolean = webSearchConfigured || model in nativeSearch
 }
@@ -65,6 +65,7 @@ object IntegrationCapabilities {
             projectsEnabled = json.optJSONObject("projects")?.opt("enabled") == true,
             projectTasksEnabled = json.optJSONObject("projects")?.opt("enabled") == true && json.optJSONObject("projects")?.opt("tasks") == true,
             taskDueDatesEnabled = json.optJSONObject("projects")?.opt("enabled") == true && json.optJSONObject("projects")?.opt("tasks") == true && json.optJSONObject("projects")?.opt("dueDates") == true,
+            projectMemoryEnabled = json.optJSONObject("projects")?.opt("enabled") == true && json.optJSONObject("projects")?.opt("memory") == true,
             filesEnabled = files?.opt("enabled") == true,
             filesMaxBytes = files?.optLong("maxBytes")?.coerceIn(0, 5L * 1024 * 1024 * 1024) ?: 0,
             webSearchConfigured = web?.opt("searchConfigured") == true,

@@ -132,6 +132,42 @@ class ProjectSwitchingTest {
         model.selectProject("personal")
         assertEquals("- Private note", memory.invoke(model))
     }
+    @Suppress("UNCHECKED_CAST")
+    private fun enableProjectMemory() {
+        val flow = ChatViewModel::class.java.getDeclaredField("_integrations").apply { isAccessible = true }.get(model) as MutableStateFlow<IntegrationState>
+        flow.value = flow.value.copy(projectsEnabled = true, projectMemoryEnabled = true)
+    }
+    @Test fun projectMemorySurvivesTaskSettingsResetRestartAndServerDownload() {
+        enableProjectMemory(); enableTasks()
+        assertTrue(model.saveProjectMemory("coding", true, listOf("  Prefer Compose  ")))
+        assertTrue(model.saveTask("coding", null, "Review"))
+        assertTrue(model.saveProject("coding", "Coding", "Use Kotlin", false))
+        assertEquals(listOf("Private note"), model.localSettings.value.memory)
+        model.resetSettings()
+        val reopened = ChatViewModel(app).also { store.put("reopened", it) }
+        val coding = reopened.localSettings.value.projects[1]
+        assertEquals(com.dua.ai.projects.ProjectMemory(true, listOf("Prefer Compose")), coding.memory)
+        assertEquals("Use Kotlin", coding.instructions); assertEquals("Review", coding.tasks.single().title)
+        assertEquals(com.dua.ai.projects.ProjectMemory(), reopened.localSettings.value.projects[2].memory)
+        assertTrue(reopened.localSettings.value.memory.isEmpty())
+        val remote = reopened.localSettings.value.projects.map { if (it.id == "coding") it.copy(memory = com.dua.ai.projects.ProjectMemory(false, listOf("Server preference"))) else it }
+        val sync = ChatViewModel::class.java.getDeclaredField("automaticSync").apply { isAccessible = true }.get(model)
+        val port = AutomaticCloudSync::class.java.getDeclaredField("local").apply { isAccessible = true }.get(sync) as AutomaticCloudSync.LocalPort
+        port.commit(CloudSnapshot(listOf(personal), listOf("Private note"), remote))
+        assertEquals(remote[1].memory, DevicePreferences(app).state.value.projects[1].memory)
+    }
+    @Test fun unavailableArchivedPersonalAndInvalidMemoryDoNotOverwriteCache() {
+        assertFalse(model.saveProjectMemory("coding", true, listOf("Blocked")))
+        enableProjectMemory()
+        assertTrue(model.saveProjectMemory("coding", false, listOf("Keep me")))
+        assertFalse(model.saveProjectMemory("personal", true, listOf("Duplicate")))
+        assertFalse(model.saveProjectMemory("coding", true, List(11) { "Too many" }))
+        assertFalse(model.saveProjectMemory("coding", true, listOf(" ")))
+        assertTrue(model.saveProject("coding", "Coding", "", true))
+        assertFalse(model.saveProjectMemory("coding", true, listOf("Blocked")))
+        assertEquals(com.dua.ai.projects.ProjectMemory(false, listOf("Keep me")), model.localSettings.value.projects[1].memory)
+        assertEquals(listOf("Private note"), model.localSettings.value.memory)
+    }
     @Test fun oldBackendCannotSilentlyIgnoreCodingInstructions() {
         model.selectProject("coding")
         model.sendMessage("Review this code")

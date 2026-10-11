@@ -4,8 +4,9 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 data class ProjectTask(val id: String, val title: String, val completed: Boolean = false, val dueAt: Long? = null)
+data class ProjectMemory(val enabled: Boolean = false, val notes: List<String> = emptyList())
 data class ChatProject(val id: String, val name: String, val instructions: String = "", val archived: Boolean = false,
-    val tasks: List<ProjectTask> = emptyList())
+    val tasks: List<ProjectTask> = emptyList(), val memory: ProjectMemory = ProjectMemory())
 
 /** Projects are part of the owner snapshot; device preferences hold only their cache. */
 object ProjectCodec {
@@ -20,6 +21,8 @@ object ProjectCodec {
         require(projects.size in 1..MAX_PROJECTS && projects.map { it.id }.distinct().size == projects.size && projects.any { it.id == PERSONAL }) { "Keep Personal and at most 20 projects." }
         require(projects.all { validId(it.id) && it.name.isNotBlank() && it.name.length <= 80 && it.instructions.length <= 4000 }) { "Invalid project name or instructions." }
         projects.forEach { project ->
+            require(project.memory.notes.size <= 10 && project.memory.notes.all { it.isNotBlank() && it.length <= 200 }) { "Keep at most 10 memory notes, each up to 200 characters." }
+            require(project.id != PERSONAL || project.memory == ProjectMemory()) { "Personal uses its existing memory settings." }
             require(project.tasks.size <= MAX_TASKS && project.tasks.map { it.id }.distinct().size == project.tasks.size &&
                 project.tasks.all { validId(it.id) && it.title.isNotBlank() && it.title.length <= MAX_TASK_TITLE && (it.dueAt == null || it.dueAt in 1..MAX_DUE_AT) }) { "Invalid task or due date. Keep at most 100 tasks per project, with titles up to 200 characters." }
         }
@@ -27,6 +30,8 @@ object ProjectCodec {
         return projects
     }
     internal fun encodedProject(project: ChatProject) = JSONObject().put("id", project.id).put("name", project.name).put("instructions", project.instructions).put("archived", project.archived).apply {
+        // Default memory preserves older snapshot signatures.
+        if (project.memory != ProjectMemory()) put("memory", JSONObject().put("enabled", project.memory.enabled).put("notes", JSONArray(project.memory.notes)))
         // Empty lists keep the pre-Tasks wire format and existing sync baselines unchanged.
         if (project.tasks.isNotEmpty()) put("tasks", JSONArray().apply { project.tasks.forEach {
             put(JSONObject().put("id", it.id).put("title", it.title).put("completed", it.completed).apply { it.dueAt?.let { at -> put("dueAt", at) } })
@@ -41,7 +46,14 @@ object ProjectCodec {
         return validate((0 until value.length()).map { index ->
             val p = value.getJSONObject(index)
             val fields = p.keys().asSequence().toSet()
-            require(fields == setOf("id", "name", "instructions", "archived") || fields == setOf("id", "name", "instructions", "archived", "tasks")) { "Invalid project fields." }
+            require(fields.containsAll(setOf("id", "name", "instructions", "archived")) && fields.all { it in setOf("id", "name", "instructions", "archived", "tasks", "memory") }) { "Invalid project fields." }
+            val memory = if (!p.has("memory")) ProjectMemory() else p.getJSONObject("memory").let { m ->
+                require(m.keys().asSequence().toSet() == setOf("enabled", "notes")) { "Invalid project memory fields." }
+                val notes = m.getJSONArray("notes")
+                require(notes.length() <= 10) { "Too many memory notes." }
+                ProjectMemory(m.get("enabled") as? Boolean ?: error("Invalid memory switch."),
+                    (0 until notes.length()).map { notes.get(it) as? String ?: error("Invalid memory note.") })
+            }
             val tasks = if (!p.has("tasks")) emptyList() else p.getJSONArray("tasks").let { array ->
                 require(array.length() <= MAX_TASKS) { "Too many tasks." }
                 (0 until array.length()).map { taskIndex ->
@@ -57,7 +69,7 @@ object ProjectCodec {
                 }
             }
             ChatProject(p.get("id") as? String ?: error("Invalid project ID."), p.get("name") as? String ?: error("Invalid project name."),
-                p.get("instructions") as? String ?: error("Invalid project instructions."), p.get("archived") as? Boolean ?: error("Invalid project archive flag."), tasks)
+                p.get("instructions") as? String ?: error("Invalid project instructions."), p.get("archived") as? Boolean ?: error("Invalid project archive flag."), tasks, memory)
         })
     }
 }

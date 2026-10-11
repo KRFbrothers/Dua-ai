@@ -29,6 +29,17 @@ test('Personal uses enabled memory and authoritative project instructions', asyn
   await resolveProjectContext(request(data), data, { env: settings, fetcher: reader(s) });
   assert.match(data.memory, /Private personal note/); assert.match(data.memory, /Reply in Hinglish/);
 });
+test('provider receives selected server memory and ignores unsynced client note text', async () => {
+  const s = snapshot(); s.projects[1].memory = { enabled: true, notes: ['Prefer Compose for Android'] };
+  s.projects[2].memory = { enabled: true, notes: ['Confidential Business context'] };
+  const fetcher = reader(s, Response.json({ candidates: [{ content: { parts: [{ text: 'Compose code' }] }, finishReason: 'STOP' }] }));
+  const response = await handleChat(request({ ...body(), memory: 'Stale Coding note' }), { env: settings, fetcher });
+  assert.equal(response.status, 200);
+  const upstream = JSON.stringify(fetcher.calls.at(-1).body);
+  assert.match(upstream, /Prefer Compose for Android/);
+  assert.doesNotMatch(upstream, /Stale Coding note|Confidential Business context|Private personal note/);
+  assert.equal((await handleChat(request({ ...body(), projectMemory: 'Inline bypass' }), { env: settings, fetcher: mockFetch() })).status, 400);
+});
 test('unknown, archived and conflicting chat projects stop before a provider call', async () => {
   const cases = [['missing', snapshot()], ['coding', { ...snapshot(), projects: snapshot().projects.map(p => p.id === 'coding' ? { ...p, archived: true } : p) }],
     ['coding', { ...snapshot(), chats: [{ id: 'chat-id-1234', model: 'Dua', projectId: 'business', draft: '', updatedAt: 0, messages: [] }] }]];

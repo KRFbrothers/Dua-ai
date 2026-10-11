@@ -58,12 +58,13 @@ fun CloudSyncScreen(viewModel: ChatViewModel, onBack: () -> Unit, onProfile: () 
                     if (reviewed.kind != "delete") {
                         reviewed.review.snapshot.projects.forEach { project ->
                             Text("Project: ${project.name}${if (project.archived) " (archived)" else ""}\nInstructions: ${project.instructions.ifBlank { "None" }}", style = MaterialTheme.typography.bodyMedium)
+                            if (project.id != com.dua.ai.projects.ProjectCodec.PERSONAL) Text("Memory: ${if (project.memory.enabled) "On" else "Off"}\n" + project.memory.notes.joinToString("\n"), style = MaterialTheme.typography.bodyMedium)
                             project.tasks.forEach { task -> Text("${if (task.completed) "✓" else "○"} ${task.title}${task.dueAt?.let { "\nDue: ${com.dua.ai.tasks.TaskDates.display(it)} · ${java.time.ZoneId.systemDefault().id}" }.orEmpty()}", style = MaterialTheme.typography.bodyMedium) }
                         }
                         reviewed.review.snapshot.chats.forEach { chat -> Text("${chat.title}: ${chat.messages.size} messages\nDraft: ${chat.draft}", style = MaterialTheme.typography.bodyMedium) }
                         Text("Memories:\n" + reviewed.review.snapshot.memory.joinToString("\n"), style = MaterialTheme.typography.bodyMedium)
                     } else Text("Server chats, memory, project settings and tasks are cleared. This phone's cache stays saved.")
-                    Text("Check the account shown above. Automatic uploads require consent on this device. Imported memories keep their current on/off setting.", style = MaterialTheme.typography.bodyMedium)
+                    Text("Check the account shown above. Automatic uploads require consent on this device. Personal memory keeps its phone on/off setting. Other projects restore their server memory switch and notes.", style = MaterialTheme.typography.bodyMedium)
                     FilledTonalButton(enabled = !state.busy, onClick = { viewModel.confirmCloud() }) { Text("Confirm") }
                     TextButton(enabled = !state.busy, onClick = { viewModel.cancelCloudReview() }) { Text("Cancel") }
                 }

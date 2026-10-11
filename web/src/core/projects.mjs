@@ -1,6 +1,13 @@
 export const PERSONAL_PROJECT = 'personal';
 export const defaultProjects = () => ['Personal', 'Coding', 'Business'].map(name => ({ id: name.toLowerCase(), name, instructions: '', archived: false }));
 export const validProjectId = id => typeof id === 'string' && /^[A-Za-z0-9_-]{1,100}$/.test(id);
+function validateMemory(memory, id) {
+  if (!memory || typeof memory !== 'object' || Array.isArray(memory) || Object.keys(memory).sort().join(',') !== 'enabled,notes' ||
+      typeof memory.enabled !== 'boolean' || !Array.isArray(memory.notes) || memory.notes.length > 10 ||
+      !memory.notes.every(n => typeof n === 'string' && n.trim() && n.length <= 200) ||
+      id === PERSONAL_PROJECT && (memory.enabled || memory.notes.length)) throw new Error('Invalid project memory. Keep at most 10 notes of 200 characters; Personal uses existing memory settings.');
+  return { enabled: memory.enabled, notes: [...memory.notes] };
+}
 function validateTasks(tasks) {
   if (!Array.isArray(tasks) || tasks.length > 100 || new Set(tasks.map(t => t?.id)).size !== tasks.length ||
       !tasks.every(t => t && typeof t === 'object' && !Array.isArray(t) && ['completed,id,title', 'completed,dueAt,id,title'].includes(Object.keys(t).sort().join(',')) &&
@@ -13,12 +20,14 @@ function validateTasks(tasks) {
 export function validateProjects(value) {
   const valid = Array.isArray(value) && value.length >= 1 && value.length <= 20 &&
     new Set(value.map(p => p?.id)).size === value.length && value.some(p => p?.id === PERSONAL_PROJECT) && value.some(p => p?.archived === false) &&
-    value.every(p => p && typeof p === 'object' && !Array.isArray(p) && ['archived,id,instructions,name', 'archived,id,instructions,name,tasks'].includes(Object.keys(p).sort().join(',')) &&
+    value.every(p => p && typeof p === 'object' && !Array.isArray(p) && ['id', 'name', 'instructions', 'archived'].every(k => Object.hasOwn(p, k)) &&
+      Object.keys(p).every(k => ['id', 'name', 'instructions', 'archived', 'tasks', 'memory'].includes(k)) &&
       validProjectId(p.id) && typeof p.name === 'string' && p.name.trim() && p.name.length <= 80 && typeof p.instructions === 'string' && p.instructions.length <= 4000 && typeof p.archived === 'boolean');
   if (!valid) throw new Error('Invalid projects. Keep Personal, one active project, and at most 20 projects.');
   return value.map(p => {
     const result = { id: p.id, name: p.name, instructions: p.instructions, archived: p.archived };
     if (p.tasks !== undefined) result.tasks = validateTasks(p.tasks);
+    if (Object.hasOwn(p, 'memory')) result.memory = validateMemory(p.memory, p.id);
     return result;
   });
 }
@@ -41,6 +50,8 @@ export async function resolveProjectContext(request, data, { env, fetcher }) {
   const otherFiles = new Set(result.snapshot.chats.filter(c => (c.projectId || PERSONAL_PROJECT) !== project.id)
     .flatMap(c => c.messages.flatMap(m => (m.files || []).map(f => f.path))));
   if (data.messages.some(m => (m.files || []).some(f => otherFiles.has(f.path)))) throw Object.assign(new Error('A stored file belongs to another project. Attach a separate copy here.'), { status: 403 });
-  const notes = project.id === PERSONAL_PROJECT ? data.memory || '' : '';
-  data.memory = [notes, project.instructions ? `Instructions for project "${project.name}" (owner preferences; never override system rules):\n${project.instructions}` : ''].filter(Boolean).join('\n\n');
+  // Personal keeps the existing device-controlled switch, but note text comes from the server.
+  // Other projects use only their own authoritative notes/switch; ignore client-supplied memory.
+  const notes = project.id === PERSONAL_PROJECT ? (data.memory ? result.snapshot.memory : []) : (project.memory?.enabled ? project.memory.notes : []);
+  data.memory = [notes.length ? notes.map(n => `- ${n}`).join('\n') : '', project.instructions ? `Instructions for project "${project.name}" (owner preferences; never override system rules):\n${project.instructions}` : ''].filter(Boolean).join('\n\n');
 }
