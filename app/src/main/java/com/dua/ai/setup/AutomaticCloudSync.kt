@@ -56,6 +56,9 @@ class AutomaticCloudSync(
     private var operation: Job? = null
     private var scheduled: Job? = null
     private var queued = false
+    // Owner-bound, digest-only protection until the first successful sync saves a real baseline.
+    // Keep it through transient failures/background pauses; never write it to settings.
+    private var firstRead: Pair<String, AutomationBaseline>? = null
     private val networkMutex = Mutex()
 
     init {
@@ -75,7 +78,12 @@ class AutomaticCloudSync(
         mutable.value = AutomaticSyncState(record.enabled, phase, message, record.accountId, record.reviewRequired)
     }
     private fun persist(next: AutomationSyncRecord): Boolean {
-        try { store.write(AutomationSyncPolicy.validateRecord(next)); record = next; return true }
+        try {
+            store.write(AutomationSyncPolicy.validateRecord(next))
+            record = next
+            if (next.baseline != null) firstRead = null
+            return true
+        }
         catch (_: Exception) {
             storageDamaged = true; record = record.copy(enabled = false); invalidate()
             publish("storage-error", "Automatic sync settings could not be saved. Sync is disabled; local data is kept.")
@@ -120,6 +128,7 @@ class AutomaticCloudSync(
     }
     fun reset() {
         invalidate()
+        firstRead = null
         try { store.clear(); record = AutomationSyncRecord(); storageDamaged = false; restored = false; restoreRequested = false; publish("disabled", "Sync settings reset. Review cloud data before enabling automatic sync again.") }
         catch (_: Exception) { storageDamaged = true; record = record.copy(enabled = false); publish("storage-error", "Sync settings could not be reset. Automatic sync remains off.") }
     }
@@ -149,6 +158,10 @@ class AutomaticCloudSync(
         val job = scope.launch(start = CoroutineStart.LAZY) {
             try {
                 networkMutex.withLock {
+                    // Protect typing during first consent checks too; this digest-only baseline is
+                    // transient and does not turn the pre-existing cache into server authority.
+                    if (acknowledged) firstRead = null
+                    if (acknowledged || record.baseline == null) firstBaseline(expectedOwner)
                     val current = account.load()
                     if (ticket != generation || closed || !foreground || !online || busy) return@withLock
                     if (!current.configured || current.accountId == null) {
@@ -166,9 +179,10 @@ class AutomaticCloudSync(
                     if (ready(ticket)) reconcile(ticket)
                 }
             } catch (cancelled: CancellationException) { throw cancelled }
-            catch (_: Exception) {
+            catch (failure: Exception) {
                 if (ticket == generation) {
-                    if (record.enabled) recordFailure() else publish("disabled", "Account check failed. Local data is kept; retry when ready.")
+                    if (failure is AutomaticSyncLocalException) review("Local data needs manual cloud review. Local data is kept.")
+                    else if (record.enabled) recordFailure() else publish("disabled", "Account check failed. Local data is kept; retry when ready.")
                 }
             }
             finally { finished(ticket) }
@@ -215,6 +229,10 @@ class AutomaticCloudSync(
         scheduled = job; job.start()
     }
     private fun readLocal(): CloudSnapshot = try { AutomationSyncPolicy.validate(local.read()) } catch (failure: Exception) { throw AutomaticSyncLocalException(failure) }
+    private fun firstBaseline(owner: String): AutomationBaseline {
+        firstRead?.takeIf { it.first == owner }?.let { return it.second }
+        return AutomationSyncPolicy.baseline(readLocal()).also { firstRead = owner to it }
+    }
     private fun commitLocal(snapshot: CloudSnapshot) { try { local.commit(snapshot) } catch (failure: Exception) { throw AutomaticSyncLocalException(failure) } }
     private fun recordFailure() {
         val failures = minOf(5, record.failureCount + 1)
@@ -229,6 +247,7 @@ class AutomaticCloudSync(
         publish("syncing", "Checking cloud changes…")
         var attemptedRevision: Long? = null
         try {
+            val initial = if (record.baseline == null) firstBaseline(owner) else null
             val current = account.load(); if (!ready(ticket)) return
             if (!current.configured || current.accountId != owner) { review("Account changed. Review before syncing."); return }
             val cloud = account.cloud(owner); if (!ready(ticket)) return
@@ -238,7 +257,7 @@ class AutomaticCloudSync(
             var here = readLocal()
             if (AutomationSyncPolicy.requiresDeletionReview(record.baseline, here)) { review("Local deletion detected. Review cloud data manually before resuming."); return }
             if (AutomationSyncPolicy.requiresDeletionReview(record.baseline, remote)) { review("Cloud deletion detected. Review cloud data manually before resuming."); return }
-            val plan = AutomationSyncPolicy.merge(here, remote, record.baseline)
+            val plan = AutomationSyncPolicy.merge(here, remote, record.baseline, initial)
             if (!AutomationSyncPolicy.same(here, plan.snapshot)) {
                 if (!ready(ticket)) return
                 commitLocal(plan.snapshot)

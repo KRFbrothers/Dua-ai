@@ -114,6 +114,79 @@ class AutomaticCloudSyncTest {
         p.close(sync)
     }
 
+    @Test fun `first sync keeps edits during account and cloud checks under separate ids`() = runBlocking {
+        for (duringAccountCheck in listOf(true, false)) {
+            val original = chat(draft = "Cached draft")
+            val server = chat(text = "Server question", draft = "Server draft", updated = 3)
+            val p = Fixture(snapshot(listOf(original), listOf("Cached note")), snapshot(listOf(server), listOf("Server note")))
+            val gate = CompletableDeferred<Unit>()
+            if (duringAccountCheck) p.loadHook = { gate.await() } else p.cloudHook = { gate.await() }
+            val sync = p.controller(); val job = sync.enable()
+            val edited = original.copy(draft = "Typed while checking", model = "Gemini", updatedAt = 2)
+            p.here = snapshot(listOf(edited), listOf("Changed cached note"))
+            gate.complete(Unit); job?.join()
+            assertEquals("synced", sync.state.value.phase)
+            assertEquals(server, p.here.chats.single { it.id == original.id })
+            val copy = p.here.chats.single { it.id.startsWith("unsynced-") }
+            assertEquals(edited.copy(id = copy.id), copy)
+            assertEquals(listOf("Server note"), p.here.memory)
+            assertEquals(1, p.uploadCalls)
+            assertEquals(p.here, p.remote)
+            sync.syncNow()?.join()
+            assertEquals(1, p.uploadCalls); assertEquals(2, p.here.chats.size)
+            p.close(sync)
+        }
+    }
+
+    @Test fun `first sync edit matching the server creates no unnecessary copy`() = runBlocking {
+        val original = chat(draft = "Old draft")
+        val server = original.copy(draft = "Same draft", updatedAt = 2)
+        val p = Fixture(snapshot(listOf(original)), snapshot(listOf(server)))
+        val gate = CompletableDeferred<Unit>(); p.cloudHook = { gate.await() }
+        val sync = p.controller(); val job = sync.enable()
+        p.here = snapshot(listOf(server)); gate.complete(Unit); job?.join()
+        assertEquals(listOf(server), p.here.chats); assertEquals(0, p.uploadCalls)
+        p.close(sync)
+    }
+
+    @Test fun `first sync retains live edit protection when the initial cloud request fails`() = runBlocking {
+        val original = chat(draft = "Cached draft")
+        val server = original.copy(draft = "Server draft", updatedAt = 3)
+        val p = Fixture(snapshot(listOf(original)), snapshot(listOf(server)))
+        val gate = CompletableDeferred<Unit>()
+        p.cloudHook = { gate.await(); error("Connection lost") }
+        val sync = p.controller(); val job = sync.enable()
+        p.here = snapshot(listOf(original.copy(draft = "Typed before failure", updatedAt = 2)))
+        gate.complete(Unit); job?.join()
+        assertEquals("retrying", sync.state.value.phase); assertEquals(0, p.commits)
+        p.cloudHook = {}; sync.retry()?.join()
+        assertEquals("synced", sync.state.value.phase)
+        assertEquals(server, p.here.chats.single { it.id == original.id })
+        assertEquals("Typed before failure", p.here.chats.single { it.id.startsWith("unsynced-") }.draft)
+        assertEquals(1, p.uploadCalls)
+        p.close(sync)
+    }
+
+    @Test fun `first sync recovery exceeding snapshot limits keeps the typed cache for review`() = runBlocking {
+        val original = chat()
+        val remote = snapshot(listOf(original.copy(draft = "Server draft")) + (1..99).map { chat("server-$it") })
+        val p = Fixture(snapshot(listOf(original)), remote)
+        val gate = CompletableDeferred<Unit>(); p.cloudHook = { gate.await() }
+        val sync = p.controller(); val job = sync.enable()
+        val edited = snapshot(listOf(original.copy(draft = "Keep this typed draft")))
+        p.here = edited; gate.complete(Unit); job?.join()
+        assertTrue(sync.state.value.reviewRequired); assertEquals(edited, p.here)
+        assertEquals(0, p.commits); assertEquals(0, p.uploadCalls); assertEquals(remote, p.remote)
+        p.close(sync)
+    }
+
+    @Test fun `unreadable first cache requires review before account or cloud checks`() = runBlocking {
+        val p = Fixture(); p.readFails = true; val sync = p.controller(); sync.enable()?.join()
+        assertTrue(sync.state.value.reviewRequired); assertEquals(0, p.loadCalls)
+        assertEquals(0, p.cloudCalls); assertEquals(0, p.uploadCalls)
+        p.close(sync)
+    }
+
     @Test fun `server memory deletion is applied to the phone and never uploaded back`() = runBlocking {
         val original = snapshot(listOf(chat()), listOf("Prefer Hindi")); val record = AutomationSyncRecord(true, ownerA, 2, AutomationSyncPolicy.baseline(original))
         val p = Fixture(original, snapshot(listOf(chat())), record); p.revision = 3; val sync = p.controller(); sync.restore()?.join()

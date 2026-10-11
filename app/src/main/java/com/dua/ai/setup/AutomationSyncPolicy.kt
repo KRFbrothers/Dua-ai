@@ -54,11 +54,13 @@ object AutomationSyncPolicy {
     /**
      * Server-first merge: the cloud copy is authoritative. A chat that exists on the server replaces the
      * phone's cached copy with the same id. If the phone copy was edited since the last sync (an offline
-     * edit), it is kept as a separate "unsynced-" copy so nothing is lost silently. Chats that exist only
+     * edit), it is kept as a separate "unsynced-" copy so nothing is lost silently. Before a first sync
+     * establishes that baseline, a transient first-read baseline protects edits made during its account
+     * or cloud requests. Unchanged pre-existing cache still yields to the server. Chats that exist only
      * on the phone are kept so they can upload. Memory follows the server; notes the user deleted on the
      * phone since the last sync are removed from the server copy too, and notes added on the phone are kept.
      */
-    fun merge(local: CloudSnapshot, remote: CloudSnapshot, previous: AutomationBaseline?): AutomationMergePlan {
+    fun merge(local: CloudSnapshot, remote: CloudSnapshot, previous: AutomationBaseline?, firstRead: AutomationBaseline? = null): AutomationMergePlan {
         validate(local); validate(remote)
         val remoteById = remote.chats.associateBy { it.id }
         val usedIds = (local.chats.map { it.id } + remote.chats.map { it.id }).toMutableSet()
@@ -69,7 +71,7 @@ object AutomationSyncPolicy {
             if (server == null) { chats += here; return@forEach }
             chats += server
             val hereSignature = signature(here)
-            val editedOffline = previous?.chatSignatures?.get(here.id).let { it != null && it != hereSignature }
+            val editedOffline = (previous ?: firstRead)?.chatSignatures?.get(here.id).let { it != null && it != hereSignature }
             if (editedOffline && hereSignature != signature(server)) {
                 val stem = "unsynced-" + digest(here.id + ":" + hereSignature).take(16)
                 var id = stem; var suffix = 0
