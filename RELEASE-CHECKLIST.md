@@ -157,6 +157,14 @@ No private signing keys are supplied by this repository. The manual `Build perso
 - Check reboot/package-update/clock-change scheduling, denied notifications, permission revocation and reminder reset. Confirm task dates survive while consent/history remain device-local and excluded from backup/transfer.
 - Android battery saving may delay delivery; exact alarms are not implemented. These device checks are pending.
 
+## Full-message history search update
+
+- In Coding, search a literal phrase present only in an old middle reply, a first message beyond its 60-character title, a draft and saved Run code output. Check a matching snippet, highlight and the correct conversation opening.
+- Clear the query and confirm all current-project chats return. Try mixed case, code symbols and an unmatched phrase; no-results should suggest refreshing history by sync.
+- Type quickly and edit/restore the snapshot while a search is pending. Old query/snapshot results must disappear, and the final query must show current matches.
+- Switch projects with an active query: it must clear, and another project's matches must stay hidden. Verify no extra network/provider request or persistent search index.
+- On the phone, check typing responsiveness, emoji/long-line snippets, restart/rotation and sync-refresh results. These device/live checks remain pending; see [HISTORY-SEARCH.md](HISTORY-SEARCH.md).
+
 ## Daily planner update
 
 - Open Projects → Daily planner. Check Today, Previous/Next and project filters using Personal/Coding/Business tasks: previous-day overdue, today's elapsed/future deadlines, tomorrow, completed and undated tasks.

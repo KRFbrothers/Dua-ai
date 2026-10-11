@@ -84,6 +84,8 @@ Android JVM unit tests run in CI (`bash ./gradlew :app:testDebugUnitTest`) and c
 
 ## Projects and instructions
 
+**Full-message history search** is implemented in source: current-project cached user/assistant text, drafts and saved Run code/code output; one result per chat with highlighted context, date groups and open/clear controls. Search runs on a background dispatcher after a short debounce, makes no provider request and discards stale query/project/snapshot results. Server-wide/semantic search and direct jumps to matching turns remain pending. See [HISTORY-SEARCH.md](HISTORY-SEARCH.md); device/live sync-refresh checks remain pending.
+
 Implemented in source: Personal/Coding/Business defaults, create/edit/archive, project-scoped history, persisted chat project IDs, custom instructions from the owner server snapshot, cloud sync and project-aware JSON import/export. Old chats default to Personal. Divergent edits to the same project pause automatic sync; reviewed download uses server settings and keeps phone-only projects. Imports copy differing project settings rather than overwrite current instructions. Dedicated project file libraries, configured tools per project and project memory are still pending. Live voice uses Personal without custom instructions; other projects use hands-free Voice mode for scoped chat requests. See [PROJECTS.md](PROJECTS.md). Physical-device and live provider verification of Projects is pending.
 
 

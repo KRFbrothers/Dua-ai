@@ -37,6 +37,7 @@ Dua is a personal, single-user app: the backend is meant to be restricted to the
 
 #### On-device cache
 - **Android:** A cache of chat history and app preferences is stored in app-private `SharedPreferences`; they are not encrypted by the app. Android OS sandboxing protects app-private files, but this is not equivalent to an encrypted database.
+- **History search:** Queries scan the current project's loaded messages, drafts and saved Run code/code output on the phone. They are not sent to providers or the backend, and no search index is persisted. Query/snippets are transient UI state, excluded from server snapshots and exports; Android UI saved-state restoration can retain the query. Project switching clears it. Search does not retrieve raw stored-file contents or hidden attachment/reasoning/memory fields. Sync refreshes the disposable cache from the authoritative server snapshot. See [HISTORY-SEARCH.md](HISTORY-SEARCH.md).
 - **Backup:** Android app backup and device transfer are enabled. Chat history, account-session and automatic-sync preference files are excluded by the checked-in backup rules. Other app preferences, including cached memory notes and project instructions, are not excluded. Whether a backup is created or restored depends on Android/device backup settings and the user's account. Users should not assume the phone cache is the authoritative copy.
 - **Retention:** Retained until the user deletes the data, clears app storage, uninstalls the app, or an enabled device backup restores it. Backup copies may have separate retention.
 

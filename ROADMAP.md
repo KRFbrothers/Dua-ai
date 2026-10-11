@@ -326,4 +326,6 @@ Model names, endpoints and prices in this roadmap were checked against official 
 
 ## Personal/Coding/Business follow-up: Projects
 
+Full-message/draft history search is implemented in a subsequent source change, with current-project filtering, highlighted snippets and background/debounced scans of the loaded server cache. Saved Run code/code output is searchable too. Server-wide/semantic search and direct jumps to matched turns remain future work. See [HISTORY-SEARCH.md](HISTORY-SEARCH.md); phone/live sync-refresh verification is pending.
+
 The first Projects implementation adds server-backed project definitions and custom instructions, project-scoped chat history, archive/restore and sync/backup compatibility. See [PROJECTS.md](PROJECTS.md). Dedicated project file libraries, editable memory per project and per-project connected tools remain pending. Project to-do lists ([TASKS.md](TASKS.md)), optional due dates/device reminders ([REMINDERS.md](REMINDERS.md)), and a deadline-based daily planner ([PLANNER.md](PLANNER.md)) are implemented in subsequent source increments. Recurring tasks, separate planned dates, calendar integration and business workflows remain later steps. These source implementations still need an updated APK and live/device verification.

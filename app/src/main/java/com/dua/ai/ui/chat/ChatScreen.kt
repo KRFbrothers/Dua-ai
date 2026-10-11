@@ -154,6 +154,7 @@ fun ChatScreen(
             drawerContent = {
                 HistoryDrawer(
                     chats = state.savedChats.filter { it.projectId == state.projectId },
+                    projectId = state.projectId,
                     newChatEnabled = !state.typing,
                     onNewChat = { closeDrawerThen(actions.onNewChat) },
                     onOpenChat = { id -> closeDrawerThen { actions.onOpenChat(id) } },

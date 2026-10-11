@@ -5,7 +5,7 @@ This first Projects version organizes Fareed’s one owner account into Personal
 ## How to use
 
 1. Open **Projects** on Home or above the conversation.
-2. Select a project. Switching saves the current draft and starts a new chat in the selected project. Open its existing chats from the history menu; search shows only that project’s history.
+2. Select a project. Switching saves the current draft and starts a new chat in the selected project. Open its existing chats from the history menu; search shows only that project’s history, scans full message/draft text and saved code/output, and clears its query when the project changes. See [HISTORY-SEARCH.md](HISTORY-SEARCH.md).
 3. Tap **Edit**, enter a name and custom instructions, then **Save project**. Use instructions for preferred language, coding conventions or business context.
 4. Enable automatic foreground Cloud Sync, or use **Cloud sync → Review upload → Confirm**. New project definitions and instructions must reach the server before they apply to replies. The editor shows a reminder to sync.
 5. Archive a finished project to keep its chats while blocking new replies; Edit can restore it. At least one project must remain active.

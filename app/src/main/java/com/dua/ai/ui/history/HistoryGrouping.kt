@@ -22,8 +22,7 @@ object HistoryGrouping {
     }
 
     fun filter(chats: List<SavedChat>, query: String): List<SavedChat> {
-        val needle = query.trim()
-        return if (needle.isEmpty()) chats else chats.filter { (it.title + " " + it.preview).contains(needle, ignoreCase = true) }
+        return HistorySearch.search(chats, query).map { it.chat }
     }
 
     fun group(chats: List<SavedChat>, now: Long, zone: ZoneId): List<Pair<HistoryBucket, List<SavedChat>>> =
