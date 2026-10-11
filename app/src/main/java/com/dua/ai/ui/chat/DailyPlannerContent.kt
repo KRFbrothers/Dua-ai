@@ -77,8 +77,10 @@ internal fun DailyPlannerContent(projects: List<ChatProject>, notice: String, en
                     Text(selectedProject?.name ?: "All active projects")
                 }
                 DropdownMenu(expanded = filterOpen, onDismissRequest = { filterOpen = false }) {
-                    DropdownMenuItem(text = { Text("All active projects") }, onClick = { projectId = null; filterOpen = false })
-                    active.forEach { project -> DropdownMenuItem(text = { Text(project.name) }, onClick = { projectId = project.id; filterOpen = false }) }
+                    DropdownMenuItem(text = { Text("All active projects") }, onClick = { projectId = null; filterOpen = false },
+                        modifier = Modifier.semantics { contentDescription = "Show all active projects in planner" })
+                    active.forEach { project -> DropdownMenuItem(text = { Text(project.name) }, onClick = { projectId = project.id; filterOpen = false },
+                        modifier = Modifier.semantics { contentDescription = "Filter planner to ${project.name}" }) }
                 }
             }
             Text("${plan.scheduled.size} due on this day · ${plan.earlier.size} earlier unfinished · ${plan.undated.size} without a date")

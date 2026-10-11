@@ -30,7 +30,7 @@ class DailyPlannerInteractionTest {
         restoration.setContent { DuaTheme(LocalPreferences()) { DailyPlannerContent(ProjectCodec.defaults, "", true, true, now, utc, { _, _ -> true }, {}, {}) } }
         compose.onNodeWithContentDescription("Next planner day").performClick()
         compose.onNodeWithContentDescription("Planner project filter").performClick()
-        compose.onNodeWithText("Business").performClick()
+        compose.onNodeWithContentDescription("Filter planner to Business").performClick()
         restoration.emulateSavedInstanceStateRestore()
         compose.onNodeWithText("Tomorrow · 2030-01-03 · UTC").assertExists()
         compose.onNodeWithContentDescription("Planner project filter").assertTextContains("Business")
@@ -91,7 +91,7 @@ class DailyPlannerInteractionTest {
         compose.onNodeWithText("Daily planner").performClick()
         compose.onNodeWithContentDescription("Next planner day").performClick()
         compose.onNodeWithContentDescription("Planner project filter").performClick()
-        compose.onNodeWithText("Coding").performClick()
+        compose.onNodeWithContentDescription("Filter planner to Coding").performClick()
         scrollTo(hasContentDescription("Open tasks: Coding · Code inbox"))
         compose.onNodeWithContentDescription("Open tasks: Coding · Code inbox").performClick()
         compose.onNodeWithText("Coding · Tasks").assertExists()
