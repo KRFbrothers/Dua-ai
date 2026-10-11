@@ -6,7 +6,7 @@ Dua is a personal, single-user app: it is built for its owner only and installed
 
 ## Current features
 
-- Server-backed conversations, drafts and memory with an app-private cache for offline viewing, search, export/import, sharing and data controls.
+- Server-backed conversations, drafts and memory with an app-private cache for offline viewing, full-message/draft search, export/import, sharing and data controls. Search is project-scoped with match snippets; see [HISTORY-SEARCH.md](HISTORY-SEARCH.md).
 - Gemini plus configurable ChatGPT, Claude, Grok and Kimi adapters with streaming replies and a Reasoning mode (collapsible Thinking block on Gemini, Grok and reasoning ChatGPT models). Text and code files (TXT, CSV, MD, JSON, source code) work on all providers; images/PDF depend on the selected provider and configured model. See [PROVIDERS.md](PROVIDERS.md).
 - Chat Web: Off/Search/Read link modes and clickable source footers. Search requires Brave configuration; public page reading uses the existing chat provider. Web mode starts Off.
 - Copy, retry and speaker reply icons; device speech recognition/TTS and explicit foreground hands-free turns. Optional generated reply audio uses an authenticated, owner-restricted server integration.
@@ -51,4 +51,4 @@ The Android cache is stored in app-private preferences; Android backup/device tr
 
 ### Projects and custom instructions
 
-Home → **Projects** offers Personal, Coding and Business, plus custom projects. Each chat keeps its project, and the history drawer searches that project only. Save instructions, then sync them before chatting; the backend reads the owner’s server snapshot. See [PROJECTS.md](PROJECTS.md) for limits, conflict handling and the first version’s scope. **Projects → Tasks** adds separate to-do lists with edit, complete/reopen and confirmed delete; sync and JSON backup include tasks. See [TASKS.md](TASKS.md). Optional due dates and opt-in device reminders are implemented; see [REMINDERS.md](REMINDERS.md). A daily planner remains pending.
+Home → **Projects** offers Personal, Coding and Business, plus custom projects. Each chat keeps its project, and the history drawer searches that project only. Save instructions, then sync them before chatting; the backend reads the owner’s server snapshot. See [PROJECTS.md](PROJECTS.md) for limits, conflict handling and the first version’s scope. **Projects → Tasks** adds separate to-do lists with edit, complete/reopen and confirmed delete; sync and JSON backup include tasks. See [TASKS.md](TASKS.md). Optional due dates and opt-in device reminders are implemented; see [REMINDERS.md](REMINDERS.md). **Projects → Daily planner** groups deadlines and undated tasks with date navigation, project filtering and completion; see [PLANNER.md](PLANNER.md). These source changes need an updated APK; physical-device/live sync verification remains pending.

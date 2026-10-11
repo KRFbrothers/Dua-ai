@@ -21,7 +21,8 @@ import com.dua.ai.ui.theme.Spacing
 @Composable
 internal fun ProjectTasksContent(project: ChatProject, notice: String, enabled: Boolean, disabledReason: String,
     onSave: (String, String?, String, Long?) -> Boolean, onToggle: (String, String) -> Boolean,
-    onDelete: (String, String) -> Boolean, onBack: () -> Unit, dueDatesEnabled: Boolean = false) {
+    onDelete: (String, String) -> Boolean, onBack: () -> Unit, dueDatesEnabled: Boolean = false,
+    backLabel: String = "Back to projects") {
     var editing by rememberSaveable(project.id) { mutableStateOf(false) }
     var editingId by rememberSaveable(project.id) { mutableStateOf<String?>(null) }
     var title by rememberSaveable(project.id) { mutableStateOf("") }
@@ -90,7 +91,7 @@ internal fun ProjectTasksContent(project: ChatProject, notice: String, enabled: 
             Button(onClick = { editingId = null; title = ""; dueDate = ""; dueTime = ""; dateError = ""; editingDueAt = null; editingZone = java.time.ZoneId.systemDefault().id; editing = true }, enabled = enabled && project.tasks.size < ProjectCodec.MAX_TASKS) { Text("Add task") }
             if (project.tasks.size == ProjectCodec.MAX_TASKS) Text("100-task limit reached. Delete a finished task to make space.")
         }
-        TextButton(onClick = onBack) { Text("Back to projects") }
+        TextButton(onClick = onBack) { Text(backLabel) }
     }
     project.tasks.find { it.id == deleteId }?.let { task ->
         AlertDialog(onDismissRequest = { deleteId = null }, title = { Text("Delete task?") }, text = { Text(task.title) },

@@ -5,7 +5,7 @@ This first Projects version organizes Fareed’s one owner account into Personal
 ## How to use
 
 1. Open **Projects** on Home or above the conversation.
-2. Select a project. Switching saves the current draft and starts a new chat in the selected project. Open its existing chats from the history menu; search shows only that project’s history.
+2. Select a project. Switching saves the current draft and starts a new chat in the selected project. Open its existing chats from the history menu; search shows only that project’s history, scans full message/draft text and saved code/output, and clears its query when the project changes. See [HISTORY-SEARCH.md](HISTORY-SEARCH.md).
 3. Tap **Edit**, enter a name and custom instructions, then **Save project**. Use instructions for preferred language, coding conventions or business context.
 4. Enable automatic foreground Cloud Sync, or use **Cloud sync → Review upload → Confirm**. New project definitions and instructions must reach the server before they apply to replies. The editor shows a reminder to sync.
 5. Archive a finished project to keep its chats while blocking new replies; Edit can restore it. At least one project must remain active.
@@ -33,7 +33,7 @@ The phone keeps a disposable cache. Projects and instructions are part of the au
 
 Text chat, chat search/history, summaries, retries, Build chat, hands-free Voice mode, cloud snapshots and JSON backup carry project context. Global enabled memory and reviewed memory suggestions are Personal-only. Other projects use their instructions for context; dedicated editable memory per project is future work.
 
-Files currently belong to the chats where they were attached. The model is not automatically given another project’s history or files. A dedicated project file library, per-project connected-tool configuration, daily planner/recurring tasks, calendar/email integration and recurring business workflows are follow-ups. Existing GitHub writes still require the owner’s diff review and explicit confirmation.
+Files currently belong to the chats where they were attached. The model is not automatically given another project’s history or files. Project tasks, due dates/device reminders and a deadline-based daily planner are implemented in follow-up source changes; see [TASKS.md](TASKS.md), [REMINDERS.md](REMINDERS.md) and [PLANNER.md](PLANNER.md). A dedicated project file library, per-project connected-tool configuration, recurring tasks, calendar/email integration and recurring business workflows remain pending. Existing GitHub writes still require the owner’s diff review and explicit confirmation.
 
 Live realtime voice currently works only in Personal with no custom instructions. Other projects use hands-free Voice mode so project instructions go through the scoped chat endpoint. Imagine prompts retain their chat’s project when saved but do not apply text-chat custom instructions to image/video generation.
 
