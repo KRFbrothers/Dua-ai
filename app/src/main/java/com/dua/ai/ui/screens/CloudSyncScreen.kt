@@ -29,7 +29,7 @@ fun CloudSyncScreen(viewModel: ChatViewModel, onBack: () -> Unit, onProfile: () 
                     }, enabled = sync.phase != "checking" && !state.busy && !dataBusy && (sync.enabled || (state.configured && state.user != null && preview == null)),
                         modifier = Modifier.semantics { contentDescription = "Automatic cloud sync on this device" })
                 }
-                Text("When enabled, saved chats, drafts, memory and chat metadata sync while this app is open and online. Raw file/audio bytes stay in private Storage. Sync pauses during replies and manual reviews.", style = MaterialTheme.typography.bodyMedium)
+                Text("When enabled, projects, instructions, saved chats, drafts, memory and chat metadata sync while this app is open and online. Raw file/audio bytes stay in private Storage. Sync pauses during replies and manual reviews.", style = MaterialTheme.typography.bodyMedium)
                 Text(sync.message, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
                 if (sync.phase == "checking") {
                     TextButton(onClick = { viewModel.disableAutomaticSync() }) { Text("Cancel sync setup") }
@@ -47,7 +47,7 @@ fun CloudSyncScreen(viewModel: ChatViewModel, onBack: () -> Unit, onProfile: () 
                 }
             }
         }
-        Text("Download restores server chats at their original IDs, including the open chat. Different phone versions stay as unsynced copies, and phone-only chats stay cached. Server memory notes replace cached notes. Upload replaces the server snapshot after review. Includes saved drafts and chat metadata; no file/audio bytes.", style = MaterialTheme.typography.bodyMedium)
+        Text("Download restores server chats at their original IDs, including the open chat. Different phone versions stay as unsynced copies, and phone-only chats stay cached. Server memory and project instructions replace cached settings; phone-only projects are kept. Upload replaces the server snapshot after review. Includes drafts and chat metadata; no file/audio bytes.", style = MaterialTheme.typography.bodyMedium)
         listOf("upload" to "Review upload", "download" to "Review download", "delete" to "Clear cloud snapshot").forEach { (kind, title) ->
             FilledTonalButton(enabled = state.configured && state.user != null && !state.busy, onClick = { viewModel.reviewCloud(kind) }) { Text(title) }
         }
@@ -56,6 +56,7 @@ fun CloudSyncScreen(viewModel: ChatViewModel, onBack: () -> Unit, onProfile: () 
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text("Confirm ${reviewed.kind} · cloud revision ${reviewed.review.revision}")
                     if (reviewed.kind != "delete") {
+                        reviewed.review.snapshot.projects.forEach { project -> Text("Project: ${project.name}${if (project.archived) " (archived)" else ""}\nInstructions: ${project.instructions.ifBlank { "None" }}", style = MaterialTheme.typography.bodyMedium) }
                         reviewed.review.snapshot.chats.forEach { chat -> Text("${chat.title}: ${chat.messages.size} messages\nDraft: ${chat.draft}", style = MaterialTheme.typography.bodyMedium) }
                         Text("Memories:\n" + reviewed.review.snapshot.memory.joinToString("\n"), style = MaterialTheme.typography.bodyMedium)
                     } else Text("Cloud snapshot becomes empty. Local data stays saved.")

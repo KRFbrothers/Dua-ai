@@ -1,5 +1,6 @@
 import { STORED_PATH, validFileRef } from './file-types.mjs';
 import { REPOSITORY } from './github.mjs';
+import { validateProjects, validProjectId, defaultProjects } from './projects.mjs';
 
 const MEDIA_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'video/mp4'];
 const MODELS = ['Dua', 'Gemini', 'ChatGPT', 'Claude', 'Grok', 'Kimi'];
@@ -140,11 +141,14 @@ export function validateCloudSnapshot(data) {
   requireValid(object(data) && data.format === 'dua-cloud-snapshot' && data.version === 1 && Array.isArray(data.chats) && data.chats.length <= 100 &&
     Array.isArray(data.memory) && data.memory.length <= 10 && data.memory.every(note => text(note, 200, true)));
   const ids = new Set();
+  const projects = data.projects === undefined ? null : validateProjects(data.projects);
   const chats = data.chats.map(chat => {
     requireValid(object(chat) && text(chat.id, 200, true) && !ids.has(chat.id) && integer(chat.updatedAt) && MODELS.includes(chat.model) &&
       text(chat.draft, 8000) && Array.isArray(chat.messages) && chat.messages.length <= 500);
     ids.add(chat.id);
     const result = { id: chat.id, updatedAt: chat.updatedAt, model: chat.model, draft: chat.draft, messages: chat.messages.map(message) };
+    if (chat.projectId !== undefined) { requireValid(validProjectId(chat.projectId)); result.projectId = chat.projectId; }
+    requireValid((projects || defaultProjects()).some(p => p.id === (chat.projectId || 'personal')));
     const messageIds = result.messages.filter(item => item.id !== undefined).map(item => item.id);
     requireValid(new Set(messageIds).size === messageIds.length);
     optional(chat, 'buildRepository', v => typeof v === 'string' && REPOSITORY.test(v), result);
@@ -155,6 +159,7 @@ export function validateCloudSnapshot(data) {
     return result;
   });
   const value = { format: 'dua-cloud-snapshot', version: 1, chats, memory: data.memory.slice() };
+  if (projects) value.projects = projects;
   requireValid(Buffer.byteLength(JSON.stringify(value), 'utf8') <= 4 * 1024 * 1024);
   return value;
 }

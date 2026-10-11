@@ -153,7 +153,7 @@ fun ChatScreen(
             gesturesEnabled = drawerState.isOpen,
             drawerContent = {
                 HistoryDrawer(
-                    chats = state.savedChats,
+                    chats = state.savedChats.filter { it.projectId == state.projectId },
                     newChatEnabled = !state.typing,
                     onNewChat = { closeDrawerThen(actions.onNewChat) },
                     onOpenChat = { id -> closeDrawerThen { actions.onOpenChat(id) } },
@@ -171,6 +171,10 @@ fun ChatScreen(
                     onComputer = actions.onOpenComputer,
                     onNewChat = actions.onNewChat,
                 )
+                TextButton(onClick = { sheet = ChatSheet.Projects }, modifier = Modifier.align(Alignment.CenterHorizontally)) {
+                    val project = state.projects.find { it.id == state.projectId }
+                    Text("${project?.name ?: "Missing project"}${if (project?.archived == true) " (archived)" else ""} · Projects")
+                }
                 Box(Modifier.weight(1f).fillMaxWidth()) {
                     if (home) {
                         EmptyState()
@@ -229,6 +233,8 @@ fun ChatScreen(
 
     }
     when (sheet) {
+        ChatSheet.Projects -> ProjectsSheet(state.projects, state.projectId, state.projectNotice, !state.typing,
+            actions.onSelectProject, actions.onSaveProject, onDismiss = { sheet = null })
         ChatSheet.Model -> ModelPickerSheet(
             current = state.model, providers = state.providers,
             onSelect = actions.onSelectModel, onOpenSetup = { sheet = null; actions.onOpenSetup() },
@@ -286,7 +292,7 @@ fun ChatScreen(
         AlertDialog(
             onDismissRequest = { deletingId = null },
             title = { Text("Delete chat?") },
-            text = { Text("Delete this chat? Files uploaded or generated in this chat are deleted from your storage too.") },
+            text = { Text("Remove this chat from the phone cache? Review and upload in Cloud Sync to update server history. Stored files are kept.") },
             confirmButton = { TextButton(onClick = { actions.onDeleteChat(id); deletingId = null }) { Text("Delete") } },
             dismissButton = { TextButton(onClick = { deletingId = null }) { Text("Cancel") } },
         )

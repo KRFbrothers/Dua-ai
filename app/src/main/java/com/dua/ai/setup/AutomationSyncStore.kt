@@ -114,7 +114,8 @@ object AutomationSyncRecordCodec {
             .put("chats", JSONArray().apply {
                 value.chatMessageCounts.toSortedMap().forEach { (id, count) -> put(JSONObject()
                     .put("id", id).put("messageCount", count).put("signature", value.chatSignatures.getValue(id))) }
-            }).put("memoryDigests", JSONArray(value.memoryDigests.sorted())) }
+            }).put("memoryDigests", JSONArray(value.memoryDigests.sorted()))
+            .put("projectSignatures", JSONObject(value.projectSignatures)) }
         val raw = JSONObject().put("version", 1).put("backend", backend).put("enabled", record.enabled)
             .put("accountId", record.accountId ?: JSONObject.NULL).put("revision", record.revision ?: JSONObject.NULL)
             .put("baseline", baseline ?: JSONObject.NULL).put("reviewRequired", record.reviewRequired)
@@ -132,7 +133,7 @@ object AutomationSyncRecordCodec {
         require(integer(json, "version", 1) == 1L && text(json, "backend") == backend) { "Automatic sync backend or format changed. Review sync before enabling it." }
         val baseline = if (json.isNull("baseline")) null else {
             val data = json.getJSONObject("baseline")
-            requireKeys(data, setOf("chats", "memoryDigests"))
+            require(keys(data) == setOf("chats", "memoryDigests") || keys(data) == setOf("chats", "memoryDigests", "projectSignatures")) { "Invalid automatic sync baseline." }
             val chats = data.getJSONArray("chats")
             require(chats.length() <= 100) { "Invalid automatic sync chat baseline." }
             val counts = linkedMapOf<String, Int>(); val signatures = linkedMapOf<String, String>()
@@ -148,7 +149,9 @@ object AutomationSyncRecordCodec {
             require(notes.length() <= 10) { "Invalid automatic sync memory baseline." }
             val digests = (0 until notes.length()).map { notes.get(it) as? String ?: error("Invalid automatic sync digest.") }
             require(digests.toSet().size == digests.size) { "Duplicate automatic sync memory digest." }
-            AutomationBaseline(counts, signatures, digests.toSet())
+            val projects = data.optJSONObject("projectSignatures")?.let { p -> p.keys().asSequence().associateWith { text(p, it) } } ?: emptyMap()
+            require(!data.has("projectSignatures") || data.get("projectSignatures") is JSONObject)
+            AutomationBaseline(counts, signatures, digests.toSet(), projects)
         }
         return AutomationSyncRecord(boolean(json, "enabled"), if (json.isNull("accountId")) null else text(json, "accountId"),
             if (json.isNull("revision")) null else integer(json, "revision", 2147483647), baseline,

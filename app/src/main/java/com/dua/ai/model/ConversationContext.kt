@@ -19,7 +19,7 @@ data class ChatSummary(val text: String, val throughId: String) {
 }
 
 /** What a long-context request sends: the chat id (prompt-cache routing on the server) and the cached summary. */
-data class ConversationContext(val id: String, val summary: String?) {
+data class ConversationContext(val id: String, val summary: String?, val projectId: String? = null) {
     init { require(id.matches(Regex("[A-Za-z0-9-]{8,100}"))) { "Invalid conversation id." } }
     fun toJson(): JSONObject = JSONObject().put("id", id).apply { summary?.takeIf { it.isNotBlank() }?.let { put("summary", it.take(ChatSummary.MAX_CHARS)) } }
 }

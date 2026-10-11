@@ -91,7 +91,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val _liveUsage = MutableStateFlow<com.dua.ai.voice.live.LiveUsage?>(null)
     val liveUsage = _liveUsage.asStateFlow()
     /** Live voice is offered by this backend and the owner is signed in. */
-    fun liveVoiceAvailable(): Boolean = _integrations.value.voice?.live?.enabled == true && account.state.value.user != null
+    fun liveVoiceAvailable(): Boolean = _integrations.value.voice?.live?.enabled == true && account.state.value.user != null &&
+        _projectId.value == com.dua.ai.projects.ProjectCodec.PERSONAL && localSettings.value.projects.find { it.id == _projectId.value }?.let { !it.archived && it.instructions.isBlank() } == true
     fun liveOptions(): com.dua.ai.voice.live.LiveOptions? = _integrations.value.voice?.live?.takeIf { it.enabled }?.let { config ->
         val settings = localSettings.value
         com.dua.ai.voice.live.LiveVoiceCodec.options(config, settings.liveVoice, settings.replyLanguage, settings.voiceSpeed)
@@ -106,6 +107,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         if (_liveStart.value.busy || com.dua.ai.voice.live.LiveVoiceController.active) return
         val options = liveOptions()
         val reason = when {
+            projectUnavailable() != null -> projectUnavailable()
+            _projectId.value != com.dua.ai.projects.ProjectCodec.PERSONAL || localSettings.value.projects.find { it.id == _projectId.value }?.instructions?.isNotBlank() == true -> "Use Voice mode for this project so its instructions apply. Live voice is available in Personal without custom instructions."
             options == null -> _integrations.value.voice?.live?.reason?.ifBlank { null } ?: "Live voice needs the latest Dua backend. Voice mode works now."
             account.state.value.user == null -> "Sign in from Profile to use live voice."
             !_online.value -> "You're offline. Connect to the internet to start live voice."
@@ -117,7 +120,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         val chatId = activeId
         viewModelScope.launch {
             try {
-                val body = com.dua.ai.voice.live.LiveVoiceCodec.sessionRequest(options!!, com.dua.ai.settings.PreferencesCodec.memoryText(localSettings.value), _messages.value)
+                val body = com.dua.ai.voice.live.LiveVoiceCodec.sessionRequest(options!!, projectMemory(), _messages.value)
                 val grant = com.dua.ai.voice.live.LiveVoiceCodec.grant(account.request("/api/voice/session", "POST", body, authenticated = true))
                 _liveUsage.value = grant.usage
                 _liveStart.value = LiveStartState()
@@ -155,12 +158,18 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val _memoryCandidates = MutableStateFlow<List<String>>(emptyList())
     val memoryCandidates = _memoryCandidates.asStateFlow()
     fun proposeMemoryNotes() {
+        if (_projectId.value != com.dua.ai.projects.ProjectCodec.PERSONAL) {
+            _memoryCandidates.value = emptyList()
+            integrationNotice("Personal memory suggestions are available in Personal chats. Use this project's instructions for its context.")
+            return
+        }
         val existing = localSettings.value.memory
         _memoryCandidates.value = _messages.value.filter { it.isUser && it.state == "complete" }.takeLast(20)
             .flatMap { com.dua.ai.setup.AutomationMemoryCandidates.propose(it.text, existing) }.distinct().take(4)
         integrationNotice(if (_memoryCandidates.value.isEmpty()) "No explicit memory requests found. Try saying ‘remember that I prefer Hindi’." else "Review each proposed note before saving. Nothing has been sent or saved automatically.")
     }
     fun acceptMemoryNote(note: String) {
+        if (_projectId.value != com.dua.ai.projects.ProjectCodec.PERSONAL) return
         if (note !in _memoryCandidates.value) return
         try {
             val settings = localSettings.value
@@ -194,7 +203,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         val current = _integrations.value
         // /api/setup has no per-feature config; keep what /api/config reported.
         _integrations.value = next.copy(busy = true, notice = "Setup status refreshed.",
-            webSearchConfigured = current.webSearchConfigured, pageReadingAvailable = current.pageReadingAvailable,
+            webSearchConfigured = current.webSearchConfigured, pageReadingAvailable = current.pageReadingAvailable, projectsEnabled = current.projectsEnabled,
             filesEnabled = current.filesEnabled, filesMaxBytes = current.filesMaxBytes, nativeSearch = current.nativeSearch,
             xSearchAvailable = current.xSearchAvailable, longContext = current.longContext, imagine = current.imagine, codeExecution = current.codeExecution, build = current.build,
             voice = current.voice, generatedVoiceConfigured = current.voice?.ttsEnabled ?: next.generatedVoiceConfigured)
@@ -257,7 +266,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     fun reviewCloud(kind: String) = accountAction {
         val remote = account.cloud()
         draftSaver.runNow()
-        val snapshot = if (kind == "upload") com.dua.ai.account.CloudSnapshot(_savedChats.value.toList(), localSettings.value.memory.toList()) else remote.snapshot
+        val snapshot = if (kind == "upload") com.dua.ai.account.CloudSnapshot(_savedChats.value.toList(), localSettings.value.memory.toList(), localSettings.value.projects.toList()) else remote.snapshot
         com.dua.ai.account.CloudSnapshotCodec.encode(snapshot)
         _cloudPreview.value = CloudPreview(kind, account.state.value.user?.id ?: error("Sign in again."), remote.copy(snapshot = snapshot))
     }
@@ -278,10 +287,10 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     /** Prepare off Main, then commit without suspension after checking that the cache is still current. */
     private suspend fun downloadCloudSnapshot(remote: com.dua.ai.account.CloudSnapshot) {
-        check(!_isTyping.value && _buildPr.value.values.none { it.creating }) { "Wait for the reply or pull request to finish before downloading." }
+        check(!_isTyping.value && !liveProjectBusy() && _buildPr.value.values.none { it.creating }) { "Wait for the reply, live voice or pull request to finish before downloading." }
         flushHistory()
         val oldSettings = localSettings.value
-        val local = com.dua.ai.account.CloudSnapshot(_savedChats.value.toList(), oldSettings.memory.toList())
+        val local = com.dua.ai.account.CloudSnapshot(_savedChats.value.toList(), oldSettings.memory.toList(), oldSettings.projects.toList())
         val selectedId = activeId
         val (result, encoded) = withContext(Dispatchers.Default) {
             val merged = com.dua.ai.account.CloudSnapshotCodec.mergeDownload(local, remote)
@@ -293,7 +302,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
         val chats = result.snapshot.chats
         val previous = preferences.getString("history", null)
-        localPreferences.update(oldSettings.copy(memory = result.snapshot.memory))
+        localPreferences.update(oldSettings.copy(memory = result.snapshot.memory, projects = result.snapshot.projects))
         try {
             val committed = historyWriter.writeDirectly {
                 preferences.edit().putString("history", encoded).commit().also { ok ->
@@ -303,7 +312,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             check(committed) { "Cloud chats could not be saved. Retry." }
         } catch (failure: Exception) {
             try { localPreferences.update(oldSettings) } catch (_: Exception) {
-                throw IllegalStateException("Download interrupted and memory rollback failed. Inspect cached memories before retrying.", failure)
+                throw IllegalStateException("Download interrupted and settings rollback failed. Inspect cached memories and projects before retrying.", failure)
             }
             throw failure
         }
@@ -315,10 +324,11 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             _draft.value = chat.draft
             _summary.value = chat.summary
             _buildRepo.value = chat.buildRepository
+            _projectId.value = chat.projectId
             _webMode.value = null
             _xSearch.value = false
         }
-        account.notice("${result.added} server chats added; ${result.conflicts} phone versions kept as unsynced copies. Server memories restored.")
+        account.notice("${result.added} server chats added; ${result.conflicts} phone versions kept as unsynced copies. Server memories and project settings restored.")
     }
     private val api = DuaApiClient()
 
@@ -576,10 +586,11 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     /** Long-context servers get every turn after the cached summary; older servers the last 39 turns as before. */
     private fun requestTurns(history: List<ChatMessage>, legacy: List<ChatMessage>, inlineFiles: Boolean): RequestTurns {
-        if (!_integrations.value.longContext) return RequestTurns(legacy, null, historyBytes())
+        if (!_integrations.value.longContext) return RequestTurns(legacy,
+            if (_integrations.value.projectsEnabled) com.dua.ai.model.ConversationContext(activeId, null, _projectId.value) else null, historyBytes())
         val budget = if (inlineFiles) DuaApiClient.LONG_HISTORY_BYTES_WITH_FILES else DuaApiClient.LONG_HISTORY_BYTES
         val selection = com.dua.ai.model.ContextWindow.select(history, _summary.value, budget, DuaApiClient::turnJsonBytes)
-        return RequestTurns(selection.turns, com.dua.ai.model.ConversationContext(activeId, selection.summary?.text), budget + 1024)
+        return RequestTurns(selection.turns, com.dua.ai.model.ConversationContext(activeId, selection.summary?.text, _projectId.value.takeIf { _integrations.value.projectsEnabled }), budget + 1024)
     }
 
     private fun applySummary(chatId: String, sent: List<ChatMessage>, event: com.dua.ai.network.ReplyEvent.Context) {
@@ -910,6 +921,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     fun dataControlNotice(text: String) { _dataStatus.value = text }
 
     private val _importPreview = MutableStateFlow<List<SavedChat>?>(null)
+    private var importProjects = com.dua.ai.projects.ProjectCodec.defaults
     val importPreview: StateFlow<List<SavedChat>?> = _importPreview.asStateFlow()
     fun cancelImport() { if (!_dataBusy.value) { _importPreview.value = null; _dataStatus.value = "Import cancelled. Your chats are unchanged." } }
 
@@ -920,13 +932,14 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         _dataStatus.value = "Checking export…"
         viewModelScope.launch {
             try {
-                val records = withContext(Dispatchers.IO) {
+                val backup = withContext(Dispatchers.IO) {
                     val input = getApplication<Application>().contentResolver.openInputStream(uri)
                         ?: error("Selected file cannot be read.")
-                    input.use { ChatHistoryCodec.readImport(it) }
+                    input.use { ChatHistoryCodec.readBackup(it) }
                 }
-                if (records.isEmpty()) _dataStatus.value = "This export has no chats. Nothing was changed."
-                else { _importPreview.value = records; _dataStatus.value = "Export checked. Confirm to add chats." }
+                importProjects = backup.projects
+                if (backup.chats.isEmpty() && backup.projects == com.dua.ai.projects.ProjectCodec.defaults) _dataStatus.value = "This export has no chats. Nothing was changed."
+                else { _importPreview.value = backup.chats; _dataStatus.value = "Export checked. Confirm to add chats and their project settings." }
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (error: Exception) { _dataStatus.value = error.message ?: "Export could not be read. No chats were changed." }
             finally { _dataBusy.value = false }
@@ -935,6 +948,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     fun confirmImport() {
         if (_dataBusy.value) return
+        if (liveProjectBusy()) { _dataStatus.value = "End live voice before importing chats."; return }
         val imported = _importPreview.value ?: return
         if (_buildPr.value.values.any { it.creating }) { _dataStatus.value = "Wait for the pull request to finish before importing."; return }
         _dataBusy.value = true; refreshSyncBusy()
@@ -943,17 +957,23 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         flushHistory()
         // Use the latest local records at confirmation, keeping the active draft/selection.
         val original = _savedChats.value.toList()
+        val originalProjects = localSettings.value.projects.toList()
+        val importedProjects = importProjects.toList()
         val selectedId = activeId
         viewModelScope.launch {
+            var projectsWritten = false
             try {
-                val (merged, encoded) = withContext(Dispatchers.Default) {
-                    val chats = ChatHistoryCodec.importCopies(original, imported)
-                    chats to ChatHistoryCodec.encode(chats, selectedId)
+                val (merged, encoded, mergedProjects) = withContext(Dispatchers.Default) {
+                    val adjusted = com.dua.ai.projects.ProjectImports.prepare(originalProjects, com.dua.ai.history.ChatBackup(imported, importedProjects))
+                    val chats = ChatHistoryCodec.importCopies(original, adjusted.chats, projects = adjusted.projects)
+                    Triple(chats, ChatHistoryCodec.encode(chats, selectedId), adjusted.projects)
                 }
                 fun cacheUnchanged() = activeId == selectedId && _savedChats.value == original && !draftSaver.pending &&
-                    !_isTyping.value && _buildPr.value.values.none { it.creating }
+                    localSettings.value.projects == (if (projectsWritten) mergedProjects else originalProjects) && !_isTyping.value && _buildPr.value.values.none { it.creating }
                 val changed = "The phone cache changed while preparing the import. Review and retry. No chats were imported."
                 check(cacheUnchanged()) { changed }
+                localPreferences.update(localSettings.value.copy(projects = mergedProjects))
+                projectsWritten = true
                 val committed = withContext(Dispatchers.IO) { historyWriter.writeDirectly {
                     val previous = preferences.getString("history", null)
                     val success = preferences.edit().putString("history", encoded).commit()
@@ -969,12 +989,16 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 if (committed) {
                     _savedChats.value = merged
+                    projectsWritten = false
                     _importPreview.value = null
                     _dataStatus.value = "${imported.size} chats imported into the phone cache. Sign in and sync to make them server-backed. Existing chats and drafts were kept."
                 } else _dataStatus.value = "Import could not be saved. No chats were changed. Try again."
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (failure: Exception) { _dataStatus.value = failure.message ?: "Import could not be saved. No chats were changed. Try again." }
-            finally { _dataBusy.value = false }
+            finally {
+                if (projectsWritten) runCatching { localPreferences.update(localSettings.value.copy(projects = originalProjects)) }
+                _dataBusy.value = false
+            }
         }
     }
 
@@ -982,12 +1006,13 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         if (_dataBusy.value) return
         draftSaver.runNow()
         val records = _savedChats.value.toList()
+        val projects = localSettings.value.projects.toList()
         _dataBusy.value = true; refreshSyncBusy()
         _dataStatus.value = "Creating export…"
         viewModelScope.launch {
             try {
                 withContext(Dispatchers.IO) {
-                    val encoded = ChatHistoryCodec.exportBackup(records).toByteArray(Charsets.UTF_8)
+                    val encoded = ChatHistoryCodec.exportBackup(records, projects = projects).toByteArray(Charsets.UTF_8)
                     val output = getApplication<Application>().contentResolver.openOutputStream(uri, "wt")
                         ?: error("Selected file cannot be written.")
                     output.use { it.write(encoded) }
@@ -1048,6 +1073,47 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val _draft = MutableStateFlow("")
     val draft: StateFlow<String> = _draft.asStateFlow()
     private var historyReadable = true
+    private val _projectId = MutableStateFlow(com.dua.ai.projects.ProjectCodec.PERSONAL)
+    val projectId = _projectId.asStateFlow()
+    private val _projectNotice = MutableStateFlow("")
+    val projectNotice = _projectNotice.asStateFlow()
+    private fun projectMemory(): String = if (_projectId.value == com.dua.ai.projects.ProjectCodec.PERSONAL)
+        com.dua.ai.settings.PreferencesCodec.memoryText(localSettings.value) else ""
+
+    fun selectProject(id: String) {
+        if (syncBlocked() || _readingFiles.value || _uploads.value.isNotEmpty() || _attachments.value.isNotEmpty() || _recordingSince.value != null) {
+            _projectNotice.value = "Finish the current action and send or remove pending attachments before switching projects."; return
+        }
+        if (localSettings.value.projects.none { it.id == id && !it.archived }) return
+        if (id == _projectId.value) return
+        startNewChat()
+        _projectId.value = id
+        _projectNotice.value = ""
+    }
+
+    fun saveProject(id: String?, name: String, instructions: String, archived: Boolean): Boolean {
+        if (syncBlocked()) { _projectNotice.value = "Finish the current action before editing projects."; return false }
+        return try {
+            val settings = localSettings.value
+            val project = com.dua.ai.projects.ChatProject(id ?: UUID.randomUUID().toString(), name.trim(), instructions, archived)
+            check(id == null || settings.projects.any { it.id == id }) { "Project changed. Reopen the editor." }
+            val next = if (id == null) settings.projects + project else settings.projects.map { if (it.id == id) project else it }
+            com.dua.ai.projects.ProjectCodec.validate(next)
+            com.dua.ai.account.CloudSnapshotCodec.encode(CloudSnapshot(_savedChats.value, settings.memory, next))
+            localPreferences.update(settings.copy(projects = next))
+            _projectNotice.value = "Saved to the cache. Sync to apply these project settings on the server."
+            true
+        } catch (failure: Exception) { _projectNotice.value = failure.message ?: "Project could not be saved."; false }
+    }
+
+    private fun projectUnavailable(): String? {
+        val project = localSettings.value.projects.find { it.id == _projectId.value }
+            ?: return "This project's settings are missing. Restore them from the server before chatting."
+        if (project.archived) return "This project is archived. Restore it in Projects before chatting."
+        if (!_integrations.value.projectsEnabled && (project.id != "personal" || project.instructions.isNotBlank())) return "Deploy the Projects backend and refresh setup before chatting in this project."
+        return null
+    }
+
     private val automaticSync = AutomaticCloudSync(
         viewModelScope,
         object : AutomaticCloudSync.AccountPort {
@@ -1070,7 +1136,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 localPreferences.requireReadable()
                 // Include keystrokes still waiting for the draft debounce in the merge/baseline.
                 flushHistory()
-                return CloudSnapshot(_savedChats.value.toList(), localSettings.value.memory.toList())
+                return CloudSnapshot(_savedChats.value.toList(), localSettings.value.memory.toList(), localSettings.value.projects.toList())
             }
             // Read, merge and commit run without suspension on Main. Rebind the open chat only
             // after persistence; otherwise its next draft save would write the stale cache back.
@@ -1084,7 +1150,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 // The server snapshot is authoritative, including long-context summaries.
                 val chats = snapshot.chats
                 val encoded = ChatHistoryCodec.encode(chats, activeId)
-                localPreferences.update(settings.copy(memory = snapshot.memory))
+                localPreferences.update(settings.copy(memory = snapshot.memory, projects = snapshot.projects))
                 try {
                     // Kept synchronous: the sync controller expects the commit to finish before it records the revision.
                     val saved = historyWriter.writeDirectly {
@@ -1098,6 +1164,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                         _draft.value = chat.draft
                         _summary.value = chat.summary
                         _buildRepo.value = chat.buildRepository
+                        _projectId.value = chat.projectId
                     }
                 } catch (failure: Exception) {
                     try { localPreferences.update(settings) }
@@ -1114,7 +1181,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     fun resetAutomaticSync() = automaticSync.reset()
     fun retryAutomaticSync() { refreshSyncBusy(); automaticSync.retry() }
     fun resumeAutomaticSyncAfterReview() { refreshSyncBusy(); automaticSync.resumeAfterReview() }
-    private fun syncBlocked() = account.state.value.busy || _dataBusy.value || _isTyping.value ||
+    private fun liveProjectBusy() = _liveStart.value.busy || com.dua.ai.voice.live.LiveVoiceController.active
+    private fun syncBlocked() = account.state.value.busy || _dataBusy.value || _isTyping.value || liveProjectBusy() ||
         _cloudPreview.value != null || _importPreview.value != null || _buildPr.value.values.any { it.creating }
     private fun refreshSyncBusy() = automaticSync.setBusy(syncBlocked())
     private val connectivity = application.getSystemService(android.net.ConnectivityManager::class.java)
@@ -1147,6 +1215,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     _draft.value = it.draft
                     _summary.value = it.summary
                     _buildRepo.value = it.buildRepository
+                    _projectId.value = it.projectId
                 }
             } catch (_: Exception) {
                 historyReadable = false
@@ -1166,7 +1235,11 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             _buildPr.map { states -> states.values.any { it.creating } }.distinctUntilChanged().collect { refreshSyncBusy() }
         }
         viewModelScope.launch {
-            combine(_savedChats, localSettings) { chats, settings -> CloudSnapshot(chats, settings.memory) }
+            combine(_liveStart, com.dua.ai.voice.live.LiveVoiceController.state) { starting, live -> starting.busy || live.active }
+                .distinctUntilChanged().collect { refreshSyncBusy() }
+        }
+        viewModelScope.launch {
+            combine(_savedChats, localSettings) { chats, settings -> CloudSnapshot(chats, settings.memory, settings.projects) }
                 .distinctUntilChanged().collect { automaticSync.localChanged() }
         }
         automaticSync.restore()
@@ -1188,7 +1261,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         _savedChats.value = if (_messages.value.isEmpty() && _draft.value.isBlank()) others else
             listOf(com.dua.ai.history.ChatSavePolicy.preserveUnchangedTime(previous,
                 SavedChat(activeId, _selectedModel.value, _draft.value, _messages.value, System.currentTimeMillis(),
-                    com.dua.ai.model.ContextWindow.validSummary(_messages.value, _summary.value), _buildRepo.value))) + others
+                    com.dua.ai.model.ContextWindow.validSummary(_messages.value, _summary.value), _buildRepo.value, _projectId.value))) + others
         historyWriter.save(_savedChats.value, activeId)
     }
 
@@ -1217,6 +1290,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         _webMode.value = null
         _xSearch.value = false
         _buildRepo.value = chat.buildRepository
+        _projectId.value = chat.projectId
         saveHistory()
     }
 
@@ -1295,10 +1369,13 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         _webMode.value = null
         _xSearch.value = false
         _buildRepo.value = null
+        if (localSettings.value.projects.none { it.id == _projectId.value && !it.archived })
+            _projectId.value = localSettings.value.projects.first { !it.archived }.id
         saveHistory()
     }
 
     fun retryResponse(messageId: String) {
+        projectUnavailable()?.let { _error.value = it; return }
         if (_isTyping.value || _readingFiles.value || _dataBusy.value) return
         val original = _messages.value.lastOrNull() ?: return
         if (original.id != messageId || original.isUser || original.state !in listOf("complete", "stopped") || original.isImagine) return
@@ -1325,7 +1402,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 account.withToken { token ->
                     val attempt = com.dua.ai.network.StreamAccumulator(startedAt).also { accumulator = it }
-                    collectReply(messageId, attempt, api.streamReply(plan.model, request.turns, emptyList(), com.dua.ai.settings.PreferencesCodec.memoryText(localSettings.value), token, requestWebMode.takeIf { requestBuild == null }, requestReasoning && requestBuild == null,
+                    collectReply(messageId, attempt, api.streamReply(plan.model, request.turns, emptyList(), projectMemory(), token, requestWebMode.takeIf { requestBuild == null }, requestReasoning && requestBuild == null,
                         request.historyBytes, request.context, requestXSearch && requestBuild == null, requestCode && requestBuild == null, requestBuild), request)
                 }
                 if (accumulator?.snapshot()?.text.isNullOrBlank()) throw DuaApiException(EMPTY_REPLY)
@@ -1354,6 +1431,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun sendMessage(userText: String) {
+        projectUnavailable()?.let { _error.value = it; return }
         if (_imagine.value) { sendImagine(userText); return }
         val storedFiles = _uploads.value.filter { it.state == PendingUpload.DONE }.mapNotNull { it.ref }
         if ((userText.isBlank() && _attachments.value.isEmpty() && storedFiles.isEmpty()) || _isTyping.value || _readingFiles.value) return
@@ -1415,7 +1493,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 account.withToken { token ->
                     val attempt = com.dua.ai.network.StreamAccumulator(startedAt).also { accumulator = it }
                     collectReply(reply.id, attempt, api.streamReply(responseModel, request.turns, prepared,
-                        com.dua.ai.settings.PreferencesCodec.memoryText(localSettings.value), token, requestWebMode.takeIf { requestBuild == null }, requestReasoning && requestBuild == null,
+                        projectMemory(), token, requestWebMode.takeIf { requestBuild == null }, requestReasoning && requestBuild == null,
                         request.historyBytes, request.context, requestXSearch && requestBuild == null, requestCode && requestBuild == null, requestBuild), request)
                 }
                 if (accumulator?.snapshot()?.text.isNullOrBlank()) throw DuaApiException(EMPTY_REPLY)

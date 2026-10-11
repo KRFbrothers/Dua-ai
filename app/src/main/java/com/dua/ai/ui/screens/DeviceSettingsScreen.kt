@@ -120,7 +120,7 @@ fun DeviceSettingsScreen(viewModel: ChatViewModel, page: String, onBack: () -> U
         }) { Text("Open app Settings") }
         Text(status, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
     }
-    if (resetting) AlertDialog(onDismissRequest = { resetting = false }, title = { Text("Reset settings and memories?") }, text = { Text("Appearance, notifications and memories reset. Chats stay saved.") }, confirmButton = { TextButton(onClick = { resetting = false; viewModel.resetSettings() }) { Text("Reset") } }, dismissButton = { TextButton(onClick = { resetting = false }) { Text("Cancel") } })
+    if (resetting) AlertDialog(onDismissRequest = { resetting = false }, title = { Text("Reset settings and memories?") }, text = { Text("Appearance, notifications and memories reset. Cached chats and readable project settings stay saved.") }, confirmButton = { TextButton(onClick = { resetting = false; viewModel.resetSettings() }) { Text("Reset") } }, dismissButton = { TextButton(onClick = { resetting = false }) { Text("Cancel") } })
     if (confirming) AlertDialog(onDismissRequest = { confirming = false }, title = { Text("Delete all memories?") }, text = { Text("Remove every cached memory on this device. With sync on, the deleted notes are removed from the server on the next sync. Chats remain unchanged.") }, confirmButton = { TextButton(onClick = { confirming = false; viewModel.updateSettings(settings.copy(memory = emptyList())) }) { Text("Delete") } }, dismissButton = { TextButton(onClick = { confirming = false }) { Text("Cancel") } })
 }
 

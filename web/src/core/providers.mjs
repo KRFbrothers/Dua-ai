@@ -16,6 +16,7 @@ import { codeExecutionConfiguration, codeExecutionProviders } from './code-execu
 import { buildConfiguration, BuildError, prepareRepository, runBuildLoop, validRepository } from './build-chat.mjs';
 import { GitHubError } from './github.mjs';
 import { resolveOwner, StorageError } from './storage.mjs';
+import { resolveProjectContext, validProjectId } from './projects.mjs';
 
 const fileTypes = ['text/plain', 'image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
 // `allowed` is what the provider API accepts; non-Gemini vision/document types still need <PREFIX>_ATTACHMENT_TYPES opt-in.
@@ -67,7 +68,7 @@ export const MAX_HISTORY_BYTES = 2.5 * 1024 * 1024;
 export const MAX_MESSAGES = 400;
 export const MAX_FILES_PER_MESSAGE = 10;
 const MAX_FILE_REFS = 400;
-const CHAT_KEYS = ['model', 'messages', 'attachments', 'memory', 'web', 'stream', 'mode', 'context', 'xSearch', 'code', 'repository'];
+const CHAT_KEYS = ['model', 'messages', 'attachments', 'memory', 'web', 'stream', 'mode', 'context', 'xSearch', 'code', 'repository', 'projectId'];
 export function validateChat(data) {
   if (!data || typeof data !== 'object' || Array.isArray(data) || Object.keys(data).some(key => !CHAT_KEYS.includes(key))) return ['Invalid request.', 400];
   if (!definitions.some(provider => provider.name === data.model)) return ['Select a supported AI model.', 400];
@@ -87,6 +88,7 @@ export function validateChat(data) {
   if (data.mode !== 'build' && data.repository !== undefined) return ['A repository is only used in Build mode.', 400];
   if (data.mode === 'build' && !['Dua', 'Gemini'].includes(data.model)) return ['Build mode works with Dua or Gemini. Select one of them.', 400];
   if (!validContext(data.context)) return ['Invalid conversation context.', 400];
+  if (data.projectId !== undefined && (!validProjectId(data.projectId) || !data.context?.id)) return ['Invalid project context.', 400];
   if (data.xSearch !== undefined && typeof data.xSearch !== 'boolean') return ['Invalid X search option.', 400];
   if (data.xSearch === true && data.model !== 'Grok') return ['X search works with Grok only. Select Grok or turn X off.', 400];
   if (data.code !== undefined && typeof data.code !== 'boolean') return ['Invalid Run code option.', 400];
@@ -204,7 +206,7 @@ export async function handleChat(request, { env = process.env, fetcher = fetch, 
     const web = { ...chatWebConfiguration(env), nativeSearch: nativeSearchProviders(env, definitions).filter(name => configured.has(name)), xSearch: xSearchAvailable(env) && configured.has('Grok'), preferBrave: preferBrave(env) };
     const context = { summaries: true, budgets: Object.fromEntries(definitions.map(provider => [provider.name, contextBudget(provider.prefix, env)])) };
     return json({ geminiConfigured: providers[0].configured, model: providers[0].model, providers, web, streaming: true, files: filesConfiguration(env), context, imagine: publicImagineConfiguration(env), voice: voiceConfiguration(env),
-      code: codeExecutionConfiguration(env, definitions, configured), build: buildConfiguration(env, configured) });
+      code: codeExecutionConfiguration(env, definitions, configured), build: buildConfiguration(env, configured), projects: { enabled: Boolean(env.DUA_ALLOWED_EMAIL?.trim() && env.SUPABASE_URL && env.SUPABASE_ANON_KEY) } });
   }
   if (url.pathname !== '/api/chat' || request.method !== 'POST') return json({ error: 'Method not allowed.' }, 405);
   if (request.headers.get('origin') && request.headers.get('origin') !== url.origin) return json({ error: 'Request origin is not allowed.' }, 403);
@@ -213,6 +215,8 @@ export async function handleChat(request, { env = process.env, fetcher = fetch, 
   catch (error) { if (request.signal.aborted) return json({ error: 'Request stopped.' }, 504); return json({ error: error.status === 413 ? 'Message history is too large.' : 'Invalid request.' }, error.status === 413 ? 413 : 400); }
   const invalid = validateChat(data);
   if (invalid) return json({ error: invalid[0] }, invalid[1]);
+  try { await resolveProjectContext(request, data, { env, fetcher }); }
+  catch (error) { return json({ error: error.message || 'Project could not be loaded. Sync and retry.' }, error.status || 502); }
   const provider = definitions.find(item => item.name === data.model);
   if (data.mode === 'build') return handleBuildChat(request, data, provider, { env, fetcher, startedAt });
   let parts;

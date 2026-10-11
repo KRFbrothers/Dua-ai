@@ -70,15 +70,15 @@ fun DataControlsScreen(viewModel: ChatViewModel, onBack: () -> Unit) {
         }
         StoredFilesSection(signedIn = account.user != null, enabled = integrations.filesEnabled, usage = usage, busy = busy,
             onRefresh = viewModel::loadStorageUsage, onDeleteAll = { confirmFiles = true })
-        Text("Chat controls manage this phone's cache; the separate uploaded-files action manages private server storage. The server chat copy is restored on sync. Backups include messages, drafts, extracted attachment text, file references/transcripts, code results, Build metadata, summaries and Imagine state. Raw file/audio bytes and memory notes are not included. Stored files still need owner sign-in and must exist on the server. Import accepts Dua version 1 JSON up to 4 MiB, 100 chats, 500 messages per chat and 8000-character drafts; the combined cache must fit too. Existing chats stay intact; repeated imports create copies. Cache clearing keeps server chats, their stored files and previously exported files.",
+        Text("Chat controls manage this phone's cache; the separate uploaded-files action manages private server storage. The server chat copy is restored on sync. Backups include messages, drafts, project settings/instructions, extracted attachment text, file references/transcripts, code results, Build metadata, summaries and Imagine state. Raw file/audio bytes and global memory notes are not included. Stored files still need owner sign-in and must exist on the server. Import accepts Dua version 1 JSON up to 4 MiB, 100 chats, 500 messages per chat and 8000-character drafts; the combined cache must fit too. Existing chats and project instructions stay intact; differing imported instructions get a separate project. Cache clearing keeps server chats, their stored files, project settings and previously exported files.",
             style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
         if (status.isNotBlank()) Text(status, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
     }
     // Capture the preview once: the dialog content recomposes separately and must not re-read a cleared state.
-    importPreview?.let { preview -> AlertDialog(onDismissRequest = { viewModel.cancelImport() }, title = { Text("Import chats?") },
+    importPreview?.let { preview -> AlertDialog(onDismissRequest = { viewModel.cancelImport() }, title = { Text("Import chats and projects?") },
         text = { Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("Add ${preview.size} chats as separate copies? Existing chats and drafts will be kept. Importing the same file again creates additional copies.")
+            Text("Add ${preview.size} chats as separate copies, with their project settings? Existing chats, drafts and instructions will be kept. Differing project instructions are imported separately. Importing the same file again creates additional chat copies.")
             if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
             Text(status, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
         } },
