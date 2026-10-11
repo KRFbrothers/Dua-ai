@@ -17,7 +17,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
@@ -51,7 +50,7 @@ fun SidebarPanel(aura: Boolean, onAura: (Boolean) -> Unit, query: String, onQuer
                     Icon(if (aura) Icons.Outlined.AutoAwesome else SidebarCube, null,
                         tint = if (aura) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(24.dp))
                     Text(if (aura) "Aura" else "Dua AI", Modifier.padding(start = 12.dp).weight(1f),
-                        style = MaterialTheme.typography.titleLarge.copy(fontSize = 27.sp), fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 SearchField(query, onQuery, Modifier.padding(bottom = 8.dp))
                 val menu = if (aura) listOf(
@@ -80,9 +79,9 @@ fun SidebarPanel(aura: Boolean, onAura: (Boolean) -> Unit, query: String, onQuer
                 Row(Modifier.fillMaxWidth().heightIn(min = 64.dp).testTag("sidebar-footer"), verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.weight(1f)) {
                         Button(onClick = onNewChat, enabled = newChatEnabled, modifier = Modifier.widthIn(max = 200.dp).fillMaxWidth().heightIn(min = 52.dp), shape = DuaShape.chip,
-                            colors = ButtonDefaults.buttonColors(containerColor = DuaTheme.accent.color, contentColor = DuaTheme.accent.onColor)) {
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh, contentColor = MaterialTheme.colorScheme.onSurface)) {
                             Icon(Icons.Outlined.Add, null, Modifier.size(20.dp))
-                            Text("New chat", Modifier.padding(start = 8.dp), style = MaterialTheme.typography.labelLarge.copy(fontSize = 18.sp))
+                            Text("New chat", Modifier.padding(start = 8.dp), style = MaterialTheme.typography.labelLarge)
                         }
                     }
                     Spacer(Modifier.width(12.dp))
@@ -103,10 +102,10 @@ fun SidebarPanel(aura: Boolean, onAura: (Boolean) -> Unit, query: String, onQuer
 
 @Composable
 private fun SidebarMenuRow(item: SidebarItem, chevron: Boolean, modifier: Modifier, compact: Boolean) {
-    Row(modifier.heightIn(min = if (compact) 48.dp else 52.dp).clickable(role = Role.Button, onClick = item.action)
+    Row(modifier.heightIn(min = 48.dp).clickable(role = Role.Button, onClick = item.action)
         .padding(horizontal = if (compact) 4.dp else 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        Icon(item.icon, null, Modifier.size(24.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(item.title, Modifier.weight(1f).padding(start = if (compact) 8.dp else 20.dp), style = MaterialTheme.typography.bodyLarge.copy(fontSize = 18.sp, fontWeight = FontWeight.Medium), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Icon(item.icon, null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(item.title, Modifier.weight(1f).padding(start = if (compact) 8.dp else 16.dp), style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
         if (chevron && !compact) Icon(Icons.Outlined.ChevronRight, null, Modifier.size(20.dp))
     }
 }

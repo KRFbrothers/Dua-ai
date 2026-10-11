@@ -174,14 +174,13 @@ fun ChatScreen(
                     onMenu = { scope.launch { drawerState.open() } },
                     onComputer = actions.onOpenComputer,
                     onNewChat = actions.onNewChat,
+                    projectName = state.projects.find { it.id == state.projectId }?.let { it.name + if (it.archived) " (archived)" else "" } ?: "Missing project",
+                    onProjects = { sheet = ChatSheet.Projects },
                 )
-                TextButton(onClick = { sheet = ChatSheet.Projects }, modifier = Modifier.align(Alignment.CenterHorizontally)) {
-                    val project = state.projects.find { it.id == state.projectId }
-                    Text("${project?.name ?: "Missing project"}${if (project?.archived == true) " (archived)" else ""} · Projects")
-                }
                 Box(Modifier.weight(1f).fillMaxWidth()) {
                     if (home) {
-                        EmptyState()
+                        EmptyState(suggestions = if (state.draft.isBlank()) state.suggestions else emptyList(),
+                            onSuggestion = { prompt -> actions.onDraftChange(prompt); inputFocus.requestFocus() })
                     } else {
                         key(conversationKey) {
                             MessageList(state = state, actions = actions, listState = listState, imagineActions = mediaActions)

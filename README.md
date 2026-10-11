@@ -35,6 +35,8 @@ This serves only `/api/*` on `http://localhost:3000`. Run `npm test` for the bac
 
 ## Android and routine checks
 
+See [ANDROID_UI_GUIDE.md](ANDROID_UI_GUIDE.md) for the compact mobile UI, screen/MVVM map, debug-only sample-conversation preview, setup and implemented/pending features.
+
 Open the repository in Android Studio. The launcher is `com.dua.ai.MainActivity`; checked-in Gradle configuration uses JDK 17 and Android SDK 35. The default API URL is `https://dua-cyan.vercel.app`.
 
 Run source compilation and JVM tests without packaging an APK:

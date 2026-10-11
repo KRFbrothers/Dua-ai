@@ -27,7 +27,6 @@ import androidx.compose.material3.rememberTooltipState
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
-import androidx.compose.ui.layout.Measurable
 import androidx.compose.ui.layout.SubcomposeLayout
 import com.dua.ai.ui.theme.rememberMotionAllowed
 import androidx.compose.foundation.background
@@ -95,6 +94,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
@@ -130,7 +130,7 @@ fun Composer(
     val colors = DuaTheme.colors
     val scheme = MaterialTheme.colorScheme
     val idle = !state.typing && !state.readingFiles
-    val inputStyle = MaterialTheme.typography.bodyLarge.copy(fontSize = 17.sp, lineHeight = 24.sp)
+    val inputStyle = MaterialTheme.typography.bodyLarge
     Surface(shape = DuaShape.composer, color = colors.composer, border = BorderStroke(1.dp, colors.composerBorder),
         modifier = modifier.fillMaxWidth().padding(start = Spacing.lg, end = Spacing.lg, bottom = Spacing.sm)) {
         Column(Modifier.padding(top = Spacing.xs, start = Spacing.xs, end = Spacing.xs, bottom = Spacing.xs)) {
@@ -164,7 +164,7 @@ fun Composer(
                 modifier = Modifier.padding(start = Spacing.sm, end = Spacing.sm, bottom = Spacing.xs))
             Row(Modifier.fillMaxWidth().padding(start = Spacing.xxs, end = Spacing.xs), verticalAlignment = Alignment.CenterVertically) {
                 RoundComposerButton(Icons.Outlined.Add, "Add photos and files", enabled = idle, onClick = onAttach, contentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = if (idle) 1f else .38f))
-                ModelPill(model = state.model, enabled = idle, onClick = onModel)
+                ModelPill(model = state.model, enabled = idle, onClick = onModel, modifier = Modifier.weight(1f, fill = false))
                 Spacer(Modifier.weight(1f))
                 // Empty field: voice mode. Once there is something to send (or a reply to stop) it becomes Send/Stop.
                 if (state.typing || state.canSend || state.draft.isNotBlank()) SendButton(typing = state.typing, canSend = state.canSend, onSend = onSend, onStop = onStop)
@@ -291,14 +291,18 @@ private fun AdaptiveChipRow(specs: List<ModeChipSpec>, fill: Boolean, enabled: B
         SubcomposeLayout(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = pad)) { constraints ->
             val gapPx = Spacing.sm.roundToPx()
             val gaps = gapPx * (specs.size - 1).coerceAtLeast(0)
-            val fits = listOf(ChipFit.Full, ChipFit.Tight)
-            var measurables: List<Measurable> = emptyList()
+            val fits = listOf(ChipFit.Full, ChipFit.Tight, ChipFit.Icon)
             var widths: List<Int> = emptyList()
+            var chosen = fits.last()
             for (fit in fits) {
-                measurables = subcompose(fit) { specs.forEach { spec -> key(spec.key) { ModeChip(spec, fit, enabled, height = if (fill) Sizes.modeChipHeight else Sizes.composerButton) } } }
-                widths = measurables.map { it.maxIntrinsicWidth(Constraints.Infinity) }
-                if (widths.sum() + gaps <= available) break
+                // Intrinsic probes have no semantics. Only placed chips expose actions to TalkBack/tests.
+                val probes = subcompose("measure-$fit") { specs.forEach { spec -> key(spec.key) {
+                    Box(Modifier.clearAndSetSemantics {}) { ModeChip(spec, fit, enabled, height = if (fill) Sizes.modeChipHeight else Sizes.composerButton) }
+                } } }
+                widths = probes.map { it.maxIntrinsicWidth(Constraints.Infinity) }
+                if (widths.sum() + gaps <= available) { chosen = fit; break }
             }
+            val measurables = subcompose("visible-chips") { specs.forEach { spec -> key(spec.key) { ModeChip(spec, chosen, enabled, height = if (fill) Sizes.modeChipHeight else Sizes.composerButton) } } }
             val natural = widths.sum() + gaps
             val extra = if (fill && measurables.isNotEmpty() && natural < available) (available - natural) / measurables.size else 0
             val placeables = measurables.mapIndexed { index, measurable ->
@@ -364,7 +368,7 @@ private fun ModeChip(label: String, icon: ImageVector, isSelected: Boolean, enab
         modifier = Modifier.semantics { contentDescription = description; selected = isSelected; role = Role.Button },
     ) {
         val horizontal = when { compact -> Spacing.md; fit == ChipFit.Full -> Spacing.md; fit == ChipFit.Tight -> Spacing.sm + Spacing.xxs; else -> Spacing.md }
-        Row(Modifier.heightIn(min = if (compact) 32.dp else height).padding(horizontal = horizontal),
+        Row(Modifier.heightIn(min = if (compact) 32.dp else maxOf(height, Sizes.touchTarget)).padding(horizontal = horizontal),
             horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
             Icon(icon, contentDescription = null, tint = if (isSelected) colors.chipSelectedIcon else content,
                 modifier = Modifier.size(if (compact) Sizes.iconTiny else Sizes.iconSmall))
@@ -412,18 +416,17 @@ internal const val AUTO_MODEL = "Dua"
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ModelPill(model: String, enabled: Boolean, onClick: () -> Unit) {
+private fun ModelPill(model: String, enabled: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val scheme = MaterialTheme.colorScheme
     val label = modelPillLabel(model)
     val hint = if (model == AUTO_MODEL) "Model: Auto (Dua). Tap to choose a model" else "Model: $model. Tap to choose a model"
     TooltipBox(positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(), tooltip = { PlainTooltip { Text(hint) } },
-        state = rememberTooltipState()) {
-        Surface(onClick = onClick, enabled = enabled, shape = DuaShape.chip, color = scheme.surfaceContainerHighest, contentColor = scheme.onSurface,
+        state = rememberTooltipState(), modifier = modifier) {
+        Surface(onClick = onClick, enabled = enabled, shape = DuaShape.chip, color = Color.Transparent, contentColor = scheme.onSurface,
             modifier = Modifier.padding(start = Spacing.xs).semantics { contentDescription = hint; role = Role.Button }) {
             Row(Modifier.height(Sizes.composerButton).padding(start = Spacing.md, end = Spacing.sm), verticalAlignment = Alignment.CenterVertically) {
-                Icon(DuaIcons.Sparkle, contentDescription = null, modifier = Modifier.size(Sizes.iconSmall))
-                Text(label, maxLines = 1, color = scheme.onSurface, style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-                    modifier = Modifier.padding(start = Spacing.sm).widthIn(max = 120.dp), overflow = TextOverflow.Ellipsis)
+                Text(label, maxLines = 1, color = scheme.onSurface, style = MaterialTheme.typography.labelLarge,
+                    modifier = Modifier.weight(1f, fill = false).widthIn(max = 120.dp), overflow = TextOverflow.Ellipsis)
                 Icon(Icons.Outlined.ExpandMore, contentDescription = null, tint = scheme.onSurface.copy(alpha = .86f),
                     modifier = Modifier.padding(start = Spacing.xxs).size(Sizes.iconSmall))
             }

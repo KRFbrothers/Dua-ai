@@ -1,5 +1,7 @@
 package com.dua.ai.ui
 
+import androidx.compose.foundation.background
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
@@ -43,7 +45,8 @@ class ApprovedNavigationUiTest(private val dark: Boolean, private val small: Boo
             CompositionLocalProvider(LocalDensity provides Density(density.density, if (small) 2f else 1f)) {
                 DuaTheme(preferences) {
                     assertEquals(androidx.compose.material3.MaterialTheme.colorScheme.onSurface, androidx.compose.material3.LocalContentColor.current)
-                    Box(Modifier.requiredSize(if (small) 320.dp else 360.dp, if (small) 568.dp else 752.dp)) { block() }
+                    Box(Modifier.requiredSize(if (small) 320.dp else 360.dp, if (small) 568.dp else 752.dp)
+                        .background(androidx.compose.material3.MaterialTheme.colorScheme.background)) { block() }
                 }
             }
         }
