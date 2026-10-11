@@ -124,7 +124,7 @@ API keys are stored server-side (Vercel Functions or Supabase) and are never exp
 - **Source icons:** to show a site icon on a source chip, the app requests `https://<site>/favicon.ico` directly from that site (no cookies). The site learns your IP address and that its icon was requested.
 
 #### Long conversations
-- When a chat outgrows the selected model's budget, the server asks the same provider to summarise the older turns. The summary is stored with the chat in the server snapshot and phone cache; exports remain user-initiated and sent with later messages in that chat. Deleting the chat deletes it.
+- When a chat outgrows the selected model's budget, the server asks the same provider to summarise the older turns. The summary is stored with the chat in the server snapshot and phone cache; exports remain user-initiated and sent with later messages in that chat. Removing a cached chat removes its cached summary; the server version remains until the server snapshot is changed or cleared.
 
 #### User Control
 - Both modes are optional and off by default.
@@ -171,8 +171,8 @@ API keys are stored server-side (Vercel Functions or Supabase) and are never exp
 | API Keys | Server-side only | Server-side only | Until removed or rotated by the deployment operator; never stored on device |
 | Search Queries | None | N/A (Brave) | Per Brave's current privacy policy and service terms |
 | Cloud Snapshots | N/A | Supabase | User-managed; deletion and backup retention depend on Supabase project behavior |
-| Generated images and videos (Imagine) | References and prompts in local chat history; cached copies in the app cache (Android may clear it) | Supabase Storage, private `dua-files` bucket; references (not bytes) in exports and cloud snapshots | Kept until the chat is deleted, **Delete all uploaded files**, or account deletion. Provider-side retention follows xAI and Google terms; videos too large to store stay only at xAI's temporary link |
-| Stored files (uploads) | File references and audio transcripts in the phone cache; raw bytes are not exported | Supabase Storage, private `dua-files` bucket; bounded references/transcripts in the server snapshot | Kept until the chat that sent them is deleted (deletion is retried later if offline or signed out), until **Delete all uploaded files**, or until account deletion. Provider copies follow provider terms (for example, the Gemini Files API keeps files for 48 h) |
+| Generated images and videos (Imagine) | References and prompts in local chat history; cached copies in the app cache (Android may clear it) | Supabase Storage, private `dua-files` bucket; references (not bytes) in exports and cloud snapshots | Cached chat deletion keeps stored files. Explicit **Delete all uploaded files** removes them; account deletion attempts cleanup. Unreferenced abandoned results may be cleaned up. Provider-side retention follows xAI and Google terms; videos too large to store stay only at xAI's temporary link |
+| Stored files (uploads) | File references and audio transcripts in the phone cache; raw bytes are not exported | Supabase Storage, private `dua-files` bucket; bounded references/transcripts in the server snapshot | Cached chat deletion keeps stored files. Explicit **Delete all uploaded files** removes them; account deletion attempts cleanup. Discarded unsent uploads are cleaned up, with retries if offline or signed out. Provider copies follow provider terms (for example, the Gemini Files API keeps files for 48 h) |
 
 ---
 
@@ -188,7 +188,7 @@ API keys are stored server-side (Vercel Functions or Supabase) and are never exp
 
 ### Deletion
 - **Local Data:** Users can use in-app data controls or clear app storage. Android backup may retain or restore app data according to device settings.
-- **Uploaded files:** Deleting a chat deletes the files uploaded in it. Settings → Data & privacy → Data controls shows storage used and has **Delete all uploaded files**. Clearing all chats deletes their files too. Clearing app storage without deleting chats first leaves files in the bucket; use Delete all uploaded files after signing in again.
+- **Uploaded files:** Removing individual cached chats, clearing cached history or clearing Android app storage keeps files needed by server chats. Settings → Data & privacy → Data controls shows storage used and has a separate reviewed **Delete all uploaded files** action, which permanently removes files even when server chats reference them. Discarding unsent attachments cleans up temporary uploads. Per-file cleanup retains paths referenced by the current server snapshot and fails without deleting files if that snapshot cannot be read; old queued chat-deletion requests receive the same protection. Removing a chat from the server snapshot does not itself delete its stored files.
 - **Cloud Data:** Users can delete snapshots manually or request full account deletion.
 - **Account Deletion:** Available from Profile when configured. It removes the account/cloud data on successful completion, and first tries to delete your uploaded files; it does not remove the phone cache; clear the cache separately if you want the device copy removed. Supabase backup-retention timing is outside Dua's control.
 

@@ -40,6 +40,8 @@ Stored-file variables (Vercel):
 
 API routes: `POST /api/files/sign`, `POST /api/files/url`, `POST /api/files/delete`, `POST /api/files/delete-all`, `GET /api/files/usage`. All require the owner's Supabase sign-in. `/api/config.files` reports `{enabled, maxBytes, types, requiresSignIn}`; older apps ignore it.
 
+Per-file cleanup checks the owner's current server snapshot with the same owner token and retains referenced uploads and generated media. It returns `retained` when paths are kept, so old queued cache-deletion requests finish without deleting those files. If the snapshot cannot be read or validated, no Storage deletion is attempted. Apply the server snapshot migration as well as the Storage migration before using cleanup. Snapshot reads and Storage deletion are separate requests; this guard is not atomic with concurrent snapshot writes. The explicitly reviewed Delete all uploaded files action intentionally deletes files even when chats reference them.
+
 **Deploy order:** apply the migration, set the variables, deploy the backend, then install the new APK. Old APKs keep working unchanged: they never send file references.
 
 ## 1c. Imagine (Phase 3: generated images and videos)
@@ -50,7 +52,7 @@ Run `supabase/migrations/202610090001_dua_imagine.sql` once, after the §1b migr
 - creates `public.dua_imagine_usage` (per account and UTC day: images and video seconds; RLS on, no client access);
 - creates `dua_consume_imagine(feature, amount, daily_limit)` and `dua_read_imagine_usage()`, `security definer` functions that only act on `auth.uid()`. The backend calls them with your own token, so no service-role key is needed. They can only add usage, never reset it.
 
-Generated files live next to your uploads under `<your user id>/`. Deleting a chat deletes them, and **Delete all uploaded files** removes them too. Cloud snapshots keep references to generated images and videos (paths only, never bytes).
+Generated files live next to your uploads under `<your user id>/`. Deleting or clearing cached chats keeps those files available for server restore. **Delete all uploaded files** permanently removes them; account deletion also attempts file cleanup. Discarded unsent uploads are cleaned up separately. Cloud snapshots keep references to generated images and videos (paths only, never bytes).
 
 Without this migration the backend refuses Imagine requests with a setup message instead of generating without caps; video storage fails with a "run the Phase 3 migration" message.
 
