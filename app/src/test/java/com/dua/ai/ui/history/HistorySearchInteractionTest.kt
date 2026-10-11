@@ -31,7 +31,7 @@ class HistorySearchInteractionTest {
         compose.waitUntil(8_000) { compose.onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty() }
     }
 
-    @Test fun olderReplyShowsMatchSnippetAndOpensTheCorrectChatAndClearRestoresAllRows() {
+    @Test fun olderReplyMatchCanBeOpenedAndSearchClearedThroughAccessibleActions() {
         val chats = listOf(chat("first", "coding", "Old invoice-2026 reply"), chat("second", "coding", "Unrelated"))
         var opened = ""
         compose.setContent { DuaTheme(LocalPreferences()) { HistoryDrawer(chats, true, {}, { opened = it }, {}, {}, projectId = "coding") } }
@@ -41,7 +41,9 @@ class HistorySearchInteractionTest {
         compose.onNode(hasText("Dua: Old invoice-2026 reply") and hasClickAction())
             .performSemanticsAction(SemanticsActions.OnClick) { click -> click() }
         compose.runOnIdle { assertEquals("first", opened) }
-        compose.onNodeWithContentDescription("Clear search").performClick()
+        compose.onNodeWithContentDescription("Clear search")
+            .performSemanticsAction(SemanticsActions.OnClick) { click -> click() }
+        compose.onNodeWithContentDescription("Search chats").assertTextEquals("")
         compose.onNodeWithText("Chat second").assertExists()
     }
 
