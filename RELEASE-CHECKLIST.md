@@ -4,6 +4,15 @@ Dua is a single-user app for its owner. This checklist covers deploying the back
 
 It describes checks to run; it is not evidence that production, staging, or a physical device has passed them. The repository checkout cannot read Vercel/Supabase dashboard settings. Do not put credentials, tokens, passwords, or signing material in this repository, issues, screenshots, or chat.
 
+## Project memory
+
+- [ ] Deploy the backend and update every APK that syncs this account; old APKs reject snapshots with the new project-memory field. Refresh Feature setup and confirm `projects.enabled` and `projects.memory` are true.
+- [ ] In Projects, save distinct Coding and Business notes; sync, send fresh chats and verify replies use only the selected project's notes. Personal notes stay in Settings → Memory.
+- [ ] Turn project memory off, sync and verify a new chat excludes notes while the editor retains them. Archive the project and confirm notes become read-only.
+- [ ] Edit/delete a note, restart and review a cloud download. Confirm server notes and their switch restore without losing tasks/instructions. If both copies changed the project, review the conflict before proceeding.
+- [ ] Export/import project-only JSON, verify project notes/switches are included and differing imported definitions become separate projects. Keep the export private; global Personal notes remain excluded.
+- [ ] Check real-phone editor taps, scrolling, keyboard, rotation and returning to Projects. Automated tests do not establish physical-device/live-provider behavior. See [MEMORY.md](MEMORY.md).
+
 ## Owner-only lock and spend controls
 
 The owner-only lock is the permanent access model: it keeps the server-side keys and provider spend limited to the owner. Before enabling online AI in Vercel Production:

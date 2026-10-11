@@ -20,9 +20,10 @@ import com.dua.ai.ui.theme.Spacing
 fun ProjectsSheet(projects: List<ChatProject>, selected: String, notice: String, enabled: Boolean,
     onSelect: (String) -> Unit, onSave: (String?, String, String, Boolean) -> Boolean, onDismiss: () -> Unit,
     tasksEnabled: Boolean = false, onSaveTask: (String, String?, String, Long?) -> Boolean = { _, _, _, _ -> false },
-    onToggleTask: (String, String) -> Boolean = { _, _ -> false }, onDeleteTask: (String, String) -> Boolean = { _, _ -> false }, dueDatesEnabled: Boolean = false) {
+    onToggleTask: (String, String) -> Boolean = { _, _ -> false }, onDeleteTask: (String, String) -> Boolean = { _, _ -> false }, dueDatesEnabled: Boolean = false,
+    memoryEnabled: Boolean = false, onSaveMemory: (String, Boolean, List<String>) -> Boolean = { _, _, _ -> false }) {
     ModalBottomSheet(onDismissRequest = onDismiss) {
-        ProjectsContent(projects, selected, notice, enabled, onSelect, onSave, tasksEnabled, onSaveTask, onToggleTask, onDeleteTask, dueDatesEnabled)
+        ProjectsContent(projects, selected, notice, enabled, onSelect, onSave, tasksEnabled, onSaveTask, onToggleTask, onDeleteTask, dueDatesEnabled, memoryEnabled, onSaveMemory)
     }
 }
 
@@ -30,7 +31,15 @@ fun ProjectsSheet(projects: List<ChatProject>, selected: String, notice: String,
 internal fun ProjectsContent(projects: List<ChatProject>, selected: String, notice: String, enabled: Boolean,
     onSelect: (String) -> Unit, onSave: (String?, String, String, Boolean) -> Boolean,
     tasksEnabled: Boolean = false, onSaveTask: (String, String?, String, Long?) -> Boolean = { _, _, _, _ -> false },
-    onToggleTask: (String, String) -> Boolean = { _, _ -> false }, onDeleteTask: (String, String) -> Boolean = { _, _ -> false }, dueDatesEnabled: Boolean = false) {
+    onToggleTask: (String, String) -> Boolean = { _, _ -> false }, onDeleteTask: (String, String) -> Boolean = { _, _ -> false }, dueDatesEnabled: Boolean = false,
+    memoryEnabled: Boolean = false, onSaveMemory: (String, Boolean, List<String>) -> Boolean = { _, _, _ -> false }) {
+    var memoryProjectId by rememberSaveable { mutableStateOf<String?>(null) }
+    projects.find { it.id == memoryProjectId }?.let { project ->
+        ProjectMemoryContent(project, notice, enabled && memoryEnabled && !project.archived,
+            if (project.archived) "Restore this project to edit its memory." else if (!memoryEnabled) "Refresh setup after deploying project memory to edit notes." else "",
+            onSaveMemory, onBack = { memoryProjectId = null })
+        return
+    }
     var tasksProjectId by rememberSaveable { mutableStateOf<String?>(null) }
     var plannerOpen by rememberSaveable { mutableStateOf(false) }
     val plannerState = rememberSaveableStateHolder()
@@ -60,7 +69,7 @@ internal fun ProjectsContent(projects: List<ChatProject>, selected: String, noti
     Column(Modifier.fillMaxWidth().imePadding().verticalScroll(rememberScrollState())
         .padding(horizontal = Spacing.lg).padding(bottom = Spacing.xxl), verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
         Text(if (editing) "Project settings" else "Projects", style = MaterialTheme.typography.titleLarge, modifier = Modifier.semantics { heading() })
-        Text("Each project has its own chats and instructions. Sync changes before using new instructions. Personal memory is only included in Personal replies.",
+        Text("Each project has its own chats, instructions and memory. Sync changes before using them in replies. Personal notes are managed in Settings → Memory.",
             style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         if (notice.isNotBlank()) Text(notice, style = MaterialTheme.typography.bodyMedium)
         if (editing) {
@@ -84,6 +93,9 @@ internal fun ProjectsContent(projects: List<ChatProject>, selected: String, noti
                         Text("${if (project.id == selected) "✓ " else ""}${project.name}${if (project.archived) " (archived)" else ""}")
                     }
                     TextButton(onClick = { edit(project) }, enabled = enabled) { Text("Edit") }
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+                    if (project.id != ProjectCodec.PERSONAL) TextButton(onClick = { memoryProjectId = project.id }) { Text("Memory · ${project.name}") }
                     TextButton(onClick = { tasksProjectId = project.id }) { Text("Tasks (${project.tasks.count { !it.completed }})") }
                 }
             }

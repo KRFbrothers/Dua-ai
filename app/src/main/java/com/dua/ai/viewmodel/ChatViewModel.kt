@@ -203,7 +203,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         val current = _integrations.value
         // /api/setup has no per-feature config; keep what /api/config reported.
         _integrations.value = next.copy(busy = true, notice = "Setup status refreshed.",
-            webSearchConfigured = current.webSearchConfigured, pageReadingAvailable = current.pageReadingAvailable, projectsEnabled = current.projectsEnabled, projectTasksEnabled = current.projectTasksEnabled, taskDueDatesEnabled = current.taskDueDatesEnabled,
+            webSearchConfigured = current.webSearchConfigured, pageReadingAvailable = current.pageReadingAvailable, projectsEnabled = current.projectsEnabled, projectTasksEnabled = current.projectTasksEnabled, taskDueDatesEnabled = current.taskDueDatesEnabled, projectMemoryEnabled = current.projectMemoryEnabled,
             filesEnabled = current.filesEnabled, filesMaxBytes = current.filesMaxBytes, nativeSearch = current.nativeSearch,
             xSearchAvailable = current.xSearchAvailable, longContext = current.longContext, imagine = current.imagine, codeExecution = current.codeExecution, build = current.build,
             voice = current.voice, generatedVoiceConfigured = current.voice?.ttsEnabled ?: next.generatedVoiceConfigured)
@@ -355,7 +355,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         automaticSync.setForeground(value)
         refreshSyncNetwork()
     }
-    fun resetSettings() { try { localPreferences.reset(); _settingsStatus.value = "Settings and memories reset." } catch (error: Exception) { _settingsStatus.value = error.message ?: "Reset failed." } }
+    fun resetSettings() { try { localPreferences.reset(); _settingsStatus.value = "Device settings and Personal memory reset. Project settings and memory kept." } catch (error: Exception) { _settingsStatus.value = error.message ?: "Reset failed." } }
     fun settingsNotice(text: String) { _settingsStatus.value = text }
     fun updateSettings(value: com.dua.ai.settings.LocalPreferences) {
         try { localPreferences.update(value); _settingsStatus.value = "Saved on this device." }
@@ -1140,10 +1140,29 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         tasks.filterNot { it.id == taskId }
     }
 
+    fun saveProjectMemory(projectId: String, enabled: Boolean, notes: List<String>): Boolean {
+        if (syncBlocked()) { _projectNotice.value = "Finish the current action before editing memory."; return false }
+        if (!_integrations.value.projectMemoryEnabled) { _projectNotice.value = "Refresh setup after deploying the project memory backend."; return false }
+        return try {
+            localPreferences.requireReadable()
+            val settings = localSettings.value
+            val project = settings.projects.find { it.id == projectId } ?: error("Project changed. Reopen Memory.")
+            check(projectId != com.dua.ai.projects.ProjectCodec.PERSONAL) { "Use Settings → Memory for Personal notes." }
+            check(!project.archived) { "Restore this project before editing memory." }
+            val memory = com.dua.ai.projects.ProjectMemory(enabled, notes.map { it.trim() })
+            val next = settings.projects.map { if (it.id == projectId) it.copy(memory = memory) else it }
+            com.dua.ai.account.CloudSnapshotCodec.encode(CloudSnapshot(_savedChats.value, settings.memory, next))
+            localPreferences.update(settings.copy(projects = next))
+            _projectNotice.value = "Memory saved to the cache. Sync to apply it on the server."
+            true
+        } catch (failure: Exception) { _projectNotice.value = failure.message ?: "Memory could not be saved."; false }
+    }
+
     private fun projectUnavailable(): String? {
         val project = localSettings.value.projects.find { it.id == _projectId.value }
             ?: return "This project's settings are missing. Restore them from the server before chatting."
         if (project.archived) return "This project is archived. Restore it in Projects before chatting."
+        if (project.memory != com.dua.ai.projects.ProjectMemory() && !_integrations.value.projectMemoryEnabled) return "Refresh Feature setup after deploying the project memory backend before chatting here."
         if (!_integrations.value.projectsEnabled && (project.id != "personal" || project.instructions.isNotBlank())) return "Deploy the Projects backend and refresh setup before chatting in this project."
         return null
     }

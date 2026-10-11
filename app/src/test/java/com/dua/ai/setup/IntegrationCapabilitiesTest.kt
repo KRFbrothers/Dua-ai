@@ -5,6 +5,14 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class IntegrationCapabilitiesTest {
+    @Test fun projectMemoryRequiresExplicitOwnerBackendCapability() {
+        fun read(raw: String) = IntegrationCapabilities.configuration(JSONObject(raw), IntegrationState(projectMemoryEnabled = true)).projectMemoryEnabled
+        assertFalse(read("{}"))
+        assertFalse(read("""{"projects":{"enabled":true}}"""))
+        assertFalse(read("""{"projects":{"enabled":false,"memory":true}}"""))
+        assertFalse(read("""{"projects":{"enabled":true,"memory":"true"}}"""))
+        assertTrue(read("""{"projects":{"enabled":true,"memory":true}}"""))
+    }
     @Test fun dueDatesRequireNewBackendCapabilityAlongsideOwnerTasks() {
         fun enabled(raw: String) = IntegrationCapabilities.configuration(JSONObject(raw), IntegrationState()).taskDueDatesEnabled
         assertFalse(enabled("""{"projects":{"enabled":true,"tasks":true}}"""))
