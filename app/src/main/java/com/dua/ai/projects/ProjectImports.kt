@@ -4,7 +4,7 @@ import com.dua.ai.history.ChatBackup
 import java.util.UUID
 
 object ProjectImports {
-    /** Reuse identical settings; differing imported instructions get a new project, never overwrite. */
+    /** Reuse identical settings; differing instructions/tasks get a new project, never overwrite. */
     fun prepare(current: List<ChatProject>, backup: ChatBackup): ChatBackup {
         ProjectCodec.validate(current); ProjectCodec.validate(backup.projects)
         val projects = current.toMutableList()

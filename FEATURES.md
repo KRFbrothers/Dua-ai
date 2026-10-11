@@ -85,3 +85,8 @@ Android JVM unit tests run in CI (`bash ./gradlew :app:testDebugUnitTest`) and c
 ## Projects and instructions
 
 Implemented in source: Personal/Coding/Business defaults, create/edit/archive, project-scoped history, persisted chat project IDs, custom instructions from the owner server snapshot, cloud sync and project-aware JSON import/export. Old chats default to Personal. Divergent edits to the same project pause automatic sync; reviewed download uses server settings and keeps phone-only projects. Imports copy differing project settings rather than overwrite current instructions. Dedicated project file libraries, configured tools per project and project memory are still pending. Live voice uses Personal without custom instructions; other projects use hands-free Voice mode for scoped chat requests. See [PROJECTS.md](PROJECTS.md). Physical-device and live provider verification of Projects is pending.
+
+
+## Project tasks
+
+Implemented in source: project to-do lists, add/edit titles, complete/reopen, confirmed delete, archived read-only lists, owner snapshot sync and task-only JSON backup/import. Limits: 100 tasks per project and 200 UTF-16 code units per title. Project edits/reset keep tasks, divergent project edits pause sync, and task titles are not automatically included in AI prompts. Tasks require the updated backend/APK. Reminder notifications, due dates, recurring tasks and a daily planner are pending. See [TASKS.md](TASKS.md); physical-device/live sync verification is pending.

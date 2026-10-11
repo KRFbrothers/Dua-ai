@@ -51,4 +51,4 @@ The Android cache is stored in app-private preferences; Android backup/device tr
 
 ### Projects and custom instructions
 
-Home → **Projects** offers Personal, Coding and Business, plus custom projects. Each chat keeps its project, and the history drawer searches that project only. Save instructions, then sync them before chatting; the backend reads the owner’s server snapshot. See [PROJECTS.md](PROJECTS.md) for limits, conflict handling and the first version’s scope.
+Home → **Projects** offers Personal, Coding and Business, plus custom projects. Each chat keeps its project, and the history drawer searches that project only. Save instructions, then sync them before chatting; the backend reads the owner’s server snapshot. See [PROJECTS.md](PROJECTS.md) for limits, conflict handling and the first version’s scope. **Projects → Tasks** adds separate to-do lists with edit, complete/reopen and confirmed delete; sync and JSON backup include tasks. See [TASKS.md](TASKS.md). Reminders and a daily planner remain pending.

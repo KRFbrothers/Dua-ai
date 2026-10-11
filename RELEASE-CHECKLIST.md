@@ -136,3 +136,13 @@ No private signing keys are supplied by this repository. The manual `Build perso
 - Switch Coding/Business with unsent drafts, restart, and check each project’s history and draft. Personal memory must not appear in other project replies.
 - Review project settings in Cloud Sync, round-trip a JSON export/import, archive/restore a project, and confirm archived chats cannot send replies.
 - Verify divergent instruction edits pause automatic sync for manual review. Keep live voice in Personal without custom instructions; other projects use Voice mode.
+
+
+## Project tasks update
+
+- Deploy backend and verify `/api/config.projects.enabled` and `projects.tasks` before installing the updated APK. No SQL migration is needed.
+- Add different Coding/Business tasks, sync, restart, and verify titles/completion stay in the correct project.
+- Edit a completed task, reopen it, cancel/confirm deletion; check archived tasks are readable and cannot be edited.
+- Review full task lists in cloud download/upload. Export a task-only JSON backup and import differing tasks; existing tasks must remain in their original project.
+- Rename/archive/restore/reset settings and confirm tasks are kept. Simulate divergent same-project edits and confirm automatic sync pauses for review.
+- Reminder alarms, due dates and a daily planner are not covered by this version. Physical-device and production verification are pending.

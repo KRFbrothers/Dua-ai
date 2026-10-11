@@ -32,8 +32,7 @@ object AutomationSyncPolicy {
     fun signature(chat: SavedChat): String = digest(canonical(chat))
     fun validate(snapshot: CloudSnapshot): CloudSnapshot { CloudSnapshotCodec.encode(snapshot); return snapshot }
     fun baseline(snapshot: CloudSnapshot): AutomationBaseline = AutomationBaseline(snapshot.chats.associate { it.id to it.messages.size }, snapshot.chats.associate { it.id to signature(it) }, snapshot.memory.map(::digest).toSet(), snapshot.projects.associate { it.id to projectSignature(it) })
-    fun projectSignature(project: com.dua.ai.projects.ChatProject): String = digest(JSONObject()
-        .put("id", project.id).put("name", project.name).put("instructions", project.instructions).put("archived", project.archived).toString())
+    fun projectSignature(project: com.dua.ai.projects.ChatProject): String = digest(com.dua.ai.projects.ProjectCodec.encodedProject(project).toString())
     fun same(left: CloudSnapshot, right: CloudSnapshot): Boolean = baseline(left) == baseline(right)
 
     fun validateRecord(value: AutomationSyncRecord): AutomationSyncRecord {

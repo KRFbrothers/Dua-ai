@@ -17,15 +17,26 @@ import com.dua.ai.ui.theme.Spacing
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProjectsSheet(projects: List<ChatProject>, selected: String, notice: String, enabled: Boolean,
-    onSelect: (String) -> Unit, onSave: (String?, String, String, Boolean) -> Boolean, onDismiss: () -> Unit) {
+    onSelect: (String) -> Unit, onSave: (String?, String, String, Boolean) -> Boolean, onDismiss: () -> Unit,
+    tasksEnabled: Boolean = false, onSaveTask: (String, String?, String) -> Boolean = { _, _, _ -> false },
+    onToggleTask: (String, String) -> Boolean = { _, _ -> false }, onDeleteTask: (String, String) -> Boolean = { _, _ -> false }) {
     ModalBottomSheet(onDismissRequest = onDismiss) {
-        ProjectsContent(projects, selected, notice, enabled, onSelect, onSave)
+        ProjectsContent(projects, selected, notice, enabled, onSelect, onSave, tasksEnabled, onSaveTask, onToggleTask, onDeleteTask)
     }
 }
 
 @Composable
 internal fun ProjectsContent(projects: List<ChatProject>, selected: String, notice: String, enabled: Boolean,
-    onSelect: (String) -> Unit, onSave: (String?, String, String, Boolean) -> Boolean) {
+    onSelect: (String) -> Unit, onSave: (String?, String, String, Boolean) -> Boolean,
+    tasksEnabled: Boolean = false, onSaveTask: (String, String?, String) -> Boolean = { _, _, _ -> false },
+    onToggleTask: (String, String) -> Boolean = { _, _ -> false }, onDeleteTask: (String, String) -> Boolean = { _, _ -> false }) {
+    var tasksProjectId by rememberSaveable { mutableStateOf<String?>(null) }
+    projects.find { it.id == tasksProjectId }?.let { project ->
+        ProjectTasksContent(project, notice, enabled && tasksEnabled && !project.archived,
+            if (project.archived) "Restore this project to edit its tasks." else if (!tasksEnabled) "Refresh setup after deploying the Tasks backend to edit tasks." else "",
+            onSaveTask, onToggleTask, onDeleteTask, onBack = { tasksProjectId = null })
+        return
+    }
     var editing by rememberSaveable { mutableStateOf(false) }
     var editingId by rememberSaveable { mutableStateOf<String?>(null) }
     var name by rememberSaveable { mutableStateOf("") }
@@ -61,6 +72,7 @@ internal fun ProjectsContent(projects: List<ChatProject>, selected: String, noti
                         Text("${if (project.id == selected) "✓ " else ""}${project.name}${if (project.archived) " (archived)" else ""}")
                     }
                     TextButton(onClick = { edit(project) }, enabled = enabled) { Text("Edit") }
+                    TextButton(onClick = { tasksProjectId = project.id }) { Text("Tasks (${project.tasks.count { !it.completed }})") }
                 }
             }
             TextButton(onClick = { edit(null) }, enabled = enabled && projects.size < ProjectCodec.MAX_PROJECTS) { Text("New project") }

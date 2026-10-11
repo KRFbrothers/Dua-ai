@@ -5,6 +5,14 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class IntegrationCapabilitiesTest {
+    @Test fun tasksRequireExplicitServerSupportAndAnEnabledOwnerProjectBackend() {
+        fun read(raw: String) = IntegrationCapabilities.configuration(JSONObject(raw), IntegrationState(projectTasksEnabled = true))
+        assertFalse(read("{}").projectTasksEnabled)
+        assertFalse(read("""{"projects":{"enabled":true}}""").projectTasksEnabled)
+        assertFalse(read("""{"projects":{"enabled":false,"tasks":true}}""").projectTasksEnabled)
+        assertFalse(read("""{"projects":{"enabled":true,"tasks":"true"}}""").projectTasksEnabled)
+        assertTrue(read("""{"projects":{"enabled":true,"tasks":true}}""").projectTasksEnabled)
+    }
     @Test fun inChatWebCapabilitiesAreExplicitAndKeepSetupState() {
         val existing = IntegrationState(searchConfigured = true, busy = true, notice = "Refreshing")
         val next = IntegrationCapabilities.configuration(JSONObject("""{"web":{"searchConfigured":true,"pageReadingAvailable":true}}"""), existing)
