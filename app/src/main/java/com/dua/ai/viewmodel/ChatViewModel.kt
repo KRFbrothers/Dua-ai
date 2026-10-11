@@ -950,13 +950,22 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     val chats = ChatHistoryCodec.importCopies(original, imported)
                     chats to ChatHistoryCodec.encode(chats, selectedId)
                 }
-                check(activeId == selectedId && _savedChats.value == original && !draftSaver.pending &&
-                    !_isTyping.value && _buildPr.value.values.none { it.creating }) { "The phone cache changed while preparing the import. Review and retry. No chats were imported." }
-                val committed = historyWriter.writeDirectly {
+                fun cacheUnchanged() = activeId == selectedId && _savedChats.value == original && !draftSaver.pending &&
+                    !_isTyping.value && _buildPr.value.values.none { it.creating }
+                val changed = "The phone cache changed while preparing the import. Review and retry. No chats were imported."
+                check(cacheUnchanged()) { changed }
+                val committed = withContext(Dispatchers.IO) { historyWriter.writeDirectly {
                     val previous = preferences.getString("history", null)
                     val success = preferences.edit().putString("history", encoded).commit()
                     if (!success) preferences.edit().putString("history", previous).apply()
                     success
+                } }
+                if (!cacheUnchanged()) {
+                    // Main remained responsive during the write. Retire the stale disk import by
+                    // queuing the latest live buffers (including pending typing), then flush off Main.
+                    saveHistory()
+                    withContext(Dispatchers.IO) { historyWriter.flush() }
+                    error(changed)
                 }
                 if (committed) {
                     _savedChats.value = merged

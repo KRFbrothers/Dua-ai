@@ -1,6 +1,7 @@
 package com.dua.ai.viewmodel
 
 import android.app.Application
+import android.content.SharedPreferences
 import android.os.Looper
 import androidx.lifecycle.ViewModelStore
 import com.dua.ai.account.CloudSnapshotCodec
@@ -18,6 +19,10 @@ import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.LooperMode
+import java.lang.reflect.Proxy
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class)
@@ -111,5 +116,53 @@ class ChatImportRecoveryTest {
         val restored = ChatHistoryCodec.decode(application.getSharedPreferences("dua_chat_history", 0)
             .getString("history", null)!!).second.single()
         assertEquals("Typing during preparation", restored.draft)
+    }
+
+    @Test fun typingDuringTheIoCommitRestoresTheLatestCacheAndRejectsTheStaleImport() {
+        val original = chat()
+        seed(listOf(original))
+        val preferences = application.getSharedPreferences("dua_chat_history", 0)
+        val entered = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val committedOnMain = AtomicBoolean(false)
+        val mainThread = Looper.getMainLooper().thread
+        val guarded = Proxy.newProxyInstance(SharedPreferences::class.java.classLoader,
+            arrayOf(SharedPreferences::class.java)) { _, method, arguments ->
+            if (method.name == "edit") {
+                val editor = preferences.edit()
+                Proxy.newProxyInstance(SharedPreferences.Editor::class.java.classLoader,
+                    arrayOf(SharedPreferences.Editor::class.java)) { proxy, call, values ->
+                    if (call.name == "commit") {
+                        committedOnMain.set(Thread.currentThread() == mainThread)
+                        entered.countDown()
+                        check(release.await(5, TimeUnit.SECONDS)) { "Test did not release import commit" }
+                    }
+                    val result = call.invoke(editor, *(values ?: emptyArray()))
+                    if (result is SharedPreferences.Editor) proxy else result
+                }
+            } else method.invoke(preferences, *(arguments ?: emptyArray()))
+        } as SharedPreferences
+        ChatViewModel::class.java.getDeclaredField("preferences").apply { isAccessible = true }.set(model, guarded)
+        preview(listOf(original))
+        try {
+            model.confirmImport()
+            val deadline = System.nanoTime() + 5_000_000_000L
+            while (entered.count > 0 && System.nanoTime() < deadline) {
+                shadowOf(Looper.getMainLooper()).idle()
+                Thread.sleep(5)
+            }
+            assertEquals("Import never reached the IO commit", 0L, entered.count)
+            assertFalse("Disk commit blocked Main", committedOnMain.get())
+            model.updateDraft("Typing during disk commit")
+            release.countDown()
+            waitForImport()
+            assertNotNull(model.importPreview.value)
+            assertTrue(model.dataStatus.value.contains("phone cache changed"))
+            assertEquals("Typing during disk commit", model.draft.value)
+            val records = ChatHistoryCodec.decode(preferences.getString("history", null)!!).second
+            assertEquals(1, records.size)
+            assertEquals("Typing during disk commit", records.single().draft)
+            assertEquals(original.messages, records.single().messages)
+        } finally { release.countDown() }
     }
 }
