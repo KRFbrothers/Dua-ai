@@ -42,6 +42,7 @@ class ApprovedNavigationUiTest(private val dark: Boolean, private val small: Boo
             val density = LocalDensity.current
             CompositionLocalProvider(LocalDensity provides Density(density.density, if (small) 2f else 1f)) {
                 DuaTheme(preferences) {
+                    assertEquals(androidx.compose.material3.MaterialTheme.colorScheme.onSurface, androidx.compose.material3.LocalContentColor.current)
                     Box(Modifier.requiredSize(if (small) 320.dp else 360.dp, if (small) 568.dp else 752.dp)) { block() }
                 }
             }

@@ -30,7 +30,7 @@ Dedicated Images gallery, Library, AI Agent, Work, Plugins, General, Usage and l
 - Appearance (`system`, `light`, `dark`) and optional accent override use separate keys in Preferences DataStore `dua_appearance`. Fresh installs use System default; an existing valid appearance is copied once from the legacy JSON without deleting or modifying its memory/projects.
 - Presets: Purple `#AA4FF6`, Orange `#FF6308`, Blue `#2979FF`, Green `#16A34A`, Pink `#E84393`, Teal `#00897B`.
 - An override applies in both themes. **Reset to default** removes only the accent key; it keeps the appearance choice. Without an override Light uses Purple and Dark uses Orange. Device settings reset also resets appearance to System default and clears the override.
-- Exact preset colors are used for swatches and New chat. Foreground colors and Material text roles are adjusted for contrast, while original neutral/error/code/brand tokens in `Color.kt` stay intact. The full original logo assets and Home/Onboarding image rendering are untouched; the artwork is never recolored with the accent.
+- Exact preset colors are used for swatches and New chat. Default page text/icons use the theme foreground; foreground colors and Material text roles are adjusted for contrast, while original neutral/error/code/brand tokens in `Color.kt` stay intact. The full original logo assets and Home/Onboarding image rendering are untouched; the artwork is never recolored with the accent.
 - These are device appearance preferences, not server history or memory. They are not part of a cloud snapshot. DataStore failures show a storage/retry notice.
 
 ## Responsive behavior

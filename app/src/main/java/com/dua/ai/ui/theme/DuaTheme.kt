@@ -3,6 +3,7 @@ package com.dua.ai.ui.theme
 import android.app.Activity
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.ReadOnlyComposable
@@ -49,7 +50,11 @@ fun DuaTheme(
         }
     }
     CompositionLocalProvider(LocalDuaColors provides extra, LocalDuaAccent provides accentColors(preset, darkTheme)) {
-        MaterialTheme(colorScheme = scheme, typography = typography, shapes = DuaShapes, content = content)
+        MaterialTheme(colorScheme = scheme, typography = typography, shapes = DuaShapes) {
+            // Pages draw their own backgrounds; give their bare Text/Icon the theme foreground.
+            // Material surfaces and buttons still override this with their own content colors.
+            CompositionLocalProvider(LocalContentColor provides scheme.onSurface, content = content)
+        }
     }
 }
 
