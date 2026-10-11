@@ -18,23 +18,23 @@ import com.dua.ai.ui.theme.Spacing
 @Composable
 fun ProjectsSheet(projects: List<ChatProject>, selected: String, notice: String, enabled: Boolean,
     onSelect: (String) -> Unit, onSave: (String?, String, String, Boolean) -> Boolean, onDismiss: () -> Unit,
-    tasksEnabled: Boolean = false, onSaveTask: (String, String?, String) -> Boolean = { _, _, _ -> false },
-    onToggleTask: (String, String) -> Boolean = { _, _ -> false }, onDeleteTask: (String, String) -> Boolean = { _, _ -> false }) {
+    tasksEnabled: Boolean = false, onSaveTask: (String, String?, String, Long?) -> Boolean = { _, _, _, _ -> false },
+    onToggleTask: (String, String) -> Boolean = { _, _ -> false }, onDeleteTask: (String, String) -> Boolean = { _, _ -> false }, dueDatesEnabled: Boolean = false) {
     ModalBottomSheet(onDismissRequest = onDismiss) {
-        ProjectsContent(projects, selected, notice, enabled, onSelect, onSave, tasksEnabled, onSaveTask, onToggleTask, onDeleteTask)
+        ProjectsContent(projects, selected, notice, enabled, onSelect, onSave, tasksEnabled, onSaveTask, onToggleTask, onDeleteTask, dueDatesEnabled)
     }
 }
 
 @Composable
 internal fun ProjectsContent(projects: List<ChatProject>, selected: String, notice: String, enabled: Boolean,
     onSelect: (String) -> Unit, onSave: (String?, String, String, Boolean) -> Boolean,
-    tasksEnabled: Boolean = false, onSaveTask: (String, String?, String) -> Boolean = { _, _, _ -> false },
-    onToggleTask: (String, String) -> Boolean = { _, _ -> false }, onDeleteTask: (String, String) -> Boolean = { _, _ -> false }) {
+    tasksEnabled: Boolean = false, onSaveTask: (String, String?, String, Long?) -> Boolean = { _, _, _, _ -> false },
+    onToggleTask: (String, String) -> Boolean = { _, _ -> false }, onDeleteTask: (String, String) -> Boolean = { _, _ -> false }, dueDatesEnabled: Boolean = false) {
     var tasksProjectId by rememberSaveable { mutableStateOf<String?>(null) }
     projects.find { it.id == tasksProjectId }?.let { project ->
         ProjectTasksContent(project, notice, enabled && tasksEnabled && !project.archived,
             if (project.archived) "Restore this project to edit its tasks." else if (!tasksEnabled) "Refresh setup after deploying the Tasks backend to edit tasks." else "",
-            onSaveTask, onToggleTask, onDeleteTask, onBack = { tasksProjectId = null })
+            onSaveTask, onToggleTask, onDeleteTask, onBack = { tasksProjectId = null }, dueDatesEnabled = dueDatesEnabled)
         return
     }
     var editing by rememberSaveable { mutableStateOf(false) }

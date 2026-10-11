@@ -24,8 +24,12 @@ fun DuaApp(viewModel: ChatViewModel = viewModel(), notificationRoute: Pair<Strin
     }
     // Write a debounced draft and queued history when the app leaves the foreground, before Android may kill the process.
     val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
+    val context = androidx.compose.ui.platform.LocalContext.current
     DisposableEffect(lifecycle, viewModel) {
-        val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_STOP) viewModel.flushHistory() }
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP) viewModel.flushHistory()
+            if (event == Lifecycle.Event.ON_RESUME) com.dua.ai.tasks.TaskReminders.refresh(context)
+        }
         lifecycle.addObserver(observer)
         onDispose { lifecycle.removeObserver(observer) }
     }

@@ -1,6 +1,6 @@
 # Project tasks
 
-This first to-do version keeps Fareed's Personal, Coding, Business and custom project tasks separate. It adds a list, not reminder alarms or a daily planner.
+This first to-do version keeps Fareed's Personal, Coding, Business and custom project tasks separate. It adds a project list. Optional due dates and device reminder notifications are now implemented in the next increment; see [REMINDERS.md](REMINDERS.md). A daily planner remains pending.
 
 ## Use
 
@@ -9,11 +9,11 @@ This first to-do version keeps Fareed's Personal, Coding, Business and custom pr
 3. Enable foreground automatic Cloud Sync, or use **Cloud sync → Review upload → Confirm**. The phone caches edits; the owner server snapshot is authoritative after sync.
 4. Completed tasks stay visible below open tasks. Archived projects keep their readable tasks; restore the project to edit them.
 
-Each project allows 100 tasks including completed ones, with titles up to 200 UTF-16 code units. Delete a finished task to make room. Titles are plain text. Tasks are not automatically sent to the AI provider or changed by AI chat. Notifications, due dates, recurring tasks and a planner remain follow-ups.
+Each project allows 100 tasks including completed ones, with titles up to 200 UTF-16 code units. Delete a finished task to make room. Titles are plain text. Tasks are not automatically sent to the AI provider or changed by AI chat. Optional due dates and device notifications are described in [REMINDERS.md](REMINDERS.md). Recurring tasks and a planner remain follow-ups.
 
 ## Persistence and recovery
 
-Tasks are an optional `tasks` array on each project in the existing version-1 owner JSON snapshot. Each item has a unique project-local `id`, a `title`, and a Boolean `completed`. The existing owner authentication, Supabase RLS, revision checks and 4 MiB snapshot limit apply; no SQL migration is needed.
+Tasks are an optional `tasks` array on each project in the existing version-1 owner JSON snapshot. Each item has a unique project-local `id`, a `title`, a Boolean `completed`, and optionally an absolute `dueAt` timestamp. The existing owner authentication, Supabase RLS, revision checks and 4 MiB snapshot limit apply; no SQL migration is needed.
 
 Projects without tasks retain their old wire representation and sync signature. The updated Android app reads older snapshots, preferences and exports. `/api/config.projects.tasks` must be true alongside `projects.enabled` before the app allows task edits. Deploy the new backend and install the updated APK together. Older APKs cannot read task-bearing project definitions; use the updated APK for cloud reviews and backups after adding tasks.
 

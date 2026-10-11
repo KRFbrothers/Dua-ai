@@ -27,3 +27,11 @@ test('task type, IDs, fields and UTF-16 limits are validated before saving', () 
   value.projects[1].tasks.push({ ...task(), id: 'last' });
   assert.throws(() => validateCloudSnapshot(value));
 });
+test('optional due timestamps survive snapshots and invalid values are rejected', () => {
+  const value = snapshot(); value.projects[1].tasks[0].dueAt = 1893456000000;
+  assert.deepEqual(validateCloudSnapshot(value), value);
+  for (const dueAt of [null, '123', 0, -1, 1.5, 253402300800000, true]) {
+    value.projects[1].tasks[0].dueAt = dueAt;
+    assert.throws(() => validateCloudSnapshot(value));
+  }
+});

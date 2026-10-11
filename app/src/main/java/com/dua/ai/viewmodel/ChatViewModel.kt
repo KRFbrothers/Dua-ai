@@ -203,7 +203,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         val current = _integrations.value
         // /api/setup has no per-feature config; keep what /api/config reported.
         _integrations.value = next.copy(busy = true, notice = "Setup status refreshed.",
-            webSearchConfigured = current.webSearchConfigured, pageReadingAvailable = current.pageReadingAvailable, projectsEnabled = current.projectsEnabled, projectTasksEnabled = current.projectTasksEnabled,
+            webSearchConfigured = current.webSearchConfigured, pageReadingAvailable = current.pageReadingAvailable, projectsEnabled = current.projectsEnabled, projectTasksEnabled = current.projectTasksEnabled, taskDueDatesEnabled = current.taskDueDatesEnabled,
             filesEnabled = current.filesEnabled, filesMaxBytes = current.filesMaxBytes, nativeSearch = current.nativeSearch,
             xSearchAvailable = current.xSearchAvailable, longContext = current.longContext, imagine = current.imagine, codeExecution = current.codeExecution, build = current.build,
             voice = current.voice, generatedVoiceConfigured = current.voice?.ttsEnabled ?: next.generatedVoiceConfigured)
@@ -1125,9 +1125,10 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         } catch (failure: Exception) { _projectNotice.value = failure.message ?: "Task could not be saved."; false }
     }
 
-    fun saveTask(projectId: String, taskId: String?, title: String): Boolean = changeTasks(projectId) { tasks ->
+    fun saveTask(projectId: String, taskId: String?, title: String, dueAt: Long? = null): Boolean = changeTasks(projectId) { tasks ->
+        check(dueAt == null || _integrations.value.taskDueDatesEnabled) { "Refresh setup after updating the backend before saving due dates." }
         val existing = taskId?.let { id -> tasks.find { it.id == id } ?: error("Task changed. Reopen the editor.") }
-        val task = existing?.copy(title = title.trim()) ?: com.dua.ai.projects.ProjectTask(UUID.randomUUID().toString(), title.trim())
+        val task = existing?.copy(title = title.trim(), dueAt = dueAt) ?: com.dua.ai.projects.ProjectTask(UUID.randomUUID().toString(), title.trim(), dueAt = dueAt)
         if (existing == null) tasks + task else tasks.map { if (it.id == taskId) task else it }
     }
     fun toggleTask(projectId: String, taskId: String): Boolean = changeTasks(projectId) { tasks ->

@@ -145,4 +145,14 @@ No private signing keys are supplied by this repository. The manual `Build perso
 - Edit a completed task, reopen it, cancel/confirm deletion; check archived tasks are readable and cannot be edited.
 - Review full task lists in cloud download/upload. Export a task-only JSON backup and import differing tasks; existing tasks must remain in their original project.
 - Rename/archive/restore/reset settings and confirm tasks are kept. Simulate divergent same-project edits and confirm automatic sync pauses for review.
-- Reminder alarms, due dates and a daily planner are not covered by this version. Physical-device and production verification are pending.
+- Due dates and device reminders are covered by the following update; a daily planner remains pending. Physical-device and production verification are pending.
+
+
+## Task reminders update
+
+- Deploy the backend with `projects.dueDates`, install the new APK, and sync dates before checking another device.
+- Save a valid due date/time; reject invalid/partial input. Edit only the title and confirm the original exact deadline is retained; remove the date and verify sync/export restores its absence.
+- Enable task reminders in Settings → Notifications. Verify generic/private notification delivery after backgrounding the app, without a network connection.
+- Complete/delete/archive a task before its due time and confirm its stale alarm cannot notify. Edit the due date and ensure only the new deadline is scheduled.
+- Check reboot/package-update/clock-change scheduling, denied notifications, permission revocation and reminder reset. Confirm task dates survive while consent/history remain device-local and excluded from backup/transfer.
+- Android battery saving may delay delivery; exact alarms and a daily planner are not implemented. These device checks are pending.

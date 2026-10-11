@@ -18,7 +18,7 @@ class ProjectTasksTest {
         if (it.id == "coding") it.copy(tasks = tasks) else it
     })
     @Test fun cloudPreferencesAndChatlessJsonBackupPreserveTasks() {
-        val original = snapshot(listOf(task, task.copy(id = "task-2", completed = true)))
+        val original = snapshot(listOf(task.copy(dueAt = 1893456000000L), task.copy(id = "task-2", completed = true)))
         assertEquals(original, CloudSnapshotCodec.decode(CloudSnapshotCodec.encode(original)))
         val settings = LocalPreferences(projects = original.projects)
         assertEquals(settings, PreferencesCodec.decode(PreferencesCodec.encode(settings)))
@@ -63,6 +63,11 @@ class ProjectTasksTest {
             { it.getJSONArray("tasks").getJSONObject(0).put("title", "x".repeat(201)) },
             { it.getJSONArray("tasks").getJSONObject(0).put("id", "../bad") },
             { it.getJSONArray("tasks").getJSONObject(0).put("extra", true) },
+            { it.getJSONArray("tasks").getJSONObject(0).put("dueAt", JSONObject.NULL) },
+            { it.getJSONArray("tasks").getJSONObject(0).put("dueAt", "123") },
+            { it.getJSONArray("tasks").getJSONObject(0).put("dueAt", 1.5) },
+            { it.getJSONArray("tasks").getJSONObject(0).put("dueAt", 0) },
+            { it.getJSONArray("tasks").getJSONObject(0).put("dueAt", ProjectCodec.MAX_DUE_AT + 1) },
             { it.getJSONArray("tasks").put(it.getJSONArray("tasks").getJSONObject(0)) }
         )
         for (mutate in mutations) {
