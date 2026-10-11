@@ -120,7 +120,7 @@ class ImagineCodecTest {
         val export = JSONObject(ChatHistoryCodec.export(listOf(chat)))
         val messages = export.getJSONArray("chats").getJSONObject(0).getJSONArray("messages")
         assertEquals(png, messages.getJSONObject(1).getJSONArray("media").getJSONObject(0).getString("path"))
-        assertFalse(messages.getJSONObject(2).has("imagine"))
+        assertTrue(messages.getJSONObject(2).has("imagine"))
         assertFalse(messages.getJSONObject(3).has("media"))
         assertFalse(export.toString().contains("vidgen.x.ai"))
         val imported = ChatHistoryCodec.parseImport(export.toString()).single()
@@ -128,9 +128,9 @@ class ImagineCodecTest {
         // Cloud snapshot: same references, validated on encode.
         val snapshot = CloudSnapshotCodec.encode(CloudSnapshot(listOf(chat), emptyList()))
         assertEquals(listOf(GeneratedMedia(png, "image/png", 10)), CloudSnapshotCodec.decode(snapshot).chats.single().messages[1].media)
-        // Older exports without media import as before; media on user turns is ignored.
+        // Older exports without media import as before; media on user turns is invalid.
         val userMedia = JSONObject(export.toString()).apply { getJSONArray("chats").getJSONObject(0).getJSONArray("messages").getJSONObject(0).put("media", JSONArray().put(JSONObject().put("path", png).put("mimeType", "image/png"))) }
-        assertTrue(ChatHistoryCodec.parseImport(userMedia.toString()).single().messages[0].media.isEmpty())
+        assertThrows(IllegalArgumentException::class.java) { ChatHistoryCodec.parseImport(userMedia.toString()) }
     }
 
     @Test fun imaginePreferencesAreOptionalAndValidated() {

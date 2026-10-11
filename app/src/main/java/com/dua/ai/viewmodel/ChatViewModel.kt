@@ -936,28 +936,35 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     fun confirmImport() {
         if (_dataBusy.value) return
         val imported = _importPreview.value ?: return
+        if (_buildPr.value.values.any { it.creating }) { _dataStatus.value = "Wait for the pull request to finish before importing."; return }
         _dataBusy.value = true; refreshSyncBusy()
         _dataStatus.value = "Saving imported chats…"
         cancelReply()
         flushHistory()
         // Use the latest local records at confirmation, keeping the active draft/selection.
-        val merged = ChatHistoryCodec.importCopies(_savedChats.value, imported)
-        val encoded = ChatHistoryCodec.encode(merged, activeId)
+        val original = _savedChats.value.toList()
+        val selectedId = activeId
         viewModelScope.launch {
             try {
-                val committed = withContext(Dispatchers.IO) { historyWriter.writeDirectly {
+                val (merged, encoded) = withContext(Dispatchers.Default) {
+                    val chats = ChatHistoryCodec.importCopies(original, imported)
+                    chats to ChatHistoryCodec.encode(chats, selectedId)
+                }
+                check(activeId == selectedId && _savedChats.value == original && !draftSaver.pending &&
+                    !_isTyping.value && _buildPr.value.values.none { it.creating }) { "The phone cache changed while preparing the import. Review and retry. No chats were imported." }
+                val committed = historyWriter.writeDirectly {
                     val previous = preferences.getString("history", null)
                     val success = preferences.edit().putString("history", encoded).commit()
                     if (!success) preferences.edit().putString("history", previous).apply()
                     success
-                } }
+                }
                 if (committed) {
                     _savedChats.value = merged
                     _importPreview.value = null
                     _dataStatus.value = "${imported.size} chats imported into the phone cache. Sign in and sync to make them server-backed. Existing chats and drafts were kept."
                 } else _dataStatus.value = "Import could not be saved. No chats were changed. Try again."
             } catch (cancelled: CancellationException) { throw cancelled }
-            catch (_: Exception) { _dataStatus.value = "Import could not be saved. No chats were changed. Try again." }
+            catch (failure: Exception) { _dataStatus.value = failure.message ?: "Import could not be saved. No chats were changed. Try again." }
             finally { _dataBusy.value = false }
         }
     }
@@ -971,12 +978,14 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             try {
                 withContext(Dispatchers.IO) {
+                    val encoded = ChatHistoryCodec.exportBackup(records).toByteArray(Charsets.UTF_8)
                     val output = getApplication<Application>().contentResolver.openOutputStream(uri, "wt")
                         ?: error("Selected file cannot be written.")
-                    output.use { it.write(ChatHistoryCodec.export(records).toByteArray(Charsets.UTF_8)) }
+                    output.use { it.write(encoded) }
                 }
                 _dataStatus.value = "Export saved. Your chats are unchanged."
             } catch (cancelled: CancellationException) { throw cancelled }
+            catch (failure: IllegalArgumentException) { _dataStatus.value = "Export exceeds backup limits or contains invalid metadata. No backup was written. ${failure.message.orEmpty()}" }
             catch (_: Exception) { _dataStatus.value = "Export failed. The selected file may be incomplete; try again." }
             finally { _dataBusy.value = false }
         }

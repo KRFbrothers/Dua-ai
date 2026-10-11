@@ -54,12 +54,12 @@ class CodeRunsTest {
         assertEquals(runs, CodeRuns.merge(runs, CodeRuns.MAX_RUNS, "python", "x", null, null))
     }
 
-    @Test fun codeRunsAreSavedInLocalHistoryButNotExported() {
+    @Test fun codeRunsSurviveHistoryAndExportImport() {
         val reply = ChatMessage(id = "r", text = "It is 4.", isUser = false, model = "Dua", codeRuns = listOf(CodeRun("python", "print(2+2)", "4", "ok"), CodeRun("python", "while True: pass", "", "timeout")))
         val chat = SavedChat("c", "Dua", "", listOf(ChatMessage(id = "u", text = "2+2?", isUser = true, model = "Dua"), reply), 5)
         val restored = ChatHistoryCodec.decode(ChatHistoryCodec.encode(listOf(chat), "c")).second.single()
         assertEquals(reply.codeRuns, restored.messages[1].codeRuns)
-        assertFalse(ChatHistoryCodec.export(listOf(chat)).contains("print(2+2)"))
+        assertEquals(reply.codeRuns, ChatHistoryCodec.parseImport(ChatHistoryCodec.export(listOf(chat))).single().messages[1].codeRuns)
         // Older history entries without the field still load.
         val legacy = JSONObject(ChatHistoryCodec.encode(listOf(chat), "c"))
         legacy.getJSONArray("chats").getJSONObject(0).getJSONArray("messages").getJSONObject(1).remove("codeRuns")

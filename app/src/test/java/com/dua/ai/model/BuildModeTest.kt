@@ -57,7 +57,7 @@ class BuildModeTest {
         assertThrows(IllegalArgumentException::class.java) { body(stream = true, build = "../../etc") }
     }
 
-    @Test fun buildRepositoryAndFilesStayInLocalHistoryOnly() {
+    @Test fun buildRepositoryAndFilesSurviveHistoryAndExport() {
         val reply = ChatMessage(id = "r", text = "```diff\n-a\n+b\n```", isUser = false, model = "Dua",
             build = BuildInfo("KRFbrothers/Dua-ai", "main", listOf(BuildFile("app/src/main/java/com/dua/ai/Secret.kt", 120))))
         val chat = SavedChat("c", "Dua", "", listOf(ChatMessage(id = "u", text = "Fix it", isUser = true, model = "Dua"), reply), 5, buildRepository = "KRFbrothers/Dua-ai")
@@ -65,7 +65,9 @@ class BuildModeTest {
         assertEquals("KRFbrothers/Dua-ai", restored.buildRepository)
         assertEquals(reply.build, restored.messages[1].build)
         val exported = ChatHistoryCodec.export(listOf(chat))
-        assertFalse(exported.contains("Secret.kt")); assertFalse(exported.contains("buildRepository"))
+        val imported = ChatHistoryCodec.parseImport(exported).single()
+        assertEquals(chat.buildRepository, imported.buildRepository)
+        assertEquals(reply.build, imported.messages[1].build)
         val legacy = JSONObject(ChatHistoryCodec.encode(listOf(chat), "c"))
         legacy.getJSONArray("chats").getJSONObject(0).put("buildRepository", "bad repo")
         assertNull(ChatHistoryCodec.decode(legacy.toString()).second.single().buildRepository)
