@@ -78,7 +78,7 @@ Dua is a personal, single-user app: the backend is meant to be restricted to the
 
 #### What Dua Shares with Providers
 - **Text Messages:** User prompts and chat history (if using a configured provider).
-- **Attachments:** Images, PDFs, text/code files (provider-dependent; not all providers support all formats). For the signed-in owner, bounded text from attached text/code files and stored-file metadata are retained with the server-backed chat so follow-ups work across devices; raw attachment bytes are kept in private Storage and are not placed in JSON snapshots or local exports. Signed-out chats remain cache-only.
+- **Attachments:** Images, PDFs, text/code files (provider-dependent; not all providers support all formats). For the signed-in owner, bounded text from attached text/code files and stored-file metadata are retained with the server-backed chat so follow-ups work across devices. User-initiated JSON backups include that extracted text, stored-file references and audio transcripts. Raw attachment/audio bytes stay in private Storage and are not placed in JSON snapshots or backups. Signed-out chats remain cache-only.
 - **Stored files (signed-in owner only):** Larger files, spreadsheets and audio are uploaded from the phone straight to a private Supabase Storage bucket (`dua-files`) in a folder named after your account ID; file names are not part of the stored path. For each reply that uses them, the backend either downloads the file and sends it to the provider (Gemini; Kimi images), gives the provider a link that expires after one hour (OpenAI, xAI/Grok, Claude), or extracts text itself (spreadsheets as CSV, text files, PDFs for providers without PDF input). Gemini may keep a copy for 48 hours when large files go through its Files API. xAI handles attached PDFs with its document search tool.
 - **Audio:** Audio files and recorded voice notes are transcribed (by default xAI speech-to-text, then Gemini, then OpenAI, depending on which keys are configured). The transcript is sent to the chat provider and retained as bounded chat metadata in the signed-in server snapshot and phone cache, so follow-ups don't transcribe the audio again.
 - **Imagine (signed-in owner only):** Your description and any photo you attach for editing or animating are sent to xAI (Grok Imagine) or Google (Gemini, with `store: false`). Photos are read from your private bucket by the backend and sent as inline data, not as public links. Generated images come back as data; finished videos are downloaded by the backend from xAI's temporary link. Both are saved to your folder in the private `dua-files` bucket, and the app downloads them into its cache to show, save or share them. Saving copies a file into your phone's gallery (Pictures/Dua or Movies/Dua); sharing hands it to the app you pick. Daily usage counts (not prompts) are stored in Supabase to enforce caps.
@@ -124,7 +124,7 @@ API keys are stored server-side (Vercel Functions or Supabase) and are never exp
 - **Source icons:** to show a site icon on a source chip, the app requests `https://<site>/favicon.ico` directly from that site (no cookies). The site learns your IP address and that its icon was requested.
 
 #### Long conversations
-- When a chat outgrows the selected model's budget, the server asks the same provider to summarise the older turns. The summary is stored with the chat in the server snapshot and phone cache; exports remain user-initiated and sent with later messages in that chat. Removing a cached chat removes its cached summary; the server version remains until the server snapshot is changed or cleared.
+- When a chat outgrows the selected model's budget, the server asks the same provider to summarise the older turns. The summary is stored with the chat in the server snapshot and phone cache, included in user-initiated JSON backups, and sent with later messages in that chat. Removing a cached chat removes its cached summary; the server version remains until the server snapshot is changed or cleared.
 
 #### User Control
 - Both modes are optional and off by default.
@@ -179,7 +179,7 @@ API keys are stored server-side (Vercel Functions or Supabase) and are never exp
 ## User Rights & Controls
 
 ### Access
-- Users can export their chat history (JSON format) at any time.
+- The owner can export the cached chat view as JSON within the documented backup limits. Backups include drafts, extracted attachment text, stored-file references/transcripts, code outputs, Build proposals/PR links, summaries and Imagine metadata. They exclude memory notes, account session tokens and raw file/audio bytes. Import creates separate cache copies; files still require authenticated owner access to the original Storage objects.
 - Users can view their account settings and cloud snapshots in the app.
 
 ### Correction

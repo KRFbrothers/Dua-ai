@@ -49,8 +49,8 @@ class StoredFilesTest {
             files = listOf(FileRef(path, "invoice.pdf", "application/pdf", 1200), FileRef(audioPath, "note.m4a", "audio/mp4", 300, "Call Ammi at six")))
         val (_, chats) = ChatHistoryCodec.decode(ChatHistoryCodec.encode(listOf(SavedChat("c1", "Dua", "", listOf(message), 1L)), "c1"))
         assertEquals(message.files, chats.single().messages.single().files)
-        // Exports do not carry storage paths.
-        assertFalse(ChatHistoryCodec.export(chats).contains(path))
+        // Export stores references/transcripts, with file bytes remaining in private Storage.
+        assertEquals(message.files, ChatHistoryCodec.parseImport(ChatHistoryCodec.export(chats)).single().messages.single().files)
     }
 
     @Test fun invalidStoredRefsAreDroppedNotFatal() {

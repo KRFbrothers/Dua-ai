@@ -92,14 +92,14 @@ class BuildProposalTest {
         assertEquals("PR #3", BuildPullRequest("u", 3, draft = false).label)
     }
 
-    @Test fun proposalsAndPrLinksStayInLocalHistoryOnly() {
+    @Test fun proposalsAndPrLinksSurviveHistoryAndExport() {
         val proposal = BuildProposals.fromJson(proposalJson())!!
         val reply = ChatMessage(id = "r", text = "Review it.", isUser = false, model = "Dua", proposal = proposal)
         val chat = SavedChat("c", "Dua", "", listOf(ChatMessage(id = "u", text = "Fix it", isUser = true, model = "Dua"), reply), 5)
         val restored = ChatHistoryCodec.decode(ChatHistoryCodec.encode(listOf(chat), "c")).second.single().messages[1].proposal!!
         assertEquals(proposal, restored)
         assertTrue("contents survive a restart so the PR can still be created", restored.complete)
-        assertFalse(ChatHistoryCodec.export(listOf(chat)).contains("dua/fix-readme"))
+        assertEquals(proposal, ChatHistoryCodec.parseImport(ChatHistoryCodec.export(listOf(chat))).single().messages[1].proposal)
         // After the PR exists the contents are dropped; the link and the diffs stay.
         val created = proposal.copy(pullRequest = BuildPullRequest("https://github.com/KRFbrothers/Dua-ai/pull/80", 80, true, "dua/fix-readme-261008-134512"))
         val saved = ChatHistoryCodec.decode(ChatHistoryCodec.encode(listOf(chat.copy(messages = listOf(chat.messages[0], reply.copy(proposal = created)))), "c")).second.single().messages[1].proposal!!

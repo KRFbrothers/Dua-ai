@@ -51,12 +51,14 @@ class LongContextSearchTest {
         assertNull(ContextWindow.advance(sent, 3, " "))
     }
 
-    @Test fun summaryIsSavedLocallyButNotExportedOrImported() {
+    @Test fun summarySurvivesExportAndReferencesTheCopiedMessageOnImport() {
         val chat = SavedChat("c1", "Grok", "", turns(4), 1L, ChatSummary("Earlier bits", "m1"))
         val (_, decoded) = ChatHistoryCodec.decode(ChatHistoryCodec.encode(listOf(chat), "c1"))
         assertEquals(ChatSummary("Earlier bits", "m1"), decoded.single().summary)
-        assertFalse(ChatHistoryCodec.export(listOf(chat)).contains("Earlier bits"))
-        assertNull(ChatHistoryCodec.importCopies(emptyList(), listOf(chat)).single().summary)
+        assertEquals(chat.summary, ChatHistoryCodec.parseImport(ChatHistoryCodec.export(listOf(chat))).single().summary)
+        val imported = ChatHistoryCodec.importCopies(emptyList(), listOf(chat)).single()
+        assertEquals(chat.summary!!.text, imported.summary!!.text)
+        assertEquals(imported.messages[1].id, imported.summary!!.throughId)
         val legacy = JSONObject(ChatHistoryCodec.encode(listOf(chat.copy(summary = null)), "c1"))
         assertNull(ChatHistoryCodec.decode(legacy.toString()).second.single().summary)
     }

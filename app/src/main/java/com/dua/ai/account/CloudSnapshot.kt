@@ -23,7 +23,8 @@ object CloudSnapshotCodec {
         val memory = (0 until notes.length()).map { notes.get(it) as? String ?: error("Invalid memory note") }
         require(memory.size <= 10 && memory.all { it.isNotBlank() && it.length <= 200 }) { "Invalid cloud memory." }
         val copy = JSONObject(json.toString()).put("format", "dua-chat-export").put("exportedAt", 0)
-        return CloudSnapshot(ChatHistoryCodec.parseImport(copy.toString(), includeServerFields = true), memory)
+        // The backend validates cloud metadata; retain the existing lenient wire decoders here.
+        return CloudSnapshot(ChatHistoryCodec.parseImport(copy.toString(), includeServerFields = true, strictMetadata = false), memory)
     }
     private fun content(chat: SavedChat): String {
         val root = JSONObject(ChatHistoryCodec.export(listOf(chat), exportedAt = 0, includeServerFields = true))

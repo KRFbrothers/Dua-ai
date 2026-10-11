@@ -43,7 +43,7 @@ object ChatHistoryCodec {
         return parseImport(raw)
     }
 
-    fun parseImport(raw: String, includeServerFields: Boolean = false): List<SavedChat> {
+    fun parseImport(raw: String, includeServerFields: Boolean = true, strictMetadata: Boolean = true): List<SavedChat> {
         require(raw.toByteArray(Charsets.UTF_8).size <= MAX_IMPORT_BYTES) { "Choose a Dua JSON export up to 4 MiB." }
         var depth = 0
         var quoted = false
@@ -88,7 +88,8 @@ object ChatHistoryCodec {
                 val updatedAt = integer(chat, "updatedAt")
                 val messages = chat.getJSONArray("messages")
                 require(messages.length() <= 500) { invalid }
-                SavedChat(id, model, draft, (0 until messages.length()).map { i ->
+                val messageIds = mutableSetOf<String>()
+                val decoded = SavedChat(id, model, draft, (0 until messages.length()).map { i ->
                     val message = messages.getJSONObject(i)
                     val role = text(message, "role", 10)
                     val state = text(message, "state", 10)
@@ -98,7 +99,10 @@ object ChatHistoryCodec {
                     val seconds = if (role == "model" && message.has("thinkingSeconds")) integer(message, "thinkingSeconds").also { require(it <= 86400) { invalid } }.toInt() else null
                     // Optional since Imagine (Phase 3): stored references to generated images and videos.
                     val media = if (role == "model" && message.has("media")) com.dua.ai.imagine.ImagineCodec.mediaFrom(message.getJSONArray("media"), local = false) else emptyList()
-                    ChatMessage(id = if (includeServerFields) message.optString("id").takeIf { it.isNotBlank() && it.length <= 100 } ?: UUID.randomUUID().toString() else UUID.randomUUID().toString(),
+                    val messageId = if (includeServerFields && message.has("id")) text(message, "id", 100).also { require(it.isNotBlank()) { invalid } }
+                        else UUID.randomUUID().toString()
+                    require(messageIds.add(messageId)) { invalid }
+                    ChatMessage(id = messageId,
                         text = text(message, "text", 1048576), isUser = role == "user", model = model, state = state,
                         thinking = thinking?.takeIf { it.isNotBlank() }, thinkingSeconds = seconds, media = media,
                         attachmentText = if (includeServerFields && role == "user") message.optString("attachmentText").takeIf { it.isNotEmpty() }?.take(ChatMessage.MAX_ATTACHMENT_TEXT_CHARS) else null,
@@ -110,20 +114,27 @@ object ChatHistoryCodec {
                 }, updatedAt,
                     if (includeServerFields) com.dua.ai.model.ChatSummary.fromJson(chat.optJSONObject("summary")) else null,
                     if (includeServerFields) chat.optString("buildRepository").takeIf { com.dua.ai.model.BuildInfos.validRepository(it) } else null)
+                if (includeServerFields && strictMetadata) ChatImportMetadata.validate(chat, decoded)
+                decoded
             }
         } catch (_: Exception) { throw IllegalArgumentException(invalid) }
     }
 
     fun importCopies(existing: List<SavedChat>, imported: List<SavedChat>): List<SavedChat> {
         val used = existing.map { it.id }.toMutableSet()
-        return existing + imported.map { chat ->
+        return (existing + imported.map { chat ->
             var id: String
             do { id = UUID.randomUUID().toString() } while (!used.add(id))
-            chat.copy(id = id, messages = chat.messages.map { it.copy(id = UUID.randomUUID().toString()) }, summary = null)
-        }
+            val messageIds = chat.messages.associate { it.id to UUID.randomUUID().toString() }
+            chat.copy(id = id, messages = chat.messages.map { it.copy(id = messageIds.getValue(it.id)) },
+                summary = chat.summary?.let { summary -> summary.copy(throughId = messageIds.getValue(summary.throughId)) })
+        }).also { exportBackup(it) }
     }
 
-    fun export(chats: List<SavedChat>, exportedAt: Long = System.currentTimeMillis(), includeServerFields: Boolean = false): String = JSONObject()
+    /** Prepare and validate a complete, importable backup before opening/truncating its destination. */
+    fun exportBackup(chats: List<SavedChat>, exportedAt: Long = System.currentTimeMillis()): String = export(chats, exportedAt).also { parseImport(it) }
+
+    fun export(chats: List<SavedChat>, exportedAt: Long = System.currentTimeMillis(), includeServerFields: Boolean = true): String = JSONObject()
         .put("format", "dua-chat-export").put("version", 1).put("exportedAt", exportedAt)
         .put("chats", JSONArray().apply {
             chats.sortedByDescending { it.updatedAt }.forEach { chat ->

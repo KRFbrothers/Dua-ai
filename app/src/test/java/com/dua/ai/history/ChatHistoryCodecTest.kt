@@ -50,12 +50,12 @@ class ChatHistoryThinkingTest {
         val restored = ChatHistoryCodec.decode(ChatHistoryCodec.encode(listOf(chat), "one")).second.single()
         assertEquals(listOf(user, reply), restored.messages)
     }
-    @Test fun exportAndCloudKeepThinkingButNotFileText() {
+    @Test fun exportAndCloudKeepThinkingAndExtractedFileText() {
         val export = ChatHistoryCodec.export(listOf(chat), 1)
-        assertFalse(export.contains("attachmentText")); assertFalse(export.contains("1,2"))
+        assertTrue(export.contains("attachmentText")); assertTrue(export.contains("1,2"))
         val imported = ChatHistoryCodec.parseImport(export).single().messages
         assertEquals("First I checked…", imported[1].thinking); assertEquals(12, imported[1].thinkingSeconds)
-        assertNull(imported[0].attachmentText)
+        assertEquals(user.attachmentText, imported[0].attachmentText)
         val cloud = com.dua.ai.account.CloudSnapshotCodec.decode(com.dua.ai.account.CloudSnapshotCodec.encode(com.dua.ai.account.CloudSnapshot(listOf(chat), emptyList())))
         assertEquals(12, cloud.chats.single().messages[1].thinkingSeconds)
         assertEquals(1, org.json.JSONObject(export).getInt("version"))
