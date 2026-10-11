@@ -33,7 +33,7 @@ class AutomaticCloudSync(
     }
     interface LocalPort {
         fun read(): CloudSnapshot
-        /** Synchronous persistence with rollback on failure; keep an active chat's local buffer intact. */
+        /** Read includes pending edits; commit persists with rollback and rebinds the active chat's buffers. */
         fun commit(snapshot: CloudSnapshot)
     }
     interface StorePort {

@@ -1050,13 +1050,15 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 check(!syncBlocked()) { "Sync paused during a reply or manual review." }
                 check(historyReadable) { "Saved chats could not be read. Review Data controls before enabling sync." }
                 localPreferences.requireReadable()
+                // Include keystrokes still waiting for the draft debounce in the merge/baseline.
+                flushHistory()
                 return CloudSnapshot(_savedChats.value.toList(), localSettings.value.memory.toList())
             }
-            // Called without suspension on the main dispatcher. Active edit buffers and attachments
-            // stay visible, but the server copy wins for chats and memory; the phone only caches it.
+            // Read, merge and commit run without suspension on Main. Rebind the open chat only
+            // after persistence; otherwise its next draft save would write the stale cache back.
             override fun commit(snapshot: CloudSnapshot) {
                 check(!syncBlocked()) { "Sync paused during a reply or manual review." }
-                // Persist queued saves first (no list changes here; a pending draft save runs afterwards and keeps the live draft).
+                check(!draftSaver.pending) { "The draft changed after reading the cache. Retry sync before applying server data." }
                 historyWriter.flush()
                 com.dua.ai.account.CloudSnapshotCodec.encode(snapshot)
                 val settings = localSettings.value
@@ -1072,6 +1074,13 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     }
                     if (!saved) error("Synced chats could not be saved. Local data was kept.")
                     _savedChats.value = chats
+                    chats.find { it.id == activeId }?.let { chat ->
+                        _messages.value = chat.messages
+                        _selectedModel.value = chat.model
+                        _draft.value = chat.draft
+                        _summary.value = chat.summary
+                        _buildRepo.value = chat.buildRepository
+                    }
                 } catch (failure: Exception) {
                     try { localPreferences.update(settings) }
                     catch (_: Exception) { throw IllegalStateException("Sync interrupted. Review local memories before retrying.", failure) }
@@ -1088,7 +1097,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     fun retryAutomaticSync() { refreshSyncBusy(); automaticSync.retry() }
     fun resumeAutomaticSyncAfterReview() { refreshSyncBusy(); automaticSync.resumeAfterReview() }
     private fun syncBlocked() = account.state.value.busy || _dataBusy.value || _isTyping.value ||
-        _cloudPreview.value != null || _importPreview.value != null
+        _cloudPreview.value != null || _importPreview.value != null || _buildPr.value.values.any { it.creating }
     private fun refreshSyncBusy() = automaticSync.setBusy(syncBlocked())
     private val connectivity = application.getSystemService(android.net.ConnectivityManager::class.java)
     private val networkObserver = object : android.net.ConnectivityManager.NetworkCallback() {
@@ -1119,6 +1128,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     _selectedModel.value = it.model
                     _draft.value = it.draft
                     _summary.value = it.summary
+                    _buildRepo.value = it.buildRepository
                 }
             } catch (_: Exception) {
                 historyReadable = false
@@ -1134,6 +1144,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             }.distinctUntilChanged().collect { refreshSyncBusy() }
         }
         viewModelScope.launch { account.state.map { it.user?.id }.distinctUntilChanged().collect { automaticSync.accountChanged(); resumeImagineJobs() } }
+        viewModelScope.launch {
+            _buildPr.map { states -> states.values.any { it.creating } }.distinctUntilChanged().collect { refreshSyncBusy() }
+        }
         viewModelScope.launch {
             combine(_savedChats, localSettings) { chats, settings -> CloudSnapshot(chats, settings.memory) }
                 .distinctUntilChanged().collect { automaticSync.localChanged() }

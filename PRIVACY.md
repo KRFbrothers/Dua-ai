@@ -220,6 +220,6 @@ Dua AI integrates with:
 
 ## Policy Updates
 
-This policy is effective as of **2026-10-06**. Updates will be announced via GitHub Releases and the repository's discussions.
+This policy is effective as of **2026-10-11**. Updates will be announced via GitHub Releases and the repository's discussions.
 
-**Last Updated:** 2026-10-06
+**Last Updated:** 2026-10-11
