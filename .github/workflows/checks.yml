@@ -57,7 +57,7 @@ jobs:
         run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
       - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
       - name: Compile Android sources and run unit tests
-        run: bash ./gradlew :app:testDebugUnitTest --no-daemon --max-workers=2
+        run: bash ./gradlew :app:testDebugUnitTest -Pdua.ui-record --no-daemon --max-workers=2
       - name: Preserve unit test reports
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -66,4 +66,5 @@ jobs:
           path: |
             app/build/reports/tests/testDebugUnitTest/
             app/build/test-results/testDebugUnitTest/
+            app/build/approved-ui/
           if-no-files-found: ignore

@@ -24,7 +24,21 @@ enum class DuaDestination(val route: String) {
     ReplyLanguage("settings/voice/reply-language"),
     InputLanguage("settings/voice/input-language"),
     LiveVoicePicker("settings/voice/live-voices"),
-    FeatureSetup("settings/feature-setup");
+    FeatureSetup("settings/feature-setup"),
+    Account("settings/account"),
+    Accent("settings/accent"),
+    Images("images"), Library("library"), Agent("agent"), Work("work"), Plugins("plugins"),
+    General("settings/general"), UsageLimits("settings/usage-limits"), Safety("settings/safety"),
+    SecurityLogin("settings/security-login"), Storage("settings/storage"), HistoryData("settings/history-data"),
+    SettingsSearch("settings/search"), AvatarEdit("settings/avatar");
+
+    /** Dedicated screens absent from the source inventory; navigation stays honest about availability. */
+    val comingSoonTitle: String? get() = when (this) {
+        Images -> "Images"; Library -> "Library"; Agent -> "AI Agent"; Work -> "Work"; Plugins -> "Plugins"
+        General -> "General"; UsageLimits -> "Usage and limits"; Safety -> "Safety"
+        SecurityLogin -> "Security and login"; Storage -> "Storage"; HistoryData -> "History and data"
+        SettingsSearch -> "Search settings"; AvatarEdit -> "Edit profile photo"; else -> null
+    }
 
     companion object {
         /** Maps the page names used inside the device settings screens to destinations. */

@@ -26,6 +26,7 @@ import java.time.LocalTime
 /** Binds [ChatScreen] to [ChatViewModel]. Activity-result launchers live here so they survive sheets closing. */
 @Composable
 fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () -> Unit, onOpenVoice: () -> Unit, onOpenSetup: () -> Unit,
+    onOpenDestination: (com.dua.ai.ui.navigation.DuaDestination) -> Unit = {},
     onOpenComputer: () -> Unit = {},
     onOpenVoiceMode: () -> Unit = {},
     attachRequest: Int = 0, onAttachRequestHandled: () -> Unit = {}) {
@@ -99,6 +100,7 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
 
     val greeting = remember(account.user?.displayName) { greetingFor(LocalTime.now().hour, account.user?.displayName) }
     val state = ChatUiState(
+        profileName = account.user?.displayName.orEmpty().ifBlank { account.user?.email.orEmpty() },
         chatId = chatId, messages = messages, draft = draft, typing = typing, error = error, model = model,
         providers = integrations.providers, webMode = webMode, reasoning = reasoning,
         webSearchConfigured = integrations.searchAvailable(model), pageReadingAvailable = integrations.pageReadingAvailable,
@@ -198,6 +200,7 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
             },
             onClearAttachments = { viewModel.clearAttachments(); attachmentNotice = "" },
             onOpenSettings = onOpenSettings,
+            onOpenDestination = onOpenDestination,
             onOpenVoice = onOpenVoice,
             onOpenComputer = onOpenComputer,
             onOpenVoiceMode = onOpenVoiceMode,

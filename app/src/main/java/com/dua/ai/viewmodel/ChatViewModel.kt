@@ -22,6 +22,7 @@ import kotlinx.coroutines.CancellationException
 import com.dua.ai.network.DuaApiClient
 import com.dua.ai.network.DuaApiException
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
@@ -346,6 +347,16 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val pollJobs = mutableMapOf<String, Job>()
     private val localPreferences = com.dua.ai.settings.DevicePreferences(application)
     val localSettings = localPreferences.state
+    private val appearanceStore = com.dua.ai.settings.AppearanceStore(application)
+    val appearance = appearanceStore.data.stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, appearanceStore.initial)
+    val appearanceNotice = appearanceStore.notice
+    fun setAppearance(value: String) = saveAppearance { appearanceStore.setTheme(value) }
+    fun setAccent(value: com.dua.ai.settings.AccentPreset?) = saveAppearance { appearanceStore.setAccent(value) }
+    private fun saveAppearance(write: suspend () -> Unit) = viewModelScope.launch {
+        try { write(); _settingsStatus.value = "Saved on this device." }
+        catch (cancelled: CancellationException) { throw cancelled }
+        catch (_: java.io.IOException) { _settingsStatus.value = "Appearance could not be saved. Check device storage and retry." }
+    }
     private val _settingsStatus = MutableStateFlow("")
     val settingsStatus = _settingsStatus.asStateFlow()
     var foreground = false
@@ -355,7 +366,17 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         automaticSync.setForeground(value)
         refreshSyncNetwork()
     }
-    fun resetSettings() { try { localPreferences.reset(); _settingsStatus.value = "Device settings and Personal memory reset. Project settings and memory kept." } catch (error: Exception) { _settingsStatus.value = error.message ?: "Reset failed." } }
+    fun resetSettings() {
+        try { localPreferences.reset() }
+        catch (failure: Exception) { _settingsStatus.value = failure.message ?: "Reset failed."; return }
+        viewModelScope.launch {
+            try {
+                appearanceStore.reset()
+                _settingsStatus.value = "Device settings and Personal memory reset. Project settings and memory kept."
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: java.io.IOException) { _settingsStatus.value = "Other device settings reset; appearance could not be reset. Check storage and retry." }
+        }
+    }
     fun settingsNotice(text: String) { _settingsStatus.value = text }
     fun updateSettings(value: com.dua.ai.settings.LocalPreferences) {
         try { localPreferences.update(value); _settingsStatus.value = "Saved on this device." }

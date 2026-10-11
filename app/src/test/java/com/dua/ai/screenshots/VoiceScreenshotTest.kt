@@ -122,7 +122,7 @@ class VoiceScreenshotTest(private val dark: Boolean) {
 
     @Test fun settingsVoiceRow() = shot("34_settings_voice_row") {
         SettingsContent(SettingsUiState(email = "fareed@example.com", theme = mode, voice = "Grok voice (xAI) · Ara · Hindi"),
-            onBack = {}, onOpen = {}, onHaptic = {}, onGeneratedVoice = {})
+            onBack = {}, onOpen = {}, onGeneratedVoice = {})
     }
 }
 

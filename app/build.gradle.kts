@@ -143,6 +143,7 @@ android {
 val screenshotTestsEnabled = providers.gradleProperty("dua.screenshots").isPresent
 tasks.withType<Test>().configureEach {
     if (!screenshotTestsEnabled) exclude("**/screenshots/**")
+    if (providers.gradleProperty("dua.ui-record").isPresent) systemProperty("roborazzi.test.record", "true")
 }
 
 dependencies {
@@ -158,6 +159,7 @@ dependencies {
     implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
     implementation("androidx.exifinterface:exifinterface:1.4.1")
     implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.core.splashscreen)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)

@@ -107,7 +107,7 @@ Confirm production can support the plan and is not already failing.
 Highest impact, lowest risk: make Dua look professional, then add streaming and reasoning. Absorbs the former *Core Product Stability* and *Design and UX Polish* phases.
 
 **PR 1 — UI foundation (Android only, no API change, L):**
-- `ui/theme` tokens: brand colors (light/dark), one type scale, shapes, 4-dp spacing — replacing template purples and ad-hoc font sizes
+- `ui/theme` tokens: brand colors (light/dark), one type scale, shapes, 4-dp spacing — preserving the original tokens while adding approved accent roles and independent DataStore appearance/accent preferences
 - Split `ChatScreen.kt` into focused components and move to Navigation Compose
 - Markdown and code-block rendering with copy; full-width assistant replies, user messages as bubbles
 - New composer with mode chips (Auto and Search map to today's web modes; Reasoning stays hidden until PR 2), attachment bottom sheet with thumbnail chips, source chips from existing reply links

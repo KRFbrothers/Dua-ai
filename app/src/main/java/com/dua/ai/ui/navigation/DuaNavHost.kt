@@ -102,7 +102,8 @@ fun DuaNavHost(viewModel: ChatViewModel, voice: ReplyVoice, notificationRoute: P
         composable(DuaDestination.Chat.route) {
             BusyBackGuard(viewModel)
             ChatRoute(viewModel, voice,
-                onOpenSettings = { navigator.open(DuaDestination.Settings) },
+                onOpenSettings = { navigator.open(DuaDestination.Profile) },
+                onOpenDestination = { navigator.open(it) },
                 onOpenVoice = { navigator.open(DuaDestination.Voice) },
                 onOpenSetup = { navigator.open(DuaDestination.FeatureSetup) },
                 onOpenComputer = { navigator.open(DuaDestination.Computer) },
@@ -138,13 +139,31 @@ fun DuaNavHost(viewModel: ChatViewModel, voice: ReplyVoice, notificationRoute: P
         }
         composable(DuaDestination.Profile.route) {
             BusyBackGuard(viewModel)
+            SettingsScreen(viewModel, onBack = navigator::back, onOpen = navigator::open)
+        }
+        composable(DuaDestination.Account.route) {
+            BusyBackGuard(viewModel)
             ProfileScreen(viewModel, onBack = navigator::back)
+        }
+        listOf(DuaDestination.Appearance, DuaDestination.Accent).forEach { destination ->
+            composable(destination.route) {
+                BusyBackGuard(viewModel)
+                com.dua.ai.ui.settings.AppearanceScreen(viewModel, onBack = navigator::back, accentPage = destination == DuaDestination.Accent)
+            }
+        }
+        DuaDestination.entries.filter { it.comingSoonTitle != null }.forEach { destination ->
+            composable(destination.route) {
+                BusyBackGuard(viewModel)
+                com.dua.ai.ui.components.DuaPageScaffold(destination.comingSoonTitle!!, navigator::back) {
+                    androidx.compose.material3.Text("Coming soon")
+                }
+            }
         }
         composable(DuaDestination.CloudSync.route) {
             BusyBackGuard(viewModel)
             CloudSyncScreen(viewModel, onBack = navigator::back, onProfile = { navigator.open(DuaDestination.Profile) })
         }
-        listOf(DuaDestination.Appearance to "Appearance", DuaDestination.Memory to "Memory", DuaDestination.Privacy to "Privacy",
+        listOf(DuaDestination.Memory to "Memory", DuaDestination.Privacy to "Privacy",
             DuaDestination.Sharing to "Sharing", DuaDestination.Permissions to "Permissions", DuaDestination.Notifications to "Notifications").forEach { (destination, page) ->
             composable(destination.route) {
                 BusyBackGuard(viewModel)
