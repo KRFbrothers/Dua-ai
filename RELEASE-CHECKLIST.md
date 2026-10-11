@@ -145,7 +145,7 @@ No private signing keys are supplied by this repository. The manual `Build perso
 - Edit a completed task, reopen it, cancel/confirm deletion; check archived tasks are readable and cannot be edited.
 - Review full task lists in cloud download/upload. Export a task-only JSON backup and import differing tasks; existing tasks must remain in their original project.
 - Rename/archive/restore/reset settings and confirm tasks are kept. Simulate divergent same-project edits and confirm automatic sync pauses for review.
-- Due dates and device reminders are covered by the following update; a daily planner remains pending. Physical-device and production verification are pending.
+- Due dates/device reminders and the daily planner are covered by the following updates. Physical-device and production verification are pending.
 
 
 ## Task reminders update
@@ -155,4 +155,14 @@ No private signing keys are supplied by this repository. The manual `Build perso
 - Enable task reminders in Settings → Notifications. Verify generic/private notification delivery after backgrounding the app, without a network connection.
 - Complete/delete/archive a task before its due time and confirm its stale alarm cannot notify. Edit the due date and ensure only the new deadline is scheduled.
 - Check reboot/package-update/clock-change scheduling, denied notifications, permission revocation and reminder reset. Confirm task dates survive while consent/history remain device-local and excluded from backup/transfer.
-- Android battery saving may delay delivery; exact alarms and a daily planner are not implemented. These device checks are pending.
+- Android battery saving may delay delivery; exact alarms are not implemented. These device checks are pending.
+
+## Daily planner update
+
+- Open Projects → Daily planner. Check Today, Previous/Next and project filters using Personal/Coding/Business tasks: previous-day overdue, today's elapsed/future deadlines, tomorrow, completed and undated tasks.
+- Verify every task shows its project; archived projects are hidden, and a removed/archived selected filter returns to all active projects after sync.
+- Complete/reopen matching task IDs from different projects and verify only the intended task changes. A failed save must keep the task state and show an error.
+- Open a project task list from the planner, edit a deadline, and return with Back to planner. The selected day/filter must remain and the new deadline group must update. An empty selected project must offer Manage tasks.
+- Verify resume/midnight/phone-zone changes refresh Today and overdue labels within one minute; a browsed date stays fixed. Confirm the same absolute due timestamp remains after a time-zone change, including clock-change days.
+- Sync completion/date edits, restart and review/download on another device. Verify the planner reflects the current server snapshot and creates no separate task store or provider request. Completed sections describe due dates, not completion history.
+- See [PLANNER.md](PLANNER.md). Physical-device and authenticated production checks remain pending; recurrence and separate planned dates are not implemented.
