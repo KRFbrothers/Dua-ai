@@ -203,7 +203,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         val current = _integrations.value
         // /api/setup has no per-feature config; keep what /api/config reported.
         _integrations.value = next.copy(busy = true, notice = "Setup status refreshed.",
-            webSearchConfigured = current.webSearchConfigured, pageReadingAvailable = current.pageReadingAvailable, projectsEnabled = current.projectsEnabled,
+            webSearchConfigured = current.webSearchConfigured, pageReadingAvailable = current.pageReadingAvailable, projectsEnabled = current.projectsEnabled, projectTasksEnabled = current.projectTasksEnabled,
             filesEnabled = current.filesEnabled, filesMaxBytes = current.filesMaxBytes, nativeSearch = current.nativeSearch,
             xSearchAvailable = current.xSearchAvailable, longContext = current.longContext, imagine = current.imagine, codeExecution = current.codeExecution, build = current.build,
             voice = current.voice, generatedVoiceConfigured = current.voice?.ttsEnabled ?: next.generatedVoiceConfigured)
@@ -1094,8 +1094,10 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     fun saveProject(id: String?, name: String, instructions: String, archived: Boolean): Boolean {
         if (syncBlocked()) { _projectNotice.value = "Finish the current action before editing projects."; return false }
         return try {
+            localPreferences.requireReadable()
             val settings = localSettings.value
-            val project = com.dua.ai.projects.ChatProject(id ?: UUID.randomUUID().toString(), name.trim(), instructions, archived)
+            val project = (settings.projects.find { it.id == id } ?: com.dua.ai.projects.ChatProject(id ?: UUID.randomUUID().toString(), name.trim()))
+                .copy(name = name.trim(), instructions = instructions, archived = archived)
             check(id == null || settings.projects.any { it.id == id }) { "Project changed. Reopen the editor." }
             val next = if (id == null) settings.projects + project else settings.projects.map { if (it.id == id) project else it }
             com.dua.ai.projects.ProjectCodec.validate(next)
@@ -1104,6 +1106,37 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             _projectNotice.value = "Saved to the cache. Sync to apply these project settings on the server."
             true
         } catch (failure: Exception) { _projectNotice.value = failure.message ?: "Project could not be saved."; false }
+    }
+
+    private fun changeTasks(projectId: String, change: (List<com.dua.ai.projects.ProjectTask>) -> List<com.dua.ai.projects.ProjectTask>): Boolean {
+        if (syncBlocked()) { _projectNotice.value = "Finish the current action before editing tasks."; return false }
+        if (!_integrations.value.projectTasksEnabled) { _projectNotice.value = "Refresh setup after deploying the Tasks backend before editing tasks."; return false }
+        return try {
+            localPreferences.requireReadable()
+            val settings = localSettings.value
+            val project = settings.projects.find { it.id == projectId } ?: error("Project changed. Reopen Tasks.")
+            check(!project.archived) { "Restore this project before editing tasks." }
+            val updated = project.copy(tasks = change(project.tasks))
+            val next = settings.projects.map { if (it.id == projectId) updated else it }
+            com.dua.ai.account.CloudSnapshotCodec.encode(CloudSnapshot(_savedChats.value, settings.memory, next))
+            localPreferences.update(settings.copy(projects = next))
+            _projectNotice.value = "Task saved to the cache. Sync to save it on the server."
+            true
+        } catch (failure: Exception) { _projectNotice.value = failure.message ?: "Task could not be saved."; false }
+    }
+
+    fun saveTask(projectId: String, taskId: String?, title: String): Boolean = changeTasks(projectId) { tasks ->
+        val existing = taskId?.let { id -> tasks.find { it.id == id } ?: error("Task changed. Reopen the editor.") }
+        val task = existing?.copy(title = title.trim()) ?: com.dua.ai.projects.ProjectTask(UUID.randomUUID().toString(), title.trim())
+        if (existing == null) tasks + task else tasks.map { if (it.id == taskId) task else it }
+    }
+    fun toggleTask(projectId: String, taskId: String): Boolean = changeTasks(projectId) { tasks ->
+        check(tasks.any { it.id == taskId }) { "Task changed. Reopen Tasks." }
+        tasks.map { if (it.id == taskId) it.copy(completed = !it.completed) else it }
+    }
+    fun deleteTask(projectId: String, taskId: String): Boolean = changeTasks(projectId) { tasks ->
+        check(tasks.any { it.id == taskId }) { "Task changed. Reopen Tasks." }
+        tasks.filterNot { it.id == taskId }
     }
 
     private fun projectUnavailable(): String? {

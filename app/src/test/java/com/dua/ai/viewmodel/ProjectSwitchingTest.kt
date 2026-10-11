@@ -6,6 +6,8 @@ import com.dua.ai.account.CloudSnapshot
 import com.dua.ai.history.ChatHistoryCodec
 import com.dua.ai.history.SavedChat
 import com.dua.ai.projects.ProjectCodec
+import com.dua.ai.setup.IntegrationState
+import kotlinx.coroutines.flow.MutableStateFlow
 import com.dua.ai.settings.DevicePreferences
 import com.dua.ai.settings.LocalPreferences
 import com.dua.ai.setup.AutomaticCloudSync
@@ -36,6 +38,42 @@ class ProjectSwitchingTest {
     }
     @After fun teardown() { store.clear() }
     private fun persisted() = ChatHistoryCodec.decode(app.getSharedPreferences("dua_chat_history", 0).getString("history", null)!!).second
+    @Suppress("UNCHECKED_CAST")
+    private fun enableTasks() {
+        val flow = ChatViewModel::class.java.getDeclaredField("_integrations").apply { isAccessible = true }.get(model) as MutableStateFlow<IntegrationState>
+        flow.value = flow.value.copy(projectsEnabled = true, projectTasksEnabled = true)
+    }
+    @Test fun tasksStayWithProjectAndSurviveSettingsEditsResetAndViewModelRestart() {
+        enableTasks()
+        assertTrue(model.saveTask("coding", null, "  Review diff  "))
+        var task = model.localSettings.value.projects.single { it.id == "coding" }.tasks.single()
+        assertEquals("Review diff", task.title)
+        assertTrue(model.toggleTask("coding", task.id))
+        assertTrue(model.saveTask("coding", task.id, "Review final diff"))
+        task = model.localSettings.value.projects.single { it.id == "coding" }.tasks.single()
+        assertTrue(task.completed)
+        assertTrue(model.saveProject("coding", "Code work", "Use Kotlin", false))
+        model.resetSettings()
+        val reopened = ChatViewModel(app).also { store.put("reopened", it) }
+        assertEquals(listOf(task), reopened.localSettings.value.projects.single { it.id == "coding" }.tasks)
+        assertTrue(reopened.localSettings.value.projects.single { it.id == "business" }.tasks.isEmpty())
+        assertTrue(model.deleteTask("coding", task.id))
+        assertTrue(model.localSettings.value.projects.single { it.id == "coding" }.tasks.isEmpty())
+        assertFalse(model.toggleTask("coding", task.id))
+    }
+    @Test fun oldBackendArchivedProjectsAndInvalidTasksRejectChangesWithoutDroppingExistingData() {
+        assertFalse(model.saveTask("coding", null, "Keep safe"))
+        enableTasks()
+        assertTrue(model.saveTask("coding", null, "Keep safe"))
+        assertTrue(model.saveProject("coding", "Coding", "", true))
+        val original = model.localSettings.value.projects
+        assertFalse(model.saveTask("coding", null, "Blocked"))
+        assertEquals(original, model.localSettings.value.projects)
+        assertTrue(model.saveProject("coding", "Coding", "", false))
+        assertFalse(model.saveTask("coding", null, " "))
+        assertFalse(model.saveTask("coding", "missing", "No accidental replacement"))
+        assertEquals(listOf("Keep safe"), model.localSettings.value.projects.single { it.id == "coding" }.tasks.map { it.title })
+    }
     @Test fun switchingSavesOldDraftAndPersistsNewProjectWithoutMovingOldChats() {
         model.updateDraft("Edited personal draft")
         model.selectProject("coding")

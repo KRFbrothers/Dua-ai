@@ -326,4 +326,4 @@ Model names, endpoints and prices in this roadmap were checked against official 
 
 ## Personal/Coding/Business follow-up: Projects
 
-The first Projects implementation adds server-backed project definitions and custom instructions, project-scoped chat history, archive/restore and sync/backup compatibility. See [PROJECTS.md](PROJECTS.md). Dedicated project file libraries, editable memory per project and per-project connected tools remain pending; tasks/reminders and business workflows are later steps. This source implementation still needs an updated APK and live/device verification.
+The first Projects implementation adds server-backed project definitions and custom instructions, project-scoped chat history, archive/restore and sync/backup compatibility. See [PROJECTS.md](PROJECTS.md). Dedicated project file libraries, editable memory per project and per-project connected tools remain pending; project to-do lists are implemented in the next source increment ([TASKS.md](TASKS.md)); reminders, a daily planner and business workflows remain later steps. This source implementation still needs an updated APK and live/device verification.

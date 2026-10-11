@@ -1,13 +1,25 @@
 export const PERSONAL_PROJECT = 'personal';
 export const defaultProjects = () => ['Personal', 'Coding', 'Business'].map(name => ({ id: name.toLowerCase(), name, instructions: '', archived: false }));
 export const validProjectId = id => typeof id === 'string' && /^[A-Za-z0-9_-]{1,100}$/.test(id);
+function validateTasks(tasks) {
+  if (!Array.isArray(tasks) || tasks.length > 100 || new Set(tasks.map(t => t?.id)).size !== tasks.length ||
+      !tasks.every(t => t && typeof t === 'object' && !Array.isArray(t) && Object.keys(t).sort().join(',') === 'completed,id,title' &&
+        validProjectId(t.id) && typeof t.title === 'string' && t.title.trim() && t.title.length <= 200 && typeof t.completed === 'boolean')) {
+    throw new Error('Invalid tasks. Keep at most 100 per project with titles up to 200 characters.');
+  }
+  return tasks.map(t => ({ id: t.id, title: t.title, completed: t.completed }));
+}
 export function validateProjects(value) {
   const valid = Array.isArray(value) && value.length >= 1 && value.length <= 20 &&
     new Set(value.map(p => p?.id)).size === value.length && value.some(p => p?.id === PERSONAL_PROJECT) && value.some(p => p?.archived === false) &&
-    value.every(p => p && typeof p === 'object' && !Array.isArray(p) && Object.keys(p).sort().join(',') === 'archived,id,instructions,name' &&
+    value.every(p => p && typeof p === 'object' && !Array.isArray(p) && ['archived,id,instructions,name', 'archived,id,instructions,name,tasks'].includes(Object.keys(p).sort().join(',')) &&
       validProjectId(p.id) && typeof p.name === 'string' && p.name.trim() && p.name.length <= 80 && typeof p.instructions === 'string' && p.instructions.length <= 4000 && typeof p.archived === 'boolean');
   if (!valid) throw new Error('Invalid projects. Keep Personal, one active project, and at most 20 projects.');
-  return value.map(p => ({ id: p.id, name: p.name, instructions: p.instructions, archived: p.archived }));
+  return value.map(p => {
+    const result = { id: p.id, name: p.name, instructions: p.instructions, archived: p.archived };
+    if (p.tasks !== undefined) result.tasks = validateTasks(p.tasks);
+    return result;
+  });
 }
 
 /** Read instructions from the owner snapshot, never from client-supplied instruction text. */

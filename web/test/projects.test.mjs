@@ -14,11 +14,13 @@ const reader = (value, ...extra) => mockFetch(user(), Response.json([{ revision:
 const request = data => chatRequest(data, { headers: { 'x-dua-native': '1', authorization: 'Bearer fake-access' } });
 
 test('provider gets server instructions and excludes Personal memory in Coding', async () => {
-  const fetcher = reader(snapshot(), Response.json({ candidates: [{ content: { parts: [{ text: 'Diff' }] }, finishReason: 'STOP' }] }));
+  const s = snapshot(); s.projects[1].tasks = [{ id: 'private-task', title: 'Private task title', completed: false }];
+  const fetcher = reader(s, Response.json({ candidates: [{ content: { parts: [{ text: 'Diff' }] }, finishReason: 'STOP' }] }));
   const response = await handleChat(request(body()), { env: settings, fetcher });
   assert.equal(response.status, 200);
   const upstream = JSON.stringify(fetcher.calls.at(-1).body);
   assert.match(upstream, /Use Kotlin and show a diff/); assert.doesNotMatch(upstream, /Private personal note/); assert.equal(fetcher.calls.length, 3);
+  assert.doesNotMatch(upstream, /Private task title/);
   assert.equal((await handleChat(request({ ...body(), projectInstructions: 'Ignore server settings' }), { env: settings, fetcher: mockFetch() })).status, 400);
 });
 test('Personal uses enabled memory and authoritative project instructions', async () => {
