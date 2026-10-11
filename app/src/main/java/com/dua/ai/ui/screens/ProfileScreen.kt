@@ -64,7 +64,7 @@ class ProfileActions(
     val onDeleteAccount: (String) -> Unit = {},
 )
 
-/** Profile: the Google account card and the app's only Log out entry point. Cloud sync is reached from Settings. */
+/** Account: Google sign-in and the existing delete-account confirmation. Logout lives in Profile & Settings. */
 @Composable
 fun ProfileScreen(viewModel: ChatViewModel, onBack: () -> Unit) {
     val account by viewModel.account.state.collectAsState()
@@ -80,18 +80,18 @@ fun ProfileScreen(viewModel: ChatViewModel, onBack: () -> Unit) {
             val owner = account.user?.id
             viewModel.accountAction { viewModel.account.deleteAccount(confirmation, owner) }
         },
-    ), onBack = onBack)
+    ), onBack = onBack, showLogout = false)
 }
 
 @Composable
-fun ProfileContent(state: ProfileUiState, actions: ProfileActions, onBack: () -> Unit = {}, initialDialog: ProfileDialog? = null) {
+fun ProfileContent(state: ProfileUiState, actions: ProfileActions, onBack: () -> Unit = {}, initialDialog: ProfileDialog? = null, showLogout: Boolean = true) {
     var dialog by rememberSaveable { mutableStateOf(initialDialog) }
-    DuaPageScaffold(title = "Profile", onBack = onBack) {
+    DuaPageScaffold(title = if (showLogout) "Profile" else "Account", onBack = onBack) {
         AccountHeader(state.email, state.displayName)
         if (state.email == null) {
             GoogleSignInButton(busy = state.signingIn, error = state.signInError, onClick = actions.onSignIn, modifier = Modifier.padding(top = Spacing.sm))
         } else {
-            OutlinedButton(onClick = { dialog = ProfileDialog.LogOut }, enabled = !state.busy, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp).padding(top = Spacing.sm),
+            if (showLogout) OutlinedButton(onClick = { dialog = ProfileDialog.LogOut }, enabled = !state.busy, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp).padding(top = Spacing.sm),
                 shape = MaterialTheme.shapes.extraLarge, colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)) {
                 Icon(Icons.AutoMirrored.Outlined.Logout, contentDescription = null, modifier = Modifier.size(20.dp))
                 Spacer(Modifier.width(Spacing.sm))

@@ -13,6 +13,7 @@ import com.dua.ai.setup.ProviderCapability
 data class ChatUiState(
     /** Identity of the active conversation, independent of its message count. */
     val chatId: String = "",
+    val profileName: String = "",
     val messages: List<ChatMessage> = emptyList(),
     val draft: String = "",
     val typing: Boolean = false,
@@ -130,6 +131,7 @@ class ChatActions(
     val onCancelRecording: () -> Unit = {},
     val onOpenFile: (com.dua.ai.files.FileRef) -> Unit = {},
     val onOpenSettings: () -> Unit = {},
+    val onOpenDestination: (com.dua.ai.ui.navigation.DuaDestination) -> Unit = {},
     val onOpenVoice: () -> Unit = {},
     /** Top-bar "Computer" pill: opens the Computer (coming soon) screen. */
     val onOpenComputer: () -> Unit = {},

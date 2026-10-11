@@ -1,33 +1,28 @@
 package com.dua.ai.ui.history
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.DeleteOutline
-import androidx.compose.material.icons.outlined.EditNote
 import androidx.compose.material.icons.outlined.Search
-import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -39,6 +34,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.semantics.CustomAccessibilityAction
@@ -64,7 +60,7 @@ import kotlinx.coroutines.withContext
 private data class SearchResults(val chats: List<SavedChat>, val query: String, val matches: List<HistoryMatch>)
 
 /**
- * History drawer: new chat, search, chats grouped by date, and Settings.
+ * Approved sidebar / expanded Aura: fixed navigation and footer, with project-scoped search and a scrolling recent-chat list.
  * Long-press a chat (or use the accessibility action) to remove its cached copy.
  */
 @Composable
@@ -78,7 +74,14 @@ fun HistoryDrawer(
     now: Long? = null,
     zone: ZoneId = ZoneId.systemDefault(),
     projectId: String? = null,
+    onProjects: () -> Unit = {},
+    onDestination: (com.dua.ai.ui.navigation.DuaDestination) -> Unit = {},
+    profileName: String = "",
+    activeChatId: String? = null,
+    drawerOpen: Boolean = true,
 ) {
+    var aura by rememberSaveable { mutableStateOf(false) }
+    androidx.activity.compose.BackHandler(enabled = aura && drawerOpen) { aura = false }
     var query by rememberSaveable(projectId) { mutableStateOf("") }
     val scoped = remember(chats, projectId) { if (projectId == null) chats else chats.filter { it.projectId == projectId } }
     val needle = query.trim()
@@ -96,16 +99,9 @@ fun HistoryDrawer(
     val snippets = remember(matches) { matches.orEmpty().associateBy { it.chat.id } }
     val reference = now ?: remember(chats) { System.currentTimeMillis() }
     val groups = remember(filtered, reference, zone) { HistoryGrouping.group(filtered, reference, zone) }
-    ModalDrawerSheet(drawerContainerColor = MaterialTheme.colorScheme.surfaceContainerLow, modifier = Modifier.width(Sizes.drawerWidth)) {
-        Column(Modifier.fillMaxSize()) {
-            Row(Modifier.fillMaxWidth().padding(start = Spacing.xl, end = Spacing.xs, top = Spacing.sm), verticalAlignment = Alignment.CenterVertically) {
-                Text("Dua", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
-                IconButton(onClick = onNewChat, enabled = newChatEnabled) { Icon(Icons.Outlined.EditNote, contentDescription = "New chat") }
-            }
-            SearchField(query, { query = it.take(HistorySearch.MAX_QUERY_CHARS) }, Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm))
-            Text("Search messages and drafts in this project", style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = Spacing.lg))
-            LazyColumn(Modifier.weight(1f).fillMaxWidth(), contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.xs)) {
+    SidebarPanel(aura, { aura = it }, query, { query = it.take(HistorySearch.MAX_QUERY_CHARS) },
+        newChatEnabled, onNewChat, onOpenSettings, onProjects, onDestination, profileName) {
+            LazyColumn(Modifier.weight(1f).fillMaxWidth().testTag("recent-chats"), contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.xs)) {
                 if (searching) item { Text("Searching chats…", modifier = Modifier.padding(Spacing.lg)) }
                 else if (groups.isEmpty()) item {
                     Column(Modifier.fillMaxWidth().padding(Spacing.lg)) {
@@ -120,23 +116,15 @@ fun HistoryDrawer(
                         Text(bucket.label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(start = Spacing.md, top = Spacing.lg, bottom = Spacing.xs).semantics { heading() })
                     }
-                    items(items, key = { it.id }) { chat -> HistoryRow(chat, snippets[chat.id], onOpen = { onOpenChat(chat.id) }, onDelete = { onDeleteChat(chat.id) }) }
+                    items(items, key = { it.id }) { chat -> HistoryRow(chat, snippets[chat.id], onOpen = { onOpenChat(chat.id) }, onDelete = { onDeleteChat(chat.id) }, active = chat.id == activeChatId) }
                 }
             }
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-            Row(Modifier.fillMaxWidth().padding(Spacing.sm).clip(DuaShape.card)
-                .combinedClickableCompat(onClick = onOpenSettings).heightIn(min = 52.dp).padding(horizontal = Spacing.md),
-                verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Outlined.Settings, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text("Settings", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(start = Spacing.lg))
-            }
-        }
     }
 }
 
 @Composable
-private fun SearchField(value: String, onValueChange: (String) -> Unit, modifier: Modifier = Modifier) {
-    Surface(shape = DuaShape.chip, color = MaterialTheme.colorScheme.surfaceContainerHigh, modifier = modifier.fillMaxWidth()) {
+internal fun SearchField(value: String, onValueChange: (String) -> Unit, modifier: Modifier = Modifier) {
+    Surface(shape = DuaShape.chip, color = MaterialTheme.colorScheme.surfaceContainerLow, border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant), modifier = modifier.fillMaxWidth()) {
         Row(Modifier.heightIn(min = Sizes.touchTarget).padding(start = Spacing.md), verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Outlined.Search, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(Sizes.iconSmall))
             Box(Modifier.weight(1f).padding(horizontal = Spacing.md)) {
@@ -146,16 +134,18 @@ private fun SearchField(value: String, onValueChange: (String) -> Unit, modifier
                     cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                     modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Search chats" })
             }
-            if (value.isNotEmpty()) IconButton(onClick = { onValueChange("") }) { Icon(Icons.Outlined.Close, contentDescription = "Clear search") }
+            if (value.isNotEmpty()) IconButton(onClick = { onValueChange("") }, modifier = Modifier.size(48.dp)) { Icon(Icons.Outlined.Close, contentDescription = "Clear search") }
         }
     }
 }
 
 @Composable
-private fun HistoryRow(chat: SavedChat, match: HistoryMatch?, onOpen: () -> Unit, onDelete: () -> Unit) {
+private fun HistoryRow(chat: SavedChat, match: HistoryMatch?, onOpen: () -> Unit, onDelete: () -> Unit, active: Boolean = false) {
     var menu by remember { mutableStateOf(false) }
+    var unavailable by remember { mutableStateOf<String?>(null) }
     Box {
         Row(Modifier.fillMaxWidth().clip(DuaShape.card)
+            .background(if (active) MaterialTheme.colorScheme.primaryContainer else androidx.compose.ui.graphics.Color.Transparent)
             .combinedClickableCompat(onClick = onOpen, onLongClick = { menu = true }, onLongClickLabel = "Chat options")
             .semantics { customActions = listOf(CustomAccessibilityAction("Remove cached chat") { onDelete(); true }) }
             .heightIn(min = Sizes.touchTarget).padding(horizontal = Spacing.md, vertical = Spacing.sm),
@@ -173,9 +163,16 @@ private fun HistoryRow(chat: SavedChat, match: HistoryMatch?, onOpen: () -> Unit
             }
         }
         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+            listOf("Rename", "Pin").forEach { title ->
+                DropdownMenuItem(text = { Text(title) }, onClick = { menu = false; unavailable = title })
+            }
             DropdownMenuItem(text = { Text("Remove cached chat") }, leadingIcon = { Icon(Icons.Outlined.DeleteOutline, contentDescription = null) },
                 onClick = { menu = false; onDelete() })
         }
+    }
+    unavailable?.let { title ->
+        androidx.compose.material3.AlertDialog(onDismissRequest = { unavailable = null }, title = { Text(title) },
+            text = { Text("Coming soon") }, confirmButton = { androidx.compose.material3.TextButton(onClick = { unavailable = null }) { Text("Close") } })
     }
 }
 

@@ -17,6 +17,7 @@ import com.dua.ai.viewmodel.ChatViewModel
 @Composable
 fun DuaApp(viewModel: ChatViewModel = viewModel(), notificationRoute: Pair<String, String>? = null) {
     val preferences by viewModel.localSettings.collectAsState()
+    val appearance by viewModel.appearance.collectAsState()
     LaunchedEffect(Unit) {
         viewModel.loadProviderConfiguration(); viewModel.loadIntegrations()
         // Refresh a saved session so the greeting picks up the current Google account name.
@@ -33,7 +34,7 @@ fun DuaApp(viewModel: ChatViewModel = viewModel(), notificationRoute: Pair<Strin
         lifecycle.addObserver(observer)
         onDispose { lifecycle.removeObserver(observer) }
     }
-    DuaTheme(preferences) {
+    DuaTheme(preferences.copy(theme = appearance.theme), accent = appearance.accent) {
         val voice = rememberReplyVoice(viewModel)
         DuaNavHost(viewModel, voice, notificationRoute)
     }

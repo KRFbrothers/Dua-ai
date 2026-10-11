@@ -20,9 +20,7 @@ import androidx.compose.ui.semantics.*
 import androidx.core.content.ContextCompat
 import com.dua.ai.viewmodel.ChatViewModel
 import com.dua.ai.settings.LocalReplyNotifications
-import androidx.compose.foundation.selection.selectable
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.semantics.Role
 import com.dua.ai.ui.components.DuaPageScaffold
 import com.dua.ai.ui.components.SettingsSection
 
@@ -53,26 +51,13 @@ fun DeviceSettingsScreen(viewModel: ChatViewModel, page: String, onBack: () -> U
             viewModel.settingsNotice(com.dua.ai.tasks.TaskReminders.status(context))
         } catch (failure: Exception) { viewModel.settingsNotice(failure.message ?: "Task reminders could not be enabled.") }
     }
+    if (page in listOf("ColorMode", "FontStyle", "Appearance")) {
+        com.dua.ai.ui.settings.AppearanceScreen(viewModel, onBack)
+        return
+    }
     DuaPageScaffold(title = when (page) { "ColorMode", "FontStyle", "Appearance" -> "Appearance"; else -> page }, onBack = onBack) {
         fun notice(text: String) = viewModel.settingsNotice(text)
         when (page) {
-            "ColorMode", "FontStyle", "Appearance" -> {
-                SettingsSection("Color mode") {
-                    listOf("dark" to "Dark", "light" to "Light", "system" to "Match system").forEach { (choice, label) ->
-                        ChoiceRow(label, selected = settings.theme == choice) { viewModel.updateSettings(settings.copy(theme = choice)) }
-                    }
-                }
-                SettingsSection("Font") {
-                    listOf("default" to "Inter (default)", "system" to "Device font", "serif" to "Serif", "monospace" to "Monospace").forEach { (choice, label) ->
-                        ChoiceRow(label, selected = settings.font == choice) { viewModel.updateSettings(settings.copy(font = choice)) }
-                    }
-                }
-                Text("Saved on this device and applied to every Dua screen. Text size follows your phone's font size setting.",
-                    style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Surface(color = MaterialTheme.colorScheme.surfaceContainer, shape = MaterialTheme.shapes.large, modifier = Modifier.fillMaxWidth()) {
-                    Text("I am Dua · आज मैं आपकी कैसे मदद करूँ? · 0123456789", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(16.dp))
-                }
-            }
             "Memory" -> {
                 Row(Modifier.fillMaxWidth().heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically) { Text("Use memory in replies", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f)); Switch(settings.memoryEnabled, { viewModel.updateSettings(settings.copy(memoryEnabled = it)) }) }
                 Text("Personal memory is off by default. After sync, enabled notes are read from the server and sent to the selected chat provider. Other projects have their own Memory editor in Projects. Chats do not automatically create memories.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -135,7 +120,7 @@ fun DeviceSettingsScreen(viewModel: ChatViewModel, page: String, onBack: () -> U
             }
             "Privacy" -> {
                 Text("Chats and memory notes live on the server; this phone keeps a disposable cache. Chat history is excluded from Android backups. Sending forwards messages, selected file contents and enabled memory notes to the configured AI provider. Device/browser speech services may process speech remotely. Account sessions are encrypted on this device and excluded from backup.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text("Removing cached chats keeps server chats and their stored files. Discarding unsent attachments may delete temporary uploads. Provider records and exports remain unchanged. Your drafts, messages and saved notes are authoritative in your Supabase account. Logout does not erase cached or server data. Clear cloud separately in Settings → Cloud sync. " + if (account.deletionConfigured) "To delete your account and its cloud data, use Delete account in Settings → Profile." else "Account deletion is not configured on this server.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("Removing cached chats keeps server chats and their stored files. Discarding unsent attachments may delete temporary uploads. Provider records and exports remain unchanged. Your drafts, messages and saved notes are authoritative in your Supabase account. Logout does not erase cached or server data. Clear cloud separately in Profile & Settings → Sync. " + if (account.deletionConfigured) "To delete your account and its cloud data, use Delete account in Profile & Settings → Account." else "Account deletion is not configured on this server.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 TextButton(onClick = { onPage("DataControls") }) { Text("Manage cached chats") }
                 TextButton(onClick = { onPage("Memory") }) { Text("Manage cached memories") }
                 TextButton(onClick = { resetting = true }) { Text("Reset device settings and Personal memory") }
@@ -149,13 +134,4 @@ fun DeviceSettingsScreen(viewModel: ChatViewModel, page: String, onBack: () -> U
     }
     if (resetting) AlertDialog(onDismissRequest = { resetting = false }, title = { Text("Reset settings and Personal memory?") }, text = { Text("Appearance, notifications and cached Personal memory reset. Cached chats and readable project settings, tasks and project memory stay saved.") }, confirmButton = { TextButton(onClick = { resetting = false; viewModel.resetSettings() }) { Text("Reset") } }, dismissButton = { TextButton(onClick = { resetting = false }) { Text("Cancel") } })
     if (confirming) AlertDialog(onDismissRequest = { confirming = false }, title = { Text("Delete all Personal memories?") }, text = { Text("Remove all cached Personal notes on this device. Other projects keep their notes. With sync on, the deleted notes are removed from the server on the next sync. Chats remain unchanged.") }, confirmButton = { TextButton(onClick = { confirming = false; viewModel.updateSettings(settings.copy(memory = emptyList())) }) { Text("Delete") } }, dismissButton = { TextButton(onClick = { confirming = false }) { Text("Cancel") } })
-}
-
-@Composable
-private fun ChoiceRow(label: String, selected: Boolean, onSelect: () -> Unit) {
-    Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).selectable(selected = selected, role = Role.RadioButton, onClick = onSelect)
-        .padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-        RadioButton(selected = selected, onClick = null)
-        Text(label, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(start = 16.dp))
-    }
 }

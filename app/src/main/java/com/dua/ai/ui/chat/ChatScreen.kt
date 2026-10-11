@@ -160,6 +160,9 @@ fun ChatScreen(
                     onOpenChat = { id -> closeDrawerThen { actions.onOpenChat(id) } },
                     onDeleteChat = { id -> deletingId = id },
                     onOpenSettings = { closeDrawerThen(actions.onOpenSettings) },
+                    onProjects = { closeDrawerThen { sheet = ChatSheet.Projects } },
+                    onDestination = { destination -> closeDrawerThen { actions.onOpenDestination(destination) } },
+                    profileName = state.profileName, activeChatId = state.chatId, drawerOpen = drawerState.isOpen,
                 )
             },
         ) {
