@@ -19,10 +19,12 @@ data class LocalPreferences(val theme: String = "dark", val font: String = "defa
     val voiceProvider: String = "", val voiceName: String = "", val deviceVoice: String = "", val voiceSpeed: Float = 1f,
     val replyLanguage: String = "auto", val inputLanguage: String = "auto",
     /** Live voice (xAI realtime) voice id; "" = server default. */
-    val liveVoice: String = "")
+    val liveVoice: String = "",
+    val projects: List<com.dua.ai.projects.ChatProject> = com.dua.ai.projects.ProjectCodec.defaults)
 
 object PreferencesCodec {
     fun validate(value: LocalPreferences): LocalPreferences {
+        com.dua.ai.projects.ProjectCodec.validate(value.projects)
         require(value.theme in listOf("dark", "light", "system") && value.font in listOf("default", "system", "serif", "monospace"))
         require(value.imagineProvider in listOf("", "xai", "gemini") && value.imagineAspect in com.dua.ai.imagine.ImagineCodec.ASPECTS) { "Invalid Imagine default." }
         require((value.voiceProvider.isEmpty() || value.voiceProvider in com.dua.ai.voice.VoiceCodec.PROVIDERS) && com.dua.ai.voice.VoiceCodec.validId(value.voiceName)
@@ -38,7 +40,8 @@ object PreferencesCodec {
             .put("memory", JSONArray(value.memory)).put("generatedVoice", value.generatedVoice)
             .put("imagineProvider", value.imagineProvider).put("imagineAspect", value.imagineAspect)
             .put("voiceProvider", value.voiceProvider).put("voiceName", value.voiceName).put("deviceVoice", value.deviceVoice)
-            .put("voiceSpeed", value.voiceSpeed.toDouble()).put("replyLanguage", value.replyLanguage).put("inputLanguage", value.inputLanguage).put("liveVoice", value.liveVoice).toString()
+            .put("voiceSpeed", value.voiceSpeed.toDouble()).put("replyLanguage", value.replyLanguage).put("inputLanguage", value.inputLanguage).put("liveVoice", value.liveVoice)
+            .put("projects", com.dua.ai.projects.ProjectCodec.toJson(value.projects)).toString()
     }
     fun decode(raw: String): LocalPreferences {
         val data = JSONObject(raw); val notes = data.getJSONArray("memory")
@@ -56,7 +59,8 @@ object PreferencesCodec {
         val liveVoice = data.optString("liveVoice").takeIf(com.dua.ai.voice.VoiceCodec::validId) ?: ""
         return validate(LocalPreferences(data.getString("theme"), data.getString("font"), data.getBoolean("haptic"),
             data.getBoolean("notifications"), data.getBoolean("memoryEnabled"), (0 until notes.length()).map { (notes.get(it) as? String ?: error("Invalid memory note")) }, generatedVoice,
-            imagineProvider, imagineAspect, voiceProvider, voiceName, deviceVoice, voiceSpeed, replyLanguage, inputLanguage, liveVoice))
+            imagineProvider, imagineAspect, voiceProvider, voiceName, deviceVoice, voiceSpeed, replyLanguage, inputLanguage, liveVoice,
+            com.dua.ai.projects.ProjectCodec.fromJson(if (data.has("projects")) data.getJSONArray("projects") else null)))
     }
     fun memoryText(value: LocalPreferences): String = if (value.memoryEnabled) value.memory.joinToString("\n") { "- $it" } else ""
 }

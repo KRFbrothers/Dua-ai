@@ -131,6 +131,10 @@ class DuaApiClient(
                 if (stream) put("stream", true).put("mode", if (build != null) "build" else if (reasoning) "reasoning" else "auto")
                 if (stream && build != null) put("repository", build)
                 if (longContext) put("context", context!!.toJson())
+                if (longContext) context?.projectId?.let { project ->
+                    require(com.dua.ai.projects.ProjectCodec.validId(project)) { "Invalid project." }
+                    put("projectId", project)
+                }
                 if (stream && xSearch && model == "Grok") put("xSearch", true)
                 // Run code (Phase 5): only sent when the server advertised it, so older servers never see the field.
                 if (stream && code && build == null) put("code", true)

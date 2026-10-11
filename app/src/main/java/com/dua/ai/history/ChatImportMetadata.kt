@@ -5,7 +5,7 @@ import org.json.JSONObject
 
 /** Imports must reject lossy/unsafe metadata instead of silently applying the lenient cache decoders. */
 internal object ChatImportMetadata {
-    private val chatFields = listOf("summary", "buildRepository")
+    private val chatFields = listOf("summary", "buildRepository", "projectId")
     private val userFields = listOf("attachmentText", "files")
     private val replyFields = listOf("thinking", "thinkingSeconds", "media", "imagine", "codeRuns", "build", "proposal")
 

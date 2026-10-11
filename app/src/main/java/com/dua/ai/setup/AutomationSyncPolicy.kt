@@ -8,7 +8,7 @@ import org.json.JSONObject
 import java.security.MessageDigest
 
 /** Only digests/counts are persisted; never duplicate chat or memory plaintext in sync settings. */
-data class AutomationBaseline(val chatMessageCounts: Map<String, Int>, val chatSignatures: Map<String, String>, val memoryDigests: Set<String>)
+data class AutomationBaseline(val chatMessageCounts: Map<String, Int>, val chatSignatures: Map<String, String>, val memoryDigests: Set<String>, val projectSignatures: Map<String, String> = emptyMap())
 data class AutomationSyncRecord(val enabled: Boolean = false, val accountId: String? = null, val revision: Long? = null,
     val baseline: AutomationBaseline? = null, val reviewRequired: Boolean = false, val failureCount: Int = 0)
 data class AutomationMergePlan(val snapshot: CloudSnapshot, val requiresContentReview: Boolean)
@@ -23,13 +23,17 @@ object AutomationSyncPolicy {
         val json = JSONObject(ChatHistoryCodec.export(listOf(chat), exportedAt = 0, includeServerFields = true))
         val item = json.getJSONArray("chats").getJSONObject(0)
         item.remove("id")
+        // Preserve pre-Projects baselines for existing Personal chats.
+        if (chat.projectId == com.dua.ai.projects.ProjectCodec.PERSONAL) item.remove("projectId")
         val messages = item.getJSONArray("messages")
         for (index in 0 until messages.length()) messages.getJSONObject(index).remove("id")
         return json.toString()
     }
     fun signature(chat: SavedChat): String = digest(canonical(chat))
     fun validate(snapshot: CloudSnapshot): CloudSnapshot { CloudSnapshotCodec.encode(snapshot); return snapshot }
-    fun baseline(snapshot: CloudSnapshot): AutomationBaseline = AutomationBaseline(snapshot.chats.associate { it.id to it.messages.size }, snapshot.chats.associate { it.id to signature(it) }, snapshot.memory.map(::digest).toSet())
+    fun baseline(snapshot: CloudSnapshot): AutomationBaseline = AutomationBaseline(snapshot.chats.associate { it.id to it.messages.size }, snapshot.chats.associate { it.id to signature(it) }, snapshot.memory.map(::digest).toSet(), snapshot.projects.associate { it.id to projectSignature(it) })
+    fun projectSignature(project: com.dua.ai.projects.ChatProject): String = digest(JSONObject()
+        .put("id", project.id).put("name", project.name).put("instructions", project.instructions).put("archived", project.archived).toString())
     fun same(left: CloudSnapshot, right: CloudSnapshot): Boolean = baseline(left) == baseline(right)
 
     fun validateRecord(value: AutomationSyncRecord): AutomationSyncRecord {
@@ -40,6 +44,7 @@ object AutomationSyncPolicy {
             require(value.accountId != null && baseline.chatMessageCounts.size <= 100 && baseline.chatMessageCounts.keys == baseline.chatSignatures.keys && baseline.memoryDigests.size <= 10)
             require(baseline.chatMessageCounts.all { (id, count) -> id.isNotBlank() && id.length <= 200 && count in 0..500 })
             require(baseline.chatSignatures.values.all(digestPattern::matches) && baseline.memoryDigests.all(digestPattern::matches))
+            require(baseline.projectSignatures.size <= 20 && baseline.projectSignatures.all { (id, hash) -> com.dua.ai.projects.ProjectCodec.validId(id) && digestPattern.matches(hash) })
         }
         return value
     }
@@ -89,7 +94,17 @@ object AutomationSyncPolicy {
             val kept = remote.memory.filter { digest(it) !in previous.memoryDigests || digest(it) in localDigests }
             (kept + local.memory.filter { digest(it) !in previous.memoryDigests }).distinct()
         }
-        return AutomationMergePlan(validate(CloudSnapshot(chats, memory.distinct())), false)
+        val projects = remote.projects.map { server ->
+            val here = local.projects.find { it.id == server.id } ?: return@map server
+            val base = previous?.projectSignatures?.get(here.id)
+                ?: com.dua.ai.projects.ProjectCodec.defaults.find { it.id == here.id }?.let(::projectSignature)
+            val localHash = projectSignature(here); val serverHash = projectSignature(server)
+            if (localHash == serverHash) server
+            else if (base == localHash) server
+            else if (base == serverHash) here
+            else throw IllegalArgumentException("Project changed on both copies. Review cloud data before syncing.")
+        } + local.projects.filter { here -> remote.projects.none { it.id == here.id } }
+        return AutomationMergePlan(validate(CloudSnapshot(chats, memory.distinct(), projects)), false)
     }
 
     /** Stop after five failures; retry should require an explicit user action thereafter. */

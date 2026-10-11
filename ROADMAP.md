@@ -323,3 +323,7 @@ A feature is done when:
 - **Validation is pending** — provider APIs, cloud sync and physical-device behavior need real-world testing
 
 Model names, endpoints and prices in this roadmap were checked against official provider documentation in October 2026. Prices change often; re-check before building.
+
+## Personal/Coding/Business follow-up: Projects
+
+The first Projects implementation adds server-backed project definitions and custom instructions, project-scoped chat history, archive/restore and sync/backup compatibility. See [PROJECTS.md](PROJECTS.md). Dedicated project file libraries, editable memory per project and per-project connected tools remain pending; tasks/reminders and business workflows are later steps. This source implementation still needs an updated APK and live/device verification.

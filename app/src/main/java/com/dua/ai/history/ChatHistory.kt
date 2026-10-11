@@ -18,17 +18,22 @@ data class SavedChat(
     /** Server summary of older turns (long context). Included in the signed-in cloud snapshot. */
     val summary: com.dua.ai.model.ChatSummary? = null,
     /** Build mode repository this chat is tied to (owner/name). Included in the signed-in cloud snapshot. */
-    val buildRepository: String? = null
+    val buildRepository: String? = null,
+    val projectId: String = com.dua.ai.projects.ProjectCodec.PERSONAL
 ) {
     val title: String get() = messages.firstOrNull { it.isUser }?.text?.take(60) ?: "Draft"
     val preview: String get() = draft.takeIf { it.isNotBlank() }?.let { "Draft: $it" }
         ?: messages.lastOrNull { it.text.isNotBlank() }?.text.orEmpty()
 }
 
+data class ChatBackup(val chats: List<SavedChat>, val projects: List<com.dua.ai.projects.ChatProject>)
+
 object ChatHistoryCodec {
     const val MAX_IMPORT_BYTES = 4 * 1024 * 1024
 
-    fun readImport(input: InputStream): List<SavedChat> {
+    fun readImport(input: InputStream): List<SavedChat> = readBackup(input).chats
+
+    fun readBackup(input: InputStream): ChatBackup {
         val output = ByteArrayOutputStream()
         val buffer = ByteArray(8192)
         while (true) {
@@ -40,7 +45,7 @@ object ChatHistoryCodec {
         val decoder = Charsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT).onUnmappableCharacter(CodingErrorAction.REPORT)
         val raw = try { decoder.decode(ByteBuffer.wrap(output.toByteArray())).toString() }
             catch (_: java.nio.charset.CharacterCodingException) { error("This file is not valid UTF-8 JSON.") }
-        return parseImport(raw)
+        return ChatBackup(parseImport(raw), com.dua.ai.projects.ProjectCodec.fromJson(JSONObject(raw.removePrefix("\uFEFF")).optJSONArray("projects")))
     }
 
     fun parseImport(raw: String, includeServerFields: Boolean = true, strictMetadata: Boolean = true): List<SavedChat> {
@@ -76,6 +81,7 @@ object ChatHistoryCodec {
             require(root.get("format") == "dua-chat-export" && root.get("version") is Number && integer(root, "version") == 1L) { invalid }
             integer(root, "exportedAt")
             val records = root.getJSONArray("chats")
+            val projects = com.dua.ai.projects.ProjectCodec.fromJson(if (root.has("projects")) root.getJSONArray("projects") else null)
             require(records.length() <= 100) { invalid }
             val ids = mutableSetOf<String>()
             return (0 until records.length()).map { index ->
@@ -113,14 +119,16 @@ object ChatHistoryCodec {
                         proposal = if (includeServerFields && role == "model") com.dua.ai.model.BuildProposals.fromJson(message.optJSONObject("proposal")) else null)
                 }, updatedAt,
                     if (includeServerFields) com.dua.ai.model.ChatSummary.fromJson(chat.optJSONObject("summary")) else null,
-                    if (includeServerFields) chat.optString("buildRepository").takeIf { com.dua.ai.model.BuildInfos.validRepository(it) } else null)
+                    if (includeServerFields) chat.optString("buildRepository").takeIf { com.dua.ai.model.BuildInfos.validRepository(it) } else null,
+                    if (chat.has("projectId")) text(chat, "projectId", 100) else com.dua.ai.projects.ProjectCodec.PERSONAL)
+                require(projects.any { it.id == decoded.projectId }) { invalid }
                 if (includeServerFields && strictMetadata) ChatImportMetadata.validate(chat, decoded)
                 decoded
             }
         } catch (_: Exception) { throw IllegalArgumentException(invalid) }
     }
 
-    fun importCopies(existing: List<SavedChat>, imported: List<SavedChat>): List<SavedChat> {
+    fun importCopies(existing: List<SavedChat>, imported: List<SavedChat>, projects: List<com.dua.ai.projects.ChatProject>? = null): List<SavedChat> {
         val used = existing.map { it.id }.toMutableSet()
         return (existing + imported.map { chat ->
             var id: String
@@ -128,17 +136,18 @@ object ChatHistoryCodec {
             val messageIds = chat.messages.associate { it.id to UUID.randomUUID().toString() }
             chat.copy(id = id, messages = chat.messages.map { it.copy(id = messageIds.getValue(it.id)) },
                 summary = chat.summary?.let { summary -> summary.copy(throughId = messageIds.getValue(summary.throughId)) })
-        }).also { exportBackup(it) }
+        }).also { exportBackup(it, projects = projects) }
     }
 
     /** Prepare and validate a complete, importable backup before opening/truncating its destination. */
-    fun exportBackup(chats: List<SavedChat>, exportedAt: Long = System.currentTimeMillis()): String = export(chats, exportedAt).also { parseImport(it) }
+    fun exportBackup(chats: List<SavedChat>, exportedAt: Long = System.currentTimeMillis(), projects: List<com.dua.ai.projects.ChatProject>? = null): String = export(chats, exportedAt, projects = projects).also { parseImport(it) }
 
-    fun export(chats: List<SavedChat>, exportedAt: Long = System.currentTimeMillis(), includeServerFields: Boolean = true): String = JSONObject()
+    fun export(chats: List<SavedChat>, exportedAt: Long = System.currentTimeMillis(), includeServerFields: Boolean = true, projects: List<com.dua.ai.projects.ChatProject>? = null): String = JSONObject()
         .put("format", "dua-chat-export").put("version", 1).put("exportedAt", exportedAt)
+        .apply { projects?.let { put("projects", com.dua.ai.projects.ProjectCodec.toJson(it)) } }
         .put("chats", JSONArray().apply {
             chats.sortedByDescending { it.updatedAt }.forEach { chat ->
-                put(JSONObject().put("id", chat.id).put("model", chat.model).put("draft", chat.draft)
+                put(JSONObject().put("id", chat.id).put("model", chat.model).put("draft", chat.draft).put("projectId", chat.projectId)
                     .apply { if (includeServerFields) { chat.summary?.let { put("summary", it.toJson()) }; chat.buildRepository?.let { put("buildRepository", it) } } }
                     .put("updatedAt", chat.updatedAt).put("messages", JSONArray().apply {
                         chat.messages.filter(::persistable).forEach { message -> put(JSONObject()
@@ -165,7 +174,7 @@ object ChatHistoryCodec {
     fun encode(chats: List<SavedChat>, activeId: String): String = JSONObject()
         .put("activeId", activeId).put("chats", JSONArray().apply {
             chats.forEach { chat -> put(JSONObject().put("id", chat.id).put("model", chat.model)
-                .put("draft", chat.draft).put("updatedAt", chat.updatedAt)
+                .put("draft", chat.draft).put("updatedAt", chat.updatedAt).put("projectId", chat.projectId)
                 .apply { chat.summary?.let { put("summary", it.toJson()) }; chat.buildRepository?.let { put("buildRepository", it) } }
                 .put("messages", JSONArray().apply { chat.messages.filter(::persistable).forEach { message ->
                     put(JSONObject().put("id", message.id).put("text", message.text).put("isUser", message.isUser)
@@ -227,9 +236,11 @@ object ChatHistoryCodec {
                         build = if (message.optBoolean("isUser")) null else com.dua.ai.model.BuildInfos.fromJson(message.optJSONObject("build")),
                         proposal = if (message.optBoolean("isUser")) null else com.dua.ai.model.BuildProposals.fromJson(message.optJSONObject("proposal")))
                 }, item.getLong("updatedAt"), com.dua.ai.model.ChatSummary.fromJson(item.optJSONObject("summary")),
-                item.optString("buildRepository").takeIf { com.dua.ai.model.BuildInfos.validRepository(it) })
+                item.optString("buildRepository").takeIf { com.dua.ai.model.BuildInfos.validRepository(it) },
+                if (item.has("projectId")) (item.get("projectId") as? String ?: error("Invalid project ID.")) else com.dua.ai.projects.ProjectCodec.PERSONAL)
         }
         require(chats.all { it.model in com.dua.ai.setup.IntegrationCapabilities.MODELS } && chats.map { it.id }.distinct().size == chats.size)
+        require(chats.all { com.dua.ai.projects.ProjectCodec.validId(it.projectId) })
         return root.getString("activeId") to chats
     }
 }

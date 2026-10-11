@@ -44,7 +44,7 @@ No live provider or staging checks were performed as part of this repository cha
 
 ## Android device and backup checks
 
-Use non-production test data on an emulator or the owner's phone; do not use real conversations for backup or deletion experiments. Current app backup is enabled; chat history and ordinary app preferences are not excluded by the checked-in backup rules.
+Use non-production test data on an emulator or the owner's phone; do not use real conversations for backup or deletion experiments. App backup is enabled, but chat history, account sessions and automatic-sync consent are excluded by the checked-in rules. Ordinary preferences, including memory and project instructions, may be backed up.
 
 ### Server-first restore sequence
 
@@ -128,3 +128,11 @@ No private signing keys are supplied by this repository. The manual `Build perso
 - [x] The Backend tests job in [Project checks for PR #117](https://github.com/KRFbrothers/Dua-ai/actions/runs/38078632200) installed the locked dependencies on Node 24 and passed all 148 tests, with zero failures or skipped tests, on commit `91628f5`.
 - [x] The `backend-unit-test-report` JUnit artifact was uploaded successfully. This resolves the earlier full-backend-suite verification gap using GitHub's runner; the local SheetJS network restriction remains an environment limitation.
 - This is automated regression coverage using fake upstream responses, not live verification of deployed providers, Supabase policies or the owner lock.
+
+## Projects update
+
+- Deploy the backend and confirm `/api/config.projects.enabled` is true for the owner configuration; build/install the updated APK.
+- Confirm old chats open in Personal. Create/edit a Coding project, sync it, and verify the reply follows its instructions.
+- Switch Coding/Business with unsent drafts, restart, and check each project’s history and draft. Personal memory must not appear in other project replies.
+- Review project settings in Cloud Sync, round-trip a JSON export/import, archive/restore a project, and confirm archived chats cannot send replies.
+- Verify divergent instruction edits pause automatic sync for manual review. Keep live voice in Personal without custom instructions; other projects use Voice mode.

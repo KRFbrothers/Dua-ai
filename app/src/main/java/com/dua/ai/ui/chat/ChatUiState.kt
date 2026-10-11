@@ -45,6 +45,9 @@ data class ChatUiState(
     val readingFiles: Boolean = false,
     val attachmentStatus: String = "",
     val savedChats: List<SavedChat> = emptyList(),
+    val projects: List<com.dua.ai.projects.ChatProject> = com.dua.ai.projects.ProjectCodec.defaults,
+    val projectId: String = com.dua.ai.projects.ProjectCodec.PERSONAL,
+    val projectNotice: String = "",
     val speakingId: String? = null,
     val speechAvailable: Boolean = true,
     val generatedVoice: Boolean = false,
@@ -105,6 +108,8 @@ class ChatActions(
     val onAuto: () -> Unit = {},
     val onSelectModel: (String) -> Unit = {},
     val onNewChat: () -> Unit = {},
+    val onSelectProject: (String) -> Unit = {},
+    val onSaveProject: (String?, String, String, Boolean) -> Boolean = { _, _, _, _ -> false },
     val onOpenChat: (String) -> Unit = {},
     val onDeleteChat: (String) -> Unit = {},
     val onPickCamera: () -> Unit = {},
@@ -140,4 +145,4 @@ class ChatActions(
 )
 
 /** Bottom sheets the chat screen can show. */
-enum class ChatSheet { Model, Attach, Audio, Imagine, Build }
+enum class ChatSheet { Model, Attach, Audio, Imagine, Build, Projects }

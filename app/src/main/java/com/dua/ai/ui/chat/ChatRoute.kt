@@ -33,6 +33,8 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
     val chatId by viewModel.activeChatId.collectAsState()
     val draft by viewModel.draft.collectAsState()
     val savedChats by viewModel.savedChats.collectAsState()
+    val projectId by viewModel.projectId.collectAsState()
+    val projectNotice by viewModel.projectNotice.collectAsState()
     val model by viewModel.selectedModel.collectAsState()
     val webMode by viewModel.webMode.collectAsState()
     val reasoning by viewModel.reasoning.collectAsState()
@@ -109,6 +111,7 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
         storedFilesMaxBytes = integrations.filesMaxBytes,
         attachmentStatus = if (readingFiles) "Reading files…" else fileError.ifBlank { attachmentNotice },
         savedChats = savedChats,
+        projects = preferences.projects, projectId = projectId, projectNotice = projectNotice,
         speakingId = speech.activeId ?: generatedSpeech.activeId,
         speechAvailable = speech.available, generatedVoice = preferences.generatedVoice,
         deviceVoiceStatus = speech.status, deviceVoiceActive = speech.activeId != null,
@@ -160,6 +163,8 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
             onAuto = viewModel::selectAuto,
             onSelectModel = viewModel::setModel,
             onNewChat = { pulse(); voice.stopAll(); viewModel.startNewChat(); viewModel.clearAttachments(); attachmentNotice = "" },
+            onSelectProject = { id -> voice.stopAll(); viewModel.selectProject(id) },
+            onSaveProject = viewModel::saveProject,
             onOpenChat = { id -> pulse(); voice.stopAll(); viewModel.openChat(id); viewModel.clearAttachments() },
             onDeleteChat = viewModel::deleteChat,
             onPickCamera = {

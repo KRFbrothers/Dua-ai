@@ -32,12 +32,12 @@ Dua is a personal, single-user app: the backend is meant to be restricted to the
 ### 2. Chat History & Conversations
 
 #### Collection
-- **Scope:** The server is the source of truth for chat messages and memory notes; the phone keeps only a disposable cache for offline viewing and speed.
-- **Server-backed storage:** For the owner’s signed-in account, the server snapshot is the source of truth for chat messages and memory notes. The phone keeps a disposable cache for offline viewing and startup; sync refreshes that cache from the server. Without an account, chat is temporary cache-only mode and cannot become authoritative.
+- **Scope:** The server is the source of truth for chat messages, memory notes and project instructions; the phone keeps only a disposable cache for offline viewing and speed.
+- **Server-backed storage:** For the owner’s signed-in account, the server snapshot is the source of truth for chat messages, memory notes and project instructions. The phone keeps a disposable cache for offline viewing and startup; sync refreshes that cache from the server. Without an account, chat is temporary cache-only mode and cannot become authoritative.
 
 #### On-device cache
 - **Android:** A cache of chat history and app preferences is stored in app-private `SharedPreferences`; they are not encrypted by the app. Android OS sandboxing protects app-private files, but this is not equivalent to an encrypted database.
-- **Backup:** Android app backup and device transfer are enabled. The account-session and automatic-sync preference files are excluded, but chat history and other app preferences are not excluded by the checked-in backup rules. Whether a backup is created or restored depends on Android/device backup settings and the user's account. Users should not assume the phone cache is the authoritative copy.
+- **Backup:** Android app backup and device transfer are enabled. Chat history, account-session and automatic-sync preference files are excluded by the checked-in backup rules. Other app preferences, including cached memory notes and project instructions, are not excluded. Whether a backup is created or restored depends on Android/device backup settings and the user's account. Users should not assume the phone cache is the authoritative copy.
 - **Retention:** Retained until the user deletes the data, clears app storage, uninstalls the app, or an enabled device backup restores it. Backup copies may have separate retention.
 
 #### Cloud Storage (Opt-In)
@@ -47,7 +47,7 @@ Dua is a personal, single-user app: the backend is meant to be restricted to the
   - Users can clear their cloud snapshot from the app or delete their account.
   - Account deletion requests removal of the Supabase account and associated app data; provider backup-retention timing is controlled by Supabase and is not guaranteed by Dua.
   - The repository does not define or verify a fixed post-deletion backup-retention period.
-- **Encryption:** Supabase Row Level Security (RLS) ensures only the account owner can access their snapshots.
+- **Access control:** Supabase Row Level Security (RLS) restricts snapshot access to the signed-in account. The backend also checks the configured owner email. RLS is an access rule, not encryption.
 
 ---
 
@@ -60,8 +60,7 @@ Dua is a personal, single-user app: the backend is meant to be restricted to the
 - Provider API keys are configured server-side and are not stored in the app's local account profile.
 
 #### Signed-out cache mode
-- Users can chat without creating an account (local-only mode).
-- No email or sign-up required for basic chat.
+- Saved cached chats remain viewable while signed out. The configured owner-only backend requires owner sign-in for online replies.
 
 #### Cloud Account (Opt-In)
 - Required for cloud snapshots and multi-device sync.
@@ -165,7 +164,7 @@ API keys are stored server-side (Vercel Functions or Supabase) and are never exp
 
 | Data Type | Local | Cloud | Retention |
 |-----------|-------|-------|-----------|
-| Chat Messages | Android app-private `SharedPreferences` | Opt-in snapshot | Until local deletion/storage removal; Android backup may retain copies; cloud deletion/backup timing is controlled by Supabase |
+| Chat Messages | Android app-private `SharedPreferences` | Opt-in snapshot | Until cache deletion/storage removal; chat cache is excluded from Android backup and device transfer; cloud deletion/backup timing is controlled by Supabase |
 | Audio/transcripts | Speech service; transcript may be retained locally as chat text if sent | No raw audio in snapshots | Speech-service terms apply; transcript follows chat retention; generated audio is not retained by Dua |
 | Account Credentials | Encrypted Android session token (Google sign-in; no password is used) | Supabase | Until logout, expiry or account deletion; provider backup retention may apply |
 | API Keys | Server-side only | Server-side only | Until removed or rotated by the deployment operator; never stored on device |
@@ -223,3 +222,7 @@ Dua AI integrates with:
 This policy is effective as of **2026-10-11**. Updates will be announced via GitHub Releases and the repository's discussions.
 
 **Last Updated:** 2026-10-11
+
+## Projects and custom instructions
+
+Project names, custom instructions, archive flags and chat project IDs are included in the owner’s server snapshot, cached on the phone, and included in user-initiated JSON chat exports. Other settings (appearance, voice choices and the memory on/off switch) remain device preferences. Project instructions are sent to the selected chat provider for text replies, including hands-free Voice mode and Build chat. Global Personal memory is omitted from Coding, Business and custom project requests. Project scopes are organizational separation within one owner account, not separate accounts or storage encryption. No other project’s chats are automatically added to a reply; stored-file references known to belong to another project are rejected in project-aware chat requests. Old APK requests use their legacy Personal protocol, so use the updated APK for project separation. Live voice is limited to Personal without custom instructions until project-aware realtime sessions are implemented.

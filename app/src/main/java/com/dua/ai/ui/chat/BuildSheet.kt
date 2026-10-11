@@ -59,7 +59,7 @@ internal fun BuildSheetContent(current: String?, hint: String, repositories: Bui
             Icon(Icons.Outlined.Build, contentDescription = null, tint = scheme.primary, modifier = Modifier.size(Sizes.iconSmall))
             Text("Build mode", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(start = Spacing.sm).semantics { heading() })
         }
-        Text("Read-only: Dua reads files from the repository you pick and answers with explanations and diffs. Nothing is written to GitHub.",
+        Text("Dua reads the repository you pick and answers with explanations and diffs. Creating a pull request requires a separate review and confirmation.",
             style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = Spacing.sm).padding(bottom = Spacing.sm))
         when {
             hint.isNotEmpty() -> Surface(color = scheme.surfaceContainerHighest, shape = DuaShape.card) {
@@ -104,7 +104,7 @@ internal fun BuildSheetContent(current: String?, hint: String, repositories: Bui
                 }
             }
         }
-        Text("Works with Dua and Gemini. The server reads files with your connector token; it cannot create branches, commits or pull requests, or run commands.",
+        Text("Works with Dua and Gemini. The server reads files with your connector token; repository reads use the read-only connector. A separate write token allows confirmed draft pull requests. Repository commands remain unavailable.",
             style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = Spacing.sm).padding(top = Spacing.md))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             if (hint.isNotEmpty()) TextButton(onClick = onOpenSetup) { Text("Feature setup") }

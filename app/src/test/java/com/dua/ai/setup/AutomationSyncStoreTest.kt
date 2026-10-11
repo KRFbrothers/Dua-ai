@@ -34,7 +34,7 @@ class AutomationSyncStoreTest {
         assertFalse(raw.contains("messages")); assertFalse(raw.contains("draft")); assertFalse(raw.contains("password"))
         assertFalse(raw.contains("memoryNotes"))
         val baselineJson = JSONObject(raw).getJSONObject("baseline")
-        assertEquals(setOf("chats", "memoryDigests"), baselineJson.keys().asSequence().toSet())
+        assertEquals(setOf("chats", "memoryDigests", "projectSignatures"), baselineJson.keys().asSequence().toSet())
         assertEquals(setOf("id", "messageCount", "signature"), baselineJson.getJSONArray("chats").getJSONObject(0).keys().asSequence().toSet())
     }
     @Test fun newStoreHasNoConsentAndInitialAccountBoundConsentCanBeSaved() {
@@ -44,6 +44,13 @@ class AutomationSyncStoreTest {
         store.write(initial)
         assertEquals(initial, AutomationSyncStore(storage, backend).read())
         assertNull(AutomationSyncStore(storage, backend).read()!!.baseline)
+    }
+    @Test fun legacyBaselineUpgradesWithoutDiscardingConsentOrChatGuards() {
+        val legacy = JSONObject(encoded())
+        legacy.getJSONObject("baseline").remove("projectSignatures")
+        assertEquals(record, decode(legacy.toString()))
+        val updated = record.copy(baseline = baseline.copy(projectSignatures = mapOf("personal" to "c".repeat(64))))
+        assertEquals(updated, decode(AutomationSyncRecordCodec.encode(updated, backend)))
     }
     @Test fun corruptionIsNotOverwrittenByEnablingAndRequiresExplicitClear() {
         val storage = MemoryStorage("{broken"); val store = AutomationSyncStore(storage, backend)

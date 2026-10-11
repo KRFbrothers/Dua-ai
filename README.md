@@ -47,4 +47,8 @@ bash ./gradlew :app:testDebugUnitTest --no-daemon --max-workers=2
 
 Run backend tests locally with `cd web && npm ci && npm test`; `npm run test:ci` runs the same suite with console output and a `backend-test-results.xml` report. Install the locked dependencies first (`unpdf` and SheetJS). SheetJS is fetched from `cdn.sheetjs.com`, which must be accessible from the build environment.
 
-The Android cache is stored in app-private preferences; Android backup/device transfer can include cached history and preferences according to device settings. Signed-in server data remains authoritative and is not replaced by a restored cache. A Vercel deployment updates the backend only; Android code changes require building and installing a new APK.
+The Android cache is stored in app-private preferences; Android backup/device transfer exclude cached chat history, account sessions and automatic-sync consent. Other preferences, including cached memory and project instructions, can be backed up according to device settings. Signed-in server data remains authoritative and is not replaced by a restored cache. A Vercel deployment updates the backend only; Android code changes require building and installing a new APK.
+
+### Projects and custom instructions
+
+Home → **Projects** offers Personal, Coding and Business, plus custom projects. Each chat keeps its project, and the history drawer searches that project only. Save instructions, then sync them before chatting; the backend reads the owner’s server snapshot. See [PROJECTS.md](PROJECTS.md) for limits, conflict handling and the first version’s scope.
