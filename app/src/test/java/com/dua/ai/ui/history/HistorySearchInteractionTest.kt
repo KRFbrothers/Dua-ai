@@ -3,6 +3,7 @@ package com.dua.ai.ui.history
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.semantics.SemanticsActions
 import com.dua.ai.history.SavedChat
 import com.dua.ai.model.ChatMessage
 import com.dua.ai.settings.LocalPreferences
@@ -37,7 +38,8 @@ class HistorySearchInteractionTest {
         search("INVOICE-2026")
         awaitText("Dua: Old invoice-2026 reply")
         compose.onNodeWithText("Chat second").assertDoesNotExist()
-        compose.onNodeWithText("Dua: Old invoice-2026 reply").performClick()
+        compose.onNode(hasText("Dua: Old invoice-2026 reply") and hasClickAction())
+            .performSemanticsAction(SemanticsActions.OnClick) { click -> click() }
         compose.runOnIdle { assertEquals("first", opened) }
         compose.onNodeWithContentDescription("Clear search").performClick()
         compose.onNodeWithText("Chat second").assertExists()
