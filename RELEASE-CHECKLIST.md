@@ -58,6 +58,8 @@ Use two owner-controlled installations, or clear app data between each step:
 6. Delete a memory note on A and sync. Confirm the documented memory-deletion policy removes that note from the server snapshot; add a new note and confirm it is retained.
 7. Import a JSON export while signed out. Confirm it is labelled/treated as phone-cache data until an authenticated sync.
 8. Clear app storage on B, sign in again, and confirm the server snapshot restores the intended state. Log out and confirm the server snapshot remains intact while signed-out chats are temporary cache-only data.
+9. With a different cached draft for an existing server chat open, use Review download → Confirm. Confirm the server version keeps its original ID, the open chat displays the server draft/messages/model/summary/Build repository, and the phone version survives as an `unsynced-*` copy. Edit the restored draft, restart and verify the server messages remain. Repeat download without edits and verify no extra copy appears. Check that phone-only chats remain and server memory replaces cached memory, including an empty server memory list.
+10. Review a download whose union with the phone cache would exceed 100 chats or 4 MiB. Confirm it fails before replacing chat history or memory; reduce the cache only after preserving any needed phone-only content.
 
 Record the Android version, app version, backend deployment, snapshot revision, and pass/fail result. Do not record prompts, tokens, file contents, or account credentials.
 
