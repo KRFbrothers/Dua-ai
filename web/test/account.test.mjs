@@ -103,7 +103,7 @@ test('the owner keeps refresh, cloud read/write; session, features and logout st
   assert.equal((await session.json()).user.email, 'someone@else.com');
 
   const features = await call('/api/account/features', { token: null }, mockFetch());
-  assert.deepEqual(await features.json(), { passwordReset: false, accountDeletion: false });
+  assert.deepEqual(await features.json(), { passwordReset: false, emailAuth: true, accountDeletion: false });
 
   const logout = await call('/api/account/logout', { method: 'POST', body: {} }, mockFetch(new Response(null, { status: 204 })));
   assert.equal(logout.status, 200);
@@ -119,8 +119,8 @@ test('without DUA_ALLOWED_EMAIL any signed-in account may use cloud; a malformed
   assert.equal((await call('/api/account/logout', { method: 'POST', body: {}, env: broken }, mockFetch(new Response(null, { status: 204 })))).status, 200);
 });
 
-test('the removed email/password routes are no longer served', async () => {
-  for (const route of ['signin', 'signup', 'reset-password', 'verify-recovery', 'password']) {
+test('legacy sign-in/signup and recovery routes remain unserved', async () => {
+  for (const route of ['signin', 'signup', 'reset-password', 'verify-recovery']) {
     const fetcher = mockFetch();
     const response = await call('/api/account/' + route, { method: 'POST', body: { email: 'fareed@example.com', password: 'secret-password', token: '123456' }, token: null }, fetcher);
     assert.equal(response.status, 404, route);

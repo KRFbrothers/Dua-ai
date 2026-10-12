@@ -1,6 +1,6 @@
 # Dua AI Android UI and setup
 
-Dua AI keeps its original name and artwork. This is the owner's personal assistant, with a compact mobile chat layout inspired by ChatGPT. The owner explicitly chose to keep Google owner login and temporary offline cache access; email/password sign-up and unrestricted online guest access are outside this app's scope.
+Dua AI keeps its original name and artwork. This is the owner's personal assistant, with a compact mobile chat layout inspired by ChatGPT. Google owner login and temporary offline cache access are preserved. Phase 1 now adds owner-only email login/signup and password setup for the existing account; unrestricted online guest access remains outside scope.
 
 ## Screens and structure
 
@@ -66,7 +66,8 @@ The default native UI tests render production components with synthetic fixtures
 | Theme/accent, font family, notifications/reminders, account/data controls | Implemented. General UI language and an in-app text-size slider are pending; Android system text scaling and existing voice-language controls work |
 | Empty history, loading, request errors and offline cached viewing | Implemented. No offline AI generation; a dedicated connectivity status/retry banner is pending |
 | Images gallery, Library, AI Agent, Work, Plugins and other missing settings destinations | Coming soon as listed in [APPROVED_UI_IMPLEMENTATION.md](APPROVED_UI_IMPLEMENTATION.md) |
-| Email sign-up or unrestricted online guest mode | Intentionally outside the owner's approved access model |
+| Email login/signup and existing-account password setup | Implemented under Account (and Continue with email on Welcome when configured); owner-only, mandatory email confirmation and provider/SMTP setup required. Passwords are transient; password reset/recovery UI remains pending. |
+| Unrestricted online guest mode | Outside the owner-only access model |
 
 Code/build/render verification is not proof of live provider, account, Storage, permission or physical-device behavior. Check these with [RELEASE-CHECKLIST.md](RELEASE-CHECKLIST.md) and the owner's installed release APK.
 

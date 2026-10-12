@@ -39,16 +39,17 @@ import com.dua.ai.viewmodel.ChatViewModel
 
 /** Welcome screen shown at launch while signed out: one Google sign-in button and a quiet "Skip for now". */
 @Composable
-fun OnboardingScreen(viewModel: ChatViewModel, onDone: () -> Unit) {
+fun OnboardingScreen(viewModel: ChatViewModel, onDone: () -> Unit, onEmail: () -> Unit = {}) {
     val account by viewModel.account.state.collectAsState()
     val google by viewModel.googleSignIn.collectAsState()
     val signIn = rememberGoogleSignIn(viewModel)
+    LaunchedEffect(Unit) { viewModel.loadAccount() }
     LaunchedEffect(account.user?.id) { if (account.user != null) onDone() }
-    OnboardingContent(busy = google.busy, error = google.error, onSignIn = signIn, onSkip = { viewModel.skipOnboarding(); onDone() })
+    OnboardingContent(busy = google.busy, error = google.error, onSignIn = signIn, onSkip = { viewModel.skipOnboarding(); onDone() }, onEmail = if (account.emailAuthConfigured && !account.busy) onEmail else null)
 }
 
 @Composable
-fun OnboardingContent(busy: Boolean, error: String?, onSignIn: () -> Unit, onSkip: () -> Unit) {
+fun OnboardingContent(busy: Boolean, error: String?, onSignIn: () -> Unit, onSkip: () -> Unit, onEmail: (() -> Unit)? = null) {
     BoxWithConstraints(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).windowInsetsPadding(WindowInsets.safeDrawing)) {
         val viewport = maxHeight
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).heightIn(min = viewport)
@@ -67,6 +68,7 @@ fun OnboardingContent(busy: Boolean, error: String?, onSignIn: () -> Unit, onSki
             Column(Modifier.widthIn(max = 420.dp).fillMaxWidth().padding(top = Spacing.huge), horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                 GoogleSignInButton(busy = busy, error = error, onClick = onSignIn)
+                onEmail?.let { TextButton(onClick = it, enabled = !busy, modifier = Modifier.heightIn(min = 48.dp)) { Text("Continue with email") } }
                 TextButton(onClick = onSkip, enabled = !busy, modifier = Modifier.heightIn(min = 48.dp)) {
                     Text("Skip for now", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }

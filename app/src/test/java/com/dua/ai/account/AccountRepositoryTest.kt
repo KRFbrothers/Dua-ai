@@ -20,6 +20,59 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
 class AccountRepositoryTest {
+    @Test fun emailSignInUsesNativeTlsApiAndStoresOnlyTheReturnedSession() = runBlocking {
+        val store = MemoryStore(null); val repository = AccountRepository(api, store)
+        server.enqueue(json(AccountSessionCodec.encode(session(userA))))
+        assertTrue(repository.signInWithEmail(" ${userA.email.uppercase()} ", " password spaces "))
+        val request = server.takeRequest(2, TimeUnit.SECONDS)!!
+        assertEquals("/api/account/email-login", request.path); assertEquals("1", request.getHeader("x-dua-native"))
+        assertEquals(" password spaces ", JSONObject(request.body.readUtf8()).getString("password"))
+        assertEquals(userA, store.value!!.user)
+        assertFalse(AccountSessionCodec.encode(store.value!!).toString().contains("password spaces"))
+    }
+    @Test fun signupConfirmationNeverInstallsASessionAndPasswordSetupRequiresTheCurrentAccount() = runBlocking {
+        val store = MemoryStore(null); val repository = AccountRepository(api, store)
+        server.enqueue(json(JSONObject().put("confirmationRequired", true).put("message", "Check your email.")))
+        assertFalse(repository.signInWithEmail(userA.email, "new-password", signup = true))
+        assertNull(store.value); assertNull(repository.state.value.user)
+        assertEquals("Check your email.", repository.state.value.notice)
+        assertEquals("/api/account/email-signup", server.takeRequest(2, TimeUnit.SECONDS)!!.path)
+        assertTrue(runCatching { repository.setEmailPassword("new-password", userA.id) }.isFailure)
+        assertEquals(0, server.requestCount - 1)
+    }
+    @Test fun invalidCredentialsAndUnexpectedEmailCannotInstallAuthentication() = runBlocking {
+        val store = MemoryStore(null); val repository = AccountRepository(api, store)
+        assertTrue(runCatching { repository.signInWithEmail("invalid", "password") }.isFailure)
+        assertTrue(runCatching { repository.signInWithEmail(userA.email, "short", signup = true) }.isFailure)
+        assertEquals(0, server.requestCount)
+        server.enqueue(json(AccountSessionCodec.encode(session(userB))))
+        assertTrue(runCatching { repository.signInWithEmail(userA.email, "password") }.isFailure)
+        assertNull(store.value)
+    }
+    @Test fun passwordUpdateSendsOwnerBindingWithoutReplacingSessionOrSavingThePassword() = runBlocking {
+        val store = MemoryStore(session(userA)); val repository = AccountRepository(api, store)
+        server.enqueue(json(JSONObject().put("ownerId", userA.id).put("passwordUpdated", true)))
+        repository.setEmailPassword("new-password", userA.id)
+        val request = server.takeRequest(2, TimeUnit.SECONDS)!!
+        assertEquals("PUT", request.method); assertEquals("/api/account/password", request.path)
+        assertEquals(userA.id, JSONObject(request.body.readUtf8()).getString("expectedAccountId"))
+        assertEquals(session(userA), store.value)
+        server.enqueue(json(JSONObject().put("ownerId", userB.id).put("passwordUpdated", true)))
+        assertTrue(runCatching { repository.setEmailPassword("new-password", userA.id) }.isFailure)
+    }
+    @Test fun aLateEmailSignInCannotUndoLogoutOrCancellation() = runBlocking {
+        val arrived = CompletableDeferred<Unit>(); val release = CountDownLatch(1)
+        val store = MemoryStore(null); val repository = AccountRepository(api, store)
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse {
+                arrived.complete(Unit); release.await(4, TimeUnit.SECONDS)
+                return json(AccountSessionCodec.encode(session(userA)))
+            }
+        }
+        val pending = async { runCatching { repository.signInWithEmail(userA.email, "password") } }
+        withTimeout(3000) { arrived.await() }; repository.logout(); repository.cancelAuthentication(); release.countDown()
+        assertTrue(pending.await().isFailure); assertNull(store.value); assertNull(repository.state.value.user)
+    }
     private lateinit var server: MockWebServer
     private lateinit var client: OkHttpClient
     private lateinit var api: AccountApi

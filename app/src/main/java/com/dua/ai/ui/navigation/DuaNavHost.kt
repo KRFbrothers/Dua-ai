@@ -97,7 +97,7 @@ fun DuaNavHost(viewModel: ChatViewModel, voice: ReplyVoice, notificationRoute: P
         popExitTransition = { fadeOut(tween(120)) },
     ) {
         composable(DuaDestination.Onboarding.route) {
-            OnboardingScreen(viewModel, onDone = navigator::toChat)
+            OnboardingScreen(viewModel, onDone = navigator::toChat, onEmail = { navigator.open(DuaDestination.EmailAccount) })
         }
         composable(DuaDestination.Chat.route) {
             BusyBackGuard(viewModel)
@@ -141,9 +141,12 @@ fun DuaNavHost(viewModel: ChatViewModel, voice: ReplyVoice, notificationRoute: P
             BusyBackGuard(viewModel)
             SettingsScreen(viewModel, onBack = navigator::back, onOpen = navigator::open)
         }
+        composable(DuaDestination.EmailAccount.route) {
+            com.dua.ai.ui.auth.EmailAuthScreen(viewModel, onBack = navigator::back)
+        }
         composable(DuaDestination.Account.route) {
             BusyBackGuard(viewModel)
-            ProfileScreen(viewModel, onBack = navigator::back)
+            ProfileScreen(viewModel, onBack = navigator::back, onEmail = { navigator.open(DuaDestination.EmailAccount) })
         }
         listOf(DuaDestination.Appearance, DuaDestination.Accent).forEach { destination ->
             composable(destination.route) {
