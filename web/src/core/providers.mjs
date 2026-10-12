@@ -231,10 +231,26 @@ export async function handleChat(request, { env = process.env, fetcher = fetch, 
   const model = publicModel(env[provider.model]);
   if (!hasKey(env[provider.key]) || !model) return json({ error: `${provider.name} is not configured. Set ${provider.key} and ${provider.model} in hosting settings.` }, 503);
   const reasoning = data.mode === 'reasoning';
-  // The service handler adds the configurable chat deadline (DUA_CHAT_DEADLINE_SECONDS) to request.signal.
-  const signal = request.signal;
   if (data.xSearch === true && !xSearchAvailable(env)) return json({ error: 'X search is turned off on this server. Turn X off and retry.' }, 403);
   const search = searchPlan(provider, data, env, definitions);
+  const reply = (signal, sendEvent) => generateChatReply(request, data, provider, parts, { env, fetcher, pageReader, model, reasoning, search, signal, sendEvent });
+  if (data.stream === true) {
+    // Flush headers and keep the socket alive BEFORE web/file preparation or provider headers arrive.
+    // The signal combines the service deadline with client cancellation, including these initial waits.
+    return eventStreamResponse(async (send, streamSignal) => {
+      const failed = await reply(streamSignal, send);
+      if (failed) {
+        const body = await failed.json();
+        send({ type: 'error', message: body.error, status: failed.status,
+          ...(body.retryAfterSeconds ? { retryAfterSeconds: body.retryAfterSeconds } : {}) });
+      }
+    }, { signal: request.signal, onUnexpected: error => console.error('[dua-chat] stream failed', error?.name) });
+  }
+  return reply(request.signal);
+}
+
+/** Slow preparation and provider work: JSON replies retain HTTP errors; open streams send error events. */
+async function generateChatReply(request, data, provider, parts, { env, fetcher, pageReader, model, reasoning, search, signal, sendEvent }) {
   let web;
   // Native search needs no Brave request; Read link (page) always uses the page reader.
   try { web = await prepareChatWeb(search.native ? { ...data, web: undefined } : data, { url: request.url, env, fetcher, signal, pageReader }); }
@@ -272,11 +288,9 @@ export async function handleChat(request, { env = process.env, fetcher = fetch, 
   let response;
   let searchNotice = null;
   let codeNotice = data.code === true && !codeAllowed ? (String(env.DUA_CODE_EXECUTION ?? '').trim() === '0' ? 'Run code is turned off on this server, so no code was run.' : `${provider.name} cannot run code in Dua, so no code was run. Choose Dua or Gemini.`) : null;
-  // Lets a cancelled event stream (client gone) abort the provider body read as well.
-  const upstream = new AbortController();
   const send = async current => {
     signal.throwIfAborted();
-    const result = await fetcher(current.url, { method: 'POST', headers: current.headers, body: JSON.stringify(current.body), redirect: 'error', signal: AbortSignal.any([signal, upstream.signal]) });
+    const result = await fetcher(current.url, { method: 'POST', headers: current.headers, body: JSON.stringify(current.body), redirect: 'error', signal });
     signal.throwIfAborted();
     return result;
   };
@@ -310,14 +324,12 @@ export async function handleChat(request, { env = process.env, fetcher = fetch, 
   const contextEvent = covered ? { summary, covered } : null;
   const notice = [reasoning && !provider.reasoning ? `${provider.name} has no visible thinking in Dua yet, so it answered normally.` : null, searchNotice, codeNotice, contextNotice].filter(Boolean).join(' ') || null;
   if (data.stream === true) {
-    return eventStreamResponse(async (send, streamSignal) => {
-      streamSignal.addEventListener('abort', () => upstream.abort(streamSignal.reason), { once: true });
-      if (contextEvent) send({ type: 'context', ...contextEvent });
-      if (stored.transcripts.length) send({ type: 'files', files: stored.transcripts });
-      if (web.sources.length) send({ type: 'sources', sources: web.sources });
-      if (notice) send({ type: 'notice', message: notice });
-      await relayStream({ provider, response, sources: web.sources, reasoning, signal: streamSignal, send });
-    }, { signal, onUnexpected: error => console.error('[dua-chat] stream failed', error?.name) });
+    if (contextEvent) sendEvent({ type: 'context', ...contextEvent });
+    if (stored.transcripts.length) sendEvent({ type: 'files', files: stored.transcripts });
+    if (web.sources.length) sendEvent({ type: 'sources', sources: web.sources });
+    if (notice) sendEvent({ type: 'notice', message: notice });
+    await relayStream({ provider, response, sources: web.sources, reasoning, signal, send: sendEvent });
+    return null;
   }
   try {
     const reply = extractReply(provider.type, await readJsonLimited(response, 1024 * 1024));
