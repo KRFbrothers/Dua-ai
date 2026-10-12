@@ -7,8 +7,9 @@ import com.dua.ai.history.ChatHistoryCodec
 import org.json.JSONObject
 import java.security.MessageDigest
 
-/** Only digests/counts are persisted; never duplicate chat or memory plaintext in sync settings. */
-data class AutomationBaseline(val chatMessageCounts: Map<String, Int>, val chatSignatures: Map<String, String>, val memoryDigests: Set<String>, val projectSignatures: Map<String, String> = emptyMap())
+/** Persist IDs, counts, hashes and pin membership; never duplicate chat or memory plaintext here. */
+data class AutomationBaseline(val chatMessageCounts: Map<String, Int>, val chatSignatures: Map<String, String>, val memoryDigests: Set<String>, val projectSignatures: Map<String, String> = emptyMap(),
+    val pinnedChatIds: Set<String> = emptySet())
 data class AutomationSyncRecord(val enabled: Boolean = false, val accountId: String? = null, val revision: Long? = null,
     val baseline: AutomationBaseline? = null, val reviewRequired: Boolean = false, val failureCount: Int = 0)
 data class AutomationMergePlan(val snapshot: CloudSnapshot, val requiresContentReview: Boolean)
@@ -23,6 +24,8 @@ object AutomationSyncPolicy {
         val json = JSONObject(ChatHistoryCodec.export(listOf(chat), exportedAt = 0, includeServerFields = true))
         val item = json.getJSONArray("chats").getJSONObject(0)
         item.remove("id")
+        // Pins have their own baseline: preserve legacy content signatures and avoid pin-only copies.
+        item.remove("pinned")
         // Preserve pre-Projects baselines for existing Personal chats.
         if (chat.projectId == com.dua.ai.projects.ProjectCodec.PERSONAL) item.remove("projectId")
         val messages = item.getJSONArray("messages")
@@ -31,7 +34,7 @@ object AutomationSyncPolicy {
     }
     fun signature(chat: SavedChat): String = digest(canonical(chat))
     fun validate(snapshot: CloudSnapshot): CloudSnapshot { CloudSnapshotCodec.encode(snapshot); return snapshot }
-    fun baseline(snapshot: CloudSnapshot): AutomationBaseline = AutomationBaseline(snapshot.chats.associate { it.id to it.messages.size }, snapshot.chats.associate { it.id to signature(it) }, snapshot.memory.map(::digest).toSet(), snapshot.projects.associate { it.id to projectSignature(it) })
+    fun baseline(snapshot: CloudSnapshot): AutomationBaseline = AutomationBaseline(snapshot.chats.associate { it.id to it.messages.size }, snapshot.chats.associate { it.id to signature(it) }, snapshot.memory.map(::digest).toSet(), snapshot.projects.associate { it.id to projectSignature(it) }, snapshot.chats.filter { it.pinned }.map { it.id }.toSet())
     fun projectSignature(project: com.dua.ai.projects.ChatProject): String = digest(com.dua.ai.projects.ProjectCodec.encodedProject(project).toString())
     fun same(left: CloudSnapshot, right: CloudSnapshot): Boolean = baseline(left) == baseline(right) && left.deletedChatIds.toSet() == right.deletedChatIds.toSet()
 
@@ -44,6 +47,7 @@ object AutomationSyncPolicy {
             require(baseline.chatMessageCounts.all { (id, count) -> id.isNotBlank() && id.length <= 200 && count in 0..500 })
             require(baseline.chatSignatures.values.all(digestPattern::matches) && baseline.memoryDigests.all(digestPattern::matches))
             require(baseline.projectSignatures.size <= 20 && baseline.projectSignatures.all { (id, hash) -> com.dua.ai.projects.ProjectCodec.validId(id) && digestPattern.matches(hash) })
+            require(baseline.pinnedChatIds.size <= 100 && baseline.pinnedChatIds.all { it in baseline.chatMessageCounts })
         }
         return value
     }
@@ -75,7 +79,9 @@ object AutomationSyncPolicy {
             if (here.id in deleted) return@forEach
             val server = remoteById[here.id]
             if (server == null) { chats += here; return@forEach }
-            chats += server
+            val pinBaseline = previous ?: firstRead
+            val pinEdited = pinBaseline?.chatMessageCounts?.containsKey(here.id) == true && here.pinned != (here.id in pinBaseline.pinnedChatIds)
+            chats += if (pinEdited) server.copy(pinned = here.pinned) else server
             val hereSignature = signature(here)
             val editedOffline = (previous ?: firstRead)?.chatSignatures?.get(here.id).let { it != null && it != hereSignature }
             if (editedOffline && hereSignature != signature(server)) {

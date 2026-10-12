@@ -38,6 +38,7 @@ object CloudSnapshotCodec {
         val root = JSONObject(ChatHistoryCodec.export(listOf(chat), exportedAt = 0, includeServerFields = true))
         val item = root.getJSONArray("chats").getJSONObject(0)
         item.remove("id")
+        item.remove("pinned") // Pin-only differences do not warrant a recovered conversation copy.
         return item.toString()
     }
 

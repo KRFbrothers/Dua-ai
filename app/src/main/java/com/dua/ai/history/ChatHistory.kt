@@ -20,7 +20,8 @@ data class SavedChat(
     /** Build mode repository this chat is tied to (owner/name). Included in the signed-in cloud snapshot. */
     val buildRepository: String? = null,
     val projectId: String = com.dua.ai.projects.ProjectCodec.PERSONAL,
-    val customTitle: String? = null
+    val customTitle: String? = null,
+    val pinned: Boolean = false
 ) {
     init { require(customTitle == null || ChatTitles.valid(customTitle)) { ChatTitles.ERROR } }
     val title: String get() = customTitle ?: messages.firstOrNull { it.isUser }?.text?.take(60) ?: "Draft"
@@ -131,7 +132,8 @@ object ChatHistoryCodec {
                     if (includeServerFields) com.dua.ai.model.ChatSummary.fromJson(chat.optJSONObject("summary")) else null,
                     if (includeServerFields) chat.optString("buildRepository").takeIf { com.dua.ai.model.BuildInfos.validRepository(it) } else null,
                     if (chat.has("projectId")) text(chat, "projectId", 100) else com.dua.ai.projects.ProjectCodec.PERSONAL,
-                    if (chat.has("title")) text(chat, "title", ChatTitles.MAX_LENGTH) else null)
+                    if (chat.has("title")) text(chat, "title", ChatTitles.MAX_LENGTH) else null,
+                    if (chat.has("pinned")) chat.get("pinned") as? Boolean ?: error(invalid) else false)
                 require(projects.any { it.id == decoded.projectId }) { invalid }
                 if (includeServerFields && strictMetadata) ChatImportMetadata.validate(chat, decoded)
                 decoded
@@ -159,6 +161,7 @@ object ChatHistoryCodec {
         .put("chats", JSONArray().apply {
             chats.sortedByDescending { it.updatedAt }.forEach { chat ->
                 put(JSONObject().put("id", chat.id).put("model", chat.model).put("draft", chat.draft).put("projectId", chat.projectId)
+                    .put("pinned", chat.pinned)
                     .apply { chat.customTitle?.let { put("title", it) } }
                     .apply { if (includeServerFields) { chat.summary?.let { put("summary", it.toJson()) }; chat.buildRepository?.let { put("buildRepository", it) } } }
                     .put("updatedAt", chat.updatedAt).put("messages", JSONArray().apply {
@@ -187,6 +190,7 @@ object ChatHistoryCodec {
         .put("activeId", activeId).put("chats", JSONArray().apply {
             chats.forEach { chat -> put(JSONObject().put("id", chat.id).put("model", chat.model)
                 .put("draft", chat.draft).put("updatedAt", chat.updatedAt).put("projectId", chat.projectId)
+                .put("pinned", chat.pinned)
                 .apply { chat.customTitle?.let { put("title", it) } }
                 .apply { chat.summary?.let { put("summary", it.toJson()) }; chat.buildRepository?.let { put("buildRepository", it) } }
                 .put("messages", JSONArray().apply { chat.messages.filter(::persistable).forEach { message ->
@@ -251,7 +255,8 @@ object ChatHistoryCodec {
                 }, item.getLong("updatedAt"), com.dua.ai.model.ChatSummary.fromJson(item.optJSONObject("summary")),
                 item.optString("buildRepository").takeIf { com.dua.ai.model.BuildInfos.validRepository(it) },
                 if (item.has("projectId")) (item.get("projectId") as? String ?: error("Invalid project ID.")) else com.dua.ai.projects.ProjectCodec.PERSONAL,
-                if (item.has("title")) item.get("title") as? String ?: error(ChatTitles.ERROR) else null)
+                if (item.has("title")) item.get("title") as? String ?: error(ChatTitles.ERROR) else null,
+                if (item.has("pinned")) item.get("pinned") as? Boolean ?: error("Invalid chat pin flag.") else false)
         }
         require(chats.all { it.model in com.dua.ai.setup.IntegrationCapabilities.MODELS } && chats.map { it.id }.distinct().size == chats.size)
         require(chats.all { com.dua.ai.projects.ProjectCodec.validId(it.projectId) })

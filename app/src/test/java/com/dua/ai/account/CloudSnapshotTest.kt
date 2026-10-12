@@ -45,7 +45,7 @@ class CloudSnapshotTest {
         val raw = javaClass.getResourceAsStream("/cloud-snapshot-v1.json")!!.bufferedReader().use { it.readText() }
         val expected = org.json.JSONObject(raw).put("projects", com.dua.ai.projects.ProjectCodec.toJson(com.dua.ai.projects.ProjectCodec.defaults))
         val chats = expected.getJSONArray("chats")
-        for (i in 0 until chats.length()) chats.getJSONObject(i).put("projectId", "personal")
+        for (i in 0 until chats.length()) chats.getJSONObject(i).put("projectId", "personal").put("pinned", false)
         val restored = CloudSnapshotCodec.decode(expected)
         val actual = CloudSnapshotCodec.encode(restored)
         assertTrue("Android and backend must preserve the same snapshot fields", expected.similar(actual))

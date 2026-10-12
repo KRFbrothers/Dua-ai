@@ -5,7 +5,7 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 
-enum class HistoryBucket(val label: String) { Today("Today"), Yesterday("Yesterday"), Previous7Days("Previous 7 days"), Older("Older") }
+enum class HistoryBucket(val label: String) { Pinned("Pinned"), Today("Today"), Yesterday("Yesterday"), Previous7Days("Previous 7 days"), Older("Older") }
 
 /** Groups saved chats by their last update for the history drawer. */
 object HistoryGrouping {
@@ -27,7 +27,7 @@ object HistoryGrouping {
 
     fun group(chats: List<SavedChat>, now: Long, zone: ZoneId): List<Pair<HistoryBucket, List<SavedChat>>> =
         chats.sortedByDescending { it.updatedAt }
-            .groupBy { bucket(it.updatedAt, now, zone) }
+            .groupBy { if (it.pinned) HistoryBucket.Pinned else bucket(it.updatedAt, now, zone) }
             .toList()
             .sortedBy { it.first.ordinal }
 }

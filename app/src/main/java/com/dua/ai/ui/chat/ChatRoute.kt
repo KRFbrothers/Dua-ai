@@ -115,6 +115,7 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
         attachmentStatus = if (readingFiles) "Reading files…" else fileError.ifBlank { attachmentNotice },
         savedChats = savedChats,
         serverChatDeletionEnabled = integrations.chatDeletionEnabled && account.user != null,
+        chatPinEnabled = integrations.chatPinEnabled,
         chatDeletion = chatDeletion,
         projects = preferences.projects, projectId = projectId, projectNotice = projectNotice, projectTasksEnabled = integrations.projectTasksEnabled, taskDueDatesEnabled = integrations.taskDueDatesEnabled, projectMemoryEnabled = integrations.projectMemoryEnabled,
         speakingId = speech.activeId ?: generatedSpeech.activeId,
@@ -175,6 +176,7 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
             onOpenChat = { id -> pulse(); voice.stopAll(); viewModel.openChat(id); viewModel.clearAttachments() },
             onDeleteChat = viewModel::deleteChat,
             onRenameChat = viewModel::renameChat,
+            onPinChat = viewModel::setChatPinned,
             onDeleteServerChat = viewModel::deleteServerChat,
             onDismissChatDeletion = viewModel::dismissChatDeletion,
             onPickCamera = {

@@ -105,6 +105,11 @@ export async function handleAccount(req,env={}){
    }else if(snapshot.chats.some(chat=>deleted.has(chat.id))){
     return json({error:'This upload contains a deleted chat. Download current cloud history before uploading.',revision:remote.revision},409);
    }
+   // Legacy clients cannot express unpin: preserve the server flag when they omit it.
+   if(!deleteChat&&req.method==='PUT'){
+    const serverPins=new Map(remote.snapshot.chats.map(chat=>[chat.id,chat.pinned]));
+    snapshot.chats=snapshot.chats.map(chat=>chat.pinned===undefined&&serverPins.get(chat.id)!==undefined?{...chat,pinned:serverPins.get(chat.id)}:chat);
+   }
    // Only the server creates deletion IDs. Older clients may omit them, but cannot remove them.
    delete snapshot.deletedChatIds;
    if(deleted.size)snapshot.deletedChatIds=[...deleted].sort();
