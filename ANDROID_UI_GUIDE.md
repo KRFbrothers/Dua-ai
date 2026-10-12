@@ -12,7 +12,7 @@ Dua AI keeps its original name and artwork. This is the owner's personal assista
 | Composer | `Composer.kt`, `AttachmentSheet.kt`, `StoredFileChips.kt`: multiline input, send/stop, model choice, mic/voice and file tools |
 | History / Aura | `ui/history/HistoryDrawer.kt`, `SidebarPanel.kt`: project search, fixed navigation/footer and independently scrolling recent chats |
 | Projects | `ProjectsSheet.kt` and project task/memory/planner components: selected project, instructions, archive, tasks, memory and planner |
-| Profile and settings | `ui/navigation/DuaNavHost.kt`, `ui/settings/`, `ui/screens/ProfileScreen.kt`: owner account, appearance/accent, fonts, haptics, notifications, voice and data controls |
+| Profile and settings | `ui/navigation/DuaNavHost.kt`, `ui/settings/`, `ui/screens/ProfileScreen.kt`: owner account, appearance/accent, fonts, haptics, notifications; Voice contains its input/mode/reply controls, and History and data contains Data controls/privacy/sharing/permissions |
 
 Production follows the existing MVVM structure: `MainActivity → DuaApp → DuaNavHost → ChatRoute → ChatScreen`. `ChatViewModel` owns state and operations; `ChatUiState`/`ChatActions` keep the chat components reusable. Account, network, history, settings, projects and voice modules hold their existing responsibilities. The backend lives only in `web/`; provider keys never belong in Android source, resources or build configuration.
 
@@ -67,10 +67,18 @@ The native UI test suite records production renders separately, without the prev
 
 Code/build/render verification is not proof of live provider, account, Storage, permission or physical-device behavior. Check these with [RELEASE-CHECKLIST.md](RELEASE-CHECKLIST.md) and the owner's installed release APK.
 
-## Validation for this update
+## Validation for the compact-chat update
 
 - Local debug APK build and the full 462-test Android suite passed with zero failures/errors/skips.
 - After adding the share-chooser regression check and correcting the screenshot fixture background, 33 UI/action tests passed. The new share test checks Android's chooser receives the full reply including executed code.
 - Home, Projects, Sidebar/Aura and settings were rendered/reviewed in Light/Dark, with 320 × 568dp at 2× font scaling. The debug APK manifest contains the isolated preview activity.
 - Local release-task verification requires the permanent signing credentials and was not completed. Use the existing main-only signed GitHub workflow after merging; do not create a new keystore.
 - Physical-device interaction and live backend/account/permissions remain checks for the owner's installed release.
+
+## Voice and data grouping
+
+Profile has one **Settings → Voice** entry. Voice input, voice mode/live conversation, reply providers, samples, speed and language controls live inside it; the separate profile Voice card is removed. The older-backend AI reply-voice switch remains available there with its original account/setup gating.
+
+The separate profile Data card is also removed. **Settings → History and data** opens the existing Data controls, Your data, Sharing and Permissions destinations. Their data operations and confirmations are unchanged; navigating into this group does not modify any data.
+
+For this grouping update, debug APK packaging and 55 focused UI/voice tests passed. Native renders were checked in both themes and at 320 × 568dp with 2× font scaling. The owner's installed APK still needs a phone navigation check after updating.

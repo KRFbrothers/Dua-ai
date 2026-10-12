@@ -198,7 +198,7 @@ class DuaScreenshotTest(private val dark: Boolean) {
 
     @Test fun settings() = shot("05_settings") {
         SettingsContent(SettingsUiState(email = "fareed@example.com", theme = mode, haptic = true, notifications = true),
-            onBack = {}, onOpen = {}, onGeneratedVoice = {})
+            onBack = {}, onOpen = {})
     }
 }
 

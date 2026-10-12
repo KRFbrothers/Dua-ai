@@ -30,13 +30,15 @@ Read Page 1, **Dua AI — Navigation Flow**, and **Dua AI — Complete UI Map** 
 | Account | Existing Google sign-in, sign-in errors, account status and typed account-deletion confirmation; Logout moved to the profile hub |
 | Personalization | Appearance, existing fonts and haptics |
 | Memory, Notifications, Voice | Existing memory editor, notification/reminder controls and voice settings; voice input, voice mode/live voice and languages retained |
-| More settings / Voice / Data / Setup | Existing Sync review, Imagine settings, dictation, conversation modes, generated-voice control, Data controls, Privacy, Sharing, Permissions and feature diagnostics |
+| Settings → Voice | Dictation, voice mode/live conversation, reply voice/provider, speed, samples and languages; the legacy AI reply-voice switch remains available on older backends |
+| Settings → History and data | Existing Data controls, Your data/privacy, Sharing and Permissions destinations; the profile no longer repeats the Voice/Data cards |
+| More settings / Setup | Existing Sync review, Imagine settings and feature diagnostics |
 
 The old `settings` route still resolves to the hub, so restored navigation state remains valid. Existing cache operations keep navigation guards and reply audio stops on destination changes. Chat models, markdown/copy/retry, attachments, generated media, code execution, Build/repository reading and PR approval remain unchanged.
 
 ## Coming soon
 
-Dedicated Images gallery, Library, AI Agent, Work, Plugins, General, Usage and limits, Safety, Security and login, Storage, History and data, settings search and profile-photo editing have no corresponding implementation in the current source. They open a title/back/Coming soon page. Imagine generation and existing Data controls remain available separately; they are not disguised as these missing screens. The approved chat-options Rename and Pin entries explicitly show Coming soon; existing Remove cached chat still uses its real confirmation.
+Dedicated Images gallery, Library, AI Agent, Work, Plugins, General, Usage and limits, Safety, Security and login, Storage, settings search and profile-photo editing have no corresponding implementation in the current source. They open a title/back/Coming soon page. Imagine generation and existing Data controls remain available separately; they are not disguised as these missing screens. The approved chat-options Rename and Pin entries explicitly show Coming soon; existing Remove cached chat still uses its real confirmation.
 
 ## Preferences and theme preservation
 

@@ -185,7 +185,7 @@ fun DuaNavHost(viewModel: ChatViewModel, voice: ReplyVoice, notificationRoute: P
                     com.dua.ai.ui.voice.VoicePickerKind.LIVE -> DuaDestination.LiveVoice
                     else -> DuaDestination.VoicePicker
                 })
-            })
+            }, onOpen = { destination -> navigator.open(destination) })
         }
         listOf(DuaDestination.VoicePicker to com.dua.ai.ui.voice.VoicePickerKind.VOICE,
             DuaDestination.ReplyLanguage to com.dua.ai.ui.voice.VoicePickerKind.REPLY_LANGUAGE,
@@ -199,6 +199,10 @@ fun DuaNavHost(viewModel: ChatViewModel, voice: ReplyVoice, notificationRoute: P
         composable(DuaDestination.DataControls.route) {
             BusyBackGuard(viewModel)
             DataControlsScreen(viewModel, onBack = navigator::back)
+        }
+        composable(DuaDestination.HistoryData.route) {
+            BusyBackGuard(viewModel)
+            com.dua.ai.ui.settings.HistoryDataScreen(onBack = navigator::back, onOpen = { navigator.open(it) })
         }
         composable(DuaDestination.FeatureSetup.route) {
             BusyBackGuard(viewModel)

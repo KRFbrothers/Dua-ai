@@ -96,9 +96,16 @@ class ApprovedNavigationUiTest(private val dark: Boolean, private val small: Boo
     @Test fun profileKeepsExistingRoutesAndLogoutRequiresConfirmation() {
         var destination: DuaDestination? = null; var logouts = 0
         content { SettingsContent(SettingsUiState(email = "fareed@example.com", displayName = "Fareed", theme = preferences.theme, accent = com.dua.ai.settings.AccentPreset.defaultFor(dark).label,
-            imagine = "Image generation", voice = "Device voice"), {}, { destination = it }, onGeneratedVoice = {}, onLogOut = { logouts++ }) }
+            imagine = "Image generation", voice = "Device voice"), {}, { destination = it }, onLogOut = { logouts++ }) }
         capture("profile")
-        compose.onNodeWithText("Account").performClick()
+        compose.onAllNodesWithText("Voice", substring = false).assertCountEquals(1)
+        for (label in listOf("Voice input", "Voice mode", "Reply voice & language", "Data controls", "Your data", "Sharing", "Permissions"))
+            compose.onNodeWithText(label, substring = false).assertDoesNotExist()
+        compose.onNodeWithText("Voice", substring = false).performScrollTo().performClick()
+        compose.runOnIdle { assertEquals(DuaDestination.VoiceSettings, destination) }
+        compose.onNodeWithText("History and data").performScrollTo().performClick()
+        compose.runOnIdle { assertEquals(DuaDestination.HistoryData, destination) }
+        compose.onNodeWithText("Account").performScrollTo().performClick()
         compose.runOnIdle { assertEquals(DuaDestination.Account, destination) }
         compose.onNodeWithText("Accent color").performScrollTo().performClick()
         compose.runOnIdle { assertEquals(DuaDestination.Accent, destination) }
@@ -142,5 +149,37 @@ class ApprovedNavigationUiTest(private val dark: Boolean, private val small: Boo
         compose.onNodeWithText("System default").performClick()
         compose.onNodeWithText("Dark").performScrollTo().performClick()
         compose.runOnIdle { assertEquals("dark", appearance.value.theme); assertEquals(com.dua.ai.settings.AccentPreset.Blue, appearance.value.accent) }
+    }
+
+    @Test fun historyAndDataOpensEveryExistingDataDestination() {
+        var destination: DuaDestination? = null
+        content { HistoryDataScreen({}, { destination = it }) }
+        capture("history-data")
+        for ((label, expected) in listOf("Data controls" to DuaDestination.DataControls, "Your data" to DuaDestination.Privacy,
+            "Sharing" to DuaDestination.Sharing, "Permissions" to DuaDestination.Permissions)) {
+            compose.onNodeWithText(label).performScrollTo().performClick()
+            compose.runOnIdle { assertEquals(expected, destination) }
+        }
+        assertNull(DuaDestination.HistoryData.comingSoonTitle)
+    }
+
+    @Test fun voiceContainsMovedActionsAndPreservesLegacyAndLiveAvailability() {
+        var destination: DuaDestination? = null
+        val state = mutableStateOf(com.dua.ai.ui.voice.VoiceSettingsUiState(null, false, preferences))
+        content { com.dua.ai.ui.voice.VoiceSettingsContent(state.value, {}, {}, {}, {}, {},
+            onOpen = { destination = it }, onGeneratedVoice = { state.value = state.value.copy(preferences = state.value.preferences.copy(generatedVoice = it)) }) }
+        capture("voice-settings")
+        compose.onNodeWithText("Voice input").performScrollTo().performClick()
+        compose.runOnIdle { assertEquals(DuaDestination.Voice, destination) }
+        compose.onNodeWithText("Voice mode").performScrollTo().performClick()
+        compose.runOnIdle { assertEquals(DuaDestination.HandsFree, destination) }
+        compose.onNodeWithText("AI reply voice").performScrollTo().assertIsNotEnabled()
+        compose.runOnIdle { state.value = state.value.copy(signedIn = true, legacyGeneratedVoiceConfigured = true) }
+        compose.onNodeWithText("AI reply voice").assertIsEnabled().performClick().assertIsOn()
+        compose.runOnIdle { state.value = state.value.copy(config = com.dua.ai.voice.VoiceConfig(live = com.dua.ai.voice.LiveVoiceConfig(enabled = true))) }
+        compose.onNode(hasText("Live conversation") and hasClickAction()).performScrollTo().performClick()
+        compose.runOnIdle { assertEquals(DuaDestination.LiveVoice, destination) }
+        compose.onNodeWithText("Voice mode").assertDoesNotExist()
+        compose.onNodeWithText("AI reply voice").assertDoesNotExist()
     }
 }
