@@ -13,6 +13,7 @@ import androidx.compose.material.icons.outlined.DesktopWindows
 import androidx.compose.material.icons.outlined.EditNote
 import androidx.compose.material.icons.outlined.Menu
 import androidx.compose.material.icons.outlined.ExpandMore
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -32,7 +33,7 @@ import com.dua.ai.ui.theme.Spacing
 /** Quiet navigation chrome; the project selector stays in the header rather than a second row. */
 @Composable
 fun ChatTopBar(newChatEnabled: Boolean, showComputer: Boolean, onMenu: () -> Unit, onComputer: () -> Unit, onNewChat: () -> Unit,
-    projectName: String = "Personal", onProjects: () -> Unit = {}) {
+    projectName: String = "Personal", onProjects: () -> Unit = {}, onSearch: (() -> Unit)? = null) {
     Row(Modifier.fillMaxWidth().statusBarsPadding().heightIn(min = 56.dp).padding(horizontal = Spacing.sm),
         verticalAlignment = Alignment.CenterVertically) {
         RoundBarButton(Icons.Outlined.Menu, "Open chat history", enabled = true, onClick = onMenu)
@@ -51,6 +52,7 @@ fun ChatTopBar(newChatEnabled: Boolean, showComputer: Boolean, onMenu: () -> Uni
         if (showComputer) {
             RoundBarButton(Icons.Outlined.DesktopWindows, "Computer, coming soon", enabled = true, onClick = onComputer)
         }
+        onSearch?.let { RoundBarButton(Icons.Outlined.Search, "Find in chat", enabled = true, onClick = it) }
         RoundBarButton(Icons.Outlined.EditNote, "New chat", enabled = newChatEnabled, onClick = onNewChat)
     }
 }
