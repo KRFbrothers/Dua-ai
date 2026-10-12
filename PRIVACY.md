@@ -6,6 +6,10 @@ Dua is a personal, single-user app: the backend is meant to be restricted to the
 
 ## Data Collection & Processing
 
+### Completed chat replies
+
+With the updated APK and configured owner backend, sending a signed-in chat writes its completed prompt/reply pair to the owner's Supabase snapshot before completion is acknowledged, even when optional foreground sync is off. Stored metadata includes stable message IDs, summaries, source footers, file references/transcripts, code results and Build metadata where used. Raw inline file bytes are not added to the snapshot. An incomplete/cancelled generation is not saved by this completion path; cached partial turns can still be included in a later reviewed/automatic sync. A save already in flight may commit before its acknowledgement is lost. Imagine and live realtime voice retain their existing storage flows. Cloud data remains protected by owner access/RLS and is not end-to-end encrypted by Dua.
+
 ### 1. Audio & Voice Data
 
 #### Collection

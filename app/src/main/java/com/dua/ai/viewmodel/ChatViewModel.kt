@@ -462,6 +462,26 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         events.onEach {
             if (it is com.dua.ai.network.ReplyEvent.Files) applyTranscripts(it.transcripts)
             if (it is com.dua.ai.network.ReplyEvent.Context && request?.context != null) applySummary(chatId, request.turns, it)
+            if (it is com.dua.ai.network.ReplyEvent.Saved) {
+                val receipt = it.receipt
+                check(activeId == chatId && receipt.chatId == chatId && receipt.replyId == id && account.state.value.user?.id == receipt.ownerId) {
+                    "Account or chat changed before server save acknowledgement. Review cloud history."
+                }
+                val latest = accumulator.snapshot(ended = true)
+                val completed = _messages.value.map { message -> if (message.id == id) message.copy(
+                    text = latest.text, thinking = latest.thinking, thinkingSeconds = receipt.thinkingSeconds,
+                    notice = latest.notice, codeRuns = latest.codeRuns, build = latest.build ?: message.build,
+                    proposal = latest.proposal ?: message.proposal, state = "complete") else message }
+                val confirmed = withContext(Dispatchers.Default) { com.dua.ai.account.ReplyPersistenceCodec.confirmedChat(receipt, completed) }
+                check(activeId == chatId && account.state.value.user?.id == receipt.ownerId && _messages.value.lastOrNull()?.id == id)
+                val prior = _savedChats.value.find { chat -> chat.id == chatId }
+                // Retain unsynced local metadata edits; adopt concurrent server metadata only where unchanged.
+                val cached = com.dua.ai.account.ReplyPersistenceCodec.cachedMetadata(confirmed, prior, _draft.value, _buildRepo.value, receipt)
+                _messages.value = completed; _draft.value = cached.draft; _summary.value = cached.summary
+                _selectedModel.value = cached.model; _projectId.value = cached.projectId; _buildRepo.value = cached.buildRepository
+                _savedChats.value = listOf(cached) + _savedChats.value.filterNot { chat -> chat.id == chatId }
+                historyWriter.save(_savedChats.value, activeId)
+            }
             accumulator.apply(it)
         }.conflate().collect {
             val snapshot = accumulator.snapshot()
@@ -1611,6 +1631,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         if (requestBuild != null) (buildUnavailableReason() ?: if (!buildUsable(plan.model)) "Build mode works with Dua or Gemini." else null)?.let { _error.value = it; return }
         webModeError(requestWebMode, plan.model)?.let { _error.value = it; return }
         val request = requestTurns(plan.full, plan.context, inlineFiles = false)
+        val persistenceBase = _messages.value.toList()
+        val persistenceOwner = account.state.value.user?.id.takeIf { _integrations.value.serverRepliesEnabled }
         val currentGeneration = generation
         val startedAt = System.currentTimeMillis()
         _error.value = null; _isTyping.value = true; refreshSyncBusy()
@@ -1619,10 +1641,14 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         replyJob = viewModelScope.launch {
             var accumulator: com.dua.ai.network.StreamAccumulator? = null
             try {
+                val persistence = persistenceOwner?.let { owner -> withContext(Dispatchers.Default) {
+                    com.dua.ai.account.ReplyPersistenceCodec.create(activeId, owner, persistenceBase, plan.full.last(), messageId,
+                        request.turns.filter { it.state == "complete" }.takeLast(if (request.context != null) 400 else 39), plan.full.last().text, replacing = true)
+                } }
                 account.withToken { token ->
                     val attempt = com.dua.ai.network.StreamAccumulator(startedAt).also { accumulator = it }
                     collectReply(messageId, attempt, api.streamReply(plan.model, request.turns, emptyList(), projectMemory(), token, requestWebMode.takeIf { requestBuild == null }, requestReasoning && requestBuild == null,
-                        request.historyBytes, request.context, requestXSearch && requestBuild == null, requestCode && requestBuild == null, requestBuild), request)
+                        request.historyBytes, request.context, requestXSearch && requestBuild == null, requestCode && requestBuild == null, requestBuild, persistence), request)
                 }
                 if (accumulator?.snapshot()?.text.isNullOrBlank()) throw DuaApiException(EMPTY_REPLY)
                 if (generation == currentGeneration) {
@@ -1694,6 +1720,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         val reply = ChatMessage(text = "", isUser = false, model = responseModel, state = ChatMessage.STREAMING, startedAt = startedAt,
             build = requestBuild?.let { com.dua.ai.model.BuildInfo(it) })
         val request = requestTurns(_messages.value + userMessage, _messages.value.takeLast(38) + userMessage, inlineFiles = files.isNotEmpty())
+        val persistenceBase = _messages.value.toList()
+        val persistenceOwner = account.state.value.user?.id.takeIf { _integrations.value.serverRepliesEnabled }
         val currentGeneration = generation
         replyWebModes[reply.id] = requestWebMode
         replyXSearch[reply.id] = requestXSearch
@@ -1709,11 +1737,15 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             var accumulator: com.dua.ai.network.StreamAccumulator? = null
             try {
                 val prepared = if (files.any(convert)) withContext(Dispatchers.Default) { PhotoAttachmentReader.convertToJpeg(files, convert) } else files
+                val persistence = persistenceOwner?.let { owner -> withContext(Dispatchers.Default) {
+                    com.dua.ai.account.ReplyPersistenceCodec.create(activeId, owner, persistenceBase, userMessage, reply.id,
+                        request.turns.filter { it.state == "complete" }.takeLast(if (request.context != null) 400 else 39), userText)
+                } }
                 account.withToken { token ->
                     val attempt = com.dua.ai.network.StreamAccumulator(startedAt).also { accumulator = it }
                     collectReply(reply.id, attempt, api.streamReply(responseModel, request.turns, prepared,
                         projectMemory(), token, requestWebMode.takeIf { requestBuild == null }, requestReasoning && requestBuild == null,
-                        request.historyBytes, request.context, requestXSearch && requestBuild == null, requestCode && requestBuild == null, requestBuild), request)
+                        request.historyBytes, request.context, requestXSearch && requestBuild == null, requestCode && requestBuild == null, requestBuild, persistence), request)
                 }
                 if (accumulator?.snapshot()?.text.isNullOrBlank()) throw DuaApiException(EMPTY_REPLY)
                 if (generation == currentGeneration) {

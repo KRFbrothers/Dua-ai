@@ -44,7 +44,8 @@ data class IntegrationState(val groups: List<IntegrationGroup> = emptyList(), va
     val build: BuildModeConfig? = null,
     val projectsEnabled: Boolean = false, val projectTasksEnabled: Boolean = false, val taskDueDatesEnabled: Boolean = false, val projectMemoryEnabled: Boolean = false,
     /** Older snapshot validators drop custom titles; wait for an explicit backend capability. */
-    val chatRenameEnabled: Boolean = false, val chatDeletionEnabled: Boolean = false, val chatPinEnabled: Boolean = false) {
+    val chatRenameEnabled: Boolean = false, val chatDeletionEnabled: Boolean = false, val chatPinEnabled: Boolean = false,
+    val serverRepliesEnabled: Boolean = false) {
     /** Search works for [model] natively or through Brave. */
     fun searchAvailable(model: String): Boolean = webSearchConfigured || model in nativeSearch
 }
@@ -67,6 +68,7 @@ object IntegrationCapabilities {
             chatRenameEnabled = json.optJSONObject("history")?.opt("rename") == true,
             chatPinEnabled = json.optJSONObject("history")?.opt("pin") == true,
             chatDeletionEnabled = json.optJSONObject("history")?.opt("delete") == true,
+            serverRepliesEnabled = json.optJSONObject("history")?.opt("persistReplies") == true,
             projectsEnabled = json.optJSONObject("projects")?.opt("enabled") == true,
             projectTasksEnabled = json.optJSONObject("projects")?.opt("enabled") == true && json.optJSONObject("projects")?.opt("tasks") == true,
             taskDueDatesEnabled = json.optJSONObject("projects")?.opt("enabled") == true && json.optJSONObject("projects")?.opt("tasks") == true && json.optJSONObject("projects")?.opt("dueDates") == true,

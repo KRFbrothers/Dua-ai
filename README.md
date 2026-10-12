@@ -6,7 +6,7 @@ Dua is a personal, single-user app: it is built for its owner only and installed
 
 ## Current features
 
-- Server-backed conversations, drafts and memory with an app-private cache for offline viewing, full-message/draft search, in-conversation search with previous/next message navigation, pinned conversations, export/import, sharing and data controls. Search is project-scoped with match snippets; see [HISTORY-SEARCH.md](HISTORY-SEARCH.md).
+- Server-backed conversations, drafts and memory with an app-private cache for offline viewing, full-message/draft search, in-conversation search with previous/next message navigation, pinned conversations, export/import, sharing and data controls. Updated signed-in clients save completed `/api/chat` replies through the backend before completion is acknowledged, independently of optional foreground sync. Search is project-scoped with match snippets; see [HISTORY-SEARCH.md](HISTORY-SEARCH.md).
 - Gemini plus configurable ChatGPT, Claude, Grok and Kimi adapters with streaming replies and a Reasoning mode (collapsible Thinking block on Gemini, Grok and reasoning ChatGPT models). Text and code files (TXT, CSV, MD, JSON, source code) work on all providers; images/PDF depend on the selected provider and configured model. See [PROVIDERS.md](PROVIDERS.md).
 - Chat Web: Off/Search/Read link modes and clickable source footers. Search requires Brave configuration; public page reading uses the existing chat provider. Web mode starts Off.
 - Copy, retry and speaker reply icons; device speech recognition/TTS and explicit foreground hands-free turns. Optional generated reply audio uses an authenticated, owner-restricted server integration.
@@ -15,6 +15,8 @@ Dua is a personal, single-user app: it is built for its owner only and installed
 - A configured read-only GitHub repository connector.
 
 API keys and optional credentials remain server-side. Preparing a feature does not activate a provider or paid service. OpenAI key setup remains deferred. Background/realtime sync, model-based memory and other advanced integrations remain pending.
+
+For server reply saving, deploy this backend first, install the updated APK and refresh Feature setup. Existing cached conversations must match their server message history before a follow-up or regeneration; sync/review older or stopped offline turns first. Save conflicts and uncertain acknowledgements keep received text on the phone and require cloud review. The existing snapshot RPC/schema is reused; see [SUPABASE.md](SUPABASE.md#completed-reply-saving) for the contract and limits. Imagine and live realtime voice retain their existing storage flows.
 
 ## Project roadmap
 

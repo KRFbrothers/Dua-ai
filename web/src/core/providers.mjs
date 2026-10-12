@@ -17,6 +17,7 @@ import { buildConfiguration, BuildError, prepareRepository, runBuildLoop, validR
 import { GitHubError } from './github.mjs';
 import { resolveOwner, StorageError } from './storage.mjs';
 import { resolveProjectContext, validProjectId } from './projects.mjs';
+import { prepareReplySave, savedReplyStream, validateReplySave } from './reply-persistence.mjs';
 
 const fileTypes = ['text/plain', 'image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
 // `allowed` is what the provider API accepts; non-Gemini vision/document types still need <PREFIX>_ATTACHMENT_TYPES opt-in.
@@ -68,7 +69,7 @@ export const MAX_HISTORY_BYTES = 2.5 * 1024 * 1024;
 export const MAX_MESSAGES = 400;
 export const MAX_FILES_PER_MESSAGE = 10;
 const MAX_FILE_REFS = 400;
-const CHAT_KEYS = ['model', 'messages', 'attachments', 'memory', 'web', 'stream', 'mode', 'context', 'xSearch', 'code', 'repository', 'projectId'];
+const CHAT_KEYS = ['model', 'messages', 'attachments', 'memory', 'web', 'stream', 'mode', 'context', 'xSearch', 'code', 'repository', 'projectId', 'persistence'];
 export function validateChat(data) {
   if (!data || typeof data !== 'object' || Array.isArray(data) || Object.keys(data).some(key => !CHAT_KEYS.includes(key))) return ['Invalid request.', 400];
   if (!definitions.some(provider => provider.name === data.model)) return ['Select a supported AI model.', 400];
@@ -92,7 +93,7 @@ export function validateChat(data) {
   if (data.xSearch !== undefined && typeof data.xSearch !== 'boolean') return ['Invalid X search option.', 400];
   if (data.xSearch === true && data.model !== 'Grok') return ['X search works with Grok only. Select Grok or turn X off.', 400];
   if (data.code !== undefined && typeof data.code !== 'boolean') return ['Invalid Run code option.', 400];
-  return null;
+  return validateReplySave(data);
 }
 
 function upstreamError(provider, response, reasoning) {
@@ -197,7 +198,7 @@ export async function relayStream({ provider, response, sources = [], reasoning,
   send({ type: 'done', truncated: Boolean(state.truncated), ...(state.usage ? { usage: state.usage } : {}) });
 }
 
-export async function handleChat(request, { env = process.env, fetcher = fetch, pageReader } = {}) {
+export async function handleChat(request, { env = process.env, fetcher = fetch, pageReader, deadlineAt } = {}) {
   const startedAt = Date.now();
   const url = new URL(request.url);
   if (url.pathname === '/api/config' && request.method === 'GET') {
@@ -206,7 +207,7 @@ export async function handleChat(request, { env = process.env, fetcher = fetch, 
     const web = { ...chatWebConfiguration(env), nativeSearch: nativeSearchProviders(env, definitions).filter(name => configured.has(name)), xSearch: xSearchAvailable(env) && configured.has('Grok'), preferBrave: preferBrave(env) };
     const context = { summaries: true, budgets: Object.fromEntries(definitions.map(provider => [provider.name, contextBudget(provider.prefix, env)])) };
     return json({ geminiConfigured: providers[0].configured, model: providers[0].model, providers, web, streaming: true, files: filesConfiguration(env), context, imagine: publicImagineConfiguration(env), voice: voiceConfiguration(env),
-      history: { rename: true, pin: true, delete: Boolean(env.DUA_ALLOWED_EMAIL?.trim() && env.SUPABASE_URL && env.SUPABASE_ANON_KEY) },
+      history: { rename: true, pin: true, delete: Boolean(env.DUA_ALLOWED_EMAIL?.trim() && env.SUPABASE_URL && env.SUPABASE_ANON_KEY), persistReplies: Boolean(env.DUA_ALLOWED_EMAIL?.trim() && env.SUPABASE_URL && env.SUPABASE_ANON_KEY) },
       code: codeExecutionConfiguration(env, definitions, configured), build: buildConfiguration(env, configured), projects: { enabled: Boolean(env.DUA_ALLOWED_EMAIL?.trim() && env.SUPABASE_URL && env.SUPABASE_ANON_KEY), tasks: true, dueDates: true, memory: true } });
   }
   if (url.pathname !== '/api/chat' || request.method !== 'POST') return json({ error: 'Method not allowed.' }, 405);
@@ -216,8 +217,18 @@ export async function handleChat(request, { env = process.env, fetcher = fetch, 
   catch (error) { if (request.signal.aborted) return json({ error: 'Request stopped.' }, 504); return json({ error: error.status === 413 ? 'Message history is too large.' : 'Invalid request.' }, error.status === 413 ? 413 : 400); }
   const invalid = validateChat(data);
   if (invalid) return json({ error: invalid[0] }, invalid[1]);
-  try { await resolveProjectContext(request, data, { env, fetcher }); }
+  let prepared;
+  if (data.persistence) {
+    try { prepared = await prepareReplySave(request, data, { env, fetcher }); }
+    catch (error) { return json({ error: error.message || 'Server reply save setup failed. Sync and retry.' }, error.status || 503); }
+  }
+  try { await resolveProjectContext(request, data, { env, fetcher, cloud: prepared?.cloud }); }
   catch (error) { return json({ error: error.message || 'Project could not be loaded. Sync and retry.' }, error.status || 502); }
+  if (prepared) return savedReplyStream(signal => generateValidatedChat(new Request(request.url, { headers: request.headers, signal }), data, { env, fetcher, pageReader, startedAt }), prepared, { signal: request.signal, startedAt, deadlineAt });
+  return generateValidatedChat(request, data, { env, fetcher, pageReader, startedAt });
+}
+
+async function generateValidatedChat(request, data, { env, fetcher, pageReader, startedAt }) {
   const provider = definitions.find(item => item.name === data.model);
   if (data.mode === 'build') return handleBuildChat(request, data, provider, { env, fetcher, startedAt });
   let parts;

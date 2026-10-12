@@ -125,4 +125,29 @@ class DuaApiClientStreamTest {
         val withText = (0 until budgeted.length()).filter { budgeted.getJSONObject(it).has("attachmentText") }
         assertEquals("newest files fit the budget", listOf(6, 8, 10), withText)
     }
+
+    private fun persistence(): com.dua.ai.account.ReplyPersistence = com.dua.ai.account.ReplyPersistenceCodec.create(
+        "chat-12345", "11111111-1111-4111-8111-111111111111", emptyList(), history.single(), "reply-1", history, "Hi")
+    private fun saved(value: com.dua.ai.account.ReplyPersistence, owner: String = value.ownerId): String =
+        event("saved", ",\"ownerId\":\"$owner\",\"chatId\":\"${value.chatId}\",\"replyId\":\"${value.replyId}\",\"userId\":\"${value.userId}\",\"revision\":1,\"replyHash\":\"${"a".repeat(64)}\",\"chat\":{},\"original\":{}")
+
+    @Test fun persistedRequestSendsStableIdsAndAcceptsOnlyABoundSaveReceiptBeforeDone() = runBlocking {
+        val persistence = persistence()
+        server.enqueue(stream(event("text", ",\"delta\":\"Answer\"") + saved(persistence) + event("done", "")))
+        val events = withTimeout(5000) { api.streamReply("Dua", history, token = "fake-access", persistence = persistence).toList() }
+        assertEquals(listOf("text", "saved", "done"), events.map { when (it) { is ReplyEvent.Text -> "text"; is ReplyEvent.Saved -> "saved"; else -> "done" } })
+        val request = JSONObject(server.takeRequest(2, TimeUnit.SECONDS)!!.body.readUtf8())
+        assertEquals(persistence.userId, request.getJSONObject("persistence").getJSONObject("user").getString("id"))
+        assertEquals(persistence.replyId, request.getJSONObject("persistence").getString("replyId"))
+    }
+    @Test fun missingOrForeignSaveReceiptCannotCompleteAPersistedRequestAndPartialTextIsKept() = runBlocking {
+        val persistence = persistence()
+        for (receipt in listOf("", saved(persistence, "22222222-2222-4222-8222-222222222222"))) {
+            server.enqueue(stream(event("text", ",\"delta\":\"Partial\"") + receipt + event("done", "")))
+            val received = mutableListOf<ReplyEvent>()
+            val error = runCatching { withTimeout(5000) { api.streamReply("Dua", history, token = "fake-access", persistence = persistence).collect { received += it } } }.exceptionOrNull()
+            assertTrue(error is DuaApiException)
+            assertEquals(listOf(ReplyEvent.Text("Partial")), received)
+        }
+    }
 }

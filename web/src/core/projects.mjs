@@ -33,14 +33,17 @@ export function validateProjects(value) {
 }
 
 /** Read instructions from the owner snapshot, never from client-supplied instruction text. */
-export async function resolveProjectContext(request, data, { env, fetcher }) {
+export async function resolveProjectContext(request, data, { env, fetcher, cloud }) {
   if (data.projectId === undefined) return; // Older APKs keep their existing personal-chat protocol.
   if (!env.DUA_ALLOWED_EMAIL?.trim()) throw Object.assign(new Error('Owner-only Projects require the allowed account email.'), { status: 503 });
   const { handleCloudRead } = await import('./account.mjs');
-  const response = await handleCloudRead(new Request(new URL('/api/cloud', request.url), { headers: request.headers, signal: request.signal }),
-    { url: env.SUPABASE_URL, key: env.SUPABASE_ANON_KEY, allowedEmail: env.DUA_ALLOWED_EMAIL, fetcher });
-  const result = await response.json();
-  if (!response.ok) throw Object.assign(new Error(result.error || 'Project could not be loaded. Sync and retry.'), { status: response.status });
+  let result = cloud;
+  if (!result) {
+    const response = await handleCloudRead(new Request(new URL('/api/cloud', request.url), { headers: request.headers, signal: request.signal }),
+      { url: env.SUPABASE_URL, key: env.SUPABASE_ANON_KEY, allowedEmail: env.DUA_ALLOWED_EMAIL, fetcher });
+    result = await response.json();
+    if (!response.ok) throw Object.assign(new Error(result.error || 'Project could not be loaded. Sync and retry.'), { status: response.status });
+  }
   const projects = result.snapshot.projects || defaultProjects();
   const project = projects.find(p => p.id === data.projectId);
   if (!project) throw Object.assign(new Error('This project is not on the server yet. Sync it before chatting.'), { status: 409 });
