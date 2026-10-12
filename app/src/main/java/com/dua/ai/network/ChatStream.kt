@@ -141,8 +141,12 @@ class StreamAccumulator(private val startedAt: Long, private val clock: () -> Lo
     }
 
     /** Current reply. When [ended] (done, error or stop) thinking time is fixed even without answer text. */
-    fun snapshot(ended: Boolean = finished) = StreamSnapshot(text.toString(), thinking.toString().takeIf { it.isNotBlank() },
-        thinkingSeconds ?: if (thinking.isNotEmpty() && ended) elapsedSeconds() else null, notice, finished, codeRuns, build, proposal)
+    fun snapshot(ended: Boolean = finished): StreamSnapshot {
+        val visibleThinking = thinking.toString().takeIf { it.isNotBlank() }
+        return StreamSnapshot(text.toString(), visibleThinking,
+            if (visibleThinking == null) null else thinkingSeconds ?: if (ended) elapsedSeconds() else null,
+            notice, finished, codeRuns, build, proposal)
+    }
 
     private fun elapsedSeconds() = (((clock() - startedAt) + 500) / 1000).toInt().coerceIn(1, 86400)
 }

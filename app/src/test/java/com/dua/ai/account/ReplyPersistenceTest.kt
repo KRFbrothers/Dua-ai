@@ -66,6 +66,20 @@ class ReplyPersistenceTest {
         assertEquals(ChatMessage.MAX_THINKING_CHARS, stream.snapshot().thinking!!.length)
         assertEquals(7, stream.snapshot().thinkingSeconds)
     }
+    @Test fun blankThinkingCannotReappearAsElapsedTimeAfterServerAcknowledgement() {
+        val stream = StreamAccumulator(0) { 100000 }
+        stream.apply(ReplyEvent.Thinking(" \n\t\u001c\u00a0\u2007\u202f\u3000"))
+        stream.apply(ReplyEvent.Text(reply.text))
+        assertNull(stream.snapshot().thinking); assertNull(stream.snapshot().thinkingSeconds)
+        stream.apply(ReplyEvent.Saved(receipt())); stream.apply(ReplyEvent.Done(false))
+        val result = stream.snapshot()
+        assertNull(result.thinking); assertNull(result.thinkingSeconds)
+        val completed = reply.copy(thinking = result.thinking, thinkingSeconds = result.thinkingSeconds)
+        assertEquals(reply.text, ReplyPersistenceCodec.confirmedChat(receipt(), listOf(user, completed)).messages.last().text)
+        val nonblank = StreamAccumulator(0) { 1000 }
+        nonblank.apply(ReplyEvent.Thinking("\ufeff")); nonblank.apply(ReplyEvent.Text(reply.text))
+        assertEquals("\ufeff", nonblank.snapshot().thinking)
+    }
     @Test fun persistenceCapabilityRequiresExplicitTrueAndDefaultsOffForOlderBackends() {
         assertFalse(IntegrationCapabilities.configuration(JSONObject(), IntegrationState(serverRepliesEnabled = true)).serverRepliesEnabled)
         assertFalse(IntegrationCapabilities.configuration(JSONObject("{\"history\":{\"persistReplies\":\"true\"}}"), IntegrationState()).serverRepliesEnabled)

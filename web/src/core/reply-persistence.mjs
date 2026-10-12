@@ -191,6 +191,8 @@ export function savedReplyStream(run, prepared, { signal, startedAt = Date.now()
       }
       if (failed) return;
       if (!done || !result.text.trim()) throw new ReplySaveError('Reply ended without a complete answer. Partial reply kept.', 502);
+      // Match Kotlin Char.isWhitespace / isNotBlank; JS trim also removes nonblank U+FEFF.
+      if (/^[\u0009-\u000d\u001c-\u0020\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]*$/.test(result.thinking)) result.thinking = '';
       streamSignal.throwIfAborted();
       const receipt = await prepared.commit(result, streamSignal);
       send({ type: 'saved', ...receipt }); send(done);

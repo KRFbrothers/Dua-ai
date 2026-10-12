@@ -169,6 +169,23 @@ test('thinking, code, source footers, repository metadata and summary are persis
   assert.match(reply.text, /Sources:/); assert.equal(events.at(-2).replyHash, messagesHash([reply]));
 });
 
+test('thinking whitespace matches Android blank handling without trimming real thought content', async () => {
+  for (const thinking of [' \n\t\u001c\u00a0\u2007\u202f\u3000', ' \nConsider tips\n ', '\ufeff']) {
+    const state = fixture();
+    const events = await complete(await prepare(state), [{ type: 'thinking', delta: thinking }, ...success]);
+    const reply = state.payload.chats.find(chat => chat.id === 'chat-12345').messages.at(-1); const receipt = events.at(-2);
+    if (thinking.startsWith(' \n\t')) {
+      assert.equal(reply.thinking, undefined); assert.equal(reply.thinkingSeconds, undefined);
+      assert.equal(receipt.thinkingSeconds, undefined);
+      assert.equal(receipt.replyHash, messagesHash([turn('new-reply', 'model', 'A complete reply.')]));
+    } else {
+      assert.equal(reply.thinking, thinking); assert.equal(reply.thinkingSeconds, 1);
+      assert.equal(receipt.replyHash, messagesHash([reply]));
+    }
+    assert.equal(events.at(-1).type, 'done');
+  }
+});
+
 test('generation reserve cancels a hanging model without consuming the independent save signal', async () => {
   const stop = new AbortController(); let generationSignal; let writes = 0;
   const response = savedReplyStream(signal => {
