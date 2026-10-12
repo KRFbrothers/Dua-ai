@@ -39,6 +39,26 @@ class ChatHistoryCodecTest {
         assertTrue(runCatching { ChatHistoryCodec.decode("broken") }.isFailure)
         assertTrue(runCatching { ChatHistoryCodec.decode(ChatHistoryCodec.encode(listOf(first.copy(model = "unsupported")), "one")) }.isFailure)
     }
+    @Test fun renamedChatSurvivesCacheBackupAndImportCopiesWithoutEditingMessages() {
+        val named = first.copy(customTitle = ChatTitles.normalize("  Coding — समीक्षा  "))
+        val cached = ChatHistoryCodec.decode(ChatHistoryCodec.encode(listOf(named), named.id)).second.single()
+        assertEquals(named, cached)
+        val imported = ChatHistoryCodec.parseImport(ChatHistoryCodec.exportBackup(listOf(named))).single()
+        assertEquals(named, imported)
+        val copy = ChatHistoryCodec.importCopies(listOf(named), listOf(imported)).last()
+        assertNotEquals(named.id, copy.id)
+        assertEquals(named.customTitle, copy.customTitle)
+        assertEquals(first.messages.map { it.text }, copy.messages.map { it.text })
+    }
+    @Test fun legacyTitlesStayDerivedAndInvalidTitleMetadataIsRejected() {
+        val old = org.json.JSONObject(ChatHistoryCodec.export(listOf(first)))
+        assertFalse(old.getJSONArray("chats").getJSONObject(0).has("title"))
+        assertEquals(first.title, ChatHistoryCodec.parseImport(old.toString()).single().title)
+        for (bad in listOf("", " ", "a\nb", "a\u2028b", "a\u0085b", "x".repeat(121), " padded ", 123, org.json.JSONObject.NULL)) {
+            old.getJSONArray("chats").getJSONObject(0).put("title", bad)
+            assertTrue("Reject $bad", runCatching { ChatHistoryCodec.parseImport(old.toString()) }.isFailure)
+        }
+    }
 }
 
 class ChatHistoryThinkingTest {

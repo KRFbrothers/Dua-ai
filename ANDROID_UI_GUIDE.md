@@ -57,7 +57,8 @@ The default native UI tests render production components with synthetic fixtures
 | Streaming, stop, Markdown/code, copy and response regeneration | Implemented; actual generation/regeneration requires a configured provider; retry preserves the existing request mode |
 | Reply sharing | Implemented through Android's share chooser; no automatic external send |
 | History search, opening chats and removing a cached chat | Implemented; cache removal preserves server history and stored files. This is not server-history deletion |
-| Rename and Pin | Explicit Coming soon; server-backed title/pin persistence is not implemented |
+| Rename | Long-press a recent chat → Rename; 1–120 character title metadata survives cache, JSON backup/import and cloud sync. Requires backend `history.rename` support. |
+| Pin | Explicit Coming soon; pin persistence is not implemented |
 | Editing an old user message, thumbs-up/down feedback | Pending; no history rewriting or feedback-storage endpoint is claimed |
 | Voice input, voice mode, photos/documents/camera, upload progress/errors | Implemented production flows; microphone/speech service, Android pickers, private Storage and provider format support are required. Upload failure recovery currently means removing/reselecting the file |
 | Theme/accent, font family, notifications/reminders, account/data controls | Implemented. General UI language and an in-app text-size slider are pending; Android system text scaling and existing voice-language controls work |

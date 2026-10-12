@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -11,8 +12,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
@@ -20,6 +24,7 @@ import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -47,7 +52,10 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.dua.ai.history.SavedChat
+import com.dua.ai.history.ChatTitles
 import com.dua.ai.ui.theme.DuaShape
 import com.dua.ai.ui.theme.Sizes
 import com.dua.ai.ui.theme.Spacing
@@ -61,7 +69,7 @@ private data class SearchResults(val chats: List<SavedChat>, val query: String, 
 
 /**
  * Approved sidebar / expanded Aura: fixed navigation and footer, with project-scoped search and a scrolling recent-chat list.
- * Long-press a chat (or use the accessibility action) to remove its cached copy.
+ * Long-press a chat (or use an accessibility action) to rename or remove its cached copy.
  */
 @Composable
 fun HistoryDrawer(
@@ -79,10 +87,14 @@ fun HistoryDrawer(
     profileName: String = "",
     activeChatId: String? = null,
     drawerOpen: Boolean = true,
+    onRenameChat: (String, String) -> String? = { _, _ -> "Rename is unavailable." },
 ) {
     var aura by rememberSaveable { mutableStateOf(false) }
     androidx.activity.compose.BackHandler(enabled = aura && drawerOpen) { aura = false }
     var query by rememberSaveable(projectId) { mutableStateOf("") }
+    var renamingId by rememberSaveable(projectId) { mutableStateOf<String?>(null) }
+    var renameTitle by rememberSaveable(projectId) { mutableStateOf("") }
+    var renameError by rememberSaveable(projectId) { mutableStateOf<String?>(null) }
     val scoped = remember(chats, projectId) { if (projectId == null) chats else chats.filter { it.projectId == projectId } }
     val needle = query.trim()
     var results by remember(projectId) { mutableStateOf<SearchResults?>(null) }
@@ -116,10 +128,14 @@ fun HistoryDrawer(
                         Text(bucket.label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(start = Spacing.md, top = Spacing.lg, bottom = Spacing.xs).semantics { heading() })
                     }
-                    items(items, key = { it.id }) { chat -> HistoryRow(chat, snippets[chat.id], onOpen = { onOpenChat(chat.id) }, onDelete = { onDeleteChat(chat.id) }, active = chat.id == activeChatId) }
+                    items(items, key = { it.id }) { chat -> HistoryRow(chat, snippets[chat.id], onOpen = { onOpenChat(chat.id) }, onDelete = { onDeleteChat(chat.id) },
+                        onRename = { renamingId = chat.id; renameTitle = chat.title; renameError = null }, active = chat.id == activeChatId) }
                 }
             }
     }
+    renamingId?.let { id -> RenameChatDialog(renameTitle, renameError,
+        onChange = { renameTitle = it; renameError = null }, onDismiss = { renamingId = null },
+        onSave = { renameError = onRenameChat(id, renameTitle); if (renameError == null) renamingId = null }) }
 }
 
 @Composable
@@ -140,14 +156,17 @@ internal fun SearchField(value: String, onValueChange: (String) -> Unit, modifie
 }
 
 @Composable
-private fun HistoryRow(chat: SavedChat, match: HistoryMatch?, onOpen: () -> Unit, onDelete: () -> Unit, active: Boolean = false) {
+private fun HistoryRow(chat: SavedChat, match: HistoryMatch?, onOpen: () -> Unit, onDelete: () -> Unit, onRename: () -> Unit, active: Boolean = false) {
     var menu by remember { mutableStateOf(false) }
     var unavailable by remember { mutableStateOf<String?>(null) }
+    fun beginRename() { menu = false; onRename() }
     Box {
         Row(Modifier.fillMaxWidth().clip(DuaShape.card)
             .background(if (active) MaterialTheme.colorScheme.primaryContainer else androidx.compose.ui.graphics.Color.Transparent)
             .combinedClickableCompat(onClick = onOpen, onLongClick = { menu = true }, onLongClickLabel = "Chat options")
-            .semantics { customActions = listOf(CustomAccessibilityAction("Remove cached chat") { onDelete(); true }) }
+            .semantics { customActions = listOf(
+                CustomAccessibilityAction("Rename chat") { beginRename(); true },
+                CustomAccessibilityAction("Remove cached chat") { onDelete(); true }) }
             .heightIn(min = Sizes.touchTarget).padding(horizontal = Spacing.md, vertical = Spacing.sm),
             verticalAlignment = Alignment.CenterVertically) {
             Column {
@@ -163,9 +182,8 @@ private fun HistoryRow(chat: SavedChat, match: HistoryMatch?, onOpen: () -> Unit
             }
         }
         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-            listOf("Rename", "Pin").forEach { title ->
-                DropdownMenuItem(text = { Text(title) }, onClick = { menu = false; unavailable = title })
-            }
+            DropdownMenuItem(text = { Text("Rename") }, onClick = { beginRename() })
+            DropdownMenuItem(text = { Text("Pin") }, onClick = { menu = false; unavailable = "Pin" })
             DropdownMenuItem(text = { Text("Remove cached chat") }, leadingIcon = { Icon(Icons.Outlined.DeleteOutline, contentDescription = null) },
                 onClick = { menu = false; onDelete() })
         }
@@ -173,6 +191,34 @@ private fun HistoryRow(chat: SavedChat, match: HistoryMatch?, onOpen: () -> Unit
     unavailable?.let { title ->
         androidx.compose.material3.AlertDialog(onDismissRequest = { unavailable = null }, title = { Text(title) },
             text = { Text("Coming soon") }, confirmButton = { androidx.compose.material3.TextButton(onClick = { unavailable = null }) { Text("Close") } })
+    }
+}
+
+@Composable
+internal fun RenameChatDialog(title: String, error: String?, onChange: (String) -> Unit, onDismiss: () -> Unit, onSave: () -> Unit) {
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Surface(modifier = Modifier.padding(horizontal = Spacing.xl).widthIn(max = 400.dp).fillMaxWidth(),
+            shape = DuaShape.card, color = MaterialTheme.colorScheme.surfaceContainerHigh) {
+            Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(Spacing.lg),
+                verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
+                Text("Rename chat", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.semantics { heading() })
+                Text("Chat name", style = MaterialTheme.typography.labelLarge)
+                Surface(shape = DuaShape.card, color = MaterialTheme.colorScheme.surfaceContainerLow,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline)) {
+                    BasicTextField(title, onChange, singleLine = true,
+                        textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
+                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                        modifier = Modifier.fillMaxWidth().heightIn(min = Sizes.touchTarget).padding(Spacing.md)
+                            .semantics { contentDescription = "Chat name" })
+                }
+                Text(error ?: "${title.trim().length}/${ChatTitles.MAX_LENGTH}", style = MaterialTheme.typography.bodySmall,
+                    color = if (error == null) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error)
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = onDismiss) { Text("Cancel") }
+                    TextButton(enabled = ChatTitles.valid(title.trim()), onClick = onSave) { Text("Save") }
+                }
+            }
+        }
     }
 }
 

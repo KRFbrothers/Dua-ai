@@ -42,7 +42,9 @@ data class IntegrationState(val groups: List<IntegrationGroup> = emptyList(), va
     val codeExecution: CodeExecutionConfig? = null,
     /** Build mode (Phase 5B); null on older backends, where the Build sheet explains that a backend update is needed. */
     val build: BuildModeConfig? = null,
-    val projectsEnabled: Boolean = false, val projectTasksEnabled: Boolean = false, val taskDueDatesEnabled: Boolean = false, val projectMemoryEnabled: Boolean = false) {
+    val projectsEnabled: Boolean = false, val projectTasksEnabled: Boolean = false, val taskDueDatesEnabled: Boolean = false, val projectMemoryEnabled: Boolean = false,
+    /** Older snapshot validators drop custom titles; wait for an explicit backend capability. */
+    val chatRenameEnabled: Boolean = false) {
     /** Search works for [model] natively or through Brave. */
     fun searchAvailable(model: String): Boolean = webSearchConfigured || model in nativeSearch
 }
@@ -62,6 +64,7 @@ object IntegrationCapabilities {
         val web = json.optJSONObject("web")
         val files = json.optJSONObject("files")
         return current.copy(providers = providers(json),
+            chatRenameEnabled = json.optJSONObject("history")?.opt("rename") == true,
             projectsEnabled = json.optJSONObject("projects")?.opt("enabled") == true,
             projectTasksEnabled = json.optJSONObject("projects")?.opt("enabled") == true && json.optJSONObject("projects")?.opt("tasks") == true,
             taskDueDatesEnabled = json.optJSONObject("projects")?.opt("enabled") == true && json.optJSONObject("projects")?.opt("tasks") == true && json.optJSONObject("projects")?.opt("dueDates") == true,

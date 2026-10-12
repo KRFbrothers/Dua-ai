@@ -11,6 +11,17 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class CloudSnapshotTest {
+    @Test fun titleOnlyCloudConflictPreservesBothNamesWithoutDuplicatingMessages() {
+        val local = chat.copy(customTitle = "Phone name")
+        val remote = chat.copy(customTitle = "Server name")
+        val merged = CloudSnapshotCodec.mergeDownload(CloudSnapshot(listOf(local), emptyList()), CloudSnapshot(listOf(remote), emptyList()))
+        assertEquals(1, merged.conflicts)
+        assertEquals(listOf("Server name", "Phone name"), merged.snapshot.chats.map { it.title })
+        assertTrue(merged.snapshot.chats.all { it.messages == chat.messages })
+        val repeated = CloudSnapshotCodec.mergeDownload(merged.snapshot, CloudSnapshot(listOf(remote), emptyList()))
+        assertEquals(0, repeated.conflicts)
+        assertEquals(merged.snapshot, repeated.snapshot)
+    }
     @Test fun sharedBackendFixtureSurvivesAndroidDecodeAndReencode() {
         val raw = javaClass.getResourceAsStream("/cloud-snapshot-v1.json")!!.bufferedReader().use { it.readText() }
         val expected = org.json.JSONObject(raw).put("projects", com.dua.ai.projects.ProjectCodec.toJson(com.dua.ai.projects.ProjectCodec.defaults))

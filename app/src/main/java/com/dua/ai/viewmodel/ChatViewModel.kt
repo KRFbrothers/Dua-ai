@@ -1332,10 +1332,11 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         draftSaver.cancel()
         val previous = _savedChats.value.find { it.id == activeId }
         val others = _savedChats.value.filterNot { it.id == activeId }
-        _savedChats.value = if (_messages.value.isEmpty() && _draft.value.isBlank()) others else
+        _savedChats.value = if (_messages.value.isEmpty() && _draft.value.isBlank() && previous?.customTitle == null) others else
             listOf(com.dua.ai.history.ChatSavePolicy.preserveUnchangedTime(previous,
                 SavedChat(activeId, _selectedModel.value, _draft.value, _messages.value, System.currentTimeMillis(),
-                    com.dua.ai.model.ContextWindow.validSummary(_messages.value, _summary.value), _buildRepo.value, _projectId.value))) + others
+                    com.dua.ai.model.ContextWindow.validSummary(_messages.value, _summary.value), _buildRepo.value, _projectId.value,
+                    previous?.customTitle))) + others
         historyWriter.save(_savedChats.value, activeId)
     }
 
@@ -1366,6 +1367,22 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         _buildRepo.value = chat.buildRepository
         _projectId.value = chat.projectId
         saveHistory()
+    }
+
+    /** Returns an actionable error, or null after queuing the renamed chat for the existing sync flow. */
+    fun renameChat(id: String, value: String): String? {
+        if (syncBlocked()) return "Finish the current reply or sync action, then try again."
+        if (!_integrations.value.chatRenameEnabled) return "Refresh setup after updating the backend, then try again."
+        val title = try { com.dua.ai.history.ChatTitles.normalize(value) }
+            catch (_: IllegalArgumentException) { return com.dua.ai.history.ChatTitles.ERROR }
+        draftSaver.runNow()
+        val chat = _savedChats.value.find { it.id == id } ?: return "This chat is no longer available."
+        if (chat.customTitle == title) return null
+        _savedChats.value = _savedChats.value.map {
+            if (it.id == id) it.copy(customTitle = title, updatedAt = System.currentTimeMillis()) else it
+        }
+        historyWriter.save(_savedChats.value, activeId)
+        return null
     }
 
     fun deleteChat(id: String) {

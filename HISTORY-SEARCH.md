@@ -1,6 +1,8 @@
 # Chat history search
 
-Open the history menu and enter a word or literal phrase in **Search chats**. Search now covers the current project's cached user messages, assistant replies, drafts, and saved Run code source/output, including text beyond the title and last reply. Markdown/code fences are searched as text. Matching is case-insensitive, with surrounding query whitespace ignored; it is not regex, fuzzy or semantic search.
+Open the history menu and enter a word or literal phrase in **Search chats**. Search now covers the current project's cached chat titles, user messages, assistant replies, drafts, and saved Run code source/output, including text beyond the title and last reply. Markdown/code fences are searched as text. Matching is case-insensitive, with surrounding query whitespace ignored; it is not regex, fuzzy or semantic search.
+
+Long-press a recent chat → **Rename** → edit **Chat name** → **Save**. Names allow 1–120 UTF-16 code units on a single line; surrounding whitespace is trimmed. Renaming keeps the original messages and chat ID. Older chats retain their derived titles. Custom titles survive restart, JSON backup/import and the existing authenticated Cloud Sync flow; saving locally does not claim that a cloud upload has completed. Refresh setup after deploying the matching backend before renaming. Finish an active reply or sync review before saving a name. Pin is still Coming soon.
 
 Results stay grouped by last-updated date. Each matching chat appears once with a short snippet and highlighted match. Draft matches take priority; otherwise the most recent matching message/code/output supplies the snippet. Tap a result to open that conversation normally, or **Clear search** to restore the full list. Opening does not jump directly to the matching turn in this version. Queries allow up to 200 UTF-16 code units; snippets retain bounded surrounding context, collapse whitespace and preserve emoji pairs at their edges.
 

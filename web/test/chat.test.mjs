@@ -8,6 +8,12 @@ import { mockFetch, chatRequest, readEvents, sseResponse, sse, env, b64 } from '
 const geminiJson = parts => Response.json({ candidates: [{ content: { parts }, finishReason: 'STOP' }] });
 const body = (extra = {}) => ({ model: 'Dua', messages: [{ role: 'user', text: 'Hello' }], ...extra });
 
+test('configuration advertises support for persisted chat renaming', async () => {
+  const response = await handleChat(new Request('https://dua.test/api/config'), { env });
+  assert.equal(response.status, 200);
+  assert.deepEqual((await response.json()).history, { rename: true });
+});
+
 test('legacy JSON path is unchanged for older apps (no stream, no mode)', async () => {
   const fetcher = mockFetch(geminiJson([{ text: 'secret plan', thought: true }, { text: 'Hi there' }]));
   const response = await handleChat(chatRequest(body({ attachments: [], memory: '' })), { env, fetcher });

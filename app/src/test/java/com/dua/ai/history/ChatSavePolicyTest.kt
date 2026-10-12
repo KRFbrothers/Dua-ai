@@ -19,7 +19,7 @@ class ChatSavePolicyTest {
             saved.copy(messages = saved.messages.map { it.copy(text = "Changed") }),
             saved.copy(messages = saved.messages.map { it.copy(isUser = false) }),
             saved.copy(messages = saved.messages.map { it.copy(state = "stopped") }),
-            saved.copy(messages = emptyList())).forEach { changed ->
+            saved.copy(messages = emptyList()), saved.copy(customTitle = "Renamed")).forEach { changed ->
             assertEquals(99L, ChatSavePolicy.preserveUnchangedTime(saved, changed.copy(updatedAt = 99)).updatedAt)
         }
     }

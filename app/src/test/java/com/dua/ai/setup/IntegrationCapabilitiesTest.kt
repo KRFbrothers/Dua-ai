@@ -5,6 +5,12 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class IntegrationCapabilitiesTest {
+    @Test fun renameRequiresExplicitBackendSupportAndRefreshClearsOldSupport() {
+        fun read(raw: String) = IntegrationCapabilities.configuration(JSONObject(raw), IntegrationState(chatRenameEnabled = true)).chatRenameEnabled
+        assertFalse(read("{}"))
+        assertFalse(read("""{"history":{"rename":"true"}}"""))
+        assertTrue(read("""{"history":{"rename":true}}"""))
+    }
     @Test fun projectMemoryRequiresExplicitOwnerBackendCapability() {
         fun read(raw: String) = IntegrationCapabilities.configuration(JSONObject(raw), IntegrationState(projectMemoryEnabled = true)).projectMemoryEnabled
         assertFalse(read("{}"))
