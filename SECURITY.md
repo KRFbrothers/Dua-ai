@@ -52,6 +52,10 @@ We will acknowledge reports within 48 hours and aim to provide an update within 
 - Stored-file paths are account-scoped and must be checked against the verified Supabase user before signing, opening, deleting, or re-attaching a file.
 - A private `dua-files` bucket, RLS policies, signed-link expiry, and account deletion cleanup require live staging verification; repository tests cannot prove deployed project settings.
 
+#### Request Burst Limits
+- The Vercel handler groups `/api/account/*`, `/api/files/*`, `/api/cloud` and `/api/cloud/chat` into the same limit of 20 requests per IP per 60-second window. This includes confirmed server chat deletion.
+- Requests exceeding that window return HTTP 429 with `Retry-After` before authentication or storage calls. The guard is per server instance; cold starts and separate instances have independent windows, so this is not a distributed abuse-prevention guarantee.
+
 #### Device Cache
 - Android cache data remains in app-private storage for offline viewing and fast startup; it is not the authoritative copy.
 - Export/import operate on the cached view. Deleting the cache does not delete the signed-in server snapshot.
