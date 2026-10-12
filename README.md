@@ -39,15 +39,37 @@ See [ANDROID_UI_GUIDE.md](ANDROID_UI_GUIDE.md) for the compact mobile UI, screen
 
 Open the repository in Android Studio. The launcher is `com.dua.ai.MainActivity`; checked-in Gradle configuration uses JDK 17 and Android SDK 35. The default API URL is `https://dua-cyan.vercel.app`.
 
-Run source compilation and JVM tests without packaging an APK:
+From the repository root, run the same Android command as [Project checks](.github/workflows/checks.yml), including native UI render recording:
 
 ```sh
-bash ./gradlew :app:testDebugUnitTest --no-daemon --max-workers=2
+bash ./gradlew :app:testDebugUnitTest -Pdua.ui-record --no-daemon --max-workers=2
 ```
 
-[Project checks](.github/workflows/checks.yml) runs Android compilation/JVM tests and the backend's full `node:test` suite in separate jobs on PRs, pushes to main and manual runs. It does not assemble or sign an APK. The backend job uses Node 24, installs locked dependencies and saves a JUnit report even when tests fail. It requires no provider keys or signing credentials.
+The default Android suite includes JVM and Compose/Robolectric interaction tests. `-Pdua.ui-record` also records the current UI fixtures to `app/build/approved-ui/`; omitting that flag still runs those tests, but does not record their PNGs. HTML results are in `app/build/reports/tests/testDebugUnitTest/` and JUnit XML in `app/build/test-results/testDebugUnitTest/`.
 
-Run backend tests locally with `cd web && npm ci && npm test`; `npm run test:ci` runs the same suite with console output and a `backend-test-results.xml` report. Install the locked dependencies first (`unpdf` and SheetJS). SheetJS is fetched from `cdn.sheetjs.com`, which must be accessible from the build environment.
+The separate historical screenshot classes under `app/src/test/java/com/dua/ai/screenshots/` are **excluded by default**, including in CI. To include them and record their renders:
+
+```sh
+bash ./gradlew :app:recordRoborazziDebug -Pdua.screenshots --no-daemon --max-workers=2
+```
+
+Those renders go to `app/build/outputs/roborazzi/`. Recording images is not a pixel-baseline comparison or a physical-device check. The two opt-in flags have different purposes: `dua.ui-record` records current UI fixtures; `dua.screenshots` includes the historical screenshot classes. This behavior is configured in [app/build.gradle.kts](app/build.gradle.kts); the fixture capture paths are in [ApprovedNavigationUiTest.kt](app/src/test/java/com/dua/ai/ui/ApprovedNavigationUiTest.kt), [CompactChatUiTest.kt](app/src/test/java/com/dua/ai/ui/chat/CompactChatUiTest.kt) and [HomeScreenshotTest.kt](app/src/test/java/com/dua/ai/screenshots/HomeScreenshotTest.kt).
+
+First-run Android checks need dependency access and writable Gradle/Maven caches: Robolectric may download an instrumented Android runtime. A dependency-download failure before test assertions is not evidence of an app assertion failure; inspect the test report. The older local blockers in [RELEASE-CHECKLIST.md](RELEASE-CHECKLIST.md) remain historical validation records.
+
+[Project checks](.github/workflows/checks.yml) runs the default Android suite with its recorded UI fixtures and the backend's full `node:test` suite in separate jobs on PRs, pushes to main and manual runs. It uploads `android-unit-test-reports` (HTML/JUnit plus `approved-ui` renders) and `backend-unit-test-report`. It does not assemble or sign an APK. The backend job uses Node 24, installs locked dependencies and saves a JUnit report even when tests fail. It requires no provider keys or signing credentials.
+
+For the backend, use Node 24+ and run from the repository root:
+
+```sh
+cd web
+npm ci --ignore-scripts --no-audit --no-fund
+npm run test:ci
+```
+
+These are the install/test commands from CI. `npm test` runs the same test files without writing the CI JUnit report; `npm run test:ci` writes `web/backend-test-results.xml` (repository-relative path). Install the locked dependencies first (`unpdf` and SheetJS); SheetJS is fetched from `cdn.sheetjs.com`, which must be accessible from the build environment. The scripts and Node requirement are declared in [web/package.json](web/package.json).
+
+After installation, the separate Imagine smoke check is `node scripts/imagine-smoke.mjs` **from `web/`**. [That script](web/scripts/imagine-smoke.mjs) starts an ephemeral loopback HTTP server and uses fake providers/storage; it needs no real provider keys and is not run by `Project checks`.
 
 The Android cache is stored in app-private preferences; Android backup/device transfer exclude cached chat history, account sessions and automatic-sync consent. Other preferences, including cached memory and project instructions, can be backed up according to device settings. Signed-in server data remains authoritative and is not replaced by a restored cache. A Vercel deployment updates the backend only; Android code changes require building and installing a new APK.
 

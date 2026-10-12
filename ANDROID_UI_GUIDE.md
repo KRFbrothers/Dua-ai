@@ -46,7 +46,7 @@ adb shell am start -n com.dua.ai/.preview.UiPreviewActivity
 
 Use Home, Chat, Error and Welcome plus the Light/Dark switch. A persistent **UI preview · sample data · no backend** banner distinguishes these fixtures. Sending/retrying displays a preview notice; it never generates an AI response or contacts a backend. Real account, voice and picker actions direct you to the normal app. The preview neither loads private chats nor creates an account/ViewModel. It is excluded from release source/manifest; the normal launcher remains unchanged.
 
-The native UI test suite records production renders separately, without the preview banner. Run `bash ./gradlew :app:testDebugUnitTest -Pdua.ui-record --no-daemon --max-workers=2` and inspect `app/build/approved-ui/*.png`.
+The default native UI tests render production components with synthetic fixtures, separately from the preview activity. Run `bash ./gradlew :app:testDebugUnitTest -Pdua.ui-record --no-daemon --max-workers=2` from the repository root and inspect `app/build/approved-ui/*.png`. The flag enables PNG recording; without it, the tests still run. Historical screenshot classes are excluded unless `-Pdua.screenshots` is supplied. See [README.md — Android and routine checks](README.md#android-and-routine-checks) for both commands, report locations and CI scope. Recorded PNGs are not proof of physical-device or pixel-baseline verification.
 
 ## Implemented versus integration-dependent or pending
 
@@ -69,7 +69,7 @@ Code/build/render verification is not proof of live provider, account, Storage, 
 
 ## Validation for the compact-chat update
 
-- Local debug APK build and the full 462-test Android suite passed with zero failures/errors/skips.
+- Local debug APK build and the default 462-test Android suite passed with zero failures/errors/skips; that count excludes the opt-in historical screenshot classes.
 - After adding the share-chooser regression check and correcting the screenshot fixture background, 33 UI/action tests passed. The new share test checks Android's chooser receives the full reply including executed code.
 - Home, Projects, Sidebar/Aura and settings were rendered/reviewed in Light/Dark, with 320 × 568dp at 2× font scaling. The debug APK manifest contains the isolated preview activity.
 - Local release-task verification requires the permanent signing credentials and was not completed. Use the existing main-only signed GitHub workflow after merging; do not create a new keystore.
