@@ -18,7 +18,7 @@ API keys and optional credentials remain server-side. Preparing a feature does n
 
 ## Project roadmap
 
-See [ROADMAP.md](ROADMAP.md) for the ChatGPT-inspired, owner-only Dua roadmap: 14 feature phases mapped to current code and remaining work, the next implementation order, and the preserved engineering plan for files/search, Imagine, voice and coding/Build mode.
+See [ROADMAP.md](ROADMAP.md) for the original ChatGPT Clone — Step-by-Step Roadmap.
 Use [RELEASE-CHECKLIST.md](RELEASE-CHECKLIST.md) to verify the owner-only lock, provider spending limits, device/staging checks, and installing the APK on your own phone. The production configuration cannot be verified from this source checkout alone.
 Use [SIGNING.md](SIGNING.md) to store the permanent personal signing key and run the manual [Build personal APK](.github/workflows/personal-apk.yml) workflow. Release builds require the pinned certificate; they cannot fall back to another machine's debug key.
 
