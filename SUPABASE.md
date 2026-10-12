@@ -129,6 +129,16 @@ For non-native callers the backend still issues Secure, HttpOnly, SameSite=Stric
 
 Cloud storage is protected by user-token RLS and revision checks; it is not end-to-end encrypted. Account deletion and native Google sign-in are implemented with separate setup. Model-based automatic memory extraction, server push and background/realtime synchronization remain pending. Reviewed memory proposals and foreground cache refresh are available.
 
+## Completed reply saving
+
+Updated native clients use `/api/config.history.persistReplies` (explicit `true`) and send owner-bound `persistence` metadata with streaming `/api/chat` requests. Auto/Reasoning and Build replies are written by the backend using the existing `dua_write_cloud_snapshot` RPC before the stream sends `saved` and `done`. This works with foreground sync disabled and needs no new schema, admin key or migration. Deploy the backend first, install the updated APK and refresh Feature setup. Old clients/requests without this metadata keep their existing sync flow.
+
+The request binds chat, prompt and reply IDs plus a versioned digest of the phone's message history. The backend verifies the signed-in owner, project and current snapshot before generation. Imported/older unsynced chats and earlier stopped offline turns need reviewed sync before continuing. A retry replaces only the latest reply; a stopped pair never previously saved can be completed against its matching server prefix. Completed replies, summaries, source footers, code results and Build metadata are retained with stable IDs; raw inline file bytes are not stored in the snapshot.
+
+Before saving, the backend re-reads the snapshot and preserves unrelated chats, memory, projects, deletion markers and concurrent draft/title/pin edits. Changed/deleted target history or a cleared snapshot causes a conflict. A CAS conflict can re-read and retry the write once, without another AI call. The existing whole-request deadline remains; generation reserves up to 45 seconds for the final authenticated read/write. Cancellation before completion does not save a completed reply; a write already in flight can commit before its acknowledgement is lost.
+
+`saved` includes the owner/chat/reply IDs, revision, chat metadata and reply-content digest. Android validates it before applying server metadata and does not mark a persisted request complete without the receipt. Local unsynced title/pin/draft edits stay in the cache for the existing review flow. Failed/uncertain saves retain received text on the phone and require cloud review instead of silently regenerating or overwriting a newer version. Snapshot count/byte limits still apply. Imagine and live realtime voice use their existing flows.
+
 ## Validation status
 
 Mocked tests cover authentication, refresh, ownership, redacted errors, limits, conflicts and foreground synchronization. The SQL migration was exercised with owner isolation, write permissions and revision tests. Routine Android checks compile sources and run JVM tests without assembling an APK. Live account/deployment and physical Android Keystore/lifecycle checks remain separate.

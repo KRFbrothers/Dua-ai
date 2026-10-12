@@ -56,15 +56,16 @@ class DuaApiClient(
      */
     fun streamReply(model: String, history: List<ChatMessage>, attachments: List<ChatAttachment> = emptyList(), memory: String = "",
         token: String? = null, web: String? = null, reasoning: Boolean = false, historyBytes: Int = MAX_HISTORY_BYTES,
-        context: com.dua.ai.model.ConversationContext? = null, xSearch: Boolean = false, code: Boolean = false, build: String? = null): Flow<ReplyEvent> = callbackFlow {
-        val request = withContext(Dispatchers.IO) { buildRequest(model, history, attachments, memory, token, web, reasoning, stream = true, historyBytes = historyBytes, context = context, xSearch = xSearch, code = code, build = build) }
+        context: com.dua.ai.model.ConversationContext? = null, xSearch: Boolean = false, code: Boolean = false, build: String? = null,
+        persistence: com.dua.ai.account.ReplyPersistence? = null): Flow<ReplyEvent> = callbackFlow {
+        val request = withContext(Dispatchers.IO) { buildRequest(model, history, attachments, memory, token, web, reasoning, stream = true, historyBytes = historyBytes, context = context, xSearch = xSearch, code = code, build = build, persistence = persistence) }
         val call = client.newCall(request)
         call.enqueue(object : Callback {
             override fun onFailure(call: Call, error: IOException) { close(error) }
 
             override fun onResponse(call: Call, response: Response) {
                 try {
-                    response.use { readStream(it) { event -> trySendBlocking(event).getOrThrow() } }
+                    response.use { readStream(it, persistence) { event -> trySendBlocking(event).getOrThrow() } }
                     close()
                 } catch (error: Throwable) { close(error) }
             }
@@ -72,11 +73,14 @@ class DuaApiClient(
         awaitClose { call.cancel() }
     }
 
-    private fun readStream(response: Response, emit: (ReplyEvent) -> Unit) {
+    private fun readStream(response: Response, persistence: com.dua.ai.account.ReplyPersistence?, emit: (ReplyEvent) -> Unit) {
+        var saved = false
+        fun confirmDone() { if (persistence != null && !saved) throw DuaApiException("Server did not confirm saving this reply. Sync and review; the phone reply is kept.") }
         val contentType = response.header("Content-Type").orEmpty()
         if (!contentType.contains("text/event-stream", ignoreCase = true)) {
             // Errors before the stream starts (validation, auth, quota) keep the JSON format.
             val text = readReply(response)
+            confirmDone()
             emit(ReplyEvent.Text(text))
             emit(ReplyEvent.Done(false))
             return
@@ -92,12 +96,19 @@ class DuaApiClient(
             when (val event = parser.line(line)) {
                 null -> Unit
                 is ReplyEvent.Failed -> throw DuaApiException(event.message, event.status)
-                is ReplyEvent.Done -> { emit(event); return }
+                is ReplyEvent.Saved -> {
+                    val receipt = event.receipt
+                    if (persistence == null || saved || receipt.ownerId != persistence.ownerId || receipt.chatId != persistence.chatId ||
+                        receipt.replyId != persistence.replyId || receipt.userId != persistence.userId)
+                        throw DuaApiException("Server reply save response changed. Review cloud history.")
+                    saved = true; emit(event)
+                }
+                is ReplyEvent.Done -> { confirmDone(); emit(event); return }
                 else -> emit(event)
             }
         }
         when (val event = parser.finish()) {
-            is ReplyEvent.Done -> { emit(event); return }
+            is ReplyEvent.Done -> { confirmDone(); emit(event); return }
             is ReplyEvent.Failed -> throw DuaApiException(event.message, event.status)
             null -> Unit
             else -> emit(event)
@@ -111,7 +122,7 @@ class DuaApiClient(
      */
     internal fun buildRequest(model: String, history: List<ChatMessage>, attachments: List<ChatAttachment>, memory: String, token: String?, web: String?,
         reasoning: Boolean, stream: Boolean, historyBytes: Int = MAX_HISTORY_BYTES, context: com.dua.ai.model.ConversationContext? = null, xSearch: Boolean = false,
-        code: Boolean = false, build: String? = null): Request {
+        code: Boolean = false, build: String? = null, persistence: com.dua.ai.account.ReplyPersistence? = null): Request {
         require(build == null || com.dua.ai.model.BuildInfos.validRepository(build)) { "Choose a repository for Build mode." }
         require(model in com.dua.ai.setup.IntegrationCapabilities.MODELS) { "Supported model select karein." }
         require(memory.length <= 3000) { "Memory notes are too large." }
@@ -138,6 +149,7 @@ class DuaApiClient(
                 if (stream && xSearch && model == "Grok") put("xSearch", true)
                 // Run code (Phase 5): only sent when the server advertised it, so older servers never see the field.
                 if (stream && code && build == null) put("code", true)
+                if (persistence != null) { require(stream && token != null); put("persistence", persistence.json) }
             }
             .toString().toByteArray(Charsets.UTF_8)
         require(body.size <= (if (historyBytes > MAX_HISTORY_BYTES || longContext) 4 else 3) * 1024 * 1024) { "Conversation too large. New chat shuru karein." }

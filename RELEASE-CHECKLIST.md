@@ -4,6 +4,17 @@ Dua is a single-user app for its owner. This checklist covers deploying the back
 
 It describes checks to run; it is not evidence that production, staging, or a physical device has passed them. The repository checkout cannot read Vercel/Supabase dashboard settings. Do not put credentials, tokens, passwords, or signing material in this repository, issues, screenshots, or chat.
 
+## Completed reply saving (Phase 5)
+
+- [ ] Deploy the backend first, install the updated APK, refresh Feature setup and confirm `/api/config.history.persistReplies` is true. The existing snapshot migration/RPC is required; no new migration or signing key is needed.
+- [ ] With foreground automatic sync off, create a disposable chat and receive a complete reply. On a second owner installation, review a cloud download and confirm the prompt/reply IDs and content restore without uploading from the first phone.
+- [ ] Follow up in a synced chat; regenerate its latest reply. Confirm earlier turns, title, pin, project, summary, source footer and code/Build metadata remain. Sync older imported/stopped offline turns before using them as server history.
+- [ ] Stop a reply after text starts with automatic sync off. Confirm the cached partial reply remains and no new completed response is published. Reviewed/automatic sync may separately preserve stopped turns.
+- [ ] In staging, edit/delete the target or clear the cloud while generating. Confirm saving reports a conflict and cannot resurrect/overwrite history; unrelated draft/title/pin/memory edits must survive.
+- [ ] Simulate lost save acknowledgement and expired commit-time auth. Confirm text stays on the phone, cloud review recovers a committed response, and auth recovery does not silently trigger another generation. Verify no repeated recovery copies appear after a normal acknowledged save/restart/sync.
+
+Source/mock tests do not establish live RPC deployment or physical-device behavior for this flow.
+
 ## Project memory
 
 - [ ] Deploy the backend and update every APK that syncs this account; old APKs reject snapshots with the new project-memory field. Refresh Feature setup and confirm `projects.enabled` and `projects.memory` are true.

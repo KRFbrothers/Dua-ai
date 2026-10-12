@@ -1,0 +1,28 @@
+{
+  "messages": [
+    {
+      "id": "user-1",
+      "role": "user",
+      "text": "हिन्दी ✨ </script> \n",
+      "state": "complete",
+      "attachmentText": "CSV: \"a\"\\n"
+    },
+    {
+      "id": "reply-1",
+      "role": "model",
+      "text": "Answer",
+      "state": "complete",
+      "thinking": "Check",
+      "thinkingSeconds": 2,
+      "codeRuns": [
+        {
+          "language": "python",
+          "code": "print(1)",
+          "output": "1",
+          "outcome": "ok"
+        }
+      ]
+    }
+  ],
+  "digest": "541ffaece82b5bc7080d40825caa963cc65ea08b2e73b41eed5442388750461f"
+}

@@ -19,6 +19,7 @@ sealed interface ReplyEvent {
     data class Build(val info: com.dua.ai.model.BuildInfo) : ReplyEvent
     /** Build mode: a change proposal for the owner to review (nothing was written to GitHub). */
     data class Proposal(val proposal: com.dua.ai.model.BuildProposal) : ReplyEvent
+    data class Saved(val receipt: com.dua.ai.account.ReplySaved) : ReplyEvent
     data class Done(val truncated: Boolean) : ReplyEvent
     data class Failed(val message: String, val status: Int) : ReplyEvent
 }
@@ -94,6 +95,7 @@ class ChatStreamParser {
                 }
                 "build" -> com.dua.ai.model.BuildInfos.fromJson(json)?.let { ReplyEvent.Build(it) }
                 "proposal" -> com.dua.ai.model.BuildProposals.fromJson(json)?.let { ReplyEvent.Proposal(it) }
+                "saved" -> ReplyEvent.Saved(com.dua.ai.account.ReplyPersistenceCodec.receipt(json))
                 "done" -> ReplyEvent.Done(json.optBoolean("truncated"))
                 "error" -> ReplyEvent.Failed(json.optString("message").takeIf { it.isNotBlank() }?.take(300)
                     ?: "Reply stopped unexpectedly. Partial reply kept; retry.", json.optInt("status", 502))
@@ -118,7 +120,8 @@ class StreamAccumulator(private val startedAt: Long, private val clock: () -> Lo
     /** Applies one event; cheap (no copies) so it can run per delta. Read [snapshot] when rendering. */
     fun apply(event: ReplyEvent) {
         when (event) {
-            is ReplyEvent.Thinking -> if (thinking.length < com.dua.ai.model.ChatMessage.MAX_THINKING_CHARS) thinking.append(event.delta)
+            is ReplyEvent.Thinking -> if (thinking.length < com.dua.ai.model.ChatMessage.MAX_THINKING_CHARS)
+                thinking.append(event.delta.take(com.dua.ai.model.ChatMessage.MAX_THINKING_CHARS - thinking.length))
             is ReplyEvent.Text -> {
                 if (thinking.isNotEmpty() && thinkingSeconds == null) thinkingSeconds = elapsedSeconds()
                 text.append(event.delta)
@@ -127,6 +130,7 @@ class StreamAccumulator(private val startedAt: Long, private val clock: () -> Lo
             is ReplyEvent.Build -> build = event.info
             is ReplyEvent.Proposal -> proposal = event.proposal
             is ReplyEvent.Code -> codeRuns = com.dua.ai.model.CodeRuns.merge(codeRuns, event.index, event.language, event.code, event.output, event.outcome)
+            is ReplyEvent.Saved -> thinkingSeconds = event.receipt.thinkingSeconds
             is ReplyEvent.Done -> {
                 finished = true
                 if (thinking.isNotEmpty() && thinkingSeconds == null) thinkingSeconds = elapsedSeconds()

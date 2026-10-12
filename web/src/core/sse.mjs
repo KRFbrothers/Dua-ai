@@ -23,6 +23,8 @@
  *                    card and only the owner's confirmed Create PR tap (POST /api/build/pr) can create a pull request.
  *                    Sent once, right before the answer text.
  *   event: done      data: {"type":"done","truncated":false,"usage":{...}}  last event of a successful reply
+ *   event: saved     owner/chat/message-bound receipt with revision, chat metadata, replyHash and original metadata
+ *                    before done, only when persistence was requested (see reply-persistence.mjs)
  *   event: error     data: {"type":"error","message":"...","status":504}    last event of a failed reply
  * Lines starting with ":" are heartbeats sent every 15 s so idle-timeouts on the client measure
  * the gap between bytes rather than total reply time.
@@ -33,7 +35,7 @@ export const SSE_HEADERS = Object.freeze({
   'X-Accel-Buffering': 'no',
   'X-Content-Type-Options': 'nosniff'
 });
-const TYPES = new Set(['thinking', 'text', 'sources', 'notice', 'files', 'context', 'code', 'build', 'proposal', 'done', 'error']);
+const TYPES = new Set(['thinking', 'text', 'sources', 'notice', 'files', 'context', 'code', 'build', 'proposal', 'saved', 'done', 'error']);
 
 export function formatEvent(event) {
   if (!event || !TYPES.has(event.type)) throw new TypeError('Unknown stream event type.');

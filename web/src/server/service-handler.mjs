@@ -15,6 +15,7 @@ export const chatDeadlineMs = env => envInteger(env, 'DUA_CHAT_DEADLINE_SECONDS'
 
 export async function handleService(request,{env=process.env,fetcher=fetch}={}) {
  const url=new URL(request.url),path=url.pathname;
+ const deadlineAt=path==='/api/chat'?Date.now()+chatDeadlineMs(env):undefined;
  // Include authentication/quota work in the chat deadline. Keep it below the function maxDuration
  // (web/vercel.json: 300 s, the Hobby maximum with Fluid compute) so the reply can end cleanly.
  if(path==='/api/chat')request=new Request(request,{signal:AbortSignal.any([request.signal,AbortSignal.timeout(chatDeadlineMs(env))])});
@@ -39,7 +40,7 @@ export async function handleService(request,{env=process.env,fetcher=fetch}={}) 
   if(advanced&&!env.DUA_ALLOWED_EMAIL)return Response.json({error:'Set the allowed personal account email before enabling shared integrations.'},{status:503,headers:{'Cache-Control':'no-store'}});
   const access=await guardChatAccess(request,{env:advanced?{...env,DUA_REQUIRE_LOGIN:'1'}:env,fetcher});
   if(!access.allowed)return access.response;
-  const response=path==='/api/chat'?await handleChat(request,{env,fetcher}):path==='/api/search'?await handleSearch(request,{env,fetcher}):await handleAdvanced(request,{env,fetcher,authorized:true});
+  const response=path==='/api/chat'?await handleChat(request,{env,fetcher,deadlineAt}):path==='/api/search'?await handleSearch(request,{env,fetcher}):await handleAdvanced(request,{env,fetcher,authorized:true});
   // Keep renewed HttpOnly sessions returned by the access guard.
   if(access.headers){const headers=new Headers(access.headers);for(const [key,value] of headers)if(!['set-cookie','content-type','cache-control'].includes(key))response.headers.set(key,value);for(const cookie of headers.getSetCookie())response.headers.append('Set-Cookie',cookie);}
   return response;

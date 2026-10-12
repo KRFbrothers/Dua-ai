@@ -109,6 +109,10 @@ For streaming Auto/Reasoning chat, the backend opens SSE after access, input, pr
 
 Provider HTTP failures also include `upstreamStatus` in Auto/Reasoning error events when available. Gemini HTTP 500/502/503/504 messages identify the actual upstream status; the backend still maps these failures to status 502 for the existing client contract. Vercel runtime logs record only `[dua-gemini] Upstream request failed (HTTP N).`, without provider bodies, credentials or prompts. If chat fails, use that status and a same-project/model test in Google AI Studio to distinguish provider availability from configuration problems. No automatic paid retry or model switch is performed.
 
+## Server reply saving (Phase 5)
+
+Completed streaming replies can opt into server persistence with owner-bound `persistence` metadata when `/api/config.history.persistReplies` is `true`. The backend stores the completed user/reply pair in the existing Supabase snapshot before sending a `saved` event followed by `done`; client sync consent is not needed for this reply write. Preparation/generation failures and cancelled incomplete streams are not stored as completed replies. Post-generation save failures end with an error event while retaining received text; commit-time auth failure does not request an automatic whole-generation retry. See [SUPABASE.md](SUPABASE.md#completed-reply-saving) for prerequisites, compatibility, conflict recovery and limits.
+
 ## Run code: hosted code execution (Phase 5)
 
 The Run code chip asks the provider to run Python in **its own sandbox**; Dua never executes code on the phone or in the Vercel function. Request field: `"code": true` (streaming path; older servers never receive it). `/api/config.code` reports `{enabled, reason?, providers, language, maxRuns, maxChars}`.
