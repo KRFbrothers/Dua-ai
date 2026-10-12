@@ -105,6 +105,8 @@ Redeploy after setting server variables. `/api/config` exposes provider availabi
 
 Output caps accept 256–1,000,000; output tokens include thinking tokens. A reply that hits the cap ends with `done.truncated` and the app shows a note. `DUA_CHAT_DEADLINE_SECONDS` (10–790) must stay below the Vercel function duration: `web/vercel.json` sets `maxDuration: 300` for `api/**/*.js` (Hobby with Fluid compute allows 300 s; Pro allows up to 800 s). The Android app allows 75 s between bytes and 330 s per call.
 
+For streaming Auto/Reasoning chat, the backend opens SSE after access, input, project and provider-setup checks, before web/file preparation, context summarization or waiting for provider response headers. An initial comment and 15-second heartbeat comments keep the Android read timeout from expiring during these waits. Stop cancels the preparation/provider work; the whole-request deadline still applies. Failures after SSE opens use a terminal `error` event carrying `message`, `status` and optional `retryAfterSeconds` (HTTP remains 200); access/setup failures before it opens remain JSON with an HTTP error status. Non-streaming JSON replies keep their existing HTTP error behavior. Build mode uses its existing separate stream path.
+
 ## Run code: hosted code execution (Phase 5)
 
 The Run code chip asks the provider to run Python in **its own sandbox**; Dua never executes code on the phone or in the Vercel function. Request field: `"code": true` (streaming path; older servers never receive it). `/api/config.code` reports `{enabled, reason?, providers, language, maxRuns, maxChars}`.

@@ -90,12 +90,16 @@ test('stream: provider failure mid-reply ends with an error event after partial 
   assert.doesNotMatch(events[1].message, /raw upstream detail/);
 });
 
-test('stream: errors before streaming stay JSON with status codes', async () => {
+test('stream: provider errors use error events while setup errors stay JSON', async () => {
   const fetcher = mockFetch(new Response('{"error":{"message":"quota"}}', { status: 429, headers: { 'retry-after': '30', 'content-type': 'application/json' } }));
   const response = await handleChat(chatRequest(body({ model: 'Grok', stream: true })), { env, fetcher });
-  assert.equal(response.status, 429);
-  assert.equal(response.headers.get('retry-after'), '30');
-  assert.match((await response.json()).error, /Grok quota limit/);
+  assert.equal(response.status, 200);
+  const events = await readEvents(response);
+  assert.equal(events.length, 1);
+  assert.equal(events[0].type, 'error');
+  assert.equal(events[0].status, 429);
+  assert.equal(events[0].retryAfterSeconds, 30);
+  assert.match(events[0].message, /Grok quota limit/);
   const missing = await handleChat(chatRequest(body({ stream: true })), { env: {}, fetcher: mockFetch() });
   assert.equal(missing.status, 503);
 });
@@ -146,7 +150,11 @@ test('service handler applies the configurable chat deadline', async () => {
   const hanging = (url, init) => new Promise((resolve, reject) => init.signal.addEventListener('abort', () => reject(init.signal.reason), { once: true }));
   const started = Date.now();
   const response = await handleService(chatRequest(body({ stream: true })), { env: { ...env, DUA_CHAT_DEADLINE_SECONDS: '10' }, fetcher: hanging });
-  assert.equal(response.status, 504);
+  assert.equal(response.status, 200);
+  const events = await readEvents(response);
+  assert.equal(events.length, 1);
+  assert.equal(events[0].type, 'error');
+  assert.equal(events[0].status, 504);
   assert.ok(Date.now() - started >= 9500);
 });
 
