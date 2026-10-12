@@ -26,6 +26,7 @@ enum class DuaDestination(val route: String) {
     LiveVoicePicker("settings/voice/live-voices"),
     FeatureSetup("settings/feature-setup"),
     Account("settings/account"),
+    EmailAccount("settings/account/email"),
     Accent("settings/accent"),
     Images("images"), Library("library"), Agent("agent"), Work("work"), Plugins("plugins"),
     General("settings/general"), UsageLimits("settings/usage-limits"), Safety("settings/safety"),

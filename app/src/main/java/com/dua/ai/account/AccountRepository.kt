@@ -9,7 +9,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.json.JSONObject
 
-data class AccountState(val configured: Boolean = false, val user: AccountUser? = null, val busy: Boolean = false, val notice: String = "", val deletionConfigured: Boolean = false)
+data class AccountState(val configured: Boolean = false, val user: AccountUser? = null, val busy: Boolean = false, val notice: String = "", val deletionConfigured: Boolean = false, val emailAuthConfigured: Boolean = false)
 class AccountRepository(private val api: AccountApi, private val store: SessionPersistence) {
     constructor(context: Context) : this(AccountApi(), AccountSessionStore(context))
     private var session = runCatching { store.read() }.getOrNull()
@@ -127,15 +127,41 @@ class AccountRepository(private val api: AccountApi, private val store: SessionP
     suspend fun loadFeatures() {
         try {
             val features = api.request("/api/account/features")
-            mutable.update { it.copy(deletionConfigured = features.optBoolean("accountDeletion")) }
+            mutable.update { it.copy(deletionConfigured = features.optBoolean("accountDeletion"), emailAuthConfigured = features.opt("emailAuth") == true) }
         } catch (cancelled: CancellationException) { throw cancelled }
-        catch (_: Exception) { mutable.update { it.copy(deletionConfigured = false) } }
+        catch (_: Exception) { mutable.update { it.copy(deletionConfigured = false, emailAuthConfigured = false) } }
     }
     suspend fun signInWithGoogle(idToken: String, nonce: String) {
         val ticket = beginAuthentication()
         val result = api.request("/api/account/google-token", "POST", JSONObject().put("idToken", idToken).put("nonce", nonce))
         val installed = installAuthentication(ticket, AccountSessionCodec.decode(result))
         noticeIfCurrent(installed, "Signed in with Google. Local data was not uploaded.")
+    }
+    fun cancelAuthentication() = synchronized(sessionLock) { ++authGeneration; Unit }
+    suspend fun signInWithEmail(email: String, password: String, signup: Boolean = false): Boolean {
+        require(EmailCredentials.validEmail(email) && EmailCredentials.validPassword(password, signup)) { "Check your email and password." }
+        check(state.value.user == null) { "This account is already signed in." }
+        val ticket = beginAuthentication()
+        val result = api.request(if (signup) "/api/account/email-signup" else "/api/account/email-login", "POST",
+            JSONObject().put("email", email.trim()).put("password", password))
+        if (signup && result.opt("confirmationRequired") == true && !result.has("session")) {
+            synchronized(sessionLock) { check(authGeneration == ticket) { "Account changed. Try again." }; notice(result.getString("message")) }
+            return false
+        }
+        val received = AccountSessionCodec.decode(result)
+        check(received.user.email.equals(email.trim(), ignoreCase = true)) { "Account response changed. Try again." }
+        val installed = installAuthentication(ticket, received)
+        noticeIfCurrent(installed, "Signed in with email. Local data was not uploaded.")
+        return true
+    }
+    suspend fun setEmailPassword(password: String, expectedAccountId: String) {
+        require(EmailCredentials.validPassword(password, true)) { "Use a password with 8–128 characters." }
+        val expected = snapshot()
+        check(expected.value?.user?.id == expectedAccountId) { "Account changed. Review password setup again." }
+        val result = withSnapshot(expected) { api.request("/api/account/password", "PUT",
+            JSONObject().put("password", password).put("expectedAccountId", expectedAccountId), it) }
+        check(result.opt("passwordUpdated") == true && result.optString("ownerId") == expectedAccountId) { "Password update could not be confirmed. Try signing in before retrying." }
+        noticeIfCurrent(expected, "Email password set for this account. Google sign-in remains available.")
     }
     suspend fun logout() {
         // Forget locally before waiting on the network, invalidating pending sign-in responses too.

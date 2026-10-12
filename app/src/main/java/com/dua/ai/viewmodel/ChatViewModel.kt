@@ -263,6 +263,34 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             finally { account.busy(false); refreshSyncBusy() }
         }
     }
+    data class EmailAuthState(val busy: Boolean = false, val error: String? = null, val confirmation: String = "", val completed: Boolean = false)
+    private val _emailAuth = MutableStateFlow(EmailAuthState())
+    val emailAuth = _emailAuth.asStateFlow()
+    private var emailAuthJob: Job? = null
+    fun clearEmailAuth() {
+        if (emailAuthJob?.isActive == true) { account.cancelAuthentication(); emailAuthJob?.cancel() }
+        _emailAuth.value = EmailAuthState()
+    }
+    fun submitEmailAuth(email: String, password: String, signup: Boolean, expectedAccountId: String? = null) {
+        if (_emailAuth.value.busy) return
+        if (account.state.value.busy || _googleSignIn.value.busy || syncBlocked()) {
+            _emailAuth.value = EmailAuthState(error = "Finish the current account, reply or sync action, then try again."); return
+        }
+        if (!account.state.value.emailAuthConfigured) {
+            _emailAuth.value = EmailAuthState(error = "Refresh Account after updating the owner backend to enable email authentication."); return
+        }
+        _emailAuth.value = EmailAuthState(busy = true); account.busy(true); automaticSync.setBusy(true)
+        emailAuthJob = viewModelScope.launch {
+            try {
+                _cloudPreview.value = null
+                val completed = if (expectedAccountId != null) { account.setEmailPassword(password, expectedAccountId); true }
+                    else account.signInWithEmail(email, password, signup)
+                _emailAuth.value = EmailAuthState(completed = completed, confirmation = if (completed) "" else account.state.value.notice)
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (failure: Exception) { _emailAuth.value = EmailAuthState(error = failure.message ?: "Email authentication failed. Try again.") }
+            finally { account.busy(false); refreshSyncBusy() }
+        }
+    }
     fun logOut() { automaticSync.disable(); accountAction { _cloudPreview.value = null; account.logout() } }
     fun cancelCloudReview() { _cloudPreview.value = null; account.notice("Cancelled. Data was not changed.") }
     fun reviewCloud(kind: String) = accountAction {

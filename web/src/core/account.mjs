@@ -46,12 +46,42 @@ export async function handleAccount(req,env={}){
  }
  try{
   if(url.pathname==='/api/account/session'&&req.method==='GET')return json({configured:true,user:await authenticated()});
-  if(url.pathname==='/api/account/features'&&req.method==='GET')return json({passwordReset:false,accountDeletion:!!privilegedKey(env.serviceRoleKey)});
+  if(url.pathname==='/api/account/features'&&req.method==='GET')return json({passwordReset:false,emailAuth:!!owner,accountDeletion:!!privilegedKey(env.serviceRoleKey)});
   if(!['POST','PUT','DELETE'].includes(req.method))return json({error:'Method not allowed.'},405);
   if(owner===null&&url.pathname!=='/api/account/logout')return json({error:'Allowed account email setup is invalid.'},503);
   if(!(req.headers.get('content-type')||'').startsWith('application/json'))return json({error:'Use JSON.'},415);
   const raw=await req.text();if(Buffer.byteLength(raw)> (url.pathname==='/api/cloud'?4*1024*1024+1024:16384))return json({error:'Request too large.'},413);
   let body;try{body=JSON.parse(raw||'{}');}catch{return json({error:'Invalid request.'},400);}if(!body||typeof body!=='object'||Array.isArray(body))return json({error:'Invalid request.'},400);
+  const emailAction=['/api/account/email-login','/api/account/email-signup','/api/account/password'].includes(url.pathname);
+  if(emailAction){
+   if(!native)return json({error:'Email authentication is only available from the Android app.'},400);
+   if(!owner)return json({error:'Configure the owner email before using email authentication.'},503);
+   if(req.method!==(url.pathname==='/api/account/password'?'PUT':'POST'))return json({error:'Method not allowed.'},405);
+  }
+  if(['/api/account/email-login','/api/account/email-signup'].includes(url.pathname)&&req.method==='POST'){
+   const email=typeof body.email==='string'?body.email.trim().toLowerCase():'';
+   if(!email||email.length>254||ownerEmail(email)!==email)return json({error:'Enter a valid email address.'},400);
+   if(email!==owner)return ownerDenied();
+   const signup=url.pathname.endsWith('email-signup');
+   if(typeof body.password!=='string'||!body.password.trim()||body.password.length<(signup?8:1)||body.password.length>128)
+    return json({error:signup?'Use a password with 8–128 characters.':'Enter your password (up to 128 characters).'},400);
+   const setting=await request('/auth/v1/settings','GET');
+   if(!setting.response.ok||setting.data?.external?.email!==true||setting.data?.mailer_autoconfirm!==false)
+    return json({error:'Enable Email auth and Confirm email in Supabase before using email authentication.'},503);
+   const result=await request(signup?'/auth/v1/signup':'/auth/v1/token?grant_type=password','POST',{email,password:body.password});
+   if(!result.response.ok)return json({error:signup?'Account setup failed. Check email/password settings. If you already use Google, sign in with Google and set an email password in Account.':'Email sign-in failed. Check your credentials and confirm your email. Existing Google accounts can set an email password from Account.',retryAfter:result.response.status===429?60:undefined},result.response.status===429?429:400);
+   if(signup&&result.data?.access_token==null){
+    const registered=publicUser(result.data?.user||result.data);
+    if(!ownerAllowed(registered))return ownerDenied();
+    return json({configured:true,confirmationRequired:true,message:'Check your email to confirm the account, then return here to sign in. If this account already uses Google, sign in with Google and set an email password in Account.'});
+   }
+   const signedIn=validSession(result.data);
+   if(!ownerAllowed(publicUser(signedIn.user))||!signedIn.user.email_confirmed_at){
+    try{await request('/auth/v1/logout?scope=local','POST',{},signedIn.access_token);}catch{}
+    return json({error:'Only the confirmed owner account can sign in.'},403);
+   }
+   return json(deliver(signedIn));
+  }
   if(url.pathname==='/api/account/google-token'&&req.method==='POST'){
    if(!native)return json({error:'Native Google sign-in is only available from the Android app.'},400);
    if(typeof body.idToken!=='string'||! /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(body.idToken)||body.idToken.length>8192||body.nonce!==undefined&&(typeof body.nonce!=='string'||! /^[A-Za-z0-9_-]{16,128}$/.test(body.nonce)))return json({error:'Google sign-in could not be verified. Try again.'},400);
@@ -70,6 +100,18 @@ export async function handleAccount(req,env={}){
    if(!native)extraCookies=sessionCookies(null,true);return json({user:null,revoked,message:revoked?'Signed out on this device.':'Signed out locally; server revocation could not be confirmed.'});
   }
   const user=await authenticated();if(!user)return json({error:'Sign in from Profile to continue.'},401);if(!ownerAllowed(user))return ownerDenied();
+  if(url.pathname==='/api/account/password'&&req.method==='PUT'){
+   if(body.expectedAccountId!==user.id)return json({error:'Account changed. Review the current account before setting a password.'},409);
+   if(typeof body.password!=='string'||!body.password.trim()||body.password.length<8||body.password.length>128)return json({error:'Use a password with 8–128 characters.'},400);
+   const setting=await request('/auth/v1/settings','GET');
+   if(!setting.response.ok||setting.data?.external?.email!==true||setting.data?.mailer_autoconfirm!==false)
+    return json({error:'Enable Email auth and Confirm email in Supabase before using email authentication.'},503);
+   const result=await request('/auth/v1/user','PUT',{password:body.password},token);
+   if(!result.response.ok)return json({error:'Password could not be set. Check the password policy or sign in again with Google and retry.',retryAfter:result.response.status===429?60:undefined},result.response.status===429?429:400);
+   const updated=publicUser(result.data);
+   if(updated.id!==user.id||!ownerAllowed(updated)||!result.data.email_confirmed_at)throw Error('Invalid password update response');
+   return json({passwordUpdated:true,ownerId:user.id,message:'Email password set for this account. Google sign-in remains available.'});
+  }
   if(url.pathname==='/api/account/delete'&&req.method==='DELETE'){
    if(body.expectedAccountId!==user.id)return json({error:'Account changed. Review the account shown in Profile before deleting.'},409);
    if(body.confirmation!=='DELETE MY ACCOUNT')return json({error:'Type DELETE MY ACCOUNT to confirm permanent account and cloud data deletion.'},400);const serviceKey=privilegedKey(env.serviceRoleKey);if(!serviceKey)return json({error:'Account deletion is not configured. The server needs its Supabase admin key.'},503);

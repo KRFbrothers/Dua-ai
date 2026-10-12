@@ -56,25 +56,27 @@ data class ProfileUiState(
     val signInError: String? = null,
     val deletionConfigured: Boolean = false,
     val notice: String = "",
+    val emailAuthConfigured: Boolean = false,
 )
 
 class ProfileActions(
     val onSignIn: () -> Unit = {},
+    val onEmail: () -> Unit = {},
     val onLogOut: () -> Unit = {},
     val onDeleteAccount: (String) -> Unit = {},
 )
 
 /** Account: Google sign-in and the existing delete-account confirmation. Logout lives in Profile & Settings. */
 @Composable
-fun ProfileScreen(viewModel: ChatViewModel, onBack: () -> Unit) {
+fun ProfileScreen(viewModel: ChatViewModel, onBack: () -> Unit, onEmail: () -> Unit = {}) {
     val account by viewModel.account.state.collectAsState()
     val google by viewModel.googleSignIn.collectAsState()
     val signIn = rememberGoogleSignIn(viewModel)
     LaunchedEffect(Unit) { viewModel.loadAccount() }
     val state = ProfileUiState(email = account.user?.email, displayName = account.user?.displayName.orEmpty(), busy = account.busy,
-        signingIn = google.busy, signInError = google.error, deletionConfigured = account.deletionConfigured, notice = account.notice)
+        signingIn = google.busy, signInError = google.error, deletionConfigured = account.deletionConfigured, notice = account.notice, emailAuthConfigured = account.emailAuthConfigured)
     ProfileContent(state, ProfileActions(
-        onSignIn = signIn,
+        onSignIn = signIn, onEmail = onEmail,
         onLogOut = viewModel::logOut,
         onDeleteAccount = { confirmation ->
             val owner = account.user?.id
@@ -100,6 +102,10 @@ fun ProfileContent(state: ProfileUiState, actions: ProfileActions, onBack: () ->
             if (state.deletionConfigured) TextButton(onClick = { dialog = ProfileDialog.Delete }, enabled = !state.busy, modifier = Modifier.align(Alignment.CenterHorizontally)) {
                 Text("Delete account", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
+        }
+        if (state.emailAuthConfigured) OutlinedButton(onClick = actions.onEmail, enabled = !state.busy && !state.signingIn,
+            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+            Text(if (state.email == null) "Sign in with email" else "Set email password")
         }
         if (state.notice.isNotBlank()) Text(state.notice, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
@@ -143,7 +149,7 @@ private fun AccountHeader(email: String?, displayName: String) {
             }
             Column(Modifier.weight(1f).padding(start = Spacing.lg)) {
                 if (email != null) {
-                    Text(displayName.ifBlank { "Google account" }, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface,
+                    Text(displayName.ifBlank { "Dua account" }, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(email, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 } else {
