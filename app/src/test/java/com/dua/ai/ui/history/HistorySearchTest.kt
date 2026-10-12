@@ -12,6 +12,13 @@ class HistorySearchTest {
     private fun chat(messages: List<ChatMessage>, draft: String = "") = SavedChat("one", "Dua", draft, messages, 1)
     private fun message(text: String, user: Boolean = false) = ChatMessage(text = text, isUser = user)
 
+    @Test fun renamedTitleIsSearchableWithoutChangingTheMessageText() {
+        val value = chat(listOf(message("Original question", true))).copy(customTitle = "Quarterly report")
+        val found = HistorySearch.search(listOf(value), "quarterly").single()
+        assertEquals("Title: Quarterly report", found.snippet)
+        assertEquals("Original question", value.messages.single().text)
+    }
+
     @Test fun findsOlderUserAndAssistantTurnsBeyondTitleAndLastReply() {
         val value = chat(listOf(message("x".repeat(90) + " invoice-2026", true), message("A Kotlin coroutine bug"), message("Thanks", true), message("Done")))
         assertFalse(value.title.contains("invoice")); assertFalse(value.preview.contains("coroutine"))

@@ -19,11 +19,21 @@ data class SavedChat(
     val summary: com.dua.ai.model.ChatSummary? = null,
     /** Build mode repository this chat is tied to (owner/name). Included in the signed-in cloud snapshot. */
     val buildRepository: String? = null,
-    val projectId: String = com.dua.ai.projects.ProjectCodec.PERSONAL
+    val projectId: String = com.dua.ai.projects.ProjectCodec.PERSONAL,
+    val customTitle: String? = null
 ) {
-    val title: String get() = messages.firstOrNull { it.isUser }?.text?.take(60) ?: "Draft"
+    init { require(customTitle == null || ChatTitles.valid(customTitle)) { ChatTitles.ERROR } }
+    val title: String get() = customTitle ?: messages.firstOrNull { it.isUser }?.text?.take(60) ?: "Draft"
     val preview: String get() = draft.takeIf { it.isNotBlank() }?.let { "Draft: $it" }
         ?: messages.lastOrNull { it.text.isNotBlank() }?.text.orEmpty()
+}
+
+object ChatTitles {
+    const val MAX_LENGTH = 120
+    const val ERROR = "Use 1–120 characters on a single line."
+    fun valid(value: String) = value.length in 1..MAX_LENGTH && value.isNotBlank() && value == value.trim() &&
+        value.none { it.isISOControl() || it == '\u2028' || it == '\u2029' }
+    fun normalize(value: String): String = value.trim().also { require(valid(it)) { ERROR } }
 }
 
 data class ChatBackup(val chats: List<SavedChat>, val projects: List<com.dua.ai.projects.ChatProject>)
@@ -120,7 +130,8 @@ object ChatHistoryCodec {
                 }, updatedAt,
                     if (includeServerFields) com.dua.ai.model.ChatSummary.fromJson(chat.optJSONObject("summary")) else null,
                     if (includeServerFields) chat.optString("buildRepository").takeIf { com.dua.ai.model.BuildInfos.validRepository(it) } else null,
-                    if (chat.has("projectId")) text(chat, "projectId", 100) else com.dua.ai.projects.ProjectCodec.PERSONAL)
+                    if (chat.has("projectId")) text(chat, "projectId", 100) else com.dua.ai.projects.ProjectCodec.PERSONAL,
+                    if (chat.has("title")) text(chat, "title", ChatTitles.MAX_LENGTH) else null)
                 require(projects.any { it.id == decoded.projectId }) { invalid }
                 if (includeServerFields && strictMetadata) ChatImportMetadata.validate(chat, decoded)
                 decoded
@@ -148,6 +159,7 @@ object ChatHistoryCodec {
         .put("chats", JSONArray().apply {
             chats.sortedByDescending { it.updatedAt }.forEach { chat ->
                 put(JSONObject().put("id", chat.id).put("model", chat.model).put("draft", chat.draft).put("projectId", chat.projectId)
+                    .apply { chat.customTitle?.let { put("title", it) } }
                     .apply { if (includeServerFields) { chat.summary?.let { put("summary", it.toJson()) }; chat.buildRepository?.let { put("buildRepository", it) } } }
                     .put("updatedAt", chat.updatedAt).put("messages", JSONArray().apply {
                         chat.messages.filter(::persistable).forEach { message -> put(JSONObject()
@@ -175,6 +187,7 @@ object ChatHistoryCodec {
         .put("activeId", activeId).put("chats", JSONArray().apply {
             chats.forEach { chat -> put(JSONObject().put("id", chat.id).put("model", chat.model)
                 .put("draft", chat.draft).put("updatedAt", chat.updatedAt).put("projectId", chat.projectId)
+                .apply { chat.customTitle?.let { put("title", it) } }
                 .apply { chat.summary?.let { put("summary", it.toJson()) }; chat.buildRepository?.let { put("buildRepository", it) } }
                 .put("messages", JSONArray().apply { chat.messages.filter(::persistable).forEach { message ->
                     put(JSONObject().put("id", message.id).put("text", message.text).put("isUser", message.isUser)
@@ -237,7 +250,8 @@ object ChatHistoryCodec {
                         proposal = if (message.optBoolean("isUser")) null else com.dua.ai.model.BuildProposals.fromJson(message.optJSONObject("proposal")))
                 }, item.getLong("updatedAt"), com.dua.ai.model.ChatSummary.fromJson(item.optJSONObject("summary")),
                 item.optString("buildRepository").takeIf { com.dua.ai.model.BuildInfos.validRepository(it) },
-                if (item.has("projectId")) (item.get("projectId") as? String ?: error("Invalid project ID.")) else com.dua.ai.projects.ProjectCodec.PERSONAL)
+                if (item.has("projectId")) (item.get("projectId") as? String ?: error("Invalid project ID.")) else com.dua.ai.projects.ProjectCodec.PERSONAL,
+                if (item.has("title")) item.get("title") as? String ?: error(ChatTitles.ERROR) else null)
         }
         require(chats.all { it.model in com.dua.ai.setup.IntegrationCapabilities.MODELS } && chats.map { it.id }.distinct().size == chats.size)
         require(chats.all { com.dua.ai.projects.ProjectCodec.validId(it.projectId) })

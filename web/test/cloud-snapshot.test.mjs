@@ -45,6 +45,14 @@ test('older version 1 snapshots without metadata still normalize unchanged', () 
 
 test('invalid extended metadata is rejected before a cloud write RPC', async () => {
   const invalid = [
+    s => { s.chats[0].title = 'x'.repeat(121); },
+    s => { s.chats[0].title = ' '; },
+    s => { s.chats[0].title = 'a\nb'; },
+    s => { s.chats[0].title = 'a\u2028b'; },
+    s => { s.chats[0].title = 'a\u0085b'; },
+    s => { s.chats[0].title = null; },
+    s => { s.chats[0].title = 123; },
+    s => { s.chats[0].title = ' padded '; },
     s => { s.chats[0].summary.text = 'x'.repeat(16_001); },
     s => { s.chats[0].summary.throughId = ''; },
     s => { s.chats[0].buildRepository = '../repo'; },
@@ -90,6 +98,7 @@ test('invalid extended metadata is rejected before a cloud write RPC', async () 
 test('metadata caps match Android characters and the whole snapshot uses UTF-8 bytes', () => {
   const value = fresh();
   const chat = value.chats[0];
+  chat.title = '💡'.repeat(60);
   chat.summary.text = 'x'.repeat(16_000);
   chat.messages[0].attachmentText = 'x'.repeat(32_000);
   chat.messages[0].files[1].transcript = 'x'.repeat(100_000);

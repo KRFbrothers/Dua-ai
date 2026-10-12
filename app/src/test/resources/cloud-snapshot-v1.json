@@ -2,6 +2,7 @@
   "format": "dua-cloud-snapshot", "version": 1, "memory": ["Prefer Hindi"],
   "chats": [{
     "id": "restored-chat", "updatedAt": 123, "model": "Dua", "draft": "Continue reviewing",
+    "title": "Code review — समीक्षा",
     "summary": {"text": "Earlier discussion", "throughId": "user-turn"},
     "buildRepository": "KRFbrothers/Dua-ai",
     "messages": [{

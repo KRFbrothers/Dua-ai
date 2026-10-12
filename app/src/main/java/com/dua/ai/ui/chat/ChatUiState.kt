@@ -120,6 +120,7 @@ class ChatActions(
     val onDeleteTask: (String, String) -> Boolean = { _, _ -> false },
     val onOpenChat: (String) -> Unit = {},
     val onDeleteChat: (String) -> Unit = {},
+    val onRenameChat: (String, String) -> String? = { _, _ -> "Rename is unavailable." },
     val onPickCamera: () -> Unit = {},
     val onPickPhotos: () -> Unit = {},
     val onPickFiles: () -> Unit = {},

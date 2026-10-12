@@ -171,6 +171,7 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
             onSaveTask = viewModel::saveTask, onToggleTask = viewModel::toggleTask, onDeleteTask = viewModel::deleteTask,
             onOpenChat = { id -> pulse(); voice.stopAll(); viewModel.openChat(id); viewModel.clearAttachments() },
             onDeleteChat = viewModel::deleteChat,
+            onRenameChat = viewModel::renameChat,
             onPickCamera = {
                 pick {
                     val file = captures.create()

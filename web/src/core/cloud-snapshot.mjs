@@ -147,6 +147,7 @@ export function validateCloudSnapshot(data) {
       text(chat.draft, 8000) && Array.isArray(chat.messages) && chat.messages.length <= 500);
     ids.add(chat.id);
     const result = { id: chat.id, updatedAt: chat.updatedAt, model: chat.model, draft: chat.draft, messages: chat.messages.map(message) };
+    optional(chat, 'title', v => text(v, 120, true) && v === v.trim() && !/[\x00-\x1f\x7f-\x9f\u2028\u2029]/.test(v), result);
     if (chat.projectId !== undefined) { requireValid(validProjectId(chat.projectId)); result.projectId = chat.projectId; }
     requireValid((projects || defaultProjects()).some(p => p.id === (chat.projectId || 'personal')));
     const messageIds = result.messages.filter(item => item.id !== undefined).map(item => item.id);
