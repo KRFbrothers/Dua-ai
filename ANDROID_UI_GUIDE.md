@@ -58,7 +58,7 @@ The default native UI tests render production components with synthetic fixtures
 | Reply sharing | Implemented through Android's share chooser; no automatic external send |
 | History search, opening chats and removing a cached chat | Implemented; cache removal preserves server history and stored files. This is not server-history deletion |
 | Rename | Long-press a recent chat → Rename; 1–120 character title metadata survives cache, JSON backup/import and cloud sync. Requires backend `history.rename` support. |
-| Pin | Explicit Coming soon; pin persistence is not implemented |
+| Pin / Unpin | Long-press a recent chat; a project-scoped Pinned group, cache/JSON backup/cloud persistence, and metadata-aware sync. Requires backend `history.pin` support; saving locally queues sync. |
 | Delete chat | Long-press → Delete chat → confirm. Owner sign-in and backend `history.delete` support required. Server deletion IDs prevent stale snapshots from restoring the same chat; stored files remain. Failed deletion keeps the confirmation open for retry. |
 | Remove cached chat | Removes only the phone copy; server history and files remain. Available while signed out. |
 | Editing an old user message, thumbs-up/down feedback | Pending; no history rewriting or feedback-storage endpoint is claimed |

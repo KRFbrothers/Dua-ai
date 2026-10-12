@@ -205,7 +205,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         // /api/setup has no per-feature config; keep what /api/config reported.
         _integrations.value = next.copy(busy = true, notice = "Setup status refreshed.",
             webSearchConfigured = current.webSearchConfigured, pageReadingAvailable = current.pageReadingAvailable, projectsEnabled = current.projectsEnabled, projectTasksEnabled = current.projectTasksEnabled, taskDueDatesEnabled = current.taskDueDatesEnabled, projectMemoryEnabled = current.projectMemoryEnabled,
-            chatRenameEnabled = current.chatRenameEnabled, chatDeletionEnabled = current.chatDeletionEnabled,
+            chatRenameEnabled = current.chatRenameEnabled, chatDeletionEnabled = current.chatDeletionEnabled, chatPinEnabled = current.chatPinEnabled,
             filesEnabled = current.filesEnabled, filesMaxBytes = current.filesMaxBytes, nativeSearch = current.nativeSearch,
             xSearchAvailable = current.xSearchAvailable, longContext = current.longContext, imagine = current.imagine, codeExecution = current.codeExecution, build = current.build,
             voice = current.voice, generatedVoiceConfigured = current.voice?.ttsEnabled ?: next.generatedVoiceConfigured)
@@ -1340,11 +1340,11 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         draftSaver.cancel()
         val previous = _savedChats.value.find { it.id == activeId }
         val others = _savedChats.value.filterNot { it.id == activeId }
-        _savedChats.value = if (_messages.value.isEmpty() && _draft.value.isBlank() && previous?.customTitle == null) others else
+        _savedChats.value = if (_messages.value.isEmpty() && _draft.value.isBlank() && previous?.customTitle == null && previous?.pinned != true) others else
             listOf(com.dua.ai.history.ChatSavePolicy.preserveUnchangedTime(previous,
                 SavedChat(activeId, _selectedModel.value, _draft.value, _messages.value, System.currentTimeMillis(),
                     com.dua.ai.model.ContextWindow.validSummary(_messages.value, _summary.value), _buildRepo.value, _projectId.value,
-                    previous?.customTitle))) + others
+                    previous?.customTitle, previous?.pinned ?: false))) + others
         historyWriter.save(_savedChats.value, activeId)
     }
 
@@ -1389,6 +1389,19 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         _savedChats.value = _savedChats.value.map {
             if (it.id == id) it.copy(customTitle = title, updatedAt = System.currentTimeMillis()) else it
         }
+        historyWriter.save(_savedChats.value, activeId)
+        return null
+    }
+
+    /** Pin is chat metadata, queued for the existing reviewed/automatic sync flow. */
+    fun setChatPinned(id: String, pinned: Boolean): String? {
+        if (syncBlocked()) return "Finish the current reply or sync action, then try again."
+        if (!_integrations.value.chatPinEnabled) return "Refresh setup after updating the backend, then try again."
+        draftSaver.runNow()
+        val chat = _savedChats.value.find { it.id == id } ?: return "This chat is no longer available."
+        if (chat.pinned == pinned) return null
+        // Pinning does not change the conversation's last-message timestamp.
+        _savedChats.value = _savedChats.value.map { if (it.id == id) it.copy(pinned = pinned) else it }
         historyWriter.save(_savedChats.value, activeId)
         return null
     }

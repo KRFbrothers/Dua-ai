@@ -217,6 +217,7 @@ fun ChatScreen(
                     onOpenChat = { id -> closeDrawerThen { actions.onOpenChat(id) } },
                     onDeleteChat = { id -> deletingId = id },
                     onRenameChat = actions.onRenameChat,
+                    pinEnabled = state.chatPinEnabled, onPinChat = actions.onPinChat,
                     serverDeletionEnabled = state.serverChatDeletionEnabled,
                     onDeleteServerChat = { id -> actions.onDismissChatDeletion(); deletingServerId = id },
                     onOpenSettings = { closeDrawerThen(actions.onOpenSettings) },

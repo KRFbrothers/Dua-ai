@@ -47,6 +47,8 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.SpanStyle
@@ -90,6 +92,8 @@ fun HistoryDrawer(
     onRenameChat: (String, String) -> String? = { _, _ -> "Rename is unavailable." },
     serverDeletionEnabled: Boolean = false,
     onDeleteServerChat: (String) -> Unit = {},
+    pinEnabled: Boolean = false,
+    onPinChat: (String, Boolean) -> String? = { _, _ -> "Pin is unavailable." },
 ) {
     var aura by rememberSaveable { mutableStateOf(false) }
     androidx.activity.compose.BackHandler(enabled = aura && drawerOpen) { aura = false }
@@ -97,6 +101,7 @@ fun HistoryDrawer(
     var renamingId by rememberSaveable(projectId) { mutableStateOf<String?>(null) }
     var renameTitle by rememberSaveable(projectId) { mutableStateOf("") }
     var renameError by rememberSaveable(projectId) { mutableStateOf<String?>(null) }
+    var pinError by rememberSaveable(projectId) { mutableStateOf<String?>(null) }
     val scoped = remember(chats, projectId) { if (projectId == null) chats else chats.filter { it.projectId == projectId } }
     val needle = query.trim()
     var results by remember(projectId) { mutableStateOf<SearchResults?>(null) }
@@ -132,9 +137,15 @@ fun HistoryDrawer(
                     }
                     items(items, key = { it.id }) { chat -> HistoryRow(chat, snippets[chat.id], onOpen = { onOpenChat(chat.id) }, onDelete = { onDeleteChat(chat.id) },
                         onRename = { renamingId = chat.id; renameTitle = chat.title; renameError = null },
+                        pinEnabled = pinEnabled, onPin = { pinError = onPinChat(chat.id, !chat.pinned) },
                         serverDeletionEnabled = serverDeletionEnabled, onDeleteServer = { onDeleteServerChat(chat.id) }, active = chat.id == activeChatId) }
                 }
             }
+    }
+    pinError?.let { error ->
+        androidx.compose.material3.AlertDialog(onDismissRequest = { pinError = null }, title = { Text("Pin could not be updated") },
+            text = { Text(error, Modifier.verticalScroll(rememberScrollState())) },
+            confirmButton = { TextButton(onClick = { pinError = null }) { Text("Close") } })
     }
     renamingId?.let { id -> RenameChatDialog(renameTitle, renameError,
         onChange = { renameTitle = it; renameError = null }, onDismiss = { renamingId = null },
@@ -160,21 +171,24 @@ internal fun SearchField(value: String, onValueChange: (String) -> Unit, modifie
 
 @Composable
 private fun HistoryRow(chat: SavedChat, match: HistoryMatch?, onOpen: () -> Unit, onDelete: () -> Unit, onRename: () -> Unit,
-    serverDeletionEnabled: Boolean, onDeleteServer: () -> Unit, active: Boolean = false) {
+    serverDeletionEnabled: Boolean, onDeleteServer: () -> Unit, active: Boolean = false,
+    pinEnabled: Boolean = false, onPin: () -> Unit = {}) {
     var menu by remember { mutableStateOf(false) }
-    var unavailable by remember { mutableStateOf<String?>(null) }
     fun beginRename() { menu = false; onRename() }
     Box {
         Row(Modifier.fillMaxWidth().clip(DuaShape.card)
             .background(if (active) MaterialTheme.colorScheme.primaryContainer else androidx.compose.ui.graphics.Color.Transparent)
             .combinedClickableCompat(onClick = onOpen, onLongClick = { menu = true }, onLongClickLabel = "Chat options")
-            .semantics { customActions = listOf(
+            .semantics {
+                if (chat.pinned) stateDescription = "Pinned"
+                customActions = listOf(
                 CustomAccessibilityAction("Rename chat") { beginRename(); true },
                 CustomAccessibilityAction("Remove cached chat") { onDelete(); true }) +
-                if (serverDeletionEnabled) listOf(CustomAccessibilityAction("Delete chat from server") { onDeleteServer(); true }) else emptyList() }
+                (if (pinEnabled) listOf(CustomAccessibilityAction(if (chat.pinned) "Unpin chat" else "Pin chat") { onPin(); true }) else emptyList()) +
+                (if (serverDeletionEnabled) listOf(CustomAccessibilityAction("Delete chat from server") { onDeleteServer(); true }) else emptyList()) }
             .heightIn(min = Sizes.touchTarget).padding(horizontal = Spacing.md, vertical = Spacing.sm),
             verticalAlignment = Alignment.CenterVertically) {
-            Column {
+            Column(Modifier.weight(1f)) {
                 Text(chat.title, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 match?.snippet?.let { snippet ->
                     val highlight = MaterialTheme.colorScheme.primary
@@ -185,19 +199,18 @@ private fun HistoryRow(chat: SavedChat, match: HistoryMatch?, onOpen: () -> Unit
                         modifier = Modifier.padding(top = Spacing.xs))
                 }
             }
+            if (chat.pinned) Icon(Icons.Outlined.PushPin, contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = Spacing.sm).size(Sizes.iconTiny))
         }
         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
             DropdownMenuItem(text = { Text("Rename") }, onClick = { beginRename() })
-            DropdownMenuItem(text = { Text("Pin") }, onClick = { menu = false; unavailable = "Pin" })
+            DropdownMenuItem(text = { Text(if (chat.pinned) "Unpin" else "Pin") }, enabled = pinEnabled,
+                leadingIcon = { Icon(Icons.Outlined.PushPin, null) }, onClick = { menu = false; onPin() })
             if (serverDeletionEnabled) DropdownMenuItem(text = { Text("Delete chat") }, leadingIcon = { Icon(Icons.Outlined.DeleteOutline, null) },
                 onClick = { menu = false; onDeleteServer() })
             DropdownMenuItem(text = { Text("Remove cached chat") }, leadingIcon = { Icon(Icons.Outlined.DeleteOutline, contentDescription = null) },
                 onClick = { menu = false; onDelete() })
         }
-    }
-    unavailable?.let { title ->
-        androidx.compose.material3.AlertDialog(onDismissRequest = { unavailable = null }, title = { Text(title) },
-            text = { Text("Coming soon") }, confirmButton = { androidx.compose.material3.TextButton(onClick = { unavailable = null }) { Text("Close") } })
     }
 }
 

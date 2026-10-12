@@ -13,6 +13,18 @@ class HistoryGroupingTest {
     private fun chat(id: String, updatedAt: Long, text: String = id) =
         SavedChat(id, "Dua", "", listOf(ChatMessage(text = text, isUser = true)), updatedAt)
 
+    @Test fun pinnedChatsAppearOnceBeforeDateGroupsAndKeepStableRecentOrder() {
+        val now = at(8, 12)
+        val old = chat("old", 1).copy(pinned = true)
+        val newer = chat("newer", at(7, 12)).copy(pinned = true)
+        val recent = chat("recent", now)
+        val groups = HistoryGrouping.group(listOf(old, recent, newer), now, zone)
+        assertEquals(listOf(HistoryBucket.Pinned, HistoryBucket.Today), groups.map { it.first })
+        assertEquals(listOf("newer", "old"), groups.first().second.map { it.id })
+        assertEquals(3, groups.sumOf { it.second.size })
+        assertEquals(listOf("old"), HistoryGrouping.filter(listOf(old, recent), "old").map { it.id })
+        assertEquals(HistoryBucket.Older, HistoryGrouping.group(listOf(old.copy(pinned = false)), now, zone).single().first)
+    }
     @Test fun bucketsUseLocalCalendarDays() {
         val now = at(8, 1)
         assertEquals(HistoryBucket.Today, HistoryGrouping.bucket(at(8, 0), now, zone))

@@ -206,7 +206,7 @@ export async function handleChat(request, { env = process.env, fetcher = fetch, 
     const web = { ...chatWebConfiguration(env), nativeSearch: nativeSearchProviders(env, definitions).filter(name => configured.has(name)), xSearch: xSearchAvailable(env) && configured.has('Grok'), preferBrave: preferBrave(env) };
     const context = { summaries: true, budgets: Object.fromEntries(definitions.map(provider => [provider.name, contextBudget(provider.prefix, env)])) };
     return json({ geminiConfigured: providers[0].configured, model: providers[0].model, providers, web, streaming: true, files: filesConfiguration(env), context, imagine: publicImagineConfiguration(env), voice: voiceConfiguration(env),
-      history: { rename: true, delete: Boolean(env.DUA_ALLOWED_EMAIL?.trim() && env.SUPABASE_URL && env.SUPABASE_ANON_KEY) },
+      history: { rename: true, pin: true, delete: Boolean(env.DUA_ALLOWED_EMAIL?.trim() && env.SUPABASE_URL && env.SUPABASE_ANON_KEY) },
       code: codeExecutionConfiguration(env, definitions, configured), build: buildConfiguration(env, configured), projects: { enabled: Boolean(env.DUA_ALLOWED_EMAIL?.trim() && env.SUPABASE_URL && env.SUPABASE_ANON_KEY), tasks: true, dueDates: true, memory: true } });
   }
   if (url.pathname !== '/api/chat' || request.method !== 'POST') return json({ error: 'Method not allowed.' }, 405);
