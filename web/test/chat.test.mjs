@@ -98,6 +98,7 @@ test('stream: provider errors use error events while setup errors stay JSON', as
   assert.equal(events.length, 1);
   assert.equal(events[0].type, 'error');
   assert.equal(events[0].status, 429);
+  assert.equal(events[0].upstreamStatus, 429);
   assert.equal(events[0].retryAfterSeconds, 30);
   assert.match(events[0].message, /Grok quota limit/);
   const missing = await handleChat(chatRequest(body({ stream: true })), { env: {}, fetcher: mockFetch() });

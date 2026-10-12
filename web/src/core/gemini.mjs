@@ -36,12 +36,18 @@ export async function geminiUpstreamError(response, signal) {
     401: 'Gemini API key valid nahi hai.',
     403: 'Is key ko Gemini API access nahi hai. Google AI Studio project aur key restrictions check karein.',
     404: 'Selected Gemini model available nahi hai. GEMINI_MODEL setting check karein.',
-    429: 'Gemini quota limit aa gayi. Google AI Studio mein quota aur billing check karein.'
+    429: 'Gemini quota limit aa gayi. Google AI Studio mein quota aur billing check karein.',
+    500: 'Gemini server par internal error aaya (HTTP 500). Thodi der baad retry karein.',
+    502: 'Gemini gateway error aaya (HTTP 502). Thodi der baad retry karein.',
+    503: 'Gemini service abhi unavailable hai (HTTP 503). Thodi der baad retry karein.',
+    504: 'Gemini upstream request timeout hui (HTTP 504). Thodi der baad retry karein.'
   };
   let details;
   try { details = await readJsonLimited(response, 1024 * 1024); } catch {}
   signal?.throwIfAborted();
-  const hint = hints[status] || 'Gemini service se response nahi aaya. Dobara try karein.';
+  // Only the HTTP status goes to runtime logs; never log provider bodies, keys, prompts or headers.
+  console.error(`[dua-gemini] Upstream request failed (HTTP ${status}).`);
+  const hint = hints[status] || `Gemini request fail hui (HTTP ${status}). Dobara try karein.`;
   const delay = status === 429 ? retrySeconds(response, details) : undefined;
   return json({
     error: delay ? 'Gemini quota limit aa gayi. ' + waitText(delay) : hint,

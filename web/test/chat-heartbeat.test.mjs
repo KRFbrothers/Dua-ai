@@ -95,3 +95,18 @@ test('owner authentication fails before a stream opens or a provider is contacte
   assert.match(response.headers.get('content-type'), /application\/json/);
   assert.equal(fetcher.calls.length, 0);
 });
+
+test('Gemini upstream status survives SSE error conversion without exposing provider details', async t => {
+  t.mock.method(console, 'error', () => {});
+  const response = await handleChat(chatRequest(body()), {
+    env, fetcher: mockFetch(Response.json({ error: { message: 'private upstream body' } }, { status: 503 }))
+  });
+  const events = await readEvents(response);
+  assert.equal(response.status, 200);
+  assert.equal(events.length, 1);
+  assert.equal(events[0].type, 'error');
+  assert.equal(events[0].status, 502);
+  assert.equal(events[0].upstreamStatus, 503);
+  assert.match(events[0].message, /HTTP 503/);
+  assert.doesNotMatch(events[0].message, /private upstream body/);
+});
