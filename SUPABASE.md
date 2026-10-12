@@ -16,7 +16,7 @@ Run `supabase/migrations/202610080001_dua_files_storage.sql` once (SQL editor �
 - creates a **private** bucket `dua-files` with a 50 MB per-file limit (52,428,800 bytes) and an allowed MIME list (images, PDF, XLSX/XLS/ODS/CSV, TXT/MD/JSON, common audio types);
 - adds RLS policies on `storage.objects` so a signed-in user can only **select, insert and delete** objects whose first folder is their own `auth.uid()`. There is no update policy: files are immutable and uploads use `x-upsert: false`.
 
-**Plan limits:** 50 MB is the Supabase Free plan's maximum file size. The bucket limit cannot exceed the project's global limit (Storage → Settings). On Pro and above you can raise both, then set `DUA_FILES_MAX_MB` on Vercel to match. Free projects also have a total storage quota; Settings → Data & privacy → Data controls in the app shows how much you use.
+**Plan limits:** 50 MB is the Supabase Free plan's maximum file size. The bucket limit cannot exceed the project's global limit (Storage → Settings). On Pro and above you can raise both, then set `DUA_FILES_MAX_MB` on Vercel to match. Free projects also have a total storage quota; Settings → History and data → Data controls in the app shows how much you use.
 
 The backend talks to Storage with **your own access token** plus the public anon key, so RLS decides every access. No service-role key is used for files. The app uploads straight to Storage with a signed upload URL (valid 2 hours), which avoids Vercel's 4.5 MB request body limit.
 

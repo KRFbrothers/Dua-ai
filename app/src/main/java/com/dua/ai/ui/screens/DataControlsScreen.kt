@@ -94,7 +94,7 @@ fun DataControlsScreen(viewModel: ChatViewModel, onBack: () -> Unit) {
         dismissButton = { TextButton(onClick = { confirm = false }) { Text("Cancel") } })
 }
 
-/** Settings › Data & privacy › Data controls: storage used in the private bucket and a delete-all action. */
+/** Settings › History and data › Data controls: storage used in the private bucket and a delete-all action. */
 @Composable
 fun StoredFilesSection(signedIn: Boolean, enabled: Boolean, usage: com.dua.ai.files.StorageUsage?, busy: Boolean, onRefresh: () -> Unit, onDeleteAll: () -> Unit) {
     Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceContainer, modifier = Modifier.fillMaxWidth()) {

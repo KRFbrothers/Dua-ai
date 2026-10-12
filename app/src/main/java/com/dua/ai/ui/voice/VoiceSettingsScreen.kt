@@ -39,6 +39,8 @@ import com.dua.ai.ui.components.DuaPageScaffold
 import com.dua.ai.ui.components.SettingsDivider
 import com.dua.ai.ui.components.SettingsRow
 import com.dua.ai.ui.components.SettingsSection
+import com.dua.ai.ui.components.SettingsSwitchRow
+import com.dua.ai.ui.navigation.DuaDestination
 import com.dua.ai.ui.theme.Spacing
 import com.dua.ai.viewmodel.ChatViewModel
 import com.dua.ai.voice.LanguageOption
@@ -56,6 +58,8 @@ data class VoiceSettingsUiState(
     val config: VoiceConfig?, val signedIn: Boolean, val preferences: LocalPreferences,
     val deviceVoices: List<VoiceOption> = emptyList(), val previewing: Boolean = false, val status: String = "",
     val liveUsage: com.dua.ai.voice.live.LiveUsage? = null,
+    val legacyGeneratedVoiceConfigured: Boolean = false,
+    val busy: Boolean = false,
 ) {
     /** The AI provider in use, or null for the device voice. */
     val provider: TtsProvider? get() = if (!preferences.generatedVoice || !signedIn) null
@@ -88,12 +92,14 @@ object VoiceSamples {
 const val VOICE_PREVIEW_PREFIX = "voice-preview:"
 
 @Composable
-fun VoiceSettingsScreen(viewModel: ChatViewModel, voice: ReplyVoice, onBack: () -> Unit, onPicker: (String) -> Unit) {
+fun VoiceSettingsScreen(viewModel: ChatViewModel, voice: ReplyVoice, onBack: () -> Unit, onPicker: (String) -> Unit,
+    onOpen: (DuaDestination) -> Unit) {
     val state = rememberVoiceSettingsState(viewModel, voice)
     VoiceSettingsContent(state, onBack = onBack, onPicker = onPicker,
         onProvider = { id -> voice.stopAll(); viewModel.updateSettings(selectProvider(viewModel.localSettings.value, id)) },
         onSpeed = { value -> viewModel.updateSettings(viewModel.localSettings.value.copy(voiceSpeed = (Math.round(value * 20) / 20f).coerceIn(0.5f, 2f))) },
-        onPreview = { previewSelected(viewModel, voice) })
+        onPreview = { previewSelected(viewModel, voice) }, onOpen = onOpen,
+        onGeneratedVoice = { enabled -> voice.stopAll(); viewModel.updateSettings(viewModel.localSettings.value.copy(generatedVoice = enabled)) })
 }
 
 @Composable
@@ -110,7 +116,8 @@ internal fun rememberVoiceSettingsState(viewModel: ChatViewModel, voice: ReplyVo
     val previewing = generated.activeId?.startsWith(VOICE_PREVIEW_PREFIX) == true || device.activeId?.startsWith(VOICE_PREVIEW_PREFIX) == true
     return VoiceSettingsUiState(integrations.voice, account.user != null, preferences, deviceVoices, previewing,
         generated.status.takeIf { generated.phase == "error" || generated.status.contains("unavailable", true) || generated.status.contains("interrupted", true) }
-            ?: device.status.ifBlank { status }, liveUsage)
+            ?: device.status.ifBlank { status }, liveUsage,
+        legacyGeneratedVoiceConfigured = integrations.generatedVoiceConfigured, busy = integrations.busy)
 }
 
 internal fun selectProvider(current: LocalPreferences, id: String): LocalPreferences =
@@ -128,10 +135,17 @@ internal fun previewSelected(viewModel: ChatViewModel, voice: ReplyVoice) {
 
 @Composable
 fun VoiceSettingsContent(state: VoiceSettingsUiState, onBack: () -> Unit, onPicker: (String) -> Unit, onProvider: (String) -> Unit,
-    onSpeed: (Float) -> Unit, onPreview: () -> Unit) {
+    onSpeed: (Float) -> Unit, onPreview: () -> Unit, onOpen: (DuaDestination) -> Unit = {}, onGeneratedVoice: (Boolean) -> Unit = {}) {
     val config = state.config
     val provider = state.provider
     DuaPageScaffold(title = "Voice", onBack = onBack) {
+        SettingsSection("Talk with Dua") {
+            SettingsRow(Icons.Outlined.Mic, "Voice input", "Dictate, review, then send") { onOpen(DuaDestination.Voice) }
+            SettingsDivider()
+            if (config?.live?.enabled == true && state.signedIn)
+                SettingsRow(Icons.Outlined.GraphicEq, "Live conversation", "Talk with Grok in real time · interrupt any time") { onOpen(DuaDestination.LiveVoice) }
+            else SettingsRow(Icons.Outlined.GraphicEq, "Voice mode", "Talk with Dua and hear the reply out loud") { onOpen(DuaDestination.HandsFree) }
+        }
         Text(when {
             config == null -> "Update the Dua backend to pick Grok or Gemini voices. The device voice works now."
             !state.signedIn -> "Sign in from Profile to use AI voices. The device voice works without an account."
@@ -139,7 +153,19 @@ fun VoiceSettingsContent(state: VoiceSettingsUiState, onBack: () -> Unit, onPick
             else -> "Choose how Dua reads replies aloud. AI voices make audio only for the reply you tap."
         }, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         SettingsSection("Reply voice") {
-            Choice("Device voice", "Free · works offline when the language is installed", provider == null) { onProvider("device") }
+            Choice("Device voice", "Free · works offline when the language is installed",
+                provider == null && !(config == null && state.signedIn && state.preferences.generatedVoice)) { onProvider("device") }
+            if (config == null) {
+                SettingsDivider()
+                SettingsSwitchRow(Icons.AutoMirrored.Outlined.VolumeUp, "AI reply voice",
+                    subtitle = when {
+                        !state.legacyGeneratedVoiceConfigured && !state.preferences.generatedVoice -> "Needs backend setup · device voice stays available"
+                        !state.signedIn && !state.preferences.generatedVoice -> "Sign in to use a generated voice"
+                        else -> "Generates audio only for the reply you tap"
+                    }, checked = state.preferences.generatedVoice,
+                    enabled = !state.busy && (state.preferences.generatedVoice || (state.legacyGeneratedVoiceConfigured && state.signedIn)),
+                    onCheckedChange = onGeneratedVoice)
+            }
             config?.providers?.forEach { item ->
                 SettingsDivider()
                 Choice(providerLabel(item), listOfNotNull(item.model.ifBlank { null }, item.price.ifBlank { null }).joinToString(" · ").ifBlank { null },
@@ -186,8 +212,6 @@ fun VoiceSettingsContent(state: VoiceSettingsUiState, onBack: () -> Unit, onPick
                     style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(Spacing.lg))
                 else {
                     val liveVoice = live.voices.firstOrNull { it.id == state.preferences.liveVoice } ?: live.voices.firstOrNull { it.id == live.defaultVoice }
-                    SettingsRow(Icons.Outlined.GraphicEq, "Start live conversation", "Talk with Grok in real time · interrupt any time") { onPicker(VoicePickerKind.LIVE) }
-                    SettingsDivider()
                     SettingsRow(Icons.Outlined.RecordVoiceOver, "Live voice: ${liveVoice?.name ?: "Default"}", liveVoice?.description?.ifBlank { null }) { onPicker(VoicePickerKind.LIVE_VOICE) }
                     SettingsDivider()
                     val usage = state.liveUsage

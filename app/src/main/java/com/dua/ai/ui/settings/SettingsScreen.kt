@@ -1,12 +1,9 @@
 package com.dua.ai.ui.settings
 
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.VolumeUp
 import androidx.compose.material.icons.outlined.Brush
 import androidx.compose.material.icons.outlined.CloudSync
-import androidx.compose.material.icons.outlined.GraphicEq
 import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material.icons.outlined.IosShare
 import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material.icons.outlined.NotificationsNone
 import androidx.compose.material.icons.outlined.Palette
@@ -34,7 +31,6 @@ import com.dua.ai.BuildConfig
 import com.dua.ai.ui.components.SettingsDivider
 import com.dua.ai.ui.components.SettingsRow
 import com.dua.ai.ui.components.SettingsSection
-import com.dua.ai.ui.components.SettingsSwitchRow
 import com.dua.ai.ui.navigation.DuaDestination
 import com.dua.ai.viewmodel.ChatViewModel
 
@@ -46,23 +42,16 @@ data class SettingsUiState(
     val haptic: Boolean = false,
     val memoryEnabled: Boolean = false,
     val notifications: Boolean = false,
-    val generatedVoice: Boolean = false,
-    val generatedVoiceConfigured: Boolean = false,
-    val busy: Boolean = false,
     val version: String = BuildConfig.VERSION_NAME,
     /** Imagine row subtitle; null hides the row (backend without Imagine). */
     val imagine: String? = null,
-    /** Voice settings row subtitle; null keeps the single AI-voice switch (backend before Voice v2). */
+    /** Summary shown on the single Settings → Voice entry. */
     val voice: String? = null,
-    /** Live voice (xAI realtime) is available: the hands-free row opens it. */
-    val liveVoice: Boolean = false,
     val displayName: String = "",
     val accent: String = "Purple",
     val accountBusy: Boolean = false,
     val accountNotice: String = "",
-) {
-    val generatedVoiceToggleEnabled: Boolean get() = !busy && (generatedVoice || (generatedVoiceConfigured && email != null))
-}
+)
 
 internal fun themeLabel(theme: String) = when (theme) { "light" -> "Light"; "system" -> "Match system"; else -> "Dark" }
 internal fun fontLabel(font: String) = when (font) { "system" -> "Device font"; "serif" -> "Serif"; "monospace" -> "Monospace"; else -> "Inter" }
@@ -78,9 +67,6 @@ fun SettingsScreen(viewModel: ChatViewModel, onBack: () -> Unit, onOpen: (DuaDes
         displayName = account.user?.displayName.orEmpty(), accent = appearance.resolvedAccent(com.dua.ai.ui.theme.DuaTheme.colors.isDark).label, accountBusy = account.busy, accountNotice = account.notice,
         email = account.user?.email, theme = appearance.theme, font = preferences.font, haptic = preferences.haptic,
         memoryEnabled = preferences.memoryEnabled, notifications = preferences.notifications,
-        generatedVoice = preferences.generatedVoice, generatedVoiceConfigured = integrations.generatedVoiceConfigured,
-        busy = integrations.busy,
-        liveVoice = integrations.voice?.live?.enabled == true && account.user != null,
         voice = integrations.voice?.let { config ->
             val options = if (preferences.generatedVoice && account.user != null) com.dua.ai.voice.VoiceCodec.ttsOptions(config, preferences.voiceProvider,
                 preferences.voiceName, preferences.replyLanguage, preferences.voiceSpeed) else null
@@ -93,13 +79,11 @@ fun SettingsScreen(viewModel: ChatViewModel, onBack: () -> Unit, onOpen: (DuaDes
                 com.dua.ai.imagine.ImagineCodec.aspectLabel(preferences.imagineAspect), if (config.videoEnabled) "video on" else null).joinToString(" · ")
         },
     )
-    SettingsContent(state, onBack, onOpen,
-        onGeneratedVoice = { enabled -> viewModel.updateSettings(viewModel.localSettings.value.copy(generatedVoice = enabled)) }, onLogOut = viewModel::logOut)
+    SettingsContent(state, onBack, onOpen, onLogOut = viewModel::logOut)
 }
 
 @Composable
-fun SettingsContent(state: SettingsUiState, onBack: () -> Unit, onOpen: (DuaDestination) -> Unit,
-    onGeneratedVoice: (Boolean) -> Unit, onLogOut: () -> Unit = {}) {
+fun SettingsContent(state: SettingsUiState, onBack: () -> Unit, onOpen: (DuaDestination) -> Unit, onLogOut: () -> Unit = {}) {
     var logout by rememberSaveable { mutableStateOf(false) }
     var about by rememberSaveable { mutableStateOf(false) }
     ProfileSettingsScaffold(state.displayName.ifBlank { if (state.email == null) "Profile & Settings" else "Google account" }, onBack,
@@ -125,7 +109,7 @@ fun SettingsContent(state: SettingsUiState, onBack: () -> Unit, onOpen: (DuaDest
             SettingsDivider()
             SettingsRow(Icons.Outlined.NotificationsNone, "Notifications", if (state.notifications) "Reply notifications on" else "Off") { onOpen(DuaDestination.Notifications) }
             SettingsDivider()
-            SettingsRow(Icons.Outlined.Mic, "Voice") { onOpen(DuaDestination.VoiceSettings) }
+            SettingsRow(Icons.Outlined.Mic, "Voice", state.voice) { onOpen(DuaDestination.VoiceSettings) }
             SettingsDivider()
             SettingsRow(Icons.Outlined.Shield, "Safety") { onOpen(DuaDestination.Safety) }
             SettingsDivider()
@@ -135,37 +119,13 @@ fun SettingsContent(state: SettingsUiState, onBack: () -> Unit, onOpen: (DuaDest
             SettingsDivider()
             SettingsRow(Icons.Outlined.History, "History and data") { onOpen(DuaDestination.HistoryData) }
         }
-        // Preserve every current voice/data/setup action in addition to the approved groups.
+        // Voice actions live in Settings → Voice; keep the other existing destinations here.
         SettingsSection("More settings") {
             SettingsRow(Icons.Outlined.CloudSync, "Sync", "Chats and notes follow your account") { onOpen(DuaDestination.CloudSync) }
             if (state.imagine != null) {
                 SettingsDivider()
                 SettingsRow(Icons.Outlined.Brush, "Imagine", state.imagine) { onOpen(DuaDestination.Imagine) }
             }
-        }
-        SettingsSection("Voice") {
-            SettingsRow(Icons.Outlined.Mic, "Voice input", "Dictate, review, then send") { onOpen(DuaDestination.Voice) }
-            SettingsDivider()
-            if (state.liveVoice) SettingsRow(Icons.Outlined.GraphicEq, "Live conversation", "Talk with Grok in real time · interrupt any time") { onOpen(DuaDestination.LiveVoice) }
-            else SettingsRow(Icons.Outlined.GraphicEq, "Voice mode", "Talk with Dua and hear the reply out loud") { onOpen(DuaDestination.HandsFree) }
-            SettingsDivider()
-            if (state.voice != null) SettingsRow(Icons.AutoMirrored.Outlined.VolumeUp, "Reply voice & language", state.voice) { onOpen(DuaDestination.VoiceSettings) }
-            else SettingsSwitchRow(Icons.AutoMirrored.Outlined.VolumeUp, "AI reply voice",
-                subtitle = when {
-                    !state.generatedVoiceConfigured && !state.generatedVoice -> "Needs backend setup · device voice stays available"
-                    state.email == null && !state.generatedVoice -> "Sign in to use a generated voice"
-                    else -> "Generates audio only for the reply you tap"
-                },
-                checked = state.generatedVoice, enabled = state.generatedVoiceToggleEnabled, onCheckedChange = onGeneratedVoice)
-        }
-        SettingsSection("Data") {
-            SettingsRow(Icons.Outlined.Storage, "Data controls", "Export, import or clear chats and files") { onOpen(DuaDestination.DataControls) }
-            SettingsDivider()
-            SettingsRow(Icons.Outlined.Shield, "Your data", "Chats and memory live with your account") { onOpen(DuaDestination.Privacy) }
-            SettingsDivider()
-            SettingsRow(Icons.Outlined.IosShare, "Sharing", "Share a conversation as text") { onOpen(DuaDestination.Sharing) }
-            SettingsDivider()
-            SettingsRow(Icons.Outlined.Security, "Permissions", "Microphone, camera and files") { onOpen(DuaDestination.Permissions) }
         }
         SettingsSection("Setup") {
             SettingsRow(Icons.Outlined.Tune, "Feature setup", "Providers, web search, connectors and diagnostics") { onOpen(DuaDestination.FeatureSetup) }
