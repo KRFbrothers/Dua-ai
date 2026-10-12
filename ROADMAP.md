@@ -1,10 +1,10 @@
 # Dua AI — Product Roadmap
 
-This roadmap takes Dua from a feature-rich prototype to a clean, professional, Grok-style AI assistant for its owner's personal use. Phases 1–5 are implemented in the repository (PRs #66–#75); live provider and physical-device checks remain open. The original pre-Phase-1 gap analysis (`docs/grok-style-plan.md`) described code that has since been replaced and was removed; it remains in git history.
+This roadmap adapts the 14-step ChatGPT-inspired assistant build sequence to Fareed's existing Dua AI app, with its own name and artwork. It records what is implemented and what remains, rather than starting auth, chat, files or voice again. Implementation and automated tests are separate from live-provider and physical-device verification. The original engineering phases 0–5 are preserved later in this file; their numbering describes the earlier provider rollout, not the 14-step feature roadmap below.
 
 ## Product direction
 
-Dua is becoming a **Grok-style assistant**: one clean, professional Android app backed by a server-side API on Vercel. The web client was removed; `web/` contains only the backend, and provider API keys never leave the server.
+Dua has a **ChatGPT-inspired mobile experience with original Dua branding**: one native Kotlin/Compose Android app backed by a server-side API on Vercel. The web client was removed; `web/` contains only the backend, and provider API keys never leave the server.
 
 **Personal, single-user app.** Dua is for the owner (Fareed) only. There are no clients, no other users, no Google Play release and no monetisation. The app is installed on his own device(s) as a debug or sideloaded APK (see [RELEASE-CHECKLIST.md](RELEASE-CHECKLIST.md#personal-install)). Owner-only access (`DUA_REQUIRE_LOGIN=1` plus `DUA_ALLOWED_EMAIL` set to his account) is the permanent access model, not a step before a launch: it keeps the server-side keys and the provider spend his alone.
 
@@ -24,11 +24,11 @@ Dua is becoming a **Grok-style assistant**: one clean, professional Android app 
 - **Multiple AI providers** — Gemini, ChatGPT, Claude, Grok and Kimi today; the final lineup is an [open decision](#open-decisions)
 - **Privacy and data control** — export, import and delete for the server-backed account and its phone cache; foreground cache refresh is device-controlled and exists to keep the owner’s devices current.
 
-The composer will offer one mode menu: **Auto** (default) · **Reasoning** · **Search** · **Imagine**, with **Build** added in Phase 5. A mode that is not configured explains why instead of disappearing.
+The existing composer has an **Auto/model selector**, **Code**, **Think** and **Search** controls. Imagine and Build are opened from the attachment menu; active modes appear as chips. Feature availability comes from the backend configuration; a placeholder or sample preview is not a working integration. See [Composer.kt](app/src/main/java/com/dua/ai/ui/chat/Composer.kt) and [ChatScreen.kt](app/src/main/java/com/dua/ai/ui/chat/ChatScreen.kt).
 
 **What personal use simplifies**
 
-- Owner sign-in can be mandatory for every file, Imagine and voice feature; there is no anonymous or guest path to design.
+- Online AI and stored-file/generated-media integrations stay owner-only. **Skip for now** allows temporary offline cache access; device dictation/TTS do not require an AI account. This is not unrestricted online guest access. See [ANDROID_UI_GUIDE.md](ANDROID_UI_GUIDE.md).
 - Cost controls protect one wallet: daily per-feature caps plus provider-side hard limits. No per-user quotas or plan tiers.
 - Storage retention (files, generated media, cloud snapshots) is the owner's choice.
 - Distribution is an APK on his own phone: no store listing, review, billing or app-store compliance work.
@@ -37,9 +37,49 @@ The composer will offer one mode menu: **Auto** (default) · **Reasoning** · **
 
 ## Feature status
 
+### Step-by-step feature roadmap (14 phases)
+
+Each row separates the current source implementation from remaining work. Source coverage does not prove that every provider, permission or device flow has passed a live check. Email sign-up, public guest AI, subscriptions, credits, public beta distribution and growth analytics are outside Dua's owner-only scope.
+
+| Phase | Dua AI today | Remaining work / verification |
+| --- | --- | --- |
+| **1 — Scope and MVP** | Owner-only, server-first Android assistant; chat, history, streaming, new chat and both themes exist. [README](README.md) | Rename/Pin remain Coming soon; cache removal is not direct server-conversation deletion. Preserve original Dua branding and existing features. |
+| **2 — Tech stack** | Kotlin, Compose, Material 3, Navigation Compose and MVVM; Preferences DataStore for appearance, app-private preferences for chat cache; Node 24 backend and owner cloud snapshots. [Android build](app/build.gradle.kts), [backend scripts](web/package.json), [privacy/storage](PRIVACY.md) | No Room migration, GraphQL API or chat WebSocket rewrite is required to continue this roadmap. |
+| **3 — Authentication** | Google owner login, sessions, profile, server-only keys and server request limits. Signed-out cache mode exists. [Onboarding](app/src/main/java/com/dua/ai/ui/onboarding/OnboardingScreen.kt), [security](SECURITY.md) | Email/password sign-up is intentionally out of scope. Verify token refresh, logout and rejection of a non-owner against the deployed configuration. |
+| **4 — Chat UI** | Welcome, Home with prompt suggestions, conversation, Sidebar/Aura, Profile & Settings; user bubbles, full-width Markdown/code replies, typing, stop, copy/retry/share. [UI guide](ANDROID_UI_GUIDE.md) | Editing an old user message and feedback storage remain pending. Continue real-phone keyboard/back/touch checks. |
+| **5 — AI backend** | Authenticated backend adapters build prompts/context and stream replies; summaries and provider budgets exist. [Providers](PROVIDERS.md), [service routes](web/src/server/service-handler.mjs) | Persistence uses the existing Cloud Sync flow described below, not automatic DB insertion by `/api/chat`. Live adapter/model checks remain required. |
+| **6 — Chat storage** | Server snapshot is authoritative; phone caches messages, drafts, model, timestamps, project/summary/Build metadata and file references. [ChatHistory.kt](app/src/main/java/com/dua/ai/history/ChatHistory.kt), [CloudSnapshot.kt](app/src/main/java/com/dua/ai/account/CloudSnapshot.kt) | Titles are currently derived from the first user message. Rename/Pin need persisted metadata plus compatible snapshot/export/import handling. Verify restore and conflict recovery on the owner's devices. |
+| **7 — Streaming** | SSE chat transport, gradual replies, typing/stop and partial-reply states are implemented. Realtime voice separately uses WebSocket. [DuaApiClient.kt](app/src/main/java/com/dua/ai/network/DuaApiClient.kt) | Verify slow connections, disconnect/stop/retry and background/restart behavior with a real provider. Keep the working transport. |
+| **8 — Context and memory** | Conversation context/rolling summaries, editable Personal notes, scoped project instructions/memory and cached history search. [MEMORY.md](MEMORY.md), [PROJECTS.md](PROJECTS.md) | Automatic memory extraction, embeddings and semantic retrieval remain optional later work. Project-aware realtime voice is pending; current live voice remains Personal-only. |
+| **9 — Files and documents** | TXT/MD/JSON/CSV/code, supported images/PDFs, stored spreadsheets and audio/transcripts; provider capabilities and size limits apply. [PROVIDERS.md](PROVIDERS.md) | DOCX, a dedicated OCR pipeline, indexed document retrieval/embeddings and large-document retrieval workflows remain pending. Test real pickers, uploads and provider-specific understanding. |
+| **10 — Voice** | Dictation to reviewed draft, device/generated TTS, hands-free mode and optional interruptible xAI live voice. Controls are grouped under Settings → Voice. [VoiceSettingsScreen.kt](app/src/main/java/com/dua/ai/ui/voice/VoiceSettingsScreen.kt), [provider setup](PROVIDERS.md) | Microphone permissions, echo/audio focus, interruptions and provider availability require device/live checks. No pretend speech or automatic sending of dictated text. |
+| **11 — UI polish** | Compact ChatGPT-inspired layout, original logo, light/dark themes, six independent persisted accents, rounded components, motion handling and font-scaling checks. [UI implementation](APPROVED_UI_IMPLEMENTATION.md) | Polish remains ongoing. General UI language, an in-app text-size slider and missing destinations are not completed features. |
+| **12 — History tools** | Current-project cached full-message/draft/code search; JSON export/import; reviewed sharing and confirmed cache removal. Settings → History and data groups the existing data actions. [HISTORY-SEARCH.md](HISTORY-SEARCH.md), [FEATURES.md](FEATURES.md) | Rename/Pin, search within an open chat/jump to a match, server-wide search, Markdown-file export and direct server-conversation deletion remain pending. |
+| **13 — Privacy and access** | Owner lock, backend keys, private file storage, reviewed destructive operations and signing safeguards are implemented. [SECURITY.md](SECURITY.md), [PRIVACY.md](PRIVACY.md) | Chat-cache preferences are not encrypted by the app. Assess an encrypted-cache migration without risking unsynced drafts; verify deployed auth/storage controls. Public-app billing/abuse-growth features are not part of this plan. |
+| **14 — Testing and personal release** | Android/backend CI, native UI renders, Crashlytics release configuration and permanent signed APK workflow exist. [Test commands](README.md#android-and-routine-checks), [SIGNING.md](SIGNING.md) | Historical screenshot classes are opt-in. Login, cross-device restore, offline edits, files, voice and slow-network behavior still need the feature-specific phone/live checks in [RELEASE-CHECKLIST.md](RELEASE-CHECKLIST.md). No public beta or analytics rollout is required. |
+
+### Existing response and persistence flow
+
+1. Android sends the owner's request/context to `/api/chat`; the backend validates access, resolves project context and calls the configured provider.
+2. The response streams to Android. `ChatViewModel.saveHistory()` updates the disposable cache, including completed/stopped replies and drafts.
+3. Reviewed upload or enabled foreground sync sends a revision-checked owner snapshot through `/api/cloud`. That snapshot is the authoritative server copy; signed-out cache edits do not become server data without authenticated sync.
+
+Sources: [ChatViewModel.kt](app/src/main/java/com/dua/ai/viewmodel/ChatViewModel.kt), [AutomaticCloudSync.kt](app/src/main/java/com/dua/ai/setup/AutomaticCloudSync.kt), [account/cloud handlers](web/src/core/account.mjs). The generic “final response is saved directly by the chat backend” step must not be treated as already implemented. This plan keeps the existing server-first snapshot design.
+
+### Next implementation order
+
+1. **Finish Rename and Pin first.** Add optional chat metadata with backward-compatible defaults; sync/export/import/restart must preserve it. Renaming must not rewrite the first user message. Today `SavedChat.title` derives from that message and [HistoryDrawer.kt](app/src/main/java/com/dua/ai/ui/history/HistoryDrawer.kt) explicitly shows Coming soon for both actions.
+2. **Add search within the open chat and jump to a match.** Start with literal local search; semantic/server-wide search is a separate feature, not an automatic requirement.
+3. **Add Markdown-file export and define direct server-chat deletion.** Keep these separate from existing JSON backups and cache-only removal; retain reviewed deletion and stored-file protections.
+4. **Take advanced files and encrypted cache as separate later changes.** Prioritize DOCX/OCR/retrieval only for the owner's actual documents. Encryption needs restore/recovery checks, not a silent storage replacement.
+
+Run the relevant device checks alongside each change. Existing Projects, tasks/reminders/planner, Imagine, Build/code/approved PRs, memory, voice and sync are retained; they are not replaced by the generic MVP list. The initial auth → chat → backend → streaming → storage build order is already covered in code.
+
+### Original engineering feature status
+
 Effort scale (one developer working with coding agents): **S** ≤ 2 days, **M** ≈ 1 week, **L** ≈ 2–3 weeks, **XL** > 1 month.
 
-| Feature | Today | Target | Effort | Phase |
+| Feature | Today | Target | Effort | Original engineering phase |
 | --- | --- | --- | --- | --- |
 | UI and navigation | Design tokens (DuaTheme, Inter type scale), Navigation Compose, full-width markdown replies with code blocks, new composer with mode chips, history drawer, regrouped settings, adaptive icon | Design tokens, Navigation Compose, full-width assistant replies, history drawer, regrouped settings, app icon and splash | L | 1 |
 | Chat | Works with 6 provider choices; streaming replies (SSE, opt-in) with env-configurable output caps (8k–32k defaults) and a 280 s deadline; markdown | Opt-in streaming (SSE), markdown and code blocks, higher output caps | M | 1 |
@@ -62,14 +102,14 @@ The repository contains the implementation described below, but this checkout ca
 | Feature | Implemented in repository | Configured in production | Verified |
 | --- | --- | --- | --- |
 | Android app and backend API | Yes (Android-only client; web client removed) | Backend deployed on Vercel; settings unknown here | Source/tests; physical-device behavior pending |
-| Server-backed history/drafts with cached search | Yes | N/A | Automated tests; Android backup/restart checks pending |
+| Server-backed history/drafts with cached search | Yes | Owner account and cloud snapshot setup required; production configuration unknown here | Automated tests; Android backup/restart checks pending |
 | Attachments and photo resizing | Yes | Provider/model capabilities are environment-dependent; production unknown | Automated/mock tests; live providers and physical Android pending |
 | Camera and photo selection | Yes | Device permission is user-controlled | Automated coverage; physical-device checks pending |
 | Voice input, read-aloud and hands-free | Yes, with voice/language pickers and Grok/Gemini/ElevenLabs reply voices | Speech service is device-dependent; AI voices need `GROK_API_KEY`/`GEMINI_API_KEY` and the owner lock | Automated/mock tests; speech/audio behavior on devices pending |
 | Accounts and profile | Yes; native Google sign-in only (no email/password); owner-locked by `DUA_ALLOWED_EMAIL` | Supabase Google provider and OAuth settings are production-controlled; unknown here | Mocked tests; owner verifies live Google sign-in on his phone |
 | Cloud snapshots and foreground sync | Yes, reviewed manual and opt-in foreground flows | Supabase migration/environment and per-device consent are required; production unknown | Automated and migration tests; live cross-device checks pending |
 | Gemini and optional AI providers | Adapters and provider selection are implemented | API keys/model IDs are production-controlled; unknown here | Mocked responses; live provider/model checks pending |
-| Web search and link reading | Yes | Brave key needed for Search; production status unknown | Mocked tests; live retrieval/provider checks pending |
+| Web search and link reading | Yes | Native search depends on the selected provider/model; Brave serves configured fallback/Claude/Kimi search. Production status unknown | Mocked tests; live retrieval/provider checks pending |
 | Server-backed memory and reviewed proposals | Yes | Authoritative in the owner’s server snapshot; phone cache is disposable | Automated tests; live prompt behavior pending |
 | GitHub connector | Read-only: repository list, file tree, file contents and code search | Token, owner restriction and feature flag are required; production unknown | Mocked tests; live authorization pending |
 | Build mode (repo chat + approved PRs) | Yes: Gemini function calling over the read-only connector, diffs, files-read chips; proposals and owner-approved pull requests when `DUA_BUILD_PR=1` and `GITHUB_BUILD_WRITE_TOKEN` are set | Needs the GitHub connector, `DUA_ALLOWED_EMAIL`, sign-in and Gemini (`DUA_BUILD=0` turns it off). Pull requests also need the separate write token; production unknown | Mocked GitHub/Gemini tests and Roborazzi screenshots; live Gemini/GitHub, live write-API and physical-device checks pending |
@@ -82,7 +122,7 @@ The repository contains the implementation described below, but this checkout ca
 
 ---
 
-## Roadmap Phases
+## Original engineering roadmap phases (0–5)
 
 ### Phase 0: Configuration checks
 **Priority: Immediate | Effort: about 1 hour, owner/deployer only, no code**
