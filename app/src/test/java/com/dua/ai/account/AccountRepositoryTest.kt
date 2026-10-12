@@ -50,13 +50,15 @@ class AccountRepositoryTest {
         assertNull(store.value)
     }
     @Test fun passwordUpdateSendsOwnerBindingWithoutReplacingSessionOrSavingThePassword() = runBlocking {
-        val store = MemoryStore(session(userA)); val repository = AccountRepository(api, store)
-        server.enqueue(json(JSONObject().put("ownerId", userA.id).put("passwordUpdated", true)))
+        val original = session(userA)
+        val store = MemoryStore(original); val repository = AccountRepository(api, store)
+        // Exercise a response crossing a second boundary without recomputing the expected expiry.
+        server.enqueue(json(JSONObject().put("ownerId", userA.id).put("passwordUpdated", true)).setHeadersDelay(1100, TimeUnit.MILLISECONDS))
         repository.setEmailPassword("new-password", userA.id)
         val request = server.takeRequest(2, TimeUnit.SECONDS)!!
         assertEquals("PUT", request.method); assertEquals("/api/account/password", request.path)
         assertEquals(userA.id, JSONObject(request.body.readUtf8()).getString("expectedAccountId"))
-        assertEquals(session(userA), store.value)
+        assertEquals(original, store.value)
         server.enqueue(json(JSONObject().put("ownerId", userB.id).put("passwordUpdated", true)))
         assertTrue(runCatching { repository.setEmailPassword("new-password", userA.id) }.isFailure)
     }
