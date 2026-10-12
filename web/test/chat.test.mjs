@@ -11,7 +11,12 @@ const body = (extra = {}) => ({ model: 'Dua', messages: [{ role: 'user', text: '
 test('configuration advertises support for persisted chat renaming', async () => {
   const response = await handleChat(new Request('https://dua.test/api/config'), { env });
   assert.equal(response.status, 200);
-  assert.deepEqual((await response.json()).history, { rename: true });
+  assert.deepEqual((await response.json()).history, { rename: true, delete: false });
+});
+test('server chat deletion is advertised only with owner and cloud setup', async () => {
+  const configured = { ...env, DUA_ALLOWED_EMAIL: 'owner@example.com', SUPABASE_URL: 'https://project.supabase.co', SUPABASE_ANON_KEY: 'public-anon-key' };
+  const response = await handleChat(new Request('https://dua.test/api/config'), { env: configured });
+  assert.equal((await response.json()).history.delete, true);
 });
 
 test('legacy JSON path is unchanged for older apps (no stream, no mode)', async () => {

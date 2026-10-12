@@ -33,7 +33,7 @@ object AutomationSyncPolicy {
     fun validate(snapshot: CloudSnapshot): CloudSnapshot { CloudSnapshotCodec.encode(snapshot); return snapshot }
     fun baseline(snapshot: CloudSnapshot): AutomationBaseline = AutomationBaseline(snapshot.chats.associate { it.id to it.messages.size }, snapshot.chats.associate { it.id to signature(it) }, snapshot.memory.map(::digest).toSet(), snapshot.projects.associate { it.id to projectSignature(it) })
     fun projectSignature(project: com.dua.ai.projects.ChatProject): String = digest(com.dua.ai.projects.ProjectCodec.encodedProject(project).toString())
-    fun same(left: CloudSnapshot, right: CloudSnapshot): Boolean = baseline(left) == baseline(right)
+    fun same(left: CloudSnapshot, right: CloudSnapshot): Boolean = baseline(left) == baseline(right) && left.deletedChatIds.toSet() == right.deletedChatIds.toSet()
 
     fun validateRecord(value: AutomationSyncRecord): AutomationSyncRecord {
         require(value.failureCount in 0..5 && (value.accountId == null || accountPattern.matches(value.accountId))) { "Invalid automatic sync settings." }
@@ -52,7 +52,7 @@ object AutomationSyncPolicy {
         if (previous == null) return false
         val current = baseline(snapshot)
         // Memory deletions are intentional and propagate to the server through merge; only chat loss needs review.
-        return previous.chatMessageCounts.any { (id, count) -> current.chatMessageCounts[id]?.let { it < count } ?: true }
+        return previous.chatMessageCounts.any { (id, count) -> id !in snapshot.deletedChatIds && (current.chatMessageCounts[id]?.let { it < count } ?: true) }
     }
 
     /**
@@ -66,11 +66,13 @@ object AutomationSyncPolicy {
      */
     fun merge(local: CloudSnapshot, remote: CloudSnapshot, previous: AutomationBaseline?, firstRead: AutomationBaseline? = null): AutomationMergePlan {
         validate(local); validate(remote)
+        val deleted = (local.deletedChatIds + remote.deletedChatIds).distinct().sorted()
         val remoteById = remote.chats.associateBy { it.id }
         val usedIds = (local.chats.map { it.id } + remote.chats.map { it.id }).toMutableSet()
         val chats = mutableListOf<SavedChat>()
         val copies = mutableListOf<SavedChat>()
         local.chats.forEach { here ->
+            if (here.id in deleted) return@forEach
             val server = remoteById[here.id]
             if (server == null) { chats += here; return@forEach }
             chats += server
@@ -84,9 +86,9 @@ object AutomationSyncPolicy {
             }
         }
         val localIds = local.chats.map { it.id }.toSet()
-        remote.chats.sortedBy { it.id }.filter { it.id !in localIds }.forEach { chats += it }
+        remote.chats.sortedBy { it.id }.filter { it.id !in localIds && it.id !in deleted }.forEach { chats += it }
         chats += copies
-        val memory = if (previous == null && remote.memory.isEmpty() && remote.chats.isEmpty()) local.memory
+        val memory = if (previous == null && remote.memory.isEmpty() && remote.chats.isEmpty() && remote.deletedChatIds.isEmpty()) local.memory
         else if (previous == null) remote.memory
         else {
             val localDigests = local.memory.map(::digest).toSet()
@@ -103,7 +105,7 @@ object AutomationSyncPolicy {
             else if (base == serverHash) here
             else throw IllegalArgumentException("Project changed on both copies. Review cloud data before syncing.")
         } + local.projects.filter { here -> remote.projects.none { it.id == here.id } }
-        return AutomationMergePlan(validate(CloudSnapshot(chats, memory.distinct(), projects)), false)
+        return AutomationMergePlan(validate(CloudSnapshot(chats, memory.distinct(), projects, deleted)), false)
     }
 
     /** Stop after five failures; retry should require an explicit user action thereafter. */

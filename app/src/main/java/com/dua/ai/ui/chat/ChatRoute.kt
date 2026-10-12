@@ -42,6 +42,7 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
     val xSearch by viewModel.xSearch.collectAsState()
     val summary by viewModel.summary.collectAsState()
     val integrations by viewModel.integrations.collectAsState()
+    val chatDeletion by viewModel.chatDeletion.collectAsState()
     val attachments by viewModel.attachments.collectAsState()
     val readingFiles by viewModel.readingFiles.collectAsState()
     val fileError by viewModel.attachmentError.collectAsState()
@@ -113,6 +114,8 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
         storedFilesMaxBytes = integrations.filesMaxBytes,
         attachmentStatus = if (readingFiles) "Reading files…" else fileError.ifBlank { attachmentNotice },
         savedChats = savedChats,
+        serverChatDeletionEnabled = integrations.chatDeletionEnabled && account.user != null,
+        chatDeletion = chatDeletion,
         projects = preferences.projects, projectId = projectId, projectNotice = projectNotice, projectTasksEnabled = integrations.projectTasksEnabled, taskDueDatesEnabled = integrations.taskDueDatesEnabled, projectMemoryEnabled = integrations.projectMemoryEnabled,
         speakingId = speech.activeId ?: generatedSpeech.activeId,
         speechAvailable = speech.available, generatedVoice = preferences.generatedVoice,
@@ -172,6 +175,8 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
             onOpenChat = { id -> pulse(); voice.stopAll(); viewModel.openChat(id); viewModel.clearAttachments() },
             onDeleteChat = viewModel::deleteChat,
             onRenameChat = viewModel::renameChat,
+            onDeleteServerChat = viewModel::deleteServerChat,
+            onDismissChatDeletion = viewModel::dismissChatDeletion,
             onPickCamera = {
                 pick {
                     val file = captures.create()

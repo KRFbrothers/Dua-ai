@@ -5,6 +5,11 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class IntegrationCapabilitiesTest {
+    @Test fun chatDeletionRequiresExplicitBackendSupport() {
+        fun read(raw: String) = IntegrationCapabilities.configuration(JSONObject(raw), IntegrationState(chatDeletionEnabled = true)).chatDeletionEnabled
+        assertFalse(read("{}")); assertFalse(read("""{"history":{"delete":"true"}}"""))
+        assertTrue(read("""{"history":{"delete":true}}"""))
+    }
     @Test fun renameRequiresExplicitBackendSupportAndRefreshClearsOldSupport() {
         fun read(raw: String) = IntegrationCapabilities.configuration(JSONObject(raw), IntegrationState(chatRenameEnabled = true)).chatRenameEnabled
         assertFalse(read("{}"))

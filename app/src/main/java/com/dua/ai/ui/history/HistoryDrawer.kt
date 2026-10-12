@@ -88,6 +88,8 @@ fun HistoryDrawer(
     activeChatId: String? = null,
     drawerOpen: Boolean = true,
     onRenameChat: (String, String) -> String? = { _, _ -> "Rename is unavailable." },
+    serverDeletionEnabled: Boolean = false,
+    onDeleteServerChat: (String) -> Unit = {},
 ) {
     var aura by rememberSaveable { mutableStateOf(false) }
     androidx.activity.compose.BackHandler(enabled = aura && drawerOpen) { aura = false }
@@ -129,7 +131,8 @@ fun HistoryDrawer(
                             modifier = Modifier.padding(start = Spacing.md, top = Spacing.lg, bottom = Spacing.xs).semantics { heading() })
                     }
                     items(items, key = { it.id }) { chat -> HistoryRow(chat, snippets[chat.id], onOpen = { onOpenChat(chat.id) }, onDelete = { onDeleteChat(chat.id) },
-                        onRename = { renamingId = chat.id; renameTitle = chat.title; renameError = null }, active = chat.id == activeChatId) }
+                        onRename = { renamingId = chat.id; renameTitle = chat.title; renameError = null },
+                        serverDeletionEnabled = serverDeletionEnabled, onDeleteServer = { onDeleteServerChat(chat.id) }, active = chat.id == activeChatId) }
                 }
             }
     }
@@ -156,7 +159,8 @@ internal fun SearchField(value: String, onValueChange: (String) -> Unit, modifie
 }
 
 @Composable
-private fun HistoryRow(chat: SavedChat, match: HistoryMatch?, onOpen: () -> Unit, onDelete: () -> Unit, onRename: () -> Unit, active: Boolean = false) {
+private fun HistoryRow(chat: SavedChat, match: HistoryMatch?, onOpen: () -> Unit, onDelete: () -> Unit, onRename: () -> Unit,
+    serverDeletionEnabled: Boolean, onDeleteServer: () -> Unit, active: Boolean = false) {
     var menu by remember { mutableStateOf(false) }
     var unavailable by remember { mutableStateOf<String?>(null) }
     fun beginRename() { menu = false; onRename() }
@@ -166,7 +170,8 @@ private fun HistoryRow(chat: SavedChat, match: HistoryMatch?, onOpen: () -> Unit
             .combinedClickableCompat(onClick = onOpen, onLongClick = { menu = true }, onLongClickLabel = "Chat options")
             .semantics { customActions = listOf(
                 CustomAccessibilityAction("Rename chat") { beginRename(); true },
-                CustomAccessibilityAction("Remove cached chat") { onDelete(); true }) }
+                CustomAccessibilityAction("Remove cached chat") { onDelete(); true }) +
+                if (serverDeletionEnabled) listOf(CustomAccessibilityAction("Delete chat from server") { onDeleteServer(); true }) else emptyList() }
             .heightIn(min = Sizes.touchTarget).padding(horizontal = Spacing.md, vertical = Spacing.sm),
             verticalAlignment = Alignment.CenterVertically) {
             Column {
@@ -184,6 +189,8 @@ private fun HistoryRow(chat: SavedChat, match: HistoryMatch?, onOpen: () -> Unit
         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
             DropdownMenuItem(text = { Text("Rename") }, onClick = { beginRename() })
             DropdownMenuItem(text = { Text("Pin") }, onClick = { menu = false; unavailable = "Pin" })
+            if (serverDeletionEnabled) DropdownMenuItem(text = { Text("Delete chat") }, leadingIcon = { Icon(Icons.Outlined.DeleteOutline, null) },
+                onClick = { menu = false; onDeleteServer() })
             DropdownMenuItem(text = { Text("Remove cached chat") }, leadingIcon = { Icon(Icons.Outlined.DeleteOutline, contentDescription = null) },
                 onClick = { menu = false; onDelete() })
         }

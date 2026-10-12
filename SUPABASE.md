@@ -78,7 +78,15 @@ Add these environment variables to Vercel Production and redeploy:
 
 `SUPABASE_ANON_KEY` accepts only the project's public publishable/anon credential; service-role/secret credentials are rejected in that field. Optional deletion and durable request quotas use a separate server-only `SUPABASE_SERVICE_ROLE_KEY`. Keep existing model configuration. Supabase credentials are read by the backend and are not embedded in the Android app. Local development uses an ignored `web/.env`; run `npm start` from `web` with Node 24 or newer.
 
-Android defaults to the same HTTPS Vercel backend through `DUA_API_BASE_URL`. Native source changes reach installed apps through a later release; routine compilation/JVM tests do not package an APK. The backend serves `/api/account/*` and `/api/cloud`. No separate Supabase key belongs in Android.
+Android defaults to the same HTTPS Vercel backend through `DUA_API_BASE_URL`. Native source changes reach installed apps through a later release; routine compilation/JVM tests do not package an APK. The backend serves `/api/account/*`, `/api/cloud` and `/api/cloud/chat`. No separate Supabase key belongs in Android.
+
+### Delete one conversation
+
+The updated backend reports `/api/config.history.delete` when owner/cloud setup is configured. Android shows **Delete chat** alongside the separate **Remove cached chat** action. After confirmation, `DELETE /api/cloud/chat` sends `chatId`, `expectedAccountId`, `expectedRevision` and `confirmation: "DELETE CHAT"`. The backend verifies the owner, reads their snapshot through RLS and uses the existing `dua_write_cloud_snapshot` RPC to write only that chat's removal with a revision check. Concurrent changes fail with a conflict; retrying an already recorded deletion does not write another revision.
+
+The snapshot's optional `deletedChatIds` field retains up to 10,000 IDs within the existing 4 MiB limit. All current backend snapshot uploads/clears preserve these server-created IDs, and uploads containing a deleted chat ID are rejected. Client-supplied IDs cannot create deletion records. Updated Android sync/download flows apply confirmed IDs to the cache and active buffers; older APKs cannot re-upload those IDs through the updated backend, but may still show an old cached copy. Stored files are retained. Existing exports can restore independently imported copies with fresh IDs.
+
+No additional SQL migration is required. Deploy this backend before installing the updated APK; refresh setup if the action is missing. An older backend rollback can strip deletion metadata and remove the protection. Database backup retention and live owner/RLS settings still require production verification.
 
 ### Native Google sign-in
 

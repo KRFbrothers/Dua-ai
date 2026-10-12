@@ -164,4 +164,22 @@ class AccountRepository(private val api: AccountApi, private val store: SessionP
         val body = JSONObject().put("expectedRevision", review.revision).put("expectedAccountId", owner); if (!clear) body.put("snapshot", CloudSnapshotCodec.encode(review.snapshot))
         return withSnapshot(expected) { api.request("/api/cloud", if (clear) "DELETE" else "PUT", body, it) }.getLong("revision")
     }
+    suspend fun deleteChat(review: CloudReview, chatId: String): CloudChatDeletion {
+        require(chatId.isNotBlank() && chatId.length <= 200)
+        val expected = snapshot()
+        val owner = review.ownerId ?: expected.value?.user?.id ?: error("Sign in from Profile to continue.")
+        check(expected.value?.user?.id == owner) { "Account changed. Review chat deletion again." }
+        val body = JSONObject().put("expectedRevision", review.revision).put("expectedAccountId", owner)
+            .put("chatId", chatId).put("confirmation", "DELETE CHAT")
+        val result = withSnapshot(expected) { api.request("/api/cloud/chat", "DELETE", body, it) }
+        val rawRevision = result.get("revision")
+        check(rawRevision is Number && rawRevision.toDouble().isFinite() && rawRevision.toDouble() == rawRevision.toLong().toDouble()) { "Invalid chat deletion revision." }
+        val revision = result.getLong("revision")
+        val deleted = CloudDeletionIds.decode(result.getJSONArray("deletedChatIds"))
+        check(result.getString("ownerId") == owner && result.getString("chatId") == chatId && result.get("deleted") == true &&
+            revision in review.revision..2147483647L && chatId in deleted) { "Chat deletion could not be confirmed. Refresh and retry." }
+        return CloudChatDeletion(owner, chatId, revision, deleted)
+    }
 }
+
+data class CloudChatDeletion(val ownerId: String, val chatId: String, val revision: Long, val deletedChatIds: List<String>)

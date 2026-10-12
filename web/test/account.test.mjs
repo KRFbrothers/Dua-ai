@@ -90,7 +90,7 @@ test('the owner keeps refresh, cloud read/write; session, features and logout st
   assert.equal(refresh.status, 200);
 
   const put = await call('/api/cloud', { method: 'PUT', body: { expectedRevision: 0, snapshot: { format: 'dua-cloud-snapshot', version: 1, chats: [], memory: [] } } },
-    mockFetch(userJson('FAREED@example.com'), Response.json({ revision: 1 })));
+    mockFetch(userJson('FAREED@example.com'), Response.json([]), Response.json({ revision: 1 })));
   assert.equal(put.status, 200);
   assert.equal((await put.json()).revision, 1);
 

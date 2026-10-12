@@ -205,6 +205,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         // /api/setup has no per-feature config; keep what /api/config reported.
         _integrations.value = next.copy(busy = true, notice = "Setup status refreshed.",
             webSearchConfigured = current.webSearchConfigured, pageReadingAvailable = current.pageReadingAvailable, projectsEnabled = current.projectsEnabled, projectTasksEnabled = current.projectTasksEnabled, taskDueDatesEnabled = current.taskDueDatesEnabled, projectMemoryEnabled = current.projectMemoryEnabled,
+            chatRenameEnabled = current.chatRenameEnabled, chatDeletionEnabled = current.chatDeletionEnabled,
             filesEnabled = current.filesEnabled, filesMaxBytes = current.filesMaxBytes, nativeSearch = current.nativeSearch,
             xSearchAvailable = current.xSearchAvailable, longContext = current.longContext, imagine = current.imagine, codeExecution = current.codeExecution, build = current.build,
             voice = current.voice, generatedVoiceConfigured = current.voice?.ttsEnabled ?: next.generatedVoiceConfigured)
@@ -267,7 +268,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     fun reviewCloud(kind: String) = accountAction {
         val remote = account.cloud()
         draftSaver.runNow()
-        val snapshot = if (kind == "upload") com.dua.ai.account.CloudSnapshot(_savedChats.value.toList(), localSettings.value.memory.toList(), localSettings.value.projects.toList()) else remote.snapshot
+        val snapshot = if (kind == "upload") com.dua.ai.account.CloudSnapshot(_savedChats.value.toList(), localSettings.value.memory.toList(), localSettings.value.projects.toList(), currentDeletionIds()) else remote.snapshot
         com.dua.ai.account.CloudSnapshotCodec.encode(snapshot)
         _cloudPreview.value = CloudPreview(kind, account.state.value.user?.id ?: error("Sign in again."), remote.copy(snapshot = snapshot))
     }
@@ -279,7 +280,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         check(account.state.value.user?.id == preview.userId) { "Account changed. Review again." }
         when (preview.kind) {
             "upload" -> account.notice("Uploaded cloud revision ${account.upload(preview.review)}. Local data stays unchanged.")
-            "delete" -> { account.upload(preview.review, clear = true); account.notice("Cloud snapshot cleared. Local data stays unchanged.") }
+            "delete" -> { account.upload(preview.review, clear = true); account.notice("Cloud chat and note contents cleared. Deletion IDs are kept to block stale uploads; the phone cache stays unchanged.") }
             "download" -> downloadCloudSnapshot(preview.review.snapshot)
         }
         _cloudPreview.value = null
@@ -291,7 +292,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         check(!_isTyping.value && !liveProjectBusy() && _buildPr.value.values.none { it.creating }) { "Wait for the reply, live voice or pull request to finish before downloading." }
         flushHistory()
         val oldSettings = localSettings.value
-        val local = com.dua.ai.account.CloudSnapshot(_savedChats.value.toList(), oldSettings.memory.toList(), oldSettings.projects.toList())
+        val local = com.dua.ai.account.CloudSnapshot(_savedChats.value.toList(), oldSettings.memory.toList(), oldSettings.projects.toList(), currentDeletionIds())
         val selectedId = activeId
         val (result, encoded) = withContext(Dispatchers.Default) {
             val merged = com.dua.ai.account.CloudSnapshotCodec.mergeDownload(local, remote)
@@ -306,8 +307,11 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         localPreferences.update(oldSettings.copy(memory = result.snapshot.memory, projects = result.snapshot.projects))
         try {
             val committed = historyWriter.writeDirectly {
-                preferences.edit().putString("history", encoded).commit().also { ok ->
-                    if (!ok) preferences.edit().putString("history", previous).apply()
+                val previousDeleted = preferences.getString("deleted_chat_ids", null)
+                val previousOwner = preferences.getString("deleted_chat_owner", null)
+                preferences.edit().putString("history", encoded).putString("deleted_chat_ids", org.json.JSONArray(result.snapshot.deletedChatIds).toString())
+                    .putString("deleted_chat_owner", account.state.value.user?.id).commit().also { ok ->
+                    if (!ok) preferences.edit().putString("history", previous).putString("deleted_chat_ids", previousDeleted).putString("deleted_chat_owner", previousOwner).apply()
                 }
             }
             check(committed) { "Cloud chats could not be saved. Retry." }
@@ -317,18 +321,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             }
             throw failure
         }
-        _savedChats.value = chats
-        // Rebind the open chat too: saveHistory uses these buffers, not just the cached chat list.
-        chats.find { it.id == activeId }?.let { chat ->
-            _messages.value = chat.messages
-            _selectedModel.value = chat.model
-            _draft.value = chat.draft
-            _summary.value = chat.summary
-            _buildRepo.value = chat.buildRepository
-            _projectId.value = chat.projectId
-            _webMode.value = null
-            _xSearch.value = false
-        }
+        bindCloudHistory(chats, result.snapshot.deletedChatIds)
+        _webMode.value = null
+        _xSearch.value = false
         account.notice("${result.added} server chats added; ${result.conflicts} phone versions kept as unsynced copies. Server memories and project settings restored.")
     }
     private val api = DuaApiClient()
@@ -650,6 +645,15 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         set(value) { _activeChatId.value = value }
     private val _savedChats = MutableStateFlow<List<SavedChat>>(emptyList())
     val savedChats: StateFlow<List<SavedChat>> = _savedChats.asStateFlow()
+    private val _deletedChatIds = MutableStateFlow<List<String>>(emptyList())
+    private var deletionOwnerId: String? = null
+    private fun currentDeletionIds(): List<String> {
+        val signedIn = account.state.value.user?.id
+        return if (signedIn != null && deletionOwnerId != null && signedIn != deletionOwnerId) emptyList() else _deletedChatIds.value
+    }
+    data class ChatDeletionState(val id: String? = null, val busy: Boolean = false, val error: String? = null, val completed: Boolean = false)
+    private val _chatDeletion = MutableStateFlow(ChatDeletionState())
+    val chatDeletion = _chatDeletion.asStateFlow()
     private val _attachments = MutableStateFlow<List<ChatAttachment>>(emptyList())
     val attachments: StateFlow<List<ChatAttachment>> = _attachments.asStateFlow()
     private val _attachmentError = MutableStateFlow("")
@@ -1059,10 +1063,12 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 val committed = withContext(Dispatchers.IO) { historyWriter.writeDirectly {
                     val previous = preferences.getString("history", null)
                     val backup = preferences.getString("unreadable_history_backup", null)
+                    val deleted = preferences.getString("deleted_chat_ids", null)
+                    val deletionOwner = preferences.getString("deleted_chat_owner", null)
                     val success = preferences.edit().putString("history", ChatHistoryCodec.encode(emptyList(), nextId))
-                        .remove("unreadable_history_backup").commit()
+                        .remove("unreadable_history_backup").remove("deleted_chat_ids").remove("deleted_chat_owner").commit()
                     if (!success) preferences.edit().putString("history", previous)
-                        .putString("unreadable_history_backup", backup).apply()
+                        .putString("unreadable_history_backup", backup).putString("deleted_chat_ids", deleted).putString("deleted_chat_owner", deletionOwner).apply()
                     if (success) runCatching { File(getApplication<Application>().cacheDir, "camera-captures").listFiles()?.forEach { it.delete() } }
                     success
                 } }
@@ -1075,6 +1081,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     _messages.value = emptyList()
                     _draft.value = ""
                     _savedChats.value = emptyList()
+                    _deletedChatIds.value = emptyList()
+                    deletionOwnerId = null
                     _summary.value = null
                     _buildRepo.value = null
                     _webMode.value = null
@@ -1210,7 +1218,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 localPreferences.requireReadable()
                 // Include keystrokes still waiting for the draft debounce in the merge/baseline.
                 flushHistory()
-                return CloudSnapshot(_savedChats.value.toList(), localSettings.value.memory.toList(), localSettings.value.projects.toList())
+                return CloudSnapshot(_savedChats.value.toList(), localSettings.value.memory.toList(), localSettings.value.projects.toList(), currentDeletionIds())
             }
             // Read, merge and commit run without suspension on Main. Rebind the open chat only
             // after persistence; otherwise its next draft save would write the stale cache back.
@@ -1221,6 +1229,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 com.dua.ai.account.CloudSnapshotCodec.encode(snapshot)
                 val settings = localSettings.value
                 val previous = preferences.getString("history", null)
+                val previousDeleted = preferences.getString("deleted_chat_ids", null)
+                val previousDeletionOwner = preferences.getString("deleted_chat_owner", null)
                 // The server snapshot is authoritative, including long-context summaries.
                 val chats = snapshot.chats
                 val encoded = ChatHistoryCodec.encode(chats, activeId)
@@ -1228,18 +1238,13 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 try {
                     // Kept synchronous: the sync controller expects the commit to finish before it records the revision.
                     val saved = historyWriter.writeDirectly {
-                        preferences.edit().putString("history", encoded).commit().also { ok -> if (!ok) preferences.edit().putString("history", previous).apply() }
+                        preferences.edit().putString("history", encoded).putString("deleted_chat_ids", org.json.JSONArray(snapshot.deletedChatIds).toString())
+                            .putString("deleted_chat_owner", account.state.value.user?.id).commit().also { ok ->
+                            if (!ok) preferences.edit().putString("history", previous).putString("deleted_chat_ids", previousDeleted).putString("deleted_chat_owner", previousDeletionOwner).apply()
+                        }
                     }
                     if (!saved) error("Synced chats could not be saved. Local data was kept.")
-                    _savedChats.value = chats
-                    chats.find { it.id == activeId }?.let { chat ->
-                        _messages.value = chat.messages
-                        _selectedModel.value = chat.model
-                        _draft.value = chat.draft
-                        _summary.value = chat.summary
-                        _buildRepo.value = chat.buildRepository
-                        _projectId.value = chat.projectId
-                    }
+                    bindCloudHistory(chats, snapshot.deletedChatIds)
                 } catch (failure: Exception) {
                     try { localPreferences.update(settings) }
                     catch (_: Exception) { throw IllegalStateException("Sync interrupted. Review local memories before retrying.", failure) }
@@ -1281,9 +1286,12 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         preferences.getString("history", null)?.let { raw ->
             try {
                 val (id, records) = com.dua.ai.history.ChatHistoryPreload.take(raw)
-                activeId = id
-                _savedChats.value = records
-                records.find { it.id == id }?.let {
+                _deletedChatIds.value = com.dua.ai.account.CloudDeletionIds.decode(preferences.getString("deleted_chat_ids", null)?.let { org.json.JSONArray(it) })
+                deletionOwnerId = preferences.getString("deleted_chat_owner", null)
+                activeId = if (id in currentDeletionIds()) UUID.randomUUID().toString() else id
+                val visible = records.filterNot { it.id in currentDeletionIds() }
+                _savedChats.value = visible
+                visible.find { it.id == activeId }?.let {
                     _messages.value = it.messages
                     _selectedModel.value = it.model
                     _draft.value = it.draft
@@ -1313,7 +1321,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 .distinctUntilChanged().collect { refreshSyncBusy() }
         }
         viewModelScope.launch {
-            combine(_savedChats, localSettings) { chats, settings -> CloudSnapshot(chats, settings.memory, settings.projects) }
+            combine(_savedChats, localSettings, _deletedChatIds) { chats, settings, deleted -> CloudSnapshot(chats, settings.memory, settings.projects, deleted) }
                 .distinctUntilChanged().collect { automaticSync.localChanged() }
         }
         automaticSync.restore()
@@ -1385,7 +1393,86 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         return null
     }
 
+    /** Apply authoritative deletion IDs after persistence, including the active chat's draft buffers. */
+    private fun bindCloudHistory(chats: List<SavedChat>, deleted: List<String>) {
+        val removed = _savedChats.value.filter { it.id in deleted }.flatMap { it.messages }
+        _deletedChatIds.value = deleted
+        deletionOwnerId = account.state.value.user?.id
+        _savedChats.value = chats
+        removed.forEach { message ->
+            pollJobs.remove(message.id)?.cancel()
+            replyWebModes.remove(message.id); replyReasoning.remove(message.id); replyCode.remove(message.id); replyBuild.remove(message.id)
+        }
+        val used = pathsOf(chats.flatMap { it.messages }).toSet()
+        runCatching { mediaCache.forget(pathsOf(removed).filterNot { it in used }.distinct()) }
+        if (activeId in deleted) {
+            activeId = UUID.randomUUID().toString()
+            _messages.value = emptyList(); _draft.value = ""; _summary.value = null
+            _webMode.value = null; _xSearch.value = false; _buildRepo.value = null
+            clearAttachments()
+        } else chats.find { it.id == activeId }?.let { chat ->
+            _messages.value = chat.messages; _selectedModel.value = chat.model; _draft.value = chat.draft
+            _summary.value = chat.summary; _buildRepo.value = chat.buildRepository; _projectId.value = chat.projectId
+        }
+    }
+
+    fun dismissChatDeletion() { if (!_chatDeletion.value.busy) _chatDeletion.value = ChatDeletionState() }
+    fun deleteServerChat(id: String) {
+        if (_chatDeletion.value.busy) return
+        fun fail(message: String) { _chatDeletion.value = ChatDeletionState(id = id, error = message) }
+        if (syncBlocked()) { fail("Finish the current reply or sync action, then try again."); return }
+        if (account.state.value.user == null) { fail("Sign in from Profile before deleting server history."); return }
+        if (!_integrations.value.chatDeletionEnabled) { fail("Refresh setup after updating the backend, then try again."); return }
+        if (_savedChats.value.none { it.id == id }) { fail("This chat is no longer available."); return }
+        _chatDeletion.value = ChatDeletionState(id = id, busy = true)
+        _dataBusy.value = true; refreshSyncBusy()
+        viewModelScope.launch {
+            var serverConfirmed = false
+            try {
+                val review = account.cloud()
+                val result = account.deleteChat(review, id)
+                serverConfirmed = true
+                applyConfirmedChatDeletion(result)
+                _chatDeletion.value = ChatDeletionState(id = id, completed = true)
+            } catch (cancelled: CancellationException) {
+                fail("Deletion was interrupted. Refresh cloud history before retrying."); throw cancelled
+            } catch (failure: Exception) {
+                fail(if (serverConfirmed) "Server deletion succeeded, but the phone cache could not be updated. Retry to finish."
+                    else failure.message ?: "Chat deletion could not be confirmed. Retry; the phone cache was kept.")
+            } finally { _dataBusy.value = false; refreshSyncBusy() }
+        }
+    }
+
+    private suspend fun applyConfirmedChatDeletion(result: com.dua.ai.account.CloudChatDeletion) {
+        check(account.state.value.user?.id == result.ownerId) { "Account changed. Refresh cloud history." }
+        check(result.chatId in result.deletedChatIds) { "Chat deletion was not confirmed." }
+        flushHistory()
+        val original = _savedChats.value.toList()
+        val selectedId = activeId
+        val deleted = (currentDeletionIds() + result.deletedChatIds).distinct().sorted()
+        com.dua.ai.account.CloudDeletionIds.validate(deleted)
+        val chats = original.filterNot { it.id in deleted }
+        val nextId = if (selectedId in deleted) UUID.randomUUID().toString() else selectedId
+        val encoded = withContext(Dispatchers.Default) { ChatHistoryCodec.encode(chats, nextId) }
+        check(account.state.value.user?.id == result.ownerId && activeId == selectedId && _savedChats.value == original && !draftSaver.pending) {
+            "Phone cache changed while applying deletion. Retry."
+        }
+        val previous = preferences.getString("history", null)
+        val previousDeleted = preferences.getString("deleted_chat_ids", null)
+        val previousOwner = preferences.getString("deleted_chat_owner", null)
+        val saved = historyWriter.writeDirectly {
+            preferences.edit().putString("history", encoded).putString("deleted_chat_ids", org.json.JSONArray(deleted).toString())
+                .putString("deleted_chat_owner", result.ownerId).commit().also { ok ->
+                if (!ok) preferences.edit().putString("history", previous).putString("deleted_chat_ids", previousDeleted).putString("deleted_chat_owner", previousOwner).apply()
+            }
+        }
+        check(saved) { "Phone cache could not be saved." }
+        bindCloudHistory(chats, deleted)
+        if (selectedId in deleted) activeId = nextId
+    }
+
     fun deleteChat(id: String) {
+        if (_dataBusy.value) return
         draftSaver.runNow()
         _savedChats.value.find { it.id == id }?.messages?.forEach { replyWebModes.remove(it.id); replyReasoning.remove(it.id); replyCode.remove(it.id); replyBuild.remove(it.id) }
         // Remove cached references/media only. The server snapshot may still need the stored files.

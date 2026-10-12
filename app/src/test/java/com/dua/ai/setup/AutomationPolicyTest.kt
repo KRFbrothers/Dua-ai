@@ -7,6 +7,27 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class AutomationPolicyTest {
+    @Test fun confirmedDeletionDropsEvenOfflineEditsWhileUnexplainedLossStillRequiresReview() {
+        val original = CloudSnapshot(listOf(chat), listOf("Server note"))
+        val baseline = AutomationSyncPolicy.baseline(original)
+        val here = original.copy(chats = listOf(chat.copy(draft = "Unsynced target edit")))
+        val remote = original.copy(chats = emptyList(), deletedChatIds = listOf(chat.id))
+        assertFalse(AutomationSyncPolicy.requiresDeletionReview(baseline, remote))
+        assertTrue(AutomationSyncPolicy.requiresDeletionReview(baseline, remote.copy(deletedChatIds = emptyList())))
+        val merged = AutomationSyncPolicy.merge(here, remote, baseline).snapshot
+        assertTrue(merged.chats.isEmpty())
+        assertEquals(listOf(chat.id), merged.deletedChatIds)
+        assertEquals(original.memory, merged.memory)
+        assertTrue(AutomationSyncPolicy.same(merged, remote))
+    }
+    @Test fun deletionIdsParticipateInEqualityAndDoNotCreateFreshUnsyncedCopies() {
+        val empty = CloudSnapshot(emptyList(), emptyList())
+        val remote = empty.copy(deletedChatIds = listOf(chat.id))
+        assertFalse(AutomationSyncPolicy.same(empty, remote))
+        val merged = AutomationSyncPolicy.merge(CloudSnapshot(listOf(chat), listOf("Stale note")), remote, null).snapshot
+        assertTrue(merged.chats.isEmpty()); assertTrue(merged.memory.isEmpty())
+        assertEquals(remote, AutomationSyncPolicy.merge(merged, remote, AutomationSyncPolicy.baseline(merged)).snapshot)
+    }
     private val chat = SavedChat("saved", "Dua", "", listOf(ChatMessage(text = "Hi", isUser = true)), 1)
 
     @Test fun `deletions require review and additions do not`() {

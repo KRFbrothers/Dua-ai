@@ -58,6 +58,15 @@ class AutomaticSyncCacheTest {
 
     private fun persisted() = ChatHistoryCodec.decode(application.getSharedPreferences("dua_chat_history", 0)
         .getString("history", null)!!).second
+    @Test fun deletionDownloadClearsTheActiveBuffersAndPersistsItsIdsAcrossDraftSave() {
+        port.read()
+        port.commit(CloudSnapshot(emptyList(), emptyList(), deletedChatIds = listOf(local.id)))
+        assertTrue(model.messages.value.isEmpty()); assertEquals("", model.draft.value)
+        assertNotEquals(local.id, model.activeChatId.value)
+        model.updateDraft("New chat after deletion"); model.flushHistory()
+        assertFalse(persisted().any { it.id == local.id })
+        assertEquals(listOf(local.id), port.read().deletedChatIds)
+    }
 
     @Test fun coldStartRestoresBuildRepositoryBeforeAnyDraftSave() {
         assertEquals(local.buildRepository, model.buildRepo.value)
