@@ -242,6 +242,7 @@ export async function handleChat(request, { env = process.env, fetcher = fetch, 
       if (failed) {
         const body = await failed.json();
         send({ type: 'error', message: body.error, status: failed.status,
+          ...(Number.isInteger(body.upstreamStatus) ? { upstreamStatus: body.upstreamStatus } : {}),
           ...(body.retryAfterSeconds ? { retryAfterSeconds: body.retryAfterSeconds } : {}) });
       }
     }, { signal: request.signal, onUnexpected: error => console.error('[dua-chat] stream failed', error?.name) });

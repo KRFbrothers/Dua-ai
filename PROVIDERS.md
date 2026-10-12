@@ -107,6 +107,8 @@ Output caps accept 256–1,000,000; output tokens include thinking tokens. A rep
 
 For streaming Auto/Reasoning chat, the backend opens SSE after access, input, project and provider-setup checks, before web/file preparation, context summarization or waiting for provider response headers. An initial comment and 15-second heartbeat comments keep the Android read timeout from expiring during these waits. Stop cancels the preparation/provider work; the whole-request deadline still applies. Failures after SSE opens use a terminal `error` event carrying `message`, `status` and optional `retryAfterSeconds` (HTTP remains 200); access/setup failures before it opens remain JSON with an HTTP error status. Non-streaming JSON replies keep their existing HTTP error behavior. Build mode uses its existing separate stream path.
 
+Provider HTTP failures also include `upstreamStatus` in Auto/Reasoning error events when available. Gemini HTTP 500/502/503/504 messages identify the actual upstream status; the backend still maps these failures to status 502 for the existing client contract. Vercel runtime logs record only `[dua-gemini] Upstream request failed (HTTP N).`, without provider bodies, credentials or prompts. If chat fails, use that status and a same-project/model test in Google AI Studio to distinguish provider availability from configuration problems. No automatic paid retry or model switch is performed.
+
 ## Run code: hosted code execution (Phase 5)
 
 The Run code chip asks the provider to run Python in **its own sandbox**; Dua never executes code on the phone or in the Vercel function. Request field: `"code": true` (streaming path; older servers never receive it). `/api/config.code` reports `{enabled, reason?, providers, language, maxRuns, maxChars}`.
