@@ -54,10 +54,19 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import com.dua.ai.ui.history.HistoryDrawer
 import com.dua.ai.ui.theme.Sizes
 import com.dua.ai.ui.theme.Spacing
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.withContext
+import com.dua.ai.model.ChatMessage
+
+private data class ConversationResults(val messages: List<ChatMessage>, val query: String, val matches: List<ConversationMatch>)
 
 /**
  * Chat surface: history drawer, top bar, message list or empty state, notices and composer.
@@ -90,6 +99,31 @@ fun ChatScreen(
     val mediaActions = remember(actions) { ImagineActions(onOpen = { id, index -> viewer = id to index }, onSave = actions.imagine.onSave, onShare = actions.imagine.onShare,
         onEdit = actions.imagine.onEdit, onAnimate = actions.imagine.onAnimate, onCancelVideo = actions.imagine.onCancelVideo, onReuse = actions.imagine.onReuse) }
     val conversationKey = state.chatId.ifEmpty { state.messages.firstOrNull()?.id.orEmpty() }
+    var searchOpen by rememberSaveable(conversationKey) { mutableStateOf(false) }
+    var searchQuery by rememberSaveable(conversationKey) { mutableStateOf("") }
+    var selectedSearchId by rememberSaveable(conversationKey) { mutableStateOf<String?>(null) }
+    var searchResults by remember(conversationKey) { mutableStateOf<ConversationResults?>(null) }
+    var readyQuery by remember(conversationKey) { mutableStateOf<String?>(null) }
+    var lastSearchJump by remember(conversationKey) { mutableStateOf<Triple<String, String, Int>?>(null) }
+    val focusManager = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
+    val needle = searchQuery.trim()
+    // Incoming tokens must not restart the query's debounce timer.
+    LaunchedEffect(searchOpen, needle) {
+        readyQuery = null
+        if (!searchOpen || needle.isEmpty()) return@LaunchedEffect
+        delay(150)
+        readyQuery = needle
+    }
+    LaunchedEffect(searchOpen, state.messages, needle, readyQuery) {
+        searchResults = null
+        if (!searchOpen || needle.isEmpty() || readyQuery != needle) return@LaunchedEffect
+        val matches = withContext(Dispatchers.Default) { ConversationSearch.search(state.messages, needle) { ensureActive() } }
+        searchResults = ConversationResults(state.messages, needle, matches)
+    }
+    val matches = searchResults?.takeIf { searchOpen && it.messages == state.messages && it.query == needle }?.matches.orEmpty()
+    val matchIndex = matches.indexOfFirst { it.messageId == selectedSearchId }.coerceAtLeast(0)
+    val selectedMatch = matches.getOrNull(matchIndex)
     val listState = key(conversationKey) {
         rememberLazyListState(initialFirstVisibleItemIndex = state.messages.lastIndex.coerceAtLeast(0))
     }
@@ -97,17 +131,31 @@ fun ChatScreen(
     var automaticScroll by remember(conversationKey) { mutableStateOf(false) }
     var dragging by remember(conversationKey) { mutableStateOf(false) }
     suspend fun goToLatest() {
-        if (automaticScroll || dragging) return
+        if (searchOpen || automaticScroll || dragging) return
         val latestIndex = listState.layoutInfo.totalItemsCount - 1
         if (latestIndex < 0) return
         automaticScroll = true
         try {
             listState.scrollToItem(latestIndex)
             // A large code block can exceed one scroll step; continue to its actual end.
-            while (listState.canScrollForward) {
+            while (!searchOpen && listState.canScrollForward) {
                 if (listState.scrollBy(STREAM_FOLLOW_PX) <= 0f) break
             }
         } finally { automaticScroll = false }
+    }
+    fun closeSearch() {
+        followTail = false; searchOpen = false; searchQuery = ""; selectedSearchId = null; lastSearchJump = null
+        focusManager.clearFocus(); keyboard?.hide()
+    }
+    BackHandler(enabled = searchOpen && !drawerState.isOpen && sheet == null) { closeSearch() }
+    LaunchedEffect(searchOpen, selectedMatch?.messageId, selectedMatch?.messageIndex, needle) {
+        val target = selectedMatch?.let { Triple(needle, it.messageId, it.messageIndex) }
+        if (searchOpen && selectedMatch != null && target != lastSearchJump) {
+            selectedSearchId = selectedMatch.messageId
+            followTail = false
+            listState.scrollToItem(selectedMatch.messageIndex)
+            lastSearchJump = target
+        }
     }
     val inputFocus = remember { FocusRequester() }
     // Mode toggles (chips and + sheet switches) give a light haptic.
@@ -135,9 +183,9 @@ fun ChatScreen(
         snapshotFlow { listOf(listState.isScrollInProgress, listState.canScrollForward, automaticScroll, dragging) }
             .collect { (scrolling, moreBelow, automatic, userDragging) ->
                 if (scrolling && !automatic) followTail = false
-                if (!scrolling && !userDragging && !moreBelow) followTail = true
+                if (!searchOpen && !scrolling && !userDragging && !moreBelow) followTail = true
                 // Markdown/media can grow after the initial message layout, even without a new token.
-                if (followTail && moreBelow && !scrolling && !automatic && !userDragging) goToLatest()
+                if (!searchOpen && followTail && moreBelow && !scrolling && !automatic && !userDragging) goToLatest()
             }
     }
     // Stop/completion never move a reader who has scrolled up.
@@ -149,7 +197,7 @@ fun ChatScreen(
         val newPrompt = lastUserId != previousUserId
         if (newPrompt) {
             previousUserId = lastUserId
-            followTail = true
+            if (!searchOpen) followTail = true
         }
         if (followTail && (!listState.isScrollInProgress || newPrompt)) goToLatest()
     }
@@ -188,16 +236,25 @@ fun ChatScreen(
                     onNewChat = actions.onNewChat,
                     projectName = state.projects.find { it.id == state.projectId }?.let { it.name + if (it.archived) " (archived)" else "" } ?: "Missing project",
                     onProjects = { sheet = ChatSheet.Projects },
+                    onSearch = if (state.messages.isEmpty()) null else ({ followTail = false; searchOpen = true }),
                 )
+                if (searchOpen) ConversationSearchBar(searchQuery,
+                    onQuery = { searchQuery = it; selectedSearchId = null; lastSearchJump = null },
+                    searching = needle.isNotEmpty() && searchResults?.takeIf { it.messages == state.messages && it.query == needle } == null,
+                    matches = matches, currentIndex = matchIndex,
+                    onPrevious = { if (matches.isNotEmpty()) selectedSearchId = matches[(matchIndex - 1 + matches.size) % matches.size].messageId },
+                    onNext = { if (matches.isNotEmpty()) selectedSearchId = matches[(matchIndex + 1) % matches.size].messageId },
+                    onClose = { closeSearch() })
                 Box(Modifier.weight(1f).fillMaxWidth()) {
                     if (home) {
                         EmptyState(suggestions = if (state.draft.isBlank()) state.suggestions else emptyList(),
                             onSuggestion = { prompt -> actions.onDraftChange(prompt); inputFocus.requestFocus() })
                     } else {
                         key(conversationKey) {
-                            MessageList(state = state, actions = actions, listState = listState, imagineActions = mediaActions)
+                            MessageList(state = state, actions = actions, listState = listState, imagineActions = mediaActions,
+                                searchMessageId = selectedMatch?.messageId)
                         }
-                        if (!followTail && listState.canScrollForward) FilledTonalButton(
+                        if (!searchOpen && !followTail && listState.canScrollForward) FilledTonalButton(
                             onClick = { scope.launch { followTail = true; goToLatest() } },
                             modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = Spacing.md)
                                 .heightIn(min = Sizes.touchTarget).semantics { contentDescription = "Go to latest reply" },

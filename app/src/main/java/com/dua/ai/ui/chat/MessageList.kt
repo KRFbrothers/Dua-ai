@@ -6,6 +6,8 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -39,13 +41,14 @@ import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import com.dua.ai.ui.theme.Sizes
 import com.dua.ai.ui.theme.Spacing
 
 @Composable
 fun MessageList(state: ChatUiState, actions: ChatActions, listState: LazyListState, modifier: Modifier = Modifier,
-    imagineActions: ImagineActions = actions.imagine) {
+    imagineActions: ImagineActions = actions.imagine, searchMessageId: String? = null) {
     val lastId = state.messages.lastOrNull()?.id
     LazyColumn(
         state = listState,
@@ -55,7 +58,11 @@ fun MessageList(state: ChatUiState, actions: ChatActions, listState: LazyListSta
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         items(state.messages, key = { it.id }, contentType = { if (it.isUser) "user" else "assistant" }) { message ->
-            Column(Modifier.widthIn(max = Sizes.contentMaxWidth).fillMaxWidth()) {
+            val selected = message.id == searchMessageId
+            Column(Modifier.widthIn(max = Sizes.contentMaxWidth).fillMaxWidth()
+                .testTag("message-${message.id}")
+                .then(if (selected) Modifier.border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(12.dp)) else Modifier)
+                .semantics { if (selected) stateDescription = "Selected search result" }) {
                 if (message.isUser) UserMessage(message.text, files = message.files, onOpenFile = actions.onOpenFile)
                 else if (message.isImagine) ImagineReply(message, imagineActions, videoAvailable = state.videoAvailable)
                 else AssistantMessage(
