@@ -20,6 +20,9 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.semantics.contentDescription
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
@@ -77,6 +80,12 @@ fun ChatScreen(
     /** Empty Home (new chat): logo and tagline, full mode chip row. */
     val home = state.messages.isEmpty() && !state.typing
     var deletingId by rememberSaveable { mutableStateOf<String?>(null) }
+    var deletingServerId by rememberSaveable { mutableStateOf<String?>(null) }
+    LaunchedEffect(state.chatDeletion.id, state.chatDeletion.completed) {
+        if (state.chatDeletion.completed && state.chatDeletion.id == deletingServerId) {
+            deletingServerId = null; actions.onDismissChatDeletion()
+        }
+    }
     var viewer by remember { mutableStateOf(initialViewer) }
     val mediaActions = remember(actions) { ImagineActions(onOpen = { id, index -> viewer = id to index }, onSave = actions.imagine.onSave, onShare = actions.imagine.onShare,
         onEdit = actions.imagine.onEdit, onAnimate = actions.imagine.onAnimate, onCancelVideo = actions.imagine.onCancelVideo, onReuse = actions.imagine.onReuse) }
@@ -160,6 +169,8 @@ fun ChatScreen(
                     onOpenChat = { id -> closeDrawerThen { actions.onOpenChat(id) } },
                     onDeleteChat = { id -> deletingId = id },
                     onRenameChat = actions.onRenameChat,
+                    serverDeletionEnabled = state.serverChatDeletionEnabled,
+                    onDeleteServerChat = { id -> actions.onDismissChatDeletion(); deletingServerId = id },
                     onOpenSettings = { closeDrawerThen(actions.onOpenSettings) },
                     onProjects = { closeDrawerThen { sheet = ChatSheet.Projects } },
                     onDestination = { destination -> closeDrawerThen { actions.onOpenDestination(destination) } },
@@ -297,11 +308,27 @@ fun ChatScreen(
     deletingId?.let { id ->
         AlertDialog(
             onDismissRequest = { deletingId = null },
-            title = { Text("Delete chat?") },
-            text = { Text("Remove this chat from the phone cache? Review and upload in Cloud Sync to update server history. Stored files are kept.") },
-            confirmButton = { TextButton(onClick = { actions.onDeleteChat(id); deletingId = null }) { Text("Delete") } },
+            title = { Text("Remove cached chat?") },
+            text = { Text("Remove this chat from the phone cache? Server history and stored files are kept.") },
+            confirmButton = { TextButton(onClick = { actions.onDeleteChat(id); deletingId = null }) { Text("Remove") } },
             dismissButton = { TextButton(onClick = { deletingId = null }) { Text("Cancel") } },
         )
+    }
+    deletingServerId?.let { id ->
+        val deletion = state.chatDeletion.takeIf { it.id == id }
+        val busy = deletion?.busy == true
+        AlertDialog(onDismissRequest = { if (!busy) { deletingServerId = null; actions.onDismissChatDeletion() } },
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, dismissOnBackPress = !busy, dismissOnClickOutside = !busy),
+            modifier = Modifier.padding(horizontal = Spacing.xl).widthIn(max = 400.dp),
+            title = { Text("Delete chat?") },
+            text = { Column(Modifier.verticalScroll(rememberScrollState())) {
+                val title = state.savedChats.firstOrNull { it.id == id }?.title ?: "this chat"
+                Text("Delete “$title” from server history and this phone? Other devices with this update remove it when they sync. Edits to this conversation are removed; stored files are kept.")
+                if (busy) Text("Deleting…", Modifier.padding(top = Spacing.md))
+                deletion?.error?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = Spacing.md)) }
+            } },
+            confirmButton = { TextButton(enabled = !busy, onClick = { actions.onDeleteServerChat(id) }) { Text(if (deletion?.error != null) "Retry" else "Delete") } },
+            dismissButton = { TextButton(enabled = !busy, onClick = { deletingServerId = null; actions.onDismissChatDeletion() }) { Text("Cancel") } })
     }
 }
 

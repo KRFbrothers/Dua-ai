@@ -55,6 +55,15 @@ class CloudDownloadRecoveryTest {
         }
     }
 
+    @Test fun reviewedServerDeletionCannotReturnFromAnActiveDraftSave() {
+        download(CloudSnapshot(emptyList(), emptyList(), deletedChatIds = listOf(local.id)))
+        assertTrue(model.messages.value.isEmpty()); assertEquals("", model.draft.value)
+        assertNotEquals(local.id, model.activeChatId.value)
+        model.updateDraft("Fresh draft"); model.flushHistory()
+        val cached = ChatHistoryCodec.decode(application.getSharedPreferences("dua_chat_history", 0).getString("history", null)!!).second
+        assertFalse(cached.any { it.id == local.id })
+    }
+
     @Test fun serverRestoreRebindsActiveBuffersAndSurvivesTheNextDraftSave() {
         val message = ChatMessage(id = "server-message", text = "Server question", isUser = true, model = "Gemini")
         val remote = local.copy(model = "Gemini", draft = "Server draft", messages = listOf(message),

@@ -58,6 +58,35 @@ class AccountRepositoryTest {
             }
         }
     }
+    private fun deletionResult(user: AccountUser = userA, chat: String = "target", revision: Long = 4) = JSONObject()
+        .put("ownerId", user.id).put("chatId", chat).put("revision", revision).put("deleted", true)
+        .put("deletedChatIds", org.json.JSONArray().put(chat))
+    @Test fun chatDeletionUsesReviewedOwnerAndRevisionAndRequiresConfirmedMarker() = runBlocking {
+        val repository = AccountRepository(api, MemoryStore(session(userA)))
+        val review = CloudReview(3, CloudSnapshot(emptyList(), emptyList()), userA.id)
+        server.enqueue(json(deletionResult()))
+        val result = repository.deleteChat(review, "target")
+        assertEquals(listOf("target"), result.deletedChatIds)
+        val request = server.takeRequest(2, TimeUnit.SECONDS)!!
+        assertEquals("/api/cloud/chat", request.path); assertEquals("DELETE", request.method)
+        val body = JSONObject(request.body.readUtf8())
+        assertEquals(3L, body.getLong("expectedRevision")); assertEquals(userA.id, body.getString("expectedAccountId"))
+        assertEquals("DELETE CHAT", body.getString("confirmation"))
+        server.enqueue(json(deletionResult().put("deletedChatIds", org.json.JSONArray())))
+        assertTrue(runCatching { repository.deleteChat(review, "target") }.isFailure)
+        server.enqueue(json(deletionResult(userB)))
+        assertTrue(runCatching { repository.deleteChat(review, "target") }.isFailure)
+        assertTrue(runCatching { repository.deleteChat(review.copy(ownerId = userB.id), "target") }.isFailure)
+    }
+    @Test fun aLateDeletionResponseCannotBeAppliedAfterAccountReplacement() = runBlocking {
+        val repository = AccountRepository(api, MemoryStore(session(userA)))
+        val arrived = CompletableDeferred<Unit>(); val release = CountDownLatch(1)
+        delayedDispatcher("/api/cloud/chat", json(deletionResult()), arrived, release)
+        val pending = async { runCatching { repository.deleteChat(CloudReview(3, CloudSnapshot(emptyList(), emptyList()), userA.id), "target") } }
+        try { withTimeout(3000) { arrived.await() }; repository.signInWithGoogle(idToken(userB), nonce) } finally { release.countDown() }
+        assertTrue(withTimeout(3000) { pending.await() }.isFailure)
+        assertEquals(userB, repository.state.value.user)
+    }
     @Test fun lateSessionLoadCannotMixNewOwnerTokensWithOldOwnerLabel() = runBlocking {
         val initial = session(userA); val signedIn = session(userB); val store = MemoryStore(initial); val repository = AccountRepository(api, store)
         val arrived = CompletableDeferred<Unit>(); val release = CountDownLatch(1)

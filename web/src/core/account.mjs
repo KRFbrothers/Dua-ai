@@ -78,13 +78,41 @@ export async function handleAccount(req,env={}){
    // Only this verified user's id is used. Never accept an owner id from request JSON.
    const result=await fetcher(config.url+'/auth/v1/admin/users/'+encodeURIComponent(user.id),{method:'DELETE',headers:{apikey:serviceKey,Authorization:'Bearer '+serviceKey,'Content-Type':'application/json'},body:JSON.stringify({should_soft_delete:false}),signal:AbortSignal.any([req.signal,AbortSignal.timeout(15000)]),redirect:'error'});if(!result.ok)return json({error:'Account deletion failed. The account and local data may still be available. Check Profile before retrying.'},502);if(!native)extraCookies=sessionCookies(null,true);return json({user:null,deleted:true,message:'Account deleted. Its server snapshot and request usage were deleted. The phone cache remains until cleared.'});
   }
-  if(url.pathname==='/api/cloud'&&(req.method==='PUT'||req.method==='DELETE')){
+  if((url.pathname==='/api/cloud'&&(req.method==='PUT'||req.method==='DELETE'))||(url.pathname==='/api/cloud/chat'&&req.method==='DELETE')){
+   const deleteChat=url.pathname==='/api/cloud/chat';
+   if(deleteChat&&!owner)return json({error:'Owner account setup is required for chat deletion.'},503);
+   if(deleteChat&&(body.expectedAccountId!==user.id||body.confirmation!=='DELETE CHAT'))return json({error:'Confirm chat deletion from the current signed-in account.'},409);
+   if(deleteChat&&(typeof body.chatId!=='string'||!body.chatId.trim()||body.chatId.length>200))return json({error:'Choose a valid chat to delete.'},400);
    if(body.expectedAccountId!==undefined&&body.expectedAccountId!==user.id)return json({error:'Account changed. Review the cloud snapshot again.'},409);
    if(!Number.isSafeInteger(body.expectedRevision)||body.expectedRevision<0||body.expectedRevision>2147483647)return json({error:'Review the cloud version before changing it.'},400);
-   let snapshot;try{snapshot=validateCloudSnapshot(req.method==='DELETE'?{format:'dua-cloud-snapshot',version:1,chats:[],memory:[]}:body.snapshot);}catch(error){return json({error:error.message},400);}
+   let snapshot;try{if(!deleteChat)snapshot=validateCloudSnapshot(req.method==='DELETE'?{format:'dua-cloud-snapshot',version:1,chats:[],memory:[]}:body.snapshot);}catch(error){return json({error:error.message},400);}
+   // Read through this verified account's RLS before the revision-checked RPC. The RPC still
+   // rejects a concurrent change between this read and write; no other chats are overwritten.
+   const stored=await request('/rest/v1/dua_cloud_snapshots?select=revision,payload,updated_at&owner_id=eq.'+encodeURIComponent(user.id),'GET',undefined,token);
+   if(!stored.response.ok)return json({error:'Cloud history could not be checked. Retry without changing the phone cache.'},503);
+   let remote;try{
+    if(!Array.isArray(stored.data)||stored.data.length>1)throw Error();
+    const row=stored.data[0];if(row&&(!Number.isSafeInteger(row.revision)||row.revision<1||row.revision>2147483647))throw Error();
+    remote={revision:row?.revision||0,snapshot:row?validateCloudSnapshot(row.payload):{format:'dua-cloud-snapshot',version:1,chats:[],memory:[]}};
+   }catch{return json({error:'Cloud history needs review. No server data was changed.'},503);}
+   if(remote.revision!==body.expectedRevision)return json({error:'Cloud changed on another device. Refresh and review before retrying.',revision:remote.revision},409);
+   const deleted=new Set(remote.snapshot.deletedChatIds||[]);
+   if(deleteChat){
+    if(deleted.has(body.chatId))return json({ownerId:user.id,chatId:body.chatId,revision:remote.revision,deletedChatIds:[...deleted].sort(),deleted:true});
+    if(deleted.size>=10_000)return json({error:'Deletion history limit reached. No chat was changed.'},409);
+    deleted.add(body.chatId);
+    snapshot={...remote.snapshot,chats:remote.snapshot.chats.filter(chat=>chat.id!==body.chatId)};
+   }else if(snapshot.chats.some(chat=>deleted.has(chat.id))){
+    return json({error:'This upload contains a deleted chat. Download current cloud history before uploading.',revision:remote.revision},409);
+   }
+   // Only the server creates deletion IDs. Older clients may omit them, but cannot remove them.
+   delete snapshot.deletedChatIds;
+   if(deleted.size)snapshot.deletedChatIds=[...deleted].sort();
+   try{snapshot=validateCloudSnapshot(snapshot);}catch(error){return json({error:error.message},400);}
    const result=await request('/rest/v1/rpc/dua_write_cloud_snapshot','POST',{expected_revision:body.expectedRevision,next_payload:snapshot},token);if(!result.response.ok)return json({error:'Cloud database setup or saving failed. Local data was kept.'},503);
    if(result.data?.conflict)return json({error:'Cloud changed on another device. Download and review before uploading.',revision:result.data.revision},409);
-   if(!Number.isSafeInteger(result.data?.revision))throw Error('Invalid revision');return json({revision:result.data.revision});
+   if(!Number.isSafeInteger(result.data?.revision)||result.data.revision<=remote.revision||result.data.revision>2147483647)throw Error('Invalid revision');
+   return deleteChat?json({ownerId:user.id,chatId:body.chatId,revision:result.data.revision,deletedChatIds:[...deleted].sort(),deleted:true}):json({revision:result.data.revision});
   }
   return json({error:'Not found.'},404);
  }catch(error){return json({error:error?.name==='AbortError'||error?.name==='TimeoutError'?'Account request timed out. Retry.':'Account service unavailable. Retry without changing local data.'},502);}

@@ -42,10 +42,11 @@ Dua is a personal, single-user app: the backend is meant to be restricted to the
 - **Retention:** Retained until the user deletes the data, clears app storage, uninstalls the app, or an enabled device backup restores it. Backup copies may have separate retention.
 
 #### Cloud Storage (Opt-In)
-- **Activation:** User must explicitly enable "Cloud Sync" in account settings.
+- **Activation:** The owner confirms manual cloud writes/deletions or enables automatic foreground Cloud Sync. Sign-in alone does not upload cached chats.
 - **Transport:** Messages are sent over HTTPS to Supabase (encrypted at rest).
 - **Retention:** 
   - Users can clear their cloud snapshot from the app or delete their account.
+  - **Delete chat** removes that conversation from the current server snapshot and this phone after server confirmation. Other updated devices apply the deletion when syncing. Only chat IDs are retained as deletion metadata (up to 10,000 IDs, within the 4 MiB snapshot limit), including after clearing a snapshot, so stale clients cannot upload the same deleted ID. These IDs contain no message text or titles. Stored files and existing exports are kept; importing a backup creates new chat IDs and can intentionally restore a copy. Supabase backup retention is separate and has not been verified.
   - Account deletion requests removal of the Supabase account and associated app data; provider backup-retention timing is controlled by Supabase and is not guaranteed by Dua.
   - The repository does not define or verify a fixed post-deletion backup-retention period.
 - **Access control:** Supabase Row Level Security (RLS) restricts snapshot access to the signed-in account. The backend also checks the configured owner email. RLS is an access rule, not encryption.

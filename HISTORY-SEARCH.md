@@ -12,6 +12,12 @@ The owner server snapshot remains authoritative. Search runs on the phone's curr
 
 Nonblank queries are debounced by 150 ms and scanned on a background dispatcher, with cooperative cancellation between chats/messages/code runs. A new query, project or snapshot invalidates old results immediately; pending scans show **Searching chats…**. Empty/cleared search returns cached chats immediately. No extra background service, storage permission, migration or provider cost is added.
 
+## Deleting a conversation
+
+Long-press a recent chat → **Delete chat** → confirm. This requires owner sign-in and the updated backend's `history.delete` capability. The server removes only that conversation, preserving other chats, project definitions, notes and stored files. Its ID remains in server deletion metadata; stale uploads containing that ID are rejected with a conflict. Automatic sync and reviewed downloads remove cached copies with confirmed deletion IDs, including active drafts, without creating a recovered copy of the deleted chat. Offline devices apply this when they next sync.
+
+The phone changes only after a confirmed response. Retry is safe if the server committed but the response was lost; cache-write failures report partial completion and let Retry finish. **Remove cached chat** remains a separate action and does not delete server history. Existing JSON exports/files and independently created conversation copies are retained. No database migration is required; deletion metadata lives in the existing revision-checked owner snapshot. Deploy the matching backend before using the updated APK. Rolling back to an older backend can remove these guards; repository tests do not verify production deployment or backup retention.
+
 ## Verification
 
 Automated coverage checks older turns, title truncation, drafts, newest matches, literal code patterns, code output, emoji/multiline snippets, hidden-data exclusion, cancellation, opening/clearing results, project switching and snapshot/query changes. Physical-device typing/rendering and authenticated sync refresh remain pending. On the updated APK, sync a Coding conversation with a distinctive phrase in a middle reply, search for it, open/clear it, then verify the same phrase in Business cannot appear while Coding is selected.

@@ -59,6 +59,8 @@ The default native UI tests render production components with synthetic fixtures
 | History search, opening chats and removing a cached chat | Implemented; cache removal preserves server history and stored files. This is not server-history deletion |
 | Rename | Long-press a recent chat → Rename; 1–120 character title metadata survives cache, JSON backup/import and cloud sync. Requires backend `history.rename` support. |
 | Pin | Explicit Coming soon; pin persistence is not implemented |
+| Delete chat | Long-press → Delete chat → confirm. Owner sign-in and backend `history.delete` support required. Server deletion IDs prevent stale snapshots from restoring the same chat; stored files remain. Failed deletion keeps the confirmation open for retry. |
+| Remove cached chat | Removes only the phone copy; server history and files remain. Available while signed out. |
 | Editing an old user message, thumbs-up/down feedback | Pending; no history rewriting or feedback-storage endpoint is claimed |
 | Voice input, voice mode, photos/documents/camera, upload progress/errors | Implemented production flows; microphone/speech service, Android pickers, private Storage and provider format support are required. Upload failure recovery currently means removing/reselecting the file |
 | Theme/accent, font family, notifications/reminders, account/data controls | Implemented. General UI language and an in-app text-size slider are pending; Android system text scaling and existing voice-language controls work |

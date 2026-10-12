@@ -6,13 +6,17 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.security.MessageDigest
 
-data class CloudSnapshot(val chats: List<SavedChat>, val memory: List<String>, val projects: List<com.dua.ai.projects.ChatProject> = com.dua.ai.projects.ProjectCodec.defaults)
+data class CloudSnapshot(val chats: List<SavedChat>, val memory: List<String>, val projects: List<com.dua.ai.projects.ChatProject> = com.dua.ai.projects.ProjectCodec.defaults,
+    val deletedChatIds: List<String> = emptyList())
 data class CloudReview(val revision: Long, val snapshot: CloudSnapshot, val ownerId: String? = null)
 data class CloudDownloadResult(val snapshot: CloudSnapshot, val added: Int, val conflicts: Int)
 object CloudSnapshotCodec {
     fun encode(value: CloudSnapshot): JSONObject {
+        CloudDeletionIds.validate(value.deletedChatIds)
+        require(value.chats.none { it.id in value.deletedChatIds }) { "Deleted chats cannot be uploaded. Refresh cloud history." }
         require(value.memory.size <= 10 && value.memory.all { it.isNotBlank() && it.length <= 200 }) { "Cloud memory limit is 10 notes of 200 characters." }
         val json = JSONObject(ChatHistoryCodec.export(value.chats, includeServerFields = true, projects = value.projects)).put("format", "dua-cloud-snapshot").put("memory", JSONArray(value.memory)).apply { remove("exportedAt") }
+        if (value.deletedChatIds.isNotEmpty()) json.put("deletedChatIds", JSONArray(value.deletedChatIds.sorted()))
         require(json.toString().toByteArray(Charsets.UTF_8).size <= 4 * 1024 * 1024) { "Cloud snapshot limit is 4 MiB." }
         decode(json)
         return json
@@ -24,8 +28,11 @@ object CloudSnapshotCodec {
         require(memory.size <= 10 && memory.all { it.isNotBlank() && it.length <= 200 }) { "Invalid cloud memory." }
         val copy = JSONObject(json.toString()).put("format", "dua-chat-export").put("exportedAt", 0)
         // The backend validates cloud metadata; retain the existing lenient wire decoders here.
-        return CloudSnapshot(ChatHistoryCodec.parseImport(copy.toString(), includeServerFields = true, strictMetadata = false), memory,
-            com.dua.ai.projects.ProjectCodec.fromJson(if (json.has("projects")) json.getJSONArray("projects") else null))
+        val deleted = CloudDeletionIds.decode(if (json.has("deletedChatIds")) json.getJSONArray("deletedChatIds") else null)
+        val chats = ChatHistoryCodec.parseImport(copy.toString(), includeServerFields = true, strictMetadata = false)
+        require(chats.none { it.id in deleted }) { "Invalid cloud deletion metadata." }
+        return CloudSnapshot(chats, memory,
+            com.dua.ai.projects.ProjectCodec.fromJson(if (json.has("projects")) json.getJSONArray("projects") else null), deleted)
     }
     private fun content(chat: SavedChat): String {
         val root = JSONObject(ChatHistoryCodec.export(listOf(chat), exportedAt = 0, includeServerFields = true))
@@ -44,14 +51,16 @@ object CloudSnapshotCodec {
         // Restore known server definitions before validating; never strip the cached chats.
         val restoredDefinitions = local.projects + remote.projects.filter { server -> local.projects.none { it.id == server.id } }
         encode(local.copy(projects = restoredDefinitions))
+        val deleted = (local.deletedChatIds + remote.deletedChatIds).distinct().sorted()
+        val visibleLocal = local.chats.filterNot { it.id in deleted }
         val serverById = remote.chats.associateBy { it.id }
         val localIds = local.chats.map { it.id }.toSet()
-        val added = remote.chats.filter { it.id !in localIds }
-        val merged = (local.chats.map { serverById[it.id] ?: it } + added).toMutableList()
+        val added = remote.chats.filter { it.id !in localIds && it.id !in deleted }
+        val merged = (visibleLocal.map { serverById[it.id] ?: it } + added).filterNot { it.id in deleted }.toMutableList()
         val usedIds = merged.map { it.id }.toMutableSet()
         val preserved = merged.filter { it.id.startsWith("unsynced-") }.map { digest(content(it)) }.toMutableSet()
         var conflicts = 0
-        local.chats.forEach { here ->
+        visibleLocal.forEach { here ->
             val server = serverById[here.id] ?: return@forEach
             val original = digest(content(here))
             if (original == digest(content(server))) return@forEach
@@ -67,7 +76,7 @@ object CloudSnapshotCodec {
             conflicts++
         }
         val projects = remote.projects + local.projects.filter { here -> remote.projects.none { it.id == here.id } }
-        val snapshot = CloudSnapshot(merged, remote.memory.distinct(), projects)
+        val snapshot = CloudSnapshot(merged, remote.memory.distinct(), projects, deleted)
         // The union can exceed limits even when each input fits. Fail before changing cache or memory.
         encode(snapshot)
         return CloudDownloadResult(snapshot, added.size, conflicts)

@@ -24,11 +24,11 @@ test('the shared Android snapshot retains every extended field through repeated 
 
 test('cloud PUT writes the complete snapshot and GET returns it with its stable message IDs', async () => {
   const value = fresh();
-  const writer = mockFetch(user(), Response.json({ revision: 1 }));
+  const writer = mockFetch(user(), Response.json([]), Response.json({ revision: 1 }));
   const upload = await handleAccount(request('PUT', value), environment(writer));
   assert.equal(upload.status, 200);
-  assert.deepEqual(writer.calls[1].body, { expected_revision: 0, next_payload: value });
-  const reader = mockFetch(user(), Response.json([{ revision: 1, payload: writer.calls[1].body.next_payload }]));
+  assert.deepEqual(writer.calls[2].body, { expected_revision: 0, next_payload: value });
+  const reader = mockFetch(user(), Response.json([{ revision: 1, payload: writer.calls[2].body.next_payload }]));
   const download = await handleCloudRead(request('GET'), environment(reader));
   assert.equal(download.status, 200);
   assert.deepEqual(await download.json(), { ownerId: owner, revision: 1, snapshot: value });

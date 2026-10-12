@@ -11,6 +11,25 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class CloudSnapshotTest {
+    @Test fun deletionMetadataRoundTripsAndRemovesStalePhoneCopiesWithoutRecoveringTheDeletedChat() {
+        val remote = CloudSnapshot(emptyList(), emptyList(), deletedChatIds = listOf(chat.id))
+        assertEquals(remote, CloudSnapshotCodec.decode(CloudSnapshotCodec.encode(remote)))
+        val merged = CloudSnapshotCodec.mergeDownload(CloudSnapshot(listOf(chat), emptyList()), remote)
+        assertTrue(merged.snapshot.chats.isEmpty())
+        assertEquals(listOf(chat.id), merged.snapshot.deletedChatIds)
+        assertEquals(0, merged.conflicts)
+        assertEquals(0, merged.added)
+        assertEquals(merged.snapshot, CloudSnapshotCodec.mergeDownload(merged.snapshot, remote).snapshot)
+    }
+    @Test fun malformedOrOverlappingDeletionMetadataIsRejectedWithoutDroppingLiveChatsSilently() {
+        val raw = CloudSnapshotCodec.encode(CloudSnapshot(listOf(chat), emptyList()))
+        for (value in listOf(org.json.JSONArray().put(chat.id), org.json.JSONArray().put("gone").put("gone"),
+            org.json.JSONArray().put(1), org.json.JSONArray().put(""), "invalid", org.json.JSONObject.NULL)) {
+            raw.put("deletedChatIds", value)
+            assertTrue(runCatching { CloudSnapshotCodec.decode(raw) }.isFailure)
+        }
+        assertTrue(runCatching { CloudSnapshotCodec.encode(CloudSnapshot(listOf(chat), emptyList(), deletedChatIds = listOf(chat.id))) }.isFailure)
+    }
     @Test fun titleOnlyCloudConflictPreservesBothNamesWithoutDuplicatingMessages() {
         val local = chat.copy(customTitle = "Phone name")
         val remote = chat.copy(customTitle = "Server name")

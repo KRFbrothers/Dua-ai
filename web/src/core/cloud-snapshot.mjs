@@ -141,9 +141,11 @@ export function validateCloudSnapshot(data) {
   requireValid(object(data) && data.format === 'dua-cloud-snapshot' && data.version === 1 && Array.isArray(data.chats) && data.chats.length <= 100 &&
     Array.isArray(data.memory) && data.memory.length <= 10 && data.memory.every(note => text(note, 200, true)));
   const ids = new Set();
+  const deletedChatIds = data.deletedChatIds === undefined ? [] : data.deletedChatIds;
+  requireValid(Array.isArray(deletedChatIds) && deletedChatIds.length <= 10_000 && deletedChatIds.every(id => text(id, 200, true)) && new Set(deletedChatIds).size === deletedChatIds.length);
   const projects = data.projects === undefined ? null : validateProjects(data.projects);
   const chats = data.chats.map(chat => {
-    requireValid(object(chat) && text(chat.id, 200, true) && !ids.has(chat.id) && integer(chat.updatedAt) && MODELS.includes(chat.model) &&
+    requireValid(object(chat) && text(chat.id, 200, true) && !ids.has(chat.id) && !deletedChatIds.includes(chat.id) && integer(chat.updatedAt) && MODELS.includes(chat.model) &&
       text(chat.draft, 8000) && Array.isArray(chat.messages) && chat.messages.length <= 500);
     ids.add(chat.id);
     const result = { id: chat.id, updatedAt: chat.updatedAt, model: chat.model, draft: chat.draft, messages: chat.messages.map(message) };
@@ -160,6 +162,7 @@ export function validateCloudSnapshot(data) {
     return result;
   });
   const value = { format: 'dua-cloud-snapshot', version: 1, chats, memory: data.memory.slice() };
+  if (data.deletedChatIds !== undefined) value.deletedChatIds = deletedChatIds.slice().sort();
   if (projects) value.projects = projects;
   requireValid(Buffer.byteLength(JSON.stringify(value), 'utf8') <= 4 * 1024 * 1024);
   return value;
