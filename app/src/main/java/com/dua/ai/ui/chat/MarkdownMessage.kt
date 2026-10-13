@@ -1,5 +1,9 @@
 package com.dua.ai.ui.chat
 
+import com.dua.ai.ui.theme.CodeTextStyle
+import com.dua.ai.ui.theme.markdownBodyStyle
+import com.dua.ai.ui.theme.markdownInlineCodeStyle
+
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -49,8 +53,8 @@ fun MarkdownMessage(markdown: String, modifier: Modifier = Modifier) {
     val type = MaterialTheme.typography
     val scheme = MaterialTheme.colorScheme
     val colors = DuaTheme.colors
-    val body = com.dua.ai.ui.theme.markdownBodyStyle(type)
-    val inlineCode = com.dua.ai.ui.theme.markdownInlineCodeStyle(body)
+    val body = markdownBodyStyle(type)
+    val inlineCode = markdownInlineCodeStyle(body)
     CompositionLocalProvider(LocalUriHandler provides uriHandler) {
         Markdown(
             content = remember(markdown) { com.dua.ai.model.CitationMarkers.escape(markdown) },
@@ -70,7 +74,7 @@ fun MarkdownMessage(markdown: String, modifier: Modifier = Modifier) {
                 h1 = type.headlineSmall, h2 = type.titleLarge, h3 = type.titleMedium,
                 h4 = type.titleSmall.copy(fontWeight = FontWeight.SemiBold), h5 = type.titleSmall, h6 = type.titleSmall,
                 text = body, paragraph = body, ordered = body, bullet = body, list = body,
-                code = com.dua.ai.ui.theme.CodeTextStyle, inlineCode = inlineCode,
+                code = CodeTextStyle, inlineCode = inlineCode,
                 quote = body.copy(fontStyle = FontStyle.Italic, color = scheme.onSurfaceVariant),
                 link = body.copy(color = scheme.primary, textDecoration = TextDecoration.Underline),
             ),

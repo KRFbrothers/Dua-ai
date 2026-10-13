@@ -258,12 +258,12 @@ fun MediaViewerContent(media: List<GeneratedMedia>, startIndex: Int, actions: Im
                 else MediaBitmap(item, Modifier.fillMaxSize(), maxPx = 1600, poster = true, contentScale = ContentScale.Fit, background = DuaTheme.colors.mediaBackground)
             } else ZoomableImage(item)
         }
-        Row(Modifier.fillMaxWidth().background(DuaTheme.colors.mediaOverlay).safeDrawingPadding().padding(Spacing.xs), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().safeDrawingPadding().padding(Spacing.xs), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onDismiss) { Icon(Icons.Outlined.Close, "Close viewer", tint = DuaTheme.colors.onMedia) }
             if (media.size > 1) Text("${pager.currentPage + 1} / ${media.size}", color = DuaTheme.colors.onMedia, style = MaterialTheme.typography.titleMedium)
         }
         val current = media.getOrNull(pager.currentPage)
-        if (current != null) Row(Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(DuaTheme.colors.mediaOverlay).safeDrawingPadding().padding(Spacing.md),
+        if (current != null) Row(Modifier.align(Alignment.BottomCenter).fillMaxWidth().safeDrawingPadding().padding(Spacing.md),
             horizontalArrangement = Arrangement.SpaceEvenly) {
             ViewerButton(Icons.Outlined.Download, "Save") { actions.onSave(listOf(current)) }
             ViewerButton(Icons.Outlined.Share, "Share") { actions.onShare(listOf(current)) }

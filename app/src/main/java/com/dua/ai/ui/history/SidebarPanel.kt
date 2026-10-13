@@ -1,5 +1,7 @@
 package com.dua.ai.ui.history
 
+import com.dua.ai.ui.theme.DuaVectorStroke
+
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -112,7 +114,7 @@ private fun SidebarMenuRow(item: SidebarItem, chevron: Boolean, modifier: Modifi
 // Exact outlined cube from the approved header, separate from the unchanged full Dua logo.
 private val SidebarCube by lazy {
     ImageVector.Builder("Dua cube", 24.dp, 24.dp, 24f, 24f).apply {
-        path(fill = null, stroke = SolidColor(com.dua.ai.ui.theme.DuaVectorStroke), strokeLineWidth = 1.8f, strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round) {
+        path(fill = null, stroke = SolidColor(DuaVectorStroke), strokeLineWidth = 1.8f, strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round) {
             moveTo(12f, 2f); lineTo(21f, 7f); lineTo(21f, 17f); lineTo(12f, 22f); lineTo(3f, 17f); lineTo(3f, 7f); close()
             moveTo(3f, 7f); lineTo(12f, 12f); lineTo(21f, 7f)
             moveTo(12f, 12f); lineTo(12f, 22f)

@@ -84,7 +84,6 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -96,9 +95,10 @@ import com.dua.ai.R
 import com.dua.ai.ui.theme.DuaColors
 import com.dua.ai.ui.theme.DuaVoiceColors
 import com.dua.ai.ui.theme.DuaTheme
-import com.dua.ai.ui.theme.DuaShape
-import com.dua.ai.ui.theme.MontserratFontFamily
 import com.dua.ai.ui.theme.VoiceGreetingStyle
+import com.dua.ai.ui.theme.VoiceReplyCaptionStyle
+import com.dua.ai.ui.theme.VoicePermissionHeadingStyle
+import com.dua.ai.ui.theme.voiceTranscriptStyle
 import com.dua.ai.ui.theme.Sizes
 import com.dua.ai.ui.theme.Spacing
 import com.dua.ai.voice.VoicePhase
@@ -316,18 +316,17 @@ private fun Greeting(ui: VoiceModeUi, conversation: Boolean, modifier: Modifier)
 private fun Captions(ui: VoiceModeUi, callbacks: VoiceModeCallbacks, modifier: Modifier) {
     val scroll = rememberScrollState()
     LaunchedEffect(ui.replyText) { scroll.scrollTo(0) }
-    Column(modifier.background(DuaTheme.colors.voice.textSurface, DuaShape.card)
-        .verticalScroll(scroll).padding(top = Spacing.sm, bottom = Spacing.lg)) {
+    Column(modifier.verticalScroll(scroll).padding(top = Spacing.sm, bottom = Spacing.lg)) {
         if (ui.userText.isNotBlank()) {
-            Text(ui.userText, style = MaterialTheme.typography.bodyLarge,
+            Text(ui.userText, style = voiceTranscriptStyle(MaterialTheme.typography),
                 color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 4, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.semantics { contentDescription = "You said: ${ui.userText}" })
             Spacer(Modifier.height(Spacing.lg))
         }
         when {
-            ui.phase == VoicePhase.Thinking -> Text("Thinking…", style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Normal), color = MaterialTheme.colorScheme.onSurfaceVariant)
+            ui.phase == VoicePhase.Thinking -> Text("Thinking…", style = VoiceReplyCaptionStyle, color = MaterialTheme.colorScheme.onSurfaceVariant)
             ui.replyText.isNotBlank() -> {
-                Text(ui.replyText, style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Normal), color = MaterialTheme.colorScheme.onSurface,
+                Text(ui.replyText, style = VoiceReplyCaptionStyle, color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
                 Spacer(Modifier.height(Spacing.md))
                 ReplyActions(ui.feedback, callbacks)
@@ -364,8 +363,7 @@ private fun ActionIcon(icon: ImageVector, description: String, tint: Color, sele
 @Composable
 private fun BottomStatus(ui: VoiceModeUi) {
     val heard = ui.heard.takeIf { ui.captions && ui.phase == VoicePhase.Listening && it.isNotBlank() }
-    val backdrop = if (heard != null || ui.notice.isNotBlank()) Modifier.background(DuaTheme.colors.voice.textSurface, DuaShape.card) else Modifier
-    Column(Modifier.fillMaxWidth().padding(horizontal = Spacing.xxl).then(backdrop), horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = Spacing.xxl), horizontalAlignment = Alignment.CenterHorizontally) {
         if (heard != null) Text(heard, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center, maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(bottom = Spacing.sm))
         if (ui.notice.isNotBlank()) Text(ui.notice, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -492,7 +490,7 @@ private fun PermissionRationale(permission: MicPermission, callbacks: VoiceModeC
                 Icon(Icons.Outlined.Mic, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(30.dp))
             }
             Spacer(Modifier.height(Spacing.lg))
-            Text("Let Dua hear you", style = MaterialTheme.typography.headlineSmall.copy(fontFamily = MontserratFontFamily, fontWeight = FontWeight.Medium), color = MaterialTheme.colorScheme.onSurface,
+            Text("Let Dua hear you", style = VoicePermissionHeadingStyle, color = MaterialTheme.colorScheme.onSurface,
                 textAlign = TextAlign.Center, modifier = Modifier.semantics { heading() })
             Spacer(Modifier.height(Spacing.sm))
             val body = if (permission == MicPermission.Blocked)

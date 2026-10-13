@@ -1,5 +1,7 @@
 package com.dua.ai.ui.icons
 
+import com.dua.ai.ui.theme.DuaVectorStroke
+
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
@@ -12,7 +14,7 @@ object DuaIcons {
     /** Four-point sparkle with a small plus (Auto pill and Home tagline). */
     val Sparkle: ImageVector by lazy {
         ImageVector.Builder("DuaSparkle", 24.dp, 24.dp, 24f, 24f).path(
-            stroke = SolidColor(com.dua.ai.ui.theme.DuaVectorStroke), strokeLineWidth = 1.6f, strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round,
+            stroke = SolidColor(DuaVectorStroke), strokeLineWidth = 1.6f, strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round,
         ) {
             moveTo(10f, 4.5f)
             quadTo(11f, 12f, 18.5f, 13f)

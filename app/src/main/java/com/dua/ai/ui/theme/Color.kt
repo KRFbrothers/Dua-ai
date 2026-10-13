@@ -5,7 +5,8 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.lerp
+import dev.snipme.highlights.model.SyntaxTheme
+import dev.snipme.highlights.model.SyntaxThemes
 
 /**
  * Raw palette. Screens never use these directly: they read [ColorScheme] roles from
@@ -153,6 +154,8 @@ data class DuaColors(
     val voiceCubeStroke: Color,
     val voiceCubeHighlight: Color,
     val diff: DuaDiffColors,
+    /** Original Atom palette selected for this appearance, without runtime hue adjustment. */
+    val syntaxTheme: SyntaxTheme,
     val voice: DuaVoiceColors,
     val danger: Color,
     val onDanger: Color,
@@ -179,8 +182,6 @@ data class DuaDiffColors(val added: Color, val addedBackground: Color, val remov
 @Immutable
 data class DuaVoiceColors(
     val background: Color,
-    /** Keeps captions/status readable even where the animated glow is brightest. */
-    val textSurface: Color,
     val glowSilver: Color,
     val highlight: Color,
     val statusSurface: Color,
@@ -200,17 +201,8 @@ internal val DuaVectorStroke = Color.Black
 /** Geometry supplies a computed shade, while the theme owns the cube's color construction. */
 internal fun voiceCubeFaceColor(shade: Float, alpha: Float): Color = Color(shade, shade, shade, alpha)
 
-/** Third-party syntax hues are retained, adjusting only those that fail AA on our code surfaces. */
-internal fun codeSyntaxColor(rgb: Int, colors: DuaColors): Color {
-    val raw = Color(rgb).copy(alpha = 1f)
-    val target = if (colors.isDark) Color.White else Color.Black
-    val surfaces = listOf(colors.codeBackground, colors.codeHeader)
-    for (step in 0..100) {
-        val candidate = lerp(raw, target, step / 100f)
-        if (surfaces.all { contrast(candidate, it) >= 4.5 }) return candidate
-    }
-    return target
-}
+/** Decode an original syntax token's RGB exactly as the pre-refactor renderer did. */
+internal fun syntaxTokenColor(rgb: Int): Color = Color(rgb).copy(alpha = 1f)
 
 internal val DuaDarkColors = DuaColors(
     userBubble = DuaPalette.Neutral16,
@@ -226,15 +218,16 @@ internal val DuaDarkColors = DuaColors(
     voiceCubeStroke = DuaPalette.Neutral72,
     voiceCubeHighlight = Color(.88f, .88f, .90f),
     diff = DuaDiffColors(Color(0xFF7EE787), Color(0x332EA043), Color(0xFFFF7B72), Color(0x33F85149), Color(0xFF79C0FF)),
+    syntaxTheme = SyntaxThemes.atom(true),
     voice = DuaVoiceColors(
-        background = Color(0xFF050506), textSurface = Color(0xFF050506).copy(alpha = .92f),
+        background = Color(0xFF050506),
         glowSilver = DuaPalette.Neutral88, highlight = DuaPalette.Neutral100,
         statusSurface = DuaPalette.Neutral100.copy(alpha = .06f), speakingGlow = Color(0xFF8B7CF6),
         orbSurfaceTop = Color(0xFF141518), orbSurfaceBottom = Color(0xFF0B0B0D),
         orbSilverLow = DuaPalette.Neutral72, orbSilverHigh = DuaPalette.Neutral88,
         orbGold = DuaPalette.Gold80, orbCream = Color(0xFFF3E3B8), orbRim = Color.White.copy(alpha = .10f),
     ),
-    danger = Color(0xFFC7353B), onDanger = DuaPalette.Neutral100,
+    danger = Color(0xFFE5484D), onDanger = DuaPalette.Neutral100,
     mediaBackground = Color.Black, mediaOverlay = Color.Black.copy(alpha = .55f), onMedia = DuaPalette.Neutral100,
     logoHighlight = DuaPalette.Neutral100, brandBadgeBackground = DuaPalette.Neutral100,
     sparkle = DuaPalette.Gold80,
@@ -258,15 +251,16 @@ internal val DuaLightColors = DuaColors(
     voiceCubeStroke = DuaPalette.Neutral45,
     voiceCubeHighlight = Color(.88f, .88f, .90f),
     diff = DuaDiffColors(Color(0xFF116329), Color(0x262DA44E), Color(0xFF82071E), Color(0x26FF8182), Color(0xFF0550AE)),
+    syntaxTheme = SyntaxThemes.atom(false),
     voice = DuaVoiceColors(
-        background = DuaPalette.Neutral97, textSurface = DuaPalette.Neutral97.copy(alpha = .92f),
+        background = DuaPalette.Neutral97,
         glowSilver = DuaPalette.Neutral72, highlight = DuaPalette.Neutral100,
-        statusSurface = DuaPalette.Ink.copy(alpha = .05f), speakingGlow = Color(0xFF6754C7),
+        statusSurface = DuaPalette.Ink.copy(alpha = .05f), speakingGlow = Color(0xFF8B7CF6),
         orbSurfaceTop = Color(0xFF141518), orbSurfaceBottom = Color(0xFF0B0B0D),
         orbSilverLow = DuaPalette.Neutral72, orbSilverHigh = DuaPalette.Neutral88,
         orbGold = DuaPalette.Gold80, orbCream = Color(0xFFF3E3B8), orbRim = Color.Black.copy(alpha = .12f),
     ),
-    danger = Color(0xFFC7353B), onDanger = DuaPalette.Neutral100,
+    danger = Color(0xFFE5484D), onDanger = DuaPalette.Neutral100,
     mediaBackground = Color.Black, mediaOverlay = Color.Black.copy(alpha = .55f), onMedia = DuaPalette.Neutral100,
     logoHighlight = DuaPalette.Neutral100, brandBadgeBackground = DuaPalette.Neutral100,
     sparkle = DuaPalette.Gold40,

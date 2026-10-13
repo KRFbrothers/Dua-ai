@@ -1,5 +1,7 @@
 package com.dua.ai.model
 
+import com.dua.ai.ui.theme.DuaDarkColors
+
 import com.dua.ai.history.ChatHistoryCodec
 import com.dua.ai.history.SavedChat
 import com.dua.ai.network.ChatStreamParser
@@ -100,7 +102,7 @@ class BuildModeTest {
 
     @Test fun diffLinesAreColouredByKind() {
         val diff = "--- a/x\n+++ b/x\n@@ -1 +1 @@\n-old\n+new\n same"
-        val styled = highlightDiff(diff, com.dua.ai.ui.theme.DuaDarkColors)
+        val styled = highlightDiff(diff, DuaDarkColors)
         assertEquals(diff, styled.text)
         fun styleAt(text: String) = styled.spanStyles.filter { diff.indexOf(text) in it.start until it.end }.map { it.item }
         assertNotNull(styleAt("+new").single().background)

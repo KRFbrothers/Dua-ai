@@ -2,6 +2,12 @@ package com.dua.ai.ui.theme
 
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
+import com.dua.ai.ui.chat.highlightCode
+import dev.snipme.highlights.Highlights
+import dev.snipme.highlights.model.ColorHighlight
+import dev.snipme.highlights.model.SyntaxLanguage
+import dev.snipme.highlights.model.SyntaxThemes
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -23,28 +29,28 @@ class DesignSystemContrastTest {
                 aa("$label proposal totals", color, scheme.surfaceContainerLow)
                 aa("$label proposal badges", color, color.copy(alpha = .14f).compositeOver(scheme.surfaceContainerLow))
             }
-            aa("$label danger", colors.onDanger, colors.danger)
+            // End-call uses an icon, not text. Preserve the original red and check non-text AA (3:1).
+            assertTrue("$label end-call icon", contrast(colors.onDanger, colors.danger) >= 3.0)
             aa("$label voice heading", scheme.onSurface, colors.voice.background)
             aa("$label voice transcript", scheme.onSurfaceVariant, colors.voice.background)
-            val brightestGlow = if (colors.isDark) Color.White else Color.Black
-            aa("$label voice text over glow", scheme.onSurfaceVariant, colors.voice.textSurface.compositeOver(brightestGlow))
             aa("$label voice status", scheme.onSurfaceVariant, colors.voice.statusSurface.compositeOver(colors.voice.background))
             aa("$label media", colors.onMedia, colors.mediaBackground)
-            // White artwork is the worst backdrop for white labels on a black overlay.
+            // This overlay is used by the original video poster badge, not the viewer rows.
             aa("$label media over white image", colors.onMedia, colors.mediaOverlay.compositeOver(Color.White))
         }
     }
 
-    @Test fun syntaxColorsAreReadableAndAlreadyAccessibleHuesStayUnchanged() {
-        val samples = listOf(0x000000, 0xffffff, 0xff0000, 0x00ff00, 0x0000ff, 0x999999, 0xf3e3b8)
+    @Test fun syntaxTokensPreserveTheOriginalAtomPaletteWithoutContrastAdjustment() {
+        val code = "# comment\ndef greet(name):\n    return 'Hi ' + name\nprint(greet('Dua'))"
+        val language = SyntaxLanguage.getByName("python")!!
         for (colors in listOf(DuaLightColors, DuaDarkColors)) {
-            for (rgb in samples) {
-                val adjusted = codeSyntaxColor(rgb, colors)
-                aa("syntax $rgb", adjusted, colors.codeBackground)
-                aa("syntax $rgb header", adjusted, colors.codeHeader)
-                val raw = Color(rgb).copy(alpha = 1f)
-                if (listOf(colors.codeBackground, colors.codeHeader).all { contrast(raw, it) >= 4.5 })
-                    org.junit.Assert.assertEquals(raw, adjusted)
+            val original = Highlights.Builder().code(code).language(language).theme(SyntaxThemes.atom(colors.isDark)).build()
+            val styled = highlightCode(code, "python", colors)
+            val expected = original.getHighlights().filterIsInstance<ColorHighlight>()
+            assertTrue(expected.isNotEmpty())
+            for (highlight in expected) {
+                val matching = styled.spanStyles.filter { it.start == highlight.location.start && it.end == highlight.location.end && it.item.color != Color.Unspecified }
+                assertEquals(Color(highlight.rgb).copy(alpha = 1f), matching.single().item.color)
             }
         }
     }

@@ -37,14 +37,13 @@ import com.dua.ai.ui.theme.CodeTextStyle
 import com.dua.ai.ui.theme.DuaShape
 import com.dua.ai.ui.theme.DuaTheme
 import com.dua.ai.ui.theme.DuaColors
-import com.dua.ai.ui.theme.codeSyntaxColor
+import com.dua.ai.ui.theme.syntaxTokenColor
 import com.dua.ai.ui.theme.Sizes
 import com.dua.ai.ui.theme.Spacing
 import dev.snipme.highlights.Highlights
 import dev.snipme.highlights.model.BoldHighlight
 import dev.snipme.highlights.model.ColorHighlight
 import dev.snipme.highlights.model.SyntaxLanguage
-import dev.snipme.highlights.model.SyntaxThemes
 import kotlinx.coroutines.delay
 
 private const val MAX_HIGHLIGHT_CHARS = 20_000
@@ -57,7 +56,7 @@ internal fun highlightCode(code: String, language: String?, colors: DuaColors): 
     }
     if (syntax == null || code.length > MAX_HIGHLIGHT_CHARS) return AnnotatedString(code)
     return runCatching {
-        val result = Highlights.Builder().code(code).language(syntax).theme(SyntaxThemes.atom(colors.isDark)).build()
+        val result = Highlights.Builder().code(code).language(syntax).theme(colors.syntaxTheme).build()
         val syntaxColors = mutableMapOf<Int, androidx.compose.ui.graphics.Color>()
         buildAnnotatedString {
             append(code)
@@ -65,7 +64,7 @@ internal fun highlightCode(code: String, language: String?, colors: DuaColors): 
                 val start = highlight.location.start.coerceIn(0, code.length)
                 val end = highlight.location.end.coerceIn(start, code.length)
                 when (highlight) {
-                    is ColorHighlight -> addStyle(SpanStyle(color = syntaxColors.getOrPut(highlight.rgb) { codeSyntaxColor(highlight.rgb, colors) }), start, end)
+                    is ColorHighlight -> addStyle(SpanStyle(color = syntaxColors.getOrPut(highlight.rgb) { syntaxTokenColor(highlight.rgb) }), start, end)
                     is BoldHighlight -> addStyle(SpanStyle(fontWeight = FontWeight.Bold), start, end)
                 }
             }

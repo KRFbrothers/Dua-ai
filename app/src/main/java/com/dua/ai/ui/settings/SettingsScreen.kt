@@ -1,5 +1,7 @@
 package com.dua.ai.ui.settings
 
+import com.dua.ai.ui.theme.DuaTheme
+
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Brush
 import androidx.compose.material.icons.outlined.CloudSync
@@ -64,7 +66,7 @@ fun SettingsScreen(viewModel: ChatViewModel, onBack: () -> Unit, onOpen: (DuaDes
     val account by viewModel.account.state.collectAsState()
     val integrations by viewModel.integrations.collectAsState()
     val state = SettingsUiState(
-        displayName = account.user?.displayName.orEmpty(), accent = appearance.resolvedAccent(com.dua.ai.ui.theme.DuaTheme.colors.isDark).label, accountBusy = account.busy, accountNotice = account.notice,
+        displayName = account.user?.displayName.orEmpty(), accent = appearance.resolvedAccent(DuaTheme.colors.isDark).label, accountBusy = account.busy, accountNotice = account.notice,
         email = account.user?.email, theme = appearance.theme, font = preferences.font, haptic = preferences.haptic,
         memoryEnabled = preferences.memoryEnabled, notifications = preferences.notifications,
         voice = integrations.voice?.let { config ->

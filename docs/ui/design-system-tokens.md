@@ -16,8 +16,8 @@ Tokens below are relative to `DuaTheme.colors`, unless marked M3. D/L means dark
 | Voice background D/L `#050506` / Neutral97 `#F6F6F7` | `voice.background` |
 | Orb gradient `#141518` → `#0B0B0D` in both themes | `voice.orbSurfaceTop` → `voice.orbSurfaceBottom` |
 | Orb cream `#F3E3B8` | `voice.orbCream` |
-| Live speaking glow `#8B7CF6` | `voice.speakingGlow`: dark unchanged, light `#6754C7` |
-| End-call red `#E5484D`, white icon | `danger` (`#C7353B`) / `onDanger` (white); stronger contrast |
+| Live speaking glow `#8B7CF6` | `voice.speakingGlow` (original `#8B7CF6` in both appearances) |
+| End-call red `#E5484D`, white icon | `danger` (`#E5484D`) / `onDanger` (white), unchanged |
 | Voice glow gold D/L Gold80 `#E8C46A` / Gold40 `#A67C1E` | Existing `sparkle` |
 | Voice glow silver D/L Neutral88 `#DDDEE2` / Neutral72 `#B4B7BE` | `voice.glowSilver` |
 | Orb silver Neutral72 `#B4B7BE` → Neutral88 `#DDDEE2`; Gold80 `#E8C46A` | `voice.orbSilverLow` → `voice.orbSilverHigh`; `voice.orbGold` |
@@ -32,9 +32,9 @@ Tokens below are relative to `DuaTheme.colors`, unless marked M3. D/L means dark
 | Home logo sweep white; Google badge white | `logoHighlight`; `brandBadgeBackground` (artwork colors stay fixed) |
 | Cube highlight RGB `(0.88, 0.88, 0.90)`; computed grayscale face shade | `voiceCubeHighlight`; theme helper `voiceCubeFaceColor` |
 | Black vector strokes (DuaIcons, sidebar cube) | Theme `DuaVectorStroke` tint mask; visible icon tint still follows the caller |
-| Third-party syntax RGB values | Theme `codeSyntaxColor`: preserves accessible hues and adjusts only failing colors to at least 4.5:1 on code surfaces |
+| Third-party syntax RGB values | `syntaxTheme` (original Atom dark/light palettes) and theme `syntaxTokenColor`; RGB values are decoded unchanged |
 
-Voice `textSurface` adds a 92%-opaque themed backdrop under captions/status so glow cannot wash out text. Media viewer header/footer now use `mediaOverlay` so white labels remain readable over bright artwork. These are visual contrast corrections, not new actions.
+Voice captions and bottom status retain the original background without an extra card. Media viewer header/footer retain their original transparent rows. `mediaOverlay` is only used by the original video poster play/duration overlays.
 
 ## Replaced typography
 
@@ -44,9 +44,9 @@ All sizes and proportional sizing helpers live in `ui/theme/Type.kt`. Android fo
 | --- | --- |
 | Home tagline `20sp / 28sp`, compact `18sp / 28sp`, Montserrat Medium | `HomeTaglineStyle`, `HomeTaglineCompactStyle` (exact original sizing) |
 | Voice greeting `26sp / 34sp`, Montserrat Medium | `VoiceGreetingStyle` (exact original sizing) |
-| Voice user transcript `16sp / 22sp` | M3 `bodyLarge` (`16sp / 25sp`) |
-| Voice reply/Thinking caption `24sp / 33sp`, normal weight | M3 `headlineMedium` (`24sp / 32sp`) with normal weight |
-| Permission heading `22sp / 28sp`, Montserrat Medium | M3 `headlineSmall` (`22sp / 30sp`) with original family/weight |
+| Voice user transcript `16sp / 22sp` | Theme `voiceTranscriptStyle` (`16sp / 22sp`), derived from the selected M3 body family |
+| Voice reply/Thinking caption `24sp / 33sp`, normal weight | Theme `VoiceReplyCaptionStyle` (`24sp / 33sp`, original default family/normal weight) |
+| Permission heading `22sp / 28sp`, Montserrat Medium | Theme `VoicePermissionHeadingStyle` (`22sp / 28sp`, Montserrat Medium) |
 | Markdown line height = body size × `1.55`, inline code = body size × `0.9` | Theme `markdownBodyStyle`, `markdownInlineCodeStyle` (same proportional sizing) |
 
 The caption toggle uses `Sizes.touchTarget` (48dp); existing action targets remain intact. `Color.Transparent` and `Color.Unspecified` are rendering/default sentinels, not palette colors. The white JPEG flattening in `PhotoAttachmentReader` is file processing, not UI, and remains unchanged.
@@ -59,4 +59,4 @@ rg '\.sp\b' app/src/main            # only theme/Type.kt
 bash ./gradlew :app:testDebugUnitTest --no-daemon --max-workers=2
 ```
 
-`DesignSystemContrastTest` checks AA text contrast (4.5:1) on diff/badge/translucent media/voice surfaces in both themes and checks the syntax hue correction. Existing accent tests cover all six presets. UI rendering uses sample data; physical-device/TalkBack verification is separate from automated checks.
+`DesignSystemContrastTest` checks AA text contrast (4.5:1) on the existing diff/badge/voice-base/media surfaces in both themes. The restored end-call color is checked at the non-text icon threshold (3:1); syntax highlighting is checked against the exact original Atom colors. It does not claim every original syntax hue or text over arbitrary artwork/animated glow meets text AA. Existing accent tests cover all six presets. UI rendering uses sample data; physical-device/TalkBack verification is separate from automated checks.

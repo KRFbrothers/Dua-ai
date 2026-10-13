@@ -1,5 +1,7 @@
 package com.dua.ai.ui.voice
 
+import com.dua.ai.ui.theme.DuaTheme
+
 import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -125,14 +127,14 @@ fun LiveVoiceContent(state: LiveState, starting: Boolean, error: String, fallbac
                     Icon(if (state.muted) Icons.Outlined.MicOff else Icons.Outlined.Mic, contentDescription = if (state.muted) "Unmute microphone" else "Mute microphone", modifier = Modifier.size(28.dp))
                 }
                 FilledIconButton(onClick = onEnd, modifier = Modifier.size(72.dp),
-                    colors = IconButtonDefaults.filledIconButtonColors(containerColor = com.dua.ai.ui.theme.DuaTheme.colors.danger,
-                        contentColor = com.dua.ai.ui.theme.DuaTheme.colors.onDanger)) {
+                    colors = IconButtonDefaults.filledIconButtonColors(containerColor = DuaTheme.colors.danger,
+                        contentColor = DuaTheme.colors.onDanger)) {
                     Icon(Icons.Filled.CallEnd, contentDescription = "End live voice", modifier = Modifier.size(32.dp))
                 }
             } else Column(Modifier.fillMaxWidth().padding(vertical = Spacing.lg), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                 Button(onClick = onStart, enabled = !starting && !(fallback && error.isNotBlank() && usage?.leftSeconds == 0),
                     modifier = Modifier.fillMaxWidth().widthIn(max = 420.dp).height(52.dp), shape = RoundedCornerShape(26.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = com.dua.ai.ui.theme.DuaTheme.colors.action, contentColor = com.dua.ai.ui.theme.DuaTheme.colors.onAction)) {
+                    colors = ButtonDefaults.buttonColors(containerColor = DuaTheme.colors.action, contentColor = DuaTheme.colors.onAction)) {
                     Icon(Icons.Outlined.Mic, null); Text(if (state.phase == LivePhase.IDLE) "Start talking" else "Start again", modifier = Modifier.padding(start = Spacing.sm))
                 }
                 if (fallback || error.isNotBlank()) TextButton(onClick = onHandsFree) { Text("Use hands-free mode instead") }
@@ -182,11 +184,11 @@ fun VoiceOrb(phase: LivePhase, level: Float, muted: Boolean, modifier: Modifier 
     val transition = rememberInfiniteTransition(label = "orb")
     val time by transition.animateFloat(0f, 1f, infiniteRepeatable(tween(3200, easing = LinearEasing), RepeatMode.Restart), label = "time")
     val smoothed by animateFloatAsState(if (muted) 0f else level, tween(120), label = "level")
-    val accent = com.dua.ai.ui.theme.DuaTheme.colors.action
+    val accent = DuaTheme.colors.action
     val speaking = phase == LivePhase.SPEAKING
     val idle = phase == LivePhase.IDLE || phase == LivePhase.ENDED || phase == LivePhase.FAILED
     val core = if (muted || idle) MaterialTheme.colorScheme.outline else accent
-    val voiceColors = com.dua.ai.ui.theme.DuaTheme.colors.voice
+    val voiceColors = DuaTheme.colors.voice
     val glow = if (speaking) voiceColors.speakingGlow else accent
     Canvas(modifier) {
         val radius = size.minDimension / 2
