@@ -291,7 +291,7 @@ fun ChatScreen(
                             onStop = actions.onStop,
                             onModelClick = { sheet = ChatSheet.Model },
                             currentModel = state.model,
-                            onCancelUpload = actions.onCancelUpload,
+                            onCancelUpload = { state.uploads.filter { it.uploading }.forEach { actions.onCancelUpload(it.id) } },
                             onImagineOptions = { sheet = ChatSheet.Imagine },
                         )
                     }
