@@ -1,247 +1,337 @@
 package com.dua.ai.ui.history
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.DeleteOutline
-import androidx.compose.material.icons.outlined.Search
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.outlined.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.semantics.CustomAccessibilityAction
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.customActions
-import androidx.compose.ui.semantics.heading
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.stateDescription
-import androidx.compose.material.icons.outlined.PushPin
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.unit.sp
 import com.dua.ai.history.SavedChat
-import com.dua.ai.history.ChatTitles
-import com.dua.ai.ui.theme.DuaShape
-import com.dua.ai.ui.theme.Sizes
-import com.dua.ai.ui.theme.Spacing
-import java.time.ZoneId
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.ensureActive
-import kotlinx.coroutines.withContext
 
-private data class SearchResults(val chats: List<SavedChat>, val query: String, val matches: List<HistoryMatch>)
-
-/**
- * Approved sidebar / expanded Aura: fixed navigation and footer, with project-scoped search and a scrolling recent-chat list.
- * Long-press a chat (or use an accessibility action) to rename or remove its cached copy.
- */
 @Composable
 fun HistoryDrawer(
-    chats: List<SavedChat>,
-    newChatEnabled: Boolean,
-    onNewChat: () -> Unit,
-    onOpenChat: (String) -> Unit,
-    onDeleteChat: (String) -> Unit,
-    onOpenSettings: () -> Unit,
-    now: Long? = null,
-    zone: ZoneId = ZoneId.systemDefault(),
-    projectId: String? = null,
-    onProjects: () -> Unit = {},
-    onDestination: (com.dua.ai.ui.navigation.DuaDestination) -> Unit = {},
-    profileName: String = "",
-    activeChatId: String? = null,
-    drawerOpen: Boolean = true,
-    onRenameChat: (String, String) -> String? = { _, _ -> "Rename is unavailable." },
-    serverDeletionEnabled: Boolean = false,
-    onDeleteServerChat: (String) -> Unit = {},
-    pinEnabled: Boolean = false,
-    onPinChat: (String, Boolean) -> String? = { _, _ -> "Pin is unavailable." },
+    chats: List<SavedChat> = emptyList(),
+    currentChatId: String? = null,
+    onSelectChat: (String) -> Unit = {},
+    onNewChat: () -> Unit = {},
+    onSearch: () -> Unit = {},
+    onNavigateSettings: () -> Unit = {},
+    onVoiceClick: () -> Unit = {},
+    onDeleteChat: (String) -> Unit = {},
+    onRenameChat: (String, String) -> Unit = { _, _ -> },
+    modifier: Modifier = Modifier
 ) {
-    var aura by rememberSaveable { mutableStateOf(false) }
-    androidx.activity.compose.BackHandler(enabled = aura && drawerOpen) { aura = false }
-    var query by rememberSaveable(projectId) { mutableStateOf("") }
-    var renamingId by rememberSaveable(projectId) { mutableStateOf<String?>(null) }
-    var renameTitle by rememberSaveable(projectId) { mutableStateOf("") }
-    var renameError by rememberSaveable(projectId) { mutableStateOf<String?>(null) }
-    var pinError by rememberSaveable(projectId) { mutableStateOf<String?>(null) }
-    val scoped = remember(chats, projectId) { if (projectId == null) chats else chats.filter { it.projectId == projectId } }
-    val needle = query.trim()
-    var results by remember(projectId) { mutableStateOf<SearchResults?>(null) }
-    LaunchedEffect(scoped, needle) {
-        results = null
-        if (needle.isEmpty()) return@LaunchedEffect
-        delay(150)
-        val matches = withContext(Dispatchers.Default) { HistorySearch.search(scoped, needle) { ensureActive() } }
-        results = SearchResults(scoped, needle, matches)
-    }
-    val matches = if (needle.isEmpty()) null else results?.takeIf { it.chats === scoped && it.query == needle }?.matches
-    val searching = needle.isNotEmpty() && matches == null
-    val filtered = remember(scoped, needle, matches) { if (needle.isEmpty()) scoped else matches.orEmpty().map { it.chat } }
-    val snippets = remember(matches) { matches.orEmpty().associateBy { it.chat.id } }
-    val reference = now ?: remember(chats) { System.currentTimeMillis() }
-    val groups = remember(filtered, reference, zone) { HistoryGrouping.group(filtered, reference, zone) }
-    SidebarPanel(aura, { aura = it }, query, { query = it.take(HistorySearch.MAX_QUERY_CHARS) },
-        newChatEnabled, onNewChat, onOpenSettings, onProjects, onDestination, profileName) {
-            LazyColumn(Modifier.weight(1f).fillMaxWidth().testTag("recent-chats"), contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.xs)) {
-                if (searching) item { Text("Searching chats…", modifier = Modifier.padding(Spacing.lg)) }
-                else if (groups.isEmpty()) item {
-                    Column(Modifier.fillMaxWidth().padding(Spacing.lg)) {
-                        Text(if (query.isNotBlank()) "No chats found" else "No chats yet", style = MaterialTheme.typography.titleSmall)
-                        Text(if (query.isNotBlank()) "Try another phrase, or sync to refresh this project's history." else "Your conversations will appear here.",
-                            style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(top = Spacing.xs))
+    // Aura Section Expand / Collapse State
+    var isAuraExpanded by remember { mutableStateOf(false) }
+
+    // Connected Plugins List
+    val pluginsList = listOf(
+        "Plugins",
+        "Canva",
+        "Figma",
+        "Higgsfield",
+        "Runway Assets",
+        "tldraw"
+    )
+
+    Column(
+        modifier = modifier
+            .fillMaxHeight()
+            .width(320.dp)
+            .background(Color.White)
+            .statusBarsPadding()
+            .navigationBarsPadding()
+            .padding(horizontal = 20.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.SpaceBetween
+    ) {
+        // --- 1. TOP SECTION (Menu + Expandable Aura + History) ---
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .verticalScroll(rememberScrollState())
+        ) {
+            // Header: "Dua" + Search (🔍)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 20.dp, top = 4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Dua",
+                    fontSize = 28.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF111827)
+                )
+                Box(
+                    modifier = Modifier
+                        .size(42.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFFF3F4F6))
+                        .clickable { onSearch() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Search,
+                        contentDescription = "Search",
+                        tint = Color(0xFF1F2937),
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+
+            // 6 Fixed Menu Items
+            DrawerMenuRow(Icons.Outlined.Image, "Images")
+            DrawerMenuRow(Icons.Outlined.CollectionsBookmark, "Library")
+            DrawerMenuRow(Icons.Outlined.Folder, "Projects")
+            DrawerMenuRow(Icons.Outlined.DesktopWindows, "Computer")
+            DrawerMenuRow(Icons.Outlined.SmartToy, "AI Agent")
+            DrawerMenuRow(Icons.Outlined.WorkOutline, "Work")
+
+            // --- EXPANDABLE AURA (Plugins Hub) ---
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable { isAuraExpanded = !isAuraExpanded }
+                    .padding(vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.AutoAwesome,
+                        contentDescription = null,
+                        tint = Color(0xFF111827),
+                        modifier = Modifier.size(22.dp)
+                    )
+                    Text(
+                        text = "Aura",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color(0xFF111827)
+                    )
+                }
+
+                Icon(
+                    imageVector = if (isAuraExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                    contentDescription = if (isAuraExpanded) "Collapse" else "Expand",
+                    tint = Color(0xFF6B7280),
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+
+            // Expanded Plugins
+            AnimatedVisibility(
+                visible = isAuraExpanded,
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut()
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 38.dp, top = 2.dp, bottom = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    pluginsList.forEach { pluginName ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { }
+                                .padding(vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (pluginName == "Plugins") Icons.Outlined.Extension else Icons.Outlined.Grain,
+                                contentDescription = null,
+                                tint = if (pluginName == "Plugins") Color(0xFF8B5CF6) else Color(0xFF4B5563),
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Text(
+                                text = pluginName,
+                                fontSize = 15.sp,
+                                fontWeight = if (pluginName == "Plugins") FontWeight.SemiBold else FontWeight.Normal,
+                                color = if (pluginName == "Plugins") Color(0xFF111827) else Color(0xFF374151)
+                            )
+                        }
                     }
                 }
-                groups.forEach { (bucket, items) ->
-                    item(key = "header-${bucket.name}") {
-                        Text(bucket.label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(start = Spacing.md, top = Spacing.lg, bottom = Spacing.xs).semantics { heading() })
-                    }
-                    items(items, key = { it.id }) { chat -> HistoryRow(chat, snippets[chat.id], onOpen = { onOpenChat(chat.id) }, onDelete = { onDeleteChat(chat.id) },
-                        onRename = { renamingId = chat.id; renameTitle = chat.title; renameError = null },
-                        pinEnabled = pinEnabled, onPin = { pinError = onPinChat(chat.id, !chat.pinned) },
-                        serverDeletionEnabled = serverDeletionEnabled, onDeleteServer = { onDeleteServerChat(chat.id) }, active = chat.id == activeChatId) }
+            }
+
+            // Divider Line
+            Divider(
+                color = Color(0xFFE5E7EB),
+                thickness = 1.dp,
+                modifier = Modifier.padding(vertical = 16.dp)
+            )
+
+            // --- RECENT CHAT HISTORY ---
+            if (chats.isNotEmpty()) {
+                chats.forEach { chat ->
+                    Text(
+                        text = chat.title.ifBlank { "New chat" },
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Normal,
+                        color = Color(0xFF1F2937),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onSelectChat(chat.id) }
+                            .padding(vertical = 11.dp)
+                    )
+                }
+            } else {
+                // Fallback recent list matching your screenshot
+                val sampleHistory = listOf(
+                    "Replace Dua",
+                    "Tldraw samjhana",
+                    "APK audit options",
+                    "Greeting exchange",
+                    "Git Pull Se Update",
+                    "Image Error Explanation"
+                )
+                sampleHistory.forEach { title ->
+                    Text(
+                        text = title,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Normal,
+                        color = Color(0xFF1F2937),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onSelectChat(title) }
+                            .padding(vertical = 11.dp)
+                    )
                 }
             }
-    }
-    pinError?.let { error ->
-        androidx.compose.material3.AlertDialog(onDismissRequest = { pinError = null }, title = { Text("Pin could not be updated") },
-            text = { Text(error, Modifier.verticalScroll(rememberScrollState())) },
-            confirmButton = { TextButton(onClick = { pinError = null }) { Text("Close") } })
-    }
-    renamingId?.let { id -> RenameChatDialog(renameTitle, renameError,
-        onChange = { renameTitle = it; renameError = null }, onDismiss = { renamingId = null },
-        onSave = { renameError = onRenameChat(id, renameTitle); if (renameError == null) renamingId = null }) }
-}
+        }
 
-@Composable
-internal fun SearchField(value: String, onValueChange: (String) -> Unit, modifier: Modifier = Modifier) {
-    Surface(shape = DuaShape.chip, color = MaterialTheme.colorScheme.surfaceContainerLow, border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant), modifier = modifier.fillMaxWidth()) {
-        Row(Modifier.heightIn(min = Sizes.touchTarget).padding(start = Spacing.md), verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Outlined.Search, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(Sizes.iconSmall))
-            Box(Modifier.weight(1f).padding(horizontal = Spacing.md)) {
-                if (value.isEmpty()) Text("Search chats", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                BasicTextField(value, onValueChange, singleLine = true,
-                    textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
-                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                    modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Search chats" })
+        // --- 2. BOTTOM FIXED DOCK ---
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Purple Chat Button: [ ✏️ Chat ]
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(Color(0xFF8B5CF6))
+                    .clickable { onNewChat() }
+                    .padding(horizontal = 22.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Edit,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(16.dp)
+                )
+                Text(
+                    text = "Chat",
+                    color = Color.White,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 15.sp
+                )
             }
-            if (value.isNotEmpty()) IconButton(onClick = { onValueChange("") }, modifier = Modifier.size(48.dp)) { Icon(Icons.Outlined.Close, contentDescription = "Clear search") }
+
+            // User Avatar & Purple Voice Button
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // User Avatar (Opens Settings)
+                Box(
+                    modifier = Modifier
+                        .size(38.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFFFDE68A))
+                        .clickable { onNavigateSettings() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "F",
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF1F2937),
+                        fontSize = 16.sp
+                    )
+                }
+
+                // Purple Voice Button
+                Box(
+                    modifier = Modifier
+                        .size(38.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFF8B5CF6))
+                        .clickable { onVoiceClick() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.GraphicEq,
+                        contentDescription = "Voice",
+                        tint = Color.White,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
         }
     }
 }
 
 @Composable
-private fun HistoryRow(chat: SavedChat, match: HistoryMatch?, onOpen: () -> Unit, onDelete: () -> Unit, onRename: () -> Unit,
-    serverDeletionEnabled: Boolean, onDeleteServer: () -> Unit, active: Boolean = false,
-    pinEnabled: Boolean = false, onPin: () -> Unit = {}) {
-    var menu by remember { mutableStateOf(false) }
-    fun beginRename() { menu = false; onRename() }
-    Box {
-        Row(Modifier.fillMaxWidth().clip(DuaShape.card)
-            .background(if (active) MaterialTheme.colorScheme.primaryContainer else androidx.compose.ui.graphics.Color.Transparent)
-            .combinedClickableCompat(onClick = onOpen, onLongClick = { menu = true }, onLongClickLabel = "Chat options")
-            .semantics {
-                if (chat.pinned) stateDescription = "Pinned"
-                customActions = listOf(
-                CustomAccessibilityAction("Rename chat") { beginRename(); true },
-                CustomAccessibilityAction("Remove cached chat") { onDelete(); true }) +
-                (if (pinEnabled) listOf(CustomAccessibilityAction(if (chat.pinned) "Unpin chat" else "Pin chat") { onPin(); true }) else emptyList()) +
-                (if (serverDeletionEnabled) listOf(CustomAccessibilityAction("Delete chat from server") { onDeleteServer(); true }) else emptyList()) }
-            .heightIn(min = Sizes.touchTarget).padding(horizontal = Spacing.md, vertical = Spacing.sm),
-            verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(chat.title, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                match?.snippet?.let { snippet ->
-                    val highlight = MaterialTheme.colorScheme.primary
-                    Text(buildAnnotatedString {
-                        append(snippet)
-                        addStyle(SpanStyle(fontWeight = FontWeight.SemiBold, color = highlight), match.matchStart, match.matchEnd)
-                    }, style = MaterialTheme.typography.bodySmall, maxLines = 3, overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(top = Spacing.xs))
-                }
-            }
-            if (chat.pinned) Icon(Icons.Outlined.PushPin, contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = Spacing.sm).size(Sizes.iconTiny))
-        }
-        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-            DropdownMenuItem(text = { Text("Rename") }, onClick = { beginRename() })
-            DropdownMenuItem(text = { Text(if (chat.pinned) "Unpin" else "Pin") }, enabled = pinEnabled,
-                leadingIcon = { Icon(Icons.Outlined.PushPin, null) }, onClick = { menu = false; onPin() })
-            if (serverDeletionEnabled) DropdownMenuItem(text = { Text("Delete chat") }, leadingIcon = { Icon(Icons.Outlined.DeleteOutline, null) },
-                onClick = { menu = false; onDeleteServer() })
-            DropdownMenuItem(text = { Text("Remove cached chat") }, leadingIcon = { Icon(Icons.Outlined.DeleteOutline, contentDescription = null) },
-                onClick = { menu = false; onDelete() })
-        }
+private fun DrawerMenuRow(
+    icon: ImageVector,
+    label: String,
+    onClick: () -> Unit = {}
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = Color(0xFF111827),
+            modifier = Modifier.size(22.dp)
+        )
+        Text(
+            text = label,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = Color(0xFF111827)
+        )
     }
 }
-
-@Composable
-internal fun RenameChatDialog(title: String, error: String?, onChange: (String) -> Unit, onDismiss: () -> Unit, onSave: () -> Unit) {
-    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Surface(modifier = Modifier.padding(horizontal = Spacing.xl).widthIn(max = 400.dp).fillMaxWidth(),
-            shape = DuaShape.card, color = MaterialTheme.colorScheme.surfaceContainerHigh) {
-            Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(Spacing.lg),
-                verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
-                Text("Rename chat", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.semantics { heading() })
-                Text("Chat name", style = MaterialTheme.typography.labelLarge)
-                Surface(shape = DuaShape.card, color = MaterialTheme.colorScheme.surfaceContainerLow,
-                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline)) {
-                    BasicTextField(title, onChange, singleLine = true,
-                        textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
-                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                        modifier = Modifier.fillMaxWidth().heightIn(min = Sizes.touchTarget).padding(Spacing.md)
-                            .semantics { contentDescription = "Chat name" })
-                }
-                Text(error ?: "${title.trim().length}/${ChatTitles.MAX_LENGTH}", style = MaterialTheme.typography.bodySmall,
-                    color = if (error == null) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error)
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    TextButton(onClick = onDismiss) { Text("Cancel") }
-                    TextButton(enabled = ChatTitles.valid(title.trim()), onClick = onSave) { Text("Save") }
-                }
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalFoundationApi::class)
-private fun Modifier.combinedClickableCompat(onClick: () -> Unit, onLongClick: (() -> Unit)? = null, onLongClickLabel: String? = null) =
-    combinedClickable(onClick = onClick, onLongClick = onLongClick, onLongClickLabel = onLongClickLabel)
