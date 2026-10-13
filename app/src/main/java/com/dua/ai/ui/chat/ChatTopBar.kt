@@ -94,6 +94,5 @@ fun ChatTopBar(
                 tint = Color(0xFF1F2937)
             )
         }
-   
     }
 }

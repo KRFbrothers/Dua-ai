@@ -32,6 +32,15 @@ import androidx.compose.ui.unit.sp
 import com.dua.ai.history.SavedChat
 
 @Composable
+fun SearchField(
+    query: String = "",
+    onQueryChange: (String) -> Unit = {},
+    modifier: Modifier = Modifier
+) {
+    // SearchField stub for SidebarPanel
+}
+
+@Composable
 fun HistoryDrawer(
     chats: List<SavedChat> = emptyList(),
     currentChatId: String? = null,
@@ -42,12 +51,19 @@ fun HistoryDrawer(
     onVoiceClick: () -> Unit = {},
     onDeleteChat: (String) -> Unit = {},
     onRenameChat: (String, String) -> Unit = { _, _ -> },
+    serverDeletionEnabled: Boolean = false,
+    onDeleteServerChat: (String) -> Unit = {},
+    onOpenSettings: () -> Unit = onNavigateSettings,
+    onProjects: () -> Unit = {},
+    onDestination: (Any) -> Unit = {},
+    profileName: String = "Fareed",
+    activeChatId: String? = null,
+    drawerOpen: Boolean = false,
+    onCloseDrawer: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    // Aura Section Expand / Collapse State
     var isAuraExpanded by remember { mutableStateOf(false) }
 
-    // Connected Plugins List
     val pluginsList = listOf(
         "Plugins",
         "Canva",
@@ -67,7 +83,6 @@ fun HistoryDrawer(
             .padding(horizontal = 20.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.SpaceBetween
     ) {
-        // --- 1. TOP SECTION (Menu + Expandable Aura + History) ---
         Column(
             modifier = Modifier
                 .weight(1f)
@@ -107,7 +122,7 @@ fun HistoryDrawer(
             // 6 Fixed Menu Items
             DrawerMenuRow(Icons.Outlined.Image, "Images")
             DrawerMenuRow(Icons.Outlined.CollectionsBookmark, "Library")
-            DrawerMenuRow(Icons.Outlined.Folder, "Projects")
+            DrawerMenuRow(Icons.Outlined.Folder, "Projects", onClick = onProjects)
             DrawerMenuRow(Icons.Outlined.DesktopWindows, "Computer")
             DrawerMenuRow(Icons.Outlined.SmartToy, "AI Agent")
             DrawerMenuRow(Icons.Outlined.WorkOutline, "Work")
@@ -148,7 +163,6 @@ fun HistoryDrawer(
                 )
             }
 
-            // Expanded Plugins
             AnimatedVisibility(
                 visible = isAuraExpanded,
                 enter = expandVertically() + fadeIn(),
@@ -186,7 +200,6 @@ fun HistoryDrawer(
                 }
             }
 
-            // Divider Line
             Divider(
                 color = Color(0xFFE5E7EB),
                 thickness = 1.dp,
@@ -208,7 +221,6 @@ fun HistoryDrawer(
                     )
                 }
             } else {
-                // Fallback recent list matching your screenshot
                 val sampleHistory = listOf(
                     "Replace Dua",
                     "Tldraw samjhana",
@@ -240,7 +252,6 @@ fun HistoryDrawer(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Purple Chat Button: [ ✏️ Chat ]
             Row(
                 modifier = Modifier
                     .clip(RoundedCornerShape(24.dp))
@@ -264,29 +275,26 @@ fun HistoryDrawer(
                 )
             }
 
-            // User Avatar & Purple Voice Button
             Row(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // User Avatar (Opens Settings)
                 Box(
                     modifier = Modifier
                         .size(38.dp)
                         .clip(CircleShape)
                         .background(Color(0xFFFDE68A))
-                        .clickable { onNavigateSettings() },
+                        .clickable { onOpenSettings() },
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "F",
+                        text = profileName.firstOrNull()?.uppercase() ?: "F",
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFF1F2937),
                         fontSize = 16.sp
                     )
                 }
 
-                // Purple Voice Button
                 Box(
                     modifier = Modifier
                         .size(38.dp)

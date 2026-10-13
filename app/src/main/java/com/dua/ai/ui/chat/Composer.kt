@@ -32,17 +32,17 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-// 1. Missing ModelChipRow reference solve karne ke liye
+const val AUTO_MODEL = "Auto"
+
 @Composable
 fun ModelChipRow(
     modifier: Modifier = Modifier,
     selectedModel: String = "Auto",
     onModelClick: () -> Unit = {}
 ) {
-    // Header model indicator if called by ChatScreen
+    // Model chip header stub
 }
 
-// 2. Full-compatible Composer Component
 @Composable
 fun Composer(
     modifier: Modifier = Modifier,
@@ -58,6 +58,11 @@ fun Composer(
     onVoiceClick: () -> Unit = onMic,
     onVoiceMode: () -> Unit = onVoiceClick,
     onModelClick: () -> Unit = {},
+    onModel: (String) -> Unit = {},
+    onStop: () -> Unit = {},
+    onCancelUpload: () -> Unit = {},
+    onImagineOptions: () -> Unit = {},
+    modeToggles: Any? = null,
     onTextFieldFocus: ((Boolean) -> Unit)? = null,
     onTextFieldBounds: ((Rect) -> Unit)? = null,
     currentModel: String = "Auto"
@@ -72,7 +77,6 @@ fun Composer(
             .navigationBarsPadding()
             .imePadding()
     ) {
-        // --- Inset Rounded Card Container ---
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -81,7 +85,6 @@ fun Composer(
                 .border(1.dp, Color(0xFFE5E7EB), RoundedCornerShape(28.dp))
                 .padding(horizontal = 14.dp, vertical = 12.dp)
         ) {
-            // Text Input ("Ask anything")
             val textFieldModifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 4.dp, vertical = 4.dp)
@@ -127,13 +130,11 @@ fun Composer(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // Bottom Controls Row
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Left Controls: (+) and [ ✨ Auto ⌵ ]
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
@@ -184,7 +185,6 @@ fun Composer(
                     }
                 }
 
-                // Right Controls: (Mic) and [ Black Voice Waveform Button / Send Button ]
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
