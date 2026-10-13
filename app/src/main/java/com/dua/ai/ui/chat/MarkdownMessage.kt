@@ -1,8 +1,6 @@
 package com.dua.ai.ui.chat
 
 import com.dua.ai.ui.theme.CodeTextStyle
-import com.dua.ai.ui.theme.markdownBodyStyle
-import com.dua.ai.ui.theme.markdownInlineCodeStyle
 
 import android.content.Context
 import android.content.Intent
@@ -87,3 +85,11 @@ fun MarkdownMessage(markdown: String, modifier: Modifier = Modifier) {
         )
     }
 }
+
+/** Body text for markdown replies: bodyLarge with a roomier line height. */
+private fun markdownBodyStyle(type: androidx.compose.material3.Typography): androidx.compose.ui.text.TextStyle =
+    type.bodyLarge.copy(lineHeight = type.bodyLarge.fontSize * 1.55f)
+
+/** Inline code: the body style in monospace, slightly smaller. */
+private fun markdownInlineCodeStyle(body: androidx.compose.ui.text.TextStyle): androidx.compose.ui.text.TextStyle =
+    body.copy(fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, fontSize = body.fontSize * .9f)

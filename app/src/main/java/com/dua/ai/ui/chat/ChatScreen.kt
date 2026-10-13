@@ -13,6 +13,10 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowDownward
+import androidx.compose.material.icons.outlined.Lightbulb
+import androidx.compose.material.icons.outlined.Public
+import androidx.compose.material.icons.outlined.Tag
+import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.key
@@ -211,19 +215,18 @@ fun ChatScreen(
             drawerContent = {
                 HistoryDrawer(
                     chats = state.savedChats.filter { it.projectId == state.projectId },
-                    projectId = state.projectId,
-                    newChatEnabled = !state.typing,
-                    onNewChat = { closeDrawerThen(actions.onNewChat) },
-                    onOpenChat = { id -> closeDrawerThen { actions.onOpenChat(id) } },
+                    currentChatId = state.chatId,
+                    onNewChat = { if (!state.typing) closeDrawerThen(actions.onNewChat) },
+                    onSelectChat = { id -> closeDrawerThen { actions.onOpenChat(id) } },
                     onDeleteChat = { id -> deletingId = id },
-                    onRenameChat = actions.onRenameChat,
-                    pinEnabled = state.chatPinEnabled, onPinChat = actions.onPinChat,
+                    onRenameChat = { id, title -> actions.onRenameChat(id, title) },
                     serverDeletionEnabled = state.serverChatDeletionEnabled,
                     onDeleteServerChat = { id -> actions.onDismissChatDeletion(); deletingServerId = id },
                     onOpenSettings = { closeDrawerThen(actions.onOpenSettings) },
                     onProjects = { closeDrawerThen { sheet = ChatSheet.Projects } },
-                    onDestination = { destination -> closeDrawerThen { actions.onOpenDestination(destination) } },
+                    onDestination = { destination -> (destination as? com.dua.ai.ui.navigation.DuaDestination)?.let { closeDrawerThen { actions.onOpenDestination(it) } } },
                     profileName = state.profileName, activeChatId = state.chatId, drawerOpen = drawerState.isOpen,
+                    onCloseDrawer = { scope.launch { drawerState.close() } },
                 )
             },
         ) {
@@ -273,16 +276,6 @@ fun ChatScreen(
                             onSwipeUp = { tap(); sheet = ChatSheet.Attach })
                         .semantics { customActions = listOf(CustomAccessibilityAction("Open add to chat") { sheet = ChatSheet.Attach; true }) }) {
                         ChatNotices(state = state, actions = actions)
-                        ModeChipRow(
-                            state = state,
-                            onWebMode = onWebMode,
-                            onReasoning = onReasoning,
-                            onXSearch = onXSearch,
-                            onImagine = onImagine,
-                            onRunCode = onRunCode,
-                            onBuild = { sheet = ChatSheet.Build; actions.onOpenBuild() },
-                            home = home,
-                        )
                         Composer(
                             state = state,
                             focusRequester = inputFocus,
@@ -293,9 +286,11 @@ fun ChatScreen(
                             onVoiceMode = { actions.haptic(ChatHaptic.Tap); actions.onOpenVoiceMode() },
                             onTextFieldFocus = { inputFocused = it },
                             onTextFieldBounds = { inputBounds = it },
-                            onSend = actions.onSend,
+                            value = state.draft,
+                            onSend = { actions.onSend() },
                             onStop = actions.onStop,
-                            onModel = { sheet = ChatSheet.Model },
+                            onModelClick = { sheet = ChatSheet.Model },
+                            currentModel = state.model,
                             onCancelUpload = actions.onCancelUpload,
                             onImagineOptions = { sheet = ChatSheet.Imagine },
                         )
@@ -388,6 +383,17 @@ fun ChatScreen(
             confirmButton = { TextButton(enabled = !busy, onClick = { actions.onDeleteServerChat(id) }) { Text(if (deletion?.error != null) "Retry" else "Delete") } },
             dismissButton = { TextButton(enabled = !busy, onClick = { deletingServerId = null; actions.onDismissChatDeletion() }) { Text("Cancel") } })
     }
+}
+
+/** Mode switches for the + sheet in a conversation: Run code (when offered), Reasoning, Search and X (Grok only). */
+private fun modeToggles(
+    state: ChatUiState, onWebMode: (String?) -> Unit, onReasoning: (Boolean) -> Unit,
+    onXSearch: (Boolean) -> Unit, onRunCode: (Boolean) -> Unit,
+): List<ModeToggle> = buildList {
+    if (state.codeConfig != null) add(ModeToggle("Run code", "Let the AI run Python code", Icons.Outlined.Terminal, state.runCode) { onRunCode(it) })
+    if (state.reasoningSupported) add(ModeToggle("Reasoning", "Think before answering", Icons.Outlined.Lightbulb, state.reasoning) { onReasoning(it) })
+    add(ModeToggle("Search", "Search the web for this reply", Icons.Outlined.Public, state.webMode == "search") { onWebMode(if (it) "search" else null) })
+    if (state.xSearchAvailable) add(ModeToggle("X", "Search posts on X with Grok", Icons.Outlined.Tag, state.xSearch) { onXSearch(it) })
 }
 
 /** Scrolls to the end of the growing reply; LazyColumn clamps at the content end. */
