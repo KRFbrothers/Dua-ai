@@ -53,8 +53,8 @@ fun MarkdownMessage(markdown: String, modifier: Modifier = Modifier) {
     val type = MaterialTheme.typography
     val scheme = MaterialTheme.colorScheme
     val colors = DuaTheme.colors
-    val body = markdownBodyStyle(type)
-    val inlineCode = markdownInlineCodeStyle(body)
+    val body = markdownBodyStyle
+    val inlineCode = markdownInlineCodeStyle
     CompositionLocalProvider(LocalUriHandler provides uriHandler) {
         Markdown(
             content = remember(markdown) { com.dua.ai.model.CitationMarkers.escape(markdown) },
@@ -87,3 +87,4 @@ fun MarkdownMessage(markdown: String, modifier: Modifier = Modifier) {
         )
     }
 }
+

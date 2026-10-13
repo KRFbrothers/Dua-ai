@@ -43,10 +43,9 @@ fun EmptyState(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            // Metallic 3D Animated Cube / Logo
+            // Metallic 3D Animated Cube / Logo with listening = false
             Box(
-                modifier = Modifier
-                    .size(130.dp),
+                modifier = Modifier.size(130.dp),
                 contentAlignment = Alignment.Center
             ) {
                 AnimatedVoiceCube(listening = false)
@@ -59,17 +58,8 @@ fun EmptyState(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(7.dp)
-                        .background(Color(0xFF374151), shape = RoundedCornerShape(1.dp))
-                )
-                Box(
-                    modifier = Modifier
-                        .width(22.dp)
-                        .height(1.5.dp)
-                        .background(Color(0xFF9CA3AF))
-                )
+                Box(modifier = Modifier.size(7.dp).background(Color(0xFF374151), shape = RoundedCornerShape(1.dp)))
+                Box(modifier = Modifier.width(22.dp).height(1.5.dp).background(Color(0xFF9CA3AF)))
                 Text(
                     text = "DUA",
                     fontSize = 20.sp,
@@ -77,17 +67,8 @@ fun EmptyState(
                     letterSpacing = 4.sp,
                     color = Color(0xFF1F2937)
                 )
-                Box(
-                    modifier = Modifier
-                        .width(22.dp)
-                        .height(1.5.dp)
-                        .background(Color(0xFF9CA3AF))
-                )
-                Box(
-                    modifier = Modifier
-                        .size(7.dp)
-                        .background(Color(0xFF374151), shape = RoundedCornerShape(1.dp))
-                )
+                Box(modifier = Modifier.width(22.dp).height(1.5.dp).background(Color(0xFF9CA3AF)))
+                Box(modifier = Modifier.size(7.dp).background(Color(0xFF374151), shape = RoundedCornerShape(1.dp)))
             }
 
             Spacer(modifier = Modifier.height(10.dp))
@@ -105,9 +86,7 @@ fun EmptyState(
 
         // --- 3 ACTION BUTTONS (Above Composer) ---
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 8.dp),
+            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             QuickActionButton(
@@ -148,7 +127,6 @@ private fun QuickActionButton(
             contentDescription = null,
             tint = Color(0xFF1F2937),
             modifier = Modifier.size(22.dp)
-       
         )
     }
 }

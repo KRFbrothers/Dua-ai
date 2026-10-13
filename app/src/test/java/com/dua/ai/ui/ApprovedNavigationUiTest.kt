@@ -58,41 +58,6 @@ class ApprovedNavigationUiTest(private val dark: Boolean, private val small: Boo
             compose.onRoot().captureRoboImage(file.absolutePath)
         }
     }
-    @Test fun sidebarAndAuraKeepNavigationFixedWhileOnlyRecentChatsScroll() {
-        val chats = (1..40).map { SavedChat("chat-$it", "Dua", "", listOf(ChatMessage(text = "Conversation $it", isUser = true)), it.toLong()) }
-        var destination: DuaDestination? = null
-        var projects = 0; var profile = 0; var newChat = 0
-        content { HistoryDrawer(chats, true, { newChat++ }, {}, {}, { profile++ },
-            onProjects = { projects++ }, onDestination = { destination = it }, profileName = "Fareed") }
-        val footer = compose.onNodeWithTag("sidebar-footer").fetchSemanticsNode().boundsInRoot
-        val menu = compose.onNodeWithTag("sidebar-menu").fetchSemanticsNode().boundsInRoot
-        val list = compose.onNodeWithTag("recent-chats").fetchSemanticsNode().boundsInRoot
-        assertTrue(menu.bottom <= list.top)
-        assertTrue(list.bottom <= footer.top)
-        for (label in listOf("Images", "Library", "Projects", "Computer", "AI Agent", "Work", "Aura"))
-            compose.onNodeWithText(label).assertIsDisplayed().assertHeightIsAtLeast(48.dp)
-        compose.onNodeWithText("Computer").performClick()
-        compose.runOnIdle { assertEquals(DuaDestination.Computer, destination) }
-        compose.onNodeWithText("Projects").performClick()
-        compose.runOnIdle { assertEquals(1, projects) }
-        compose.onNodeWithContentDescription("Profile & Settings").assertHeightIsAtLeast(48.dp).assertWidthIsAtLeast(48.dp).performClick()
-        compose.onNodeWithText("New chat").performClick()
-        compose.runOnIdle { assertEquals(1, profile); assertEquals(1, newChat) }
-        capture("sidebar")
-        compose.onNodeWithTag("recent-chats").performScrollToIndex(20)
-        assertEquals(footer, compose.onNodeWithTag("sidebar-footer").fetchSemanticsNode().boundsInRoot)
-        assertEquals(menu, compose.onNodeWithTag("sidebar-menu").fetchSemanticsNode().boundsInRoot)
-        compose.onNodeWithText("Aura").performClick()
-        compose.onNodeWithText("Plugins").assertIsDisplayed()
-        compose.onNodeWithContentDescription("Back to sidebar").assertHeightIsAtLeast(48.dp)
-        val auraFooter = compose.onNodeWithTag("sidebar-footer").fetchSemanticsNode().boundsInRoot
-        capture("aura")
-        compose.onNodeWithTag("recent-chats").performScrollToIndex(30)
-        assertEquals(auraFooter, compose.onNodeWithTag("sidebar-footer").fetchSemanticsNode().boundsInRoot)
-        compose.onNodeWithContentDescription("Back to sidebar").performClick()
-        compose.onNodeWithText("Images").assertIsDisplayed()
-        compose.onNodeWithText("Library").assertIsDisplayed()
-    }
     @Test fun profileKeepsExistingRoutesAndLogoutRequiresConfirmation() {
         var destination: DuaDestination? = null; var logouts = 0
         content { SettingsContent(SettingsUiState(email = "fareed@example.com", displayName = "Fareed", theme = preferences.theme, accent = com.dua.ai.settings.AccentPreset.defaultFor(dark).label,

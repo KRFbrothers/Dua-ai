@@ -26,12 +26,12 @@ import com.dua.ai.viewmodel.ChatViewModel
 fun DeviceSettingsScreen(
     viewModel: ChatViewModel,
     page: String = "",
-    onBack: () -> Unit,
-    onPage: (String) -> Unit = {}
+    onBack: () -> Unit = {},
+    onPage: (String) -> Unit = {},
+    onAttachments: () -> Unit = {}
 ) {
-    val accountState by viewModel.account.state.collectAsState()
-    val userEmail = accountState.email ?: "fareedkrf@gmail.com"
-    val userName = accountState.displayName.ifBlank { "Fareed" }
+    val userEmail = "fareedkrf@gmail.com"
+    val userName = "Fareed"
 
     Column(
         modifier = Modifier
@@ -59,7 +59,6 @@ fun DeviceSettingsScreen(
                 Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color(0xFF1F2937))
             }
 
-            // User Profile Photo + Name
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Box(contentAlignment = Alignment.BottomEnd) {
                     Box(
@@ -76,7 +75,6 @@ fun DeviceSettingsScreen(
                             color = Color(0xFF1F2937)
                         )
                     }
-                    // Edit pencil badge
                     Box(
                         modifier = Modifier
                             .size(24.dp)
@@ -130,7 +128,6 @@ fun DeviceSettingsScreen(
                 onPage("Plugins")
             }
 
-            // Accent Color (Purple Dropdown)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -201,9 +198,7 @@ private fun SettingsRowItem(
                 Text(label, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = Color(0xFF111827))
             }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                if (value != null) {
-                    Text(value, fontSize = 13.sp, color = Color(0xFF6B7280))
-                }
+                if (value != null) Text(value, fontSize = 13.sp, color = Color(0xFF6B7280))
                 Icon(Icons.Default.ChevronRight, contentDescription = null, tint = Color(0xFF9CA3AF), modifier = Modifier.size(18.dp))
             }
         }

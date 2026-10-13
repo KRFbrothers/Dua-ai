@@ -11,9 +11,16 @@ import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowDownward
+import androidx.compose.material.icons.outlined.Lightbulb
+import androidx.compose.material.icons.outlined.Public
+import androidx.compose.material.icons.outlined.Tag
+import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.key
 import androidx.compose.runtime.snapshotFlow
@@ -22,6 +29,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -211,19 +219,20 @@ fun ChatScreen(
             drawerContent = {
                 HistoryDrawer(
                     chats = state.savedChats.filter { it.projectId == state.projectId },
-                    projectId = state.projectId,
-                    newChatEnabled = !state.typing,
-                    onNewChat = { closeDrawerThen(actions.onNewChat) },
-                    onOpenChat = { id -> closeDrawerThen { actions.onOpenChat(id) } },
+                    currentChatId = state.chatId,
+                    onNewChat = { if (!state.typing) closeDrawerThen(actions.onNewChat) },
+                    onSelectChat = { id -> closeDrawerThen { actions.onOpenChat(id) } },
+                    onSearch = { if (state.messages.isNotEmpty()) closeDrawerThen { followTail = false; searchOpen = true } },
+                    onVoiceClick = { closeDrawerThen { actions.haptic(ChatHaptic.Tap); actions.onOpenVoiceMode() } },
                     onDeleteChat = { id -> deletingId = id },
-                    onRenameChat = actions.onRenameChat,
-                    pinEnabled = state.chatPinEnabled, onPinChat = actions.onPinChat,
+                    onRenameChat = { id, title -> actions.onRenameChat(id, title) },
                     serverDeletionEnabled = state.serverChatDeletionEnabled,
                     onDeleteServerChat = { id -> actions.onDismissChatDeletion(); deletingServerId = id },
                     onOpenSettings = { closeDrawerThen(actions.onOpenSettings) },
                     onProjects = { closeDrawerThen { sheet = ChatSheet.Projects } },
-                    onDestination = { destination -> closeDrawerThen { actions.onOpenDestination(destination) } },
+                    onDestination = { destination -> (destination as? com.dua.ai.ui.navigation.DuaDestination)?.let { closeDrawerThen { actions.onOpenDestination(it) } } },
                     profileName = state.profileName, activeChatId = state.chatId, drawerOpen = drawerState.isOpen,
+                    onCloseDrawer = { scope.launch { drawerState.close() } },
                 )
             },
         ) {
@@ -273,16 +282,24 @@ fun ChatScreen(
                             onSwipeUp = { tap(); sheet = ChatSheet.Attach })
                         .semantics { customActions = listOf(CustomAccessibilityAction("Open add to chat") { sheet = ChatSheet.Attach; true }) }) {
                         ChatNotices(state = state, actions = actions)
-                        ModeChipRow(
-                            state = state,
-                            onWebMode = onWebMode,
-                            onReasoning = onReasoning,
-                            onXSearch = onXSearch,
-                            onImagine = onImagine,
-                            onRunCode = onRunCode,
-                            onBuild = { sheet = ChatSheet.Build; actions.onOpenBuild() },
-                            home = home,
-                        )
+                        val visibleModes = modeToggles(state, onWebMode, onReasoning, onXSearch, onRunCode)
+                            .filter { home || it.on }
+                        if (visibleModes.isNotEmpty()) {
+                            Row(
+                                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                visibleModes.forEach { toggle ->
+                                    FilterChip(
+                                        selected = toggle.on,
+                                        onClick = { toggle.onChange(!toggle.on) },
+                                        label = { Text(toggle.label) },
+                                        modifier = Modifier.heightIn(min = Sizes.touchTarget)
+                                            .semantics { contentDescription = toggle.detail },
+                                    )
+                                }
+                            }
+                        }
                         Composer(
                             state = state,
                             focusRequester = inputFocus,
@@ -290,13 +307,16 @@ fun ChatScreen(
                             onAttach = { sheet = ChatSheet.Attach },
                             onClearAttachments = actions.onClearAttachments,
                             onMic = actions.onOpenVoice,
+                            onVoiceClick = { actions.haptic(ChatHaptic.Tap); actions.onOpenVoiceMode() },
                             onVoiceMode = { actions.haptic(ChatHaptic.Tap); actions.onOpenVoiceMode() },
                             onTextFieldFocus = { inputFocused = it },
                             onTextFieldBounds = { inputBounds = it },
-                            onSend = actions.onSend,
+                            value = state.draft,
+                            onSend = { actions.onSend() },
                             onStop = actions.onStop,
-                            onModel = { sheet = ChatSheet.Model },
-                            onCancelUpload = actions.onCancelUpload,
+                            onModelClick = { sheet = ChatSheet.Model },
+                            currentModel = state.model,
+                            onCancelUpload = { state.uploads.filter { it.uploading }.forEach { actions.onCancelUpload(it.id) } },
                             onImagineOptions = { sheet = ChatSheet.Imagine },
                         )
                     }
@@ -388,6 +408,17 @@ fun ChatScreen(
             confirmButton = { TextButton(enabled = !busy, onClick = { actions.onDeleteServerChat(id) }) { Text(if (deletion?.error != null) "Retry" else "Delete") } },
             dismissButton = { TextButton(enabled = !busy, onClick = { deletingServerId = null; actions.onDismissChatDeletion() }) { Text("Cancel") } })
     }
+}
+
+/** Mode switches for the + sheet in a conversation: Run code (when offered), Reasoning, Search and X (Grok only). */
+private fun modeToggles(
+    state: ChatUiState, onWebMode: (String?) -> Unit, onReasoning: (Boolean) -> Unit,
+    onXSearch: (Boolean) -> Unit, onRunCode: (Boolean) -> Unit,
+): List<ModeToggle> = buildList {
+    if (state.codeConfig != null) add(ModeToggle("Run code", "Let the AI run Python code", Icons.Outlined.Terminal, state.runCode) { onRunCode(it) })
+    if (state.reasoningSupported) add(ModeToggle("Reasoning", "Think before answering", Icons.Outlined.Lightbulb, state.reasoning) { onReasoning(it) })
+    add(ModeToggle("Search", "Search the web", Icons.Outlined.Public, state.webMode == "search") { onWebMode(if (it) "search" else null) })
+    if (state.xSearchAvailable) add(ModeToggle("X", "Search posts on X with Grok", Icons.Outlined.Tag, state.xSearch) { onXSearch(it) })
 }
 
 /** Scrolls to the end of the growing reply; LazyColumn clamps at the content end. */
