@@ -1,5 +1,4 @@
 package com.dua.ai.ui.chat
-package com.dua.ai.ui.chat
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
