@@ -160,7 +160,7 @@ fun Composer(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Add,
-                            contentDescription = "Attach",
+                            contentDescription = "Add photos and files",
                             tint = Color(0xFF374151),
                             modifier = Modifier.size(20.dp)
                         )
