@@ -28,11 +28,17 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -43,6 +49,9 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.painterResource
+import com.dua.ai.R
+import com.dua.ai.ui.theme.DuaTheme
 import com.dua.ai.ui.theme.Sizes
 import com.dua.ai.ui.theme.Spacing
 
@@ -50,6 +59,10 @@ import com.dua.ai.ui.theme.Spacing
 fun MessageList(state: ChatUiState, actions: ChatActions, listState: LazyListState, modifier: Modifier = Modifier,
     imagineActions: ImagineActions = actions.imagine, searchMessageId: String? = null) {
     val lastId = state.messages.lastOrNull()?.id
+    val lastAssistantId = state.messages.lastOrNull { !it.isUser }?.id
+    var actionsId by rememberSaveable(state.chatId) { mutableStateOf<String?>(null) }
+    val selectedMessage = state.messages.firstOrNull { it.id == actionsId }
+    LaunchedEffect(actionsId, selectedMessage?.id) { if (actionsId != null && selectedMessage == null) actionsId = null }
     LazyColumn(
         state = listState,
         modifier = modifier.fillMaxSize().testTag("chat-messages"),
@@ -57,40 +70,59 @@ fun MessageList(state: ChatUiState, actions: ChatActions, listState: LazyListSta
         verticalArrangement = Arrangement.spacedBy(Spacing.md),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        items(state.messages, key = { it.id }, contentType = { if (it.isUser) "user" else "assistant" }) { message ->
+        itemsIndexed(state.messages, key = { _, message -> message.id }, contentType = { _, message -> if (message.isUser) "user" else "assistant" }) { index, message ->
             val selected = message.id == searchMessageId
             Column(Modifier.widthIn(max = Sizes.contentMaxWidth).fillMaxWidth()
                 .testTag("message-${message.id}")
                 .then(if (selected) Modifier.border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(12.dp)) else Modifier)
                 .semantics { if (selected) stateDescription = "Selected search result" }) {
-                if (message.isUser) UserMessage(message.text, files = message.files, onOpenFile = actions.onOpenFile)
-                else if (message.isImagine) ImagineReply(message, imagineActions, videoAvailable = state.videoAvailable)
-                else AssistantMessage(
-                    message = message,
-                    isLast = message.id == lastId,
-                    typing = state.typing,
-                    speaking = state.speakingId == message.id,
-                    speakEnabled = state.generatedVoice || state.speechAvailable,
-                    generatedVoice = state.generatedVoice,
-                    retryWebMode = actions.retryWebMode(message.id),
-                    onRetry = { actions.onRetry(message.id) },
-                    onSpeak = { actions.onSpeak(message) },
-                    thinkingExpanded = message.id in state.expandedThinking,
-                    codeExpanded = message.id in state.expandedCode,
-                    buildExpanded = message.id in state.expandedBuild,
-                    buildPr = state.buildPr[message.id],
-                    buildPrHint = state.buildPrHint,
-                    buildPrDraft = state.buildConfig?.pr?.draft ?: true,
-                    confirmPr = state.confirmPr == message.id,
-                    onCreatePr = { title -> actions.onCreatePr(message.id, title) },
-                )
+                val openActions = { actions.haptic(ChatHaptic.LongPress); actionsId = message.id }
+                if (message.isUser) UserMessage(message.text, files = message.files, onOpenFile = actions.onOpenFile, onLongPress = openActions)
+                else AssistantTurn(showAvatar = index == 0 || state.messages[index - 1].isUser,
+                    modifier = Modifier.messageLongPress(openActions)) {
+                    if (message.isImagine) ImagineReply(message, imagineActions, videoAvailable = state.videoAvailable)
+                    else AssistantMessage(
+                        message = message,
+                        isLast = message.id == lastId,
+                        typing = state.typing,
+                        speaking = state.speakingId == message.id,
+                        speakEnabled = state.generatedVoice || state.speechAvailable,
+                        generatedVoice = state.generatedVoice,
+                        retryWebMode = actions.retryWebMode(message.id),
+                        onRetry = { actions.onRetry(message.id) },
+                        onSpeak = { actions.onSpeak(message) },
+                        thinkingExpanded = message.id in state.expandedThinking,
+                        codeExpanded = message.id in state.expandedCode,
+                        buildExpanded = message.id in state.expandedBuild,
+                        buildPr = state.buildPr[message.id],
+                        buildPrHint = state.buildPrHint,
+                        buildPrDraft = state.buildConfig?.pr?.draft ?: true,
+                        confirmPr = state.confirmPr == message.id,
+                        onCreatePr = { title -> actions.onCreatePr(message.id, title) },
+                        showActions = message.id == lastAssistantId,
+                    )
+                }
                 if (message.id == state.summarisedThroughId && message.id != lastId) SummaryDivider(Modifier.padding(top = Spacing.md))
             }
         }
         // Streaming replies render their own progress; the dots cover non-streaming waits.
         if (state.typing && state.messages.none { it.streaming }) item(key = "typing") {
-            Box(Modifier.widthIn(max = Sizes.contentMaxWidth).fillMaxWidth()) { TypingIndicator() }
+            AssistantTurn(showAvatar = state.messages.lastOrNull()?.isUser != false,
+                modifier = Modifier.widthIn(max = Sizes.contentMaxWidth)) { TypingIndicator(Modifier.heightIn(min = Sizes.touchTarget)) }
         }
+    }
+    if (selectedMessage != null) MessageActionsSheet(selectedMessage, state, actions, imagineActions, onDismiss = { actionsId = null })
+}
+
+/** One avatar per adjacent group, with a consistent gutter for later assistant chunks. */
+@Composable
+private fun AssistantTurn(showAvatar: Boolean, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+    Row(modifier.fillMaxWidth().heightIn(min = Sizes.touchTarget), verticalAlignment = Alignment.Top) {
+        Box(Modifier.size(Sizes.touchTarget), contentAlignment = Alignment.Center) {
+            if (showAvatar) Image(painterResource(if (DuaTheme.colors.isDark) R.drawable.dua_logo_home else R.drawable.dua_logo_home_light),
+                contentDescription = "Dua", modifier = Modifier.size(Sizes.icon).testTag("dua-avatar"))
+        }
+        Column(Modifier.weight(1f)) { content() }
     }
 }
 

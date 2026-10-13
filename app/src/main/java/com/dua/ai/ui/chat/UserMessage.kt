@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
@@ -35,7 +36,8 @@ internal fun splitFileNames(text: String): Pair<String, List<String>> {
 
 /** User turn: subtle right-aligned bubble. */
 @Composable
-fun UserMessage(text: String, modifier: Modifier = Modifier, files: List<com.dua.ai.files.FileRef> = emptyList(), onOpenFile: (com.dua.ai.files.FileRef) -> Unit = {}) {
+fun UserMessage(text: String, modifier: Modifier = Modifier, files: List<com.dua.ai.files.FileRef> = emptyList(), onOpenFile: (com.dua.ai.files.FileRef) -> Unit = {},
+    onLongPress: (() -> Unit)? = null) {
     val (body, names) = remember(text) { splitFileNames(text) }
     Column(modifier.fillMaxWidth().padding(start = Spacing.huge), horizontalAlignment = Alignment.End,
         verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
@@ -51,11 +53,16 @@ fun UserMessage(text: String, modifier: Modifier = Modifier, files: List<com.dua
                 }
             }
         }
-        Surface(color = DuaTheme.colors.userBubble, shape = DuaShape.userBubble) {
-            SelectionContainer {
+        Surface(color = DuaTheme.colors.userBubble, shape = DuaShape.userBubble,
+            modifier = Modifier.widthIn(min = Sizes.touchTarget).heightIn(min = Sizes.touchTarget)
+                .then(if (onLongPress != null) Modifier.messageLongPress(onLongPress) else Modifier)) {
+            // The new long-press menu owns this gesture. Standalone callers without a menu keep text selection.
+            if (onLongPress == null) SelectionContainer {
                 Text(body, style = MaterialTheme.typography.bodyLarge, color = DuaTheme.colors.onUserBubble,
                     modifier = Modifier.padding(horizontal = Spacing.lg, vertical = Spacing.md))
             }
+            else Text(body, style = MaterialTheme.typography.bodyLarge, color = DuaTheme.colors.onUserBubble,
+                modifier = Modifier.padding(horizontal = Spacing.lg, vertical = Spacing.md))
         }
     }
 }
