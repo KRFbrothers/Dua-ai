@@ -12,7 +12,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowUpward
-import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Mic
@@ -26,17 +26,21 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import com.dua.ai.ui.theme.ComposerTextStyle
+import com.dua.ai.ui.theme.HomeModelLabelStyle
+import com.dua.ai.ui.theme.HomeShapes
+import com.dua.ai.ui.theme.HomeSizes
+import com.dua.ai.ui.theme.HomeTheme
+import com.dua.ai.ui.theme.Sizes
+import com.dua.ai.ui.theme.Spacing
 
 const val AUTO_MODEL = "Auto"
 
@@ -77,30 +81,51 @@ fun Composer(
     val chatState = state as? ChatUiState
     val activeText = if (state != null) value else if (value.isNotEmpty()) value else localText
 
+    val c = HomeTheme.colors
+    fun submit() {
+        if (activeText.isNotBlank()) {
+            onSend(activeText)
+            localText = ""
+            onValueChange("")
+            onDraftChange("")
+        }
+    }
+
+    // Reference shell's bottom pill bar: + | Ask Dua AI | mic | purple voice/send. 16/8 dp outer margin as in its Column.
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .padding(horizontal = Spacing.lg, vertical = Spacing.sm)
             .navigationBarsPadding()
             .imePadding()
     ) {
-        Column(
+        // Not in the reference: the current model, small and right-aligned above the bar, opens the model sheet.
+        Row(
+            Modifier.align(Alignment.End)
+                .heightIn(min = Sizes.touchTarget).widthIn(min = Sizes.touchTarget)
+                .clip(HomeShapes.segmentTab)
+                .clickable(role = Role.Button, onClick = onModelClick)
+                .semantics(mergeDescendants = true) { contentDescription = "Model, $currentModel" }
+                .padding(horizontal = Spacing.sm),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center,
+        ) {
+            Text(currentModel, style = HomeModelLabelStyle, color = c.modelLabel, maxLines = 1)
+            Icon(Icons.Default.KeyboardArrowDown, null, tint = c.modelLabel, modifier = Modifier.size(Sizes.iconTiny))
+        }
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(28.dp))
-                .background(Color(0xFFF9FAFB))
-                .border(1.dp, Color(0xFFE5E7EB), RoundedCornerShape(28.dp))
-                .padding(horizontal = 14.dp, vertical = 12.dp)
+                .clip(HomeShapes.bar)
+                .background(c.bar)
+                .border(HomeSizes.barBorder, c.barBorder, HomeShapes.bar)
+                .padding(horizontal = HomeSizes.barPaddingH, vertical = HomeSizes.barPaddingV),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            val textFieldModifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = 48.dp)
-                .padding(horizontal = 4.dp, vertical = 4.dp)
-                .let { if (focusRequester != null) it.focusRequester(focusRequester) else it }
-                .onFocusChanged { onTextFieldFocus?.invoke(it.isFocused) }
-                .onGloballyPositioned { onTextFieldBounds?.invoke(it.boundsInRoot()) }
-                .semantics { contentDescription = "Message" }
-
+            IconButton(onClick = onAttach, modifier = Modifier.size(Sizes.touchTarget)) {
+                Icon(Icons.Default.Add, contentDescription = "Add photos and files", tint = c.barIcon,
+                    modifier = Modifier.size(HomeSizes.plusIcon))
+            }
             BasicTextField(
                 value = activeText,
                 onValueChange = {
@@ -108,166 +133,45 @@ fun Composer(
                     onValueChange(it)
                     onDraftChange(it)
                 },
-                modifier = textFieldModifier,
-                textStyle = TextStyle(
-                    fontSize = 16.sp,
-                    color = Color(0xFF111827),
-                    fontWeight = FontWeight.Normal
-                ),
-                cursorBrush = SolidColor(Color(0xFF111827)),
+                modifier = Modifier
+                    .weight(1f)
+                    .heightIn(min = Sizes.touchTarget)
+                    .padding(horizontal = Spacing.sm)
+                    .let { if (focusRequester != null) it.focusRequester(focusRequester) else it }
+                    .onFocusChanged { onTextFieldFocus?.invoke(it.isFocused) }
+                    .onGloballyPositioned { onTextFieldBounds?.invoke(it.boundsInRoot()) }
+                    .semantics { contentDescription = "Message" },
+                textStyle = ComposerTextStyle.copy(color = c.input),
+                cursorBrush = SolidColor(c.input),
+                maxLines = 6,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                keyboardActions = KeyboardActions(
-                    onSend = {
-                        if (activeText.isNotBlank()) {
-                            onSend(activeText)
-                            localText = ""
-                            onValueChange("")
-                            onDraftChange("")
-                        }
-                    }
-                ),
+                keyboardActions = KeyboardActions(onSend = { submit() }),
                 decorationBox = { innerTextField ->
-                    if (activeText.isEmpty()) {
-                        Text(
-                            text = "Ask anything",
-                            fontSize = 16.sp,
-                            color = Color(0xFF9CA3AF),
-                            fontWeight = FontWeight.Normal
-                        )
+                    Box(Modifier.heightIn(min = Sizes.touchTarget), contentAlignment = Alignment.CenterStart) {
+                        if (activeText.isEmpty()) Text("Ask Dua AI", style = ComposerTextStyle, color = c.placeholder)
+                        innerTextField()
                     }
-                    innerTextField()
                 }
             )
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            IconButton(onClick = onMic, modifier = Modifier.size(Sizes.touchTarget)) {
+                Icon(Icons.Default.Mic, contentDescription = "Dictate", tint = c.barIcon, modifier = Modifier.size(HomeSizes.micIcon))
+            }
+            val uploading = chatState?.uploads?.any { it.uploading } == true
+            val (icon, label, action) = when {
+                chatState?.typing == true -> Triple(Icons.Default.Stop, "Stop response", { onStop() })
+                uploading && activeText.isBlank() -> Triple(Icons.Default.Close, "Cancel upload", { onCancelUpload() })
+                activeText.isNotBlank() -> Triple(Icons.Default.ArrowUpward, "Send message", { submit() })
+                else -> Triple(Icons.Default.GraphicEq, "Voice mode", { onVoiceMode() })
+            }
+            Box(
+                modifier = Modifier
+                    .size(Sizes.touchTarget)
+                    .clickable(role = Role.Button, onClick = action)
+                    .semantics(mergeDescendants = true) { contentDescription = label },
+                contentAlignment = Alignment.Center
             ) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(48.dp)
-                            .clip(CircleShape)
-                            .background(Color(0xFFE5E7EB))
-                            .clickable { onAttach() },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Add,
-                            contentDescription = "Add photos and files",
-                            tint = Color(0xFF374151),
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-
-                    Row(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(18.dp))
-                            .background(Color(0xFFE5E7EB))
-                            .clickable { onModelClick() }
-                            .padding(horizontal = 12.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(5.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.AutoAwesome,
-                            contentDescription = null,
-                            tint = Color(0xFF374151),
-                            modifier = Modifier.size(14.dp)
-                        )
-                        Text(
-                            text = currentModel,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = Color(0xFF1F2937)
-                        )
-                        Icon(
-                            imageVector = Icons.Default.KeyboardArrowDown,
-                            contentDescription = null,
-                            tint = Color(0xFF6B7280),
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-                }
-
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    IconButton(
-                        onClick = { onMic() },
-                        modifier = Modifier.size(48.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Mic,
-                            contentDescription = "Dictate",
-                            tint = Color(0xFF374151),
-                            modifier = Modifier.size(22.dp)
-                        )
-                    }
-
-                    if (chatState?.typing == true) {
-                        Box(
-                            modifier = Modifier
-                                .size(48.dp)
-                                .clip(CircleShape)
-                                .background(Color.Black)
-                                .clickable { onStop() },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Stop,
-                                contentDescription = "Stop response",
-                                tint = Color.White,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                    } else if (activeText.isNotBlank()) {
-                        Box(
-                            modifier = Modifier
-                                .size(48.dp)
-                                .clip(CircleShape)
-                                .background(Color.Black)
-                                .clickable {
-                                    onSend(activeText)
-                                    localText = ""
-                                    onValueChange("")
-                                    onDraftChange("")
-                                },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.ArrowUpward,
-                                contentDescription = "Send message",
-                                tint = Color.White,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                    } else {
-                        Box(
-                            modifier = Modifier
-                                .size(48.dp)
-                                .clip(CircleShape)
-                                .background(Color.Black)
-                                .clickable {
-                                    onVoiceMode()
-                                },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.GraphicEq,
-                                contentDescription = "Voice mode",
-                                tint = Color.White,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                    }
+                Box(Modifier.size(HomeSizes.voiceButton).clip(HomeShapes.round).background(c.voice), contentAlignment = Alignment.Center) {
+                    Icon(icon, contentDescription = null, tint = c.onVoice, modifier = Modifier.size(HomeSizes.voiceIcon))
                 }
             }
         }

@@ -19,5 +19,7 @@ object DuaShape {
     val codeBlock = RoundedCornerShape(12.dp)
     val chip = RoundedCornerShape(50)
     val card = RoundedCornerShape(16.dp)
+    val pill = RoundedCornerShape(24.dp)
+    val homeAction = RoundedCornerShape(20.dp)
     val sheet = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
 }

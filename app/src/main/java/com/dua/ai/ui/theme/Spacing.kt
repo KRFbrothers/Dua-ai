@@ -34,4 +34,6 @@ object Sizes {
     val sendButton = 38.dp
     /** Home logo height on a roomy screen; it shrinks on short screens and with the keyboard open. */
     val homeLogoHeight = 196.dp
+    /** Composer round buttons: +, mic, voice/send/stop. */
+    val composerRound = 48.dp
 }

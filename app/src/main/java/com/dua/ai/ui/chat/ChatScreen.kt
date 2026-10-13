@@ -20,7 +20,6 @@ import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Tag
 import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.key
 import androidx.compose.runtime.snapshotFlow
@@ -240,12 +239,10 @@ fun ChatScreen(
                 .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))) {
                 ChatTopBar(
                     newChatEnabled = !state.typing,
-                    showComputer = home,
                     onMenu = { scope.launch { drawerState.open() } },
-                    onComputer = actions.onOpenComputer,
                     onNewChat = actions.onNewChat,
-                    projectName = state.projects.find { it.id == state.projectId }?.let { it.name + if (it.archived) " (archived)" else "" } ?: "Missing project",
-                    onProjects = { sheet = ChatSheet.Projects },
+                    // Work is an existing destination; the pill stays on Chat while this screen shows.
+                    onTab = { if (it == HomeTab.Work) actions.onOpenDestination(com.dua.ai.ui.navigation.DuaDestination.Work) },
                     onSearch = if (state.messages.isEmpty()) null else ({ followTail = false; searchOpen = true }),
                 )
                 if (searchOpen) ConversationSearchBar(searchQuery,
@@ -257,7 +254,7 @@ fun ChatScreen(
                     onClose = { closeSearch() })
                 Box(Modifier.weight(1f).fillMaxWidth()) {
                     if (home) {
-                        EmptyState(suggestions = if (state.draft.isBlank()) state.suggestions else emptyList(),
+                        EmptyState(suggestions = state.suggestions, showPrompts = state.draft.isBlank(),
                             onSuggestion = { prompt -> actions.onDraftChange(prompt); inputFocus.requestFocus() })
                     } else {
                         key(conversationKey) {
@@ -283,21 +280,15 @@ fun ChatScreen(
                         .semantics { customActions = listOf(CustomAccessibilityAction("Open add to chat") { sheet = ChatSheet.Attach; true }) }) {
                         ChatNotices(state = state, actions = actions)
                         val visibleModes = modeToggles(state, onWebMode, onReasoning, onXSearch, onRunCode)
-                            .filter { home || it.on }
+                            .filter { !home && it.on }
                         if (visibleModes.isNotEmpty()) {
                             Row(
-                                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                Modifier.fillMaxWidth().let { if (visibleModes.size > 3) it.horizontalScroll(rememberScrollState()) else it }
+                                    .padding(horizontal = Spacing.md, vertical = Spacing.xs),
+                                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                             ) {
-                                visibleModes.forEach { toggle ->
-                                    FilterChip(
-                                        selected = toggle.on,
-                                        onClick = { toggle.onChange(!toggle.on) },
-                                        label = { Text(toggle.label) },
-                                        modifier = Modifier.heightIn(min = Sizes.touchTarget)
-                                            .semantics { contentDescription = toggle.detail },
-                                    )
-                                }
+                                val fill = visibleModes.size <= 3
+                                visibleModes.forEach { toggle -> HomeActionButton(toggle, if (fill) Modifier.weight(1f) else Modifier) }
                             }
                         }
                         Composer(
@@ -349,7 +340,7 @@ fun ChatScreen(
                 imagine = state.imagineConfig?.let { config -> if (config.enabled) "Create images from your message" else config.imageReason.ifBlank { "Turned off on the server" } },
                 imagineOn = state.imagine,
                 build = state.buildHint.ifEmpty { if (state.buildRepo != null) "On: ${state.buildRepo}" else "Chat about one of your GitHub repositories, read-only" },
-                toggles = if (home) emptyList() else modeToggles(state, onWebMode, onReasoning, onXSearch, onRunCode),
+                toggles = modeToggles(state, onWebMode, onReasoning, onXSearch, onRunCode),
             ),
             onTurnOffModes = if (state.auto) null else ({ sheet = null; actions.onAuto() }),
             onImagine = { on -> sheet = null; onImagine(on) },
@@ -416,7 +407,7 @@ private fun modeToggles(
     onXSearch: (Boolean) -> Unit, onRunCode: (Boolean) -> Unit,
 ): List<ModeToggle> = buildList {
     if (state.codeConfig != null) add(ModeToggle("Run code", "Let the AI run Python code", Icons.Outlined.Terminal, state.runCode) { onRunCode(it) })
-    if (state.reasoningSupported) add(ModeToggle("Reasoning", "Think before answering", Icons.Outlined.Lightbulb, state.reasoning) { onReasoning(it) })
+    if (state.reasoningSupported) add(ModeToggle("Think", "Think before answering", Icons.Outlined.Lightbulb, state.reasoning) { onReasoning(it) })
     add(ModeToggle("Search", "Search the web", Icons.Outlined.Public, state.webMode == "search") { onWebMode(if (it) "search" else null) })
     if (state.xSearchAvailable) add(ModeToggle("X", "Search posts on X with Grok", Icons.Outlined.Tag, state.xSearch) { onXSearch(it) })
 }
