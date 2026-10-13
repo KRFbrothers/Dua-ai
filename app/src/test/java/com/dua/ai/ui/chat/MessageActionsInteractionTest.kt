@@ -98,7 +98,7 @@ class MessageActionsInteractionTest {
         compose.runOnIdle { assertEquals(listOf(prompt), plan?.context) }
     }
 
-    @Test fun retryIsDisabledWhileAnotherReplyIsPendingButCopyStillWorks() {
+    @Test fun actionRowIsHiddenWhileAnotherReplyIsPending() {
         var retried = false
         compose.setContent {
             DuaTheme(LocalPreferences()) {
@@ -107,8 +107,8 @@ class MessageActionsInteractionTest {
                     retryWebMode = null, onRetry = { retried = true }, onSpeak = {})
             }
         }
-        compose.onNodeWithText("Retry").assertIsNotEnabled()
-        compose.onNodeWithText("Copy").assertIsEnabled().performClick()
+        compose.onNodeWithText("Retry").assertDoesNotExist()
+        compose.onNodeWithText("Copy").assertDoesNotExist()
         compose.runOnIdle { assertTrue(!retried) }
     }
 

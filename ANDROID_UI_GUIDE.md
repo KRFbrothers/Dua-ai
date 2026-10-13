@@ -16,6 +16,10 @@ Dua AI keeps its original name and artwork. This is the owner's personal assista
 
 Production follows the existing MVVM structure: `MainActivity → DuaApp → DuaNavHost → ChatRoute → ChatScreen`. `ChatViewModel` owns state and operations; `ChatUiState`/`ChatActions` keep the chat components reusable. Account, network, history, settings, projects and voice modules hold their existing responsibilities. The backend lives only in `web/`; provider keys never belong in Android source, resources or build configuration.
 
+Chat interactions: only the latest finished assistant reply shows the permanent Copy/Retry/Share/Speak row, and the row stays hidden while a reply is pending/streaming. Long-press a user bubble or assistant turn to open message actions, with the existing preference-aware haptic. Copy/Share preserve the full message payload (including executed code for replies); Speak uses the existing selected-reply voice handler. Retry is visible for assistant turns but enabled only where the existing last-reply handler allows it. User-message editing has no existing handler, so no Edit action is shown. Generated-media actions retain their existing handlers and gallery controls.
+
+Each adjacent assistant group has one 24dp original Dua logo mark in a 48dp-aligned gutter, including typing indicators. Consecutive assistant chunks keep the same gutter without repeating the avatar. User bubbles remain aligned right; the avatar and sheet actions have TalkBack labels and action targets remain at least 48dp. No backend or message-storage behavior changes.
+
 ## Design system
 
 Actual Compose renders: [Dark preview](docs/ui/compact-preview-dark.png) · [Light preview](docs/ui/compact-preview-light.png). These use synthetic chats/projects, not the owner's conversations.
