@@ -7,12 +7,12 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.indication
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Edit
@@ -23,25 +23,35 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.*
+import androidx.compose.ui.text.style.TextOverflow
 import com.dua.ai.history.SavedChat
+import com.dua.ai.ui.navigation.DuaDestination
+import com.dua.ai.ui.theme.*
 
+/** Search box for chat history (also used by [SidebarPanel]). */
 @Composable
-fun SearchField(
-    query: String = "",
-    onQueryChange: (String) -> Unit = {},
-    modifier: Modifier = Modifier
-) {
-    // SearchField stub for SidebarPanel
+fun SearchField(query: String = "", onQueryChange: (String) -> Unit = {}, modifier: Modifier = Modifier) {
+    OutlinedTextField(
+        value = query, onValueChange = onQueryChange, singleLine = true,
+        placeholder = { Text("Search chats") },
+        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+        shape = DrawerShapes.newChat,
+        modifier = modifier.fillMaxWidth().testTag("drawer-search-field"),
+    )
 }
 
+/**
+ * ChatGPT-style sidebar copied from the reference shell's DrawerContent: "Dua AI" + search circle, menu rows,
+ * divider, recent chats, then the purple "Chat" pill with profile and voice circles docked at the bottom.
+ * Long-press a chat for Rename / Pin / Delete.
+ */
 @Composable
 @OptIn(ExperimentalFoundationApi::class)
 fun HistoryDrawer(
@@ -53,312 +63,216 @@ fun HistoryDrawer(
     onNavigateSettings: () -> Unit = {},
     onVoiceClick: () -> Unit = {},
     onDeleteChat: (String) -> Unit = {},
-    onRenameChat: (String, String) -> Unit = { _, _ -> },
+    onRenameChat: (String, String) -> String? = { _, _ -> null },
     serverDeletionEnabled: Boolean = false,
     onDeleteServerChat: (String) -> Unit = {},
     onOpenSettings: () -> Unit = onNavigateSettings,
     onProjects: () -> Unit = {},
-    onDestination: (Any) -> Unit = {},
-    profileName: String = "Fareed",
-    activeChatId: String? = null,
-    drawerOpen: Boolean = false,
-    onCloseDrawer: () -> Unit = {},
-    modifier: Modifier = Modifier
+    onDestination: (DuaDestination) -> Unit = {},
+    pinEnabled: Boolean = false,
+    onPinChat: (String, Boolean) -> String? = { _, _ -> null },
+    profileName: String = "",
+    newChatEnabled: Boolean = true,
+    modifier: Modifier = Modifier,
 ) {
-    var isAuraExpanded by remember { mutableStateOf(false) }
+    val colors = DrawerTheme.colors
+    var auraExpanded by rememberSaveable { mutableStateOf(false) }
+    var searching by rememberSaveable { mutableStateOf(false) }
+    var query by rememberSaveable { mutableStateOf("") }
+    var renaming by remember { mutableStateOf<SavedChat?>(null) }
+    var notice by remember { mutableStateOf<String?>(null) }
+    val visible = remember(chats, query) {
+        HistoryGrouping.filter(chats, query).sortedWith(compareByDescending<SavedChat> { it.pinned }.thenByDescending { it.updatedAt })
+    }
 
-    val pluginsList = listOf(
-        "Plugins",
-        "Canva",
-        "Figma",
-        "Higgsfield",
-        "Runway Assets",
-        "tldraw"
-    )
-
-    Column(
-        modifier = modifier
-            .fillMaxHeight()
-            .width(320.dp)
-            .background(Color.White)
-            .statusBarsPadding()
-            .navigationBarsPadding()
-            .padding(horizontal = 20.dp, vertical = 16.dp),
-        verticalArrangement = Arrangement.SpaceBetween
-    ) {
+    ModalDrawerSheet(drawerContainerColor = colors.container, modifier = modifier.width(DrawerSizes.width).testTag("history-drawer")) {
         Column(
-            modifier = Modifier
-                .weight(1f)
-                .verticalScroll(rememberScrollState())
+            Modifier.fillMaxSize().background(colors.container).statusBarsPadding().navigationBarsPadding()
+                .padding(horizontal = DrawerSizes.paddingH, vertical = DrawerSizes.paddingV),
+            verticalArrangement = Arrangement.SpaceBetween,
         ) {
-            // Header: "Dua" + Search (🔍)
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 20.dp, top = 4.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Dua",
-                    fontSize = 28.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFF111827)
-                )
-                Box(
-                    modifier = Modifier
-                        .size(42.dp)
-                        .clip(CircleShape)
-                        .background(Color(0xFFF3F4F6))
-                        .clickable { onSearch() },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Search,
-                        contentDescription = "Search",
-                        tint = Color(0xFF1F2937),
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-            }
-
-            // 6 Fixed Menu Items
-            DrawerMenuRow(Icons.Outlined.Image, "Images")
-            DrawerMenuRow(Icons.Outlined.CollectionsBookmark, "Library")
-            DrawerMenuRow(Icons.Outlined.Folder, "Projects", onClick = onProjects)
-            DrawerMenuRow(Icons.Outlined.DesktopWindows, "Computer")
-            DrawerMenuRow(Icons.Outlined.SmartToy, "AI Agent")
-            DrawerMenuRow(Icons.Outlined.WorkOutline, "Work")
-
-            // --- EXPANDABLE AURA (Plugins Hub) ---
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .clickable { isAuraExpanded = !isAuraExpanded }
-                    .padding(vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
+            Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+                // Header: "Dua AI" + search circle (42 dp visual in a 48 dp slot; padding trimmed by the 3 dp overhang).
                 Row(
+                    Modifier.fillMaxWidth().padding(top = DrawerSizes.headerTop - (DrawerSizes.touch - DrawerSizes.searchCircle) / 2,
+                        bottom = DrawerSizes.headerBottom - (DrawerSizes.touch - DrawerSizes.searchCircle) / 2),
+                    horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("Dua AI", style = DrawerTitleStyle, color = colors.title, modifier = Modifier.semantics { heading() })
+                    Box(
+                        Modifier.offset(x = (DrawerSizes.touch - DrawerSizes.searchCircle) / 2).size(DrawerSizes.touch)
+                            .clickable(role = Role.Button, onClickLabel = if (searching) "Close search" else "Search chats") {
+                                searching = !searching; if (!searching) query = ""; onSearch()
+                            },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Box(Modifier.size(DrawerSizes.searchCircle).clip(DrawerShapes.circle).background(colors.searchCircle), contentAlignment = Alignment.Center) {
+                            Icon(Icons.Default.Search, contentDescription = "Search chats", tint = colors.searchIcon, modifier = Modifier.size(DrawerSizes.searchIcon))
+                        }
+                    }
+                }
+                AnimatedVisibility(searching) {
+                    SearchField(query, { query = it }, Modifier.padding(bottom = DrawerSizes.menuPaddingV))
+                }
+
+                DrawerMenuRow(Icons.Outlined.Image, "Images") { onDestination(DuaDestination.Images) }
+                DrawerMenuRow(Icons.Outlined.CollectionsBookmark, "Library") { onDestination(DuaDestination.Library) }
+                DrawerMenuRow(Icons.Outlined.Folder, "Projects", onProjects)
+                DrawerMenuRow(Icons.Outlined.CloudQueue, "Computer") { onDestination(DuaDestination.Computer) }
+                DrawerMenuRow(Icons.Outlined.Schedule, "AI Agent") { onDestination(DuaDestination.Agent) }
+
+                // Expandable Aura (the reference's "Explore" slot): Plugins and Work.
+                Row(
+                    Modifier.fillMaxWidth().heightIn(min = DrawerSizes.touch).clip(DrawerShapes.row)
+                        .clickable(role = Role.Button, onClickLabel = if (auraExpanded) "Collapse Aura" else "Expand Aura") { auraExpanded = !auraExpanded }
+                        .semantics { stateDescription = if (auraExpanded) "Expanded" else "Collapsed" }
+                        .padding(vertical = DrawerSizes.menuPaddingV),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Outlined.AutoAwesome,
-                        contentDescription = null,
-                        tint = Color(0xFF111827),
-                        modifier = Modifier.size(22.dp)
-                    )
-                    Text(
-                        text = "Aura",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = Color(0xFF111827)
-                    )
+                    Icon(Icons.Outlined.GridView, null, tint = colors.menuText, modifier = Modifier.size(DrawerSizes.menuIcon))
+                    Spacer(Modifier.width(DrawerSizes.menuGap))
+                    Text("Aura", style = DrawerMenuStyle, color = colors.menuText, modifier = Modifier.weight(1f))
+                    Icon(if (auraExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown, null,
+                        tint = colors.chevron, modifier = Modifier.size(DrawerSizes.chevron))
+                }
+                AnimatedVisibility(auraExpanded, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+                    Column(Modifier.fillMaxWidth().padding(start = DrawerSizes.subIndent)) {
+                        DrawerSubRow(Icons.Outlined.Extension, "Plugins") { onDestination(DuaDestination.Plugins) }
+                        DrawerSubRow(Icons.Outlined.WorkOutline, "Work") { onDestination(DuaDestination.Work) }
+                    }
                 }
 
-                Icon(
-                    imageVector = if (isAuraExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                    contentDescription = if (isAuraExpanded) "Collapse" else "Expand",
-                    tint = Color(0xFF6B7280),
-                    modifier = Modifier.size(20.dp)
-                )
+                HorizontalDivider(color = colors.divider, thickness = DrawerSizes.dividerThickness, modifier = Modifier.padding(vertical = DrawerSizes.dividerPaddingV))
+
+                Column(Modifier.testTag("drawer-recent-chats")) {
+                    if (visible.isEmpty()) Text(if (query.isBlank()) "No chats yet" else "No matching chats", style = DrawerChatStyle,
+                        color = colors.subText, modifier = Modifier.padding(vertical = DrawerSizes.chatPaddingV))
+                    visible.forEach { chat ->
+                        ChatRow(chat, chat.id == currentChatId, serverDeletionEnabled, pinEnabled,
+                            onSelect = { onSelectChat(chat.id) },
+                            onRename = { renaming = chat },
+                            onPin = { onPinChat(chat.id, !chat.pinned)?.let { notice = it } },
+                            onDelete = { if (serverDeletionEnabled) onDeleteServerChat(chat.id) else onDeleteChat(chat.id) })
+                    }
+                }
+                notice?.let { Text(it, style = DrawerChatStyle, color = colors.subText, modifier = Modifier.padding(vertical = DrawerSizes.chatPaddingV)) }
             }
 
-            AnimatedVisibility(
-                visible = isAuraExpanded,
-                enter = expandVertically() + fadeIn(),
-                exit = shrinkVertically() + fadeOut()
+            // Bottom dock: purple "Chat" pill, profile initial, voice.
+            Row(
+                Modifier.fillMaxWidth().padding(top = DrawerSizes.dockTop),
+                horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically,
             ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 38.dp, top = 2.dp, bottom = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                val newChatSource = remember { MutableInteractionSource() }
+                Box(
+                    Modifier.heightIn(min = DrawerSizes.touch)
+                        .clickable(newChatSource, indication = null, enabled = newChatEnabled, role = Role.Button, onClickLabel = "Start a new chat", onClick = onNewChat)
+                        .testTag("drawer-new-chat"),
+                    contentAlignment = Alignment.Center,
                 ) {
-                    pluginsList.forEach { pluginName ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { }
-                                .padding(vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            Icon(
-                                imageVector = if (pluginName == "Plugins") Icons.Outlined.Extension else Icons.Outlined.Grain,
-                                contentDescription = null,
-                                tint = if (pluginName == "Plugins") Color(0xFF8B5CF6) else Color(0xFF4B5563),
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Text(
-                                text = pluginName,
-                                fontSize = 15.sp,
-                                fontWeight = if (pluginName == "Plugins") FontWeight.SemiBold else FontWeight.Normal,
-                                color = if (pluginName == "Plugins") Color(0xFF111827) else Color(0xFF374151)
-                            )
-                        }
+                    // The pill keeps the reference 40 dp height; the surrounding 48 dp slot takes the touch.
+                    Row(
+                        Modifier.clip(DrawerShapes.newChat).background(colors.newChat).indication(newChatSource, ripple())
+                            .padding(horizontal = DrawerSizes.newChatPaddingH, vertical = DrawerSizes.newChatPaddingV),
+                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(DrawerSizes.newChatGap),
+                    ) {
+                        Icon(Icons.Default.Edit, null, tint = colors.onNewChat, modifier = Modifier.size(DrawerSizes.newChatIcon))
+                        Text("Chat", style = DrawerNewChatStyle, color = colors.onNewChat)
                     }
                 }
-            }
-
-            Divider(
-                color = Color(0xFFE5E7EB),
-                thickness = 1.dp,
-                modifier = Modifier.padding(vertical = 16.dp)
-            )
-
-            // --- RECENT CHAT HISTORY ---
-            if (chats.isNotEmpty()) {
-                chats.forEach { chat ->
-                    var menuExpanded by remember(chat.id) { mutableStateOf(false) }
-                    Box(Modifier.fillMaxWidth()) {
-                        Text(
-                            text = chat.title.ifBlank { "New chat" },
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Normal,
-                            color = Color(0xFF1F2937),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .combinedClickable(
-                                    onClick = { onSelectChat(chat.id) },
-                                    onLongClick = { menuExpanded = true },
-                                    onLongClickLabel = "Chat options",
-                                )
-                                .padding(vertical = 11.dp)
-                        )
-                        DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
-                            DropdownMenuItem(
-                                text = { Text(if (serverDeletionEnabled) "Delete chat" else "Remove cached chat") },
-                                onClick = {
-                                    menuExpanded = false
-                                    if (serverDeletionEnabled) onDeleteServerChat(chat.id) else onDeleteChat(chat.id)
-                                },
-                            )
-                        }
+                Row(Modifier.offset(x = (DrawerSizes.touch - DrawerSizes.avatar) / 2), horizontalArrangement = Arrangement.spacedBy(DrawerSizes.dockGap),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    DockCircle(colors.avatar, "Profile & Settings", onOpenSettings) {
+                        val initial = profileName.firstOrNull { it.isLetterOrDigit() }?.uppercaseChar()
+                        if (initial == null) Icon(Icons.Outlined.PersonOutline, null, tint = colors.onAvatar, modifier = Modifier.size(DrawerSizes.voiceIcon))
+                        else Text(initial.toString(), style = DrawerAvatarStyle, color = colors.onAvatar)
                     }
-                }
-            } else {
-                val sampleHistory = listOf(
-                    "Replace Dua",
-                    "Tldraw samjhana",
-                    "APK audit options",
-                    "Greeting exchange",
-                    "Git Pull Se Update",
-                    "Image Error Explanation"
-                )
-                sampleHistory.forEach { title ->
-                    Text(
-                        text = title,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Normal,
-                        color = Color(0xFF1F2937),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onSelectChat(title) }
-                            .padding(vertical = 11.dp)
-                    )
+                    DockCircle(colors.voice, "Voice", onVoiceClick) {
+                        Icon(Icons.Default.GraphicEq, null, tint = colors.onVoice, modifier = Modifier.size(DrawerSizes.voiceIcon))
+                    }
                 }
             }
         }
+    }
 
-        // --- 2. BOTTOM FIXED DOCK ---
+    renaming?.let { chat ->
+        var title by remember(chat.id) { mutableStateOf(chat.title) }
+        var error by remember(chat.id) { mutableStateOf<String?>(null) }
+        AlertDialog(
+            onDismissRequest = { renaming = null },
+            title = { Text("Rename chat") },
+            text = {
+                OutlinedTextField(title, { title = it; error = null }, singleLine = true, label = { Text("Title") },
+                    isError = error != null, supportingText = error?.let { { Text(it) } }, modifier = Modifier.testTag("rename-field"))
+            },
+            confirmButton = {
+                TextButton(enabled = title.isNotBlank(), onClick = {
+                    val result = onRenameChat(chat.id, title.trim())
+                    if (result == null) renaming = null else error = result
+                }) { Text("Save") }
+            },
+            dismissButton = { TextButton(onClick = { renaming = null }) { Text("Cancel") } },
+        )
+    }
+}
+
+@Composable
+@OptIn(ExperimentalFoundationApi::class)
+private fun ChatRow(chat: SavedChat, current: Boolean, serverDeletion: Boolean, pinEnabled: Boolean,
+    onSelect: () -> Unit, onRename: () -> Unit, onPin: () -> Unit, onDelete: () -> Unit) {
+    val colors = DrawerTheme.colors
+    var menu by remember(chat.id) { mutableStateOf(false) }
+    Box(Modifier.fillMaxWidth()) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            Modifier.fillMaxWidth().heightIn(min = DrawerSizes.touch)
+                .combinedClickable(onClick = onSelect, onClickLabel = "Open chat", onLongClick = { menu = true }, onLongClickLabel = "Chat options")
+                .semantics { selected = current }
+                .padding(vertical = DrawerSizes.chatPaddingV),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Row(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(24.dp))
-                    .background(Color(0xFF8B5CF6))
-                    .clickable { onNewChat() }
-                    .padding(horizontal = 22.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Edit,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(16.dp)
-                )
-                Text(
-                    text = "Chat",
-                    color = Color.White,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 15.sp
-                )
-            }
-
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(38.dp)
-                        .clip(CircleShape)
-                        .background(Color(0xFFFDE68A))
-                        .clickable { onOpenSettings() },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = profileName.firstOrNull()?.uppercase() ?: "F",
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF1F2937),
-                        fontSize = 16.sp
-                    )
-                }
-
-                Box(
-                    modifier = Modifier
-                        .size(38.dp)
-                        .clip(CircleShape)
-                        .background(Color(0xFF8B5CF6))
-                        .clickable { onVoiceClick() },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.GraphicEq,
-                        contentDescription = "Voice",
-                        tint = Color.White,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-            }
+            Text(chat.title.ifBlank { "New chat" }, style = DrawerChatStyle, color = colors.chatText, maxLines = 1,
+                overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            if (chat.pinned) Icon(Icons.Outlined.PushPin, "Pinned", tint = colors.subText, modifier = Modifier.size(DrawerSizes.pinIcon))
+        }
+        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+            DropdownMenuItem(text = { Text("Rename") }, leadingIcon = { Icon(Icons.Outlined.Edit, null) },
+                onClick = { menu = false; onRename() })
+            if (pinEnabled) DropdownMenuItem(text = { Text(if (chat.pinned) "Unpin" else "Pin") }, leadingIcon = { Icon(Icons.Outlined.PushPin, null) },
+                onClick = { menu = false; onPin() })
+            DropdownMenuItem(text = { Text(if (serverDeletion) "Delete chat" else "Remove cached chat") },
+                leadingIcon = { Icon(Icons.Outlined.Delete, null) }, onClick = { menu = false; onDelete() })
         }
     }
 }
 
 @Composable
-private fun DrawerMenuRow(
-    icon: ImageVector,
-    label: String,
-    onClick: () -> Unit = {}
-) {
+private fun DockCircle(color: androidx.compose.ui.graphics.Color, label: String, onClick: () -> Unit, content: @Composable () -> Unit) {
+    Box(Modifier.size(DrawerSizes.touch).clickable(role = Role.Button, onClick = onClick).semantics { contentDescription = label },
+        contentAlignment = Alignment.Center) {
+        Box(Modifier.size(DrawerSizes.avatar).clip(DrawerShapes.circle).background(color), contentAlignment = Alignment.Center) { content() }
+    }
+}
+
+@Composable
+private fun DrawerMenuRow(icon: ImageVector, label: String, onClick: () -> Unit) {
+    val colors = DrawerTheme.colors
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(16.dp)
+        Modifier.fillMaxWidth().heightIn(min = DrawerSizes.touch).clickable(role = Role.Button, onClick = onClick).padding(vertical = DrawerSizes.menuPaddingV),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(DrawerSizes.menuGap),
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = Color(0xFF111827),
-            modifier = Modifier.size(22.dp)
-        )
-        Text(
-            text = label,
-            fontSize = 16.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = Color(0xFF111827)
-        )
+        Icon(icon, null, tint = colors.menuText, modifier = Modifier.size(DrawerSizes.menuIcon))
+        Text(label, style = DrawerMenuStyle, color = colors.menuText)
+    }
+}
+
+@Composable
+private fun DrawerSubRow(icon: ImageVector, label: String, onClick: () -> Unit) {
+    val colors = DrawerTheme.colors
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = DrawerSizes.touch).clickable(role = Role.Button, onClick = onClick),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(DrawerSizes.subGap),
+    ) {
+        Icon(icon, null, tint = colors.chevron, modifier = Modifier.size(DrawerSizes.subIcon))
+        Text(label, style = DrawerSubStyle, color = colors.chatText)
     }
 }
