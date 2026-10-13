@@ -5,7 +5,9 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -41,6 +43,7 @@ fun SearchField(
 }
 
 @Composable
+@OptIn(ExperimentalFoundationApi::class)
 fun HistoryDrawer(
     chats: List<SavedChat> = emptyList(),
     currentChatId: String? = null,
@@ -209,16 +212,32 @@ fun HistoryDrawer(
             // --- RECENT CHAT HISTORY ---
             if (chats.isNotEmpty()) {
                 chats.forEach { chat ->
-                    Text(
-                        text = chat.title.ifBlank { "New chat" },
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Normal,
-                        color = Color(0xFF1F2937),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onSelectChat(chat.id) }
-                            .padding(vertical = 11.dp)
-                    )
+                    var menuExpanded by remember(chat.id) { mutableStateOf(false) }
+                    Box(Modifier.fillMaxWidth()) {
+                        Text(
+                            text = chat.title.ifBlank { "New chat" },
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Normal,
+                            color = Color(0xFF1F2937),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .combinedClickable(
+                                    onClick = { onSelectChat(chat.id) },
+                                    onLongClick = { menuExpanded = true },
+                                    onLongClickLabel = "Chat options",
+                                )
+                                .padding(vertical = 11.dp)
+                        )
+                        DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                            DropdownMenuItem(
+                                text = { Text(if (serverDeletionEnabled) "Delete chat" else "Remove cached chat") },
+                                onClick = {
+                                    menuExpanded = false
+                                    if (serverDeletionEnabled) onDeleteServerChat(chat.id) else onDeleteChat(chat.id)
+                                },
+                            )
+                        }
+                    }
                 }
             } else {
                 val sampleHistory = listOf(

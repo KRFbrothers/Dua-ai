@@ -16,6 +16,7 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -23,9 +24,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -68,7 +74,8 @@ fun Composer(
     currentModel: String = "Auto"
 ) {
     var localText by remember { mutableStateOf(value) }
-    val activeText = if (value.isNotEmpty()) value else localText
+    val chatState = state as? ChatUiState
+    val activeText = if (state != null) value else if (value.isNotEmpty()) value else localText
 
     Column(
         modifier = modifier
@@ -87,8 +94,12 @@ fun Composer(
         ) {
             val textFieldModifier = Modifier
                 .fillMaxWidth()
+                .heightIn(min = 48.dp)
                 .padding(horizontal = 4.dp, vertical = 4.dp)
                 .let { if (focusRequester != null) it.focusRequester(focusRequester) else it }
+                .onFocusChanged { onTextFieldFocus?.invoke(it.isFocused) }
+                .onGloballyPositioned { onTextFieldBounds?.invoke(it.boundsInRoot()) }
+                .semantics { contentDescription = "Message" }
 
             BasicTextField(
                 value = activeText,
@@ -141,7 +152,7 @@ fun Composer(
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(36.dp)
+                            .size(48.dp)
                             .clip(CircleShape)
                             .background(Color(0xFFE5E7EB))
                             .clickable { onAttach() },
@@ -191,7 +202,7 @@ fun Composer(
                 ) {
                     IconButton(
                         onClick = { onMic() },
-                        modifier = Modifier.size(36.dp)
+                        modifier = Modifier.size(48.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Mic,
@@ -201,10 +212,26 @@ fun Composer(
                         )
                     }
 
-                    if (activeText.isNotBlank()) {
+                    if (chatState?.typing == true) {
                         Box(
                             modifier = Modifier
-                                .size(40.dp)
+                                .size(48.dp)
+                                .clip(CircleShape)
+                                .background(Color.Black)
+                                .clickable { onStop() },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Stop,
+                                contentDescription = "Stop response",
+                                tint = Color.White,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    } else if (activeText.isNotBlank()) {
+                        Box(
+                            modifier = Modifier
+                                .size(48.dp)
                                 .clip(CircleShape)
                                 .background(Color.Black)
                                 .clickable {
@@ -217,7 +244,7 @@ fun Composer(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.ArrowUpward,
-                                contentDescription = "Send",
+                                contentDescription = "Send message",
                                 tint = Color.White,
                                 modifier = Modifier.size(20.dp)
                             )
@@ -225,18 +252,17 @@ fun Composer(
                     } else {
                         Box(
                             modifier = Modifier
-                                .size(40.dp)
+                                .size(48.dp)
                                 .clip(CircleShape)
                                 .background(Color.Black)
                                 .clickable {
                                     onVoiceMode()
-                                    onVoiceClick()
                                 },
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Icons.Default.GraphicEq,
-                                contentDescription = "Live Voice",
+                                contentDescription = "Voice mode",
                                 tint = Color.White,
                                 modifier = Modifier.size(20.dp)
                             )

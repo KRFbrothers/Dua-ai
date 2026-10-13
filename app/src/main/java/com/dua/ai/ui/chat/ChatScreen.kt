@@ -18,6 +18,7 @@ import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Tag
 import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.key
 import androidx.compose.runtime.snapshotFlow
@@ -26,6 +27,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -278,6 +280,24 @@ fun ChatScreen(
                             onSwipeUp = { tap(); sheet = ChatSheet.Attach })
                         .semantics { customActions = listOf(CustomAccessibilityAction("Open add to chat") { sheet = ChatSheet.Attach; true }) }) {
                         ChatNotices(state = state, actions = actions)
+                        val visibleModes = modeToggles(state, onWebMode, onReasoning, onXSearch, onRunCode)
+                            .filter { home || it.on }
+                        if (visibleModes.isNotEmpty()) {
+                            Row(
+                                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                visibleModes.forEach { toggle ->
+                                    FilterChip(
+                                        selected = toggle.on,
+                                        onClick = { toggle.onChange(!toggle.on) },
+                                        label = { Text(toggle.label) },
+                                        modifier = Modifier.heightIn(min = Sizes.touchTarget)
+                                            .semantics { contentDescription = toggle.detail },
+                                    )
+                                }
+                            }
+                        }
                         Composer(
                             state = state,
                             focusRequester = inputFocus,
@@ -395,7 +415,7 @@ private fun modeToggles(
 ): List<ModeToggle> = buildList {
     if (state.codeConfig != null) add(ModeToggle("Run code", "Let the AI run Python code", Icons.Outlined.Terminal, state.runCode) { onRunCode(it) })
     if (state.reasoningSupported) add(ModeToggle("Reasoning", "Think before answering", Icons.Outlined.Lightbulb, state.reasoning) { onReasoning(it) })
-    add(ModeToggle("Search", "Search the web for this reply", Icons.Outlined.Public, state.webMode == "search") { onWebMode(if (it) "search" else null) })
+    add(ModeToggle("Search", "Search the web", Icons.Outlined.Public, state.webMode == "search") { onWebMode(if (it) "search" else null) })
     if (state.xSearchAvailable) add(ModeToggle("X", "Search posts on X with Grok", Icons.Outlined.Tag, state.xSearch) { onXSearch(it) })
 }
 
