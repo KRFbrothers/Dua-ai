@@ -87,12 +87,13 @@ class HomeGestureTest {
         assertTrue("haptic:Tap" in events)
     }
 
+    /** Home has no mode chips (reference layout); an active mode shows as a chip above the bar in a conversation. */
     @Test fun swipeUpOnChipsOpensPlusSheet() {
-        show()
+        show(conversation.copy(reasoning = true))
         compose.onNodeWithContentDescription("Think before answering").performTouchInput { swipeUp(startY = centerY, endY = centerY - 300f) }
         compose.waitForIdle()
         assertTrue(sheetShown())
-        assertTrue("reasoning:true" !in events)
+        assertTrue(events.none { it.startsWith("reasoning:") })
     }
 
     @Test fun swipeUpInsideFocusedTextFieldDoesNothing() {
@@ -115,9 +116,9 @@ class HomeGestureTest {
     }
 
     @Test fun chipToggleGivesLightHaptic() {
-        show()
+        show(conversation.copy(reasoning = true))
         compose.onNodeWithContentDescription("Think before answering").performClick()
-        assertEquals(listOf("haptic:Tap", "reasoning:true"), events)
+        assertEquals(listOf("haptic:Tap", "reasoning:false"), events)
     }
 
     @Test fun plusSheetSwitchGivesLightHaptic() {

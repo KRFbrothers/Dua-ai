@@ -51,36 +51,47 @@ class CompactChatUiTest(private val dark: Boolean, private val small: Boolean) {
             compose.onRoot().captureRoboImage(file.absolutePath)
         }
     }
-    @Test fun homeRetainsComputerProjectsVoiceAndMessageControls() {
-        var computer = 0; var newChat = 0; var voice = 0
+    @Test fun homeMatchesReferenceShellAndKeepsControlsWired() {
+        var newChat = 0; var voice = 0; var model = 0
         var suggested = ""
+        var opened: com.dua.ai.ui.navigation.DuaDestination? = null
         show { ChatScreen(ChatUiState(webSearchConfigured = true, codeConfig = CodeExecutionConfig(true, providers = setOf("Dua")),
             suggestions = listOf(com.dua.ai.model.PromptSuggestion("Explain some code", "Explain Kotlin", "Coding"),
                 com.dua.ai.model.PromptSuggestion("Draft a proposal", "Draft a proposal", "Business"))),
-            ChatActions(onDraftChange = { suggested = it }, onOpenComputer = { computer++ }, onNewChat = { newChat++ }, onOpenVoiceMode = { voice++ })) }
-        for (description in listOf("Computer, coming soon", "Open chat history", "New chat", "Projects, Personal", "Voice mode", "Add photos and files")) {
+            ChatActions(onDraftChange = { suggested = it }, onNewChat = { newChat++ }, onOpenVoiceMode = { voice++ },
+                onOpenDestination = { opened = it })) }
+        for (description in listOf("Open chat history", "New chat", "Voice mode", "Add photos and files", "Dictate", "Model, Dua")) {
             compose.onNodeWithContentDescription(description).assertIsDisplayed().assertWidthIsAtLeast(48.dp).assertHeightIsAtLeast(48.dp)
         }
-        val header = compose.onNodeWithContentDescription("Projects, Personal").fetchSemanticsNode().boundsInRoot
+        compose.onNode(hasText("Chat") and isSelectable()).assertIsDisplayed().assertIsSelected().assertHeightIsAtLeast(48.dp)
+        compose.onNode(hasText("Work") and isSelectable()).assertIsDisplayed().assertIsNotSelected()
+        compose.onNodeWithText("Ask Dua AI").assertIsDisplayed()
+        // README-only elements are gone.
+        compose.onAllNodesWithContentDescription("Computer, coming soon").assertCountEquals(0)
+        compose.onAllNodesWithText("Dua always with you ✨").assertCountEquals(0)
+        compose.onAllNodesWithContentDescription("Let the AI run Python code").assertCountEquals(0)
+        val chat = compose.onNode(hasText("Chat") and isSelectable()).fetchSemanticsNode().boundsInRoot
         val message = compose.onNodeWithContentDescription("Message").fetchSemanticsNode().boundsInRoot
-        assertTrue(header.bottom <= message.top)
-        val root = compose.onRoot().fetchSemanticsNode().boundsInRoot
-        for (description in listOf("Let the AI run Python code", "Think before answering", "Search the web")) {
-            val bounds = compose.onNodeWithContentDescription(description).assertIsDisplayed().fetchSemanticsNode().boundsInRoot
-            assertTrue(bounds.left >= root.left && bounds.right <= root.right)
-        }
-        compose.onNodeWithContentDescription("Computer, coming soon").performClick()
+        assertTrue(chat.bottom <= message.top)
         compose.onNodeWithContentDescription("New chat").performClick()
         compose.onNodeWithContentDescription("Voice mode").performClick()
-        compose.runOnIdle { assertEquals(1, computer); assertEquals(1, newChat); assertEquals(1, voice) }
+        compose.onNode(hasText("Work") and isSelectable()).performClick()
+        compose.runOnIdle { assertEquals(1, newChat); assertEquals(1, voice); assertEquals(com.dua.ai.ui.navigation.DuaDestination.Work, opened) }
         capture("compact-home")
+        compose.onNodeWithText("Create an image or sticker").performClick()
+        compose.runOnIdle { assertEquals("Create an image or sticker of ", suggested) }
         if (!small) {
             compose.onNodeWithText("Explain some code").performClick()
             compose.runOnIdle { assertEquals("Explain Kotlin", suggested) }
         }
-        compose.onNodeWithContentDescription("Projects, Personal").performClick()
+        // Mode switches moved from Home buttons into the + sheet.
+        compose.onNodeWithContentDescription("Add photos and files").performClick()
+        compose.onNodeWithText("Run code", substring = true).performScrollTo().assertIsDisplayed()
+    }
+    @Test fun projectsSheetStillOpens() {
+        show { ChatScreen(ChatUiState(), ChatActions(), initialSheet = ChatSheet.Projects) }
         compose.onNode(hasText("Projects") and SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.Heading, Unit)).assertIsDisplayed()
-        compose.onAllNodesWithText("Personal").assertCountEquals(2)
+        compose.onAllNodesWithText("Personal").onFirst().assertExists()
     }
     @Test fun projectCardsKeepSelectionEditMemoryTasksAndPlannerReachable() {
         var selected = "personal"

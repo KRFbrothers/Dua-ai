@@ -52,13 +52,11 @@ val VoiceReplyCaptionStyle = TextStyle(fontSize = 24.sp, lineHeight = 33.sp, fon
 val VoicePermissionHeadingStyle = VoiceGreetingStyle.copy(fontSize = 22.sp, lineHeight = 28.sp)
 
 // Home screen + composer styles, taken from the "Dua AI Dabba" reference shell (Söhne, ChatGPT sizes).
-/** "DUA" wordmark on the empty Home screen. */
-val HomeWordmarkStyle = TextStyle(fontFamily = SoehneFont, fontWeight = FontWeight.Bold, fontSize = 20.sp, letterSpacing = 4.sp)
 /** Quick prompt rows on Home ("Create an image…"), Dabba bodyLarge. */
-val HomePromptStyle = TextStyle(fontFamily = SoehneFont, fontWeight = FontWeight.Normal, fontSize = 16.sp, lineHeight = 22.sp)
-/** Composer input and its "Ask anything" placeholder. */
+val HomePromptStyle = TextStyle(fontFamily = SoehneFont, fontWeight = FontWeight.Normal, fontSize = 16.sp)
+/** Composer input and its "Ask Dua AI" placeholder. */
 val ComposerTextStyle = TextStyle(fontFamily = SoehneFont, fontWeight = FontWeight.Normal, fontSize = 16.sp, lineHeight = 22.sp)
-/** Model pill inside the composer and the Computer pill in the top bar. */
+/** Small pill labels. */
 val PillLabelStyle = TextStyle(fontFamily = SoehneFont, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
 /** Labels on the three Home action buttons. */
 val HomeActionLabelStyle = TextStyle(fontFamily = SoehneFont, fontWeight = FontWeight.Medium, fontSize = 14.sp)

@@ -121,7 +121,7 @@ fun AttachmentSheetContent(
         }
         // In a conversation the chip row only shows modes that are on, so every mode can be switched here.
         if (!modes?.toggles.isNullOrEmpty()) ModeToggleGroup(modes!!.toggles, enabled)
-        // Imagine and Build live here (the Home chip row keeps Run code, Reasoning and Search).
+        // Imagine and Build live here, with Run code, Think and Search.
         modes?.imagine?.let { detail ->
             Surface(shape = DuaShape.card, color = MaterialTheme.colorScheme.surfaceContainerHigh) {
                 Row(Modifier.fillMaxWidth().heightIn(min = 64.dp)
@@ -167,7 +167,7 @@ private fun duaSwitchColors() = SwitchDefaults.colors(
 )
 
 /**
- * Mode rows in the + sheet: [toggles] (Run code, Reasoning, Search, X; shown in conversations), Imagine
+ * Mode rows in the + sheet: [toggles] (Run code, Think, Search, X), Imagine
  * (null hides it; text explains its state) and Build (null hides it).
  */
 data class AttachModes(val imagine: String? = null, val imagineOn: Boolean = false, val build: String? = null, val toggles: List<ModeToggle> = emptyList())
