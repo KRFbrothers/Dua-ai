@@ -11,6 +11,8 @@ import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowDownward
 import androidx.compose.material.icons.outlined.Lightbulb
