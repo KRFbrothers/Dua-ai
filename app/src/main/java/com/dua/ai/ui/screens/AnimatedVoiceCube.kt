@@ -47,6 +47,7 @@ internal fun AnimatedVoiceCube(listening: Boolean, modifier: Modifier = Modifier
             while (true) withFrameNanos { now -> progress = ((now - start) % 4_000_000_000L) / 4_000_000_000f }
         }
     }
+    val highlight = com.dua.ai.ui.theme.DuaTheme.colors.voiceCubeHighlight
     Canvas(modifier.semantics { contentDescription = if (listening) "Voice input active" else "Voice input idle" }) {
         val pulse = if (active) .96f + .08f * ((1f - cos(progress * Math.PI.toFloat() * 4f)) / 2f) else 1f
         val radius = size.minDimension * .28f * pulse
@@ -59,7 +60,7 @@ internal fun AnimatedVoiceCube(listening: Boolean, modifier: Modifier = Modifier
                 close()
             }
             val alpha = if (active) .85f + .15f * ((1f - cos(progress * Math.PI.toFloat() * 4f)) / 2f) else 1f
-            drawPath(path, Brush.linearGradient(listOf(Color(face.shade, face.shade, face.shade, alpha), Color(.88f, .88f, .90f, alpha)), start = points[0], end = points[2]))
+            drawPath(path, Brush.linearGradient(listOf(com.dua.ai.ui.theme.voiceCubeFaceColor(face.shade, alpha), highlight.copy(alpha = alpha)), start = points[0], end = points[2]))
             drawPath(path, stroke.copy(alpha = alpha), style = Stroke(1.dp.toPx()))
         }
     }

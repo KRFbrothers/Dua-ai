@@ -42,6 +42,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import com.dua.ai.ui.theme.DuaTheme
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
@@ -157,12 +158,12 @@ fun VideoPoster(media: GeneratedMedia, aspectRatio: String?, onPlay: () -> Unit,
         .semantics { contentDescription = "Generated video${media.duration?.let { ", $it seconds" } ?: ""}. Tap to play"; role = Role.Button }) {
         val px = with(LocalDensity.current) { maxWidth.roundToPx() }
         MediaBitmap(media, Modifier.fillMaxSize(), maxPx = px, poster = true)
-        Surface(shape = CircleShape, color = Color.Black.copy(alpha = .55f), modifier = Modifier.align(Alignment.Center)) {
-            Icon(Icons.Filled.PlayArrow, null, tint = Color.White, modifier = Modifier.padding(Spacing.md).size(32.dp))
+        Surface(shape = CircleShape, color = DuaTheme.colors.mediaOverlay, modifier = Modifier.align(Alignment.Center)) {
+            Icon(Icons.Filled.PlayArrow, null, tint = DuaTheme.colors.onMedia, modifier = Modifier.padding(Spacing.md).size(32.dp))
         }
         media.duration?.let { seconds ->
-            Surface(shape = DuaShape.chip, color = Color.Black.copy(alpha = .55f), modifier = Modifier.align(Alignment.BottomEnd).padding(Spacing.sm)) {
-                Text("0:%02d".format(seconds), style = MaterialTheme.typography.labelMedium, color = Color.White,
+            Surface(shape = DuaShape.chip, color = DuaTheme.colors.mediaOverlay, modifier = Modifier.align(Alignment.BottomEnd).padding(Spacing.sm)) {
+                Text("0:%02d".format(seconds), style = MaterialTheme.typography.labelMedium, color = DuaTheme.colors.onMedia,
                     modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xxs))
             }
         }

@@ -100,7 +100,7 @@ class BuildModeTest {
 
     @Test fun diffLinesAreColouredByKind() {
         val diff = "--- a/x\n+++ b/x\n@@ -1 +1 @@\n-old\n+new\n same"
-        val styled = highlightDiff(diff, dark = true)
+        val styled = highlightDiff(diff, com.dua.ai.ui.theme.DuaDarkColors)
         assertEquals(diff, styled.text)
         fun styleAt(text: String) = styled.spanStyles.filter { diff.indexOf(text) in it.start until it.end }.map { it.item }
         assertNotNull(styleAt("+new").single().background)

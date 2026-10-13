@@ -13,7 +13,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.UriHandler
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
@@ -50,8 +49,8 @@ fun MarkdownMessage(markdown: String, modifier: Modifier = Modifier) {
     val type = MaterialTheme.typography
     val scheme = MaterialTheme.colorScheme
     val colors = DuaTheme.colors
-    val body = type.bodyLarge.copy(lineHeight = type.bodyLarge.fontSize * 1.55f)
-    val inlineCode = body.copy(fontFamily = FontFamily.Monospace, fontSize = body.fontSize * 0.9f)
+    val body = com.dua.ai.ui.theme.markdownBodyStyle(type)
+    val inlineCode = com.dua.ai.ui.theme.markdownInlineCodeStyle(body)
     CompositionLocalProvider(LocalUriHandler provides uriHandler) {
         Markdown(
             content = remember(markdown) { com.dua.ai.model.CitationMarkers.escape(markdown) },

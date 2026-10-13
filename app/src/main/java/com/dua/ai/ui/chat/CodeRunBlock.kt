@@ -108,7 +108,7 @@ fun CodeRunBlock(messageId: String, index: Int, total: Int, run: CodeRun, modifi
                 }
             }
             AnimatedVisibility(visible = expanded) {
-                val code = rememberHighlightedCode(run.code.trimEnd('\n'), run.language, colors.isDark)
+                val code = rememberHighlightedCode(run.code.trimEnd('\n'), run.language, colors)
                 Column {
                     CopyableMono(code, run.code, "Copy code")
                     HorizontalDivider(color = colors.codeBorder)

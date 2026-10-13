@@ -84,20 +84,21 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.min
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import com.dua.ai.R
-import com.dua.ai.ui.theme.DuaPalette
+import com.dua.ai.ui.theme.DuaColors
+import com.dua.ai.ui.theme.DuaVoiceColors
 import com.dua.ai.ui.theme.DuaTheme
+import com.dua.ai.ui.theme.DuaShape
 import com.dua.ai.ui.theme.MontserratFontFamily
+import com.dua.ai.ui.theme.VoiceGreetingStyle
 import com.dua.ai.ui.theme.Sizes
 import com.dua.ai.ui.theme.Spacing
 import com.dua.ai.voice.VoicePhase
@@ -201,12 +202,13 @@ fun VoiceModeContent(
             VoicePhase.Idle -> if (ui.muted) .05f else .14f + .04f * sin(t * 1.2f)
         }
     }
-    val background = if (dark) Color(0xFF050506) else DuaPalette.Neutral97
+    val colors = DuaTheme.colors
+    val scheme = MaterialTheme.colorScheme
     Box(
         Modifier
             .fillMaxSize()
-            .background(background)
-            .drawBehind { drawGlow(dark, energy(), ui.muted) },
+            .background(colors.voice.background)
+            .drawBehind { drawGlow(colors, energy(), ui.muted) },
     ) {
         Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
             TopRow(ui, callbacks)
@@ -221,22 +223,23 @@ fun VoiceModeContent(
             BottomStatus(ui)
             SnackbarHost(snackbar, Modifier.fillMaxWidth()) { data ->
                 Snackbar(data, modifier = Modifier.padding(horizontal = Spacing.lg), shape = RoundedCornerShape(16.dp),
-                    containerColor = if (dark) DuaPalette.Neutral16 else DuaPalette.Ink, contentColor = DuaPalette.Neutral93)
+                    containerColor = if (dark) scheme.surfaceContainerHighest else scheme.inverseSurface,
+                    contentColor = if (dark) scheme.onSurface else scheme.inverseOnSurface)
             }
             Controls(ui, callbacks, energy, time, Modifier.padding(start = Spacing.md, end = Spacing.md, top = Spacing.sm, bottom = Spacing.xl))
         }
     }
 }
 
-private fun DrawScope.drawGlow(dark: Boolean, energy: Float, muted: Boolean) {
+private fun DrawScope.drawGlow(colors: DuaColors, energy: Float, muted: Boolean) {
     val e = if (muted) energy * .4f else energy
-    val gold = if (dark) DuaPalette.Gold80 else DuaPalette.Gold40
-    val silver = if (dark) DuaPalette.Neutral88 else DuaPalette.Neutral72
+    val gold = colors.sparkle
+    val silver = colors.voice.glowSilver
     val center = Offset(size.width / 2f, size.height * 1.02f)
     val radius = size.width * (1.05f + .35f * e)
-    val strength = if (dark) 1f else .65f
+    val strength = if (colors.isDark) 1f else .65f
     drawRect(Brush.radialGradient(
-        0f to Color.White.copy(alpha = (.16f + .18f * e) * strength),
+        0f to colors.voice.highlight.copy(alpha = (.16f + .18f * e) * strength),
         .22f to gold.copy(alpha = (.26f + .24f * e) * strength),
         .5f to silver.copy(alpha = (.08f + .08f * e) * strength),
         1f to Color.Transparent,
@@ -256,7 +259,7 @@ private fun TopRow(ui: VoiceModeUi, callbacks: VoiceModeCallbacks) {
         IconToggleButton(
             checked = ui.captions,
             onCheckedChange = callbacks.onCaptions,
-            modifier = Modifier.size(Sizes.topBarButton).semantics { stateDescription = if (ui.captions) "On" else "Off" },
+            modifier = Modifier.size(Sizes.touchTarget).semantics { stateDescription = if (ui.captions) "On" else "Off" },
         ) {
             Icon(if (ui.captions) Icons.Outlined.ClosedCaption else Icons.Outlined.ClosedCaptionDisabled, contentDescription = "Captions",
                 tint = if (ui.captions) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant)
@@ -266,18 +269,17 @@ private fun TopRow(ui: VoiceModeUi, callbacks: VoiceModeCallbacks) {
 
 @Composable
 private fun StatusPill(phase: VoicePhase, muted: Boolean, granted: Boolean) {
-    val dark = DuaTheme.colors.isDark
     val label = if (!granted) "Mic needed" else phaseLabel(phase, muted)
     val dot = when (phase) {
         VoicePhase.Listening -> DuaTheme.colors.sparkle
-        VoicePhase.Speaking -> if (dark) DuaPalette.Neutral88 else DuaPalette.Ink
+        VoicePhase.Speaking -> MaterialTheme.colorScheme.onSurface
         VoicePhase.Thinking -> DuaTheme.colors.sparkle.copy(alpha = .6f)
-        VoicePhase.Idle -> DuaPalette.Neutral45
+        VoicePhase.Idle -> MaterialTheme.colorScheme.onSurfaceVariant
     }
     Row(
         Modifier
             .clip(CircleShape)
-            .background(if (dark) Color.White.copy(alpha = .06f) else DuaPalette.Ink.copy(alpha = .05f))
+            .background(DuaTheme.colors.voice.statusSurface)
             .padding(horizontal = Spacing.md, vertical = 6.dp)
             .semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite; contentDescription = "Voice mode: $label" },
         verticalAlignment = Alignment.CenterVertically,
@@ -294,8 +296,6 @@ private fun DuaLogo(height: Dp) {
     else Image(painterResource(R.drawable.dua_logo_home_light), contentDescription = "Dua", modifier = Modifier.height(height * 1.04f))
 }
 
-private val greetingStyle = TextStyle(fontFamily = MontserratFontFamily, fontWeight = FontWeight.Medium, fontSize = 26.sp, lineHeight = 34.sp)
-
 @Composable
 private fun Greeting(ui: VoiceModeUi, conversation: Boolean, modifier: Modifier) {
     Column(modifier.widthIn(max = 420.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -307,7 +307,7 @@ private fun Greeting(ui: VoiceModeUi, conversation: Boolean, modifier: Modifier)
             VoicePhase.Speaking -> "Speaking…"
             VoicePhase.Idle -> "Tap the orb to keep talking"
         }
-        Text(text, style = greetingStyle, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurface,
+        Text(text, style = VoiceGreetingStyle, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.semantics { heading() })
     }
 }
@@ -316,17 +316,18 @@ private fun Greeting(ui: VoiceModeUi, conversation: Boolean, modifier: Modifier)
 private fun Captions(ui: VoiceModeUi, callbacks: VoiceModeCallbacks, modifier: Modifier) {
     val scroll = rememberScrollState()
     LaunchedEffect(ui.replyText) { scroll.scrollTo(0) }
-    Column(modifier.verticalScroll(scroll).padding(top = Spacing.sm, bottom = Spacing.lg)) {
+    Column(modifier.background(DuaTheme.colors.voice.textSurface, DuaShape.card)
+        .verticalScroll(scroll).padding(top = Spacing.sm, bottom = Spacing.lg)) {
         if (ui.userText.isNotBlank()) {
-            Text(ui.userText, style = MaterialTheme.typography.bodyLarge.copy(fontSize = 16.sp, lineHeight = 22.sp),
+            Text(ui.userText, style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 4, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.semantics { contentDescription = "You said: ${ui.userText}" })
             Spacer(Modifier.height(Spacing.lg))
         }
         when {
-            ui.phase == VoicePhase.Thinking -> Text("Thinking…", style = captionStyle, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            ui.phase == VoicePhase.Thinking -> Text("Thinking…", style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Normal), color = MaterialTheme.colorScheme.onSurfaceVariant)
             ui.replyText.isNotBlank() -> {
-                Text(ui.replyText, style = captionStyle, color = MaterialTheme.colorScheme.onSurface,
+                Text(ui.replyText, style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Normal), color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
                 Spacer(Modifier.height(Spacing.md))
                 ReplyActions(ui.feedback, callbacks)
@@ -334,8 +335,6 @@ private fun Captions(ui: VoiceModeUi, callbacks: VoiceModeCallbacks, modifier: M
         }
     }
 }
-
-private val captionStyle = TextStyle(fontSize = 24.sp, lineHeight = 33.sp, fontWeight = FontWeight.Normal)
 
 @Composable
 private fun ReplyActions(feedback: Int, callbacks: VoiceModeCallbacks) {
@@ -365,7 +364,8 @@ private fun ActionIcon(icon: ImageVector, description: String, tint: Color, sele
 @Composable
 private fun BottomStatus(ui: VoiceModeUi) {
     val heard = ui.heard.takeIf { ui.captions && ui.phase == VoicePhase.Listening && it.isNotBlank() }
-    Column(Modifier.fillMaxWidth().padding(horizontal = Spacing.xxl), horizontalAlignment = Alignment.CenterHorizontally) {
+    val backdrop = if (heard != null || ui.notice.isNotBlank()) Modifier.background(DuaTheme.colors.voice.textSurface, DuaShape.card) else Modifier
+    Column(Modifier.fillMaxWidth().padding(horizontal = Spacing.xxl).then(backdrop), horizontalAlignment = Alignment.CenterHorizontally) {
         if (heard != null) Text(heard, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center, maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(bottom = Spacing.sm))
         if (ui.notice.isNotBlank()) Text(ui.notice, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -395,8 +395,8 @@ private fun ControlCircle(icon: ImageVector, description: String, size: Dp, sele
     val dark = DuaTheme.colors.isDark
     val container = when {
         selected -> DuaTheme.colors.chipSelected
-        dark -> DuaPalette.Neutral13
-        else -> DuaPalette.Neutral100
+        dark -> MaterialTheme.colorScheme.surfaceContainerHigh
+        else -> MaterialTheme.colorScheme.surface
     }
     val content = if (selected) DuaTheme.colors.onChipSelected else MaterialTheme.colorScheme.onSurface
     Surface(
@@ -404,7 +404,7 @@ private fun ControlCircle(icon: ImageVector, description: String, size: Dp, sele
         shape = CircleShape,
         color = container,
         contentColor = content,
-        border = if (!dark && !selected) BorderStroke(1.dp, DuaPalette.Neutral90) else null,
+        border = if (!dark && !selected) BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant) else null,
         modifier = Modifier.size(size).semantics { contentDescription = description; role = Role.Button; if (state != null) stateDescription = state },
     ) {
         Box(contentAlignment = Alignment.Center) { Icon(icon, contentDescription = null, modifier = Modifier.size(Sizes.icon)) }
@@ -423,19 +423,19 @@ fun VoiceOrb(phase: VoicePhase, muted: Boolean, energy: () -> Float, time: andro
         VoicePhase.Thinking -> "Thinking. Tap to stop and talk"
         VoicePhase.Speaking -> "Speaking. Tap to interrupt"
     }
-    val dark = DuaTheme.colors.isDark
+    val colors = DuaTheme.colors.voice
     Box(
         modifier
             .clip(CircleShape)
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = ripple(color = Color.White), role = Role.Button, onClick = onClick)
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = ripple(color = colors.highlight), role = Role.Button, onClick = onClick)
             .semantics { contentDescription = description }
-            .drawBehind { drawOrb(phase, muted, energy(), time.floatValue, dark) },
+            .drawBehind { drawOrb(phase, muted, energy(), time.floatValue, colors) },
     )
 }
 
-private fun DrawScope.drawOrb(phase: VoicePhase, muted: Boolean, energy: Float, t: Float, dark: Boolean) {
+private fun DrawScope.drawOrb(phase: VoicePhase, muted: Boolean, energy: Float, t: Float, colors: DuaVoiceColors) {
     val w = size.width; val h = size.height
-    drawRect(Brush.verticalGradient(listOf(Color(0xFF141518), Color(0xFF0B0B0D))))
+    drawRect(Brush.verticalGradient(listOf(colors.orbSurfaceTop, colors.orbSurfaceBottom)))
     val fill = when (phase) {
         VoicePhase.Idle -> .34f
         VoicePhase.Listening -> .36f + .28f * energy
@@ -462,25 +462,24 @@ private fun DrawScope.drawOrb(phase: VoicePhase, muted: Boolean, energy: Float, 
         lineTo(w, h); close()
     }
     drawPath(wave(2.1f, .8f, fill + .07f), Brush.verticalGradient(
-        listOf(DuaPalette.Neutral72.copy(alpha = .35f * alpha), DuaPalette.Neutral88.copy(alpha = .55f * alpha)), startY = h * (1f - fill - .1f), endY = h))
+        listOf(colors.orbSilverLow.copy(alpha = .35f * alpha), colors.orbSilverHigh.copy(alpha = .55f * alpha)), startY = h * (1f - fill - .1f), endY = h))
     drawPath(wave(0f, 1f, fill), Brush.verticalGradient(
-        0f to DuaPalette.Gold80.copy(alpha = .95f * alpha),
-        .45f to Color(0xFFF3E3B8).copy(alpha = alpha),
-        1f to Color.White.copy(alpha = alpha),
+        0f to colors.orbGold.copy(alpha = .95f * alpha),
+        .45f to colors.orbCream.copy(alpha = alpha),
+        1f to colors.highlight.copy(alpha = alpha),
         startY = h * (1f - fill - .08f), endY = h))
     if (phase == VoicePhase.Thinking && !muted) {
         val p = (t * .55f) % 1f
         val cx = -w * .4f + p * w * 1.8f
-        drawRect(Brush.horizontalGradient(listOf(Color.Transparent, Color.White.copy(alpha = .38f), Color.Transparent), startX = cx - w * .22f, endX = cx + w * .22f))
+        drawRect(Brush.horizontalGradient(listOf(Color.Transparent, colors.highlight.copy(alpha = .38f), Color.Transparent), startX = cx - w * .22f, endX = cx + w * .22f))
     }
     // Soft inner rim so the capsule reads on both themes.
-    drawRoundRect(color = if (dark) Color.White.copy(alpha = .10f) else Color.Black.copy(alpha = .12f),
+    drawRoundRect(color = colors.orbRim,
         cornerRadius = androidx.compose.ui.geometry.CornerRadius(h / 2f), style = Stroke(width = 1.dp.toPx()))
 }
 
 @Composable
 private fun PermissionRationale(permission: MicPermission, callbacks: VoiceModeCallbacks, modifier: Modifier) {
-    val dark = DuaTheme.colors.isDark
     Surface(
         modifier = modifier.widthIn(max = 420.dp).fillMaxWidth(),
         shape = RoundedCornerShape(28.dp),
@@ -488,12 +487,12 @@ private fun PermissionRationale(permission: MicPermission, callbacks: VoiceModeC
         border = BorderStroke(1.dp, DuaTheme.colors.composerBorder),
     ) {
         Column(Modifier.padding(Spacing.xxl), horizontalAlignment = Alignment.CenterHorizontally) {
-            Box(Modifier.size(64.dp).clip(CircleShape).background(if (dark) DuaPalette.Neutral16 else DuaPalette.Neutral93)
+            Box(Modifier.size(64.dp).clip(CircleShape).background(MaterialTheme.colorScheme.secondaryContainer)
                 .border(1.dp, DuaTheme.colors.sparkle.copy(alpha = .55f), CircleShape), contentAlignment = Alignment.Center) {
                 Icon(Icons.Outlined.Mic, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(30.dp))
             }
             Spacer(Modifier.height(Spacing.lg))
-            Text("Let Dua hear you", style = greetingStyle.copy(fontSize = 22.sp, lineHeight = 28.sp), color = MaterialTheme.colorScheme.onSurface,
+            Text("Let Dua hear you", style = MaterialTheme.typography.headlineSmall.copy(fontFamily = MontserratFontFamily, fontWeight = FontWeight.Medium), color = MaterialTheme.colorScheme.onSurface,
                 textAlign = TextAlign.Center, modifier = Modifier.semantics { heading() })
             Spacer(Modifier.height(Spacing.sm))
             val body = if (permission == MicPermission.Blocked)

@@ -48,6 +48,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import com.dua.ai.ui.theme.DuaTheme
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -196,7 +197,7 @@ private fun InlineVideo(messageId: String, media: GeneratedMedia, aspectRatio: S
     }
     val current = url
     if (playing && current != null) {
-        Box(Modifier.widthIn(max = if (ratio < 1f) 280.dp else 420.dp).fillMaxWidth().aspectRatio(ratio).clip(DuaShape.card).background(Color.Black)) {
+        Box(Modifier.widthIn(max = if (ratio < 1f) 280.dp else 420.dp).fillMaxWidth().aspectRatio(ratio).clip(DuaShape.card).background(DuaTheme.colors.mediaBackground)) {
             VideoPlayer(current, Modifier.fillMaxSize(), onFullscreen = { actions.onOpen(messageId, 0) })
         }
     } else VideoPoster(media, aspectRatio, onPlay = { failed = null; playing = true })
@@ -246,7 +247,7 @@ fun MediaViewerContent(media: List<GeneratedMedia>, startIndex: Int, actions: Im
     playVideo: Boolean = true) {
     val pager = rememberPagerState(initialPage = startIndex.coerceIn(0, (media.size - 1).coerceAtLeast(0))) { media.size }
     val loader = LocalMediaLoader.current
-    Box(Modifier.fillMaxSize().background(Color.Black)) {
+    Box(Modifier.fillMaxSize().background(DuaTheme.colors.mediaBackground)) {
         HorizontalPager(pager, modifier = Modifier.fillMaxSize(), key = { media[it].key }) { page ->
             val item = media[page]
             if (item.isVideo) {
@@ -254,15 +255,15 @@ fun MediaViewerContent(media: List<GeneratedMedia>, startIndex: Int, actions: Im
                 if (playVideo) LaunchedEffect(item.key) { url = runCatching { loader.playable(item) }.getOrNull() }
                 val current = url
                 if (current != null) VideoPlayer(current, Modifier.fillMaxSize())
-                else MediaBitmap(item, Modifier.fillMaxSize(), maxPx = 1600, poster = true, contentScale = ContentScale.Fit, background = Color.Black)
+                else MediaBitmap(item, Modifier.fillMaxSize(), maxPx = 1600, poster = true, contentScale = ContentScale.Fit, background = DuaTheme.colors.mediaBackground)
             } else ZoomableImage(item)
         }
-        Row(Modifier.fillMaxWidth().safeDrawingPadding().padding(Spacing.xs), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onDismiss) { Icon(Icons.Outlined.Close, "Close viewer", tint = Color.White) }
-            if (media.size > 1) Text("${pager.currentPage + 1} / ${media.size}", color = Color.White, style = MaterialTheme.typography.titleMedium)
+        Row(Modifier.fillMaxWidth().background(DuaTheme.colors.mediaOverlay).safeDrawingPadding().padding(Spacing.xs), verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onDismiss) { Icon(Icons.Outlined.Close, "Close viewer", tint = DuaTheme.colors.onMedia) }
+            if (media.size > 1) Text("${pager.currentPage + 1} / ${media.size}", color = DuaTheme.colors.onMedia, style = MaterialTheme.typography.titleMedium)
         }
         val current = media.getOrNull(pager.currentPage)
-        if (current != null) Row(Modifier.align(Alignment.BottomCenter).fillMaxWidth().safeDrawingPadding().padding(Spacing.md),
+        if (current != null) Row(Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(DuaTheme.colors.mediaOverlay).safeDrawingPadding().padding(Spacing.md),
             horizontalArrangement = Arrangement.SpaceEvenly) {
             ViewerButton(Icons.Outlined.Download, "Save") { actions.onSave(listOf(current)) }
             ViewerButton(Icons.Outlined.Share, "Share") { actions.onShare(listOf(current)) }
@@ -276,9 +277,9 @@ fun MediaViewerContent(media: List<GeneratedMedia>, startIndex: Int, actions: Im
 
 @Composable
 private fun ViewerButton(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit) {
-    Surface(onClick = onClick, shape = DuaShape.card, color = Color.Transparent, contentColor = Color.White) {
+    Surface(onClick = onClick, shape = DuaShape.card, color = Color.Transparent, contentColor = DuaTheme.colors.onMedia) {
         Column(Modifier.widthIn(min = 72.dp).padding(horizontal = Spacing.sm, vertical = Spacing.sm), horizontalAlignment = Alignment.CenterHorizontally) {
-            Surface(shape = androidx.compose.foundation.shape.CircleShape, color = Color.White.copy(alpha = .14f), contentColor = Color.White) {
+            Surface(shape = androidx.compose.foundation.shape.CircleShape, color = DuaTheme.colors.onMedia.copy(alpha = .14f), contentColor = DuaTheme.colors.onMedia) {
                 Icon(icon, null, modifier = Modifier.padding(Spacing.md).size(Sizes.iconSmall))
             }
             Text(label, style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(top = Spacing.xs))
@@ -302,6 +303,6 @@ private fun ZoomableImage(media: GeneratedMedia) {
         .transformable(state, canPan = { scale > 1f })
         .semantics { contentDescription = "Generated image. Pinch or double-tap to zoom" }) {
         MediaBitmap(media, Modifier.fillMaxSize().graphicsLayer(scaleX = scale, scaleY = scale, translationX = offset.x, translationY = offset.y),
-            maxPx = px, contentScale = ContentScale.Fit, background = Color.Black)
+            maxPx = px, contentScale = ContentScale.Fit, background = DuaTheme.colors.mediaBackground)
     }
 }

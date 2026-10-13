@@ -125,7 +125,8 @@ fun LiveVoiceContent(state: LiveState, starting: Boolean, error: String, fallbac
                     Icon(if (state.muted) Icons.Outlined.MicOff else Icons.Outlined.Mic, contentDescription = if (state.muted) "Unmute microphone" else "Mute microphone", modifier = Modifier.size(28.dp))
                 }
                 FilledIconButton(onClick = onEnd, modifier = Modifier.size(72.dp),
-                    colors = IconButtonDefaults.filledIconButtonColors(containerColor = Color(0xFFE5484D), contentColor = Color.White)) {
+                    colors = IconButtonDefaults.filledIconButtonColors(containerColor = com.dua.ai.ui.theme.DuaTheme.colors.danger,
+                        contentColor = com.dua.ai.ui.theme.DuaTheme.colors.onDanger)) {
                     Icon(Icons.Filled.CallEnd, contentDescription = "End live voice", modifier = Modifier.size(32.dp))
                 }
             } else Column(Modifier.fillMaxWidth().padding(vertical = Spacing.lg), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
@@ -185,7 +186,8 @@ fun VoiceOrb(phase: LivePhase, level: Float, muted: Boolean, modifier: Modifier 
     val speaking = phase == LivePhase.SPEAKING
     val idle = phase == LivePhase.IDLE || phase == LivePhase.ENDED || phase == LivePhase.FAILED
     val core = if (muted || idle) MaterialTheme.colorScheme.outline else accent
-    val glow = if (speaking) Color(0xFF8B7CF6) else accent
+    val voiceColors = com.dua.ai.ui.theme.DuaTheme.colors.voice
+    val glow = if (speaking) voiceColors.speakingGlow else accent
     Canvas(modifier) {
         val radius = size.minDimension / 2
         val center = Offset(size.width / 2, size.height / 2)
@@ -197,6 +199,6 @@ fun VoiceOrb(phase: LivePhase, level: Float, muted: Boolean, modifier: Modifier 
             drawCircle(glow.copy(alpha = (1f - progress) * 0.35f), radius * (scale + 0.35f * progress), center, style = Stroke(width = 3f))
         }
         drawCircle(Brush.radialGradient(listOf(core.copy(alpha = 0.95f), glow.copy(alpha = 0.75f)), center, radius * scale), radius * scale, center)
-        drawCircle(Color.White.copy(alpha = 0.18f), radius * scale * 0.45f, Offset(center.x - radius * scale * 0.25f, center.y - radius * scale * 0.3f))
+        drawCircle(voiceColors.highlight.copy(alpha = 0.18f), radius * scale * 0.45f, Offset(center.x - radius * scale * 0.25f, center.y - radius * scale * 0.3f))
     }
 }

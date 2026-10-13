@@ -15,6 +15,7 @@ import androidx.core.view.WindowCompat
 import com.dua.ai.settings.LocalPreferences
 import com.dua.ai.settings.AccentPreset
 
+/** Semantic chat/diff, voice, danger, media and branding roles supplied for the active appearance. */
 val LocalDuaColors = staticCompositionLocalOf { DuaDarkColors }
 
 /** Resolves the saved "Color mode" preference (dark, light or system). System follows the device; legacy installations retain their saved choice. */

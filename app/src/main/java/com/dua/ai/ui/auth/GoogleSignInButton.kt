@@ -21,7 +21,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -71,7 +70,7 @@ fun GoogleSignInButton(busy: Boolean, error: String?, onClick: () -> Unit, modif
                 Spacer(Modifier.width(Spacing.md))
                 Text("Signing in…", style = MaterialTheme.typography.labelLarge)
             } else {
-                Box(Modifier.size(24.dp).clip(CircleShape).background(Color.White), contentAlignment = Alignment.Center) {
+                Box(Modifier.size(24.dp).clip(CircleShape).background(DuaTheme.colors.brandBadgeBackground), contentAlignment = Alignment.Center) {
                     Image(painterResource(R.drawable.ic_google_g), contentDescription = null, modifier = Modifier.size(16.dp))
                 }
                 Spacer(Modifier.width(Spacing.md))
