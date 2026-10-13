@@ -20,7 +20,6 @@ import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Tag
 import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.key
 import androidx.compose.runtime.snapshotFlow
@@ -286,18 +285,12 @@ fun ChatScreen(
                             .filter { home || it.on }
                         if (visibleModes.isNotEmpty()) {
                             Row(
-                                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                Modifier.fillMaxWidth().let { if (visibleModes.size > 3) it.horizontalScroll(rememberScrollState()) else it }
+                                    .padding(horizontal = Spacing.md, vertical = Spacing.xs),
+                                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                             ) {
-                                visibleModes.forEach { toggle ->
-                                    FilterChip(
-                                        selected = toggle.on,
-                                        onClick = { toggle.onChange(!toggle.on) },
-                                        label = { Text(toggle.label) },
-                                        modifier = Modifier.heightIn(min = Sizes.touchTarget)
-                                            .semantics { contentDescription = toggle.detail },
-                                    )
-                                }
+                                val fill = visibleModes.size <= 3
+                                visibleModes.forEach { toggle -> HomeActionButton(toggle, if (fill) Modifier.weight(1f) else Modifier) }
                             }
                         }
                         Composer(
@@ -416,7 +409,7 @@ private fun modeToggles(
     onXSearch: (Boolean) -> Unit, onRunCode: (Boolean) -> Unit,
 ): List<ModeToggle> = buildList {
     if (state.codeConfig != null) add(ModeToggle("Run code", "Let the AI run Python code", Icons.Outlined.Terminal, state.runCode) { onRunCode(it) })
-    if (state.reasoningSupported) add(ModeToggle("Reasoning", "Think before answering", Icons.Outlined.Lightbulb, state.reasoning) { onReasoning(it) })
+    if (state.reasoningSupported) add(ModeToggle("Think", "Think before answering", Icons.Outlined.Lightbulb, state.reasoning) { onReasoning(it) })
     add(ModeToggle("Search", "Search the web", Icons.Outlined.Public, state.webMode == "search") { onWebMode(if (it) "search" else null) })
     if (state.xSearchAvailable) add(ModeToggle("X", "Search posts on X with Grok", Icons.Outlined.Tag, state.xSearch) { onXSearch(it) })
 }

@@ -26,17 +26,20 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import com.dua.ai.ui.theme.ComposerTextStyle
+import com.dua.ai.ui.theme.DuaShape
+import com.dua.ai.ui.theme.DuaTheme
+import com.dua.ai.ui.theme.PillLabelStyle
+import com.dua.ai.ui.theme.Sizes
+import com.dua.ai.ui.theme.Spacing
 
 const val AUTO_MODEL = "Auto"
 
@@ -77,25 +80,37 @@ fun Composer(
     val chatState = state as? ChatUiState
     val activeText = if (state != null) value else if (value.isNotEmpty()) value else localText
 
+    val colors = DuaTheme.colors
+    val scheme = MaterialTheme.colorScheme
+    fun submit() {
+        if (activeText.isNotBlank()) {
+            onSend(activeText)
+            localText = ""
+            onValueChange("")
+            onDraftChange("")
+        }
+    }
+
+    // Dabba / ChatGPT composer: one rounded "Ask anything" surface with the tools row inside it.
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .padding(horizontal = Spacing.md, vertical = Spacing.sm)
             .navigationBarsPadding()
             .imePadding()
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(28.dp))
-                .background(Color(0xFFF9FAFB))
-                .border(1.dp, Color(0xFFE5E7EB), RoundedCornerShape(28.dp))
-                .padding(horizontal = 14.dp, vertical = 12.dp)
+                .clip(DuaShape.composer)
+                .background(colors.composer)
+                .border(1.dp, colors.composerBorder, DuaShape.composer)
+                .padding(horizontal = Spacing.sm, vertical = Spacing.sm)
         ) {
             val textFieldModifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 48.dp)
-                .padding(horizontal = 4.dp, vertical = 4.dp)
+                .heightIn(min = Sizes.touchTarget)
+                .padding(horizontal = Spacing.sm, vertical = Spacing.xs)
                 .let { if (focusRequester != null) it.focusRequester(focusRequester) else it }
                 .onFocusChanged { onTextFieldFocus?.invoke(it.isFocused) }
                 .onGloballyPositioned { onTextFieldBounds?.invoke(it.boundsInRoot()) }
@@ -109,164 +124,61 @@ fun Composer(
                     onDraftChange(it)
                 },
                 modifier = textFieldModifier,
-                textStyle = TextStyle(
-                    fontSize = 16.sp,
-                    color = Color(0xFF111827),
-                    fontWeight = FontWeight.Normal
-                ),
-                cursorBrush = SolidColor(Color(0xFF111827)),
+                textStyle = ComposerTextStyle.copy(color = scheme.onSurface),
+                cursorBrush = SolidColor(scheme.onSurface),
+                maxLines = 6,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                keyboardActions = KeyboardActions(
-                    onSend = {
-                        if (activeText.isNotBlank()) {
-                            onSend(activeText)
-                            localText = ""
-                            onValueChange("")
-                            onDraftChange("")
-                        }
-                    }
-                ),
+                keyboardActions = KeyboardActions(onSend = { submit() }),
                 decorationBox = { innerTextField ->
-                    if (activeText.isEmpty()) {
-                        Text(
-                            text = "Ask anything",
-                            fontSize = 16.sp,
-                            color = Color(0xFF9CA3AF),
-                            fontWeight = FontWeight.Normal
-                        )
+                    Box(contentAlignment = Alignment.CenterStart) {
+                        if (activeText.isEmpty()) {
+                            Text("Ask anything", style = ComposerTextStyle, color = scheme.onSurfaceVariant)
+                        }
+                        innerTextField()
                     }
-                    innerTextField()
                 }
             )
 
-            Spacer(modifier = Modifier.height(10.dp))
-
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(48.dp)
-                            .clip(CircleShape)
-                            .background(Color(0xFFE5E7EB))
-                            .clickable { onAttach() },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Add,
-                            contentDescription = "Add photos and files",
-                            tint = Color(0xFF374151),
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-
-                    Row(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(18.dp))
-                            .background(Color(0xFFE5E7EB))
-                            .clickable { onModelClick() }
-                            .padding(horizontal = 12.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(5.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.AutoAwesome,
-                            contentDescription = null,
-                            tint = Color(0xFF374151),
-                            modifier = Modifier.size(14.dp)
-                        )
-                        Text(
-                            text = currentModel,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = Color(0xFF1F2937)
-                        )
-                        Icon(
-                            imageVector = Icons.Default.KeyboardArrowDown,
-                            contentDescription = null,
-                            tint = Color(0xFF6B7280),
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
+                IconButton(onClick = onAttach, modifier = Modifier.size(Sizes.composerRound)) {
+                    Icon(Icons.Default.Add, contentDescription = "Add photos and files", tint = scheme.onSurface,
+                        modifier = Modifier.size(Sizes.icon))
                 }
-
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                    modifier = Modifier
+                        .heightIn(min = Sizes.touchTarget)
+                        .clip(DuaShape.pill)
+                        .clickable(role = Role.Button, onClick = onModelClick)
+                        .semantics(mergeDescendants = true) { contentDescription = "Model, $currentModel" }
+                        .padding(horizontal = Spacing.sm),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.xs)
                 ) {
-                    IconButton(
-                        onClick = { onMic() },
-                        modifier = Modifier.size(48.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Mic,
-                            contentDescription = "Dictate",
-                            tint = Color(0xFF374151),
-                            modifier = Modifier.size(22.dp)
-                        )
-                    }
-
-                    if (chatState?.typing == true) {
-                        Box(
-                            modifier = Modifier
-                                .size(48.dp)
-                                .clip(CircleShape)
-                                .background(Color.Black)
-                                .clickable { onStop() },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Stop,
-                                contentDescription = "Stop response",
-                                tint = Color.White,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                    } else if (activeText.isNotBlank()) {
-                        Box(
-                            modifier = Modifier
-                                .size(48.dp)
-                                .clip(CircleShape)
-                                .background(Color.Black)
-                                .clickable {
-                                    onSend(activeText)
-                                    localText = ""
-                                    onValueChange("")
-                                    onDraftChange("")
-                                },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.ArrowUpward,
-                                contentDescription = "Send message",
-                                tint = Color.White,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                    } else {
-                        Box(
-                            modifier = Modifier
-                                .size(48.dp)
-                                .clip(CircleShape)
-                                .background(Color.Black)
-                                .clickable {
-                                    onVoiceMode()
-                                },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.GraphicEq,
-                                contentDescription = "Voice mode",
-                                tint = Color.White,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
+                    Icon(Icons.Default.AutoAwesome, null, tint = scheme.onSurfaceVariant, modifier = Modifier.size(Sizes.iconTiny))
+                    Text(currentModel, style = PillLabelStyle, color = scheme.onSurface, maxLines = 1)
+                    Icon(Icons.Default.KeyboardArrowDown, null, tint = scheme.onSurfaceVariant, modifier = Modifier.size(Sizes.iconTiny))
+                }
+                Spacer(Modifier.weight(1f))
+                IconButton(onClick = onMic, modifier = Modifier.size(Sizes.composerRound)) {
+                    Icon(Icons.Default.Mic, contentDescription = "Dictate", tint = scheme.onSurface, modifier = Modifier.size(Sizes.iconSmall))
+                }
+                val (icon, label, action) = when {
+                    chatState?.typing == true -> Triple(Icons.Default.Stop, "Stop response", { onStop() })
+                    activeText.isNotBlank() -> Triple(Icons.Default.ArrowUpward, "Send message", { submit() })
+                    else -> Triple(Icons.Default.GraphicEq, "Voice mode", { onVoiceMode() })
+                }
+                Box(
+                    modifier = Modifier
+                        .size(Sizes.composerRound)
+                        .clickable(role = Role.Button, onClick = action)
+                        .semantics(mergeDescendants = true) { contentDescription = label },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Box(Modifier.size(Sizes.sendButton).clip(CircleShape).background(colors.action), contentAlignment = Alignment.Center) {
+                        Icon(icon, contentDescription = null, tint = colors.onAction, modifier = Modifier.size(Sizes.iconSmall))
                     }
                 }
             }

@@ -4,24 +4,37 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.ChatBubbleOutline
+import androidx.compose.material.icons.outlined.Code
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.Lightbulb
-import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextOverflow
 import com.dua.ai.model.PromptSuggestion
 import com.dua.ai.ui.screens.AnimatedVoiceCube
+import com.dua.ai.ui.theme.HomePromptStyle
+import com.dua.ai.ui.theme.HomeTaglineStyle
+import com.dua.ai.ui.theme.HomeWordmarkStyle
+import com.dua.ai.ui.theme.Sizes
+import com.dua.ai.ui.theme.Spacing
 
+/**
+ * Empty Home, laid out like the "Dua AI Dabba" reference (ChatGPT layout): centred animated DUA logo,
+ * the DUA wordmark and tagline, then quick prompt rows above the composer.
+ */
 @Composable
 fun EmptyState(
     modifier: Modifier = Modifier,
@@ -30,103 +43,65 @@ fun EmptyState(
     onSuggestion: (String) -> Unit = {}
 ) {
     Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+        modifier = modifier.fillMaxSize().padding(horizontal = Spacing.lg, vertical = Spacing.sm),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.SpaceBetween
     ) {
-        Spacer(modifier = Modifier.weight(1f))
-
-        // --- CENTER HERO: 3D DUA LOGO & TAGLINE ---
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            // Metallic 3D Animated Cube / Logo with listening = false
-            Box(
-                modifier = Modifier.size(130.dp),
-                contentAlignment = Alignment.Center
-            ) {
+        Spacer(Modifier.weight(1f))
+        Column(horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.semantics(mergeDescendants = true) { contentDescription = "Dua AI"; heading() }) {
+            Box(Modifier.size(Sizes.homeLogo).clearAndSetSemantics {}, contentAlignment = Alignment.Center) {
                 AnimatedVoiceCube(listening = false)
             }
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            // — DUA — with Cubes
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Box(modifier = Modifier.size(7.dp).background(Color(0xFF374151), shape = RoundedCornerShape(1.dp)))
-                Box(modifier = Modifier.width(22.dp).height(1.5.dp).background(Color(0xFF9CA3AF)))
-                Text(
-                    text = "DUA",
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 4.sp,
-                    color = Color(0xFF1F2937)
-                )
-                Box(modifier = Modifier.width(22.dp).height(1.5.dp).background(Color(0xFF9CA3AF)))
-                Box(modifier = Modifier.size(7.dp).background(Color(0xFF374151), shape = RoundedCornerShape(1.dp)))
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // Tagline
-            Text(
-                text = "Dua always with you ✨",
-                fontSize = 19.sp,
-                fontWeight = FontWeight.Medium,
-                color = Color(0xFF111827)
-            )
+            Spacer(Modifier.height(Spacing.md))
+            DuaWordmark()
+            Spacer(Modifier.height(Spacing.sm))
+            Text("Dua always with you ✨", style = HomeTaglineStyle, color = MaterialTheme.colorScheme.onSurface)
         }
-
-        Spacer(modifier = Modifier.weight(1f))
-
-        // --- 3 ACTION BUTTONS (Above Composer) ---
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        Spacer(Modifier.weight(1f))
+        if (suggestions.isNotEmpty()) Column(
+            Modifier.fillMaxWidth().padding(horizontal = Spacing.sm, vertical = Spacing.sm),
+            verticalArrangement = Arrangement.spacedBy(Spacing.xs),
         ) {
-            QuickActionButton(
-                icon = Icons.Outlined.Image,
-                modifier = Modifier.weight(1f),
-                onClick = { onSuggestion("Create an image") }
-            )
-            QuickActionButton(
-                icon = Icons.Outlined.Lightbulb,
-                modifier = Modifier.weight(1f),
-                onClick = { onSuggestion("Brainstorm ideas") }
-            )
-            QuickActionButton(
-                icon = Icons.Outlined.Public,
-                modifier = Modifier.weight(1f),
-                onClick = { onSuggestion("Search the web") }
-            )
+            suggestions.take(4).forEach { s ->
+                PromptRow(iconFor(s.category), s.title) { onSuggestion(s.prompt.ifBlank { s.title }) }
+            }
         }
     }
 }
 
 @Composable
-private fun QuickActionButton(
-    icon: ImageVector,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit
-) {
-    Box(
-        modifier = modifier
-            .height(50.dp)
-            .clip(RoundedCornerShape(20.dp))
-            .background(Color(0xFFF3F4F6))
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = Color(0xFF1F2937),
-            modifier = Modifier.size(22.dp)
-        )
+private fun DuaWordmark() {
+    val ink = MaterialTheme.colorScheme.onSurface
+    val rule = MaterialTheme.colorScheme.outline
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+        modifier = Modifier.clearAndSetSemantics {}) {
+        Box(Modifier.size(Sizes.wordmarkSquare).background(ink, RoundedCornerShape(Spacing.xxs)))
+        Box(Modifier.width(Sizes.wordmarkRule).height(Sizes.wordmarkRuleThickness).background(rule))
+        Text("DUA", style = HomeWordmarkStyle, color = ink)
+        Box(Modifier.width(Sizes.wordmarkRule).height(Sizes.wordmarkRuleThickness).background(rule))
+        Box(Modifier.size(Sizes.wordmarkSquare).background(ink, RoundedCornerShape(Spacing.xxs)))
     }
+}
+
+@Composable
+private fun PromptRow(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, onClick: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = Sizes.touchTarget).clip(DuaThemeShapeRow)
+            .clickable(role = Role.Button, onClick = onClick).padding(horizontal = Spacing.sm),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Spacing.md),
+    ) {
+        Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(Sizes.iconSmall))
+        Text(title, style = HomePromptStyle, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+private val DuaThemeShapeRow = RoundedCornerShape(Spacing.md)
+
+private fun iconFor(category: String) = when (category.lowercase()) {
+    "coding", "code" -> Icons.Outlined.Code
+    "idea", "ideas", "brainstorm" -> Icons.Outlined.Lightbulb
+    "image", "images" -> Icons.Outlined.Image
+    "writing", "business" -> Icons.Outlined.Edit
+    else -> Icons.Outlined.ChatBubbleOutline
 }

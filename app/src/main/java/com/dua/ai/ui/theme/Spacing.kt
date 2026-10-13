@@ -34,4 +34,12 @@ object Sizes {
     val sendButton = 38.dp
     /** Home logo height on a roomy screen; it shrinks on short screens and with the keyboard open. */
     val homeLogoHeight = 196.dp
+    /** Animated DUA logo on the empty Home screen (Dabba). */
+    val homeLogo = 130.dp
+    /** Composer round buttons: +, mic, voice/send/stop. */
+    val composerRound = 48.dp
+    /** Rule either side of the DUA wordmark. */
+    val wordmarkRule = 22.dp
+    val wordmarkRuleThickness = 1.5.dp
+    val wordmarkSquare = 7.dp
 }

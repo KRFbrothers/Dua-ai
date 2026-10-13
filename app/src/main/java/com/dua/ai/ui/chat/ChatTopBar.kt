@@ -19,7 +19,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -27,7 +26,10 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import com.dua.ai.ui.theme.DuaShape
+import com.dua.ai.ui.theme.PillLabelStyle
+import com.dua.ai.ui.theme.Sizes
+import com.dua.ai.ui.theme.Spacing
 
 @Composable
 fun ChatTopBar(
@@ -70,9 +72,31 @@ fun ChatTopBar(
                 Icon(Icons.Outlined.ExpandMore, null, modifier = Modifier.size(16.dp))
             }
         }
-        if (showComputer) BarButton(Icons.Outlined.DesktopWindows, "Computer, coming soon", onComputer)
+        if (showComputer) ComputerPill(onComputer)
         onSearch?.let { BarButton(Icons.Outlined.Search, "Find in chat", it) }
         BarButton(Icons.Outlined.EditNote, "New chat", onNewChat, newChatEnabled)
+    }
+}
+
+/** Dabba's top-bar pill: icon + "Computer" on a rounded tonal surface, 48dp tall for touch. */
+@Composable
+private fun ComputerPill(onClick: () -> Unit) {
+    Box(
+        Modifier.heightIn(min = Sizes.touchTarget)
+            .clip(DuaShape.pill)
+            .clickable(role = Role.Button, onClick = onClick)
+            .semantics(mergeDescendants = true) { contentDescription = "Computer, coming soon" },
+        contentAlignment = Alignment.Center,
+    ) {
+        Row(
+            Modifier.clip(DuaShape.pill).background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                .padding(horizontal = Spacing.md, vertical = Spacing.sm),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
+        ) {
+            Icon(Icons.Outlined.DesktopWindows, null, modifier = Modifier.size(Sizes.iconTiny), tint = MaterialTheme.colorScheme.onSurface)
+            Text("Computer", style = PillLabelStyle, color = MaterialTheme.colorScheme.onSurface, maxLines = 1)
+        }
     }
 }
 
