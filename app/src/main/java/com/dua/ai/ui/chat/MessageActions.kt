@@ -2,9 +2,7 @@ package com.dua.ai.ui.chat
 
 import android.content.ActivityNotFoundException
 import android.content.Intent
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -38,15 +36,18 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.onLongClick
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
@@ -91,13 +92,17 @@ private fun rememberTextMessageActions(copyText: String, assistant: Boolean = tr
     })
 }
 
-/** The supplied callback uses the existing preference-aware haptic handler. Single taps do nothing. */
-@OptIn(ExperimentalFoundationApi::class)
+/** Observe only long presses; child links/copy controls own taps and messages expose no click action. */
 @Composable
-internal fun Modifier.messageLongPress(onLongPress: () -> Unit): Modifier = combinedClickable(
-    interactionSource = remember { MutableInteractionSource() }, indication = null,
-    onClick = {}, onLongClickLabel = "Message actions", onLongClick = onLongPress,
-)
+internal fun Modifier.messageLongPress(onLongPress: () -> Unit, haptic: () -> Unit = {}): Modifier {
+    val currentLongPress by rememberUpdatedState(onLongPress)
+    val currentHaptic by rememberUpdatedState(haptic)
+    return pointerInput(Unit) {
+        detectTapGestures(onLongPress = { currentHaptic(); currentLongPress() })
+    }.semantics {
+        onLongClick(label = "Message actions") { currentLongPress(); true }
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

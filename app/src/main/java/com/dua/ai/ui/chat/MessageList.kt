@@ -76,10 +76,12 @@ fun MessageList(state: ChatUiState, actions: ChatActions, listState: LazyListSta
                 .testTag("message-${message.id}")
                 .then(if (selected) Modifier.border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(12.dp)) else Modifier)
                 .semantics { if (selected) stateDescription = "Selected search result" }) {
-                val openActions = { actions.haptic(ChatHaptic.LongPress); actionsId = message.id }
-                if (message.isUser) UserMessage(message.text, files = message.files, onOpenFile = actions.onOpenFile, onLongPress = openActions)
+                val openActions = { actionsId = message.id }
+                val longPressHaptic = { actions.haptic(ChatHaptic.LongPress) }
+                if (message.isUser) UserMessage(message.text, files = message.files, onOpenFile = actions.onOpenFile,
+                    onLongPress = openActions, longPressHaptic = longPressHaptic)
                 else AssistantTurn(showAvatar = index == 0 || state.messages[index - 1].isUser,
-                    modifier = Modifier.messageLongPress(openActions)) {
+                    modifier = Modifier.messageLongPress(openActions, longPressHaptic)) {
                     if (message.isImagine) ImagineReply(message, imagineActions, videoAvailable = state.videoAvailable)
                     else AssistantMessage(
                         message = message,

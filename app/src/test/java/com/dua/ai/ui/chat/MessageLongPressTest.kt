@@ -10,10 +10,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.platform.ClipboardManager
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalTextToolbar
+import androidx.compose.ui.platform.TextToolbar
+import androidx.compose.ui.platform.TextToolbarStatus
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.Density
@@ -31,6 +37,8 @@ import org.junit.runner.RunWith
 import org.robolectric.ParameterizedRobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import org.robolectric.annotation.Implementation
+import org.robolectric.annotation.Implements
 import org.robolectric.Shadows
 
 @RunWith(ParameterizedRobolectricTestRunner::class)
@@ -51,11 +59,12 @@ class MessageLongPressTest(private val dark: Boolean) {
     private val spoken = mutableListOf<String>()
     private lateinit var clipboard: ClipboardManager
     private lateinit var context: android.content.Context
+    private val textToolbar = RecordingTextToolbar()
 
     private fun show(fontScale: Float = 1f) {
         compose.setContent {
             clipboard = LocalClipboardManager.current; context = LocalContext.current
-            CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, fontScale)) {
+            CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, fontScale), LocalTextToolbar provides textToolbar) {
                 DuaTheme(LocalPreferences(theme = if (dark) "dark" else "light")) {
                     Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
                         MessageList(state.value, ChatActions(onRetry = { retries += it }, onSpeak = { spoken += it.id }, haptic = { haptics += it }), rememberLazyListState())
@@ -103,12 +112,62 @@ class MessageLongPressTest(private val dark: Boolean) {
     }
 
     @Test fun userLongPressShowsOnlyCopyShareAndPreservesFullPrompt() {
-        show(); longPress(prompt.text)
+        show()
+        compose.onNode(SemanticsMatcher.keyIsDefined(SemanticsActions.OnLongClick) and hasAnyAncestor(hasTestTag("message-prompt")))
+            .performSemanticsAction(SemanticsActions.OnLongClick) { assertTrue(it()) }
         sheetAction("retry").assertDoesNotExist(); sheetAction("speak").assertDoesNotExist()
         compose.onNodeWithText("Edit").assertDoesNotExist()
         sheetAction("share").assertIsEnabled()
         sheetAction("copy").assertContentDescriptionEquals("Copy message").performClick()
-        compose.runOnIdle { assertEquals(prompt.text, clipboard.getText()?.text) }
+        compose.runOnIdle { assertEquals(prompt.text, clipboard.getText()?.text); assertTrue(haptics.isEmpty()) }
+    }
+
+    @Test @Config(shadows = [SelectionMagnifierShadow::class])
+    fun userTextRemainsSelectableWithMessageActionsEnabled() {
+        show()
+        compose.onNodeWithText(prompt.text, useUnmergedTree = true).performTouchInput {
+            longClick(Offset(width * .75f, height / 2f))
+        }
+        compose.runOnIdle {
+            assertEquals(TextToolbarStatus.Shown, textToolbar.status)
+            assertNotNull(textToolbar.copy)
+            textToolbar.copy!!.invoke()
+            assertEquals("question", clipboard.getText()?.text)
+        }
+    }
+
+    @Test fun messageLongPressSemanticsDoNotAdvertiseAnOrdinaryClickAction() {
+        show()
+        for (id in listOf(prompt.id, old.id)) {
+            val node = compose.onNode(SemanticsMatcher.keyIsDefined(SemanticsActions.OnLongClick) and hasAnyAncestor(hasTestTag("message-$id")))
+            node.assert(SemanticsMatcher.keyNotDefined(SemanticsActions.OnClick))
+            val action = node.fetchSemanticsNode().config[SemanticsActions.OnLongClick]
+            assertEquals("Message actions", action.label)
+        }
+    }
+
+    @Test fun assistantMarkdownLinkStillRespondsToAnActualTap() {
+        state.value = state.value.copy(messages = listOf(prompt, old.copy(text = "[Open docs](https://example.com/docs)"), latest))
+        show()
+        compose.onNodeWithText("Open docs", useUnmergedTree = true).performTouchInput { click() }
+        compose.runOnIdle {
+            var base = context
+            while (base is android.content.ContextWrapper && base !is android.app.Activity) base = base.baseContext
+            val intent = Shadows.shadowOf(base as android.app.Activity).nextStartedActivity
+            assertNotNull("Link tap must reach the existing URI handler", intent)
+            assertEquals(Intent.ACTION_VIEW, intent.action)
+            assertEquals("https://example.com/docs", intent.dataString)
+            assertTrue(haptics.isEmpty())
+        }
+        compose.onNodeWithTag("message-actions-sheet").assertDoesNotExist()
+    }
+
+    @Test fun assistantCodeCopyButtonStillRespondsToAnActualTap() {
+        state.value = state.value.copy(messages = listOf(prompt, old.copy(text = "```python\nprint(1)\n```"), latest))
+        show()
+        compose.onNodeWithContentDescription("Copy code").performTouchInput { click() }
+        compose.runOnIdle { assertEquals("print(1)", clipboard.getText()?.text?.trim()); assertTrue(haptics.isEmpty()) }
+        compose.onNodeWithTag("message-actions-sheet").assertDoesNotExist()
     }
 
     @Test fun sheetShareUsesExistingAndroidChooserAndExactReply() {
@@ -166,5 +225,26 @@ class MessageLongPressTest(private val dark: Boolean) {
         show(fontScale = 2f); longPress(old.text)
         for (action in listOf("copy", "retry", "share", "speak"))
             sheetAction(action).performScrollTo().assertIsDisplayed().assertHeightIsAtLeast(48.dp).assertWidthIsAtLeast(48.dp)
+    }
+
+    private class RecordingTextToolbar : TextToolbar {
+        override var status = TextToolbarStatus.Hidden
+            private set
+        var copy: (() -> Unit)? = null
+        override fun showMenu(rect: Rect, onCopyRequested: (() -> Unit)?, onPasteRequested: (() -> Unit)?,
+            onCutRequested: (() -> Unit)?, onSelectAllRequested: (() -> Unit)?) {
+            copy = onCopyRequested; status = TextToolbarStatus.Shown
+        }
+        override fun hide() { status = TextToolbarStatus.Hidden }
+    }
+
+    // Robolectric's native magnifier popup has no backing Surface. Only its drawing is
+    // stubbed; Compose still handles the real gesture, word selection and copy action.
+    @Implements(android.widget.Magnifier::class)
+    class SelectionMagnifierShadow {
+        @Implementation fun show(sourceCenterX: Float, sourceCenterY: Float) {}
+        @Implementation fun show(sourceCenterX: Float, sourceCenterY: Float, magnifierCenterX: Float, magnifierCenterY: Float) {}
+        @Implementation fun update() {}
+        @Implementation fun dismiss() {}
     }
 }
