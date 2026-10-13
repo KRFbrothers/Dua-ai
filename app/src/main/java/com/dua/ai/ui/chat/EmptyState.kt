@@ -20,7 +20,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.dua.ai.model.PromptSuggestion
-import com.dua.ai.ui.screens.AnimatedVoiceCube(listening = false)
+import com.dua.ai.ui.screens.AnimatedVoiceCube
 
 @Composable
 fun EmptyState(
@@ -49,7 +49,7 @@ fun EmptyState(
                     .size(130.dp),
                 contentAlignment = Alignment.Center
             ) {
-                AnimatedVoiceCube()
+                AnimatedVoiceCube(listening = false)
             }
 
             Spacer(modifier = Modifier.height(14.dp))
