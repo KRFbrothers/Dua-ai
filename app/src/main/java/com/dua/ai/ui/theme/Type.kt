@@ -60,3 +60,17 @@ fun duaTypography(family: FontFamily = InterFontFamily): Typography {
 
 /** Monospace style for code blocks and inline code. */
 val CodeTextStyle = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 13.5.sp, lineHeight = 20.sp)
+
+/** Original Montserrat branding: keep Home's compact layout and voice greeting proportions. */
+val HomeTaglineStyle = TextStyle(fontFamily = MontserratFontFamily, fontWeight = FontWeight.Medium, fontSize = 20.sp, lineHeight = 28.sp)
+val HomeTaglineCompactStyle = HomeTaglineStyle.copy(fontSize = 18.sp)
+val VoiceGreetingStyle = HomeTaglineStyle.copy(fontSize = 26.sp, lineHeight = 34.sp)
+
+/** Original voice layouts: keep their line spacing and family/weight without sizes in screens. */
+fun voiceTranscriptStyle(type: Typography): TextStyle = type.bodyLarge.copy(lineHeight = 22.sp)
+val VoiceReplyCaptionStyle = TextStyle(fontSize = 24.sp, lineHeight = 33.sp, fontWeight = FontWeight.Normal)
+val VoicePermissionHeadingStyle = VoiceGreetingStyle.copy(fontSize = 22.sp, lineHeight = 28.sp)
+
+/** Markdown keeps the existing proportional line spacing and inline-code sizing on the chosen type scale. */
+fun markdownBodyStyle(type: Typography): TextStyle = type.bodyLarge.copy(lineHeight = type.bodyLarge.fontSize * 1.55f)
+fun markdownInlineCodeStyle(body: TextStyle): TextStyle = body.copy(fontFamily = FontFamily.Monospace, fontSize = body.fontSize * .9f)

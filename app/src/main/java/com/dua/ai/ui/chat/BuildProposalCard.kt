@@ -96,15 +96,14 @@ fun BuildProposalCard(
     initiallyConfirming: Boolean = false,
 ) {
     val scheme = MaterialTheme.colorScheme
-    val dark = DuaTheme.colors.isDark
     val context = LocalContext.current
     val opener = remember(context) { SafeUriHandler(context) }
     var confirming by rememberSaveable(messageId) { mutableStateOf(initiallyConfirming) }
     // The first diff starts open for review; proposals that already have a pull request (e.g. from history) start collapsed.
     var expanded by remember(messageId) { mutableStateOf(if (proposal.pullRequest != null) emptySet() else proposal.files.take(1).map { it.path }.toSet()) }
     val stage = proposalStage(proposal, state, unavailable)
-    val added = if (dark) Color(0xFF7EE787) else Color(0xFF116329)
-    val removed = if (dark) Color(0xFFFF7B72) else Color(0xFF82071E)
+    val added = DuaTheme.colors.diff.added
+    val removed = DuaTheme.colors.diff.removed
     Surface(shape = DuaShape.card, color = scheme.surfaceContainerLow, border = BorderStroke(1.dp, scheme.outlineVariant), modifier = modifier.fillMaxWidth()) {
         Column(Modifier.padding(Spacing.lg).animateContentSize()) {
             Row(Modifier.semantics(mergeDescendants = true) { heading() }, verticalAlignment = Alignment.CenterVertically) {

@@ -1,5 +1,8 @@
 package com.dua.ai.ui.screens
 
+import com.dua.ai.ui.theme.DuaTheme
+import com.dua.ai.ui.theme.voiceCubeFaceColor
+
 import android.database.ContentObserver
 import android.os.Handler
 import android.os.Looper
@@ -22,7 +25,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import kotlin.math.cos
 
 @Composable
-internal fun AnimatedVoiceCube(listening: Boolean, modifier: Modifier = Modifier, stroke: Color = com.dua.ai.ui.theme.DuaTheme.colors.voiceCubeStroke) {
+internal fun AnimatedVoiceCube(listening: Boolean, modifier: Modifier = Modifier, stroke: Color = DuaTheme.colors.voiceCubeStroke) {
     val context = LocalContext.current
     val resolver = context.contentResolver
     fun motionAllowed() = Settings.Global.getFloat(resolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) > 0f
@@ -47,6 +50,7 @@ internal fun AnimatedVoiceCube(listening: Boolean, modifier: Modifier = Modifier
             while (true) withFrameNanos { now -> progress = ((now - start) % 4_000_000_000L) / 4_000_000_000f }
         }
     }
+    val highlight = DuaTheme.colors.voiceCubeHighlight
     Canvas(modifier.semantics { contentDescription = if (listening) "Voice input active" else "Voice input idle" }) {
         val pulse = if (active) .96f + .08f * ((1f - cos(progress * Math.PI.toFloat() * 4f)) / 2f) else 1f
         val radius = size.minDimension * .28f * pulse
@@ -59,7 +63,7 @@ internal fun AnimatedVoiceCube(listening: Boolean, modifier: Modifier = Modifier
                 close()
             }
             val alpha = if (active) .85f + .15f * ((1f - cos(progress * Math.PI.toFloat() * 4f)) / 2f) else 1f
-            drawPath(path, Brush.linearGradient(listOf(Color(face.shade, face.shade, face.shade, alpha), Color(.88f, .88f, .90f, alpha)), start = points[0], end = points[2]))
+            drawPath(path, Brush.linearGradient(listOf(voiceCubeFaceColor(face.shade, alpha), highlight.copy(alpha = alpha)), start = points[0], end = points[2]))
             drawPath(path, stroke.copy(alpha = alpha), style = Stroke(1.dp.toPx()))
         }
     }

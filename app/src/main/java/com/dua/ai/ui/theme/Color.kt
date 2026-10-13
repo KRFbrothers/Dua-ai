@@ -5,6 +5,8 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.Color
+import dev.snipme.highlights.model.SyntaxTheme
+import dev.snipme.highlights.model.SyntaxThemes
 
 /**
  * Raw palette. Screens never use these directly: they read [ColorScheme] roles from
@@ -150,6 +152,20 @@ data class DuaColors(
     val action: Color,
     val onAction: Color,
     val voiceCubeStroke: Color,
+    val voiceCubeHighlight: Color,
+    val diff: DuaDiffColors,
+    /** Original Atom palette selected for this appearance, without runtime hue adjustment. */
+    val syntaxTheme: SyntaxTheme,
+    val voice: DuaVoiceColors,
+    val danger: Color,
+    val onDanger: Color,
+    /** Media canvases stay black in both appearances; these are independent of the app surface. */
+    val mediaBackground: Color,
+    val mediaOverlay: Color,
+    val onMedia: Color,
+    /** Fixed artwork highlights and the Google badge retain their original colors. */
+    val logoHighlight: Color,
+    val brandBadgeBackground: Color,
     /** Small gold accent (the Home tagline sparkle). Decorative only. */
     val sparkle: Color,
     /** Selected mode chip: silver on dark, ink on light, with a gold icon. */
@@ -158,6 +174,35 @@ data class DuaColors(
     val chipSelectedIcon: Color,
     val isDark: Boolean,
 )
+
+@Immutable
+data class DuaDiffColors(val added: Color, val addedBackground: Color, val removed: Color, val removedBackground: Color, val hunk: Color)
+
+/** Decorative voice light and a deliberately dark orb capsule; no text is drawn in the glow. */
+@Immutable
+data class DuaVoiceColors(
+    val background: Color,
+    val glowSilver: Color,
+    val highlight: Color,
+    val statusSurface: Color,
+    val speakingGlow: Color,
+    val orbSurfaceTop: Color,
+    val orbSurfaceBottom: Color,
+    val orbSilverLow: Color,
+    val orbSilverHigh: Color,
+    val orbGold: Color,
+    val orbCream: Color,
+    val orbRim: Color,
+)
+
+// Vector paths are tint masks, not visible screen foregrounds; callers supply the themed Icon tint.
+internal val DuaVectorStroke = Color.Black
+
+/** Geometry supplies a computed shade, while the theme owns the cube's color construction. */
+internal fun voiceCubeFaceColor(shade: Float, alpha: Float): Color = Color(shade, shade, shade, alpha)
+
+/** Decode an original syntax token's RGB exactly as the pre-refactor renderer did. */
+internal fun syntaxTokenColor(rgb: Int): Color = Color(rgb).copy(alpha = 1f)
 
 internal val DuaDarkColors = DuaColors(
     userBubble = DuaPalette.Neutral16,
@@ -171,6 +216,20 @@ internal val DuaDarkColors = DuaColors(
     action = DuaPalette.Neutral93,
     onAction = DuaPalette.Neutral4,
     voiceCubeStroke = DuaPalette.Neutral72,
+    voiceCubeHighlight = Color(.88f, .88f, .90f),
+    diff = DuaDiffColors(Color(0xFF7EE787), Color(0x332EA043), Color(0xFFFF7B72), Color(0x33F85149), Color(0xFF79C0FF)),
+    syntaxTheme = SyntaxThemes.atom(true),
+    voice = DuaVoiceColors(
+        background = Color(0xFF050506),
+        glowSilver = DuaPalette.Neutral88, highlight = DuaPalette.Neutral100,
+        statusSurface = DuaPalette.Neutral100.copy(alpha = .06f), speakingGlow = Color(0xFF8B7CF6),
+        orbSurfaceTop = Color(0xFF141518), orbSurfaceBottom = Color(0xFF0B0B0D),
+        orbSilverLow = DuaPalette.Neutral72, orbSilverHigh = DuaPalette.Neutral88,
+        orbGold = DuaPalette.Gold80, orbCream = Color(0xFFF3E3B8), orbRim = Color.White.copy(alpha = .10f),
+    ),
+    danger = Color(0xFFE5484D), onDanger = DuaPalette.Neutral100,
+    mediaBackground = Color.Black, mediaOverlay = Color.Black.copy(alpha = .55f), onMedia = DuaPalette.Neutral100,
+    logoHighlight = DuaPalette.Neutral100, brandBadgeBackground = DuaPalette.Neutral100,
     sparkle = DuaPalette.Gold80,
     chipSelected = DuaPalette.Neutral90,
     onChipSelected = DuaPalette.Neutral4,
@@ -190,6 +249,20 @@ internal val DuaLightColors = DuaColors(
     action = DuaPalette.Ink,
     onAction = DuaPalette.Neutral100,
     voiceCubeStroke = DuaPalette.Neutral45,
+    voiceCubeHighlight = Color(.88f, .88f, .90f),
+    diff = DuaDiffColors(Color(0xFF116329), Color(0x262DA44E), Color(0xFF82071E), Color(0x26FF8182), Color(0xFF0550AE)),
+    syntaxTheme = SyntaxThemes.atom(false),
+    voice = DuaVoiceColors(
+        background = DuaPalette.Neutral97,
+        glowSilver = DuaPalette.Neutral72, highlight = DuaPalette.Neutral100,
+        statusSurface = DuaPalette.Ink.copy(alpha = .05f), speakingGlow = Color(0xFF8B7CF6),
+        orbSurfaceTop = Color(0xFF141518), orbSurfaceBottom = Color(0xFF0B0B0D),
+        orbSilverLow = DuaPalette.Neutral72, orbSilverHigh = DuaPalette.Neutral88,
+        orbGold = DuaPalette.Gold80, orbCream = Color(0xFFF3E3B8), orbRim = Color.Black.copy(alpha = .12f),
+    ),
+    danger = Color(0xFFE5484D), onDanger = DuaPalette.Neutral100,
+    mediaBackground = Color.Black, mediaOverlay = Color.Black.copy(alpha = .55f), onMedia = DuaPalette.Neutral100,
+    logoHighlight = DuaPalette.Neutral100, brandBadgeBackground = DuaPalette.Neutral100,
     sparkle = DuaPalette.Gold40,
     chipSelected = DuaPalette.Neutral10,
     onChipSelected = DuaPalette.Neutral97,

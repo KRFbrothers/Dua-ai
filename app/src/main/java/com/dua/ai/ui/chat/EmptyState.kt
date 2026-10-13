@@ -48,15 +48,13 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.dua.ai.R
 import com.dua.ai.ui.icons.DuaIcons
 import com.dua.ai.ui.theme.DuaTheme
-import com.dua.ai.ui.theme.MontserratFontFamily
+import com.dua.ai.ui.theme.HomeTaglineStyle
+import com.dua.ai.ui.theme.HomeTaglineCompactStyle
 import com.dua.ai.ui.theme.Sizes
 import com.dua.ai.ui.theme.Spacing
 import com.dua.ai.ui.theme.DuaShape
@@ -86,7 +84,8 @@ fun EmptyState(modifier: Modifier = Modifier, shimmerPreview: Float? = null,
         val showLogo = maxHeight >= 220.dp
         val logoGap = Spacing.lg
         val minHeight = maxHeight
-        val taglineSize = if (maxWidth < 360.dp) 18.sp else 20.sp
+        val taglineStyle = if (maxWidth < 360.dp) HomeTaglineCompactStyle else HomeTaglineStyle
+        val logoHighlight = DuaTheme.colors.logoHighlight
         val showSuggestions = maxHeight >= 420.dp && LocalDensity.current.fontScale <= 1.4f && suggestions.isNotEmpty()
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
             Box(Modifier.fillMaxWidth().heightIn(min = minHeight).padding(horizontal = Spacing.xxl, vertical = Spacing.lg)) {
@@ -105,15 +104,14 @@ fun EmptyState(modifier: Modifier = Modifier, shimmerPreview: Float? = null,
                         // Light theme: darker chrome with a soft shadow, so "DUA" stays readable on white. The light
                         // asset has a 4% shadow margin, so it is drawn 4% taller to keep the same visible size.
                         val dark = DuaTheme.colors.isDark
-                        val sweep = Modifier.logoShimmer(progress = { shimmerPreview ?: shimmer.floatValue }, strength = if (dark) .38f else .42f)
+                        val sweep = Modifier.logoShimmer(progress = { shimmerPreview ?: shimmer.floatValue }, strength = if (dark) .38f else .42f, light = logoHighlight)
                         if (dark) Image(painterResource(R.drawable.dua_logo_home), contentDescription = "Dua logo", modifier = Modifier.height(logoHeight).then(sweep))
                         else Image(painterResource(R.drawable.dua_logo_home_light), contentDescription = "Dua logo", modifier = Modifier.height(logoHeight * 1.04f).then(sweep))
                         Spacer(Modifier.height(logoGap))
                     }
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.semantics(mergeDescendants = true) { heading() }) {
                         Text("Dua always with you", textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurface,
-                            style = TextStyle(fontFamily = MontserratFontFamily, fontWeight = FontWeight.Medium,
-                                fontSize = taglineSize, lineHeight = 28.sp), modifier = Modifier.weight(1f, fill = false))
+                            style = taglineStyle, modifier = Modifier.weight(1f, fill = false))
                         Icon(DuaIcons.Sparkle, contentDescription = null, tint = DuaTheme.colors.sparkle,
                             modifier = Modifier.padding(start = Spacing.xxs).size(Sizes.iconSmall + 2.dp))
                     }
@@ -170,7 +168,7 @@ private fun rememberLogoShimmer(enabled: Boolean): MutableFloatState {
 }
 
 /** A diagonal band of light drawn over the image and clipped to its opaque pixels (SrcAtop on an offscreen layer). */
-private fun Modifier.logoShimmer(progress: () -> Float, strength: Float): Modifier =
+private fun Modifier.logoShimmer(progress: () -> Float, strength: Float, light: Color): Modifier =
     graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }.drawWithContent {
         drawContent()
         val p = progress()
@@ -181,7 +179,6 @@ private fun Modifier.logoShimmer(progress: () -> Float, strength: Float): Modifi
         val centre = -band + p * (diagonal + 2 * band)
         val start = Offset((centre - band) / 2f, (centre - band) / 2f)
         val end = Offset((centre + band) / 2f, (centre + band) / 2f)
-        val light = Color.White
         drawRect(
             brush = Brush.linearGradient(listOf(light.copy(alpha = 0f), light.copy(alpha = strength), light.copy(alpha = 0f)), start = start, end = end),
             blendMode = BlendMode.SrcAtop,

@@ -26,6 +26,7 @@ Actual Compose renders: [Dark preview](docs/ui/compact-preview-dark.png) · [Lig
 - `Spacing.kt` supplies the 4dp spacing scale. Rounded surfaces use `Shape.kt`. Controls retain 48dp touch targets; menu/footer stay fixed while history scrolls. Code/Think/Search use accessible icon-only controls when their labels cannot fit.
 - The header and project actions are neutral. Accent is used selectively for selection and settings; the logo is never tinted.
 - Existing reduced-motion handling, keyboard insets, Android back navigation and conversation scroll-follow behavior remain in place.
+- Diff, voice, danger and media colors now use the extended `LocalDuaColors` roles in both appearances. Screens have no literal Compose palette colors or text sizes; custom branding/code sizes live in `Type.kt`. See the [complete value-to-token mapping](docs/ui/design-system-tokens.md) and contrast checks.
 
 ## Run the real app
 
