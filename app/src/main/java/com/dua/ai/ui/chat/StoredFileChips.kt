@@ -1,5 +1,9 @@
 package com.dua.ai.ui.chat
 
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.BorderStroke
+import com.dua.ai.ui.theme.ChatSizes
+import com.dua.ai.ui.theme.ChatTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -26,7 +30,6 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
 import com.dua.ai.files.FileRef
 import com.dua.ai.files.StoredFileTypes
 import com.dua.ai.ui.theme.DuaShape
@@ -46,21 +49,22 @@ internal fun kindIcon(mimeType: String): ImageVector = when (StoredFileTypes.kin
 @Composable
 fun MessageFileChips(names: List<String>, files: List<FileRef>, onOpen: (FileRef) -> Unit) {
     val stored = files.associateBy { it.name }
+    val c = ChatTheme.colors
     FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.xs, Alignment.End), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
         names.take(10).forEach { name ->
             val ref = stored[name]
             val tap = ref?.let { { onOpen(it) } }
-            Surface(onClick = tap ?: {}, enabled = tap != null, shape = DuaShape.chip, color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                modifier = Modifier.semantics {
+            Surface(onClick = tap ?: {}, enabled = tap != null, shape = DuaShape.chip, color = c.chipFill, border = BorderStroke(ChatSizes.border, c.chipBorder),
+                modifier = Modifier.then(if (ref != null) Modifier.heightIn(min = Sizes.touchTarget) else Modifier).semantics {
                     if (ref != null) { role = Role.Button; contentDescription = "Open $name" + if (ref.transcript != null) ", transcribed" else "" }
                 }) {
-                Row(Modifier.padding(horizontal = Spacing.md, vertical = Spacing.xs), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.then(if (ref != null) Modifier.heightIn(min = Sizes.touchTarget) else Modifier).padding(horizontal = Spacing.md, vertical = Spacing.xs), verticalAlignment = Alignment.CenterVertically) {
                     Icon(ref?.let { kindIcon(it.mimeType) } ?: Icons.Outlined.Description, null, Modifier.size(Sizes.iconTiny),
-                        tint = if (ref != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text(name, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = Spacing.xs).widthIn(max = 160.dp))
+                        tint = if (ref != null) c.accent else c.chipIcon)
+                    Text(name, style = MaterialTheme.typography.labelMedium, color = c.chipText,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = Spacing.xs).widthIn(max = ChatSizes.fileChipNameMax))
                     if (ref != null && ref.size > 0) Text(" · " + StoredFileTypes.sizeLabel(ref.size), style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        color = c.mutedText)
                 }
             }
         }

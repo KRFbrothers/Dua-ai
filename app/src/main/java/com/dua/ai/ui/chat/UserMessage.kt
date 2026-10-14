@@ -1,5 +1,6 @@
 package com.dua.ai.ui.chat
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -20,7 +21,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
 import com.dua.ai.ui.theme.DuaShape
 import com.dua.ai.ui.theme.ChatMessageStyle
 import com.dua.ai.ui.theme.ChatShapes
@@ -48,11 +48,11 @@ fun UserMessage(text: String, modifier: Modifier = Modifier, files: List<com.dua
         if (files.isNotEmpty()) MessageFileChips(names, files, onOpenFile)
         else if (names.isNotEmpty()) Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
             names.take(3).forEach { name ->
-                Surface(shape = DuaShape.chip, color = MaterialTheme.colorScheme.surfaceContainerHigh) {
+                Surface(shape = DuaShape.chip, color = ChatTheme.colors.chipFill, border = BorderStroke(ChatSizes.border, ChatTheme.colors.chipBorder)) {
                     Row(Modifier.padding(horizontal = Spacing.md, vertical = Spacing.xs), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Outlined.Description, null, Modifier.size(Sizes.iconTiny), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text(name, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = Spacing.xs).widthIn(max = 140.dp))
+                        Icon(Icons.Outlined.Description, null, Modifier.size(Sizes.iconTiny), tint = ChatTheme.colors.chipIcon)
+                        Text(name, style = MaterialTheme.typography.labelMedium, color = ChatTheme.colors.chipText,
+                            maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = Spacing.xs).widthIn(max = ChatSizes.legacyFileChipNameMax))
                     }
                 }
             }

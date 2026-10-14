@@ -1,5 +1,7 @@
 package com.dua.ai.ui.chat
 
+import com.dua.ai.ui.theme.ChatSizes
+import com.dua.ai.ui.theme.ChatTheme
 import android.graphics.Bitmap
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -50,7 +52,6 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.unit.dp
 import com.dua.ai.imagine.GeneratedMedia
 import com.dua.ai.imagine.MediaLoader
 import com.dua.ai.ui.theme.DuaShape
@@ -66,10 +67,16 @@ internal fun aspectValue(value: String?, fallback: Float = 1f): Float {
     return if (parts.size == 2 && parts[0] > 0 && parts[1] > 0) parts[0] / parts[1] else fallback
 }
 
+/**
+ * TalkBack label for a loaded generated image. Grid tiles pass null because their clickable wrapper already
+ * announces "Generated image N of M. Tap to open"; posters default to null because VideoPoster labels the video.
+ */
+internal const val GENERATED_IMAGE_DESCRIPTION = "Generated image"
+
 /** An image (or a video poster when [poster]) loaded through [LocalMediaLoader], cropped to fill its box. */
 @Composable
-fun MediaBitmap(media: GeneratedMedia, modifier: Modifier = Modifier, maxPx: Int = 1024, poster: Boolean = false, contentScale: ContentScale = ContentScale.Crop,
-    background: Color = MaterialTheme.colorScheme.surfaceContainerHigh, onSize: (Int, Int) -> Unit = { _, _ -> }) {
+fun MediaBitmap(media: GeneratedMedia, modifier: Modifier = Modifier, maxPx: Int = 1024, poster: Boolean = false, contentScale: ContentScale = ContentScale.Crop, imageDescription: String? = if (poster) null else GENERATED_IMAGE_DESCRIPTION,
+    background: Color = ChatTheme.colors.mediaFill, onSize: (Int, Int) -> Unit = { _, _ -> }) {
     val loader = LocalMediaLoader.current
     var bitmap by remember(media.key, maxPx, poster) { mutableStateOf<Bitmap?>(if (poster) loader.cachedPoster(media, maxPx) else loader.cached(media, maxPx)) }
     var failed by remember(media.key, maxPx, poster) { mutableStateOf(false) }
@@ -81,9 +88,9 @@ fun MediaBitmap(media: GeneratedMedia, modifier: Modifier = Modifier, maxPx: Int
     Box(modifier.background(background), contentAlignment = Alignment.Center) {
         val current = bitmap
         when {
-            current != null -> Image(current.asImageBitmap(), contentDescription = null, contentScale = contentScale, modifier = Modifier.fillMaxSize())
-            failed -> Icon(Icons.Outlined.BrokenImage, contentDescription = "Image unavailable", tint = MaterialTheme.colorScheme.onSurfaceVariant)
-            poster -> Icon(Icons.Outlined.Movie, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            current != null -> Image(current.asImageBitmap(), contentDescription = imageDescription, contentScale = contentScale, modifier = Modifier.fillMaxSize())
+            failed -> Icon(Icons.Outlined.BrokenImage, contentDescription = "Image unavailable", tint = ChatTheme.colors.mutedText)
+            poster -> Icon(Icons.Outlined.Movie, contentDescription = null, tint = ChatTheme.colors.mutedText)
             else -> ShimmerBox(Modifier.fillMaxSize())
         }
     }
@@ -94,7 +101,7 @@ fun MediaBitmap(media: GeneratedMedia, modifier: Modifier = Modifier, maxPx: Int
 fun ShimmerBox(modifier: Modifier = Modifier) {
     val transition = rememberInfiniteTransition(label = "shimmer")
     val alpha by transition.animateFloat(.35f, .7f, infiniteRepeatable(tween(900), RepeatMode.Reverse), label = "alpha")
-    Box(modifier.alpha(alpha).background(MaterialTheme.colorScheme.surfaceContainerHighest))
+    Box(modifier.alpha(alpha).background(ChatTheme.colors.shimmer))
 }
 
 /**
@@ -104,24 +111,24 @@ fun ShimmerBox(modifier: Modifier = Modifier) {
 @Composable
 fun ImageGrid(media: List<GeneratedMedia>, aspectRatio: String?, onOpen: (Int) -> Unit, modifier: Modifier = Modifier) {
     val ratio = aspectValue(aspectRatio)
-    val px = with(LocalDensity.current) { 360.dp.roundToPx() }
+    val px = with(LocalDensity.current) { ChatSizes.imageDecodeWidth.roundToPx() }
     if (media.size == 1) {
         var natural by remember(media.first().key) { mutableStateOf<Float?>(null) }
         val shown = (natural ?: ratio).coerceIn(.5f, 2f)
-        MediaBitmap(media.first(), Modifier.widthIn(max = 420.dp).fillMaxWidth().aspectRatio(shown).clip(DuaShape.card)
+        MediaBitmap(media.first(), Modifier.widthIn(max = ChatSizes.mediaMaxWidth).fillMaxWidth().aspectRatio(shown).clip(DuaShape.card)
             .clickable(role = Role.Image, onClickLabel = "Open image") { onOpen(0) }.semantics { contentDescription = "Generated image. Tap to open" },
-            maxPx = px * 2, onSize = { w, h -> if (aspectRatio == null || aspectRatio == "auto") natural = w.toFloat() / h })
+            maxPx = px * 2, imageDescription = null, onSize = { w, h -> if (aspectRatio == null || aspectRatio == "auto") natural = w.toFloat() / h })
         return
     }
     val tile = if (ratio in .7f..1.45f) ratio else 1f
-    Column(modifier.widthIn(max = 420.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+    Column(modifier.widthIn(max = ChatSizes.mediaMaxWidth).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
         media.chunked(2).forEachIndexed { row, pair ->
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                 pair.forEachIndexed { column, item ->
                     val index = row * 2 + column
                     MediaBitmap(item, Modifier.weight(1f).aspectRatio(tile).clip(DuaShape.codeBlock)
                         .clickable(role = Role.Image, onClickLabel = "Open image ${index + 1}") { onOpen(index) }
-                        .semantics { contentDescription = "Generated image ${index + 1} of ${media.size}. Tap to open" }, maxPx = px)
+                        .semantics { contentDescription = "Generated image ${index + 1} of ${media.size}. Tap to open" }, maxPx = px, imageDescription = null)
                 }
                 if (pair.size == 1) Box(Modifier.weight(1f))
             }
@@ -134,13 +141,13 @@ fun ImageGrid(media: List<GeneratedMedia>, aspectRatio: String?, onOpen: (Int) -
 fun ImagePlaceholderGrid(count: Int, aspectRatio: String?, modifier: Modifier = Modifier) {
     val ratio = aspectValue(aspectRatio)
     val tile = if (count == 1) ratio.coerceIn(.5f, 2f) else if (ratio in .7f..1.45f) ratio else 1f
-    Column(modifier.widthIn(max = if (count == 1) 300.dp else 420.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+    Column(modifier.widthIn(max = if (count == 1) ChatSizes.placeholderSingleMaxWidth else ChatSizes.mediaMaxWidth).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
         (0 until count.coerceIn(1, 4)).chunked(2).forEach { pair ->
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                 pair.forEach { _ ->
                     Box(Modifier.weight(1f).aspectRatio(tile).clip(if (count == 1) DuaShape.card else DuaShape.codeBlock), contentAlignment = Alignment.Center) {
                         ShimmerBox(Modifier.fillMaxSize())
-                        Icon(Icons.Outlined.AutoAwesome, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(Sizes.icon))
+                        Icon(Icons.Outlined.AutoAwesome, null, tint = ChatTheme.colors.mutedText, modifier = Modifier.size(Sizes.icon))
                     }
                 }
                 if (pair.size == 1 && count > 1) Box(Modifier.weight(1f))
@@ -153,13 +160,13 @@ fun ImagePlaceholderGrid(count: Int, aspectRatio: String?, modifier: Modifier = 
 @Composable
 fun VideoPoster(media: GeneratedMedia, aspectRatio: String?, onPlay: () -> Unit, modifier: Modifier = Modifier) {
     val ratio = aspectValue(aspectRatio, 16 / 9f).coerceIn(.5f, 2f)
-    BoxWithConstraints(modifier.widthIn(max = if (ratio < 1f) 280.dp else 420.dp).fillMaxWidth().aspectRatio(ratio).clip(DuaShape.card)
+    BoxWithConstraints(modifier.widthIn(max = if (ratio < 1f) ChatSizes.portraitVideoMaxWidth else ChatSizes.mediaMaxWidth).fillMaxWidth().aspectRatio(ratio).clip(DuaShape.card)
         .clickable(role = Role.Button, onClickLabel = "Play video", onClick = onPlay)
         .semantics { contentDescription = "Generated video${media.duration?.let { ", $it seconds" } ?: ""}. Tap to play"; role = Role.Button }) {
         val px = with(LocalDensity.current) { maxWidth.roundToPx() }
         MediaBitmap(media, Modifier.fillMaxSize(), maxPx = px, poster = true)
         Surface(shape = CircleShape, color = DuaTheme.colors.mediaOverlay, modifier = Modifier.align(Alignment.Center)) {
-            Icon(Icons.Filled.PlayArrow, null, tint = DuaTheme.colors.onMedia, modifier = Modifier.padding(Spacing.md).size(32.dp))
+            Icon(Icons.Filled.PlayArrow, null, tint = DuaTheme.colors.onMedia, modifier = Modifier.padding(Spacing.md).size(ChatSizes.mediaIcon))
         }
         media.duration?.let { seconds ->
             Surface(shape = DuaShape.chip, color = DuaTheme.colors.mediaOverlay, modifier = Modifier.align(Alignment.BottomEnd).padding(Spacing.sm)) {
