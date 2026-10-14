@@ -5,7 +5,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
@@ -21,8 +21,7 @@ import androidx.compose.ui.unit.dp
 import com.dua.ai.imagine.ImagineCodec
 import com.dua.ai.imagine.ImagineConfig
 import com.dua.ai.imagine.ImagineUsage
-import com.dua.ai.ui.components.DuaPageScaffold
-import com.dua.ai.ui.components.SettingsSection
+import com.dua.ai.ui.components.*
 import com.dua.ai.ui.theme.Spacing
 import com.dua.ai.viewmodel.ChatViewModel
 
@@ -52,7 +51,7 @@ fun ImagineSettingsContent(config: ImagineConfig?, usage: ImagineUsage?, signedI
             else -> "Create images and short videos from the composer's Imagine chip. Attach a photo to edit it or turn it into a video."
         }, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         if (config != null) {
-            SettingsSection("Today") {
+            SettingsGroup("Today") {
                 UsageRow("Images", usage?.images, usage?.imageLimit ?: config.dailyImages, config.imageEnabled, config.imageReason)
                 UsageRow("Video seconds", usage?.videoSeconds, usage?.videoLimit ?: config.dailyVideoSeconds, config.videoEnabled, config.videoReason)
                 Text(usage?.let { "Limits reset at midnight UTC (" + resetLabel(it.resetAt) + " here). Set them with DUA_IMAGINE_DAILY_IMAGES and DUA_IMAGINE_DAILY_VIDEO_SECONDS." }
@@ -60,17 +59,16 @@ fun ImagineSettingsContent(config: ImagineConfig?, usage: ImagineUsage?, signedI
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = Spacing.lg, vertical = Spacing.md))
             }
-            if (config.providers.size > 1) SettingsSection("Default image model") {
+            if (config.providers.size > 1) SettingsGroup("Default image model", Modifier.selectableGroup()) {
                 Choice("Server default (${config.providerName(null)})", provider == "") { onProvider("") }
                 config.providers.forEach { item -> Choice("${item.name} · ${item.model}", provider == item.id) { onProvider(item.id) } }
-            } else if (config.providers.size == 1) SettingsSection("Image model") {
-                Text("${config.providers.first().name} · ${config.providers.first().model}", style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.padding(horizontal = Spacing.lg, vertical = Spacing.lg))
+            } else if (config.providers.size == 1) SettingsGroup("Image model") {
+                SettingsValueRow(config.providers.first().name, config.providers.first().model)
             }
-            SettingsSection("Default aspect ratio") {
+            SettingsGroup("Default aspect ratio", Modifier.selectableGroup()) {
                 config.imageAspects.forEach { value -> Choice(if (value == "auto") "Auto (model decides)" else ImagineCodec.aspectLabel(value), aspect == value) { onAspect(value) } }
             }
-            if (config.videoEnabled) SettingsSection("Video") {
+            if (config.videoEnabled) SettingsGroup("Video") {
                 Text("${config.videoModel.ifBlank { "Grok Imagine" }} · up to ${config.durations.maxOrNull() ?: 15} s · ${config.resolutions.joinToString("/")}",
                     style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(start = Spacing.lg, end = Spacing.lg, top = Spacing.lg))
                 Text("Videos keep generating if you leave the chat or close the app; Dua checks again when it opens. Cancel stops waiting, but the provider may still count the job.",
@@ -99,10 +97,4 @@ private fun UsageRow(label: String, used: Int?, limit: Int, enabled: Boolean, re
 }
 
 @Composable
-private fun Choice(label: String, selected: Boolean, onSelect: () -> Unit) {
-    Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).selectable(selected = selected, role = Role.RadioButton, onClick = onSelect)
-        .padding(horizontal = Spacing.lg), verticalAlignment = Alignment.CenterVertically) {
-        RadioButton(selected = selected, onClick = null)
-        Text(label, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(start = Spacing.lg))
-    }
-}
+private fun Choice(label: String, selected: Boolean, onSelect: () -> Unit) = SettingsChoiceRow(label, selected, onClick = onSelect)

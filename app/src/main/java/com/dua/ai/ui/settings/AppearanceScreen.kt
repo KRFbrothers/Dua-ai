@@ -19,6 +19,7 @@ import com.dua.ai.settings.AccentPreset
 import com.dua.ai.settings.AppearancePreferences
 import com.dua.ai.settings.LocalPreferences
 import com.dua.ai.ui.components.*
+import com.dua.ai.ui.theme.SettingsSizes
 import com.dua.ai.ui.theme.*
 import com.dua.ai.viewmodel.ChatViewModel
 
@@ -44,31 +45,27 @@ fun AppearanceContent(appearance: AppearancePreferences, settings: LocalPreferen
     DuaPageScaffold("Appearance", onBack) {
         Text("Choose your appearance", style = MaterialTheme.typography.titleLarge)
         Text("Accent color is a separate preference.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-        SettingsSection(null, Modifier.selectableGroup()) {
-            listOf("system" to "System default", "light" to "Light", "dark" to "Dark").forEach { (key, title) ->
+        SettingsGroup(null, Modifier.selectableGroup()) {
+            listOf("system" to "System default", "light" to "Light", "dark" to "Dark").forEachIndexed { i, (key, title) ->
+                if (i > 0) SettingsRowDivider()
                 PreferenceChoice(title, appearance.theme == key) { onTheme(key) }
             }
         }
         Text("System default follows your device.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-        SettingsSection("Font", Modifier.selectableGroup()) {
-            listOf("default" to "Söhne (default)", "system" to "Device font", "serif" to "Serif", "monospace" to "Monospace").forEach { (key, title) ->
+        SettingsGroup("Font", Modifier.selectableGroup()) {
+            listOf("default" to "Söhne (default)", "system" to "Device font", "serif" to "Serif", "monospace" to "Monospace").forEachIndexed { i, (key, title) ->
+                if (i > 0) SettingsRowDivider()
                 PreferenceChoice(title, settings.font == key) { onFont(key) }
             }
         }
-        SettingsSection(null) { SettingsSwitchRow(Icons.Outlined.Vibration, "Haptic feedback", checked = settings.haptic, onCheckedChange = onHaptic) }
+        SettingsGroup(null) { SettingsToggleRow(Icons.Outlined.Vibration, "Haptic feedback", checked = settings.haptic, onCheckedChange = onHaptic) }
         Text("Text size follows your phone's font size setting.", color = MaterialTheme.colorScheme.onSurfaceVariant)
         if (notice.isNotBlank()) Text(notice)
     }
 }
 
 @Composable
-private fun PreferenceChoice(title: String, selected: Boolean, onClick: () -> Unit) {
-    Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).selectable(selected, role = Role.RadioButton, onClick = onClick)
-        .padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(title, Modifier.weight(1f))
-        RadioButton(selected, onClick = null)
-    }
-}
+private fun PreferenceChoice(title: String, selected: Boolean, onClick: () -> Unit) = SettingsChoiceRow(title, selected, onClick = onClick)
 
 @Composable
 fun AccentContent(appearance: AppearancePreferences, onBack: () -> Unit, onAccent: (AccentPreset?) -> Unit, notice: String = "") {
@@ -76,7 +73,7 @@ fun AccentContent(appearance: AppearancePreferences, onBack: () -> Unit, onAccen
         Text("Choose your accent", style = MaterialTheme.typography.titleLarge)
         Text("One selection for both appearances.", color = MaterialTheme.colorScheme.onSurfaceVariant)
         val effective = appearance.resolvedAccent(DuaTheme.colors.isDark)
-        Column(Modifier.fillMaxWidth().selectableGroup(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        SettingsGroup(null) { Column(Modifier.fillMaxWidth().selectableGroup().padding(SettingsSizes.rowPadding), verticalArrangement = Arrangement.spacedBy(SettingsSizes.rowPadding)) {
             AccentPreset.entries.chunked(3).forEach { row ->
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     row.forEach { preset ->
@@ -92,7 +89,7 @@ fun AccentContent(appearance: AppearancePreferences, onBack: () -> Unit, onAccen
                     }
                 }
             }
-        }
+        } }
         Text("Live preview", style = MaterialTheme.typography.titleMedium)
         // Stack previews at large font sizes so labels and switches keep their full touch-free space.
         BoxWithConstraints(Modifier.fillMaxWidth()) {

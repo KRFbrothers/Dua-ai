@@ -78,3 +78,5 @@ val SettingsNameStyle = TextStyle(fontFamily = SoehneFont, fontWeight = FontWeig
 val SettingsRowStyle = TextStyle(fontFamily = SoehneFont, fontWeight = FontWeight.Medium, fontSize = 15.sp)
 val SettingsUpgradeStyle = TextStyle(fontFamily = SoehneFont, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
 val SettingsValueStyle = TextStyle(fontFamily = SoehneFont, fontWeight = FontWeight.Normal, fontSize = 13.sp)
+/** Group heading above a card on the inner settings pages. */
+val SettingsSectionStyle = TextStyle(fontFamily = SoehneFont, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
