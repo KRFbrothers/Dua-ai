@@ -127,3 +127,15 @@ test('legacy sign-in/signup and recovery routes remain unserved', async () => {
     assert.equal(fetcher.calls.length, 0, route + ' must not reach Supabase');
   }
 });
+
+test('Google sign-in returns the https profile photo and drops unsafe ones', async () => {
+  for (const [metadata, expected] of [
+    [{ avatar_url: 'https://lh3.googleusercontent.com/a/photo' }, 'https://lh3.googleusercontent.com/a/photo'],
+    [{ picture: 'https://lh3.googleusercontent.com/a/pic' }, 'https://lh3.googleusercontent.com/a/pic'],
+    [{ avatar_url: 'http://insecure.example/p.png' }, ''],
+    [{}, ''],
+  ]) {
+    const body = await (await googleSignIn(mockFetch(session(metadata)))).json();
+    assert.equal(body.user.avatarUrl, expected);
+  }
+});

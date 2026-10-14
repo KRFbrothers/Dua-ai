@@ -14,6 +14,7 @@ data class ChatUiState(
     /** Identity of the active conversation, independent of its message count. */
     val chatId: String = "",
     val profileName: String = "",
+    val profilePhotoUrl: String = "",
     val messages: List<ChatMessage> = emptyList(),
     val draft: String = "",
     val typing: Boolean = false,

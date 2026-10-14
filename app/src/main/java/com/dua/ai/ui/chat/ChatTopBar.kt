@@ -6,8 +6,6 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Menu
-import androidx.compose.material.icons.outlined.Refresh
-import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -30,13 +28,14 @@ import com.dua.ai.ui.theme.HomeShapes
 import com.dua.ai.ui.theme.HomeSizes
 import com.dua.ai.ui.theme.HomeTheme
 import com.dua.ai.ui.theme.Sizes
+import com.dua.ai.ui.components.ReferenceIcons
 
 /** Top-level tab in the centre pill, as in the reference shell. */
 enum class HomeTab(val label: String) { Chat("Chat"), Work("Work") }
 
 /**
- * Top bar from the reference shell's code: round ☰ button, centre [ Chat | Work ] pill, round ↺ (new chat) button.
- * In a conversation an extra "Find in chat" button sits beside ↺.
+ * Top bar from the reference shell: menu, centre [ Chat | Work ] pill and dashed new-chat icon.
+ * In a conversation an extra "Find in chat" button sits beside the new-chat action.
  */
 @Composable
 fun ChatTopBar(
@@ -58,8 +57,8 @@ fun ChatTopBar(
         RoundButton(Icons.Outlined.Menu, "Open chat history", onMenu)
         SegmentedPill(tab, onTab, Modifier.weight(1f, fill = false))
         Row(verticalAlignment = Alignment.CenterVertically) {
-            onSearch?.let { RoundButton(Icons.Outlined.Search, "Find in chat", it) }
-            RoundButton(Icons.Outlined.Refresh, "New chat", onNewChat, newChatEnabled)
+            onSearch?.let { RoundButton(ReferenceIcons.Search, "Find in chat", it) }
+            RoundButton(ReferenceIcons.NewChat, "New chat", onNewChat, newChatEnabled)
         }
     }
 }

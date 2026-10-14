@@ -248,7 +248,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     /** The account picker needs an Activity, so the UI runs it ([com.dua.ai.auth.GoogleSignIn]) and reports here. */
     fun googleSignInStarted() { _googleSignIn.value = GoogleSignInState(busy = true) }
     fun googleSignInFailed(message: String?) { _googleSignIn.value = GoogleSignInState(error = message) }
-    fun signInWithGoogle(idToken: String, nonce: String) {
+    fun signInWithGoogle(idToken: String, nonce: String, photoUrl: String = "") {
         if (_dataBusy.value) { googleSignInFailed("Wait for the current data operation to finish, then try again."); return }
         _googleSignIn.value = GoogleSignInState(busy = true)
         account.busy(true)
@@ -256,7 +256,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             try {
                 _cloudPreview.value = null
-                account.signInWithGoogle(idToken, nonce)
+                account.signInWithGoogle(idToken, nonce, photoUrl)
                 _googleSignIn.value = GoogleSignInState()
             } catch (cancelled: CancellationException) { _googleSignIn.value = GoogleSignInState(); throw cancelled }
             catch (failure: Exception) { googleSignInFailed(failure.message ?: "Google sign-in failed. Try again.") }

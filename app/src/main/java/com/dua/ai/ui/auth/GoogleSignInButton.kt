@@ -48,7 +48,7 @@ fun rememberGoogleSignIn(viewModel: ChatViewModel): () -> Unit {
             scope.launch {
                 try {
                     val identity = GoogleSignIn.requestIdToken(context)
-                    viewModel.signInWithGoogle(identity.idToken, identity.nonce)
+                    viewModel.signInWithGoogle(identity.idToken, identity.nonce, identity.photoUrl)
                 } catch (cancelled: CancellationException) { viewModel.googleSignInFailed(null); throw cancelled }
                 catch (_: GetCredentialCancellationException) { viewModel.googleSignInFailed(null) }
                 catch (failure: Exception) { viewModel.googleSignInFailed(GoogleSignIn.friendlyMessage(failure)) }

@@ -101,6 +101,7 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
     val greeting = remember(account.user?.displayName) { greetingFor(LocalTime.now().hour, account.user?.displayName) }
     val state = ChatUiState(
         profileName = account.user?.displayName.orEmpty().ifBlank { account.user?.email.orEmpty() },
+        profilePhotoUrl = account.user?.avatarUrl.orEmpty(),
         chatId = chatId, messages = messages, draft = draft, typing = typing, error = error, model = model,
         providers = integrations.providers, webMode = webMode, reasoning = reasoning,
         webSearchConfigured = integrations.searchAvailable(model), pageReadingAvailable = integrations.pageReadingAvailable,
