@@ -147,7 +147,7 @@ fun SettingsContent(state: SettingsUiState, onBack: () -> Unit, onOpen: (DuaDest
             SettingsItemRow(Icons.Outlined.CloudSync, "Sync", state.sync) { onOpen(DuaDestination.CloudSync) }
             if (state.email != null) SettingsItemRow(Icons.AutoMirrored.Outlined.Logout, "Logout", tint = c.danger, chevron = false,
                 enabled = !state.accountBusy) { logout = true }
-            Row(Modifier.fillMaxWidth().heightIn(min = SettingsSizes.touch).clickable(role = Role.Button) { onOpen(DuaDestination.UsageLimits) }
+            Row(Modifier.fillMaxWidth().heightIn(min = SettingsSizes.touch).clickable(role = Role.Button, onClickLabel = "Open plans and usage limits") { onOpen(DuaDestination.UsageLimits) }
                 .padding(SettingsSizes.rowPadding), verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(SettingsSizes.rowGap)) {
                 Icon(Icons.Filled.AutoAwesome, null, tint = c.upgrade, modifier = Modifier.size(SettingsSizes.rowIcon))

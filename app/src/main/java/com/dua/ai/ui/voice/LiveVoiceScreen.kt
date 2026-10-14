@@ -65,6 +65,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.dua.ai.ui.theme.Spacing
+import com.dua.ai.ui.theme.VoiceShapes
+import com.dua.ai.ui.theme.VoiceSizes
+import com.dua.ai.ui.theme.VoiceTheme
 import com.dua.ai.viewmodel.ChatViewModel
 import com.dua.ai.voice.live.LiveCaption
 import com.dua.ai.voice.live.LivePhase
@@ -105,47 +108,47 @@ fun LiveVoiceContent(state: LiveState, starting: Boolean, error: String, fallbac
 @Composable
 private fun LiveVoiceContentBody(state: LiveState, starting: Boolean, error: String, fallback: Boolean, usage: LiveUsage?, voiceName: String,
     onStart: () -> Unit, onMute: () -> Unit, onEnd: () -> Unit, onClose: () -> Unit, onHandsFree: () -> Unit) {
-    val colors = MaterialTheme.colorScheme
+    val v = VoiceTheme.colors
     // No Surface here, so set the content colour for icons and titles (dark theme).
-    androidx.compose.runtime.CompositionLocalProvider(androidx.compose.material3.LocalContentColor provides colors.onBackground) {
-    Box(Modifier.fillMaxSize().background(colors.background).safeDrawingPadding()) {
+    androidx.compose.runtime.CompositionLocalProvider(androidx.compose.material3.LocalContentColor provides v.text) {
+    Box(Modifier.fillMaxSize().background(v.background).safeDrawingPadding()) {
         Column(Modifier.fillMaxSize().padding(horizontal = Spacing.lg), horizontalAlignment = Alignment.CenterHorizontally) {
             Row(Modifier.fillMaxWidth().padding(top = Spacing.sm), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onClose) { Icon(Icons.Outlined.Close, contentDescription = if (state.active) "End and close" else "Close") }
                 Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("Live voice", style = MaterialTheme.typography.titleMedium)
-                    Text("$voiceName · Grok", style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+                    Text("$voiceName · Grok", style = MaterialTheme.typography.bodySmall, color = v.subText)
                 }
-                Surface(shape = RoundedCornerShape(50), color = colors.surfaceContainerHigh) {
-                    Text(timerLabel(state, usage), style = MaterialTheme.typography.labelMedium, color = colors.onSurfaceVariant,
+                Surface(shape = VoiceShapes.pill, color = v.pill) {
+                    Text(timerLabel(state, usage), style = MaterialTheme.typography.labelMedium, color = v.subText,
                         modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.xs))
                 }
             }
             Spacer(Modifier.height(Spacing.xl))
-            VoiceOrb(state.phase, state.level, state.muted, Modifier.size(200.dp))
+            VoiceOrb(state.phase, state.level, state.muted, Modifier.size(VoiceSizes.liveOrb))
             Spacer(Modifier.height(Spacing.lg))
             Text(statusLabel(state, starting, error), style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center,
-                color = if (error.isNotBlank() || state.phase == LivePhase.FAILED) colors.error else colors.onSurface,
+                color = if (error.isNotBlank() || state.phase == LivePhase.FAILED) v.error else v.text,
                 modifier = Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite })
             Captions(state.captions, Modifier.weight(1f).fillMaxWidth().padding(top = Spacing.lg))
             if (state.active) Row(Modifier.fillMaxWidth().padding(vertical = Spacing.xl), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-                FilledTonalIconButton(onClick = onMute, modifier = Modifier.size(64.dp)) {
-                    Icon(if (state.muted) Icons.Outlined.MicOff else Icons.Outlined.Mic, contentDescription = if (state.muted) "Unmute microphone" else "Mute microphone", modifier = Modifier.size(28.dp))
+                FilledTonalIconButton(onClick = onMute, modifier = Modifier.size(VoiceSizes.liveMute)) {
+                    Icon(if (state.muted) Icons.Outlined.MicOff else Icons.Outlined.Mic, contentDescription = if (state.muted) "Unmute microphone" else "Mute microphone", modifier = Modifier.size(VoiceSizes.liveMuteIcon))
                 }
-                FilledIconButton(onClick = onEnd, modifier = Modifier.size(72.dp),
+                FilledIconButton(onClick = onEnd, modifier = Modifier.size(VoiceSizes.liveEnd),
                     colors = IconButtonDefaults.filledIconButtonColors(containerColor = DuaTheme.colors.danger,
                         contentColor = DuaTheme.colors.onDanger)) {
-                    Icon(Icons.Filled.CallEnd, contentDescription = "End live voice", modifier = Modifier.size(32.dp))
+                    Icon(Icons.Filled.CallEnd, contentDescription = "End live voice", modifier = Modifier.size(VoiceSizes.liveEndIcon))
                 }
             } else Column(Modifier.fillMaxWidth().padding(vertical = Spacing.lg), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                 Button(onClick = onStart, enabled = !starting && !(fallback && error.isNotBlank() && usage?.leftSeconds == 0),
-                    modifier = Modifier.fillMaxWidth().widthIn(max = 420.dp).height(52.dp), shape = RoundedCornerShape(26.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = DuaTheme.colors.action, contentColor = DuaTheme.colors.onAction)) {
+                    modifier = Modifier.fillMaxWidth().widthIn(max = VoiceSizes.contentMaxWidth).height(VoiceSizes.startButtonHeight), shape = VoiceShapes.startButton,
+                    colors = ButtonDefaults.buttonColors(containerColor = v.accent, contentColor = v.onAccent)) {
                     Icon(Icons.Outlined.Mic, null); Text(if (state.phase == LivePhase.IDLE) "Start talking" else "Start again", modifier = Modifier.padding(start = Spacing.sm))
                 }
                 if (fallback || error.isNotBlank()) TextButton(onClick = onHandsFree) { Text("Use hands-free mode instead") }
                 Text("Audio streams to xAI only while a session runs. The conversation is saved to this chat when it ends.",
-                    style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant, textAlign = TextAlign.Center)
+                    style = MaterialTheme.typography.bodySmall, color = v.subText, textAlign = TextAlign.Center)
             }
         }
     }
@@ -175,10 +178,10 @@ private fun Captions(captions: List<LiveCaption>, modifier: Modifier) {
     LazyColumn(modifier, state = list, verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
         items(shown, key = { it.id }) { caption ->
             Column(Modifier.fillMaxWidth(), horizontalAlignment = if (caption.user) Alignment.End else Alignment.Start) {
-                Text(if (caption.user) "You" else "Dua", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(if (caption.user) "You" else "Dua", style = MaterialTheme.typography.labelSmall, color = VoiceTheme.colors.subText)
                 Text(caption.text + if (caption.interrupted) " —" else "", textAlign = if (caption.user) TextAlign.End else TextAlign.Start,
                     style = if (caption.user) MaterialTheme.typography.bodyLarge else MaterialTheme.typography.titleMedium,
-                    color = if (caption.user) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface.copy(alpha = if (caption.final) 1f else 0.85f))
+                    color = if (caption.user) VoiceTheme.colors.subText else VoiceTheme.colors.text.copy(alpha = if (caption.final) 1f else 0.85f))
             }
         }
     }
@@ -190,10 +193,10 @@ fun VoiceOrb(phase: LivePhase, level: Float, muted: Boolean, modifier: Modifier 
     val transition = rememberInfiniteTransition(label = "orb")
     val time by transition.animateFloat(0f, 1f, infiniteRepeatable(tween(3200, easing = LinearEasing), RepeatMode.Restart), label = "time")
     val smoothed by animateFloatAsState(if (muted) 0f else level, tween(120), label = "level")
-    val accent = DuaTheme.colors.action
+    val accent = VoiceTheme.colors.accent
     val speaking = phase == LivePhase.SPEAKING
     val idle = phase == LivePhase.IDLE || phase == LivePhase.ENDED || phase == LivePhase.FAILED
-    val core = if (muted || idle) MaterialTheme.colorScheme.outline else accent
+    val core = if (muted || idle) VoiceTheme.colors.idle else accent
     val voiceColors = DuaTheme.colors.voice
     val glow = if (speaking) voiceColors.speakingGlow else accent
     Canvas(modifier) {

@@ -57,6 +57,8 @@ import com.dua.ai.ui.components.DuaPageScaffold
 import com.dua.ai.ui.screens.AnimatedVoiceCube
 import com.dua.ai.ui.theme.DuaTheme
 import com.dua.ai.ui.theme.Spacing
+import com.dua.ai.ui.theme.VoiceSizes
+import com.dua.ai.ui.theme.VoiceTheme
 import com.dua.ai.voice.NativeVoiceInput
 import com.dua.ai.voice.VoiceDraft
 import kotlinx.coroutines.delay
@@ -76,6 +78,7 @@ fun VoiceScreen(draft: String, onBack: () -> Unit, onHandsFree: () -> Unit, onUs
         else if (input.busy) reviewed = ""
     }
     LaunchedEffect(notice) { if (notice.isNotBlank()) { delay(2400); notice = "" } }
+    val v = VoiceTheme.colors
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted && lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) voice.start()
@@ -95,24 +98,24 @@ fun VoiceScreen(draft: String, onBack: () -> Unit, onHandsFree: () -> Unit, onUs
     DuaPageScaffold(title = "Voice", onBack = onBack, backLabel = "Back to chat") {
         Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(Spacing.lg)) {
             Spacer(Modifier.height(Spacing.xl))
-            Box(Modifier.size(160.dp), contentAlignment = Alignment.Center) {
-                AnimatedVoiceCube(listening, Modifier.size(140.dp), stroke = DuaTheme.colors.voiceCubeStroke)
+            Box(Modifier.size(VoiceSizes.cubeSlot), contentAlignment = Alignment.Center) {
+                AnimatedVoiceCube(listening, Modifier.size(VoiceSizes.cube), stroke = DuaTheme.colors.voiceCubeStroke)
             }
             Text(input.status.ifBlank { "Tap the microphone and speak. Review your words, then use them in chat." },
-                style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center,
+                style = MaterialTheme.typography.bodyLarge, color = v.subText, textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite })
-            if (input.partial.isNotBlank()) Text(input.partial.take(8000), style = MaterialTheme.typography.titleMedium,
+            if (input.partial.isNotBlank()) Text(input.partial.take(8000), style = MaterialTheme.typography.titleMedium, color = v.text,
                 maxLines = 3, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
-            FilledIconButton(onClick = ::toggleListening, modifier = Modifier.size(72.dp), shape = CircleShape,
-                colors = IconButtonDefaults.filledIconButtonColors(containerColor = DuaTheme.colors.action, contentColor = DuaTheme.colors.onAction)) {
-                Icon(if (listening) Icons.Outlined.Stop else Icons.Outlined.Mic, if (listening) "Stop voice input" else "Start voice input", Modifier.size(32.dp))
+            FilledIconButton(onClick = ::toggleListening, modifier = Modifier.size(VoiceSizes.micButton), shape = CircleShape,
+                colors = IconButtonDefaults.filledIconButtonColors(containerColor = v.accent, contentColor = v.onAccent)) {
+                Icon(if (listening) Icons.Outlined.Stop else Icons.Outlined.Mic, if (listening) "Stop voice input" else "Start voice input", Modifier.size(VoiceSizes.micIcon))
             }
-            if (notice.isNotBlank()) Text(notice, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
+            if (notice.isNotBlank()) Text(notice, style = MaterialTheme.typography.bodyMedium, color = v.accent)
             if (input.transcript.isNotBlank() || reviewed.isNotBlank()) OutlinedTextField(value = reviewed,
                 onValueChange = { if (it.length <= 8000) reviewed = it }, enabled = !listening,
                 label = { Text("Review transcript") }, maxLines = 6, modifier = Modifier.fillMaxWidth())
-            if (reviewed.isNotBlank()) Button(enabled = !listening, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = DuaTheme.colors.action, contentColor = DuaTheme.colors.onAction), onClick = {
+            if (reviewed.isNotBlank()) Button(enabled = !listening, modifier = Modifier.fillMaxWidth().heightIn(min = VoiceSizes.startButtonHeight),
+                colors = ButtonDefaults.buttonColors(containerColor = v.accent, contentColor = v.onAccent), onClick = {
                     try { onUse(VoiceDraft.merge(draft, reviewed)) } catch (error: IllegalArgumentException) { notice = error.message.orEmpty() }
                 }) { Text("Use in chat") }
             if (input.permissionDenied) TextButton(onClick = {
@@ -120,12 +123,12 @@ fun VoiceScreen(draft: String, onBack: () -> Unit, onHandsFree: () -> Unit, onUs
                 catch (_: android.content.ActivityNotFoundException) { notice = "App Settings unavailable." }
             }) { Text("Open app Settings") }
             Spacer(Modifier.height(Spacing.sm))
-            OutlinedButton(onClick = onHandsFree, modifier = Modifier.heightIn(min = 48.dp)) {
-                Icon(Icons.Outlined.GraphicEq, contentDescription = null, modifier = Modifier.size(18.dp))
+            OutlinedButton(onClick = onHandsFree, modifier = Modifier.heightIn(min = VoiceSizes.touch)) {
+                Icon(Icons.Outlined.GraphicEq, contentDescription = null, modifier = Modifier.size(VoiceSizes.buttonIcon))
                 Text(if (liveAvailable) "Live conversation" else "Voice mode", modifier = Modifier.padding(start = Spacing.sm))
             }
             Text("Listening in ${com.dua.ai.voice.SpeechLanguages.name(inputLanguage)} (change in Settings › Voice). Your device's speech service may process audio remotely.",
-                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
+                style = MaterialTheme.typography.bodySmall, color = v.subText, textAlign = TextAlign.Center)
         }
     }
 }

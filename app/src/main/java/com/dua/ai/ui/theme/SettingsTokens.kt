@@ -27,7 +27,7 @@ val SettingsLightColors = SettingsColors(
     background = Color(0xFFF9FAFB), circleButton = Color(0xFFFFFFFF), circleBorder = Color(0xFFE5E7EB), circleIcon = Color(0xFF1F2937),
     avatar = Color(0xFFFDE68A), onAvatar = Color(0xFF1F2937), editBadge = Color(0xFFFFFFFF), editIcon = Color(0xFF374151), name = Color(0xFF111827),
     card = Color(0xFFFFFFFF), cardBorder = Color(0xFFE5E7EB), rowIcon = Color(0xFF111827), rowText = Color(0xFF111827), value = Color(0xFF6B7280),
-    accentValue = Color(0xFF4B5563), arrow = Color(0xFF6B7280), chevron = Color(0xFF9CA3AF), divider = Color(0xFFF3F4F6), upgrade = Color(0xFF8B5CF6),
+    accentValue = Color(0xFF4B5563), arrow = Color(0xFF6B7280), chevron = Color(0xFF9CA3AF), divider = Color(0xFFF3F4F6), upgrade = SheetLightColors.accent,
     danger = Color(0xFFDC2626),
 )
 
@@ -35,7 +35,7 @@ val SettingsDarkColors = SettingsColors(
     background = Color(0xFF030712), circleButton = Color(0xFF111827), circleBorder = Color(0xFF374151), circleIcon = Color(0xFFE5E7EB),
     avatar = Color(0xFFFDE68A), onAvatar = Color(0xFF1F2937), editBadge = Color(0xFF111827), editIcon = Color(0xFFD1D5DB), name = Color(0xFFF9FAFB),
     card = Color(0xFF111827), cardBorder = Color(0xFF374151), rowIcon = Color(0xFFF9FAFB), rowText = Color(0xFFF9FAFB), value = Color(0xFF9CA3AF),
-    accentValue = Color(0xFFD1D5DB), arrow = Color(0xFF9CA3AF), chevron = Color(0xFF6B7280), divider = Color(0xFF1F2937), upgrade = Color(0xFFA78BFA),
+    accentValue = Color(0xFFD1D5DB), arrow = Color(0xFF9CA3AF), chevron = Color(0xFF6B7280), divider = Color(0xFF1F2937), upgrade = SheetDarkColors.accent,
     danger = Color(0xFFF87171),
 )
 

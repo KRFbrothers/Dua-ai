@@ -100,6 +100,9 @@ import com.dua.ai.ui.theme.VoicePermissionHeadingStyle
 import com.dua.ai.ui.theme.voiceTranscriptStyle
 import com.dua.ai.ui.theme.Sizes
 import com.dua.ai.ui.theme.Spacing
+import com.dua.ai.ui.theme.VoiceShapes
+import com.dua.ai.ui.theme.VoiceSizes
+import com.dua.ai.ui.theme.VoiceTheme
 import com.dua.ai.voice.VoicePhase
 import kotlin.math.PI
 import kotlin.math.sin
@@ -171,7 +174,6 @@ fun VoiceModeContent(
     snackbar: SnackbarHostState = remember { SnackbarHostState() },
     staticTime: Float = 1.25f,
 ) {
-    val dark = DuaTheme.colors.isDark
     val time = remember { mutableFloatStateOf(staticTime) }
     val smooth = remember { mutableFloatStateOf(0f) }
     if (motion) {
@@ -202,7 +204,7 @@ fun VoiceModeContent(
         }
     }
     val colors = DuaTheme.colors
-    val scheme = MaterialTheme.colorScheme
+    val v = VoiceTheme.colors
     Box(
         Modifier
             .fillMaxSize()
@@ -221,9 +223,8 @@ fun VoiceModeContent(
             }
             BottomStatus(ui)
             SnackbarHost(snackbar, Modifier.fillMaxWidth()) { data ->
-                Snackbar(data, modifier = Modifier.padding(horizontal = Spacing.lg), shape = RoundedCornerShape(16.dp),
-                    containerColor = if (dark) scheme.surfaceContainerHighest else scheme.inverseSurface,
-                    contentColor = if (dark) scheme.onSurface else scheme.inverseOnSurface)
+                Snackbar(data, modifier = Modifier.padding(horizontal = Spacing.lg), shape = VoiceShapes.snackbar,
+                    containerColor = v.snackbar, contentColor = v.onSnackbar)
             }
             Controls(ui, callbacks, energy, time, Modifier.padding(start = Spacing.md, end = Spacing.md, top = Spacing.sm, bottom = Spacing.xl))
         }
@@ -261,7 +262,7 @@ private fun TopRow(ui: VoiceModeUi, callbacks: VoiceModeCallbacks) {
             modifier = Modifier.size(Sizes.touchTarget).semantics { stateDescription = if (ui.captions) "On" else "Off" },
         ) {
             Icon(if (ui.captions) Icons.Outlined.ClosedCaption else Icons.Outlined.ClosedCaptionDisabled, contentDescription = "Captions",
-                tint = if (ui.captions) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant)
+                tint = if (ui.captions) VoiceTheme.colors.text else VoiceTheme.colors.subText)
         }
     }
 }
@@ -271,21 +272,21 @@ private fun StatusPill(phase: VoicePhase, muted: Boolean, granted: Boolean) {
     val label = if (!granted) "Mic needed" else phaseLabel(phase, muted)
     val dot = when (phase) {
         VoicePhase.Listening -> DuaTheme.colors.sparkle
-        VoicePhase.Speaking -> MaterialTheme.colorScheme.onSurface
+        VoicePhase.Speaking -> VoiceTheme.colors.text
         VoicePhase.Thinking -> DuaTheme.colors.sparkle.copy(alpha = .6f)
-        VoicePhase.Idle -> MaterialTheme.colorScheme.onSurfaceVariant
+        VoicePhase.Idle -> VoiceTheme.colors.subText
     }
     Row(
         Modifier
             .clip(CircleShape)
             .background(DuaTheme.colors.voice.statusSurface)
-            .padding(horizontal = Spacing.md, vertical = 6.dp)
+            .padding(horizontal = Spacing.md, vertical = VoiceSizes.statusPaddingV)
             .semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite; contentDescription = "Voice mode: $label" },
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(Modifier.size(7.dp).clip(CircleShape).background(dot))
+        Box(Modifier.size(VoiceSizes.statusDot).clip(CircleShape).background(dot))
         Spacer(Modifier.width(Spacing.sm))
-        Text(label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(label, style = MaterialTheme.typography.labelLarge, color = VoiceTheme.colors.subText)
     }
 }
 
@@ -297,8 +298,8 @@ private fun DuaLogo(height: Dp) {
 
 @Composable
 private fun Greeting(ui: VoiceModeUi, conversation: Boolean, modifier: Modifier) {
-    Column(modifier.widthIn(max = 420.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        DuaLogo(88.dp)
+    Column(modifier.widthIn(max = VoiceSizes.contentMaxWidth), horizontalAlignment = Alignment.CenterHorizontally) {
+        DuaLogo(VoiceSizes.logo)
         Spacer(Modifier.height(Spacing.xxl))
         val text = if (!conversation) voiceGreeting(ui.firstName) else when (ui.phase) {
             VoicePhase.Listening -> "I'm listening…"
@@ -306,7 +307,7 @@ private fun Greeting(ui: VoiceModeUi, conversation: Boolean, modifier: Modifier)
             VoicePhase.Speaking -> "Speaking…"
             VoicePhase.Idle -> "Tap the orb to keep talking"
         }
-        Text(text, style = VoiceGreetingStyle, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurface,
+        Text(text, style = VoiceGreetingStyle, textAlign = TextAlign.Center, color = VoiceTheme.colors.text,
             modifier = Modifier.semantics { heading() })
     }
 }
@@ -318,14 +319,14 @@ private fun Captions(ui: VoiceModeUi, callbacks: VoiceModeCallbacks, modifier: M
     Column(modifier.verticalScroll(scroll).padding(top = Spacing.sm, bottom = Spacing.lg)) {
         if (ui.userText.isNotBlank()) {
             Text(ui.userText, style = voiceTranscriptStyle(MaterialTheme.typography),
-                color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 4, overflow = TextOverflow.Ellipsis,
+                color = VoiceTheme.colors.subText, maxLines = 4, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.semantics { contentDescription = "You said: ${ui.userText}" })
             Spacer(Modifier.height(Spacing.lg))
         }
         when {
-            ui.phase == VoicePhase.Thinking -> Text("Thinking…", style = VoiceReplyCaptionStyle, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            ui.phase == VoicePhase.Thinking -> Text("Thinking…", style = VoiceReplyCaptionStyle, color = VoiceTheme.colors.subText)
             ui.replyText.isNotBlank() -> {
-                Text(ui.replyText, style = VoiceReplyCaptionStyle, color = MaterialTheme.colorScheme.onSurface,
+                Text(ui.replyText, style = VoiceReplyCaptionStyle, color = VoiceTheme.colors.text,
                     modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
                 Spacer(Modifier.height(Spacing.md))
                 ReplyActions(ui.feedback, callbacks)
@@ -336,9 +337,9 @@ private fun Captions(ui: VoiceModeUi, callbacks: VoiceModeCallbacks, modifier: M
 
 @Composable
 private fun ReplyActions(feedback: Int, callbacks: VoiceModeCallbacks) {
-    val tint = MaterialTheme.colorScheme.onSurfaceVariant
+    val tint = VoiceTheme.colors.subText
     var menu by remember { mutableStateOf(false) }
-    Row(Modifier.offset(x = (-12).dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.offset(x = VoiceSizes.replyActionsOffset), verticalAlignment = Alignment.CenterVertically) {
         ActionIcon(if (feedback == 1) Icons.Filled.ThumbUp else Icons.Outlined.ThumbUp, "Good response", tint, selected = feedback == 1) { callbacks.onFeedback(if (feedback == 1) 0 else 1) }
         ActionIcon(if (feedback == -1) Icons.Filled.ThumbDown else Icons.Outlined.ThumbDown, "Bad response", tint, selected = feedback == -1) { callbacks.onFeedback(if (feedback == -1) 0 else -1) }
         ActionIcon(Icons.Outlined.Share, "Share reply", tint) { callbacks.onShare() }
@@ -355,7 +356,7 @@ private fun ReplyActions(feedback: Int, callbacks: VoiceModeCallbacks) {
 @Composable
 private fun ActionIcon(icon: ImageVector, description: String, tint: Color, selected: Boolean = false, onClick: () -> Unit) {
     IconButton(onClick = onClick, modifier = Modifier.size(Sizes.touchTarget).semantics { if (selected) stateDescription = "Selected" }) {
-        Icon(icon, contentDescription = description, tint = if (selected) MaterialTheme.colorScheme.onSurface else tint, modifier = Modifier.size(Sizes.iconSmall))
+        Icon(icon, contentDescription = description, tint = if (selected) VoiceTheme.colors.text else tint, modifier = Modifier.size(Sizes.iconSmall))
     }
 }
 
@@ -363,9 +364,9 @@ private fun ActionIcon(icon: ImageVector, description: String, tint: Color, sele
 private fun BottomStatus(ui: VoiceModeUi) {
     val heard = ui.heard.takeIf { ui.captions && ui.phase == VoicePhase.Listening && it.isNotBlank() }
     Column(Modifier.fillMaxWidth().padding(horizontal = Spacing.xxl), horizontalAlignment = Alignment.CenterHorizontally) {
-        if (heard != null) Text(heard, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant,
+        if (heard != null) Text(heard, style = MaterialTheme.typography.bodyLarge, color = VoiceTheme.colors.subText,
             textAlign = TextAlign.Center, maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(bottom = Spacing.sm))
-        if (ui.notice.isNotBlank()) Text(ui.notice, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+        if (ui.notice.isNotBlank()) Text(ui.notice, style = MaterialTheme.typography.bodyMedium, color = VoiceTheme.colors.subText,
             textAlign = TextAlign.Center, modifier = Modifier.padding(bottom = Spacing.sm).semantics { liveRegion = LiveRegionMode.Polite })
     }
 }
@@ -374,8 +375,8 @@ private fun BottomStatus(ui: VoiceModeUi) {
 private fun Controls(ui: VoiceModeUi, callbacks: VoiceModeCallbacks, energy: () -> Float, time: androidx.compose.runtime.FloatState, modifier: Modifier) {
     BoxWithConstraints(modifier.fillMaxWidth()) {
         val width = maxWidth
-        val circle = min(56.dp, width / 6.6f).coerceAtLeast(Sizes.touchTarget)
-        val orbWidth = min(circle * 2.5f, width - circle * 4 - 6.dp * 4)
+        val circle = min(VoiceSizes.controlMax, width / 6.6f).coerceAtLeast(Sizes.touchTarget)
+        val orbWidth = min(circle * 2.5f, width - circle * 4 - VoiceSizes.controlGap * 4)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             ControlCircle(Icons.Outlined.Videocam, "Camera, coming soon", circle, onClick = callbacks.onCamera)
             ControlCircle(Icons.AutoMirrored.Outlined.ScreenShare, "Share screen or upload, coming soon", circle, onClick = callbacks.onUpload)
@@ -389,22 +390,19 @@ private fun Controls(ui: VoiceModeUi, callbacks: VoiceModeCallbacks, energy: () 
 
 @Composable
 private fun ControlCircle(icon: ImageVector, description: String, size: Dp, selected: Boolean = false, state: String? = null, onClick: () -> Unit) {
-    val dark = DuaTheme.colors.isDark
-    val container = when {
-        selected -> DuaTheme.colors.chipSelected
-        dark -> MaterialTheme.colorScheme.surfaceContainerHigh
-        else -> MaterialTheme.colorScheme.surface
-    }
-    val content = if (selected) DuaTheme.colors.onChipSelected else MaterialTheme.colorScheme.onSurface
+    val v = VoiceTheme.colors
+    val container = if (selected) v.selected else v.control
+    val content = if (selected) v.onSelected else v.text
     Surface(
         onClick = onClick,
         shape = CircleShape,
         color = container,
         contentColor = content,
-        border = if (!dark && !selected) BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant) else null,
+        border = if (!selected) BorderStroke(VoiceSizes.border, v.controlBorder) else null,
         modifier = Modifier.size(size).semantics { contentDescription = description; role = Role.Button; if (state != null) stateDescription = state },
     ) {
-        Box(contentAlignment = Alignment.Center) { Icon(icon, contentDescription = null, modifier = Modifier.size(Sizes.icon)) }
+        Box(contentAlignment = Alignment.Center) { // Decorative: the circle itself carries the label, role and state for TalkBack.
+        Icon(icon, contentDescription = null, modifier = Modifier.size(Sizes.icon)) }
     }
 }
 
@@ -472,41 +470,41 @@ private fun DrawScope.drawOrb(phase: VoicePhase, muted: Boolean, energy: Float, 
     }
     // Soft inner rim so the capsule reads on both themes.
     drawRoundRect(color = colors.orbRim,
-        cornerRadius = androidx.compose.ui.geometry.CornerRadius(h / 2f), style = Stroke(width = 1.dp.toPx()))
+        cornerRadius = androidx.compose.ui.geometry.CornerRadius(h / 2f), style = Stroke(width = VoiceSizes.border.toPx()))
 }
 
 @Composable
 private fun PermissionRationale(permission: MicPermission, callbacks: VoiceModeCallbacks, modifier: Modifier) {
     Surface(
-        modifier = modifier.widthIn(max = 420.dp).fillMaxWidth(),
-        shape = RoundedCornerShape(28.dp),
+        modifier = modifier.widthIn(max = VoiceSizes.contentMaxWidth).fillMaxWidth(),
+        shape = VoiceShapes.permissionCard,
         color = DuaTheme.colors.composer,
-        border = BorderStroke(1.dp, DuaTheme.colors.composerBorder),
+        border = BorderStroke(VoiceSizes.border, DuaTheme.colors.composerBorder),
     ) {
         Column(Modifier.padding(Spacing.xxl), horizontalAlignment = Alignment.CenterHorizontally) {
-            Box(Modifier.size(64.dp).clip(CircleShape).background(MaterialTheme.colorScheme.secondaryContainer)
-                .border(1.dp, DuaTheme.colors.sparkle.copy(alpha = .55f), CircleShape), contentAlignment = Alignment.Center) {
-                Icon(Icons.Outlined.Mic, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(30.dp))
+            Box(Modifier.size(VoiceSizes.permissionBadge).clip(CircleShape).background(VoiceTheme.colors.iconFill)
+                .border(VoiceSizes.border, DuaTheme.colors.sparkle.copy(alpha = .55f), CircleShape), contentAlignment = Alignment.Center) {
+                Icon(Icons.Outlined.Mic, contentDescription = null, tint = VoiceTheme.colors.text, modifier = Modifier.size(VoiceSizes.permissionIcon))
             }
             Spacer(Modifier.height(Spacing.lg))
-            Text("Let Dua hear you", style = VoicePermissionHeadingStyle, color = MaterialTheme.colorScheme.onSurface,
+            Text("Let Dua hear you", style = VoicePermissionHeadingStyle, color = VoiceTheme.colors.text,
                 textAlign = TextAlign.Center, modifier = Modifier.semantics { heading() })
             Spacer(Modifier.height(Spacing.sm))
             val body = if (permission == MicPermission.Blocked)
                 "Microphone access is turned off for Dua. Turn it on in Settings › Permissions › Microphone, then come back."
             else "Voice mode uses your microphone only while this screen is open. Your phone's speech service turns what you say into text, and Dua answers out loud."
-            Text(body, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
+            Text(body, style = MaterialTheme.typography.bodyMedium, color = VoiceTheme.colors.subText, textAlign = TextAlign.Center)
             Spacer(Modifier.height(Spacing.xl))
             Surface(
                 onClick = if (permission == MicPermission.Blocked) callbacks.onOpenSettings else callbacks.onAllowMic,
-                shape = CircleShape, color = DuaTheme.colors.action, contentColor = DuaTheme.colors.onAction,
+                shape = CircleShape, color = VoiceTheme.colors.accent, contentColor = VoiceTheme.colors.onAccent,
                 modifier = Modifier.fillMaxWidth().heightIn(min = Sizes.touchTarget),
             ) {
                 Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(vertical = Spacing.md)) {
                     Text(if (permission == MicPermission.Blocked) "Open settings" else "Allow microphone", style = MaterialTheme.typography.labelLarge)
                 }
             }
-            TextButton(onClick = callbacks.onClose, modifier = Modifier.heightIn(min = Sizes.touchTarget)) { Text("Not now", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            TextButton(onClick = callbacks.onClose, modifier = Modifier.heightIn(min = Sizes.touchTarget)) { Text("Not now", color = VoiceTheme.colors.subText) }
         }
     }
 }
