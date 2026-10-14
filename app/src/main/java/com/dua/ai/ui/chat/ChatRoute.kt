@@ -28,8 +28,7 @@ import java.time.LocalTime
 fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () -> Unit, onOpenVoice: () -> Unit, onOpenSetup: () -> Unit,
     onOpenDestination: (com.dua.ai.ui.navigation.DuaDestination) -> Unit = {},
     onOpenComputer: () -> Unit = {},
-    onOpenVoiceMode: () -> Unit = {},
-    attachRequest: Int = 0, onAttachRequestHandled: () -> Unit = {}) {
+    onOpenVoiceMode: () -> Unit = {}) {
     val preferences by viewModel.localSettings.collectAsState()
     val chatId by viewModel.activeChatId.collectAsState()
     val draft by viewModel.draft.collectAsState()
@@ -250,7 +249,7 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
         )
     }
     androidx.compose.runtime.CompositionLocalProvider(LocalMediaLoader provides viewModel.mediaCache) {
-        ChatScreen(state, actions, attachRequest = attachRequest, onAttachRequestHandled = onAttachRequestHandled)
+        ChatScreen(state, actions)
     }
 }
 

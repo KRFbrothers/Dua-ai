@@ -10,9 +10,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.hapticfeedback.HapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -73,7 +71,6 @@ private fun BusyBackGuard(viewModel: ChatViewModel) {
 fun DuaNavHost(viewModel: ChatViewModel, voice: ReplyVoice, notificationRoute: Pair<String, String>?, nav: NavHostController = rememberNavController()) {
     val haptics = LocalHapticFeedback.current
     val navigator = remember(nav, viewModel, haptics) { DuaNavigator(nav, viewModel, haptics) }
-    var attachRequest by remember { mutableIntStateOf(0) }
     // Decided once per launch: signed-out users who have not skipped it start on the welcome screen.
     val startDestination = remember { if (viewModel.shouldShowOnboarding()) DuaDestination.Onboarding else DuaDestination.Chat }
     DisposableEffect(nav, voice) {
@@ -106,9 +103,7 @@ fun DuaNavHost(viewModel: ChatViewModel, voice: ReplyVoice, notificationRoute: P
                 onOpenSetup = { navigator.open(DuaDestination.FeatureSetup) },
                 onOpenComputer = { navigator.open(DuaDestination.Computer) },
                 // The mic long-press already gave its own haptic.
-                onOpenVoiceMode = { navigator.open(if (viewModel.liveVoiceAvailable()) DuaDestination.LiveVoice else DuaDestination.HandsFree, haptic = false) },
-                attachRequest = attachRequest,
-                onAttachRequestHandled = { attachRequest = 0 })
+                onOpenVoiceMode = { navigator.open(if (viewModel.liveVoiceAvailable()) DuaDestination.LiveVoice else DuaDestination.HandsFree, haptic = false) })
         }
         composable(DuaDestination.Computer.route) {
             com.dua.ai.ui.screens.ComputerScreen(onBack = navigator::back)

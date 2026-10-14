@@ -36,7 +36,6 @@ val ReferencePrompts = listOf(
 @Composable
 fun EmptyState(
     modifier: Modifier = Modifier,
-    @Suppress("UNUSED_PARAMETER") shimmerPreview: Float? = null,
     suggestions: List<PromptSuggestion> = emptyList(),
     showPrompts: Boolean = true,
     onSuggestion: (String) -> Unit = {},
