@@ -15,6 +15,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.Dp
 import androidx.compose.foundation.layout.padding
 import com.dua.ai.ui.theme.PageTheme
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.material3.Text
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
+import com.dua.ai.ui.theme.PageBodyStyle
+import com.dua.ai.ui.theme.PageCardTitleStyle
+import com.dua.ai.ui.theme.PageNoteStyle
+import com.dua.ai.ui.theme.PageSizes
 import com.dua.ai.ui.theme.SettingsShapes
 import com.dua.ai.ui.theme.SettingsSizes
 
@@ -52,3 +62,24 @@ fun pageRadioColors() = PageTheme.colors.let { p -> RadioButtonDefaults.colors(s
 fun pageSliderColors() = PageTheme.colors.let { p ->
     SliderDefaults.colors(thumbColor = p.accent, activeTrackColor = p.accent, inactiveTrackColor = p.divider)
 }
+
+/** [PageCard] with the standard inner padding and item gap. */
+@Composable
+fun PagePaddedCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) = PageCard(modifier) {
+    Column(Modifier.fillMaxWidth().padding(PageSizes.cardPadding), verticalArrangement = Arrangement.spacedBy(PageSizes.cardGap), content = content)
+}
+
+@Composable
+fun PageCardTitle(text: String, modifier: Modifier = Modifier) =
+    Text(text, style = PageCardTitleStyle, color = PageTheme.colors.text, modifier = modifier.semantics { heading() })
+
+@Composable
+fun PageBody(text: String, modifier: Modifier = Modifier) = Text(text, style = PageBodyStyle, color = PageTheme.colors.text, modifier = modifier)
+
+@Composable
+fun PageNote(text: String, modifier: Modifier = Modifier) = Text(text, style = PageNoteStyle, color = PageTheme.colors.subText, modifier = modifier)
+
+/** Status line announced politely by TalkBack. */
+@Composable
+fun PageStatus(text: String, modifier: Modifier = Modifier) =
+    Text(text, style = PageNoteStyle, color = PageTheme.colors.subText, modifier = modifier.semantics { liveRegion = LiveRegionMode.Polite })

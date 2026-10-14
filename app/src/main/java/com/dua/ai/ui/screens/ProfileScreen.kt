@@ -8,25 +8,15 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.outlined.PersonOutline
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
@@ -37,15 +27,23 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.semantics.LiveRegionMode
-import androidx.compose.ui.semantics.liveRegion
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
 import com.dua.ai.ui.auth.GoogleSignInButton
 import com.dua.ai.ui.auth.rememberGoogleSignIn
+import com.dua.ai.ui.chat.SheetTonalButton
 import com.dua.ai.ui.components.DuaPageScaffold
-import com.dua.ai.ui.theme.DuaShape
+import com.dua.ai.ui.components.PageCard
+import com.dua.ai.ui.components.PageStatus
+import com.dua.ai.ui.components.SettingsGroup
+import com.dua.ai.ui.components.SettingsNavRow
+import com.dua.ai.ui.components.pageTextFieldColors
+import com.dua.ai.ui.theme.PageSizes
+import com.dua.ai.ui.theme.PageTheme
+import com.dua.ai.ui.theme.SettingsAvatarStyle
+import com.dua.ai.ui.theme.SettingsNameStyle
+import com.dua.ai.ui.theme.SettingsShapes
+import com.dua.ai.ui.theme.SettingsTheme
+import com.dua.ai.ui.theme.SettingsValueStyle
 import com.dua.ai.ui.theme.Spacing
 import com.dua.ai.viewmodel.ChatViewModel
 
@@ -96,22 +94,16 @@ fun ProfileContent(state: ProfileUiState, actions: ProfileActions, onBack: () ->
         if (state.email == null) {
             GoogleSignInButton(busy = state.signingIn, error = state.signInError, onClick = actions.onSignIn, modifier = Modifier.padding(top = Spacing.sm))
         } else {
-            if (showLogout) OutlinedButton(onClick = { dialog = ProfileDialog.LogOut }, enabled = !state.busy, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp).padding(top = Spacing.sm),
-                shape = MaterialTheme.shapes.extraLarge, colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)) {
-                Icon(Icons.AutoMirrored.Outlined.Logout, contentDescription = null, modifier = Modifier.size(20.dp))
-                Spacer(Modifier.width(Spacing.sm))
-                Text("Log out", style = MaterialTheme.typography.labelLarge)
+            if (showLogout) SettingsGroup(title = null, modifier = Modifier.padding(top = Spacing.sm)) {
+                SettingsNavRow(Icons.AutoMirrored.Outlined.Logout, "Log out", titleColor = PageTheme.colors.danger, showChevron = false,
+                    enabled = !state.busy, onClick = { dialog = ProfileDialog.LogOut })
             }
-            if (state.deletionConfigured) TextButton(onClick = { dialog = ProfileDialog.Delete }, enabled = !state.busy, modifier = Modifier.align(Alignment.CenterHorizontally)) {
-                Text("Delete account", color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
+            if (state.deletionConfigured) SheetTextButton("Delete account", onClick = { dialog = ProfileDialog.Delete }, enabled = !state.busy,
+                destructive = true, modifier = Modifier.align(Alignment.CenterHorizontally))
         }
-        if (state.emailAuthConfigured) OutlinedButton(onClick = actions.onEmail, enabled = !state.busy && !state.signingIn,
-            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-            Text(if (state.email == null) "Sign in with email" else "Set email password")
-        }
-        if (state.notice.isNotBlank()) Text(state.notice, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+        if (state.emailAuthConfigured) SheetTonalButton(if (state.email == null) "Sign in with email" else "Set email password", onClick = actions.onEmail,
+            enabled = !state.busy && !state.signingIn, modifier = Modifier.fillMaxWidth())
+        if (state.notice.isNotBlank()) PageStatus(state.notice)
     }
     when (dialog) {
         ProfileDialog.LogOut -> DuaDialog(onDismissRequest = { dialog = null },
@@ -126,7 +118,7 @@ fun ProfileContent(state: ProfileUiState, actions: ProfileActions, onBack: () ->
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
                         Text(style = SheetBodyStyle, text = "This permanently deletes the account and its cloud snapshot. The cached chats and memories on this phone stay until cleared. Type DELETE MY ACCOUNT to confirm.")
-                        OutlinedTextField(confirmation, { confirmation = it.take(32) }, label = { Text("Confirmation") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(confirmation, { confirmation = it.take(32) }, label = { Text("Confirmation") }, singleLine = true, modifier = Modifier.fillMaxWidth(), colors = pageTextFieldColors())
                     }
                 },
                 confirmButton = { SheetTextButton("Delete", onClick = { dialog = null; actions.onDeleteAccount(confirmation) },
@@ -141,23 +133,23 @@ enum class ProfileDialog { LogOut, Delete }
 
 @Composable
 private fun AccountHeader(email: String?, displayName: String) {
-    Surface(color = MaterialTheme.colorScheme.surfaceContainer, shape = DuaShape.card, modifier = Modifier.fillMaxWidth()) {
-        Row(Modifier.padding(Spacing.lg), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(48.dp).background(if (email != null) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHighest, CircleShape),
+    val c = SettingsTheme.colors
+    PageCard {
+        Row(Modifier.padding(PageSizes.cardPadding), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(PageSizes.avatar).background(if (email != null) c.avatar else PageTheme.colors.fill, SettingsShapes.circle),
                 contentAlignment = Alignment.Center) {
                 val initial = (displayName.ifBlank { email.orEmpty() }).firstOrNull { it.isLetterOrDigit() }?.uppercaseChar()
-                if (initial != null) Text(initial.toString(), style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                else Icon(Icons.Outlined.PersonOutline, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (initial != null) Text(initial.toString(), style = SettingsAvatarStyle, color = c.onAvatar)
+                else Icon(Icons.Outlined.PersonOutline, contentDescription = null, tint = c.value)
             }
-            Column(Modifier.weight(1f).padding(start = Spacing.lg)) {
+            Column(Modifier.weight(1f).padding(start = PageSizes.cardPadding)) {
                 if (email != null) {
-                    Text(displayName.ifBlank { "Dua account" }, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(email, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(displayName.ifBlank { "Dua account" }, style = SettingsNameStyle, color = c.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(email, style = SettingsValueStyle, color = c.value, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 } else {
-                    Text("Not signed in", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
-                    Text("Sign in to sync across devices. Chats and memory are stored on the server; without an account the phone only holds a temporary cache.", style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Not signed in", style = SettingsNameStyle, color = c.name)
+                    Text("Sign in to sync across devices. Chats and memory are stored on the server; without an account the phone only holds a temporary cache.",
+                        style = SettingsValueStyle, color = c.value)
                 }
             }
         }

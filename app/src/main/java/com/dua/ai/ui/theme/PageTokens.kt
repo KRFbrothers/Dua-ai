@@ -8,6 +8,10 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
 /**
  * Full-page tokens: the Settings page look (SettingsTokens) + sheet controls (SheetTokens) applied to whole screens.
@@ -60,3 +64,31 @@ fun DuaPageTheme(content: @Composable () -> Unit) {
         CompositionLocalProvider(LocalContentColor provides p.text, content = content)
     }
 }
+
+/** Full-page sizes (Data controls, Profile, Cloud sync, Feature setup, Onboarding, Computer). Touch slots stay 48 dp. */
+object PageSizes {
+    val cardPadding = 16.dp
+    val cardGap = 12.dp
+    val itemGap = 8.dp
+    val avatar = 48.dp
+    val buttonIcon = 20.dp
+    val heroRing = 112.dp
+    val heroIcon = 52.dp
+    val heroSparkle = 26.dp
+    val heroSparkleX = 6.dp
+    val heroSparkleY = (-2).dp
+    val heroMinHeight = 420.dp
+    val heroTextMaxWidth = 320.dp
+    val onboardingLogo = 168.dp
+    val onboardingActionsMaxWidth = 420.dp
+    val touch = 48.dp
+}
+
+/** Large page heading (Onboarding welcome, Computer). */
+val PageHeadlineStyle = TextStyle(fontFamily = SoehneFont, fontWeight = FontWeight.Bold, fontSize = 26.sp, lineHeight = 32.sp)
+/** Card heading on full pages. */
+val PageCardTitleStyle = TextStyle(fontFamily = SoehneFont, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, lineHeight = 22.sp)
+/** Body copy on full pages. */
+val PageBodyStyle = TextStyle(fontFamily = SoehneFont, fontWeight = FontWeight.Normal, fontSize = 15.sp, lineHeight = 22.sp)
+/** Secondary / explanatory notes on full pages. */
+val PageNoteStyle = TextStyle(fontFamily = SoehneFont, fontWeight = FontWeight.Normal, fontSize = 13.sp, lineHeight = 18.sp)
