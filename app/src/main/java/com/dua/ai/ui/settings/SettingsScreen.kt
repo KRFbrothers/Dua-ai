@@ -1,5 +1,8 @@
 package com.dua.ai.ui.settings
 
+import com.dua.ai.ui.theme.SheetBodyStyle
+import com.dua.ai.ui.chat.SheetTextButton
+import com.dua.ai.ui.chat.DuaDialog
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -187,13 +190,13 @@ fun SettingsContent(state: SettingsUiState, onBack: () -> Unit, onOpen: (DuaDest
             SettingsItemRow(Icons.Outlined.Archive, "History and data", showDivider = false) { onOpen(DuaDestination.HistoryData) }
         }
     }
-    if (logout) AlertDialog(onDismissRequest = { logout = false }, title = { Text("Log out?") },
-        text = { Text("Your chats and memories stay on the server. This phone only holds a cache.") },
-        confirmButton = { TextButton(enabled = !state.accountBusy, onClick = { logout = false; onLogOut() }) { Text("Log out") } },
-        dismissButton = { TextButton(onClick = { logout = false }) { Text("Cancel") } })
-    if (about) AlertDialog(onDismissRequest = { about = false }, title = { Text("About Dua AI") },
-        text = { Text("Version ${state.version} · personal assistant") },
-        confirmButton = { TextButton(onClick = { about = false }) { Text("Close") } })
+    if (logout) DuaDialog(onDismissRequest = { logout = false }, title = "Log out?",
+        text = { Text(style = SheetBodyStyle, text = "Your chats and memories stay on the server. This phone only holds a cache.") },
+        confirmButton = { SheetTextButton("Log out", onClick = { logout = false; onLogOut() }, enabled = !state.accountBusy, destructive = true) },
+        dismissButton = { SheetTextButton("Cancel", onClick = { logout = false }) })
+    if (about) DuaDialog(onDismissRequest = { about = false }, title = "About Dua AI",
+        text = { Text(style = SheetBodyStyle, text = "Version ${state.version} · personal assistant") },
+        confirmButton = { SheetTextButton("Close", onClick = { about = false }) })
 }
 
 @Composable

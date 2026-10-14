@@ -1,6 +1,9 @@
 package com.dua.ai.ui.chat
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -71,7 +74,7 @@ fun sheetSwitchColors() = SheetTheme.colors.let { c ->
 @Composable
 fun SheetTextButton(text: String, onClick: () -> Unit, enabled: Boolean = true, destructive: Boolean = false, modifier: Modifier = Modifier) {
     val c = SheetTheme.colors
-    TextButton(onClick = onClick, enabled = enabled, shape = SheetShapes.button, modifier = modifier,
+    TextButton(onClick = onClick, enabled = enabled, shape = SheetShapes.button, modifier = modifier.heightIn(min = SheetSizes.touch),
         colors = ButtonDefaults.textButtonColors(contentColor = if (destructive) c.destructive else c.accent)) {
         Text(text, style = SheetButtonStyle)
     }
@@ -93,3 +96,49 @@ fun DuaDialog(
         properties = properties, title = { Text(title, style = SheetTitleStyle) }, text = text, shape = SheetShapes.dialog,
         containerColor = c.container, titleContentColor = c.title, textContentColor = c.subText, tonalElevation = 0.dp)
 }
+
+/** Tappable icon + label row inside a [SheetGroup] (long-press menus, pickers). 56 dp tall, destructive rows in red. */
+@Composable
+fun SheetActionRow(label: String, icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit, enabled: Boolean = true,
+    destructive: Boolean = false, detail: String = "", trailing: @Composable (() -> Unit)? = null, modifier: Modifier = Modifier) {
+    val c = SheetTheme.colors
+    val alpha = if (enabled) 1f else com.dua.ai.ui.theme.SheetDisabledAlpha
+    val tint = (if (destructive) c.destructive else c.icon).copy(alpha = alpha)
+    androidx.compose.foundation.layout.Row(modifier.fillMaxWidth().heightIn(min = SheetSizes.rowMin)
+        .clickable(enabled = enabled, onClickLabel = label, role = Role.Button, onClick = onClick)
+        .padding(horizontal = SheetSizes.rowPaddingH, vertical = SheetSizes.rowPaddingV), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+        androidx.compose.material3.Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(SheetSizes.rowIcon))
+        Column(Modifier.weight(1f).padding(start = SheetSizes.rowGap)) {
+            Text(label, style = com.dua.ai.ui.theme.SheetRowStyle, color = (if (destructive) c.destructive else c.text).copy(alpha = alpha))
+            if (detail.isNotEmpty()) Text(detail, style = com.dua.ai.ui.theme.SheetSubStyle, color = c.subText.copy(alpha = alpha))
+        }
+        trailing?.invoke()
+    }
+}
+
+/** Primary purple pill button (Save, Record, Stop). */
+@Composable
+fun SheetFilledButton(text: String, onClick: () -> Unit, enabled: Boolean = true, icon: androidx.compose.ui.graphics.vector.ImageVector? = null, modifier: Modifier = Modifier) {
+    val c = SheetTheme.colors
+    androidx.compose.material3.Button(onClick = onClick, enabled = enabled, shape = SheetShapes.button,
+        modifier = modifier.heightIn(min = SheetSizes.touch),
+        colors = ButtonDefaults.buttonColors(containerColor = c.accent, contentColor = c.onAccent,
+            disabledContainerColor = c.fill, disabledContentColor = c.subText)) {
+        if (icon != null) androidx.compose.material3.Icon(icon, contentDescription = null, modifier = Modifier.size(SheetSizes.rowIcon))
+        Text(text, style = SheetButtonStyle, modifier = if (icon != null) Modifier.padding(start = SheetSizes.handlePadding / 2) else Modifier)
+    }
+}
+
+/** Secondary gray-fill pill button (Choose file, Add note, Daily planner). */
+@Composable
+fun SheetTonalButton(text: String, onClick: () -> Unit, enabled: Boolean = true, icon: androidx.compose.ui.graphics.vector.ImageVector? = null, modifier: Modifier = Modifier) {
+    val c = SheetTheme.colors
+    androidx.compose.material3.Button(onClick = onClick, enabled = enabled, shape = SheetShapes.button,
+        modifier = modifier.heightIn(min = SheetSizes.touch), elevation = null,
+        colors = ButtonDefaults.buttonColors(containerColor = c.fill, contentColor = c.text,
+            disabledContainerColor = c.fill, disabledContentColor = c.subText)) {
+        if (icon != null) androidx.compose.material3.Icon(icon, contentDescription = null, modifier = Modifier.size(SheetSizes.rowIcon))
+        Text(text, style = SheetButtonStyle, modifier = if (icon != null) Modifier.padding(start = SheetSizes.handlePadding / 2) else Modifier)
+    }
+}
+

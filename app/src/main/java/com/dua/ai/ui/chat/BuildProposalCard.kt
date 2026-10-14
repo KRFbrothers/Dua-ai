@@ -1,5 +1,9 @@
 package com.dua.ai.ui.chat
 
+import com.dua.ai.ui.theme.SheetTheme
+import com.dua.ai.ui.theme.SheetRowStyle
+import com.dua.ai.ui.theme.SheetNoteStyle
+import com.dua.ai.ui.theme.SheetBodyStyle
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
@@ -180,25 +184,25 @@ fun BuildProposalCard(
         var title by rememberSaveable(messageId + ":title") { mutableStateOf(proposal.title) }
         var editing by rememberSaveable(messageId + ":editing") { mutableStateOf(false) }
         val valid = title.isNotBlank() && title.trim().length <= BuildProposals.MAX_TITLE
-        AlertDialog(
+        DuaDialog(
             onDismissRequest = { confirming = false },
-            title = { Text("Create pull request?") },
+            title = "Create pull request?",
             text = {
                 Column {
-                    Text(confirmationText(proposal, draft), style = MaterialTheme.typography.bodyMedium)
+                    Text(confirmationText(proposal, draft), style = SheetBodyStyle)
                     // The title is optional to edit: shown as text until the owner taps Edit title.
                     if (editing) OutlinedTextField(title, { title = it.replace('\n', ' ').take(BuildProposals.MAX_TITLE + 20) }, label = { Text("Pull request title") },
                         singleLine = true, isError = !valid, supportingText = { Text("${title.trim().length}/${BuildProposals.MAX_TITLE}") },
                         modifier = Modifier.fillMaxWidth().padding(top = Spacing.md))
                     else {
-                        Text("Title", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = Spacing.md))
-                        Text(title, style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = Spacing.xxs))
-                        TextButton(onClick = { editing = true }, modifier = Modifier.padding(top = Spacing.xxs)) { Text("Edit title") }
+                        Text("Title", style = SheetNoteStyle, color = SheetTheme.colors.subText, modifier = Modifier.padding(top = Spacing.md))
+                        Text(title, style = SheetRowStyle, color = SheetTheme.colors.text, modifier = Modifier.padding(top = Spacing.xxs))
+                        SheetTextButton("Edit title", onClick = { editing = true }, modifier = Modifier.padding(top = Spacing.xxs))
                     }
                 }
             },
-            confirmButton = { TextButton(onClick = { confirming = false; onCreate(title.trim()) }, enabled = valid) { Text("Create PR") } },
-            dismissButton = { TextButton(onClick = { confirming = false }) { Text("Cancel") } },
+            confirmButton = { SheetTextButton("Create PR", onClick = { confirming = false; onCreate(title.trim()) }, enabled = valid) },
+            dismissButton = { SheetTextButton("Cancel", onClick = { confirming = false }) },
         )
     }
 }

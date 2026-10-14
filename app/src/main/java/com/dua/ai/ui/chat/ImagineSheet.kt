@@ -58,7 +58,7 @@ internal fun imagineSummary(options: ImagineOptions, config: ImagineConfig?): St
 @Composable
 fun ImagineSheet(options: ImagineOptions, config: ImagineConfig, usage: ImagineUsage?, hasSource: Boolean,
     onChange: (ImagineOptions) -> Unit, onDismiss: () -> Unit) {
-    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = MaterialTheme.colorScheme.surfaceContainerLow) {
+    DuaSheet(onDismiss = onDismiss) {
         ImagineOptionsContent(options, config, usage, hasSource, onChange, onDismiss)
     }
 }

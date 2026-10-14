@@ -1,5 +1,9 @@
 package com.dua.ai.ui.screens
 
+import com.dua.ai.ui.theme.SheetSubStyle
+import com.dua.ai.ui.theme.SheetBodyStyle
+import com.dua.ai.ui.chat.SheetTextButton
+import com.dua.ai.ui.chat.DuaDialog
 import com.dua.ai.ui.components.DuaPageScaffold
 import android.content.ActivityNotFoundException
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -76,22 +80,22 @@ fun DataControlsScreen(viewModel: ChatViewModel, onBack: () -> Unit) {
         if (status.isNotBlank()) Text(status, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
     }
     // Capture the preview once: the dialog content recomposes separately and must not re-read a cleared state.
-    importPreview?.let { preview -> AlertDialog(onDismissRequest = { viewModel.cancelImport() }, title = { Text("Import chats and projects?") },
+    importPreview?.let { preview -> DuaDialog(onDismissRequest = { viewModel.cancelImport() }, title = "Import chats and projects?",
         text = { Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("Add ${preview.size} chats as separate copies, with their project settings? Existing chats, drafts, instructions and tasks will be kept. Differing project settings or tasks are imported separately. Importing the same file again creates additional chat copies.")
+            Text(style = SheetBodyStyle, text = "Add ${preview.size} chats as separate copies, with their project settings? Existing chats, drafts, instructions and tasks will be kept. Differing project settings or tasks are imported separately. Importing the same file again creates additional chat copies.")
             if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
-            Text(status, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+            Text(status, style = SheetSubStyle, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
         } },
-        confirmButton = { TextButton(enabled = !busy, onClick = { viewModel.confirmImport() }) { Text("Import") } },
-        dismissButton = { TextButton(enabled = !busy, onClick = { viewModel.cancelImport() }) { Text("Cancel") } }) }
-    if (confirmFiles) AlertDialog(onDismissRequest = { confirmFiles = false }, title = { Text("Delete all uploaded files?") },
-        text = { Text("Every file you uploaded to your private Dua storage (photos, PDFs, spreadsheets and audio) will be permanently deleted. Chats stay, but their files can no longer be opened or re-read in follow-ups.") },
-        confirmButton = { TextButton(onClick = { confirmFiles = false; viewModel.deleteAllUploadedFiles() }) { Text("Delete files") } },
-        dismissButton = { TextButton(onClick = { confirmFiles = false }) { Text("Cancel") } })
-    if (confirm) AlertDialog(onDismissRequest = { confirm = false }, title = { Text("Clear cached chats?") },
-        text = { Text("Remove cached chats and drafts from this phone. Server chats and their stored files remain available to restore. Phone-only chats and unsynced edits need an export or sync first. Pending attachments are discarded; unsent uploads may be deleted from storage.") },
-        confirmButton = { TextButton(onClick = { confirm = false; viewModel.clearAllChats() }) { Text("Clear all") } },
-        dismissButton = { TextButton(onClick = { confirm = false }) { Text("Cancel") } })
+        confirmButton = { SheetTextButton("Import", onClick = { viewModel.confirmImport() }, enabled = !busy) },
+        dismissButton = { SheetTextButton("Cancel", onClick = { viewModel.cancelImport() }, enabled = !busy) }) }
+    if (confirmFiles) DuaDialog(onDismissRequest = { confirmFiles = false }, title = "Delete all uploaded files?",
+        text = { Text(style = SheetBodyStyle, text = "Every file you uploaded to your private Dua storage (photos, PDFs, spreadsheets and audio) will be permanently deleted. Chats stay, but their files can no longer be opened or re-read in follow-ups.") },
+        confirmButton = { SheetTextButton("Delete files", onClick = { confirmFiles = false; viewModel.deleteAllUploadedFiles() }, destructive = true) },
+        dismissButton = { SheetTextButton("Cancel", onClick = { confirmFiles = false }) })
+    if (confirm) DuaDialog(onDismissRequest = { confirm = false }, title = "Clear cached chats?",
+        text = { Text(style = SheetBodyStyle, text = "Remove cached chats and drafts from this phone. Server chats and their stored files remain available to restore. Phone-only chats and unsynced edits need an export or sync first. Pending attachments are discarded; unsent uploads may be deleted from storage.") },
+        confirmButton = { SheetTextButton("Clear all", onClick = { confirm = false; viewModel.clearAllChats() }, destructive = true) },
+        dismissButton = { SheetTextButton("Cancel", onClick = { confirm = false }) })
 }
 
 /** Settings › History and data › Data controls: storage used in the private bucket and a delete-all action. */

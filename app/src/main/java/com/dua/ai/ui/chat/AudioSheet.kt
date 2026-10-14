@@ -1,5 +1,10 @@
 package com.dua.ai.ui.chat
 
+import com.dua.ai.ui.theme.SheetNoteStyle
+import com.dua.ai.ui.theme.SheetTitleStyle
+import com.dua.ai.ui.theme.SheetBodyStyle
+import com.dua.ai.ui.theme.SheetSizes
+import com.dua.ai.ui.theme.SheetTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -38,8 +43,7 @@ import kotlinx.coroutines.delay
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AudioSheet(recordingSince: Long?, available: Boolean, hint: String, onRecord: () -> Unit, onStop: () -> Unit, onCancel: () -> Unit, onPick: () -> Unit, onDismiss: () -> Unit) {
-    ModalBottomSheet(onDismissRequest = { if (recordingSince == null) onDismiss() }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true, confirmValueChange = { recordingSince == null }),
-        containerColor = MaterialTheme.colorScheme.surfaceContainerLow) {
+    DuaSheet(onDismiss = { if (recordingSince == null) onDismiss() }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true, confirmValueChange = { recordingSince == null })) {
         AudioSheetContent(recordingSince, available, hint, onRecord, onStop, onCancel, onPick)
     }
 }
@@ -49,27 +53,28 @@ fun AudioSheetContent(recordingSince: Long?, available: Boolean, hint: String, o
     now: () -> Long = System::currentTimeMillis) {
     var tick by remember { mutableLongStateOf(now()) }
     LaunchedEffect(recordingSince) { while (recordingSince != null) { tick = now(); delay(500) } }
-    Column(Modifier.fillMaxWidth().padding(horizontal = Spacing.xl).padding(bottom = Spacing.xxl), verticalArrangement = Arrangement.spacedBy(Spacing.lg)) {
-        Text("Audio", style = MaterialTheme.typography.titleMedium, modifier = Modifier.semantics { heading() })
+    val c = SheetTheme.colors
+    Column(Modifier.fillMaxWidth().padding(horizontal = SheetSizes.paddingH).padding(bottom = SheetSizes.paddingBottom), verticalArrangement = Arrangement.spacedBy(SheetSizes.sectionGap)) {
+        SheetTitle("Audio")
         if (!available) {
-            Text(hint, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(hint, style = SheetBodyStyle, color = c.subText)
             return@Column
         }
         if (recordingSince != null) {
             val seconds = ((tick - recordingSince).coerceAtLeast(0) / 1000).toInt()
-            Text("Recording… %d:%02d".format(seconds / 60, seconds % 60), style = MaterialTheme.typography.headlineSmall,
+            Text("Recording… %d:%02d".format(seconds / 60, seconds % 60), style = SheetTitleStyle, color = c.text,
                 modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
-            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
-                Button(onClick = onStop, modifier = Modifier.weight(1f).heightIn(min = 56.dp)) { Icon(Icons.Outlined.Stop, null); Text("Stop and attach", Modifier.padding(start = Spacing.sm)) }
-                TextButton(onClick = onCancel, modifier = Modifier.heightIn(min = 56.dp)) { Text("Discard") }
+            Row(horizontalArrangement = Arrangement.spacedBy(SheetSizes.tileGap)) {
+                SheetFilledButton("Stop and attach", onClick = onStop, icon = Icons.Outlined.Stop, modifier = Modifier.weight(1f).heightIn(min = SheetSizes.rowMin))
+                SheetTextButton("Discard", onClick = onCancel, destructive = true, modifier = Modifier.heightIn(min = SheetSizes.rowMin))
             }
         } else {
-            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
-                Button(onClick = onRecord, modifier = Modifier.weight(1f).heightIn(min = 56.dp)) { Icon(Icons.Outlined.Mic, null); Text("Record", Modifier.padding(start = Spacing.sm)) }
-                FilledTonalButton(onClick = onPick, modifier = Modifier.weight(1f).heightIn(min = 56.dp)) { Icon(Icons.Outlined.AudioFile, null); Text("Choose file", Modifier.padding(start = Spacing.sm)) }
+            Row(horizontalArrangement = Arrangement.spacedBy(SheetSizes.tileGap)) {
+                SheetFilledButton("Record", onClick = onRecord, icon = Icons.Outlined.Mic, modifier = Modifier.weight(1f).heightIn(min = SheetSizes.rowMin))
+                SheetTonalButton("Choose file", onClick = onPick, icon = Icons.Outlined.AudioFile, modifier = Modifier.weight(1f).heightIn(min = SheetSizes.rowMin))
             }
         }
         Text("Voice notes and audio files (M4A, MP3, WAV, OGG, OPUS, WEBM, FLAC, AAC) are uploaded to your private storage, transcribed, then answered. The transcript stays with the message for follow-ups.",
-            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            style = SheetNoteStyle, color = c.subText)
     }
 }
