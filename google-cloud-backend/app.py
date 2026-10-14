@@ -321,6 +321,9 @@ def api_chat():
                 if text:
                     sent = True
                     yield sse({"type": "text", "delta": text})
+                else:
+                    # Metadata-only chunks must not reset queue polling without emitting any bytes.
+                    yield ": heartbeat\n\n"
             if not sent:
                 yield sse({"type": "error", "message": GENERIC_ERROR, "status": 502})
                 return
