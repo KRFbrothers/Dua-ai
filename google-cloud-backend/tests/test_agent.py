@@ -120,3 +120,77 @@ def test_real_genai_tool_thinking_and_global_endpoint(monkeypatch):
     finally:
         engine._client = None
     assert url.startswith("https://aiplatform.googleapis.com")
+
+
+class RouterModel(AgentModel):
+    def __init__(self, route=None, router_fail=False):
+        super().__init__()
+        self.route, self.router_fail = route, router_fail
+
+    def generate_content(self, contents, stream=False, generation_config=None, tools=None):
+        if generation_config and generation_config.get("response_mime_type") == "application/json":
+            self.calls.append({"contents": contents, "stream": stream, "config": generation_config, "tools": tools, "router": True})
+            if self.router_fail:
+                raise RuntimeError("router down")
+            return SimpleNamespace(text=json.dumps({"route": self.route}))
+        return super().generate_content(contents, stream, generation_config, tools)
+
+
+def use(monkeypatch, m):
+    monkeypatch.setattr(engine, "get_model", lambda system=engine.SYSTEM_PROMPT: m)
+    return m
+
+
+def post(text, history=()):
+    messages = [*history, {"role": "user", "text": text}]
+    return events(engine.app.test_client().post("/api/chat", json={**BODY, "messages": messages}))
+
+
+@pytest.mark.parametrize("text", ["hi", "Hello!", "thanks", "kaise ho?", "good morning Dua"])
+def test_greeting_gets_one_direct_reply_without_search(model, text):
+    evs = post(text)
+    assert len(model.calls) == 1 and model.calls[0]["tools"] is None and model.calls[0]["stream"] is True
+    kinds = [e["type"] for e in evs]
+    assert "thinking" not in kinds and "sources" not in kinds and kinds[-1] == "done"
+    assert "Sources:" not in "".join(e.get("delta", "") for e in evs if e["type"] == "text")
+
+
+def test_direct_reply_keeps_multi_turn_history(model):
+    post("thanks", history=[{"role": "user", "text": "My name is Fareed"}, {"role": "model", "text": "Hi Fareed!"}])
+    contents = model.calls[0]["contents"]
+    assert [c["role"] for c in contents] == ["user", "model", "user"]
+    assert contents[0]["parts"][0][1] == "My name is Fareed"
+
+
+def test_task_words_run_full_pipeline_with_search(model):
+    post("Dua AI ke liye latest AI tools aur feature ideas batao")
+    assert [c["tools"] for c in model.calls] == [None, ["GOOGLE_SEARCH"], None]
+
+
+def test_router_call_is_cheap_and_decides(monkeypatch, model):
+    m = use(monkeypatch, RouterModel(route="chat"))
+    post("Can you explain what a neural network is in simple words?")
+    router = m.calls[0]
+    assert router["router"] and router["tools"] is None
+    assert router["config"]["max_output_tokens"] <= 256 and router["config"]["thinking_level"] == "low"
+    assert len(m.calls) == 2 and all(c["tools"] is None for c in m.calls)
+
+    m = use(monkeypatch, RouterModel(route="agent"))
+    post("Can you go deep on how other assistant apps handle offline mode these days?")
+    assert [c["tools"] for c in m.calls] == [None, None, ["GOOGLE_SEARCH"], None]
+
+
+def test_router_failure_falls_back_safely(monkeypatch, model):
+    m = use(monkeypatch, RouterModel(router_fail=True))
+    evs = post("What is two plus two")
+    assert [c["tools"] for c in m.calls[1:]] == [None] and evs[-1]["type"] == "done"
+    m = use(monkeypatch, RouterModel(router_fail=True))
+    evs = post("Please go through how other assistant apps handle offline mode and memory these days for me")
+    assert ["GOOGLE_SEARCH"] in [c["tools"] for c in m.calls] and evs[-1]["type"] == "done"
+
+
+def test_router_thinking_level_override():
+    pytest.importorskip("google.genai")
+    config = engine.GenaiModel("sys").config({"max_output_tokens": 5, "thinking_level": "low"})
+    if engine.MODEL_NAME.startswith("gemini-3"):
+        assert config.thinking_config.thinking_level.value == "LOW"
