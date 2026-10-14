@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-# Usage: PROJECT_ID=your-gcp-project [VERTEX_MODEL=gemini-2.5-flash] [DUA_APP_TOKEN=...] ./deploy.sh
+# Usage: PROJECT_ID=your-gcp-project [VERTEX_MODEL=gemini-3.8-flash] [VERTEX_LOCATION=global] [DUA_APP_TOKEN=...] ./deploy.sh
 set -euo pipefail
 
 : "${PROJECT_ID:?Set PROJECT_ID to your Google Cloud project id}"
 REGION="${REGION:-us-central1}"
-VERTEX_MODEL="${VERTEX_MODEL:-gemini-2.5-flash}"
-VERTEX_LOCATION="${VERTEX_LOCATION:-$REGION}"
+VERTEX_MODEL="${VERTEX_MODEL:-gemini-3.8-flash}"
+# Vertex AI location (where Gemini runs) is separate from the Cloud Run region; Gemini 3.x uses "global".
+VERTEX_LOCATION="${VERTEX_LOCATION:-global}"
 TOKEN_VAR=""
 if [ -n "${DUA_APP_TOKEN:-}" ]; then TOKEN_VAR=",DUA_APP_TOKEN=${DUA_APP_TOKEN}"; fi
 PROJECT_NUMBER=$(gcloud projects describe "$PROJECT_ID" --format="value(projectNumber)")

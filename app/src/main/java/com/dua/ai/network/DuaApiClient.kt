@@ -43,6 +43,26 @@ class DuaApiClient(
                 com.dua.ai.setup.IntegrationCapabilities.ATTACHMENT_TYPES + com.dua.ai.files.StoredFileTypes.AUDIO_TYPES, supportsReasoning = false)
         else providers.firstOrNull { it.name == model && it.configured }
 
+    /**
+     * Asks the chat engine (GET /) whether it offers Dua Agent mode. Only an explicit `"agent": true`
+     * JSON answer counts; any other status, body or network failure means not available.
+     */
+    suspend fun engineAgentAvailable(): Boolean = withContext(Dispatchers.IO) {
+        runCatching {
+            val base = URL(baseUrl.trimEnd('/') + "/")
+            if (base.protocol != "https") return@runCatching false
+            val builder = Request.Builder().url(base).get().header("Accept", "application/json")
+            if (appToken.isNotBlank()) builder.header("X-Dua-App-Token", appToken)
+            client.newCall(builder.build()).execute().use { response ->
+                if (response.code !in 200..299) return@use false
+                val source = response.body?.source() ?: return@use false
+                source.request(65537)
+                if (source.buffer.size > 65536) return@use false
+                parseAgentCapability(source.readUtf8())
+            }
+        }.getOrDefault(false)
+    }
+
     internal fun chatConfiguration(state: com.dua.ai.setup.IntegrationState): com.dua.ai.setup.IntegrationState =
         if (!separateChatEngine) state else state.copy(providers =
             (state.providers.map { if (it.name in setOf("Dua", "Gemini")) chatProvider(it.name, state.providers)!! else it } +
@@ -237,6 +257,9 @@ class DuaApiClient(
     }
 
     companion object {
+        /** True only for a JSON object with `"agent": true` (the Cloud Run engine's GET / answer). */
+        internal fun parseAgentCapability(body: String): Boolean =
+            runCatching { JSONObject(body).opt("agent") == true }.getOrDefault(false)
         private fun attachmentJson(files: List<ChatAttachment>) = JSONArray().apply { files.forEach { file ->
             put(JSONObject().put("name", file.name).put("mimeType", file.mimeType).put("data", file.data))
         } }

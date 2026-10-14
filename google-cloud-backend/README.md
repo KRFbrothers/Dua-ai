@@ -20,15 +20,17 @@ Imagine, voice, setup/config) still uses the Vercel `web/` backend.
   (`sources` event, numbered [1], [2]) -> prioritized Dua AI feature ideas with effort. Progress shows in the
   app's Thinking block. Cost caps: 3 model calls per request, only 1 grounded; output tokens capped
   (`AGENT_PLAN_TOKENS`=600, `AGENT_RESEARCH_TOKENS`=2048, `AGENT_ANSWER_TOKENS`=3072).
-  Grounding cost (gemini-2.5-flash, Vertex): 1,500 grounded prompts/day free (shared with Flash-Lite), then $35 / 1,000.
+  Grounding cost (Vertex): Gemini 3.x models share 5,000 free search queries per month, then $14 per 1,000 search queries
+  (billed per query, so one agent request can use several). Older gemini-2.5-flash: 1,500 grounded prompts/day free, then $35 / 1,000.
 - `POST /chat` – old single message endpoint `{"message"}` -> `{"reply"}` (still works).
 
 ## Settings (environment variables only, no secrets in code)
 | Name | Meaning |
 | --- | --- |
 | `GOOGLE_CLOUD_PROJECT` | your project id (required) |
-| `VERTEX_LOCATION` | default `us-central1` (`global` is needed for preview models such as `gemini-3-flash-preview`) |
-| `VERTEX_MODEL` | default `gemini-2.5-flash` |
+| `VERTEX_LOCATION` | Vertex AI location, default `global` (needed for Gemini 3.x; endpoint `aiplatform.googleapis.com`). Not the Cloud Run region. |
+| `VERTEX_MODEL` | default `gemini-3.8-flash` |
+| `VERTEX_THINKING_LEVEL` | Gemini 3 only: `low` (default), `medium` or `high` (`minimal` is not supported by 3.8 Flash) |
 | `DUA_APP_TOKEN` | optional password. When set, requests must send header `X-Dua-App-Token` with the same value. Build the app with `-PduaAppToken=...` (or env `DUA_APP_TOKEN`) so it sends it. Never commit it. Note: anyone who unpacks the APK could still find it, so it only stops casual strangers. |
 
 ## Redeploy from Cloud Shell
@@ -36,7 +38,7 @@ Imagine, voice, setup/config) still uses the Vercel `web/` backend.
 cd ~/Dua-ai && git fetch origin && git pull origin main   # after the PR is merged
 cd google-cloud-backend
 gcloud run deploy dua-ai-engine --source . --region us-central1 \
-  --set-env-vars "GOOGLE_CLOUD_PROJECT=global-healer-m6shk,VERTEX_LOCATION=us-central1,VERTEX_MODEL=gemini-2.5-flash" \
+  --set-env-vars "GOOGLE_CLOUD_PROJECT=global-healer-m6shk,VERTEX_LOCATION=global,VERTEX_MODEL=gemini-3.8-flash" \
   --allow-unauthenticated --project global-healer-m6shk
 ```
 First-time setup (APIs + permissions + deploy): `PROJECT_ID=<your-project> ./deploy.sh`.

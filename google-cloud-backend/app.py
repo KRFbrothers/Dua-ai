@@ -10,8 +10,8 @@ Endpoints
 - POST /chat        old single-turn endpoint: {"message"} -> {"reply"} (kept for backward compat).
 
 Configuration comes only from environment variables; no secrets in code.
-  GOOGLE_CLOUD_PROJECT (required), VERTEX_LOCATION (default us-central1),
-  VERTEX_MODEL (default gemini-2.5-flash), DUA_APP_TOKEN (optional shared secret; when set,
+  GOOGLE_CLOUD_PROJECT (required), VERTEX_LOCATION (default global),
+  VERTEX_MODEL (default gemini-3.8-flash), VERTEX_THINKING_LEVEL (Gemini 3: low|medium|high, default low), DUA_APP_TOKEN (optional shared secret; when set,
   requests must send the same value in the X-Dua-App-Token header).
 """
 import base64
@@ -28,8 +28,12 @@ app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 5 * 1024 * 1024
 
 PROJECT_ID = os.environ.get("GOOGLE_CLOUD_PROJECT", "")
-LOCATION = os.environ.get("VERTEX_LOCATION", "us-central1")
-MODEL_NAME = os.environ.get("VERTEX_MODEL", "gemini-2.5-flash")
+LOCATION = os.environ.get("VERTEX_LOCATION", "global")
+MODEL_NAME = os.environ.get("VERTEX_MODEL", "gemini-3.8-flash")
+# Gemini 3 uses thinking_level (low/medium/high; "minimal" is rejected by 3.8 Flash), not thinking_budget.
+THINKING_LEVEL = os.environ.get("VERTEX_THINKING_LEVEL", "low").strip().lower()
+if THINKING_LEVEL not in ("low", "medium", "high"):
+    THINKING_LEVEL = "low"
 MAX_MESSAGE_CHARS = 8000
 MAX_TURNS = 400
 MAX_TURN_CHARS = 100_000
@@ -46,9 +50,10 @@ GENERIC_ERROR = "The Dua AI engine could not answer right now. Please try again.
 
 # Dua Agent cost caps: exactly 3 model calls per agent request and only ONE of them uses
 # Google Search grounding (billed per grounded prompt after the free daily quota).
-AGENT_PLAN_TOKENS = int(os.environ.get("AGENT_PLAN_TOKENS", "600"))
-AGENT_RESEARCH_TOKENS = int(os.environ.get("AGENT_RESEARCH_TOKENS", "2048"))
-AGENT_ANSWER_TOKENS = int(os.environ.get("AGENT_ANSWER_TOKENS", "3072"))
+# Output caps include thinking tokens on Gemini 2.5/3, so leave room for low-level thinking.
+AGENT_PLAN_TOKENS = int(os.environ.get("AGENT_PLAN_TOKENS", "1024"))
+AGENT_RESEARCH_TOKENS = int(os.environ.get("AGENT_RESEARCH_TOKENS", "3072"))
+AGENT_ANSWER_TOKENS = int(os.environ.get("AGENT_ANSWER_TOKENS", "4096"))
 AGENT_MAX_SOURCES = 12
 AGENT_PLAN_PROMPT = (
     "You are the Dua Agent planning step. Do not answer yet. In at most 5 short bullet points, write a research "
@@ -76,6 +81,7 @@ SSE_HEADERS = {
     "X-Content-Type-Options": "nosniff",
 }
 
+_client = None
 _models = {}
 
 
@@ -86,37 +92,73 @@ class BadRequest(Exception):
         self.status = status
 
 
-def get_model(system_text=SYSTEM_PROMPT):
-    """Returns a cached Vertex AI GenerativeModel for this system instruction."""
-    model = _models.get(system_text)
-    if model is None:
+def get_client():
+    """google-genai client on Vertex AI. Location "global" uses https://aiplatform.googleapis.com."""
+    global _client
+    if _client is None:
         if not PROJECT_ID:
             raise RuntimeError("GOOGLE_CLOUD_PROJECT is not set")
-        import vertexai
-        from vertexai.generative_models import GenerativeModel
-        vertexai.init(project=PROJECT_ID, location=LOCATION)
-        model = GenerativeModel(MODEL_NAME, system_instruction=[system_text])
+        from google import genai
+        _client = genai.Client(vertexai=True, project=PROJECT_ID, location=LOCATION)
+    return _client
+
+
+def thinking_config(model_name=None):
+    """Gemini 3 models take thinking_level; older models keep their default thinking."""
+    if not (model_name or MODEL_NAME).startswith("gemini-3"):
+        return None
+    from google.genai import types
+    return types.ThinkingConfig(thinking_level=THINKING_LEVEL.upper())
+
+
+class GenaiModel:
+    """Small adapter with the generate_content(contents, stream, generation_config, tools) shape used here."""
+
+    def __init__(self, system):
+        self.system = system
+
+    def config(self, generation_config=None, tools=None):
+        from google.genai import types
+        options = {"system_instruction": self.system, **(generation_config or {})}
+        if tools:
+            options["tools"] = tools
+        thinking = thinking_config()
+        if thinking is not None:
+            options["thinking_config"] = thinking
+        return types.GenerateContentConfig(**options)
+
+    def generate_content(self, contents, stream=False, generation_config=None, tools=None):
+        models = get_client().models
+        config = self.config(generation_config, tools)
+        if stream:
+            return models.generate_content_stream(model=MODEL_NAME, contents=contents, config=config)
+        return models.generate_content(model=MODEL_NAME, contents=contents, config=config)
+
+
+def get_model(system_text=SYSTEM_PROMPT):
+    """Returns a cached model adapter for this system instruction."""
+    model = _models.get(system_text)
+    if model is None:
         if len(_models) > 32:
             _models.clear()
-        _models[system_text] = model
+        model = _models[system_text] = GenaiModel(system_text)
     return model
 
 
 def make_part(text=None, data=None, mime_type=None):
-    from vertexai.generative_models import Part
-    return Part.from_text(text) if data is None else Part.from_data(data=data, mime_type=mime_type)
+    from google.genai import types
+    return types.Part.from_text(text=text) if data is None else types.Part.from_bytes(data=data, mime_type=mime_type)
 
 
 def google_search_tool():
-    """Google Search grounding for Gemini 2.x on Vertex AI (`google_search`; the older
-    `google_search_retrieval` / Tool.from_google_search_retrieval is only for Gemini 1.5)."""
-    from vertexai.generative_models import Tool
-    return Tool.from_dict({"google_search": {}})
+    """Google Search grounding (`google_search` tool) for Gemini 2.x / 3.x on Vertex AI."""
+    from google.genai import types
+    return types.Tool(google_search=types.GoogleSearch())
 
 
 def make_content(role, parts):
-    from vertexai.generative_models import Content
-    return Content(role=role, parts=parts)
+    from google.genai import types
+    return types.Content(role=role, parts=parts)
 
 
 def authorized():
@@ -262,6 +304,15 @@ def _domain(url):
         return ""
 
 
+def sources_footer(sources):
+    """Plain-text footer in the exact format of web/src/core/chat-web.mjs sourcesFooter, which the app
+    (ReplySources.split) turns into clickable source chips and keeps in saved history."""
+    if not sources:
+        return ""
+    clean = lambda value: " ".join(str(value).split())
+    return "\n\nSources:\n" + "\n\n".join(f"[{item['id']}] {clean(item['title'])}\n{item['url']}" for item in sources)
+
+
 def grounding_sources(response, limit=AGENT_MAX_SOURCES):
     """Web sources from Vertex grounding metadata in the app's `sources` event shape."""
     sources, seen = [], set()
@@ -311,6 +362,9 @@ def agent_producer(messages, attachments, system):
                 generation_config={"max_output_tokens": AGENT_ANSWER_TOKENS, "temperature": 0.4}, stream=True):
             if not enqueue("chunk", chunk):
                 return
+        footer = sources_footer(sources)
+        if footer and not enqueue("event", {"type": "text", "delta": footer}):
+            return
         enqueue("done")
     return produce
 
@@ -336,7 +390,8 @@ def chunk_text(chunk):
 
 @app.route("/", methods=["GET"])
 def home():
-    return jsonify({"status": "Dua AI Engine is running!"})
+    # Capabilities: the app shows Agent mode only when this says "agent": true.
+    return jsonify({"status": "Dua AI Engine is running!", "engine": "google-cloud", "agent": True, "model": MODEL_NAME})
 
 
 @app.route("/api/chat", methods=["POST"])

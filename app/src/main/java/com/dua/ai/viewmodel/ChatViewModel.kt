@@ -183,6 +183,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     fun dismissMemoryNote(note: String) { _memoryCandidates.value = _memoryCandidates.value.filterNot { it == note } }
     fun integrationNotice(text: String) { _integrations.value = _integrations.value.copy(notice = text) }
     fun loadProviderConfiguration() = viewModelScope.launch {
+        refreshEngineCapabilities()
         try {
             val config = setupApi.request("/api/config")
             _integrations.value = api.chatConfiguration(com.dua.ai.setup.IntegrationCapabilities.configuration(config, _integrations.value))
@@ -200,6 +201,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
     fun loadIntegrations() = integrationAction {
+        refreshEngineCapabilities()
         val next = com.dua.ai.setup.IntegrationCapabilities.decode(setupApi.request("/api/setup"))
         val current = _integrations.value
         // /api/setup has no per-feature config; keep what /api/config reported.
@@ -533,11 +535,21 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val _agent = MutableStateFlow(false)
     val agent = _agent.asStateFlow()
     private val replyAgent = mutableMapOf<String, Boolean>()
-    /** Agent mode lives on the Google Cloud engine, so it is offered only when chat goes there. */
-    val agentAvailable: Boolean get() = separateChatEngine
+    /** Agent mode is offered only when the chat engine advertises `"agent": true` on GET / (unknown or failure = hidden). */
+    private val _agentAvailable = MutableStateFlow(false)
+    val agentAvailable = _agentAvailable.asStateFlow()
+    private var engineCheck: kotlinx.coroutines.Job? = null
+    fun refreshEngineCapabilities() {
+        if (_agentAvailable.value || engineCheck?.isActive == true) return
+        engineCheck = viewModelScope.launch {
+            val available = try { api.engineAgentAvailable() } catch (cancelled: CancellationException) { throw cancelled } catch (_: Exception) { false }
+            _agentAvailable.value = available
+            if (!available) _agent.value = false
+        }
+    }
     fun setAgent(enabled: Boolean) {
         if (_isTyping.value) return
-        if (enabled && !agentAvailable) { _error.value = "Agent mode needs the Google Cloud engine."; return }
+        if (enabled && !_agentAvailable.value) { _error.value = "Agent mode needs the Google Cloud engine."; return }
         _agent.value = enabled
         if (enabled) { _reasoning.value = false; _xSearch.value = false; _imagine.value = false; _runCode.value = false; _webMode.value = null; leaveBuild() }
         _error.value = null
@@ -1660,7 +1672,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         // A restored reply has no saved mode and retries with web off. In this session,
         // retries keep the original request's choice even if the composer has changed.
         val requestWebMode = replyWebModes[messageId]
-        val requestAgent = (replyAgent[messageId] ?: false) && agentAvailable
+        val requestAgent = (replyAgent[messageId] ?: false) && _agentAvailable.value
         val requestReasoning = !requestAgent && (replyReasoning[messageId] ?: (original.thinking != null))
         val requestXSearch = (replyXSearch[messageId] ?: false) && xSearchUsable(plan.model)
         val requestCode = (replyCode[messageId] ?: original.codeRuns.isNotEmpty()) && codeUsable(plan.model)
@@ -1725,7 +1737,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
         val requestWebMode = _webMode.value
-        val requestAgent = _agent.value && agentAvailable
+        val requestAgent = _agent.value && _agentAvailable.value
         val requestReasoning = _reasoning.value && !requestAgent
         val responseModel = _selectedModel.value
         val requestXSearch = _xSearch.value && xSearchUsable(responseModel)

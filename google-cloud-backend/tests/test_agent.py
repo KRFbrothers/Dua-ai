@@ -56,7 +56,7 @@ def test_agent_plans_researches_once_and_streams_ideas_with_sources(model):
     sources = next(e for e in evs if e["type"] == "sources")["sources"]
     assert [s["url"] for s in sources] == ["https://example.com/a", "https://news.test/b"]
     assert sources[0]["domain"] == "example.com" and sources[1]["domain"] == "news.test"
-    assert "".join(e["delta"] for e in evs if e["type"] == "text") == "## Ideas\n1. Voice"
+    assert "".join(e["delta"] for e in evs if e["type"] == "text").startswith("## Ideas\n1. Voice\n\nSources:\n[1]")
     # Cost caps: 3 calls, exactly one grounded, every call token-capped.
     assert len(model.calls) == 3
     assert [c["tools"] for c in model.calls] == [None, ["GOOGLE_SEARCH"], None]
@@ -78,6 +78,43 @@ def test_agent_requires_streaming(model):
     assert r.status_code == 400 and model.calls == []
 
 
-def test_real_google_search_tool_shape():
-    pytest.importorskip("vertexai")
-    assert engine.google_search_tool().to_dict() == {"google_search": {}}
+def test_grounded_reply_ends_with_app_sources_footer(model):
+    evs = events(engine.app.test_client().post("/api/chat", json=BODY))
+    text = "".join(e["delta"] for e in evs if e["type"] == "text")
+    assert text.endswith("\n\nSources:\n[1] example.com\nhttps://example.com/a\n\n[2] AI news\nhttps://news.test/b")
+    assert text.count("\n\nSources:\n") == 1
+    assert evs[-1]["type"] == "done"
+
+
+def test_footer_matches_web_format_and_flattens_titles():
+    footer = engine.sources_footer([{"id": 1, "title": "A\nB", "url": "https://a.test"}])
+    assert footer == "\n\nSources:\n[1] A B\nhttps://a.test"
+    assert engine.sources_footer([]) == ""
+
+
+def test_root_advertises_agent_capability():
+    body = engine.app.test_client().get("/").get_json()
+    assert body["agent"] is True and body["engine"] == "google-cloud"
+
+
+def test_defaults_are_gemini_3_8_flash_on_global():
+    assert engine.MODEL_NAME == os.environ.get("VERTEX_MODEL", "gemini-3.8-flash")
+    assert engine.LOCATION == os.environ.get("VERTEX_LOCATION", "global")
+
+
+def test_real_genai_tool_thinking_and_global_endpoint(monkeypatch):
+    pytest.importorskip("google.genai")
+    assert engine.google_search_tool().google_search is not None
+    assert engine.thinking_config("gemini-3.8-flash").thinking_level.value == "LOW"
+    assert engine.thinking_config("gemini-2.5-flash") is None
+    config = engine.GenaiModel("sys").config({"max_output_tokens": 10}, [engine.google_search_tool()])
+    assert config.system_instruction == "sys" and config.max_output_tokens == 10 and config.tools
+    monkeypatch.setattr(engine, "PROJECT_ID", "p")
+    monkeypatch.setattr(engine, "_client", None)
+    import google.auth
+    monkeypatch.setattr(google.auth, "default", lambda *a, **k: (None, "p"))
+    try:
+        url = engine.get_client()._api_client._http_options.base_url
+    finally:
+        engine._client = None
+    assert url.startswith("https://aiplatform.googleapis.com")
