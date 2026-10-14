@@ -248,7 +248,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     /** The account picker needs an Activity, so the UI runs it ([com.dua.ai.auth.GoogleSignIn]) and reports here. */
     fun googleSignInStarted() { _googleSignIn.value = GoogleSignInState(busy = true) }
     fun googleSignInFailed(message: String?) { _googleSignIn.value = GoogleSignInState(error = message) }
-    fun signInWithGoogle(idToken: String, nonce: String, photoUrl: String = "") {
+    fun signInWithGoogle(idToken: String, nonce: String, photoUrl: String = "", expectedEmail: String? = null) {
         if (_dataBusy.value) { googleSignInFailed("Wait for the current data operation to finish, then try again."); return }
         _googleSignIn.value = GoogleSignInState(busy = true)
         account.busy(true)
@@ -256,12 +256,18 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             try {
                 _cloudPreview.value = null
-                account.signInWithGoogle(idToken, nonce, photoUrl)
+                account.signInWithGoogle(idToken, nonce, photoUrl, expectedEmail)
                 _googleSignIn.value = GoogleSignInState()
             } catch (cancelled: CancellationException) { _googleSignIn.value = GoogleSignInState(); throw cancelled }
             catch (failure: Exception) { googleSignInFailed(failure.message ?: "Google sign-in failed. Try again.") }
             finally { account.busy(false); refreshSyncBusy() }
         }
+    }
+    /** Email-only navigation prefill. No password and no disk persistence; generic email entry clears it. */
+    var emailSignInHint: String = ""
+        private set
+    fun prepareEmailSignIn(email: String = "") {
+        emailSignInHint = email.trim().takeIf { com.dua.ai.account.EmailCredentials.validEmail(it) }.orEmpty()
     }
     data class EmailAuthState(val busy: Boolean = false, val error: String? = null, val confirmation: String = "", val completed: Boolean = false)
     private val _emailAuth = MutableStateFlow(EmailAuthState())

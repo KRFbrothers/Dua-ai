@@ -54,6 +54,15 @@ class EmailAuthInteractionTest(private val dark: Boolean, private val small: Boo
         assertEquals("owner@example.com", address); assertEquals(" spaces are valid ", sent); assertFalse(signup)
         assertEquals("", field("Account password").fetchSemanticsNode().config[androidx.compose.ui.semantics.SemanticsProperties.EditableText].text)
     }
+    @Test fun rememberedEmailPrefillIsEditableAndNeverPrefillsAPassword() {
+        compose.setContent { DuaTheme(LocalPreferences(theme = if (dark) "dark" else "light")) {
+            EmailAuthContent(initialEmail = "remembered@example.com")
+        } }
+        assertEquals("remembered@example.com", field("Account email").fetchSemanticsNode().config[androidx.compose.ui.semantics.SemanticsProperties.EditableText].text)
+        assertEquals("", field("Account password").fetchSemanticsNode().config[androidx.compose.ui.semantics.SemanticsProperties.EditableText].text)
+        field("Account email").performTextReplacement("another@example.com")
+        assertEquals("another@example.com", field("Account email").fetchSemanticsNode().config[androidx.compose.ui.semantics.SemanticsProperties.EditableText].text)
+    }
     @Test fun signupRequiresMatchingPasswordsAndSwitchingModesClearsCredentials() {
         compose.setContent(content(mode = EmailAuthMode.SignUp))
         field("Account email").performScrollTo().performTextReplacement("owner@example.com")

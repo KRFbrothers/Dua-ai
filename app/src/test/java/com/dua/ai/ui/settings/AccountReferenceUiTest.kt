@@ -13,6 +13,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import com.dua.ai.account.AccountUser
+import com.dua.ai.account.AccountProvider
 import com.dua.ai.settings.LocalPreferences
 import com.dua.ai.ui.components.AccountAvatar
 import com.dua.ai.ui.navigation.DuaDestination
@@ -125,13 +126,35 @@ class AccountReferenceUiTest(private val dark: Boolean, private val small: Boole
     @Test fun welcomeUsesActualRememberedAccountAndExistingSignInHandlers() {
         var google = 0; var email = 0; var skip = 0
         show { OnboardingContent(false, null, { google++ }, { skip++ }, { email++ },
-            rememberedAccount = AccountUser("id", "fareed@example.com", "Fareed")) }
+            rememberedAccount = AccountUser("id", "fareed@example.com", "Fareed"),
+            rememberedProvider = AccountProvider.Google, onContinueGoogle = { google++ }) }
         capture("welcome-reference")
         click("Continue with this account"); compose.runOnIdle { assertEquals(1, google) }
         click("Continue with Google"); compose.runOnIdle { assertEquals(2, google) }
         click("Log in another way"); compose.runOnIdle { assertEquals(1, email) }
         click("Skip for now"); compose.runOnIdle { assertEquals(1, skip) }
         targets()
+    }
+    @Test fun emailQuickContinueUsesRememberedEmailWithoutGoogleBrandingOrGoogleCallback() {
+        var address = ""; var google = 0
+        show { OnboardingContent(false, null, { google++ }, {}, {},
+            rememberedAccount = AccountUser("id", "owner@example.com", "Owner"), rememberedProvider = AccountProvider.Email,
+            onContinueEmail = { address = it }) }
+        compose.onNodeWithContentDescription("Google account").assertDoesNotExist()
+        click("Continue with this account")
+        compose.runOnIdle { assertEquals("owner@example.com", address); assertEquals(0, google) }
+        click("Continue with Google"); compose.runOnIdle { assertEquals(1, google) }
+    }
+    @Test fun unknownProviderOrMissingProviderSpecificHandlerHidesQuickContinue() {
+        show { OnboardingContent(false, null, {}, {}, {}, rememberedAccount = AccountUser("id", "owner@example.com", "Owner")) }
+        compose.onNodeWithText("Continue with this account").assertDoesNotExist()
+        compose.onNodeWithText("Continue with Google").assertExists()
+    }
+    @Test fun signedOutSettingsUsesAnonymousAvatarAndNeverInventsAnInitial() {
+        show { SettingsContent(SettingsUiState(), {}, {}) }
+        compose.onNodeWithContentDescription("Anonymous profile").assertExists()
+        compose.onNodeWithText("F", substring = false).assertDoesNotExist()
+        compose.onNodeWithText("Not signed in", substring = false).assertExists()
     }
     @Test fun welcomeWithoutRememberedIdentityDoesNotInventAnAccount() {
         show { OnboardingContent(true, "Sign-in failed", {}, {}, {}) }

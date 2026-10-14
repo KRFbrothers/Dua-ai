@@ -23,6 +23,7 @@ import com.dua.ai.ui.theme.Spacing
 import com.dua.ai.viewmodel.ChatViewModel
 import com.dua.ai.ui.settings.AccountContent
 import com.dua.ai.ui.onboarding.OnboardingContent
+import com.dua.ai.account.AccountProvider
 
 @Immutable
 data class ProfileUiState(
@@ -39,6 +40,7 @@ data class ProfileUiState(
     val sync: String = "Off",
     val accountId: String = "",
     val rememberedAccount: com.dua.ai.account.AccountUser? = null,
+    val rememberedProvider: AccountProvider? = null,
 )
 
 class ProfileActions(
@@ -48,6 +50,8 @@ class ProfileActions(
     val onDeleteAccount: (String) -> Unit = {},
     val onSync: () -> Unit = {},
     val onSavePhone: suspend (String, String) -> Unit = { _, _ -> },
+    val onContinueGoogle: (() -> Unit)? = null,
+    val onContinueEmail: ((String) -> Unit)? = null,
 )
 
 /** Dedicated Account destination: original authentication, sync navigation and guarded destructive actions. */
@@ -57,11 +61,13 @@ fun ProfileScreen(viewModel: ChatViewModel, onBack: () -> Unit, onEmail: () -> U
     val google by viewModel.googleSignIn.collectAsState()
     val sync by viewModel.automaticSyncState.collectAsState()
     val signIn = rememberGoogleSignIn(viewModel)
+    val continueGoogle = rememberGoogleSignIn(viewModel, account.rememberedUser?.email)
     LaunchedEffect(Unit) { viewModel.loadAccount() }
     val state = ProfileUiState(email = account.user?.email, displayName = account.user?.displayName.orEmpty(), busy = account.busy,
-        signingIn = google.busy, signInError = google.error, deletionConfigured = account.deletionConfigured, notice = account.notice, emailAuthConfigured = account.emailAuthConfigured, sync = if (sync.enabled) "On" else "Off", phoneNumber = account.user?.phoneNumber.orEmpty(), accountId = account.user?.id.orEmpty(), rememberedAccount = account.rememberedUser)
+        signingIn = google.busy, signInError = google.error, deletionConfigured = account.deletionConfigured, notice = account.notice, emailAuthConfigured = account.emailAuthConfigured, sync = if (sync.enabled) "On" else "Off", phoneNumber = account.user?.phoneNumber.orEmpty(), accountId = account.user?.id.orEmpty(), rememberedAccount = account.rememberedUser, rememberedProvider = account.rememberedProvider)
     ProfileContent(state, ProfileActions(
-        onSignIn = signIn, onEmail = onEmail, onSync = onSync,
+        onSignIn = signIn, onEmail = { viewModel.prepareEmailSignIn(); onEmail() }, onSync = onSync,
+        onContinueGoogle = continueGoogle, onContinueEmail = { email -> viewModel.prepareEmailSignIn(email); onEmail() },
         onLogOut = viewModel::logOut,
         onSavePhone = { value, ownerId -> viewModel.setAccountPhoneNumber(value, ownerId) },
         onDeleteAccount = { confirmation ->
@@ -76,7 +82,8 @@ fun ProfileContent(state: ProfileUiState, actions: ProfileActions, onBack: () ->
     var dialog by rememberSaveable { mutableStateOf(initialDialog) }
     if (state.email == null) {
         OnboardingContent(busy = state.busy || state.signingIn, error = state.signInError,
-            onSignIn = actions.onSignIn, onSkip = onBack, onEmail = actions.onEmail, rememberedAccount = state.rememberedAccount)
+            onSignIn = actions.onSignIn, onSkip = onBack, onEmail = actions.onEmail, rememberedAccount = state.rememberedAccount, rememberedProvider = state.rememberedProvider,
+            onContinueGoogle = actions.onContinueGoogle, onContinueEmail = actions.onContinueEmail)
     } else AccountContent(state, actions, onBack, onLogOutRequest = { dialog = ProfileDialog.LogOut },
         onDeleteRequest = { dialog = ProfileDialog.Delete }, showLogout = showLogout)
     when (dialog) {

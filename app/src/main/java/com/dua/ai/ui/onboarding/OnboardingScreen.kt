@@ -14,6 +14,8 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.*
 import com.dua.ai.R
 import com.dua.ai.account.AccountUser
+import com.dua.ai.account.AccountProvider
+import com.dua.ai.account.EmailCredentials
 import com.dua.ai.ui.auth.rememberGoogleSignIn
 import com.dua.ai.ui.components.AccountAvatar
 import com.dua.ai.ui.theme.*
@@ -24,17 +26,21 @@ fun OnboardingScreen(viewModel: ChatViewModel, onDone: () -> Unit, onEmail: () -
     val account by viewModel.account.state.collectAsState()
     val google by viewModel.googleSignIn.collectAsState()
     val signIn = rememberGoogleSignIn(viewModel)
+    val continueGoogle = rememberGoogleSignIn(viewModel, account.rememberedUser?.email)
     LaunchedEffect(Unit) { viewModel.loadAccount() }
     LaunchedEffect(account.user?.id) { if (account.user != null) onDone() }
     OnboardingContent(busy = google.busy || account.busy, error = google.error, onSignIn = signIn,
-        onSkip = { viewModel.skipOnboarding(); onDone() }, onEmail = onEmail,
-        rememberedAccount = account.rememberedUser)
+        onSkip = { viewModel.skipOnboarding(); onDone() }, onEmail = { viewModel.prepareEmailSignIn(); onEmail() },
+        rememberedAccount = account.rememberedUser, rememberedProvider = account.rememberedProvider,
+        onContinueGoogle = continueGoogle, onContinueEmail = { email -> viewModel.prepareEmailSignIn(email); onEmail() })
 }
 
 /** A remembered account is displayed only when supplied by the existing session or its in-memory last profile, never a fabricated email/photo. */
 @Composable
 fun OnboardingContent(busy: Boolean, error: String?, onSignIn: () -> Unit, onSkip: () -> Unit,
-    onEmail: (() -> Unit)? = null, rememberedAccount: AccountUser? = null) {
+    onEmail: (() -> Unit)? = null, rememberedAccount: AccountUser? = null,
+    rememberedProvider: AccountProvider? = null, onContinueGoogle: (() -> Unit)? = null,
+    onContinueEmail: ((String) -> Unit)? = null) {
     val c = WelcomeTheme.colors
     BoxWithConstraints(Modifier.fillMaxSize().background(c.background).windowInsetsPadding(WindowInsets.safeDrawing)) {
         val viewport = maxHeight
@@ -51,12 +57,18 @@ fun OnboardingContent(busy: Boolean, error: String?, onSignIn: () -> Unit, onSki
             }
             Column(Modifier.widthIn(max = PageSizes.onboardingActionsMaxWidth).fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(WelcomeSizes.gap), horizontalAlignment = Alignment.CenterHorizontally) {
-                rememberedAccount?.let { user ->
-                    Button(onClick = onSignIn, enabled = !busy, modifier = Modifier.fillMaxWidth().heightIn(min = WelcomeSizes.button),
+                val continueAction = when (rememberedProvider) {
+                    AccountProvider.Google -> onContinueGoogle
+                    AccountProvider.Email -> onContinueEmail?.let { action -> { action(rememberedAccount?.email.orEmpty()) } }
+                    null -> null
+                }
+                rememberedAccount?.takeIf { EmailCredentials.validEmail(it.email) && continueAction != null }?.let { user ->
+                    Button(onClick = { continueAction?.invoke() }, enabled = !busy, modifier = Modifier.fillMaxWidth().heightIn(min = WelcomeSizes.button),
                         shape = WelcomeSizes.pill, colors = ButtonDefaults.buttonColors(containerColor = c.action, contentColor = c.onAction)) {
                         Box(Modifier.size(WelcomeSizes.avatar)) {
                             AccountAvatar(user.email, user.displayName, user.avatarUrl, WelcomeSizes.avatar)
-                            Image(painterResource(R.drawable.ic_google_g), null, Modifier.size(WelcomeSizes.badge).align(Alignment.BottomEnd))
+                            if (rememberedProvider == AccountProvider.Google) Image(painterResource(R.drawable.ic_google_g), null,
+                                Modifier.size(WelcomeSizes.badge).align(Alignment.BottomEnd).semantics { contentDescription = "Google account" })
                         }
                         Spacer(Modifier.width(WelcomeSizes.gap))
                         Column(Modifier.weight(1f)) {

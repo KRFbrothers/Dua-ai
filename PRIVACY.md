@@ -71,8 +71,8 @@ With the updated APK and configured owner backend, sending a signed-in chat writ
 #### Cloud Account (Opt-In)
 - Required for cloud snapshots and multi-device sync.
 - Authenticated via Supabase with native Google sign-in or owner-only email/password authentication. Email signup requires confirmation; Google accounts can set a password while signed in.
-- The welcome quick-continue button uses a real last account profile held in memory (name, email and avatar only). It contains no tokens or contact number and is forgotten when the process restarts after logout. Account deletion clears it.
-- Account sessions are cached in encrypted device storage; cloud chat snapshots are protected by RLS and the owner lock.
+- The welcome quick-continue button uses a real last account profile held in memory (name, email, avatar and login provider only). It contains no tokens or contact number and is forgotten when the process restarts after logout. Account deletion clears it.
+- Account sessions and their last successful login method are cached in encrypted device storage; cloud chat snapshots are protected by RLS and the owner lock.
 - The optional contact phone number is saved in Supabase Auth user metadata (`dua_phone_number`) and cached with the encrypted account session. It is included in session responses and may appear in Supabase access-token metadata. It is not sent as chat context or included in chat backups. It does not verify phone ownership or enable phone sign-in. Account → Phone number can edit it or remove it by saving an empty value; logout clears the local session, and the server contact remains until removed or the account is deleted.
 
 #### Retention

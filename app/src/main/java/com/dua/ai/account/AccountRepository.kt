@@ -9,11 +9,11 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.json.JSONObject
 
-data class AccountState(val configured: Boolean = false, val user: AccountUser? = null, val busy: Boolean = false, val notice: String = "", val deletionConfigured: Boolean = false, val emailAuthConfigured: Boolean = false, val rememberedUser: AccountUser? = null)
+data class AccountState(val configured: Boolean = false, val user: AccountUser? = null, val busy: Boolean = false, val notice: String = "", val deletionConfigured: Boolean = false, val emailAuthConfigured: Boolean = false, val rememberedUser: AccountUser? = null, val rememberedProvider: AccountProvider? = null)
 class AccountRepository(private val api: AccountApi, private val store: SessionPersistence) {
     constructor(context: Context) : this(AccountApi(), AccountSessionStore(context))
     private var session = runCatching { store.read() }.getOrNull()
-    private val mutable = MutableStateFlow(AccountState(user = session?.user, rememberedUser = session?.user?.copy(phoneNumber = ""))); val state = mutable.asStateFlow()
+    private val mutable = MutableStateFlow(AccountState(user = session?.user, rememberedUser = session?.user?.copy(phoneNumber = ""), rememberedProvider = session?.provider)); val state = mutable.asStateFlow()
     private val mutex = Mutex()
     private val sessionLock = Any()
     private var authGeneration = 0L
@@ -30,7 +30,8 @@ class AccountRepository(private val api: AccountApi, private val store: SessionP
     private fun writeSession(value: AccountSession?, authenticationChange: Boolean = false) {
         store.write(value); session = value; sessionRevision++
         if (authenticationChange) authGeneration++
-        mutable.update { it.copy(user = value?.user, rememberedUser = value?.user?.copy(phoneNumber = "") ?: it.rememberedUser) }
+        mutable.update { it.copy(user = value?.user, rememberedUser = value?.user?.copy(phoneNumber = "") ?: it.rememberedUser,
+            rememberedProvider = if (value != null) value.provider else it.rememberedProvider) }
     }
     private fun beginAuthentication() = synchronized(sessionLock) { ++authGeneration }
     private fun installAuthentication(ticket: Long, value: AccountSession) = synchronized(sessionLock) {
@@ -44,7 +45,7 @@ class AccountRepository(private val api: AccountApi, private val store: SessionP
     private fun installRefresh(value: Snapshot, next: AccountSession): String = synchronized(sessionLock) {
         check(credentialsMatch(value) && next.user.id == value.value?.user?.id) { "Account changed. Retry from the current account." }
         // Preserve any profile update that completed while the credential refresh was in flight.
-        writeSession(next.copy(user = session!!.user))
+        writeSession(next.copy(user = session!!.user, provider = session!!.provider))
         next.accessToken
     }
     private suspend fun token(expected: Snapshot): String = mutex.withLock {
@@ -93,7 +94,7 @@ class AccountRepository(private val api: AccountApi, private val store: SessionP
         synchronized(sessionLock) {
             check(matches(expected)) { "Account changed. Review account deletion again." }
             writeSession(null, authenticationChange = true)
-            mutable.update { it.copy(rememberedUser = null) }
+            mutable.update { it.copy(rememberedUser = null, rememberedProvider = null) }
             notice("Account and its server data deleted. The phone cache remains until cleared.")
         }
     }
@@ -132,13 +133,14 @@ class AccountRepository(private val api: AccountApi, private val store: SessionP
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (_: Exception) { mutable.update { it.copy(deletionConfigured = false, emailAuthConfigured = false) } }
     }
-    suspend fun signInWithGoogle(idToken: String, nonce: String, photoUrl: String = "") {
+    suspend fun signInWithGoogle(idToken: String, nonce: String, photoUrl: String = "", expectedEmail: String? = null) {
         val ticket = beginAuthentication()
         val result = api.request("/api/account/google-token", "POST", JSONObject().put("idToken", idToken).put("nonce", nonce))
         val decoded = AccountSessionCodec.decode(result)
+        check(expectedEmail == null || decoded.user.email.equals(expectedEmail.trim(), ignoreCase = true)) { "Choose the remembered Google account or use Continue with Google for another account." }
         // The Google credential carries the account photo; use it when the backend does not report one.
         val photo = decoded.user.avatarUrl.ifBlank { safeAvatarUrl(photoUrl) }
-        val installed = installAuthentication(ticket, decoded.copy(user = decoded.user.copy(avatarUrl = photo)))
+        val installed = installAuthentication(ticket, decoded.copy(user = decoded.user.copy(avatarUrl = photo), provider = AccountProvider.Google))
         noticeIfCurrent(installed, "Signed in with Google. Local data was not uploaded.")
     }
     fun cancelAuthentication() = synchronized(sessionLock) { ++authGeneration; Unit }
@@ -154,7 +156,7 @@ class AccountRepository(private val api: AccountApi, private val store: SessionP
         }
         val received = AccountSessionCodec.decode(result)
         check(received.user.email.equals(email.trim(), ignoreCase = true)) { "Account response changed. Try again." }
-        val installed = installAuthentication(ticket, received)
+        val installed = installAuthentication(ticket, received.copy(provider = AccountProvider.Email))
         noticeIfCurrent(installed, "Signed in with email. Local data was not uploaded.")
         return true
     }

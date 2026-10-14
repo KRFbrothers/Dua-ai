@@ -75,6 +75,45 @@ class AccountRepositoryTest {
         withTimeout(3000) { arrived.await() }; repository.logout(); repository.cancelAuthentication(); release.countDown()
         assertTrue(pending.await().isFailure); assertNull(store.value); assertNull(repository.state.value.user)
     }
+    @Test fun lastLoginProviderIsPersistedAndRememberedAfterLogout() = runBlocking {
+        for (provider in AccountProvider.entries) {
+            val store = MemoryStore(null); val repository = AccountRepository(api, store)
+            server.enqueue(json(AccountSessionCodec.encode(session(userA))))
+            if (provider == AccountProvider.Google) repository.signInWithGoogle(idToken(userA), nonce)
+            else repository.signInWithEmail(userA.email, "password")
+            assertEquals(provider, store.value!!.provider)
+            assertEquals(provider, AccountSessionCodec.decode(AccountSessionCodec.encode(store.value!!)).provider)
+            assertEquals(provider, AccountRepository(api, store).state.value.rememberedProvider)
+            server.enqueue(json(JSONObject().put("revoked", true))); repository.logout()
+            assertEquals(provider, repository.state.value.rememberedProvider)
+            assertEquals(userA.email, repository.state.value.rememberedUser!!.email)
+            assertNull(store.value)
+        }
+    }
+    @Test fun credentialRefreshAndProfileLoadKeepTheActualLoginProvider() = runBlocking {
+        val original = session(userA, expiresAt = 1).copy(provider = AccountProvider.Email)
+        val store = MemoryStore(original); val repository = AccountRepository(api, store)
+        server.enqueue(json(account(null)))
+        server.enqueue(json(AccountSessionCodec.encode(session(userA, "refreshed"))))
+        server.enqueue(json(account(userA)))
+        repository.load()
+        assertEquals(AccountProvider.Email, store.value!!.provider)
+        assertEquals(AccountProvider.Email, repository.state.value.rememberedProvider)
+    }
+    @Test fun googleQuickContinueCannotInstallADifferentAccount() = runBlocking {
+        val store = MemoryStore(null); val repository = AccountRepository(api, store)
+        server.enqueue(json(AccountSessionCodec.encode(session(userB))))
+        assertTrue(runCatching { repository.signInWithGoogle(idToken(userB), nonce, expectedEmail = userA.email) }.isFailure)
+        assertNull(store.value); assertNull(repository.state.value.user); assertNull(repository.state.value.rememberedProvider)
+    }
+    @Test fun legacySessionDoesNotInventAGoogleLoginMethod() {
+        val encoded = AccountSessionCodec.encode(session(userA))
+        assertFalse(encoded.has("loginProvider"))
+        assertNull(AccountSessionCodec.decode(encoded).provider)
+        encoded.put("loginProvider", "unsupported")
+        assertNull(AccountSessionCodec.decode(encoded).provider)
+        assertNull(AccountRepository(api, MemoryStore(session(userA))).state.value.rememberedProvider)
+    }
     private fun phoneResult(user: AccountUser, value: String, ownerId: String = user.id) = JSONObject()
         .put("phoneUpdated", true).put("ownerId", ownerId)
         .put("user", AccountSessionCodec.encode(session(user.copy(phoneNumber = value))).getJSONObject("user"))
@@ -194,7 +233,7 @@ class AccountRepositoryTest {
         val oldLoad = async { repository.load() }
         try { withTimeout(3000) { arrived.await() }; repository.signInWithGoogle(idToken(userB), nonce) } finally { release.countDown() }
         withTimeout(3000) { oldLoad.await() }
-        assertEquals(signedIn, store.value); assertEquals(userB, repository.state.value.user)
+        assertEquals(signedIn.copy(provider = AccountProvider.Google), store.value); assertEquals(userB, repository.state.value.user)
     }
     @Test fun lateUnauthorizedLoadDoesNotClearReplacementSession() = runBlocking {
         val replacement = session(userB); val store = MemoryStore(session(userA)); val repository = AccountRepository(api, store)
@@ -203,7 +242,7 @@ class AccountRepositoryTest {
         val oldLoad = async { repository.load() }
         try { withTimeout(3000) { arrived.await() }; repository.signInWithGoogle(idToken(userB), nonce) } finally { release.countDown() }
         withTimeout(3000) { oldLoad.await() }
-        assertEquals(replacement, store.value); assertEquals(userB, repository.state.value.user)
+        assertEquals(replacement.copy(provider = AccountProvider.Google), store.value); assertEquals(userB, repository.state.value.user)
     }
     @Test fun logoutClearsImmediatelyAndLateLoadCannotResurrectSession() = runBlocking {
         val store = MemoryStore(session(userA)); val repository = AccountRepository(api, store)
@@ -220,7 +259,7 @@ class AccountRepositoryTest {
         val oldRequest = async { runCatching { repository.request("/api/private", authenticated = true) } }
         try { withTimeout(3000) { arrived.await() }; repository.signInWithGoogle(idToken(userA), nonce) } finally { release.countDown() }
         assertTrue(withTimeout(3000) { oldRequest.await() }.exceptionOrNull() is IllegalStateException)
-        assertEquals(replacement, store.value)
+        assertEquals(replacement.copy(provider = AccountProvider.Google), store.value)
     }
     @Test fun pendingLoginCannotUndoLogout() = runBlocking {
         val oldStore = MemoryStore(session(userA)); val repository = AccountRepository(api, oldStore)
@@ -247,7 +286,7 @@ class AccountRepositoryTest {
         val earlier = async { runCatching { repository.signInWithGoogle(idToken(userA), nonce) } }
         try { withTimeout(3000) { arrived.await() }; repository.signInWithGoogle(idToken(userB), nonce) } finally { release.countDown() }
         assertTrue(withTimeout(3000) { earlier.await() }.exceptionOrNull() is IllegalStateException)
-        assertEquals(replacement, store.value); assertEquals(userB, repository.state.value.user)
+        assertEquals(replacement.copy(provider = AccountProvider.Google), store.value); assertEquals(userB, repository.state.value.user)
     }
     @Test fun pendingRefreshCannotOverwriteSameOwnerNewLoginCredentials() = runBlocking {
         val old = session(userA, "old-access", expiresAt = 1); val replacement = session(userA, "replacement-access")
@@ -257,7 +296,7 @@ class AccountRepositoryTest {
         val pending = async { runCatching { repository.withToken { "private result" } } }
         try { withTimeout(3000) { arrived.await() }; repository.signInWithGoogle(idToken(userA), nonce) } finally { release.countDown() }
         assertTrue(withTimeout(3000) { pending.await() }.exceptionOrNull() is IllegalStateException)
-        assertEquals(replacement, store.value)
+        assertEquals(replacement.copy(provider = AccountProvider.Google), store.value)
     }
     @Test fun aMismatchedSessionResponseDoesNotRelabelExistingCredentials() = runBlocking {
         val original = session(userA); val store = MemoryStore(original); val repository = AccountRepository(api, store)
