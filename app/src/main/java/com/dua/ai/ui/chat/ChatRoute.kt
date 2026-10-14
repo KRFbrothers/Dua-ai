@@ -39,6 +39,7 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
     val model by viewModel.selectedModel.collectAsState()
     val webMode by viewModel.webMode.collectAsState()
     val reasoning by viewModel.reasoning.collectAsState()
+    val agent by viewModel.agent.collectAsState()
     val xSearch by viewModel.xSearch.collectAsState()
     val summary by viewModel.summary.collectAsState()
     val integrations by viewModel.integrations.collectAsState()
@@ -107,6 +108,7 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
         providers = integrations.providers, webMode = webMode, reasoning = reasoning,
         webSearchConfigured = integrations.searchAvailable(model), pageReadingAvailable = integrations.pageReadingAvailable,
         xSearchAvailable = model == "Grok" && integrations.xSearchAvailable, xSearch = xSearch,
+        agentAvailable = viewModel.agentAvailable, agent = agent,
         summarisedThroughId = summary?.throughId,
         attachments = attachments, readingFiles = readingFiles,
         uploads = uploads, recordingSince = recordingSince,
@@ -167,6 +169,7 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
             onUseDeviceVoice = { voice.stopAll(); viewModel.updateSettings(viewModel.localSettings.value.copy(generatedVoice = false)) },
             onWebMode = viewModel::setWebMode,
             onReasoning = viewModel::setReasoning,
+            onAgent = viewModel::setAgent,
             onXSearch = viewModel::setXSearch,
             onAuto = viewModel::selectAuto,
             onSelectModel = viewModel::setModel,

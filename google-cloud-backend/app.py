@@ -5,6 +5,8 @@ Endpoints
 - POST /api/chat    drop-in replacement for the web/ backend's chat endpoint used by the Android app:
                     full conversation history, inline attachments, SSE streaming (`"stream": true`)
                     with the same wire format as web/src/core/sse.mjs, or one JSON reply `{"text": ...}`.
+                    `"mode": "agent"` runs the Dua Agent (phase 1): plan -> one Google Search grounded
+                    research step -> summary with sources -> prioritized Dua AI feature ideas.
 - POST /chat        old single-turn endpoint: {"message"} -> {"reply"} (kept for backward compat).
 
 Configuration comes only from environment variables; no secrets in code.
@@ -42,6 +44,32 @@ APP_MODELS = {"Dua", "ChatGPT", "Gemini", "Claude", "Grok", "Kimi"}
 SYSTEM_PROMPT = "You are Dua AI, a helpful, smart, and polite personal AI assistant."
 GENERIC_ERROR = "The Dua AI engine could not answer right now. Please try again."
 
+# Dua Agent cost caps: exactly 3 model calls per agent request and only ONE of them uses
+# Google Search grounding (billed per grounded prompt after the free daily quota).
+AGENT_PLAN_TOKENS = int(os.environ.get("AGENT_PLAN_TOKENS", "600"))
+AGENT_RESEARCH_TOKENS = int(os.environ.get("AGENT_RESEARCH_TOKENS", "2048"))
+AGENT_ANSWER_TOKENS = int(os.environ.get("AGENT_ANSWER_TOKENS", "3072"))
+AGENT_MAX_SOURCES = 12
+AGENT_PLAN_PROMPT = (
+    "You are the Dua Agent planning step. Do not answer yet. In at most 5 short bullet points, write a research "
+    "plan for the user's request: which latest AI news, models, tools or app features to look up on the web. "
+    "Keep it simple, Hinglish-friendly English."
+)
+AGENT_RESEARCH_PROMPT = (
+    "You are the Dua Agent research step. Use Google Search to find the LATEST, real information for this plan. "
+    "Write compact factual notes (dates, names, what is new). No feature ideas yet.\n\nPlan:\n"
+)
+AGENT_ANSWER_PROMPT = (
+    "You are the Dua Agent. Dua AI is the user's own ChatGPT-like Android app (Kotlin, Jetpack Compose) with a "
+    "Google Cloud Run + Vertex AI Gemini backend. The user is a student who cannot code and wants free tools. "
+    "Using ONLY the research notes below, reply in simple, Hinglish-friendly English with these sections:\n"
+    "1. **Kya naya hai (findings)** - short bullets, cite sources like [1], [2].\n"
+    "2. **Dua AI ke liye ideas** - a numbered list ordered by priority. For each idea: what it is, why it helps, "
+    "effort (Small / Medium / Large) and whether it can stay free.\n"
+    "3. **Next step** - the one thing to do first.\n"
+    "If the notes do not cover something, say so instead of guessing."
+)
+
 SSE_HEADERS = {
     "Cache-Control": "no-store",
     "X-Accel-Buffering": "no",
@@ -77,6 +105,13 @@ def get_model(system_text=SYSTEM_PROMPT):
 def make_part(text=None, data=None, mime_type=None):
     from vertexai.generative_models import Part
     return Part.from_text(text) if data is None else Part.from_data(data=data, mime_type=mime_type)
+
+
+def google_search_tool():
+    """Google Search grounding for Gemini 2.x on Vertex AI (`google_search`; the older
+    `google_search_retrieval` / Tool.from_google_search_retrieval is only for Gemini 1.5)."""
+    from vertexai.generative_models import Tool
+    return Tool.from_dict({"google_search": {}})
 
 
 def make_content(role, parts):
@@ -211,6 +246,75 @@ def unsupported_notice(data):
     return " ".join(notes)[:300] or None
 
 
+def with_last_user_suffix(messages, suffix):
+    """Copy of the app history whose last user turn ends with an agent instruction."""
+    copied = [dict(m) if isinstance(m, dict) else m for m in messages]
+    if copied and isinstance(copied[-1], dict) and isinstance(copied[-1].get("text"), str):
+        copied[-1]["text"] = (copied[-1]["text"] + "\n\n" + suffix).strip()
+    return copied
+
+
+def _domain(url):
+    from urllib.parse import urlparse
+    try:
+        return urlparse(url).hostname or ""
+    except ValueError:
+        return ""
+
+
+def grounding_sources(response, limit=AGENT_MAX_SOURCES):
+    """Web sources from Vertex grounding metadata in the app's `sources` event shape."""
+    sources, seen = [], set()
+    try:
+        chunks = response.candidates[0].grounding_metadata.grounding_chunks
+    except (AttributeError, IndexError, TypeError):
+        return sources
+    for chunk in chunks or []:
+        web = getattr(chunk, "web", None)
+        url = str(getattr(web, "uri", "") or "")
+        if not url.startswith("https://") or url in seen:
+            continue
+        seen.add(url)
+        title = str(getattr(web, "title", "") or "")[:200]
+        domain = str(getattr(web, "domain", "") or "") or (title if "." in title and " " not in title else _domain(url))
+        sources.append({"id": len(sources) + 1, "title": title or domain or "Source", "url": url, "domain": domain[:253]})
+        if len(sources) >= limit:
+            break
+    return sources
+
+
+def agent_producer(messages, attachments, system):
+    """Dua Agent: plan -> grounded research -> streamed answer. Emits progress as `thinking`."""
+    def produce(enqueue):
+        model = get_model(system)
+        if not enqueue("event", {"type": "thinking", "delta": "**Step 1 - Plan**\n"}):
+            return
+        plan = chunk_text(model.generate_content(
+            build_contents(with_last_user_suffix(messages, AGENT_PLAN_PROMPT), attachments),
+            generation_config={"max_output_tokens": AGENT_PLAN_TOKENS, "temperature": 0.3}))[:4000]
+        if not enqueue("event", {"type": "thinking", "delta": (plan or "- Research latest AI news and tools") + "\n\n**Step 2 - Research (Google Search)**\n"}):
+            return
+        research = model.generate_content(
+            build_contents(with_last_user_suffix(messages, AGENT_RESEARCH_PROMPT + plan), attachments),
+            generation_config={"max_output_tokens": AGENT_RESEARCH_TOKENS, "temperature": 0.2},
+            tools=[google_search_tool()])
+        notes = chunk_text(research)[:20000]
+        sources = grounding_sources(research)
+        if not enqueue("event", {"type": "thinking", "delta": f"Found {len(sources)} sources.\n\n**Step 3 - Summary and ideas**\n"}):
+            return
+        if sources and not enqueue("event", {"type": "sources", "sources": sources}):
+            return
+        listed = "\n".join(f"[{item['id']}] {item['title']} - {item['url']}" for item in sources) or "(no web sources found)"
+        answer_prompt = f"{AGENT_ANSWER_PROMPT}\n\nResearch notes:\n{notes or '(empty)'}\n\nSources:\n{listed}"
+        for chunk in model.generate_content(
+                build_contents(with_last_user_suffix(messages, answer_prompt), attachments),
+                generation_config={"max_output_tokens": AGENT_ANSWER_TOKENS, "temperature": 0.4}, stream=True):
+            if not enqueue("chunk", chunk):
+                return
+        enqueue("done")
+    return produce
+
+
 def sse(event):
     return f"event: {event['type']}\ndata: {json.dumps(event, ensure_ascii=False)}\n\n"
 
@@ -253,6 +357,9 @@ def api_chat():
     except BadRequest as error:
         return jsonify({"error": error.message}), error.status
 
+    agent = data.get("mode") == "agent"
+    if agent and data.get("stream") is not True:
+        return jsonify({"error": "Agent mode needs streaming. Update the app."}), 400
     if data.get("stream") is not True:
         try:
             response = get_model(system).generate_content(contents)
@@ -282,6 +389,9 @@ def api_chat():
         def vertex_stream():
             iterator = None
             try:
+                if agent:
+                    agent_producer(data.get("messages"), attachments, system)(enqueue)
+                    return
                 iterator = iter(get_model(system).generate_content(contents, stream=True))
                 for chunk in iterator:
                     if not enqueue("chunk", chunk):
@@ -316,6 +426,9 @@ def api_chat():
                     return
                 if kind == "done":
                     break
+                if kind == "event":
+                    yield sse(chunk)
+                    continue
                 truncated = truncated or is_truncated(chunk)
                 text = chunk_text(chunk)
                 if text:

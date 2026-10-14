@@ -15,6 +15,12 @@ Imagine, voice, setup/config) still uses the Vercel `web/` backend.
   Streaming flushes an initial SSE heartbeat and sends another every 15 seconds while the Vertex worker is waiting. Cancelling the stream stops queueing results.
   Not supported here (a short notice is shown instead): other models (ChatGPT/Claude/Grok/Kimi – Gemini answers),
   web search, Run code, Build mode, server-side reply saving.
+- **Dua Agent (phase 1)**: `POST /api/chat` with `"mode": "agent"` and `"stream": true`. Steps: plan ->
+  research with Google Search grounding (`google_search` tool, Gemini 2.x) -> summary with sources
+  (`sources` event, numbered [1], [2]) -> prioritized Dua AI feature ideas with effort. Progress shows in the
+  app's Thinking block. Cost caps: 3 model calls per request, only 1 grounded; output tokens capped
+  (`AGENT_PLAN_TOKENS`=600, `AGENT_RESEARCH_TOKENS`=2048, `AGENT_ANSWER_TOKENS`=3072).
+  Grounding cost (gemini-2.5-flash, Vertex): 1,500 grounded prompts/day free (shared with Flash-Lite), then $35 / 1,000.
 - `POST /chat` – old single message endpoint `{"message"}` -> `{"reply"}` (still works).
 
 ## Settings (environment variables only, no secrets in code)

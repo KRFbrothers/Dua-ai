@@ -89,8 +89,8 @@ class DuaApiClient(
     fun streamReply(model: String, history: List<ChatMessage>, attachments: List<ChatAttachment> = emptyList(), memory: String = "",
         token: String? = null, web: String? = null, reasoning: Boolean = false, historyBytes: Int = MAX_HISTORY_BYTES,
         context: com.dua.ai.model.ConversationContext? = null, xSearch: Boolean = false, code: Boolean = false, build: String? = null,
-        persistence: com.dua.ai.account.ReplyPersistence? = null): Flow<ReplyEvent> = callbackFlow {
-        val request = withContext(Dispatchers.IO) { buildRequest(model, history, attachments, memory, token, web, reasoning, stream = true, historyBytes = historyBytes, context = context, xSearch = xSearch, code = code, build = build, persistence = persistence) }
+        persistence: com.dua.ai.account.ReplyPersistence? = null, agent: Boolean = false): Flow<ReplyEvent> = callbackFlow {
+        val request = withContext(Dispatchers.IO) { buildRequest(model, history, attachments, memory, token, web, reasoning, stream = true, historyBytes = historyBytes, context = context, xSearch = xSearch, code = code, build = build, persistence = persistence, agent = agent) }
         val call = client.newCall(request)
         call.enqueue(object : Callback {
             override fun onFailure(call: Call, error: IOException) { close(error) }
@@ -154,7 +154,7 @@ class DuaApiClient(
      */
     internal fun buildRequest(model: String, history: List<ChatMessage>, attachments: List<ChatAttachment>, memory: String, token: String?, web: String?,
         reasoning: Boolean, stream: Boolean, historyBytes: Int = MAX_HISTORY_BYTES, context: com.dua.ai.model.ConversationContext? = null, xSearch: Boolean = false,
-        code: Boolean = false, build: String? = null, persistence: com.dua.ai.account.ReplyPersistence? = null): Request {
+        code: Boolean = false, build: String? = null, persistence: com.dua.ai.account.ReplyPersistence? = null, agent: Boolean = false): Request {
         require(build == null || com.dua.ai.model.BuildInfos.validRepository(build)) { "Choose a repository for Build mode." }
         require(model in com.dua.ai.setup.IntegrationCapabilities.MODELS) { "Supported model select karein." }
         require(memory.length <= 3000) { "Memory notes are too large." }
@@ -181,7 +181,7 @@ class DuaApiClient(
                 if (web != null) put("web", web)
                 // Older servers reject unknown fields, so these are only sent by the streaming path.
                 // Build mode (Phase 5B, read-only) replaces Auto/Reasoning and names the repository.
-                if (stream) put("stream", true).put("mode", if (build != null) "build" else if (reasoning) "reasoning" else "auto")
+                if (stream) put("stream", true).put("mode", if (build != null) "build" else if (agent) "agent" else if (reasoning) "reasoning" else "auto")
                 if (stream && build != null) put("repository", build)
                 if (longContext) put("context", context!!.toJson())
                 if (longContext) context?.projectId?.let { project ->
