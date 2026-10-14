@@ -37,8 +37,10 @@ fun DeviceSettingsScreen(
     onPage: (String) -> Unit = {},
     onAttachments: () -> Unit = {}
 ) {
-    val userEmail = "fareedkrf@gmail.com"
-    val userName = "Fareed"
+    val account by viewModel.account.state.collectAsState()
+    val header = com.dua.ai.ui.settings.accountHeader(account.user?.displayName, account.user?.email)
+    val userEmail = header.email
+    val userName = header.name
     val c = SettingsTheme.colors
 
     Column(
@@ -77,11 +79,9 @@ fun DeviceSettingsScreen(
                             .background(c.avatar),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            text = userName.firstOrNull()?.uppercase() ?: "F",
-                            style = SettingsAvatarStyle,
-                            color = c.onAvatar
-                        )
+                        // Account initial, or a neutral person icon when signed out.
+                        if (header.initial != null) Text(text = header.initial, style = SettingsAvatarStyle, color = c.onAvatar)
+                        else Icon(Icons.Outlined.PersonOutline, contentDescription = null, tint = c.onAvatar)
                     }
                     Box(
                         modifier = Modifier

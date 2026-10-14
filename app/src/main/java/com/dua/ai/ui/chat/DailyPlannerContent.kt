@@ -114,11 +114,11 @@ private fun PlannerTaskRow(entry: PlannedTask, now: Long, zone: ZoneId, enabled:
     val task = entry.task
     Column {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Checkbox(task.completed, { onToggle(entry.projectId, task.id) }, enabled = enabled,
+            Checkbox(task.completed, { onToggle(entry.projectId, task.id) }, enabled = enabled, colors = com.dua.ai.ui.components.pageCheckboxColors(),
                 modifier = Modifier.semantics { contentDescription = "${if (task.completed) "Reopen" else "Complete"} planner task: ${entry.projectName} · ${task.title}" })
             Column(Modifier.weight(1f)) {
                 Text(task.title)
-                Text(entry.projectName, style = MaterialTheme.typography.labelMedium)
+                Text(entry.projectName, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
         task.dueAt?.let {
@@ -128,6 +128,6 @@ private fun PlannerTaskRow(entry: PlannedTask, now: Long, zone: ZoneId, enabled:
                 color = if (overdue) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
         }
         SheetTextButton("Open project tasks", onClick = { onOpenTasks(entry.projectId) }, modifier = Modifier.semantics { contentDescription = "Open tasks: ${entry.projectName} · ${task.title}" })
-        HorizontalDivider()
+        com.dua.ai.ui.components.PageDivider(start = androidx.compose.ui.unit.Dp(0f))
     }
 }

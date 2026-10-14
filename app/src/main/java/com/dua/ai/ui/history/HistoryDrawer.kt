@@ -47,7 +47,7 @@ fun SearchField(query: String = "", onQueryChange: (String) -> Unit = {}, modifi
         value = query, onValueChange = onQueryChange, singleLine = true,
         placeholder = { Text("Search chats") },
         leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-        shape = DrawerShapes.newChat,
+        shape = DrawerShapes.newChat, colors = com.dua.ai.ui.components.pageTextFieldColors(),
         modifier = modifier.fillMaxWidth().testTag("drawer-search-field"),
     )
 }

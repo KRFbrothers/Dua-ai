@@ -268,6 +268,9 @@ fun ChatScreen(
                             onClick = { scope.launch { followTail = true; goToLatest() } },
                             modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = Spacing.md)
                                 .heightIn(min = Sizes.touchTarget).semantics { contentDescription = "Go to latest reply" },
+                            colors = androidx.compose.material3.ButtonDefaults.filledTonalButtonColors(containerColor = com.dua.ai.ui.theme.PageTheme.colors.card,
+                                contentColor = com.dua.ai.ui.theme.PageTheme.colors.text),
+                            border = androidx.compose.foundation.BorderStroke(com.dua.ai.ui.theme.SettingsSizes.border, com.dua.ai.ui.theme.PageTheme.colors.cardBorder),
                         ) {
                             Icon(Icons.Outlined.ArrowDownward, contentDescription = null, modifier = Modifier.size(Sizes.iconSmall))
                             Text("Latest reply", modifier = Modifier.padding(start = Spacing.xs))

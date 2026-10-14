@@ -26,7 +26,7 @@ fun CloudSyncScreen(viewModel: ChatViewModel, onBack: () -> Unit, onProfile: () 
                     Text("Automatic sync on this device", Modifier.weight(1f))
                     Switch(checked = sync.enabled, onCheckedChange = { enabled ->
                         if (enabled) viewModel.enableAutomaticSync() else viewModel.disableAutomaticSync()
-                    }, enabled = sync.phase != "checking" && !state.busy && !dataBusy && (sync.enabled || (state.configured && state.user != null && preview == null)),
+                    }, colors = com.dua.ai.ui.chat.sheetSwitchColors(), enabled = sync.phase != "checking" && !state.busy && !dataBusy && (sync.enabled || (state.configured && state.user != null && preview == null)),
                         modifier = Modifier.semantics { contentDescription = "Automatic cloud sync on this device" })
                 }
                 Text("When enabled, projects, instructions, tasks, saved chats, drafts, memory and chat metadata sync while this app is open and online. Raw file/audio bytes stay in private Storage. Sync pauses during replies and manual reviews.", style = MaterialTheme.typography.bodyMedium)

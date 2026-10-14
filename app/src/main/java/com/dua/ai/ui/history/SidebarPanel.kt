@@ -35,6 +35,13 @@ private data class SidebarItem(val title: String, val icon: ImageVector, val act
 @Composable
 fun SidebarPanel(aura: Boolean, onAura: (Boolean) -> Unit, query: String, onQuery: (String) -> Unit,
     newChatEnabled: Boolean, onNewChat: () -> Unit, onProfile: () -> Unit, onProjects: () -> Unit,
+    onDestination: (DuaDestination) -> Unit, profileName: String = "", recentChats: @Composable ColumnScope.() -> Unit) = com.dua.ai.ui.theme.DuaPageTheme {
+    SidebarPanelBody(aura = aura, onAura = onAura, query = query, onQuery = onQuery, newChatEnabled = newChatEnabled, onNewChat = onNewChat, onProfile = onProfile, onProjects = onProjects, onDestination = onDestination, profileName = profileName, recentChats = recentChats)
+}
+
+@Composable
+private fun SidebarPanelBody(aura: Boolean, onAura: (Boolean) -> Unit, query: String, onQuery: (String) -> Unit,
+    newChatEnabled: Boolean, onNewChat: () -> Unit, onProfile: () -> Unit, onProjects: () -> Unit,
     onDestination: (DuaDestination) -> Unit, profileName: String = "", recentChats: @Composable ColumnScope.() -> Unit) {
     val availableWidth = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp.dp
     ModalDrawerSheet(modifier = Modifier.width(minOf(availableWidth, if (aura) 520.dp else 360.dp)).imePadding(),

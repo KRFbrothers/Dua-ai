@@ -27,6 +27,12 @@ import com.dua.ai.ui.theme.Spacing
 /** Search stays above the message list; controls wrap independently of the query field. */
 @Composable
 internal fun ConversationSearchBar(query: String, onQuery: (String) -> Unit, searching: Boolean,
+    matches: List<ConversationMatch>, currentIndex: Int, onPrevious: () -> Unit, onNext: () -> Unit, onClose: () -> Unit) = com.dua.ai.ui.theme.DuaPageTheme {
+    ConversationSearchBarBody(query = query, onQuery = onQuery, searching = searching, matches = matches, currentIndex = currentIndex, onPrevious = onPrevious, onNext = onNext, onClose = onClose)
+}
+
+@Composable
+private fun ConversationSearchBarBody(query: String, onQuery: (String) -> Unit, searching: Boolean,
     matches: List<ConversationMatch>, currentIndex: Int, onPrevious: () -> Unit, onNext: () -> Unit, onClose: () -> Unit) {
     val focus = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
@@ -37,7 +43,7 @@ internal fun ConversationSearchBar(query: String, onQuery: (String) -> Unit, sea
         Row(verticalAlignment = Alignment.CenterVertically) {
             OutlinedTextField(query, onValueChange = { onQuery(it.take(ConversationSearch.MAX_QUERY_CHARS)) },
                 modifier = Modifier.weight(1f).focusRequester(focus).semantics { contentDescription = "Search within chat" },
-                singleLine = true, label = { Text("Find in chat") })
+                singleLine = true, label = { Text("Find in chat") }, colors = com.dua.ai.ui.components.pageTextFieldColors())
             IconButton(onClick = { leaveInput(onClose) }, modifier = Modifier.size(Sizes.touchTarget)) {
                 Icon(Icons.Outlined.Close, "Close chat search")
             }

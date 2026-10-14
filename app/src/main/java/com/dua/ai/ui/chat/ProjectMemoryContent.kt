@@ -39,7 +39,7 @@ internal fun ProjectMemoryContent(project: ChatProject, notice: String, enabled:
         if (notice.isNotBlank()) Text(notice, style = MaterialTheme.typography.bodyMedium)
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text("Use memory in this project", modifier = Modifier.weight(1f))
-            Switch(project.memory.enabled, { onSave(project.id, it, notes) }, enabled = enabled,
+            Switch(project.memory.enabled, { onSave(project.id, it, notes) }, enabled = enabled, colors = sheetSwitchColors(),
                 modifier = Modifier.semantics { contentDescription = "Use memory in ${project.name}" })
         }
         Text("${notes.size}/10 notes · 200 characters each. Turning memory off keeps the notes.", style = MaterialTheme.typography.bodySmall)

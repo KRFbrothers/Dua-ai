@@ -76,7 +76,7 @@ fun IntegrationSetupScreen(viewModel: ChatViewModel, onBack: () -> Unit, onProfi
                             Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                                 Text("Use AI voice for reply speaker", Modifier.weight(1f))
                                 Switch(checked = preferences.generatedVoice, onCheckedChange = { viewModel.updateSettings(preferences.copy(generatedVoice = it)) },
-                                    enabled = !state.busy && (preferences.generatedVoice || (state.generatedVoiceConfigured && account.user != null)),
+                                    colors = com.dua.ai.ui.chat.sheetSwitchColors(), enabled = !state.busy && (preferences.generatedVoice || (state.generatedVoiceConfigured && account.user != null)),
                                     modifier = Modifier.semantics { contentDescription = "Use optional AI generated reply voice" })
                             }
                             if (!state.generatedVoiceConfigured) Text("AI voice backend setup is required. Device voice stays available.", style = MaterialTheme.typography.bodyMedium)
