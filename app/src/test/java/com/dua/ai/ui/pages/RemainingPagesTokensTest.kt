@@ -75,7 +75,7 @@ class RemainingPagesTokensTest {
     @Test fun profileSignedInOptionsAndHandlers() {
         var email = 0; var logout = 0
         profile("light", signedIn = true, onEmail = { email++ }, onLogOut = { logout++ })
-        assertTexts("Fareed", "fareed@example.com", "Log out", "Delete account", "Set email password")
+        assertTexts("Account", "fareed@example.com", "Log out", "Delete account", "Set email password")
         click("Set email password"); compose.runOnIdle { assertEquals(1, email) }
         click("Log out"); compose.onNodeWithText("Log out?").assertExists()
         compose.onAllNodes(hasText("Log out", substring = false) and hasClickAction()).onLast().performClick()
@@ -86,8 +86,8 @@ class RemainingPagesTokensTest {
     @Test fun profileSignedOutKeepsGoogleAndEmail() {
         var email = 0
         profile("dark", signedIn = false, onEmail = { email++ })
-        assertTexts("Not signed in", "Sign in with email")
-        click("Sign in with email"); compose.runOnIdle { assertEquals(1, email) }
+        assertTexts("Dua AI", "Continue with Google", "Log in another way")
+        click("Log in another way"); compose.runOnIdle { assertEquals(1, email) }
     }
     @Test fun profile48dpLight() { profile("light", true); assert48dp() }
     @Test fun profile48dpDark() { profile("dark", true); assert48dp() }
@@ -164,8 +164,8 @@ class RemainingPagesTokensTest {
     }
     @Test fun onboardingOptionsAndHandlers() {
         onboarding("light")
-        assertTexts("Welcome to Dua", "Continue with email", "Skip for now")
-        click("Continue with email"); compose.runOnIdle { assertEquals("email", calls.last()) }
+        assertTexts("Dua AI", "Log in another way", "Skip for now")
+        click("Log in another way"); compose.runOnIdle { assertEquals("email", calls.last()) }
         click("Skip for now"); compose.runOnIdle { assertEquals("skip", calls.last()) }
         compose.onAllNodes(hasClickAction()).onFirst().performClick(); compose.runOnIdle { assertEquals("google", calls.last()) }
     }

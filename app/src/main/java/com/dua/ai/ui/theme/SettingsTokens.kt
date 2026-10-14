@@ -6,14 +6,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 
 /**
- * Settings tokens copied from the code of Fareed's "Dua AI Dabba" reference shell (DuaApp.kt SettingsScreen).
- * Light values are the reference's exact colours; dark values are the matching Tailwind-gray steps inverted.
+ * Settings and Account reference tokens. Inter weights are defined in Type.kt.
+ * Light cards use white on F7F7F8; dark values retain the existing readable dark palette.
  */
 @Immutable
 data class SettingsColors(
@@ -24,11 +21,11 @@ data class SettingsColors(
 )
 
 val SettingsLightColors = SettingsColors(
-    background = Color(0xFFF9FAFB), circleButton = Color(0xFFFFFFFF), circleBorder = Color(0xFFE5E7EB), circleIcon = Color(0xFF1F2937),
-    avatar = Color(0xFFFDE68A), onAvatar = Color(0xFF1F2937), editBadge = Color(0xFFFFFFFF), editIcon = Color(0xFF374151), name = Color(0xFF111827),
-    card = Color(0xFFFFFFFF), cardBorder = Color(0xFFE5E7EB), rowIcon = Color(0xFF111827), rowText = Color(0xFF111827), value = Color(0xFF6B7280),
-    accentValue = Color(0xFF4B5563), arrow = Color(0xFF6B7280), chevron = Color(0xFF9CA3AF), divider = Color(0xFFF3F4F6), upgrade = SheetLightColors.accent,
-    danger = Color(0xFFDC2626),
+    background = Color(0xFFF7F7F8), circleButton = Color(0xFFFFFFFF), circleBorder = Color(0xFFE5E7EB), circleIcon = Color(0xFF1F2937),
+    avatar = Color(0xFFFDE68A), onAvatar = Color(0xFF1F2937), editBadge = Color(0xFFFFFFFF), editIcon = Color(0xFF374151), name = Color(0xFF0D0D0D),
+    card = Color(0xFFFFFFFF), cardBorder = Color(0xFFE5E7EB), rowIcon = Color(0xFF0D0D0D), rowText = Color(0xFF0D0D0D), value = Color(0xFF6E6E80),
+    accentValue = Color(0xFF4B5563), arrow = Color(0xFF6B7280), chevron = Color(0xFF9CA3AF), divider = Color(0xFFEDEDED), upgrade = Color(0xFF7C3AED),
+    danger = Color(0xFFC62828),
 )
 
 val SettingsDarkColors = SettingsColors(
@@ -48,35 +45,27 @@ object SettingsTheme {
 object SettingsSizes {
     val screenPadding = 16.dp
     val headerBottom = 12.dp
-    val circleButton = 42.dp
-    val avatar = 64.dp
-    val editBadge = 24.dp
-    val editIcon = 12.dp
+    val circleButton = 44.dp
+    val avatar = 88.dp
+    val editBadge = 28.dp
+    val editIcon = 16.dp
     val nameTop = 8.dp
     val cardsTop = 10.dp
-    val cardGap = 14.dp
+    val cardGap = 16.dp
     val border = 1.dp
     val rowPadding = 16.dp
     val rowGap = 12.dp
-    val rowIcon = 18.dp
+    val rowIcon = 24.dp
     val valueGap = 4.dp
     val accentGap = 6.dp
     val accentDot = 10.dp
     val arrow = 16.dp
     val chevron = 18.dp
-    val dividerStart = 46.dp
-    val touch = 48.dp
+    val dividerStart = 0.dp
+    val touch = Sizes.touchTarget
 }
 
 object SettingsShapes {
     val card = RoundedCornerShape(24.dp)
     val circle = CircleShape
 }
-
-val SettingsAvatarStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Bold, fontSize = 24.sp)
-val SettingsNameStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-val SettingsRowStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Medium, fontSize = 15.sp)
-val SettingsUpgradeStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
-val SettingsValueStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Normal, fontSize = 13.sp)
-/** Group heading above a card on the inner settings pages. */
-val SettingsSectionStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)

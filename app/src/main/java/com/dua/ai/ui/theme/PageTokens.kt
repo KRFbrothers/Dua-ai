@@ -27,10 +27,10 @@ data class PageColors(
 )
 
 val PageLightColors = PageColors(
-    background = SettingsLightColors.background, card = SettingsLightColors.card, cardBorder = SettingsLightColors.cardBorder,
-    fill = SheetLightColors.fill, text = SettingsLightColors.rowText, subText = SettingsLightColors.value, divider = SheetLightColors.divider,
+    background = Color(0xFFF9FAFB), card = SettingsLightColors.card, cardBorder = SettingsLightColors.cardBorder,
+    fill = SheetLightColors.fill, text = Color(0xFF111827), subText = Color(0xFF6B7280), divider = SheetLightColors.divider,
     accent = SheetLightColors.accent, onAccent = SheetLightColors.onAccent, accentContainer = SheetLightColors.selectedFill,
-    onAccentContainer = Color(0xFF4C1D95), danger = SettingsLightColors.danger, outline = Color(0xFFD1D5DB),
+    onAccentContainer = Color(0xFF4C1D95), danger = Color(0xFFDC2626), outline = Color(0xFFD1D5DB),
 )
 
 val PageDarkColors = PageColors(

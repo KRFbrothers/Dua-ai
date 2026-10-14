@@ -9,11 +9,11 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.json.JSONObject
 
-data class AccountState(val configured: Boolean = false, val user: AccountUser? = null, val busy: Boolean = false, val notice: String = "", val deletionConfigured: Boolean = false, val emailAuthConfigured: Boolean = false)
+data class AccountState(val configured: Boolean = false, val user: AccountUser? = null, val busy: Boolean = false, val notice: String = "", val deletionConfigured: Boolean = false, val emailAuthConfigured: Boolean = false, val rememberedUser: AccountUser? = null)
 class AccountRepository(private val api: AccountApi, private val store: SessionPersistence) {
     constructor(context: Context) : this(AccountApi(), AccountSessionStore(context))
     private var session = runCatching { store.read() }.getOrNull()
-    private val mutable = MutableStateFlow(AccountState(user = session?.user)); val state = mutable.asStateFlow()
+    private val mutable = MutableStateFlow(AccountState(user = session?.user, rememberedUser = session?.user?.copy(phoneNumber = ""))); val state = mutable.asStateFlow()
     private val mutex = Mutex()
     private val sessionLock = Any()
     private var authGeneration = 0L
@@ -30,7 +30,7 @@ class AccountRepository(private val api: AccountApi, private val store: SessionP
     private fun writeSession(value: AccountSession?, authenticationChange: Boolean = false) {
         store.write(value); session = value; sessionRevision++
         if (authenticationChange) authGeneration++
-        mutable.update { it.copy(user = value?.user) }
+        mutable.update { it.copy(user = value?.user, rememberedUser = value?.user?.copy(phoneNumber = "") ?: it.rememberedUser) }
     }
     private fun beginAuthentication() = synchronized(sessionLock) { ++authGeneration }
     private fun installAuthentication(ticket: Long, value: AccountSession) = synchronized(sessionLock) {
@@ -93,6 +93,7 @@ class AccountRepository(private val api: AccountApi, private val store: SessionP
         synchronized(sessionLock) {
             check(matches(expected)) { "Account changed. Review account deletion again." }
             writeSession(null, authenticationChange = true)
+            mutable.update { it.copy(rememberedUser = null) }
             notice("Account and its server data deleted. The phone cache remains until cleared.")
         }
     }
@@ -156,6 +157,22 @@ class AccountRepository(private val api: AccountApi, private val store: SessionP
         val installed = installAuthentication(ticket, received)
         noticeIfCurrent(installed, "Signed in with email. Local data was not uploaded.")
         return true
+    }
+    suspend fun setPhoneNumber(value: String, expectedAccountId: String) {
+        val phone = PhoneNumbers.normalize(value) ?: error("Use an international phone number with a country code, or leave it blank to remove it.")
+        val expected = snapshot()
+        check(expected.value?.user?.id == expectedAccountId) { "Account changed. Review phone number editing again." }
+        val result = withSnapshot(expected) { api.request("/api/account/phone", "PUT",
+            JSONObject().put("phoneNumber", phone).put("expectedAccountId", expectedAccountId), it) }
+        val updated = AccountSessionCodec.user(result.getJSONObject("user"))
+        check(result.opt("phoneUpdated") == true && result.optString("ownerId") == expectedAccountId && updated.id == expectedAccountId &&
+            updated.email.equals(expected.value!!.user.email, ignoreCase = true) && updated.phoneNumber == phone) { "Phone number update could not be confirmed. Retry." }
+        synchronized(sessionLock) {
+            check(matches(expected)) { "Account changed. Review phone number editing again." }
+            // Keep any credentials or avatar refreshed while saving this single profile field.
+            writeSession(session!!.copy(user = session!!.user.copy(phoneNumber = phone)))
+            notice(if (phone.isBlank()) "Phone number removed." else "Phone number saved.")
+        }
     }
     suspend fun setEmailPassword(password: String, expectedAccountId: String) {
         require(EmailCredentials.validPassword(password, true)) { "Use a password with 8–128 characters." }

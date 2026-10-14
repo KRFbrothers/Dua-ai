@@ -139,7 +139,8 @@ fun DuaNavHost(viewModel: ChatViewModel, voice: ReplyVoice, notificationRoute: P
         }
         composable(DuaDestination.Account.route) {
             BusyBackGuard(viewModel)
-            ProfileScreen(viewModel, onBack = navigator::back, onEmail = { navigator.open(DuaDestination.EmailAccount) })
+            ProfileScreen(viewModel, onBack = navigator::back, onEmail = { navigator.open(DuaDestination.EmailAccount) },
+                onSync = { navigator.open(DuaDestination.CloudSync) })
         }
         listOf(DuaDestination.Appearance, DuaDestination.Accent).forEach { destination ->
             composable(destination.route) {

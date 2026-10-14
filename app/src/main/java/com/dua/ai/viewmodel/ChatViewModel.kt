@@ -291,6 +291,13 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             finally { account.busy(false); refreshSyncBusy() }
         }
     }
+    /** Runs in the Account dialog's scope; cancellation cancels the request and leaves the last confirmed profile intact. */
+    suspend fun setAccountPhoneNumber(value: String, expectedAccountId: String) {
+        check(!account.state.value.busy && !_googleSignIn.value.busy && !syncBlocked()) { "Finish the current account, reply or sync action, then try again." }
+        account.busy(true); automaticSync.setBusy(true)
+        try { account.setPhoneNumber(value, expectedAccountId) }
+        finally { account.busy(false); refreshSyncBusy() }
+    }
     fun logOut() { automaticSync.disable(); accountAction { _cloudPreview.value = null; account.logout() } }
     fun cancelCloudReview() { _cloudPreview.value = null; account.notice("Cancelled. Data was not changed.") }
     fun reviewCloud(kind: String) = accountAction {

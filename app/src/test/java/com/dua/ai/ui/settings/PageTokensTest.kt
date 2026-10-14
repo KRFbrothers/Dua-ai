@@ -14,9 +14,9 @@ import org.junit.Test
 class PageTokensTest {
     @Test fun lightPageMatchesSettingsLook() {
         val s = pageColorScheme(lightColorScheme(), PageLightColors)
-        assertEquals(SettingsLightColors.background, s.background)
+        assertEquals(androidx.compose.ui.graphics.Color(0xFFF9FAFB), s.background)
         assertEquals(SettingsLightColors.card, s.surface)
-        assertEquals(SettingsLightColors.rowText, s.onSurface) // #111827
+        assertEquals(androidx.compose.ui.graphics.Color(0xFF111827), s.onSurface) // #111827
         assertEquals(SheetLightColors.divider, s.outlineVariant) // #E5E7EB
         assertEquals(SheetLightColors.accent, s.primary) // purple
     }

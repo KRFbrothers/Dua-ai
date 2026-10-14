@@ -63,3 +63,17 @@ val ComposerTextStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeigh
 val PillLabelStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
 /** Labels on the three Home action buttons. */
 val HomeActionLabelStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Medium, fontSize = 14.sp)
+
+// Settings, Account and welcome reference styles.
+val SettingsAvatarStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Bold, fontSize = 24.sp)
+val SettingsNameStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
+val SettingsRowStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Normal, fontSize = 17.sp)
+val SettingsUpgradeStyle = SettingsRowStyle
+val SettingsValueStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Normal, fontSize = 17.sp)
+/** Group heading above a card on the inner settings pages. */
+val SettingsSectionStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+
+val WelcomeTitleStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Bold, fontSize = 34.sp, letterSpacing = (-0.7).sp)
+val WelcomeButtonStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+val WelcomeContinueStyle = WelcomeButtonStyle.copy(fontSize = 15.sp)
+val WelcomeEmailStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Normal, fontSize = 13.sp)

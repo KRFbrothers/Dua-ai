@@ -58,10 +58,10 @@ class ApprovedNavigationUiTest(private val dark: Boolean, private val small: Boo
             compose.onRoot().captureRoboImage(file.absolutePath)
         }
     }
-    @Test fun profileKeepsExistingRoutesAndLogoutRequiresConfirmation() {
-        var destination: DuaDestination? = null; var logouts = 0
+    @Test fun settingsKeepsRoutesWhileAccountOwnsSyncAndLogout() {
+        var destination: DuaDestination? = null
         content { SettingsContent(SettingsUiState(email = "fareed@example.com", displayName = "Fareed", theme = preferences.theme, accent = com.dua.ai.settings.AccentPreset.defaultFor(dark).label,
-            imagine = "Image generation", voice = "Device voice"), {}, { destination = it }, onLogOut = { logouts++ }) }
+            imagine = "Image generation", voice = "Device voice"), {}, { destination = it }) }
         capture("profile")
         compose.onAllNodesWithText("Voice", substring = false).assertCountEquals(1)
         for (label in listOf("Voice input", "Voice mode", "Reply voice & language", "Data controls", "Your data", "Sharing", "Permissions"))
@@ -74,18 +74,11 @@ class ApprovedNavigationUiTest(private val dark: Boolean, private val small: Boo
         compose.runOnIdle { assertEquals(DuaDestination.Account, destination) }
         compose.onNodeWithText("Accent color").performScrollTo().performClick()
         compose.runOnIdle { assertEquals(DuaDestination.Accent, destination) }
-        compose.onNodeWithText("Sync").performScrollTo().performClick()
-        compose.runOnIdle { assertEquals(DuaDestination.CloudSync, destination) }
+        compose.onNodeWithText("Sync").assertDoesNotExist()
         compose.onNodeWithText("Imagine").performScrollTo().performClick()
         compose.runOnIdle { assertEquals(DuaDestination.Imagine, destination) }
-        compose.onNodeWithText("Logout").performScrollTo().performClick()
-        compose.onNodeWithText("Log out?").assertIsDisplayed()
-        compose.runOnIdle { assertEquals(0, logouts) }
-        compose.onNodeWithText("Cancel").performClick()
-        compose.runOnIdle { assertEquals(0, logouts) }
-        compose.onNodeWithText("Logout").performClick()
-        compose.onNodeWithText("Log out", substring = false).performClick()
-        compose.runOnIdle { assertEquals(1, logouts) }
+        compose.onNodeWithText("Log out").assertDoesNotExist()
+
     }
     @Test fun accountRetainsExistingDeleteActionWithoutASecondLogoutEntry() {
         content {

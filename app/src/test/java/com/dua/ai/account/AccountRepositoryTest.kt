@@ -75,6 +75,51 @@ class AccountRepositoryTest {
         withTimeout(3000) { arrived.await() }; repository.logout(); repository.cancelAuthentication(); release.countDown()
         assertTrue(pending.await().isFailure); assertNull(store.value); assertNull(repository.state.value.user)
     }
+    private fun phoneResult(user: AccountUser, value: String, ownerId: String = user.id) = JSONObject()
+        .put("phoneUpdated", true).put("ownerId", ownerId)
+        .put("user", AccountSessionCodec.encode(session(user.copy(phoneNumber = value))).getJSONObject("user"))
+    @Test fun logoutRemembersOnlyAnInMemoryProfileForTheWelcomeButton() = runBlocking {
+        val user = userA.copy(avatarUrl = "https://example.com/photo", phoneNumber = "+919876543210")
+        val store = MemoryStore(session(user)); val repository = AccountRepository(api, store)
+        server.enqueue(json(JSONObject().put("revoked", true)))
+        repository.logout()
+        assertNull(store.value); assertNull(repository.state.value.user)
+        assertEquals(user.copy(phoneNumber = ""), repository.state.value.rememberedUser)
+        assertNull(AccountRepository(api, store).state.value.rememberedUser)
+    }
+    @Test fun phoneUpdatePersistsOnlyConfirmedProfileAndKeepsSessionAndAvatar() = runBlocking {
+        val original = session(userA.copy(avatarUrl = "https://example.com/photo"))
+        val store = MemoryStore(original); val repository = AccountRepository(api, store)
+        server.enqueue(json(phoneResult(userA, "+919876543210")))
+        repository.setPhoneNumber("+91 (98765) 43210", userA.id)
+        val request = server.takeRequest(2, TimeUnit.SECONDS)!!
+        assertEquals("PUT", request.method); assertEquals("/api/account/phone", request.path)
+        val body = JSONObject(request.body.readUtf8())
+        assertEquals(userA.id, body.getString("expectedAccountId")); assertEquals("+919876543210", body.getString("phoneNumber"))
+        assertEquals(original.copy(user = original.user.copy(phoneNumber = "+919876543210")), store.value)
+        assertEquals("+919876543210", AccountSessionCodec.decode(AccountSessionCodec.encode(store.value!!)).user.phoneNumber)
+        server.enqueue(json(phoneResult(userA, ""))); repository.setPhoneNumber("", userA.id)
+        assertEquals("", store.value!!.user.phoneNumber)
+    }
+    @Test fun phoneRejectsInvalidInputAndMismatchedResponsesWithoutChangingSavedProfile() = runBlocking {
+        val original = session(userA); val store = MemoryStore(original); val repository = AccountRepository(api, store)
+        assertTrue(runCatching { repository.setPhoneNumber("9876543210", userA.id) }.isFailure)
+        assertTrue(runCatching { repository.setPhoneNumber("+919876543210", userB.id) }.isFailure)
+        assertEquals(0, server.requestCount)
+        for (reply in listOf(phoneResult(userB, "+919876543210"), phoneResult(userA, "+917777777777"), phoneResult(userA, "+919876543210", userB.id))) {
+            server.enqueue(json(reply))
+            assertTrue(runCatching { repository.setPhoneNumber("+919876543210", userA.id) }.isFailure)
+            assertEquals(original, store.value)
+        }
+    }
+    @Test fun phoneResponseCrossingLogoutCannotRestoreSession() = runBlocking {
+        val arrived = CompletableDeferred<Unit>(); val release = CountDownLatch(1)
+        val store = MemoryStore(session(userA)); val repository = AccountRepository(api, store)
+        delayedDispatcher("/api/account/phone", json(phoneResult(userA, "+919876543210")), arrived, release)
+        val pending = async { runCatching { repository.setPhoneNumber("+919876543210", userA.id) } }
+        withTimeout(3000) { arrived.await() }; repository.logout(); release.countDown()
+        assertTrue(pending.await().isFailure); assertNull(store.value); assertNull(repository.state.value.user)
+    }
     private lateinit var server: MockWebServer
     private lateinit var client: OkHttpClient
     private lateinit var api: AccountApi
