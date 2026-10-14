@@ -30,6 +30,10 @@ with `DUA_REQUIRE_LOGIN=0`; `DUA_APP_TOKEN`, if retained, is an additional gate 
   (`AGENT_PLAN_TOKENS`=1024, `AGENT_RESEARCH_TOKENS`=3072, `AGENT_ANSWER_TOKENS`=4096; they include thinking tokens).
   Grounding cost (Vertex): Gemini 3.x models share 5,000 free search queries per month, then $14 per 1,000 search queries
   (billed per query, so one agent request can use several). Older gemini-2.5-flash: 1,500 grounded prompts/day free, then $35 / 1,000.
+  **Router:** casual messages (hi, thanks, small talk, simple questions) get one direct reply with full history
+  and no Search. Clear task words (latest, news, ideas, compare, tools…) run the full agent. Unclear messages use one
+  cheap router call (low thinking, max `AGENT_ROUTER_TOKENS`=256, JSON); if it fails, long messages run the agent
+  and short ones get a direct reply.
 - `POST /chat` – old single message endpoint `{"message"}` -> `{"reply"}` (still works).
 
 ## Settings (environment variables only, no secrets in code)

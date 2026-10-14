@@ -21,6 +21,7 @@ import hmac
 import json
 import os
 import queue
+import re
 import threading
 
 from flask import Flask, Response, jsonify, request, stream_with_context
@@ -122,9 +123,12 @@ class GenaiModel:
     def config(self, generation_config=None, tools=None):
         from google.genai import types
         options = {"system_instruction": self.system, **(generation_config or {})}
+        level = options.pop("thinking_level", None)
         if tools:
             options["tools"] = tools
         thinking = thinking_config()
+        if thinking is not None and level:
+            thinking = types.ThinkingConfig(thinking_level=str(level).upper())
         if thinking is not None:
             options["thinking_config"] = thinking
         return types.GenerateContentConfig(**options)
@@ -348,10 +352,68 @@ def grounding_sources(response, limit=AGENT_MAX_SOURCES):
     return sources
 
 
+AGENT_ROUTER_TOKENS = int(os.environ.get("AGENT_ROUTER_TOKENS", "256"))
+AGENT_ROUTER_TURNS = 6
+AGENT_ROUTER_PROMPT = (
+    "You are a router for the Dua Agent. Decide if the user's LAST message needs web research. "
+    "Answer \"agent\" for real tasks: research, latest news, new AI models/tools, trends, comparisons, "
+    "feature or upgrade ideas, plans, reviews, anything that needs current web facts. Answer \"chat\" for "
+    "greetings, thanks, small talk, short follow-ups or simple questions you can answer without searching. "
+    "Reply only with JSON like {\"route\": \"chat\"}."
+)
+_GREETING = re.compile(
+    r"^(hi+|hii+|hello+|hey+|hola|yo|salam|assalam[ou]?\s*alaikum|namaste|good\s+(morning|afternoon|evening|night)|"
+    r"thanks?|thank\s+you|thx|ok(ay)?|cool|nice|great|bye|kaise\s+ho|kya\s+haal\s+hai|how\s+are\s+you)\b[\s!.?,]*\w{0,12}[\s!.?]*$",
+    re.IGNORECASE)
+_TASK_WORDS = re.compile(
+    r"\b(research|news|latest|trend\w*|compare|comparison|vs|ideas?|features?|upgrades?|roadmap|tools?|"
+    r"search|find|look\s+up|launch\w*|release\w*|what'?s\s+new|kya\s+naya|suggest\w*)\b", re.IGNORECASE)
+
+
+def last_user_text(messages):
+    for message in reversed(messages or []):
+        if isinstance(message, dict) and message.get("role") == "user":
+            return str(message.get("text", "")).strip()
+    return ""
+
+
+def route_agent(messages, attachments, system):
+    """Returns "chat" (direct reply, no Search) or "agent" (full pipeline).
+
+    Free checks first (greetings / clear task words), then one cheap model call (low thinking, small output,
+    JSON). Any router failure falls back to a heuristic: long messages -> agent, short ones -> chat."""
+    text = last_user_text(messages)
+    if not text or _GREETING.match(text):
+        return "chat"
+    if _TASK_WORDS.search(text):
+        return "agent"
+    fallback = "agent" if len(text.split()) > 12 else "chat"
+    try:
+        response = get_model(system).generate_content(
+            build_contents(with_last_user_suffix(messages[-AGENT_ROUTER_TURNS:], AGENT_ROUTER_PROMPT), attachments),
+            generation_config={"max_output_tokens": AGENT_ROUTER_TOKENS, "temperature": 0.0, "thinking_level": "low",
+                               "response_mime_type": "application/json",
+                               "response_schema": {"type": "OBJECT", "properties": {"route": {"type": "STRING", "enum": ["chat", "agent"]}},
+                                                   "required": ["route"]}})
+        route = json.loads(chunk_text(response) or "{}").get("route")
+        return route if route in ("chat", "agent") else fallback
+    except Exception:
+        app.logger.warning("agent router failed; using fallback route")
+        return fallback
+
+
 def agent_producer(messages, attachments, system):
-    """Dua Agent: plan -> grounded research -> streamed answer. Emits progress as `thinking`."""
+    """Dua Agent: route -> (direct reply) or plan -> grounded research -> streamed answer."""
     def produce(enqueue):
         model = get_model(system)
+        if route_agent(messages, attachments, system) == "chat":
+            # Casual message: one normal streamed reply with full history, no Search, no plan or sources.
+            for chunk in model.generate_content(build_contents(messages, attachments),
+                                                generation_config={"max_output_tokens": AGENT_ANSWER_TOKENS}, stream=True):
+                if not enqueue("chunk", chunk):
+                    return
+            enqueue("done")
+            return
         if not enqueue("event", {"type": "thinking", "delta": "**Step 1 - Plan**\n"}):
             return
         plan = chunk_text(model.generate_content(
