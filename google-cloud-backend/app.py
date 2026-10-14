@@ -9,8 +9,9 @@ Endpoints
 
 Configuration comes only from environment variables; no secrets in code.
   GOOGLE_CLOUD_PROJECT (required), VERTEX_LOCATION (default us-central1),
-  VERTEX_MODEL (default gemini-2.5-flash), DUA_APP_TOKEN (optional shared secret; when set,
-  requests must send the same value in the X-Dua-App-Token header).
+  VERTEX_MODEL (default gemini-2.5-flash), SUPABASE_URL, SUPABASE_ANON_KEY (or
+  SUPABASE_PUBLISHABLE_KEY), DUA_ALLOWED_EMAIL (required owner authentication).
+  DUA_APP_TOKEN is an optional additional gate, never a replacement for owner login.
 """
 import base64
 import binascii
@@ -21,6 +22,7 @@ import queue
 import threading
 
 from flask import Flask, Response, jsonify, request, stream_with_context
+from owner_auth import OwnerAuthError, verify_owner
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 5 * 1024 * 1024
@@ -84,7 +86,7 @@ def make_content(role, parts):
     return Content(role=role, parts=parts)
 
 
-def authorized():
+def app_token_matches():
     expected = os.environ.get("DUA_APP_TOKEN", "")
     if not expected:
         return True
@@ -94,6 +96,18 @@ def authorized():
 
 def unauthorized():
     return jsonify({"error": "This Dua AI engine is private."}), 401
+
+
+def owner_access_error():
+    if not app_token_matches():
+        return unauthorized()
+    try:
+        verify_owner(request.headers.get("Authorization", ""))
+    except OwnerAuthError as error:
+        response = jsonify({"error": error.message})
+        response.headers["Cache-Control"] = "no-store"
+        return response, error.status
+    return None
 
 
 def decode_attachments(raw):
@@ -237,8 +251,9 @@ def home():
 
 @app.route("/api/chat", methods=["POST"])
 def api_chat():
-    if not authorized():
-        return unauthorized()
+    denied = owner_access_error()
+    if denied is not None:
+        return denied
     data = request.get_json(silent=True)
     if not isinstance(data, dict):
         return jsonify({"error": "Invalid request."}), 400
@@ -338,8 +353,9 @@ def api_chat():
 
 @app.route("/chat", methods=["POST"])
 def chat():
-    if not authorized():
-        return unauthorized()
+    denied = owner_access_error()
+    if denied is not None:
+        return denied
     data = request.get_json(silent=True) or {}
     user_message = str(data.get("message", "")).strip()
     if not user_message:

@@ -22,18 +22,18 @@ import org.junit.Test
 import java.util.Base64
 import java.util.concurrent.TimeUnit
 
-/** Separate chat engine (Cloud Run): optional app token header, never the account session token. */
+/** Both chat engines verify the owner session; Cloud Run may additionally require an app token. */
 class DuaApiClientEngineTest {
     private val history = listOf(ChatMessage(text = "Hi", isUser = true))
     private fun engine() = DuaApiClient("https://engine.example.run.app", apiBaseUrl = "https://base.example.app")
     private fun json(request: okhttp3.Request): JSONObject = JSONObject(Buffer().also { request.body!!.writeTo(it) }.readUtf8())
 
-    @Test fun separateEngineGetsAppTokenButNoAccountToken() {
-        val api = DuaApiClient("https://engine.example.run.app", appToken = "abc", sendAccountToken = false)
+    @Test fun separateEngineGetsOwnerTokenAndOptionalAppToken() {
+        val api = DuaApiClient("https://engine.example.run.app", appToken = "abc", apiBaseUrl = "https://base.example.app")
         val request = api.buildRequest("Dua", history, emptyList(), "", "session.token", null, reasoning = false, stream = true)
         assertEquals("https://engine.example.run.app/api/chat", request.url.toString())
         assertEquals("abc", request.header("X-Dua-App-Token"))
-        assertNull(request.header("Authorization"))
+        assertEquals("Bearer session.token", request.header("Authorization"))
     }
 
     @Test fun defaultClientSendsAccountTokenAndNoAppToken() {
@@ -57,15 +57,22 @@ class DuaApiClientEngineTest {
         assertNull(DuaApiClient("https://base.example.app").chatProvider("Gemini", empty.providers))
     }
 
-    @Test fun chatRoutingIgnoresTrailingSlashAndNeverSendsBaseAccountTokenToEngine() {
+    @Test fun chatRoutingIgnoresTrailingSlashAndSendsOwnerTokenWithoutEnablingPersistence() {
         val same = DuaApiClient("https://base.example.app/", apiBaseUrl = "https://base.example.app")
         assertFalse(same.separateChatEngine)
         assertFalse(same.usesInlineChatFiles(false))
         assertTrue(engine().usesInlineChatFiles(false))
         assertFalse(engine().usesInlineChatFiles(true)) // Imagine still uses its existing base-backend storage.
         val request = engine().buildRequest("Gemini", history, emptyList(), "", "session.token", null, false, true)
-        assertNull(request.header("Authorization"))
+        assertEquals("Bearer session.token", request.header("Authorization"))
         assertFalse(json(request).has("persistence"))
+    }
+
+    @Test fun signedOutEngineRequestCannotSubstituteAppTokenForOwnerSession() {
+        val api = DuaApiClient("https://engine.example.run.app", appToken = "abc", apiBaseUrl = "https://base.example.app")
+        val request = api.buildRequest("Gemini", history, emptyList(), "", null, null, false, true)
+        assertNull(request.header("Authorization"))
+        assertEquals("abc", request.header("X-Dua-App-Token"))
     }
 
     @Test fun followUpsKeepInlineContentsOnTheirOriginalTurnsWithoutStorageReferences() {
@@ -149,10 +156,12 @@ class DuaApiClientEngineTest {
             val api = DuaApiClient(server.url("/").toString(), transport, apiBaseUrl = "https://base.example.app")
             val started = System.nanoTime()
             var firstTextAt = 0L
-            val events = withTimeout(10000) { api.streamReply("Gemini", history).onEach {
+            val events = withTimeout(10000) { api.streamReply("Gemini", history, token = "session.token").onEach {
                 if (it is ReplyEvent.Text && firstTextAt == 0L) firstTextAt = System.nanoTime()
             }.toList() }
             assertEquals(listOf(ReplyEvent.Text("Hello"), ReplyEvent.Done(false)), events)
+            server.takeRequest() // TLS warm-up request.
+            assertEquals("Bearer session.token", server.takeRequest().getHeader("Authorization"))
             assertTrue(firstTextAt - started > TimeUnit.MILLISECONDS.toNanos(500))
         } finally {
             transport.dispatcher.cancelAll(); transport.connectionPool.evictAll(); server.shutdown()

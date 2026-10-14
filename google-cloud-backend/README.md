@@ -4,6 +4,14 @@ Flask service that answers chats with Gemini on Vertex AI. The Android app sends
 messages here by default (`DUA_CHAT_BASE_URL`); everything else (sign-in, cloud history, files,
 Imagine, voice, setup/config) still uses the Vercel `web/` backend.
 
+Both chat endpoints require the owner's existing Supabase access token in `Authorization: Bearer <token>`.
+The engine verifies it with the configured Supabase project's `GET /auth/v1/user`, then matches the
+verified, non-anonymous account's confirmed email to `DUA_ALLOWED_EMAIL`. It does not trust decoded
+JWT payloads, client-provided emails or `user_metadata` for authorization. Missing/invalid sessions
+return 401, non-owner/unconfirmed accounts return 403, and missing setup or unavailable verification
+returns 503 **before calling Vertex**. The health check remains public. Owner login cannot be disabled
+with `DUA_REQUIRE_LOGIN=0`; `DUA_APP_TOKEN`, if retained, is an additional gate only.
+
 ## Endpoints
 - `GET /` – health check.
 - `POST /api/chat` – same format the app uses with Vercel:
@@ -23,17 +31,42 @@ Imagine, voice, setup/config) still uses the Vercel `web/` backend.
 | `GOOGLE_CLOUD_PROJECT` | your project id (required) |
 | `VERTEX_LOCATION` | default `us-central1` (`global` is needed for preview models such as `gemini-3-flash-preview`) |
 | `VERTEX_MODEL` | default `gemini-2.5-flash` |
-| `DUA_APP_TOKEN` | optional password. When set, requests must send header `X-Dua-App-Token` with the same value. Build the app with `-PduaAppToken=...` (or env `DUA_APP_TOKEN`) so it sends it. Never commit it. Note: anyone who unpacks the APK could still find it, so it only stops casual strangers. |
+| `SUPABASE_URL` | required; the same Supabase Auth project URL used by Vercel, HTTPS only |
+| `SUPABASE_PUBLISHABLE_KEY` / `SUPABASE_ANON_KEY` | required; publishable key preferred, existing anon key supported. Used only by the engine to verify the account; no service-role key is needed |
+| `DUA_ALLOWED_EMAIL` | required; the same owner email used by Vercel, compared case-insensitively against the Auth-verified account |
+| `DUA_APP_TOKEN` | optional **additional** password. When set, requests must also send `X-Dua-App-Token`. Build the app with `-PduaAppToken=...` (or env `DUA_APP_TOKEN`). It never replaces the owner session; APK-embedded values are extractable |
 
 ## Redeploy from Cloud Shell
+
+Configure `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY` (or `SUPABASE_ANON_KEY`) and `DUA_ALLOWED_EMAIL`
+on the **Cloud Run service**, using the same project/owner values as Vercel. Do not paste access tokens
+or keys into chat, source files or screenshots. These settings are never compiled into Android.
+
+For a redeploy with the values already available in your Cloud Shell environment:
 ```bash
 cd ~/Dua-ai && git fetch origin && git pull origin main   # after the PR is merged
 cd google-cloud-backend
+: "${SUPABASE_URL:?Set the same Supabase URL used by Vercel}"
+: "${DUA_ALLOWED_EMAIL:?Set the owner email}"
+AUTH_KEY="${SUPABASE_PUBLISHABLE_KEY:-${SUPABASE_ANON_KEY:-}}"
+: "${AUTH_KEY:?Set the Supabase publishable or anon key}"
 gcloud run deploy dua-ai-engine --source . --region us-central1 \
-  --set-env-vars "GOOGLE_CLOUD_PROJECT=global-healer-m6shk,VERTEX_LOCATION=us-central1,VERTEX_MODEL=gemini-2.5-flash" \
+  --update-env-vars "GOOGLE_CLOUD_PROJECT=global-healer-m6shk,VERTEX_LOCATION=us-central1,VERTEX_MODEL=gemini-2.5-flash,SUPABASE_URL=${SUPABASE_URL},SUPABASE_PUBLISHABLE_KEY=${AUTH_KEY},DUA_ALLOWED_EMAIL=${DUA_ALLOWED_EMAIL}" \
   --allow-unauthenticated --project global-healer-m6shk
 ```
-First-time setup (APIs + permissions + deploy): `PROJECT_ID=<your-project> ./deploy.sh`.
+`--allow-unauthenticated` allows requests to reach the service; application owner verification still
+guards both chat routes. `--update-env-vars` preserves existing settings, including an optional
+`DUA_APP_TOKEN`; if that gate is enabled, the APK must still be built with its matching value.
+
+First-time setup (APIs + permissions + deploy): after setting the three required Auth values above,
+run `PROJECT_ID=<your-project> ./deploy.sh`. Install an APK built from this change so the existing
+Supabase session reaches Cloud Run. Older APKs omit that session and will correctly receive 401.
+Deploying the engine alone does not update Android. There is no change to chat persistence, project
+memory, capabilities, UI or the Vercel APIs in this authentication fix.
+
+After deployment, confirm both `/api/chat` and `/chat` reject a request without `Authorization`,
+reject a non-owner/expired session, and allow a fresh owner session. No rejected request should
+invoke Vertex. Tests mock Auth/Vertex; successful tests do not certify the live service settings.
 
 ## Tests
 ```bash
