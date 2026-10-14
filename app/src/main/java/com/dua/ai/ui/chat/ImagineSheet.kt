@@ -23,9 +23,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -45,6 +42,12 @@ import com.dua.ai.imagine.ImagineInfo
 import com.dua.ai.imagine.ImagineOptions
 import com.dua.ai.imagine.ImagineUsage
 import com.dua.ai.ui.theme.DuaShape
+import com.dua.ai.ui.theme.SheetNoteStyle
+import com.dua.ai.ui.theme.SheetShapes
+import com.dua.ai.ui.theme.SheetSizes
+import com.dua.ai.ui.theme.SheetTheme
+import com.dua.ai.ui.theme.SheetTileStyle
+import androidx.compose.material.icons.filled.Check
 import com.dua.ai.ui.theme.Spacing
 
 /** Short summary for the composer's options chip, e.g. "Image · 1:1 · ×2" or "Video · 8 s · 720p". */
@@ -70,13 +73,16 @@ fun ImagineOptionsContent(options: ImagineOptions, config: ImagineConfig, usage:
     val video = options.kind == ImagineInfo.VIDEO
     Column(modifier.verticalScroll(rememberScrollState()).padding(horizontal = Spacing.xl).padding(bottom = Spacing.xxl),
         verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
-        Text("Imagine", style = MaterialTheme.typography.titleMedium, modifier = Modifier.semantics { heading() })
-        SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+        SheetTitle("Imagine")
+        SheetGroup {
             listOf(ImagineInfo.IMAGE to "Image", ImagineInfo.VIDEO to "Video").forEachIndexed { index, (kind, label) ->
                 val enabled = if (kind == ImagineInfo.VIDEO) config.videoEnabled else config.imageEnabled
-                SegmentedButton(selected = options.kind == kind, enabled = enabled, onClick = { onChange(options.copy(kind = kind)) },
-                    shape = SegmentedButtonDefaults.itemShape(index, 2),
-                    icon = { Icon(if (kind == ImagineInfo.VIDEO) Icons.Outlined.Movie else Icons.Outlined.Image, null, Modifier.size(18.dp)) }) { Text(label) }
+                val selected = options.kind == kind
+                if (index > 0) SheetDivider()
+                SheetActionRow(label, if (kind == ImagineInfo.VIDEO) Icons.Outlined.Movie else Icons.Outlined.Image,
+                    onClick = { onChange(options.copy(kind = kind)) }, enabled = enabled,
+                    trailing = if (selected) ({ Icon(Icons.Filled.Check, contentDescription = null, tint = SheetTheme.colors.accent, modifier = Modifier.size(SheetSizes.rowIcon)) }) else null,
+                    modifier = Modifier.semantics { this.selected = selected; role = Role.RadioButton; contentDescription = "Create $label" })
             }
         }
         val reason = if (video) config.videoReason else config.imageReason
@@ -117,31 +123,31 @@ fun ImagineOptionsContent(options: ImagineOptions, config: ImagineConfig, usage:
         }
         usage?.let {
             Text(if (video) "Today: ${it.videoSeconds} of ${it.videoLimit} video seconds used" else "Today: ${it.images} of ${it.imageLimit} images used",
-                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                style = SheetNoteStyle, color = SheetTheme.colors.subText)
         }
         Text(if (video) "Videos take a minute or two. You can leave the chat; progress continues." else "Results are saved to your private storage. Deleting the chat deletes them.",
-            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { TextButton(onClick = onDismiss) { Text("Done") } }
+            style = SheetNoteStyle, color = SheetTheme.colors.subText)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { SheetTextButton("Done", onClick = onDismiss) }
     }
 }
 
 @Composable
-private fun Label(text: String) = Text(text, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+private fun Label(text: String) = Text(text, style = SheetTileStyle, color = SheetTheme.colors.subText, modifier = Modifier.semantics { heading() })
 
 @Composable
-private fun Hint(text: String) = Text(text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+private fun Hint(text: String) = Text(text, style = SheetNoteStyle, color = SheetTheme.colors.subText)
 
 @Composable
 private fun OptionChip(label: String, selected: Boolean, description: String, leading: (@Composable () -> Unit)? = null, onClick: () -> Unit) {
-    val scheme = MaterialTheme.colorScheme
-    Surface(onClick = onClick, shape = DuaShape.chip,
-        color = if (selected) scheme.secondaryContainer else scheme.surfaceContainerLow,
-        contentColor = if (selected) scheme.onSecondaryContainer else scheme.onSurfaceVariant,
-        border = if (selected) null else BorderStroke(1.dp, scheme.outlineVariant),
+    val c = SheetTheme.colors
+    Surface(onClick = onClick, shape = SheetShapes.badge,
+        color = if (selected) c.selectedFill else c.fill,
+        contentColor = if (selected) c.accent else c.text,
+        border = if (selected) BorderStroke(SheetSizes.dividerThickness, c.accent) else null,
         modifier = Modifier.semantics { contentDescription = description; this.selected = selected; role = Role.RadioButton }) {
-        Row(Modifier.heightIn(min = 36.dp).padding(horizontal = Spacing.md), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.heightIn(min = SheetSizes.touch).padding(horizontal = SheetSizes.rowPaddingH), verticalAlignment = Alignment.CenterVertically) {
             if (leading != null) { leading(); Box(Modifier.width(Spacing.sm)) }
-            Text(label, style = MaterialTheme.typography.labelLarge)
+            Text(label, style = SheetTileStyle)
         }
     }
 }

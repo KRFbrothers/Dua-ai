@@ -142,3 +142,24 @@ fun SheetTonalButton(text: String, onClick: () -> Unit, enabled: Boolean = true,
     }
 }
 
+
+/** Dabba-style popup menu: sheet surface (white / gray-900), group corners, no tonal tint. */
+@Composable
+fun DuaDropdownMenu(expanded: Boolean, onDismissRequest: () -> Unit, modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+    val c = SheetTheme.colors
+    androidx.compose.material3.DropdownMenu(expanded = expanded, onDismissRequest = onDismissRequest, modifier = modifier,
+        shape = SheetShapes.badge, containerColor = c.container, tonalElevation = 0.dp, shadowElevation = 8.dp,
+        border = androidx.compose.foundation.BorderStroke(SheetSizes.dividerThickness, c.divider), content = content)
+}
+
+/** Menu row: 16 sp semibold, 22 dp icon, 48 dp min height, accent check/tint when selected. */
+@Composable
+fun DuaDropdownItem(label: String, onClick: () -> Unit, icon: androidx.compose.ui.graphics.vector.ImageVector? = null,
+    selected: Boolean = false, modifier: Modifier = Modifier) {
+    val c = SheetTheme.colors
+    androidx.compose.material3.DropdownMenuItem(
+        text = { Text(label, style = com.dua.ai.ui.theme.SheetRowStyle, color = if (selected) c.accent else c.text) },
+        onClick = onClick, modifier = modifier.heightIn(min = SheetSizes.touch),
+        leadingIcon = icon?.let { { androidx.compose.material3.Icon(it, contentDescription = null, tint = if (selected) c.accent else c.icon, modifier = Modifier.size(SheetSizes.rowIcon)) } },
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = SheetSizes.rowPaddingH))
+}
