@@ -20,10 +20,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -38,7 +36,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.material.icons.automirrored.outlined.LibraryBooks
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -47,7 +44,11 @@ import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.style.TextOverflow
 import com.dua.ai.history.SavedChat
 import com.dua.ai.ui.navigation.DuaDestination
+import com.dua.ai.ui.components.ReferenceIcons
 import com.dua.ai.ui.theme.*
+import android.graphics.BitmapFactory
+import java.io.ByteArrayOutputStream
+import java.io.InputStream
 
 /** Search box for chat history. */
 @Composable
@@ -55,7 +56,7 @@ fun SearchField(query: String = "", onQueryChange: (String) -> Unit = {}, modifi
     OutlinedTextField(
         value = query, onValueChange = onQueryChange, singleLine = true,
         placeholder = { Text("Search chats") },
-        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+        leadingIcon = { Icon(ReferenceIcons.Search, contentDescription = null) },
         shape = DrawerShapes.newChat, colors = com.dua.ai.ui.components.pageTextFieldColors(),
         modifier = modifier.fillMaxWidth().testTag("drawer-search-field"),
     )
@@ -123,7 +124,7 @@ fun HistoryDrawer(
                     ) {
                         Box(Modifier.size(DrawerSizes.searchCircle).shadow(DrawerSizes.searchElevation, DrawerShapes.circle, ambientColor = colors.searchShadow, spotColor = colors.searchShadow)
                             .clip(DrawerShapes.circle).background(colors.searchCircle), contentAlignment = Alignment.Center) {
-                            Icon(Icons.Outlined.Search, contentDescription = "Search chats", tint = colors.searchIcon, modifier = Modifier.size(DrawerSizes.searchIcon))
+                            Icon(ReferenceIcons.Search, contentDescription = "Search chats", tint = colors.searchIcon, modifier = Modifier.size(DrawerSizes.searchIcon))
                         }
                     }
                 }
@@ -131,11 +132,11 @@ fun HistoryDrawer(
                     SearchField(query, { query = it }, Modifier.padding(bottom = DrawerSizes.menuPaddingV))
                 }
 
-                DrawerMenuRow(Icons.Outlined.PhotoLibrary, "Images") { onDestination(DuaDestination.Images) }
-                DrawerMenuRow(Icons.AutoMirrored.Outlined.LibraryBooks, "Library") { onDestination(DuaDestination.Library) }
-                DrawerMenuRow(Icons.Outlined.Folder, "Projects", onProjects)
-                DrawerMenuRow(Icons.Outlined.Computer, "Computer") { onDestination(DuaDestination.Computer) }
-                DrawerMenuRow(Icons.Outlined.Schedule, "AI Agent") { onDestination(DuaDestination.Agent) }
+                DrawerMenuRow(ReferenceIcons.Images, "Images") { onDestination(DuaDestination.Images) }
+                DrawerMenuRow(ReferenceIcons.Library, "Library") { onDestination(DuaDestination.Library) }
+                DrawerMenuRow(ReferenceIcons.Projects, "Projects", onProjects)
+                DrawerMenuRow(ReferenceIcons.Computer, "Computer") { onDestination(DuaDestination.Computer) }
+                DrawerMenuRow(ReferenceIcons.Agent, "AI Agent") { onDestination(DuaDestination.Agent) }
 
                 // Expandable Aura (the reference's "Explore" slot): Plugins and Work.
                 Row(
@@ -145,7 +146,7 @@ fun HistoryDrawer(
                         .padding(vertical = DrawerSizes.menuPaddingV),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Icon(Icons.Outlined.Widgets, null, tint = colors.menuText, modifier = Modifier.size(DrawerSizes.menuIcon))
+                    Icon(ReferenceIcons.Aura, null, tint = colors.menuText, modifier = Modifier.size(DrawerSizes.menuIcon))
                     Spacer(Modifier.width(DrawerSizes.menuGap))
                     Text("Aura", style = DrawerMenuStyle, color = colors.menuText, modifier = Modifier.weight(1f))
                     Icon(if (auraExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown, null,
@@ -196,7 +197,7 @@ fun HistoryDrawer(
                             .padding(horizontal = DrawerSizes.newChatPaddingH, vertical = DrawerSizes.newChatPaddingV),
                         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(DrawerSizes.newChatGap),
                     ) {
-                        Icon(Icons.Default.Edit, null, tint = colors.onNewChat, modifier = Modifier.size(DrawerSizes.newChatIcon))
+                        Icon(ReferenceIcons.Chat, null, tint = colors.onNewChat, modifier = Modifier.size(DrawerSizes.newChatIcon))
                         Text("Chat", style = DrawerNewChatStyle, color = colors.onNewChat)
                     }
                 }
@@ -329,6 +330,8 @@ private fun rememberProfilePhoto(url: String): ImageBitmap? {
 }
 
 internal object ProfilePhotoCache {
+    private const val MAX_BYTES = 2_000_000
+    private const val THUMBNAIL_SIZE = 128
     private val cache = android.util.LruCache<String, ImageBitmap>(4)
     fun load(url: String): ImageBitmap? {
         if (!url.startsWith("https://")) return null
@@ -336,10 +339,36 @@ internal object ProfilePhotoCache {
         return runCatching {
             val connection = (java.net.URL(url).openConnection() as java.net.HttpURLConnection).apply { connectTimeout = 8000; readTimeout = 8000; instanceFollowRedirects = true }
             try {
-                if (connection.responseCode !in 200..299 || connection.contentLengthLong > 2_000_000) return null
-                val bytes = connection.inputStream.use { it.readBytes() }.takeIf { it.size <= 2_000_000 } ?: return null
-                android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
+                if (connection.responseCode !in 200..299 || connection.contentLengthLong > MAX_BYTES) return null
+                val bytes = connection.inputStream.use { readBoundedPhoto(it) } ?: return null
+                decodeThumbnail(bytes)
             } finally { connection.disconnect() }
         }.getOrNull()?.also { cache.put(url, it) }
+    }
+
+    /** Enforce the limit during reading, even when Content-Length is missing or incorrect. */
+    internal fun readBoundedPhoto(input: InputStream): ByteArray? {
+        val output = ByteArrayOutputStream()
+        val buffer = ByteArray(8 * 1024)
+        var total = 0
+        while (true) {
+            val count = input.read(buffer)
+            if (count == -1) break
+            total += count
+            if (total > MAX_BYTES) return null
+            output.write(buffer, 0, count)
+        }
+        return output.toByteArray()
+    }
+
+    /** Bound pixel allocation before decoding; the cache holds only avatar-sized bitmaps. */
+    internal fun decodeThumbnail(bytes: ByteArray): ImageBitmap? {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+        var sample = 1
+        while (bounds.outWidth / sample > THUMBNAIL_SIZE || bounds.outHeight / sample > THUMBNAIL_SIZE) sample *= 2
+        val options = BitmapFactory.Options().apply { inSampleSize = sample }
+        return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)?.asImageBitmap()
     }
 }
