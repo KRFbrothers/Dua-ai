@@ -1,5 +1,9 @@
 package com.dua.ai.ui.chat
 
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.foundation.BorderStroke
+import com.dua.ai.ui.theme.ChatSizes
+import com.dua.ai.ui.theme.ChatTheme
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.rememberTransformableState
@@ -11,6 +15,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
@@ -58,7 +63,6 @@ import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -88,6 +92,7 @@ fun ImagineReply(message: ChatMessage, actions: ImagineActions, videoAvailable: 
     initiallyPlaying: Boolean = false) {
     val info = message.imagine
     val media = message.media
+    val c = ChatTheme.colors
     val video = info?.isVideo ?: media.firstOrNull()?.isVideo ?: false
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
         when {
@@ -100,8 +105,8 @@ fun ImagineReply(message: ChatMessage, actions: ImagineActions, videoAvailable: 
             info != null && (message.streaming || info.pending) -> VideoProgress(message, info, actions, now)
             info != null -> Failure(info, actions)
         }
-        if (media.isNotEmpty() && info != null) Text(caption(info, media), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        message.notice?.let { Text(it, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        if (media.isNotEmpty() && info != null) Text(caption(info, media), style = MaterialTheme.typography.labelMedium, color = c.mutedText)
+        message.notice?.let { Text(it, style = MaterialTheme.typography.labelMedium, color = c.mutedText) }
         if (media.isNotEmpty()) MediaActionsRow(media, video, videoAvailable, actions)
     }
 }
@@ -115,7 +120,7 @@ private fun caption(info: ImagineInfo, media: List<GeneratedMedia>): String = bu
 
 @Composable
 private fun Status(text: String) {
-    Text(text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+    Text(text, style = MaterialTheme.typography.bodyMedium, color = ChatTheme.colors.mutedText,
         modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
 }
 
@@ -125,25 +130,26 @@ private fun VideoProgress(message: ChatMessage, info: ImagineInfo, actions: Imag
     LaunchedEffect(now) { if (now == null) while (true) { delay(1000); clock = System.currentTimeMillis() } }
     val elapsed = if (info.startedAt > 0) ((clock - info.startedAt) / 1000).coerceAtLeast(0) else 0
     val ratio = aspectValue(info.aspectRatio, 16 / 9f).coerceIn(.5f, 2f)
-    Surface(color = MaterialTheme.colorScheme.surfaceContainer, shape = DuaShape.card, modifier = Modifier.widthIn(max = 420.dp).fillMaxWidth()) {
+    val c = ChatTheme.colors
+    Surface(color = c.cardFill, contentColor = c.text, border = BorderStroke(ChatSizes.border, c.chipBorder), shape = DuaShape.card, modifier = Modifier.widthIn(max = ChatSizes.mediaMaxWidth).fillMaxWidth()) {
         Column {
             Box(Modifier.fillMaxWidth().aspectRatio(if (ratio < 1f) 1.4f else ratio), contentAlignment = Alignment.Center) {
                 ShimmerBox(Modifier.fillMaxSize())
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(Icons.Outlined.Movie, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(32.dp))
+                    Icon(Icons.Outlined.Movie, null, tint = c.mutedText, modifier = Modifier.size(ChatSizes.mediaIcon))
                     Text(if (info.progress > 0) "${info.progress}%" else "Queued", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = Spacing.xs))
                 }
             }
-            if (info.progress > 0) LinearProgressIndicator(progress = { info.progress / 100f }, modifier = Modifier.fillMaxWidth())
-            else LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            if (info.progress > 0) LinearProgressIndicator(progress = { info.progress / 100f }, modifier = Modifier.fillMaxWidth(), color = c.accent, trackColor = c.divider)
+            else LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = c.accent, trackColor = c.divider)
             Row(Modifier.fillMaxWidth().padding(start = Spacing.lg, end = Spacing.xs, top = Spacing.xs, bottom = Spacing.xs), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f).semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite }) {
                     Text(if (message.streaming) "Starting video…" else "Creating video · ${info.seconds ?: 0} s · ${info.resolution ?: ""}".trimEnd(' ', '·'),
                         style = MaterialTheme.typography.bodyMedium)
                     Text("${elapsed / 60}:%02d elapsed · keeps going if you leave".format(elapsed % 60), style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        color = c.mutedText)
                 }
-                if (!message.streaming) TextButton(onClick = { actions.onCancelVideo(message.id) }) { Text("Cancel") }
+                if (!message.streaming) TextButton(onClick = { actions.onCancelVideo(message.id) }, colors = chatTextButtonColors(), modifier = Modifier.heightIn(min = Sizes.touchTarget)) { Text("Cancel") }
             }
         }
     }
@@ -156,13 +162,14 @@ private fun Failure(info: ImagineInfo, actions: ImagineActions) {
         ImagineInfo.EXPIRED -> if (info.isVideo) "Video expired" else "Images expired"
         else -> if (info.isVideo) "Video not created" else "Image not created"
     }
-    Surface(color = MaterialTheme.colorScheme.surfaceContainer, shape = DuaShape.card, modifier = Modifier.widthIn(max = 420.dp).fillMaxWidth()) {
+    val c = ChatTheme.colors
+    Surface(color = c.cardFill, contentColor = c.text, border = BorderStroke(ChatSizes.border, c.chipBorder), shape = DuaShape.card, modifier = Modifier.widthIn(max = ChatSizes.mediaMaxWidth).fillMaxWidth()) {
         Row(Modifier.padding(start = Spacing.lg, top = Spacing.md, bottom = Spacing.xs, end = Spacing.xs), verticalAlignment = Alignment.Top) {
-            Icon(Icons.Outlined.ErrorOutline, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = Spacing.xxs).size(Sizes.iconSmall))
+            Icon(Icons.Outlined.ErrorOutline, null, tint = c.errorIcon, modifier = Modifier.padding(top = Spacing.xxs).size(Sizes.iconSmall))
             Column(Modifier.weight(1f).padding(start = Spacing.md)) {
                 Text(title, style = MaterialTheme.typography.bodyLarge)
-                info.error?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                TextButton(onClick = { actions.onReuse(info) }, modifier = Modifier.offset(x = -Spacing.md)) {
+                info.error?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = c.mutedText) }
+                TextButton(onClick = { actions.onReuse(info) }, colors = chatTextButtonColors(), modifier = Modifier.heightIn(min = Sizes.touchTarget).offset(x = -Spacing.md)) {
                     Icon(Icons.Outlined.Refresh, null, modifier = Modifier.size(Sizes.iconTiny)); Text("Use prompt again", modifier = Modifier.padding(start = Spacing.xs))
                 }
             }
@@ -172,7 +179,7 @@ private fun Failure(info: ImagineInfo, actions: ImagineActions) {
 
 @Composable
 private fun MediaActionsRow(media: List<GeneratedMedia>, video: Boolean, videoAvailable: Boolean, actions: ImagineActions) {
-    val tint = MaterialTheme.colorScheme.onSurfaceVariant
+    val tint = ChatTheme.colors.mutedText
     Row(Modifier.offset(x = -Spacing.md), verticalAlignment = Alignment.CenterVertically) {
         IconButton(onClick = { actions.onSave(media) }) { Icon(Icons.Outlined.Download, if (media.size > 1) "Save all to gallery" else "Save to gallery", tint = tint, modifier = Modifier.size(Sizes.iconSmall)) }
         IconButton(onClick = { actions.onShare(media) }) { Icon(Icons.Outlined.Share, "Share", tint = tint, modifier = Modifier.size(Sizes.iconSmall)) }
@@ -197,12 +204,12 @@ private fun InlineVideo(messageId: String, media: GeneratedMedia, aspectRatio: S
     }
     val current = url
     if (playing && current != null) {
-        Box(Modifier.widthIn(max = if (ratio < 1f) 280.dp else 420.dp).fillMaxWidth().aspectRatio(ratio).clip(DuaShape.card).background(DuaTheme.colors.mediaBackground)) {
+        Box(Modifier.widthIn(max = if (ratio < 1f) ChatSizes.portraitVideoMaxWidth else ChatSizes.mediaMaxWidth).fillMaxWidth().aspectRatio(ratio).clip(DuaShape.card).background(DuaTheme.colors.mediaBackground)) {
             VideoPlayer(current, Modifier.fillMaxSize(), onFullscreen = { actions.onOpen(messageId, 0) })
         }
     } else VideoPoster(media, aspectRatio, onPlay = { failed = null; playing = true })
-    failed?.let { Text(it, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.error) }
-    if (playing && current == null) LinearProgressIndicator(Modifier.widthIn(max = 420.dp).fillMaxWidth())
+    failed?.let { Text(it, style = MaterialTheme.typography.labelMedium, color = ChatTheme.colors.errorIcon) }
+    if (playing && current == null) LinearProgressIndicator(Modifier.widthIn(max = ChatSizes.mediaMaxWidth).fillMaxWidth(), color = ChatTheme.colors.accent, trackColor = ChatTheme.colors.divider)
 }
 
 /** Media3 player view. Released when it leaves composition; pauses when the app goes to the background. */
@@ -278,7 +285,7 @@ fun MediaViewerContent(media: List<GeneratedMedia>, startIndex: Int, actions: Im
 @Composable
 private fun ViewerButton(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit) {
     Surface(onClick = onClick, shape = DuaShape.card, color = Color.Transparent, contentColor = DuaTheme.colors.onMedia) {
-        Column(Modifier.widthIn(min = 72.dp).padding(horizontal = Spacing.sm, vertical = Spacing.sm), horizontalAlignment = Alignment.CenterHorizontally) {
+        Column(Modifier.widthIn(min = ChatSizes.viewerButtonMinWidth).padding(horizontal = Spacing.sm, vertical = Spacing.sm), horizontalAlignment = Alignment.CenterHorizontally) {
             Surface(shape = androidx.compose.foundation.shape.CircleShape, color = DuaTheme.colors.onMedia.copy(alpha = .14f), contentColor = DuaTheme.colors.onMedia) {
                 Icon(icon, null, modifier = Modifier.padding(Spacing.md).size(Sizes.iconSmall))
             }
@@ -297,7 +304,7 @@ private fun ZoomableImage(media: GeneratedMedia) {
         scale = (scale * zoom).coerceIn(1f, 5f)
         offset = if (scale <= 1f) Offset.Zero else offset + pan
     }
-    val px = with(LocalDensity.current) { 1200.dp.roundToPx() }.coerceAtMost(2048)
+    val px = with(LocalDensity.current) { ChatSizes.viewerDecodeWidth.roundToPx() }.coerceAtMost(2048)
     Box(Modifier.fillMaxSize()
         .pointerInput(media.key) { detectTapGestures(onDoubleTap = { if (scale > 1f) { scale = 1f; offset = Offset.Zero } else scale = 2.5f }) }
         .transformable(state, canPan = { scale > 1f })
@@ -306,3 +313,7 @@ private fun ZoomableImage(media: GeneratedMedia) {
             maxPx = px, contentScale = ContentScale.Fit, background = DuaTheme.colors.mediaBackground)
     }
 }
+
+/** Text buttons in chat replies use the chat accent instead of the stock M3 primary. */
+@Composable
+internal fun chatTextButtonColors() = ButtonDefaults.textButtonColors(contentColor = ChatTheme.colors.accent)

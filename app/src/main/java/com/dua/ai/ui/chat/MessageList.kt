@@ -7,7 +7,6 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -48,7 +47,6 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.stateDescription
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.painterResource
 import com.dua.ai.R
 import com.dua.ai.ui.theme.ChatShapes
@@ -76,7 +74,7 @@ fun MessageList(state: ChatUiState, actions: ChatActions, listState: LazyListSta
             val selected = message.id == searchMessageId
             Column(Modifier.widthIn(max = Sizes.contentMaxWidth).fillMaxWidth()
                 .testTag("message-${message.id}")
-                .then(if (selected) Modifier.border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(12.dp)) else Modifier)
+                .then(if (selected) Modifier.border(ChatSizes.searchSelectionBorder, ChatTheme.colors.accent, ChatShapes.searchSelection) else Modifier)
                 .semantics { if (selected) stateDescription = "Selected search result" }) {
                 val openActions = { actionsId = message.id }
                 val longPressHaptic = { actions.haptic(ChatHaptic.LongPress) }
@@ -127,16 +125,17 @@ private fun AssistantTurn(modifier: Modifier = Modifier, content: @Composable ()
 /** Marks where the model's view switches from a summary to the full messages (long context). */
 @Composable
 fun SummaryDivider(modifier: Modifier = Modifier) {
-    val color = MaterialTheme.colorScheme.outlineVariant
+    val c = ChatTheme.colors
+    val color = c.divider
     Row(modifier.fillMaxWidth().semantics(mergeDescendants = true) {
         contentDescription = "Earlier messages summarised. The model sees a summary of the messages above and the full messages below."
     }, verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.weight(1f).height(1.dp).background(color))
-        Icon(Icons.Outlined.Compress, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        Box(Modifier.weight(1f).height(ChatSizes.divider).background(color))
+        Icon(Icons.Outlined.Compress, contentDescription = null, tint = c.mutedText,
             modifier = Modifier.padding(start = Spacing.md).size(Sizes.iconTiny))
-        Text("Earlier messages summarised", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+        Text("Earlier messages summarised", style = MaterialTheme.typography.labelMedium, color = c.mutedText,
             modifier = Modifier.padding(start = Spacing.xs, end = Spacing.md))
-        Box(Modifier.weight(1f).height(1.dp).background(color))
+        Box(Modifier.weight(1f).height(ChatSizes.divider).background(color))
     }
 }
 
@@ -144,16 +143,17 @@ fun SummaryDivider(modifier: Modifier = Modifier) {
 @Composable
 fun TypingIndicator(modifier: Modifier = Modifier) {
     val transition = rememberInfiniteTransition(label = "typing")
+    val c = ChatTheme.colors
     val phase = transition.animateFloat(0f, 3f, infiniteRepeatable(tween(1200), RepeatMode.Restart), label = "phase")
     Row(modifier.clearAndSetSemantics {
         contentDescription = "Dua is thinking"; liveRegion = LiveRegionMode.Polite
     }, verticalAlignment = Alignment.CenterVertically) {
         repeat(3) { index ->
             val distance = kotlin.math.abs(phase.value - index - 0.5f).coerceAtMost(1.5f)
-            Box(Modifier.size(8.dp).alpha(1f - distance / 2f).background(MaterialTheme.colorScheme.onSurfaceVariant, CircleShape))
-            if (index < 2) Spacer(Modifier.width(6.dp))
+            Box(Modifier.size(ChatSizes.typingDot).alpha(1f - distance / 2f).background(c.mutedText, CircleShape))
+            if (index < 2) Spacer(Modifier.width(ChatSizes.typingDotGap))
         }
         Spacer(Modifier.width(Spacing.md))
-        Text("Thinking", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("Thinking", style = MaterialTheme.typography.bodyMedium, color = c.mutedText)
     }
 }

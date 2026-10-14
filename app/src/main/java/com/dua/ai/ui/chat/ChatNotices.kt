@@ -1,9 +1,11 @@
 package com.dua.ai.ui.chat
 
+import com.dua.ai.ui.theme.ChatTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
@@ -27,26 +29,27 @@ import com.dua.ai.ui.theme.Spacing
 /** Read-aloud status and inline error card shown just above the composer. */
 @Composable
 fun ChatNotices(state: ChatUiState, actions: ChatActions) {
+    val c = ChatTheme.colors
     Column(Modifier.fillMaxWidth().padding(horizontal = Spacing.lg), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
         if (state.deviceVoiceActive || state.deviceVoiceStatus.isNotBlank()) StatusLine(
             text = state.deviceVoiceStatus, actionLabel = if (state.deviceVoiceActive) "Stop" else null, onAction = actions.onStopSpeech)
         if (state.generatedVoice || state.generatedVoiceStatus.isNotBlank()) Row(verticalAlignment = Alignment.CenterVertically) {
             Text(state.generatedVoiceStatus.ifBlank { "AI voice selected · sends only the reply you tap" },
-                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall, color = c.mutedText,
                 maxLines = 2, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f).semantics { liveRegion = LiveRegionMode.Polite })
-            if (state.generatedVoiceActive) TextButton(onClick = actions.onStopSpeech) { Text("Stop") }
-            TextButton(onClick = actions.onUseDeviceVoice) { Text("Use device voice") }
+            if (state.generatedVoiceActive) TextButton(onClick = actions.onStopSpeech, colors = chatTextButtonColors(), modifier = Modifier.heightIn(min = Sizes.touchTarget)) { Text("Stop") }
+            TextButton(onClick = actions.onUseDeviceVoice, colors = chatTextButtonColors(), modifier = Modifier.heightIn(min = Sizes.touchTarget)) { Text("Use device voice") }
         }
         state.error?.let { message ->
             val needsSetup = message.contains("setup", ignoreCase = true)
-            Surface(color = MaterialTheme.colorScheme.errorContainer, shape = DuaShape.card, modifier = Modifier.fillMaxWidth()) {
+            Surface(color = c.errorFill, shape = DuaShape.card, modifier = Modifier.fillMaxWidth()) {
                 Row(Modifier.padding(start = Spacing.md, end = Spacing.xs, top = Spacing.xs, bottom = Spacing.xs), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Outlined.ErrorOutline, contentDescription = null, tint = MaterialTheme.colorScheme.onErrorContainer, modifier = Modifier.size(Sizes.iconSmall))
-                    Text(message, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onErrorContainer,
+                    Icon(Icons.Outlined.ErrorOutline, contentDescription = null, tint = c.onErrorFill, modifier = Modifier.size(Sizes.iconSmall))
+                    Text(message, style = MaterialTheme.typography.bodyMedium, color = c.onErrorFill,
                         maxLines = 3, overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f).padding(horizontal = Spacing.md, vertical = Spacing.sm).semantics { liveRegion = LiveRegionMode.Polite })
-                    if (needsSetup) TextButton(onClick = actions.onOpenSetup) { Text("Setup", color = MaterialTheme.colorScheme.onErrorContainer) }
+                    if (needsSetup) TextButton(onClick = actions.onOpenSetup, modifier = Modifier.heightIn(min = Sizes.touchTarget)) { Text("Setup", color = c.onErrorFill) }
                 }
             }
         }
@@ -56,8 +59,8 @@ fun ChatNotices(state: ChatUiState, actions: ChatActions) {
 @Composable
 private fun StatusLine(text: String, actionLabel: String?, onAction: () -> Unit) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Text(text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+        Text(text, style = MaterialTheme.typography.bodySmall, color = ChatTheme.colors.mutedText,
             maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-        if (actionLabel != null) TextButton(onClick = onAction) { Text(actionLabel) }
+        if (actionLabel != null) TextButton(onClick = onAction, colors = chatTextButtonColors(), modifier = Modifier.heightIn(min = Sizes.touchTarget)) { Text(actionLabel) }
     }
 }
