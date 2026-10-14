@@ -17,6 +17,8 @@ import binascii
 import hmac
 import json
 import os
+import queue
+import threading
 
 from flask import Flask, Response, jsonify, request, stream_with_context
 
@@ -32,6 +34,7 @@ MAX_TURN_CHARS = 100_000
 MAX_MEMORY_CHARS = 3000
 MAX_ATTACHMENTS = 10
 MAX_ATTACHMENT_BYTES = 4 * 1024 * 1024
+HEARTBEAT_SECONDS = 15
 ATTACHMENT_TYPES = ("image/", "application/pdf", "text/", "audio/", "video/")
 # Models the app may name; this engine always answers with Gemini on Vertex AI.
 APP_MODELS = {"Dua", "ChatGPT", "Gemini", "Claude", "Grok", "Kimi"}
@@ -115,8 +118,27 @@ def decode_attachments(raw):
     return result
 
 
+def file_context(files):
+    """Use supplied text only: Cloud Run cannot dereference private base-backend storage paths."""
+    if files is None:
+        return ""
+    if not isinstance(files, list) or len(files) > 20:
+        raise BadRequest("Invalid file metadata.")
+    texts = []
+    for item in files:
+        if not isinstance(item, dict):
+            raise BadRequest("Invalid file metadata.")
+        for key in ("transcript", "attachmentText", "extractedText", "text"):
+            value = item.get(key)
+            if isinstance(value, str) and value.strip():
+                name = str(item.get("name", "file"))[:200]
+                texts.append(f"Attached file ({name}):\n{value.strip()}")
+                break
+    return "\n\n".join(texts)
+
+
 def build_contents(messages, attachments):
-    """App history [{role: user|model, text, attachmentText?}] -> Gemini contents (user/model roles)."""
+    """Preserve inline parts on their original user turns, plus any supplied file-text fallback."""
     if not isinstance(messages, list) or not messages or len(messages) > MAX_TURNS:
         raise BadRequest("Invalid message history.")
     turns = []
@@ -129,25 +151,33 @@ def build_contents(messages, attachments):
         extra = message.get("attachmentText")
         if message["role"] == "user" and isinstance(extra, str) and extra.strip():
             text = (text + "\n\n" + extra).strip()
+        inline = []
+        if message["role"] == "user":
+            fallback = file_context(message.get("files"))
+            if fallback:
+                text = (text + "\n\n" + fallback).strip()
+            inline = decode_attachments(message.get("attachments"))
         if len(text) > MAX_TURN_CHARS:
             raise BadRequest("Message is too long.", 413)
-        turns.append([message["role"], text])
+        turns.append([message["role"], text, inline])
     while turns and turns[0][0] != "user":  # Gemini conversations start with the user
         turns.pop(0)
     if not turns or turns[-1][0] != "user":
         raise BadRequest("The last message must be from the user.")
-    if not turns[-1][1].strip() and not attachments:
+    if not turns[-1][1].strip() and not attachments and not turns[-1][2]:
         raise BadRequest("Message is empty")
     # Merge consecutive same-role turns (e.g. a failed reply was dropped) so roles alternate.
     merged = []
-    for role, text in turns:
+    for role, text, inline in turns:
         if merged and merged[-1][0] == role:
             merged[-1][1] = (merged[-1][1] + "\n\n" + text).strip()
+            merged[-1][2].extend(inline)
         else:
-            merged.append([role, text])
+            merged.append([role, text, inline])
     contents = []
-    for index, (role, text) in enumerate(merged):
+    for index, (role, text, inline) in enumerate(merged):
         parts = [make_part(text=text or " ")]
+        parts += [make_part(data=data, mime_type=mime) for data, mime in inline]
         if index == len(merged) - 1:
             parts += [make_part(data=data, mime_type=mime) for data, mime in attachments]
         contents.append(make_content(role, parts))
@@ -237,25 +267,67 @@ def api_chat():
     notice = unsupported_notice(data)
 
     def events():
-        if notice:
-            yield sse({"type": "notice", "message": notice})
+        chunks = queue.Queue(maxsize=16)
+        stopped = threading.Event()
+
+        def enqueue(kind, chunk=None):
+            while not stopped.is_set():
+                try:
+                    chunks.put((kind, chunk), timeout=0.5)
+                    return True
+                except queue.Full:
+                    continue
+            return False
+
+        def vertex_stream():
+            iterator = None
+            try:
+                iterator = iter(get_model(system).generate_content(contents, stream=True))
+                for chunk in iterator:
+                    if not enqueue("chunk", chunk):
+                        break
+                enqueue("done")
+            except Exception:
+                app.logger.exception("api chat stream failed")
+                enqueue("error")
+            finally:
+                if iterator is not None and hasattr(iterator, "close"):
+                    try:
+                        iterator.close()
+                    except Exception:
+                        app.logger.exception("Vertex stream cleanup failed")
+
+        threading.Thread(target=vertex_stream, name="dua-vertex-stream", daemon=True).start()
         truncated = False
         sent = False
         try:
-            for chunk in get_model(system).generate_content(contents, stream=True):
+            # Flush headers promptly; the worker also covers delays obtaining the iterator itself.
+            yield ": heartbeat\n\n"
+            if notice:
+                yield sse({"type": "notice", "message": notice})
+            while True:
+                try:
+                    kind, chunk = chunks.get(timeout=HEARTBEAT_SECONDS)
+                except queue.Empty:
+                    yield ": heartbeat\n\n"
+                    continue
+                if kind == "error":
+                    yield sse({"type": "error", "message": GENERIC_ERROR, "status": 502})
+                    return
+                if kind == "done":
+                    break
                 truncated = truncated or is_truncated(chunk)
                 text = chunk_text(chunk)
                 if text:
                     sent = True
                     yield sse({"type": "text", "delta": text})
-        except Exception:
-            app.logger.exception("api chat stream failed")
-            yield sse({"type": "error", "message": GENERIC_ERROR, "status": 502})
-            return
-        if not sent:
-            yield sse({"type": "error", "message": GENERIC_ERROR, "status": 502})
-            return
-        yield sse({"type": "done", "truncated": truncated})
+            if not sent:
+                yield sse({"type": "error", "message": GENERIC_ERROR, "status": 502})
+                return
+            yield sse({"type": "done", "truncated": truncated})
+        finally:
+            # On client disconnect, stop enqueuing and close the iterator on its owning worker.
+            stopped.set()
 
     return Response(stream_with_context(events()), headers=SSE_HEADERS,
                     content_type="text/event-stream; charset=utf-8")

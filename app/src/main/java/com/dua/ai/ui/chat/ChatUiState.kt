@@ -39,6 +39,7 @@ data class ChatUiState(
     val uploads: List<com.dua.ai.files.PendingUpload> = emptyList(),
     /** Stored files available: Phase 2 backend + signed in. */
     val storedFiles: Boolean = false,
+    val inlineChatFiles: Boolean = false,
     /** Why stored files are unavailable (sign in / backend setup); empty when available. */
     val storedFilesHint: String = "",
     val storedFilesMaxBytes: Long = 0,

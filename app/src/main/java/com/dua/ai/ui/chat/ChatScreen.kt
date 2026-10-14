@@ -356,6 +356,7 @@ fun ChatScreen(
             onDismiss = { sheet = null },
             onAudio = { sheet = ChatSheet.Audio },
             storedFiles = state.storedFiles, storedFilesHint = state.storedFilesHint, storedFilesMaxBytes = state.storedFilesMaxBytes,
+            inlineChatFiles = state.inlineChatFiles,
             modes = AttachModes(
                 imagine = state.imagineConfig?.let { config -> if (config.enabled) "Create images from your message" else config.imageReason.ifBlank { "Turned off on the server" } },
                 imagineOn = state.imagine,
@@ -367,7 +368,7 @@ fun ChatScreen(
             onBuild = { sheet = ChatSheet.Build; actions.onOpenBuild() },
         )
         ChatSheet.Audio -> AudioSheet(
-            recordingSince = state.recordingSince, available = state.storedFiles, hint = state.storedFilesHint,
+            recordingSince = state.recordingSince, available = state.storedFiles || state.inlineChatFiles, hint = state.storedFilesHint,
             onRecord = actions.onStartRecording,
             onStop = { actions.onStopRecording(); sheet = null },
             onCancel = actions.onCancelRecording,

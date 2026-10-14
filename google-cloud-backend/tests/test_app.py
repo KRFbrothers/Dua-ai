@@ -2,6 +2,8 @@ import base64
 import json
 import os
 import sys
+import queue
+import threading
 from types import SimpleNamespace
 
 import pytest
@@ -105,3 +107,104 @@ def test_shared_token(client, fake, monkeypatch):
     assert client.post("/chat", json={"message": "hi"}).status_code == 401
     assert client.post("/api/chat", json={"messages": HISTORY}, headers={"X-Dua-App-Token": "abc"}).status_code == 200
     assert client.get("/").status_code == 200
+
+
+def test_file_metadata_text_is_included_on_its_original_user_turn(client, fake):
+    history = [dict(HISTORY[0], files=[{"name": "voice.m4a", "transcript": "My name is Fareed"},
+                                     {"name": "sales.csv", "extractedText": "Revenue,42"}]), *HISTORY[1:]]
+    response = client.post("/api/chat", json={"messages": history})
+    assert response.status_code == 200
+    contents, _ = fake.calls[0]
+    assert "My name is Fareed" in contents[0]["parts"][0][1]
+    assert "Revenue,42" in contents[0]["parts"][0][1]
+    assert contents[-1]["parts"] == [("text", "My name?")]
+
+
+def test_follow_up_and_retry_keep_inline_parts_on_original_turns(client, fake):
+    attachment = {"name": "a.pdf", "mimeType": "application/pdf", "data": base64.b64encode(b"pdf bytes").decode()}
+    first = dict(HISTORY[0], attachments=[attachment], attachmentText="Original file text")
+    for history in ([first, *HISTORY[1:]], [first]):
+        response = client.post("/api/chat", json={"messages": history})
+        assert response.status_code == 200
+        contents, _ = fake.calls[-1]
+        assert contents[0]["parts"][1] == ("data", "application/pdf", b"pdf bytes")
+        assert "Original file text" in contents[0]["parts"][0][1]
+
+
+def test_invalid_inline_history_attachments_and_large_file_text_are_rejected(client, fake):
+    assert client.post("/api/chat", json={"messages": [dict(HISTORY[0], attachments=[{"mimeType": "application/pdf", "data": "bad!"}])]}).status_code == 400
+    assert client.post("/api/chat", json={"messages": [dict(HISTORY[0], files=[{"transcript": "x" * engine.MAX_TURN_CHARS}])]}).status_code == 413
+    assert fake.calls == []
+
+
+@pytest.mark.parametrize("between_chunks", [False, True])
+def test_heartbeats_while_vertex_waits_for_iterator_or_next_chunk(client, fake, monkeypatch, between_chunks):
+    release = threading.Event()
+    polls = []
+    real_queue = queue.Queue
+
+    def generate(contents, stream=False):
+        if not between_chunks:
+            assert release.wait(3)
+            return iter([SimpleNamespace(text="Late", candidates=[])])
+        def chunks():
+            yield SimpleNamespace(text="First", candidates=[])
+            assert release.wait(3)
+            yield SimpleNamespace(text="Late", candidates=[])
+        return chunks()
+
+    class PollQueue(real_queue):
+        def get(self, block=True, timeout=None):
+            polls.append(timeout)
+            first_timeout = 2 if between_chunks else 1
+            if first_timeout <= len(polls) < first_timeout + 2:
+                raise queue.Empty
+            if len(polls) >= first_timeout + 2:
+                release.set()
+            return super().get(block=block, timeout=2)
+
+    monkeypatch.setattr(fake, "generate_content", generate)
+    monkeypatch.setattr(engine.queue, "Queue", PollQueue)
+    response = client.post("/api/chat", json={"messages": HISTORY, "stream": True})
+    body = response.get_data(as_text=True)
+    assert body.count(": heartbeat\n\n") == 3  # Immediate header flush + two 15-second polling intervals.
+    assert polls and all(timeout == 15 for timeout in polls)
+    text = [event["delta"] for event in events(response) if event["type"] == "text"]
+    assert text == (["First", "Late"] if between_chunks else ["Late"])
+    assert events(response)[-1] == {"type": "done", "truncated": False}
+
+
+def test_client_disconnect_stops_a_worker_blocked_on_a_full_queue(client, fake, monkeypatch):
+    closed = threading.Event()
+    def generate(contents, stream=False):
+        def chunks():
+            try:
+                for _ in range(10000):
+                    yield SimpleNamespace(text="chunk", candidates=[])
+            finally:
+                closed.set()
+        return chunks()
+    monkeypatch.setattr(fake, "generate_content", generate)
+    response = client.post("/api/chat", json={"messages": HISTORY, "stream": True}, buffered=False)
+    response.close()
+    assert closed.wait(2)
+
+
+def test_vertex_error_after_partial_text_keeps_text_and_does_not_emit_done(client, fake, monkeypatch):
+    def generate(contents, stream=False):
+        def chunks():
+            yield SimpleNamespace(text="Partial", candidates=[])
+            raise RuntimeError("secret Vertex detail")
+        return chunks()
+    monkeypatch.setattr(fake, "generate_content", generate)
+    response = client.post("/api/chat", json={"messages": HISTORY, "stream": True})
+    assert events(response) == [{"type": "text", "delta": "Partial"}, {"type": "error", "message": engine.GENERIC_ERROR, "status": 502}]
+    assert "secret Vertex detail" not in response.get_data(as_text=True)
+
+
+def test_worker_preserves_truncation_state(client, fake, monkeypatch):
+    monkeypatch.setattr(fake, "generate_content", lambda *args, **kwargs: iter([
+        SimpleNamespace(text="Short", candidates=[SimpleNamespace(finish_reason=SimpleNamespace(name="MAX_TOKENS"))])
+    ]))
+    response = client.post("/api/chat", json={"messages": HISTORY, "stream": True})
+    assert events(response)[-1] == {"type": "done", "truncated": True}

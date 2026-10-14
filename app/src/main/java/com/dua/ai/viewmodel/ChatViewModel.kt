@@ -185,7 +185,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     fun loadProviderConfiguration() = viewModelScope.launch {
         try {
             val config = setupApi.request("/api/config")
-            _integrations.value = com.dua.ai.setup.IntegrationCapabilities.configuration(config, _integrations.value)
+            _integrations.value = api.chatConfiguration(com.dua.ai.setup.IntegrationCapabilities.configuration(config, _integrations.value))
             flushPendingFileDeletes()
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (_: Exception) { integrationNotice("Provider status could not be loaded. Dua and Gemini use the existing backend configuration; refresh Feature setup to retry.") }
@@ -203,12 +203,12 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         val next = com.dua.ai.setup.IntegrationCapabilities.decode(setupApi.request("/api/setup"))
         val current = _integrations.value
         // /api/setup has no per-feature config; keep what /api/config reported.
-        _integrations.value = next.copy(busy = true, notice = "Setup status refreshed.",
+        _integrations.value = api.chatConfiguration(next.copy(busy = true, notice = "Setup status refreshed.",
             webSearchConfigured = current.webSearchConfigured, pageReadingAvailable = current.pageReadingAvailable, projectsEnabled = current.projectsEnabled, projectTasksEnabled = current.projectTasksEnabled, taskDueDatesEnabled = current.taskDueDatesEnabled, projectMemoryEnabled = current.projectMemoryEnabled,
             chatRenameEnabled = current.chatRenameEnabled, chatDeletionEnabled = current.chatDeletionEnabled, chatPinEnabled = current.chatPinEnabled,
             filesEnabled = current.filesEnabled, filesMaxBytes = current.filesMaxBytes, nativeSearch = current.nativeSearch,
             xSearchAvailable = current.xSearchAvailable, longContext = current.longContext, imagine = current.imagine, codeExecution = current.codeExecution, build = current.build,
-            voice = current.voice, generatedVoiceConfigured = current.voice?.ttsEnabled ?: next.generatedVoiceConfigured)
+            voice = current.voice, generatedVoiceConfigured = current.voice?.ttsEnabled ?: next.generatedVoiceConfigured))
     }
     fun searchWeb(query: String) = integrationAction {
         require(query.trim().length in 1..500) { "Enter a search up to 500 characters." }
@@ -356,7 +356,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     }
     /** Chat goes to DUA_CHAT_BASE_URL (Cloud Run by default); a separate engine gets no account token or server saving. */
     private val separateChatEngine = com.dua.ai.BuildConfig.DUA_CHAT_BASE_URL.trimEnd('/') != com.dua.ai.BuildConfig.DUA_API_BASE_URL.trimEnd('/')
-    private val api = DuaApiClient(com.dua.ai.BuildConfig.DUA_CHAT_BASE_URL, appToken = com.dua.ai.BuildConfig.DUA_APP_TOKEN, sendAccountToken = !separateChatEngine)
+    private val api = DuaApiClient(com.dua.ai.BuildConfig.DUA_CHAT_BASE_URL, appToken = com.dua.ai.BuildConfig.DUA_APP_TOKEN,
+        sendAccountToken = !separateChatEngine, apiBaseUrl = com.dua.ai.BuildConfig.DUA_API_BASE_URL)
 
     // ---- Imagine (Phase 3): image and video generation through /api/imagine ----
     private val imagineApi = com.dua.ai.imagine.ImagineApi()
@@ -735,8 +736,10 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     /** Stored files need a Phase 2 backend and a signed-in account (the server also requires the owner email). */
     fun storedFilesAvailable() = _integrations.value.filesEnabled && account.state.value.user != null
+    fun inlineChatFilesAvailable() = api.usesInlineChatFiles(_imagine.value)
     private fun maxStoredBytes() = _integrations.value.filesMaxBytes.takeIf { it > 0 } ?: (50L * 1024 * 1024)
     fun storedFilesHint(): String = when {
+        inlineChatFilesAvailable() -> "Cloud Run chat sends up to 3 files inline (2 MB total). Use CSV or UTF-8 text for spreadsheets; reselect media after restoring a chat."
         !_integrations.value.filesEnabled -> "Audio, spreadsheets and files over 2 MB need stored files on the Dua backend (see SUPABASE.md). Small images, PDFs and text files still work."
         account.state.value.user == null -> "Sign in from Profile to attach audio, spreadsheets and large files (up to ${StoredFileTypes.sizeLabel(maxStoredBytes())} each). Without signing in, up to 3 small files (2 MB total) still work."
         else -> ""
@@ -869,7 +872,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     fun startRecording() {
         if (_isTyping.value || recorder.recording) return
-        if (!storedFilesAvailable()) { _attachmentError.value = storedFilesHint(); return }
+        if (!api.usesInlineChatFiles(_imagine.value) && !storedFilesAvailable()) { _attachmentError.value = storedFilesHint(); return }
         try { recorder.start(); _recordingSince.value = recorder.startedAt; _attachmentError.value = "" }
         catch (failure: Exception) { _attachmentError.value = failure.message ?: "Recording could not start." }
     }
@@ -878,7 +881,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         _recordingSince.value = null
         if (file == null) { _attachmentError.value = "Recording was too short. Hold on a little longer and try again."; return }
         val name = "Voice note " + java.time.LocalTime.now().withNano(0).toString().take(5) + ".m4a"
-        startUpload(name, AudioRecorder.MIME, file.length(), open = { file.inputStream() }, cleanup = { file.delete() })
+        if (api.usesInlineChatFiles(_imagine.value)) loadFiles(cleanup = { file.delete() }) {
+            file.inputStream().use { PhotoAttachmentReader.prepare(listOf(PhotoPolicy.readSource(name, AudioRecorder.MIME, it, allowAudio = true))) }
+        } else startUpload(name, AudioRecorder.MIME, file.length(), open = { file.inputStream() }, cleanup = { file.delete() })
     }
     fun cancelRecording() { recorder.cancel(); _recordingSince.value = null }
 
@@ -952,7 +957,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             val picked = try { withContext(Dispatchers.IO) { describe(uris) } } catch (cancelled: CancellationException) { throw cancelled }
                 catch (_: Exception) { _attachmentError.value = "File read nahi hui. Dobara select karein."; return@launch }
-            val inline = if (storedFilesAvailable()) uploadPicked(picked) else {
+            val inline = if (api.usesInlineChatFiles(_imagine.value)) picked.map { it.uri }
+            else if (storedFilesAvailable()) uploadPicked(picked) else {
                 val blocked = picked.filter { StoredFileTypes.needsStorage(it.name, it.type) || (it.size ?: 0) > AttachmentReader.MAX_BYTES }
                 if (blocked.isNotEmpty()) _attachmentError.value = storedFilesHint()
                 picked.filterNot { it in blocked }.map { it.uri }
@@ -971,7 +977,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             // Text/code files are recognised by MIME type or extension (many apps report octet-stream).
             val type = resolver.getType(uri).orEmpty()
             val input = resolver.openInputStream(uri) ?: error("File read nahi hui.")
-            input.use { PhotoPolicy.readSource(name, type, it) }
+            input.use { PhotoPolicy.readSource(name, type, it, allowAudio = api.usesInlineChatFiles(_imagine.value)) }
         }
         PhotoAttachmentReader.prepare(sources)
     }
@@ -1474,7 +1480,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             _webMode.value = null; _xSearch.value = false; _buildRepo.value = null
             clearAttachments()
         } else chats.find { it.id == activeId }?.let { chat ->
-            _messages.value = chat.messages; _selectedModel.value = chat.model; _draft.value = chat.draft
+            _messages.value = api.keepInlineContext(chat.messages, _messages.value); _selectedModel.value = chat.model; _draft.value = chat.draft
             _summary.value = chat.summary; _buildRepo.value = chat.buildRepository; _projectId.value = chat.projectId
         }
     }
@@ -1582,7 +1588,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     )
 
     fun setModel(model: String) {
-        if (_integrations.value.providers.none { it.name == model && it.configured }) return
+        if (api.chatProvider(model, _integrations.value.providers) == null) return
         _selectedModel.value = model
         if (model != "Grok") _xSearch.value = false
         if (!codeUsable(model)) _runCode.value = false
@@ -1699,7 +1705,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             if (_attachments.value.isNotEmpty() || storedFiles.isNotEmpty()) { _error.value = "Build mode reads the repository, not attachments. Remove them or turn Build off."; return }
         }
         webModeError(requestWebMode, responseModel)?.let { _error.value = it; return }
-        val provider = _integrations.value.providers.firstOrNull { it.name == responseModel && it.configured }
+        val provider = api.chatProvider(responseModel, _integrations.value.providers)
         if (provider == null) {
             _error.value = "This provider needs backend setup. Choose a configured model."
             return
@@ -1716,7 +1722,12 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         val names = files.map { it.name } + storedFiles.map { it.name }
         val text = prompt + if (names.isEmpty()) "" else "\nFiles: " + names.joinToString(", ")
         val fileText = com.dua.ai.attachments.TextFiles.contextText(files, ChatMessage.MAX_ATTACHMENT_TEXT_CHARS)
-        val userMessage = ChatMessage(text = text, isUser = true, model = responseModel, attachmentText = fileText, files = storedFiles)
+        if (api.usesInlineChatFiles(false) && storedFiles.any { it.transcript.isNullOrBlank() }) {
+            _error.value = "Cloud Run cannot read stored file references. Remove these files and select them again for inline chat (2 MB total); use CSV for spreadsheets."
+            return
+        }
+        val userMessage = ChatMessage(text = text, isUser = true, model = responseModel, attachmentText = fileText, files = storedFiles,
+            inlineAttachments = if (separateChatEngine) files else emptyList())
         val sentPaths = storedFiles.map { it.path }.toSet()
         val startedAt = System.currentTimeMillis()
         val reply = ChatMessage(text = "", isUser = false, model = responseModel, state = ChatMessage.STREAMING, startedAt = startedAt,

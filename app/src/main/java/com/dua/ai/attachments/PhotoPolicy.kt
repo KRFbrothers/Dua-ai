@@ -26,8 +26,9 @@ object PhotoPolicy {
         val budget = if (images > 0) ((AttachmentReader.MAX_BYTES - documents) / images).toInt() else 0
         return files.map { if (it.mimeType.startsWith("image/")) budget else it.bytes.size }
     }
-    fun readSource(name: String, mimeType: String, input: InputStream): AttachmentSource {
-        val type = AttachmentReader.normalizedType(name, mimeType) ?: throw IllegalArgumentException(TextFiles.UNSUPPORTED)
+    fun readSource(name: String, mimeType: String, input: InputStream, allowAudio: Boolean = false): AttachmentSource {
+        val audio = com.dua.ai.files.StoredFileTypes.storedType(name, mimeType)?.takeIf { allowAudio && it in com.dua.ai.files.StoredFileTypes.AUDIO_TYPES }
+        val type = audio ?: AttachmentReader.normalizedType(name, mimeType) ?: throw IllegalArgumentException(TextFiles.UNSUPPORTED)
         val image = type.startsWith("image/")
         val text = type == "text/plain"
         val limit = if (image) MAX_SOURCE_BYTES else if (text) TextFiles.MAX_BYTES else AttachmentReader.MAX_BYTES
