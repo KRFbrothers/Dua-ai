@@ -51,11 +51,13 @@ fun DuaTopBar(title: String, onBack: (() -> Unit)?, backEnabled: Boolean = true,
         title = { Text(title, style = com.dua.ai.ui.theme.SettingsNameStyle, color = com.dua.ai.ui.theme.PageTheme.colors.text, maxLines = 1, overflow = TextOverflow.Ellipsis,
             modifier = Modifier.semantics { heading() }) },
         navigationIcon = {
-            if (onBack != null) IconButton(onClick = onBack, enabled = backEnabled,
-                modifier = Modifier.size(SettingsSizes.touch).padding((SettingsSizes.touch - SettingsSizes.circleButton) / 2)
+            // 48 dp touch slot around the 42 dp reference circle.
+            if (onBack != null) IconButton(onClick = onBack, enabled = backEnabled, modifier = Modifier.size(SettingsSizes.touch)) {
+                androidx.compose.foundation.layout.Box(Modifier.size(SettingsSizes.circleButton)
                     .clip(SettingsShapes.circle).background(SettingsTheme.colors.circleButton)
-                    .border(SettingsSizes.border, SettingsTheme.colors.circleBorder, SettingsShapes.circle)) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = backLabel, tint = SettingsTheme.colors.circleIcon)
+                    .border(SettingsSizes.border, SettingsTheme.colors.circleBorder, SettingsShapes.circle), contentAlignment = androidx.compose.ui.Alignment.Center) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = backLabel, tint = SettingsTheme.colors.circleIcon)
+                }
             }
         },
         actions = actions,

@@ -5,7 +5,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.selection.selectable
+
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.VolumeUp
 import androidx.compose.material.icons.outlined.GraphicEq
@@ -22,6 +22,7 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -35,11 +36,10 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.dua.ai.settings.LocalPreferences
-import com.dua.ai.ui.components.DuaPageScaffold
-import com.dua.ai.ui.components.SettingsDivider
-import com.dua.ai.ui.components.SettingsRow
-import com.dua.ai.ui.components.SettingsSection
-import com.dua.ai.ui.components.SettingsSwitchRow
+import com.dua.ai.ui.components.*
+import com.dua.ai.ui.theme.SettingsRowStyle
+import com.dua.ai.ui.theme.SettingsTheme
+import com.dua.ai.ui.theme.SettingsSizes
 import com.dua.ai.ui.navigation.DuaDestination
 import com.dua.ai.ui.theme.Spacing
 import com.dua.ai.viewmodel.ChatViewModel
@@ -139,12 +139,12 @@ fun VoiceSettingsContent(state: VoiceSettingsUiState, onBack: () -> Unit, onPick
     val config = state.config
     val provider = state.provider
     DuaPageScaffold(title = "Voice", onBack = onBack) {
-        SettingsSection("Talk with Dua") {
-            SettingsRow(Icons.Outlined.Mic, "Voice input", "Dictate, review, then send") { onOpen(DuaDestination.Voice) }
-            SettingsDivider()
+        SettingsGroup("Talk with Dua") {
+            SettingsNavRow(Icons.Outlined.Mic, "Voice input", "Dictate, review, then send") { onOpen(DuaDestination.Voice) }
+            SettingsRowDivider()
             if (config?.live?.enabled == true && state.signedIn)
-                SettingsRow(Icons.Outlined.GraphicEq, "Live conversation", "Talk with Grok in real time · interrupt any time") { onOpen(DuaDestination.LiveVoice) }
-            else SettingsRow(Icons.Outlined.GraphicEq, "Voice mode", "Talk with Dua and hear the reply out loud") { onOpen(DuaDestination.HandsFree) }
+                SettingsNavRow(Icons.Outlined.GraphicEq, "Live conversation", "Talk with Grok in real time · interrupt any time") { onOpen(DuaDestination.LiveVoice) }
+            else SettingsNavRow(Icons.Outlined.GraphicEq, "Voice mode", "Talk with Dua and hear the reply out loud") { onOpen(DuaDestination.HandsFree) }
         }
         Text(when {
             config == null -> "Update the Dua backend to pick Grok or Gemini voices. The device voice works now."
@@ -152,12 +152,12 @@ fun VoiceSettingsContent(state: VoiceSettingsUiState, onBack: () -> Unit, onPick
             !config.ttsEnabled -> config.ttsReason.ifBlank { "AI voices are off on the server. The device voice is available." }
             else -> "Choose how Dua reads replies aloud. AI voices make audio only for the reply you tap."
         }, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        SettingsSection("Reply voice") {
+        SettingsGroup("Reply voice") {
             Choice("Device voice", "Free · works offline when the language is installed",
                 provider == null && !(config == null && state.signedIn && state.preferences.generatedVoice)) { onProvider("device") }
             if (config == null) {
-                SettingsDivider()
-                SettingsSwitchRow(Icons.AutoMirrored.Outlined.VolumeUp, "AI reply voice",
+                SettingsRowDivider()
+                SettingsToggleRow(Icons.AutoMirrored.Outlined.VolumeUp, "AI reply voice",
                     subtitle = when {
                         !state.legacyGeneratedVoiceConfigured && !state.preferences.generatedVoice -> "Needs backend setup · device voice stays available"
                         !state.signedIn && !state.preferences.generatedVoice -> "Sign in to use a generated voice"
@@ -167,39 +167,39 @@ fun VoiceSettingsContent(state: VoiceSettingsUiState, onBack: () -> Unit, onPick
                     onCheckedChange = onGeneratedVoice)
             }
             config?.providers?.forEach { item ->
-                SettingsDivider()
+                SettingsRowDivider()
                 Choice(providerLabel(item), listOfNotNull(item.model.ifBlank { null }, item.price.ifBlank { null }).joinToString(" · ").ifBlank { null },
                     provider?.id == item.id, enabled = state.aiAvailable) { onProvider(item.id) }
             }
         }
-        SettingsSection("Voice") {
-            SettingsRow(Icons.Outlined.RecordVoiceOver, state.voice.name, state.voice.description.ifBlank { null },
+        SettingsGroup("Voice") {
+            SettingsNavRow(Icons.Outlined.RecordVoiceOver, state.voice.name, state.voice.description.ifBlank { null },
                 enabled = provider == null || provider.voices.size > 1) { onPicker(VoicePickerKind.VOICE) }
-            SettingsDivider()
+            SettingsRowDivider()
             Row(Modifier.fillMaxWidth().padding(horizontal = Spacing.lg, vertical = Spacing.md), verticalAlignment = Alignment.CenterVertically) {
-                Text("Speed", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                Text("Speed", style = SettingsRowStyle, color = SettingsTheme.colors.rowText, modifier = Modifier.weight(1f))
                 Text(if (state.speedRange.start == state.speedRange.endInclusive) "Set by the voice" else "%.2f×".format(Locale.ROOT, state.speed).replace("0×", "×"),
                     style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             if (state.speedRange.start < state.speedRange.endInclusive) {
                 var dragging by remember(state.speed) { mutableFloatStateOf(state.speed) }
-                Slider(value = dragging, onValueChange = { dragging = it }, onValueChangeFinished = { onSpeed(dragging) },
+                Slider(value = dragging, colors = pageSliderColors(), onValueChange = { dragging = it }, onValueChangeFinished = { onSpeed(dragging) },
                     valueRange = state.speedRange, steps = (((state.speedRange.endInclusive - state.speedRange.start) / 0.1f + 0.5f).toInt() - 1).coerceAtLeast(0),
                     modifier = Modifier.padding(horizontal = Spacing.lg).semantics { contentDescription = "Speaking speed" })
             }
             Row(Modifier.fillMaxWidth().padding(Spacing.lg), verticalAlignment = Alignment.CenterVertically) {
-                FilledTonalButton(onClick = onPreview, enabled = provider == null || state.aiAvailable) {
+                FilledTonalButton(onClick = onPreview, enabled = provider == null || state.aiAvailable, modifier = Modifier.heightIn(min = SettingsSizes.touch)) {
                     Icon(if (state.previewing) Icons.Outlined.StopCircle else Icons.Outlined.PlayCircle, null)
                     Text(if (state.previewing) "Stop sample" else "Play sample", modifier = Modifier.padding(start = Spacing.sm))
                 }
             }
         }
-        SettingsSection("Language") {
-            SettingsRow(Icons.Outlined.Language, "Reply language", state.language.name + (state.language.note.takeIf { it.isNotBlank() }?.let { " · $it" } ?: "")) {
+        SettingsGroup("Language") {
+            SettingsNavRow(Icons.Outlined.Language, "Reply language", subtitle = state.language.note.ifBlank { null }, value = state.language.name) {
                 onPicker(VoicePickerKind.REPLY_LANGUAGE)
             }
-            SettingsDivider()
-            SettingsRow(Icons.Outlined.Mic, "Speech recognition", SpeechLanguages.name(state.preferences.inputLanguage) + " · dictation and voice mode") {
+            SettingsRowDivider()
+            SettingsNavRow(Icons.Outlined.Mic, "Speech recognition", subtitle = "Dictation and voice mode", value = SpeechLanguages.name(state.preferences.inputLanguage)) {
                 onPicker(VoicePickerKind.INPUT_LANGUAGE)
             }
         }
@@ -207,13 +207,13 @@ fun VoiceSettingsContent(state: VoiceSettingsUiState, onBack: () -> Unit, onPick
             else "The device voice runs on your phone. Install more voices in Android Settings › Text-to-speech.",
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         config?.live?.let { live ->
-            SettingsSection("Live conversation") {
+            SettingsGroup("Live conversation") {
                 if (!live.enabled || !state.signedIn) Text(if (!state.signedIn) "Sign in to talk with Grok in real time." else live.reason.ifBlank { "Live voice is off on the server." },
                     style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(Spacing.lg))
                 else {
                     val liveVoice = live.voices.firstOrNull { it.id == state.preferences.liveVoice } ?: live.voices.firstOrNull { it.id == live.defaultVoice }
-                    SettingsRow(Icons.Outlined.RecordVoiceOver, "Live voice: ${liveVoice?.name ?: "Default"}", liveVoice?.description?.ifBlank { null }) { onPicker(VoicePickerKind.LIVE_VOICE) }
-                    SettingsDivider()
+                    SettingsNavRow(Icons.Outlined.RecordVoiceOver, "Live voice", subtitle = liveVoice?.description?.ifBlank { null }, value = liveVoice?.name ?: "Default") { onPicker(VoicePickerKind.LIVE_VOICE) }
+                    SettingsRowDivider()
                     val usage = state.liveUsage
                     Text((if (usage != null && usage.limitSeconds > 0) "${usage.leftSeconds / 60} of ${usage.limitSeconds / 60} min left today" else "${live.dailyMinutes} min a day") +
                         " · up to ${live.maxSessionMinutes} min per session · about ${live.pricePerMinute.ifBlank { "$0.08" }}/min. Uses the reply language and speed above.",
@@ -246,21 +246,16 @@ fun VoicePickerContent(title: String, intro: String, items: List<PickerItem>, se
     onSelect: (String) -> Unit, onPreview: ((String) -> Unit)?) {
     DuaPageScaffold(title = title, onBack = onBack) {
         if (intro.isNotBlank()) Text(intro, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        SettingsSection(null) {
+        SettingsGroup(null, Modifier.selectableGroup()) {
             items.forEachIndexed { index, item ->
-                if (index > 0) SettingsDivider()
-                Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).selectable(selected = item.id == selected, role = Role.RadioButton) { onSelect(item.id) }
-                    .padding(start = Spacing.lg, end = Spacing.sm, top = Spacing.sm, bottom = Spacing.sm), verticalAlignment = Alignment.CenterVertically) {
-                    RadioButton(selected = item.id == selected, onClick = null)
-                    Column(Modifier.weight(1f).padding(start = Spacing.lg)) {
-                        Text(item.title, style = MaterialTheme.typography.bodyLarge)
-                        if (item.subtitle.isNotBlank()) Text(item.subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    if (onPreview != null) IconButton(onClick = { onPreview(item.id) }) {
-                        Icon(if (previewing == item.id) Icons.Outlined.StopCircle else Icons.AutoMirrored.Outlined.VolumeUp,
-                            contentDescription = (if (previewing == item.id) "Stop sample of " else "Play sample of ") + item.title)
-                    }
-                }
+                if (index > 0) SettingsRowDivider()
+                SettingsChoiceRow(item.title, item.id == selected, item.subtitle.ifBlank { null },
+                    trailing = onPreview?.let { preview -> {
+                        IconButton(onClick = { preview(item.id) }) {
+                            Icon(if (previewing == item.id) Icons.Outlined.StopCircle else Icons.AutoMirrored.Outlined.VolumeUp,
+                                contentDescription = (if (previewing == item.id) "Stop sample of " else "Play sample of ") + item.title)
+                        }
+                    } }) { onSelect(item.id) }
             }
         }
     }
@@ -322,13 +317,5 @@ fun VoicePickerScreen(viewModel: ChatViewModel, voice: ReplyVoice, kind: String,
 }
 
 @Composable
-private fun Choice(label: String, subtitle: String?, selected: Boolean, enabled: Boolean = true, onSelect: () -> Unit) {
-    Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).selectable(selected = selected, enabled = enabled, role = Role.RadioButton, onClick = onSelect)
-        .padding(horizontal = Spacing.lg, vertical = Spacing.sm), verticalAlignment = Alignment.CenterVertically) {
-        RadioButton(selected = selected, onClick = null, enabled = enabled)
-        Column(Modifier.padding(start = Spacing.lg)) {
-            Text(label, style = MaterialTheme.typography.bodyLarge, color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant)
-            if (!subtitle.isNullOrBlank()) Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-    }
-}
+private fun Choice(label: String, subtitle: String?, selected: Boolean, enabled: Boolean = true, onSelect: () -> Unit) =
+    SettingsChoiceRow(label, selected, subtitle, enabled, onClick = onSelect)
