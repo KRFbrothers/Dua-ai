@@ -1,5 +1,7 @@
 package com.dua.ai.ui.chat
 
+import com.dua.ai.ui.theme.SheetBodyStyle
+import com.dua.ai.ui.theme.SheetTheme
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.CustomAccessibilityAction
@@ -376,29 +378,29 @@ fun ChatScreen(
     }
 
     deletingId?.let { id ->
-        AlertDialog(
+        DuaDialog(
             onDismissRequest = { deletingId = null },
-            title = { Text("Remove cached chat?") },
-            text = { Text("Remove this chat from the phone cache? Server history and stored files are kept.") },
-            confirmButton = { TextButton(onClick = { actions.onDeleteChat(id); deletingId = null }) { Text("Remove") } },
-            dismissButton = { TextButton(onClick = { deletingId = null }) { Text("Cancel") } },
+            title = "Remove cached chat?",
+            text = { Text("Remove this chat from the phone cache? Server history and stored files are kept.", style = SheetBodyStyle) },
+            confirmButton = { SheetTextButton("Remove", { actions.onDeleteChat(id); deletingId = null }, destructive = true) },
+            dismissButton = { SheetTextButton("Cancel", { deletingId = null }) },
         )
     }
     deletingServerId?.let { id ->
         val deletion = state.chatDeletion.takeIf { it.id == id }
         val busy = deletion?.busy == true
-        AlertDialog(onDismissRequest = { if (!busy) { deletingServerId = null; actions.onDismissChatDeletion() } },
+        DuaDialog(onDismissRequest = { if (!busy) { deletingServerId = null; actions.onDismissChatDeletion() } },
             properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, dismissOnBackPress = !busy, dismissOnClickOutside = !busy),
             modifier = Modifier.padding(horizontal = Spacing.xl).widthIn(max = 400.dp),
-            title = { Text("Delete chat?") },
+            title = "Delete chat?",
             text = { Column(Modifier.verticalScroll(rememberScrollState())) {
                 val title = state.savedChats.firstOrNull { it.id == id }?.title ?: "this chat"
-                Text("Delete “$title” from server history and this phone? Other devices with this update remove it when they sync. Edits to this conversation are removed; stored files are kept.")
-                if (busy) Text("Deleting…", Modifier.padding(top = Spacing.md))
-                deletion?.error?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = Spacing.md)) }
+                Text("Delete “$title” from server history and this phone? Other devices with this update remove it when they sync. Edits to this conversation are removed; stored files are kept.", style = SheetBodyStyle)
+                if (busy) Text("Deleting…", Modifier.padding(top = Spacing.md), style = SheetBodyStyle)
+                deletion?.error?.let { Text(it, style = SheetBodyStyle, color = SheetTheme.colors.destructive, modifier = Modifier.padding(top = Spacing.md)) }
             } },
-            confirmButton = { TextButton(enabled = !busy, onClick = { actions.onDeleteServerChat(id) }) { Text(if (deletion?.error != null) "Retry" else "Delete") } },
-            dismissButton = { TextButton(enabled = !busy, onClick = { deletingServerId = null; actions.onDismissChatDeletion() }) { Text("Cancel") } })
+            confirmButton = { SheetTextButton(if (deletion?.error != null) "Retry" else "Delete", { actions.onDeleteServerChat(id) }, enabled = !busy, destructive = true) },
+            dismissButton = { SheetTextButton("Cancel", { deletingServerId = null; actions.onDismissChatDeletion() }, enabled = !busy) })
     }
 }
 

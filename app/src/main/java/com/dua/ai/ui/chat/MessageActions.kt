@@ -55,6 +55,12 @@ import androidx.compose.ui.text.AnnotatedString
 import com.dua.ai.model.ChatMessage
 import com.dua.ai.model.CodeRuns
 import com.dua.ai.ui.theme.Sizes
+import com.dua.ai.ui.theme.SheetDisabledAlpha
+import com.dua.ai.ui.theme.SheetNoteStyle
+import com.dua.ai.ui.theme.SheetRowStyle
+import com.dua.ai.ui.theme.SheetSizes
+import com.dua.ai.ui.theme.SheetTheme
+import androidx.compose.foundation.clickable
 import com.dua.ai.ui.theme.Spacing
 import kotlinx.coroutines.delay
 
@@ -115,42 +121,46 @@ internal fun MessageActionsSheet(message: ChatMessage, state: ChatUiState, actio
         message.state in listOf("complete", "stopped")
     val speaking = state.speakingId == message.id
     val speakEnabled = assistant && !message.streaming && (state.generatedVoice || state.speechAvailable) && (speaking || message.text.isNotBlank())
-    ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = Spacing.lg, vertical = Spacing.sm).testTag("message-actions-sheet")) {
-            Text("Message actions", style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.padding(bottom = Spacing.sm).semantics { heading() })
+    DuaSheet(onDismiss = onDismiss) {
+        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = SheetSizes.paddingH).padding(bottom = SheetSizes.paddingBottom)
+            .testTag("message-actions-sheet")) {
+            SheetTitle("Message actions")
+            SheetGroup {
             SheetMessageAction("copy", "Copy", if (assistant) "Copy response" else "Copy message", Icons.Outlined.ContentCopy, copyText.isNotBlank()) {
                 textActions.copy(); onDismiss()
             }
+            if (assistant) SheetDivider()
             if (assistant) SheetMessageAction("retry", "Retry", replyRetryDescription(actions.retryWebMode(message.id)), Icons.Outlined.Refresh, retryEnabled) {
                 onDismiss(); actions.onRetry(message.id)
             }
+            SheetDivider()
             SheetMessageAction("share", "Share", if (assistant) "Share response" else "Share message", Icons.Outlined.Share,
                 copyText.isNotBlank() || message.isImagine && message.media.isNotEmpty()) {
                 if (message.isImagine && message.media.isNotEmpty()) { onDismiss(); imagineActions.onShare(message.media) }
                 else if (textActions.share()) onDismiss()
             }
+            if (assistant) SheetDivider()
             if (assistant) SheetMessageAction("speak", if (speaking) "Stop speaking" else "Speak", replySpeakDescription(speaking, state.generatedVoice),
                 if (speaking) Icons.Outlined.StopCircle else Icons.AutoMirrored.Outlined.VolumeUp, speakEnabled) {
                 onDismiss(); actions.onSpeak(message)
             }
-            textActions.shareError?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
-            Spacer(Modifier.heightIn(min = Spacing.lg))
+            }
+            textActions.shareError?.let { Text(it, style = SheetNoteStyle, color = SheetTheme.colors.destructive, modifier = Modifier.padding(top = SheetSizes.sectionGap)) }
         }
     }
 }
 
 @Composable
 private fun SheetMessageAction(key: String, label: String, description: String, icon: ImageVector, enabled: Boolean, onClick: () -> Unit) {
-    val color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (enabled) 1f else .38f)
-    Surface(onClick = onClick, enabled = enabled, color = MaterialTheme.colorScheme.surface,
-        modifier = Modifier.fillMaxWidth().heightIn(min = Sizes.touchTarget).testTag("message-action-$key")
-            .semantics(mergeDescendants = true) { contentDescription = description; role = Role.Button }) {
-        Row(Modifier.padding(horizontal = Spacing.md, vertical = Spacing.md), verticalAlignment = Alignment.CenterVertically) {
-            Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(Sizes.icon))
-            Spacer(Modifier.width(Spacing.lg))
-            Text(label, style = MaterialTheme.typography.bodyLarge, color = color)
-        }
+    val c = SheetTheme.colors
+    val alpha = if (enabled) 1f else SheetDisabledAlpha
+    Row(Modifier.fillMaxWidth().heightIn(min = SheetSizes.rowMin).testTag("message-action-$key")
+        .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+        .semantics(mergeDescendants = true) { contentDescription = description; role = Role.Button }
+        .padding(horizontal = SheetSizes.rowPaddingH, vertical = SheetSizes.rowPaddingV), verticalAlignment = Alignment.CenterVertically) {
+        Icon(icon, contentDescription = null, tint = c.icon.copy(alpha = alpha), modifier = Modifier.size(SheetSizes.rowIcon))
+        Spacer(Modifier.width(SheetSizes.rowGap))
+        Text(label, style = SheetRowStyle, color = c.text.copy(alpha = alpha))
     }
 }
 

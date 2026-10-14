@@ -1,5 +1,10 @@
 package com.dua.ai.ui.history
 
+import com.dua.ai.ui.chat.DuaDialog
+import com.dua.ai.ui.chat.SheetTextButton
+import com.dua.ai.ui.theme.SheetShapes
+import com.dua.ai.ui.theme.SheetTheme
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -198,20 +203,23 @@ fun HistoryDrawer(
     renaming?.let { chat ->
         var title by remember(chat.id) { mutableStateOf(chat.title) }
         var error by remember(chat.id) { mutableStateOf<String?>(null) }
-        AlertDialog(
+        DuaDialog(
             onDismissRequest = { renaming = null },
-            title = { Text("Rename chat") },
+            title = "Rename chat",
             text = {
-                OutlinedTextField(title, { title = it; error = null }, singleLine = true, label = { Text("Title") },
+                OutlinedTextField(title, { title = it; error = null }, singleLine = true, label = { Text("Title") }, shape = SheetShapes.badge,
+                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = SheetTheme.colors.accent, focusedLabelColor = SheetTheme.colors.accent,
+                        cursorColor = SheetTheme.colors.accent, unfocusedBorderColor = SheetTheme.colors.divider,
+                        focusedTextColor = SheetTheme.colors.text, unfocusedTextColor = SheetTheme.colors.text),
                     isError = error != null, supportingText = error?.let { { Text(it) } }, modifier = Modifier.testTag("rename-field"))
             },
             confirmButton = {
-                TextButton(enabled = title.isNotBlank(), onClick = {
+                SheetTextButton("Save", {
                     val result = onRenameChat(chat.id, title.trim())
                     if (result == null) renaming = null else error = result
-                }) { Text("Save") }
+                }, enabled = title.isNotBlank())
             },
-            dismissButton = { TextButton(onClick = { renaming = null }) { Text("Cancel") } },
+            dismissButton = { SheetTextButton("Cancel", { renaming = null }) },
         )
     }
 }

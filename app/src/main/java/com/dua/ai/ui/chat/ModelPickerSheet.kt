@@ -12,69 +12,69 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.semantics.stateDescription
 import com.dua.ai.setup.ProviderCapability
-import com.dua.ai.ui.theme.DuaShape
-import com.dua.ai.ui.theme.DuaTheme
-import com.dua.ai.ui.theme.Spacing
+import com.dua.ai.ui.theme.SheetDisabledAlpha
+import com.dua.ai.ui.theme.SheetNoteStyle
+import com.dua.ai.ui.theme.SheetRowStyle
+import com.dua.ai.ui.theme.SheetShapes
+import com.dua.ai.ui.theme.SheetSizes
+import com.dua.ai.ui.theme.SheetSubStyle
+import com.dua.ai.ui.theme.SheetTheme
 
 private val MODEL_ORDER = listOf("Dua", "ChatGPT", "Gemini", "Claude", "Grok", "Kimi")
 
-/** Model picker. Only providers the backend reports as configured can be chosen. */
-@OptIn(ExperimentalMaterial3Api::class)
+/** Model picker. Only providers the backend reports as configured can be chosen. Letter badges only — no provider logos. */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun ModelPickerSheet(current: String, providers: List<ProviderCapability>, onSelect: (String) -> Unit, onOpenSetup: () -> Unit, onDismiss: () -> Unit) {
-    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = MaterialTheme.colorScheme.surfaceContainerLow) {
-        Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = Spacing.lg).padding(bottom = Spacing.xxl),
-            verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-            Text("Choose a model", style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.padding(horizontal = Spacing.sm).semantics { heading() })
-            Text("Pick who responds in this chat", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = Spacing.sm).padding(bottom = Spacing.sm))
-            MODEL_ORDER.forEach { name ->
-                val capability = providers.firstOrNull { it.name == name }
-                val available = capability?.configured == true
-                val provider = when (name) { "ChatGPT" -> "OpenAI"; "Claude" -> "Anthropic"; "Grok" -> "xAI"; "Kimi" -> "Moonshot"; else -> "Gemini" }
-                val selected = current == name
-                val alpha = if (available) 1f else .45f
-                Surface(color = if (selected) MaterialTheme.colorScheme.surfaceContainerHighest else Color.Transparent, shape = DuaShape.card) {
-                    Row(Modifier.fillMaxWidth().heightIn(min = 64.dp)
+    val c = SheetTheme.colors
+    DuaSheet(onDismiss = onDismiss) {
+        Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = SheetSizes.paddingH).padding(bottom = SheetSizes.paddingBottom)
+            .testTag("model-picker-sheet")) {
+            SheetTitle("Choose a model")
+            Text("Pick who responds in this chat", style = SheetSubStyle, color = c.subText, modifier = Modifier.padding(bottom = SheetSizes.sectionGap))
+            SheetGroup {
+                MODEL_ORDER.forEachIndexed { index, name ->
+                    if (index > 0) SheetDivider()
+                    val capability = providers.firstOrNull { it.name == name }
+                    val available = capability?.configured == true
+                    val provider = when (name) { "ChatGPT" -> "OpenAI"; "Claude" -> "Anthropic"; "Grok" -> "xAI"; "Kimi" -> "Moonshot"; else -> "Gemini" }
+                    val selected = current == name
+                    val alpha = if (available) 1f else SheetDisabledAlpha
+                    Row(Modifier.fillMaxWidth().heightIn(min = SheetSizes.rowMin).testTag("model-row-$name")
                         .selectable(selected = selected, enabled = available, role = Role.RadioButton) { onSelect(name) }
-                        .padding(horizontal = Spacing.md, vertical = Spacing.sm), verticalAlignment = Alignment.CenterVertically) {
-                        Surface(color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = alpha), shape = DuaShape.codeBlock) {
-                            Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) {
-                                Text(name.take(1), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = alpha))
+                        .semantics { stateDescription = if (selected) "Selected" else if (available) "Available" else "Setup required" }
+                        .padding(horizontal = SheetSizes.rowPaddingH, vertical = SheetSizes.rowPaddingV), verticalAlignment = Alignment.CenterVertically) {
+                        Surface(color = if (selected) c.accent else c.container, shape = SheetShapes.badge) {
+                            Box(Modifier.size(SheetSizes.badge), contentAlignment = Alignment.Center) {
+                                Text(name.take(1), style = SheetRowStyle, color = (if (selected) c.onAccent else c.text).copy(alpha = alpha))
                             }
                         }
-                        Column(Modifier.weight(1f).padding(start = Spacing.md)) {
-                            Text(if (name == AUTO_MODEL) "$name · Auto" else name, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface.copy(alpha = alpha))
+                        Column(Modifier.weight(1f).padding(start = SheetSizes.rowGap)) {
+                            Text(if (name == AUTO_MODEL) "$name · Auto" else name, style = SheetRowStyle, color = c.text.copy(alpha = alpha))
                             Text(if (available) "$provider · ${capability?.model.orEmpty()}" else "$provider · Setup required",
-                                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha))
+                                style = SheetSubStyle, color = c.subText.copy(alpha = alpha))
                         }
-                        if (selected) Icon(Icons.Filled.CheckCircle, contentDescription = "Selected", tint = DuaTheme.colors.sparkle)
+                        if (selected) Icon(Icons.Filled.Check, contentDescription = "Selected", tint = c.accent, modifier = Modifier.size(SheetSizes.rowIcon))
                     }
                 }
             }
-            Text("Available models follow backend configuration. Provider keys stay on the server.", style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = Spacing.sm).padding(top = Spacing.md))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                TextButton(onClick = onOpenSetup) { Text("Feature setup") }
-                TextButton(onClick = onDismiss) { Text("Done") }
+            Text("Available models follow backend configuration. Provider keys stay on the server.", style = SheetNoteStyle,
+                color = c.subText, modifier = Modifier.padding(top = SheetSizes.sectionGap))
+            Row(Modifier.fillMaxWidth().padding(top = SheetSizes.sectionGap), horizontalArrangement = Arrangement.SpaceBetween) {
+                SheetTextButton("Feature setup", onOpenSetup, modifier = Modifier.heightIn(min = SheetSizes.touch))
+                SheetTextButton("Done", onDismiss, modifier = Modifier.heightIn(min = SheetSizes.touch))
             }
         }
     }
