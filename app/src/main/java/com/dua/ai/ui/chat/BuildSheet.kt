@@ -1,5 +1,11 @@
 package com.dua.ai.ui.chat
 
+import com.dua.ai.ui.theme.SheetNoteStyle
+import com.dua.ai.ui.theme.SheetSubStyle
+import com.dua.ai.ui.theme.SheetRowStyle
+import com.dua.ai.ui.theme.SheetBodyStyle
+import com.dua.ai.ui.theme.SheetSizes
+import com.dua.ai.ui.theme.SheetTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -44,7 +50,7 @@ import com.dua.ai.ui.theme.Spacing
 @Composable
 fun BuildSheet(current: String?, hint: String, repositories: BuildRepositories, enabled: Boolean, onSelect: (String) -> Unit, onTurnOff: () -> Unit,
     onRetry: () -> Unit, onOpenSetup: () -> Unit, onDismiss: () -> Unit) {
-    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = MaterialTheme.colorScheme.surfaceContainerLow) {
+    DuaSheet(onDismiss = onDismiss) {
         BuildSheetContent(current, hint, repositories, enabled, onSelect, onTurnOff, onRetry, onOpenSetup, onDismiss)
     }
 }
@@ -52,65 +58,64 @@ fun BuildSheet(current: String?, hint: String, repositories: BuildRepositories, 
 @Composable
 internal fun BuildSheetContent(current: String?, hint: String, repositories: BuildRepositories, enabled: Boolean, onSelect: (String) -> Unit, onTurnOff: () -> Unit,
     onRetry: () -> Unit, onOpenSetup: () -> Unit, onDismiss: () -> Unit) {
-    val scheme = MaterialTheme.colorScheme
-    Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = Spacing.lg).padding(bottom = Spacing.xxl),
+    val c = SheetTheme.colors
+    Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = SheetSizes.paddingH).padding(bottom = SheetSizes.paddingBottom),
         verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-        Row(Modifier.padding(horizontal = Spacing.sm), verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Outlined.Build, contentDescription = null, tint = scheme.primary, modifier = Modifier.size(Sizes.iconSmall))
-            Text("Build mode", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(start = Spacing.sm).semantics { heading() })
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Outlined.Build, contentDescription = null, tint = c.accent, modifier = Modifier.size(SheetSizes.rowIcon).padding(bottom = SheetSizes.titleBottom))
+            SheetTitle("Build mode", Modifier.padding(start = SheetSizes.tileGap))
         }
         Text("Dua reads the repository you pick and answers with explanations and diffs. Creating a pull request requires a separate review and confirmation.",
-            style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = Spacing.sm).padding(bottom = Spacing.sm))
+            style = SheetBodyStyle, color = c.subText, modifier = Modifier.padding(bottom = SheetSizes.sectionGap))
         when {
-            hint.isNotEmpty() -> Surface(color = scheme.surfaceContainerHighest, shape = DuaShape.card) {
-                Row(Modifier.fillMaxWidth().padding(Spacing.md), verticalAlignment = Alignment.Top) {
-                    Icon(Icons.Outlined.Info, contentDescription = null, tint = scheme.onSurfaceVariant, modifier = Modifier.size(Sizes.iconSmall))
-                    Column(Modifier.padding(start = Spacing.md)) {
-                        Text("Build mode is unavailable", style = MaterialTheme.typography.labelLarge)
-                        Text(hint, style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant, modifier = Modifier.padding(top = Spacing.xs))
+            hint.isNotEmpty() -> SheetGroup {
+                Row(Modifier.fillMaxWidth().padding(horizontal = SheetSizes.rowPaddingH, vertical = SheetSizes.rowPaddingV), verticalAlignment = Alignment.Top) {
+                    Icon(Icons.Outlined.Info, contentDescription = null, tint = c.icon, modifier = Modifier.size(SheetSizes.rowIcon))
+                    Column(Modifier.padding(start = SheetSizes.rowGap)) {
+                        Text("Build mode is unavailable", style = SheetRowStyle, color = c.text)
+                        Text(hint, style = SheetSubStyle, color = c.subText, modifier = Modifier.padding(top = Spacing.xs))
                     }
                 }
             }
-            repositories.loading -> Row(Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(horizontal = Spacing.md), verticalAlignment = Alignment.CenterVertically) {
-                CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(Sizes.iconSmall))
-                Text("Loading your repositories…", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(start = Spacing.md))
+            repositories.loading -> Row(Modifier.fillMaxWidth().heightIn(min = SheetSizes.rowMin).padding(horizontal = SheetSizes.rowPaddingH), verticalAlignment = Alignment.CenterVertically) {
+                CircularProgressIndicator(strokeWidth = 2.dp, color = c.accent, modifier = Modifier.size(SheetSizes.rowIcon))
+                Text("Loading your repositories…", style = SheetBodyStyle, color = c.text, modifier = Modifier.padding(start = SheetSizes.rowGap))
             }
-            repositories.repositories.isEmpty() -> Column(Modifier.padding(horizontal = Spacing.sm)) {
-                Text(repositories.error.ifBlank { "Your repositories appear here." }, style = MaterialTheme.typography.bodyMedium, color = if (repositories.error.isBlank()) scheme.onSurfaceVariant else scheme.error)
-                if (repositories.error.isNotBlank()) TextButton(onClick = onRetry) { Text("Retry") }
+            repositories.repositories.isEmpty() -> Column {
+                Text(repositories.error.ifBlank { "Your repositories appear here." }, style = SheetBodyStyle, color = if (repositories.error.isBlank()) c.subText else c.destructive)
+                if (repositories.error.isNotBlank()) SheetTextButton("Retry", onClick = onRetry)
             }
             else -> {
-                Text("Choose a repository", style = MaterialTheme.typography.labelLarge, color = scheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = Spacing.sm))
-                repositories.repositories.forEach { repo ->
+                Text("Choose a repository", style = SheetNoteStyle, color = c.subText, modifier = Modifier.padding(bottom = Spacing.xs))
+                SheetGroup {
+                repositories.repositories.forEachIndexed { index, repo ->
                     val selected = repo.fullName == current
-                    Surface(color = if (selected) scheme.surfaceContainerHighest else Color.Transparent, shape = DuaShape.card) {
-                        Row(Modifier.fillMaxWidth().heightIn(min = 56.dp)
+                    if (index > 0) SheetDivider()
+                    Surface(color = if (selected) c.selectedFill else c.fill) {
+                        Row(Modifier.fillMaxWidth().heightIn(min = SheetSizes.rowMin)
                             .selectable(selected = selected, enabled = enabled, role = Role.RadioButton) { onSelect(repo.fullName) }
-                            .padding(horizontal = Spacing.md, vertical = Spacing.sm), verticalAlignment = Alignment.CenterVertically) {
-                            Surface(color = scheme.secondaryContainer, shape = DuaShape.codeBlock) {
-                                Box(Modifier.size(36.dp), contentAlignment = Alignment.Center) {
-                                    Icon(if (repo.private) Icons.Outlined.Lock else Icons.Outlined.Folder, contentDescription = if (repo.private) "Private" else null,
-                                        tint = scheme.onSecondaryContainer, modifier = Modifier.size(Sizes.iconSmall))
-                                }
-                            }
-                            Column(Modifier.weight(1f).padding(start = Spacing.md)) {
-                                Text(repo.fullName, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                if (repo.description.isNotBlank()) Text(repo.description, style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant,
+                            .padding(horizontal = SheetSizes.rowPaddingH, vertical = SheetSizes.rowPaddingV), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(if (repo.private) Icons.Outlined.Lock else Icons.Outlined.Folder, contentDescription = if (repo.private) "Private" else null,
+                                tint = c.icon, modifier = Modifier.size(SheetSizes.rowIcon))
+                            Column(Modifier.weight(1f).padding(start = SheetSizes.rowGap)) {
+                                Text(repo.fullName, style = SheetRowStyle, color = c.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                if (repo.description.isNotBlank()) Text(repo.description, style = SheetSubStyle, color = c.subText,
                                     maxLines = 2, overflow = TextOverflow.Ellipsis)
                             }
-                            if (selected) Icon(Icons.Filled.CheckCircle, contentDescription = "Selected", tint = scheme.primary)
+                            if (selected) Icon(Icons.Filled.CheckCircle, contentDescription = "Selected", tint = c.accent)
                         }
                     }
+                }
                 }
             }
         }
         Text("Works with Dua and Gemini. The server reads files with your connector token; repository reads use the read-only connector. A separate write token allows confirmed draft pull requests. Repository commands remain unavailable.",
-            style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = Spacing.sm).padding(top = Spacing.md))
+            style = SheetNoteStyle, color = c.subText, modifier = Modifier.padding(top = SheetSizes.sectionGap))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            if (hint.isNotEmpty()) TextButton(onClick = onOpenSetup) { Text("Feature setup") }
-            else if (current != null) TextButton(onClick = onTurnOff, enabled = enabled) { Text("Turn off Build") }
+            if (hint.isNotEmpty()) SheetTextButton("Feature setup", onClick = onOpenSetup)
+            else if (current != null) SheetTextButton("Turn off Build", onClick = onTurnOff, enabled = enabled, destructive = true)
             else Box(Modifier)
-            TextButton(onClick = onDismiss) { Text("Done") }
+            SheetTextButton("Done", onClick = onDismiss)
         }
     }
 }

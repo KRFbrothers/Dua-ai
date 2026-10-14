@@ -22,6 +22,12 @@ import androidx.compose.ui.unit.dp
 import com.dua.ai.projects.ChatProject
 import com.dua.ai.projects.ProjectCodec
 import com.dua.ai.ui.theme.Spacing
+import com.dua.ai.ui.theme.SheetBodyStyle
+import com.dua.ai.ui.theme.SheetNoteStyle
+import com.dua.ai.ui.theme.SheetRowStyle
+import com.dua.ai.ui.theme.SheetShapes
+import com.dua.ai.ui.theme.SheetSizes
+import com.dua.ai.ui.theme.SheetTheme
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -30,7 +36,7 @@ fun ProjectsSheet(projects: List<ChatProject>, selected: String, notice: String,
     tasksEnabled: Boolean = false, onSaveTask: (String, String?, String, Long?) -> Boolean = { _, _, _, _ -> false },
     onToggleTask: (String, String) -> Boolean = { _, _ -> false }, onDeleteTask: (String, String) -> Boolean = { _, _ -> false }, dueDatesEnabled: Boolean = false,
     memoryEnabled: Boolean = false, onSaveMemory: (String, Boolean, List<String>) -> Boolean = { _, _, _ -> false }) {
-    ModalBottomSheet(onDismissRequest = onDismiss) {
+    DuaSheet(onDismiss = onDismiss) {
         ProjectsContent(projects, selected, notice, enabled, onSelect, onSave, tasksEnabled, onSaveTask, onToggleTask, onDeleteTask, dueDatesEnabled, memoryEnabled, onSaveMemory)
     }
 }
@@ -80,66 +86,55 @@ internal fun ProjectsContent(projects: List<ChatProject>, selected: String, noti
         archived = project?.archived ?: false; editing = true
     }
     Column(Modifier.fillMaxWidth().imePadding().verticalScroll(rememberScrollState())
-        .padding(horizontal = Spacing.lg).padding(bottom = Spacing.xxl), verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-        Text(if (editing) "Project settings" else "Projects", style = MaterialTheme.typography.titleLarge, modifier = Modifier.semantics { heading() })
+        .padding(horizontal = SheetSizes.paddingH).padding(bottom = SheetSizes.paddingBottom), verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+        val c = SheetTheme.colors
+        SheetTitle(if (editing) "Project settings" else "Projects")
         Text(if (editing) "Instructions and memory stay within this project. Sync edits before using them in replies."
             else "Separate spaces for your chats, instructions and memory.",
-            style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        if (notice.isNotBlank()) Text(notice, style = MaterialTheme.typography.bodyMedium)
+            style = SheetBodyStyle, color = c.subText)
+        if (notice.isNotBlank()) Text(notice, style = SheetBodyStyle, color = c.text)
         if (editing) {
             OutlinedTextField(name, { if (it.length <= 80) name = it }, label = { Text("Project name") }, singleLine = true, enabled = enabled, modifier = Modifier.fillMaxWidth())
             OutlinedTextField(instructions, { if (it.length <= 4000) instructions = it }, label = { Text("Custom instructions") }, minLines = 4, maxLines = 8,
                 supportingText = { Text("${instructions.length}/4000 · Tone, preferred language, coding or business context") }, enabled = enabled, modifier = Modifier.fillMaxWidth())
             if (editingId != null) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("Archived", modifier = Modifier.weight(1f))
-                Switch(archived, { archived = it }, enabled = enabled)
+                Text("Archived", style = SheetRowStyle, color = c.text, modifier = Modifier.weight(1f))
+                Switch(archived, { archived = it }, enabled = enabled, colors = sheetSwitchColors())
             }
-            Text("Archiving keeps chats and blocks new replies. Keep at least one project active.", style = MaterialTheme.typography.bodySmall)
+            Text("Archiving keeps chats and blocks new replies. Keep at least one project active.", style = SheetNoteStyle, color = c.subText)
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-                Button(onClick = { if (onSave(editingId, name, instructions, archived)) editing = false }, enabled = enabled && name.isNotBlank()) { Text("Save project") }
-                TextButton(onClick = { editing = false }) { Text("Cancel") }
+                SheetFilledButton("Save project", onClick = { if (onSave(editingId, name, instructions, archived)) editing = false }, enabled = enabled && name.isNotBlank())
+                SheetTextButton("Cancel", onClick = { editing = false })
             }
         } else {
-            OutlinedButton(onClick = { plannerOpen = true }, colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface)) {
-                Icon(Icons.Outlined.Today, null, Modifier.size(18.dp))
-                Text("Daily planner", Modifier.padding(start = Spacing.sm))
-            }
+            SheetTonalButton("Daily planner", onClick = { plannerOpen = true }, icon = Icons.Outlined.Today)
             projects.forEach { project ->
                 val current = project.id == selected
-                Surface(shape = RoundedCornerShape(16.dp),
-                    color = if (current) MaterialTheme.colorScheme.surfaceContainerHigh else MaterialTheme.colorScheme.surface,
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant), modifier = Modifier.fillMaxWidth()) {
+                Surface(shape = SheetShapes.group, color = if (current) c.selectedFill else c.fill, contentColor = c.text, modifier = Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs)) {
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                             TextButton(onClick = { onSelect(project.id) }, enabled = enabled && !project.archived,
-                                modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = Spacing.sm),
-                                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurface)) {
+                                modifier = Modifier.weight(1f).heightIn(min = SheetSizes.touch), contentPadding = PaddingValues(horizontal = Spacing.sm),
+                                colors = ButtonDefaults.textButtonColors(contentColor = c.text)) {
                                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(Icons.Outlined.FolderOpen, null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Icon(Icons.Outlined.FolderOpen, null, Modifier.size(SheetSizes.rowIcon), tint = c.icon)
                                     Text("${project.name}${if (project.archived) " (archived)" else ""}",
-                                        Modifier.weight(1f).padding(start = Spacing.sm), style = MaterialTheme.typography.titleSmall)
-                                    if (current) Icon(Icons.Outlined.Check, "Selected project", Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
+                                        Modifier.weight(1f).padding(start = SheetSizes.tileGap), style = SheetRowStyle)
+                                    if (current) Icon(Icons.Outlined.Check, "Selected project", Modifier.size(SheetSizes.rowIcon), tint = c.accent)
                                 }
                             }
-                            TextButton(onClick = { edit(project) }, enabled = enabled,
-                                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant)) { Text("Edit") }
+                            SheetTextButton("Edit", onClick = { edit(project) }, enabled = enabled)
                         }
                         FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-                            if (project.id != ProjectCodec.PERSONAL) TextButton(onClick = { memoryProjectId = project.id },
-                                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant)) { Text("Memory · ${project.name}") }
-                            TextButton(onClick = { tasksProjectId = project.id },
-                                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant)) { Text("Tasks (${project.tasks.count { !it.completed }})") }
+                            if (project.id != ProjectCodec.PERSONAL) SheetTextButton("Memory · ${project.name}", onClick = { memoryProjectId = project.id })
+                            SheetTextButton("Tasks (${project.tasks.count { !it.completed }})", onClick = { tasksProjectId = project.id })
                         }
                     }
                 }
             }
-            TextButton(onClick = { edit(null) }, enabled = enabled && projects.size < ProjectCodec.MAX_PROJECTS,
-                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurface)) {
-                Icon(Icons.Outlined.Add, null, Modifier.size(18.dp))
-                Text("New project", Modifier.padding(start = Spacing.sm))
-            }
+            SheetGroup { SheetActionRow("New project", Icons.Outlined.Add, onClick = { edit(null) }, enabled = enabled && projects.size < ProjectCodec.MAX_PROJECTS) }
             Text("Switching projects starts a new chat. Personal notes are in Profile → Memory.",
-                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                style = SheetNoteStyle, color = c.subText)
         }
     }
 }

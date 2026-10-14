@@ -1,5 +1,8 @@
 package com.dua.ai.ui.screens
 
+import com.dua.ai.ui.theme.SheetBodyStyle
+import com.dua.ai.ui.chat.SheetTextButton
+import com.dua.ai.ui.chat.DuaDialog
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -111,25 +114,24 @@ fun ProfileContent(state: ProfileUiState, actions: ProfileActions, onBack: () ->
             modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
     }
     when (dialog) {
-        ProfileDialog.LogOut -> AlertDialog(onDismissRequest = { dialog = null },
-            icon = { Icon(Icons.AutoMirrored.Outlined.Logout, contentDescription = null) },
-            title = { Text("Log out?") },
-            text = { Text("Your chats and memories are kept on the server until you delete them; this phone only holds a cache.") },
-            confirmButton = { TextButton(onClick = { dialog = null; actions.onLogOut() }) { Text("Log out", color = MaterialTheme.colorScheme.error) } },
-            dismissButton = { TextButton(onClick = { dialog = null }) { Text("Cancel") } })
+        ProfileDialog.LogOut -> DuaDialog(onDismissRequest = { dialog = null },
+            title = "Log out?",
+            text = { Text(style = SheetBodyStyle, text = "Your chats and memories are kept on the server until you delete them; this phone only holds a cache.") },
+            confirmButton = { SheetTextButton("Log out", onClick = { dialog = null; actions.onLogOut() }, destructive = true) },
+            dismissButton = { SheetTextButton("Cancel", onClick = { dialog = null }) })
         ProfileDialog.Delete -> {
             var confirmation by rememberSaveable { mutableStateOf("") }
-            AlertDialog(onDismissRequest = { dialog = null },
-                title = { Text("Delete account?") },
+            DuaDialog(onDismissRequest = { dialog = null },
+                title = "Delete account?",
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
-                        Text("This permanently deletes the account and its cloud snapshot. The cached chats and memories on this phone stay until cleared. Type DELETE MY ACCOUNT to confirm.")
+                        Text(style = SheetBodyStyle, text = "This permanently deletes the account and its cloud snapshot. The cached chats and memories on this phone stay until cleared. Type DELETE MY ACCOUNT to confirm.")
                         OutlinedTextField(confirmation, { confirmation = it.take(32) }, label = { Text("Confirmation") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                     }
                 },
-                confirmButton = { TextButton(enabled = confirmation == "DELETE MY ACCOUNT", onClick = { dialog = null; actions.onDeleteAccount(confirmation) }) {
-                    Text("Delete", color = MaterialTheme.colorScheme.error) } },
-                dismissButton = { TextButton(onClick = { dialog = null }) { Text("Cancel") } })
+                confirmButton = { SheetTextButton("Delete", onClick = { dialog = null; actions.onDeleteAccount(confirmation) },
+                    enabled = confirmation == "DELETE MY ACCOUNT", destructive = true) },
+                dismissButton = { SheetTextButton("Cancel", onClick = { dialog = null }) })
         }
         null -> Unit
     }

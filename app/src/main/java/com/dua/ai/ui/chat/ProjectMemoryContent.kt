@@ -1,5 +1,6 @@
 package com.dua.ai.ui.chat
 
+import com.dua.ai.ui.theme.SheetBodyStyle
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -68,11 +69,11 @@ internal fun ProjectMemoryContent(project: ChatProject, notice: String, enabled:
         } else OutlinedButton(onClick = { editIndex = null; text = ""; original = ""; editing = true }, enabled = enabled && notes.size < 10) { Text("Add note") }
     }
     deleteIndex?.let { index ->
-        AlertDialog(onDismissRequest = { deleteIndex = null }, title = { Text("Delete memory note?") },
-            text = { Text(if (deleteChanged) "This note changed during sync. Cancel and review it again." else "Delete this note from ${project.name}? Sync afterwards to remove it from the server too.") },
-            confirmButton = { TextButton(onClick = {
+        DuaDialog(onDismissRequest = { deleteIndex = null }, title = "Delete memory note?",
+            text = { Text(style = SheetBodyStyle, text = if (deleteChanged) "This note changed during sync. Cancel and review it again." else "Delete this note from ${project.name}? Sync afterwards to remove it from the server too.") },
+            confirmButton = { SheetTextButton("Delete note", onClick = {
                 if (onSave(project.id, project.memory.enabled, notes.filterIndexed { i, _ -> i != index })) deleteIndex = null
-            }, enabled = enabled && !deleteChanged) { Text("Delete note") } },
-            dismissButton = { TextButton(onClick = { deleteIndex = null }) { Text("Cancel") } })
+            }, enabled = enabled && !deleteChanged, destructive = true) },
+            dismissButton = { SheetTextButton("Cancel", onClick = { deleteIndex = null }) })
     }
 }

@@ -242,14 +242,8 @@ private fun ChatRow(chat: SavedChat, current: Boolean, serverDeletion: Boolean, 
                 overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
             if (chat.pinned) Icon(Icons.Outlined.PushPin, "Pinned", tint = colors.subText, modifier = Modifier.size(DrawerSizes.pinIcon))
         }
-        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-            DropdownMenuItem(text = { Text("Rename") }, leadingIcon = { Icon(Icons.Outlined.Edit, null) },
-                onClick = { menu = false; onRename() })
-            if (pinEnabled) DropdownMenuItem(text = { Text(if (chat.pinned) "Unpin" else "Pin") }, leadingIcon = { Icon(Icons.Outlined.PushPin, null) },
-                onClick = { menu = false; onPin() })
-            DropdownMenuItem(text = { Text(if (serverDeletion) "Delete chat" else "Remove cached chat") },
-                leadingIcon = { Icon(Icons.Outlined.Delete, null) }, onClick = { menu = false; onDelete() })
-        }
+        if (menu) ChatOptionsSheet(chat.title.ifBlank { "New chat" }, chat.pinned, pinEnabled, serverDeletion, onDismiss = { menu = false },
+            onRename = { menu = false; onRename() }, onPin = { menu = false; onPin() }, onDelete = { menu = false; onDelete() })
     }
 }
 
@@ -282,5 +276,30 @@ private fun DrawerSubRow(icon: ImageVector, label: String, onClick: () -> Unit) 
     ) {
         Icon(icon, null, tint = colors.chevron, modifier = Modifier.size(DrawerSizes.subIcon))
         Text(label, style = DrawerSubStyle, color = colors.chatText)
+    }
+}
+
+/** Long-press chat menu in the drawer, as a Dabba sheet (same rows and labels as before). */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun ChatOptionsSheet(title: String, pinned: Boolean, pinEnabled: Boolean, serverDeletion: Boolean, onDismiss: () -> Unit,
+    onRename: () -> Unit, onPin: () -> Unit, onDelete: () -> Unit) {
+    com.dua.ai.ui.chat.DuaSheet(onDismiss = onDismiss) { ChatOptionsContent(title, pinned, pinEnabled, serverDeletion, onRename, onPin, onDelete) }
+}
+
+@Composable
+internal fun ChatOptionsContent(title: String, pinned: Boolean, pinEnabled: Boolean, serverDeletion: Boolean,
+    onRename: () -> Unit, onPin: () -> Unit, onDelete: () -> Unit) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = com.dua.ai.ui.theme.SheetSizes.paddingH).padding(bottom = com.dua.ai.ui.theme.SheetSizes.paddingBottom)) {
+        com.dua.ai.ui.chat.SheetTitle(title)
+        com.dua.ai.ui.chat.SheetGroup {
+            com.dua.ai.ui.chat.SheetActionRow("Rename", Icons.Outlined.Edit, onClick = onRename)
+            if (pinEnabled) {
+                com.dua.ai.ui.chat.SheetDivider()
+                com.dua.ai.ui.chat.SheetActionRow(if (pinned) "Unpin" else "Pin", Icons.Outlined.PushPin, onClick = onPin)
+            }
+            com.dua.ai.ui.chat.SheetDivider()
+            com.dua.ai.ui.chat.SheetActionRow(if (serverDeletion) "Delete chat" else "Remove cached chat", Icons.Outlined.Delete, onClick = onDelete, destructive = true)
+        }
     }
 }

@@ -1,5 +1,6 @@
 package com.dua.ai.ui.chat
 
+import com.dua.ai.ui.theme.SheetBodyStyle
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -94,8 +95,8 @@ internal fun ProjectTasksContent(project: ChatProject, notice: String, enabled: 
         TextButton(onClick = onBack) { Text(backLabel) }
     }
     project.tasks.find { it.id == deleteId }?.let { task ->
-        AlertDialog(onDismissRequest = { deleteId = null }, title = { Text("Delete task?") }, text = { Text(task.title) },
-            confirmButton = { TextButton(enabled = enabled, onClick = { if (onDelete(project.id, task.id)) deleteId = null }) { Text("Delete task") } },
-            dismissButton = { TextButton(onClick = { deleteId = null }) { Text("Cancel") } })
+        DuaDialog(onDismissRequest = { deleteId = null }, title = "Delete task?", text = { Text(task.title, style = SheetBodyStyle) },
+            confirmButton = { SheetTextButton("Delete task", onClick = { if (onDelete(project.id, task.id)) deleteId = null }, enabled = enabled, destructive = true) },
+            dismissButton = { SheetTextButton("Cancel", onClick = { deleteId = null }) })
     }
 }
