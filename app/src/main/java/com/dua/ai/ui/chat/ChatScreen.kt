@@ -236,7 +236,7 @@ fun ChatScreen(
                 )
             },
         ) {
-            Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
+            Column(Modifier.fillMaxSize().background(com.dua.ai.ui.theme.ChatTheme.colors.background)
                 .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))) {
                 ChatTopBar(
                     newChatEnabled = !state.typing,

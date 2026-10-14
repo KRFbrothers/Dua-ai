@@ -22,6 +22,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.dua.ai.ui.theme.DuaShape
+import com.dua.ai.ui.theme.ChatMessageStyle
+import com.dua.ai.ui.theme.ChatShapes
+import com.dua.ai.ui.theme.ChatSizes
+import com.dua.ai.ui.theme.ChatTheme
 import com.dua.ai.ui.theme.DuaTheme
 import com.dua.ai.ui.theme.Sizes
 import com.dua.ai.ui.theme.Spacing
@@ -34,12 +38,12 @@ internal fun splitFileNames(text: String): Pair<String, List<String>> {
     return text.substring(0, at) to names
 }
 
-/** User turn: subtle right-aligned bubble. */
+/** User turn: reference shell's right-aligned grey 20 dp bubble (16/10 dp padding, 16 sp text). */
 @Composable
 fun UserMessage(text: String, modifier: Modifier = Modifier, files: List<com.dua.ai.files.FileRef> = emptyList(), onOpenFile: (com.dua.ai.files.FileRef) -> Unit = {},
     onLongPress: (() -> Unit)? = null, longPressHaptic: () -> Unit = {}) {
     val (body, names) = remember(text) { splitFileNames(text) }
-    Column(modifier.fillMaxWidth().padding(start = Spacing.huge), horizontalAlignment = Alignment.End,
+    Column(modifier.fillMaxWidth(), horizontalAlignment = Alignment.End,
         verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
         if (files.isNotEmpty()) MessageFileChips(names, files, onOpenFile)
         else if (names.isNotEmpty()) Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
@@ -53,12 +57,12 @@ fun UserMessage(text: String, modifier: Modifier = Modifier, files: List<com.dua
                 }
             }
         }
-        Surface(color = DuaTheme.colors.userBubble, shape = DuaShape.userBubble,
+        Surface(color = ChatTheme.colors.userBubble, shape = ChatShapes.bubble,
             modifier = Modifier.widthIn(min = Sizes.touchTarget).heightIn(min = Sizes.touchTarget)
                 .then(if (onLongPress != null) Modifier.messageLongPress(onLongPress, longPressHaptic) else Modifier)) {
             SelectionContainer {
-                Text(body, style = MaterialTheme.typography.bodyLarge, color = DuaTheme.colors.onUserBubble,
-                    modifier = Modifier.padding(horizontal = Spacing.lg, vertical = Spacing.md))
+                Text(body, style = ChatMessageStyle, color = ChatTheme.colors.onUserBubble,
+                    modifier = Modifier.padding(horizontal = ChatSizes.bubblePaddingH, vertical = ChatSizes.bubblePaddingV))
             }
         }
     }
