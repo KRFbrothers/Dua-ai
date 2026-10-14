@@ -38,26 +38,8 @@ enum class DuaDestination(val route: String) {
         Images -> "Images"; Library -> "Library"; Agent -> "AI Agent"; Work -> "Work"; Plugins -> "Plugins"
         General -> "General"; UsageLimits -> "Usage and limits"; Safety -> "Safety"
         SecurityLogin -> "Security and login"; Storage -> "Storage"
-        SettingsSearch -> "Search settings"; AvatarEdit -> "Edit profile photo"; else -> null
-    }
-
-    companion object {
-        /** Maps the page names used inside the device settings screens to destinations. */
-        fun fromPage(name: String): DuaDestination? = when (name) {
-            "ColorMode", "FontStyle", "Appearance" -> Appearance
-            "Memory" -> Memory
-            "DataControls" -> DataControls
-            "Privacy" -> Privacy
-            "Sharing" -> Sharing
-            "Permissions" -> Permissions
-            "Notifications" -> Notifications
-            "Imagine" -> Imagine
-            "IntegrationSetup", "FeatureSetup" -> FeatureSetup
-            "Voice" -> Voice
-            "HandsFree" -> HandsFree
-            "VoiceSettings" -> VoiceSettings
-            "LiveVoice" -> LiveVoice
-            else -> null
-        }
+        SettingsSearch -> "Search settings"; AvatarEdit -> "Edit profile photo"
+        Memory -> "Memory"; Privacy -> "Privacy"; Sharing -> "Sharing"; Permissions -> "Permissions"; Notifications -> "Notifications"
+        else -> null
     }
 }

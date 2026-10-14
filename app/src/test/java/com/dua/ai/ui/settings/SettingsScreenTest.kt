@@ -25,7 +25,7 @@ class SettingsScreenTest {
 
     @Test fun referenceThreeCardStructureWithDuaBranding() {
         show()
-        for (t in listOf("Fareed", "F", "Account", "fareed@example.com", "Workspace", "Personal", "Upgrade to Dua AI Pro",
+        for (t in listOf("Fareed", "F", "Account", "fareed@example.com", "Workspace", "Upgrade to Dua AI Pro",
             "Personalization", "Memory", "Plugins", "Accent color", "General", "Usage and limits", "Notifications", "Voice",
             "Safety", "Security and login", "Storage", "History and data"))
             compose.onNodeWithText(t, substring = false, useUnmergedTree = true).assertExists()
@@ -71,5 +71,16 @@ class SettingsScreenTest {
         compose.onNodeWithText("Not signed in").assertExists()
         compose.onNodeWithText("Logout").assertDoesNotExist()
         compose.onNodeWithText("Imagine").assertDoesNotExist()
+    }
+
+    @Test fun workspaceAndSyncShowNoFakeState() {
+        show()
+        compose.onNodeWithText("Personal").assertDoesNotExist()
+        compose.onNodeWithText("On account").assertDoesNotExist()
+    }
+
+    @Test fun syncShowsRealState() {
+        show(s = state.copy(sync = "On"))
+        assertTrue(compose.onAllNodesWithText("On", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty())
     }
 }

@@ -66,6 +66,8 @@ data class SettingsUiState(
     /** Summary shown on the single Settings → Voice entry. */
     val voice: String? = null,
     val displayName: String = "",
+    /** Automatic cloud sync on this device ("On"/"Off"); null shows no value. */
+    val sync: String? = null,
     val accent: String = "Purple",
     val accountBusy: Boolean = false,
     val accountNotice: String = "",
@@ -80,11 +82,13 @@ fun SettingsScreen(viewModel: ChatViewModel, onBack: () -> Unit, onOpen: (DuaDes
     val preferences by viewModel.localSettings.collectAsState()
     val appearance by viewModel.appearance.collectAsState()
     val account by viewModel.account.state.collectAsState()
+    val sync by viewModel.automaticSyncState.collectAsState()
     val integrations by viewModel.integrations.collectAsState()
     val state = SettingsUiState(
         displayName = account.user?.displayName.orEmpty(), accent = appearance.resolvedAccent(DuaTheme.colors.isDark).label, accountBusy = account.busy, accountNotice = account.notice,
         email = account.user?.email, theme = appearance.theme, font = preferences.font, haptic = preferences.haptic,
         memoryEnabled = preferences.memoryEnabled, notifications = preferences.notifications,
+        sync = if (sync.enabled) "On" else "Off",
         voice = integrations.voice?.let { config ->
             val options = if (preferences.generatedVoice && account.user != null) com.dua.ai.voice.VoiceCodec.ttsOptions(config, preferences.voiceProvider,
                 preferences.voiceName, preferences.replyLanguage, preferences.voiceSpeed) else null
@@ -139,8 +143,8 @@ fun SettingsContent(state: SettingsUiState, onBack: () -> Unit, onOpen: (DuaDest
         // CARD 1: Account
         SettingsCardBox {
             SettingsItemRow(Icons.Outlined.Person, "Account", state.email ?: "Not signed in") { onOpen(DuaDestination.Account) }
-            SettingsItemRow(Icons.Outlined.WorkOutline, "Workspace", "Personal") { onOpen(DuaDestination.Work) }
-            SettingsItemRow(Icons.Outlined.CloudSync, "Sync", "On account") { onOpen(DuaDestination.CloudSync) }
+            SettingsItemRow(Icons.Outlined.WorkOutline, "Workspace") { onOpen(DuaDestination.Work) }
+            SettingsItemRow(Icons.Outlined.CloudSync, "Sync", state.sync) { onOpen(DuaDestination.CloudSync) }
             if (state.email != null) SettingsItemRow(Icons.AutoMirrored.Outlined.Logout, "Logout", tint = c.danger, chevron = false,
                 enabled = !state.accountBusy) { logout = true }
             Row(Modifier.fillMaxWidth().heightIn(min = SettingsSizes.touch).clickable(role = Role.Button) { onOpen(DuaDestination.UsageLimits) }
