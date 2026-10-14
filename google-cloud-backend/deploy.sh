@@ -1,8 +1,17 @@
 #!/usr/bin/env bash
-# Usage: PROJECT_ID=your-gcp-project [VERTEX_MODEL=gemini-2.5-flash] [DUA_APP_TOKEN=...] ./deploy.sh
+# Required: PROJECT_ID, SUPABASE_URL, SUPABASE_ANON_KEY (or SUPABASE_PUBLISHABLE_KEY), DUA_ALLOWED_EMAIL.
+# Optional: VERTEX_MODEL=gemini-2.5-flash, DUA_APP_TOKEN (additional gate only).
 set -euo pipefail
 
 : "${PROJECT_ID:?Set PROJECT_ID to your Google Cloud project id}"
+: "${SUPABASE_URL:?Set SUPABASE_URL to the same Auth project used by the Vercel backend}"
+: "${DUA_ALLOWED_EMAIL:?Set DUA_ALLOWED_EMAIL to the configured owner email}"
+AUTH_KEY="${SUPABASE_PUBLISHABLE_KEY:-${SUPABASE_ANON_KEY:-}}"
+: "${AUTH_KEY:?Set SUPABASE_PUBLISHABLE_KEY or SUPABASE_ANON_KEY (not a service-role key)}"
+# gcloud's comma-separated environment map must not interpret a value as another setting.
+for value in "$SUPABASE_URL" "$DUA_ALLOWED_EMAIL" "$AUTH_KEY"; do
+  if [[ "$value" == *,* ]]; then echo "Auth settings must not contain commas." >&2; exit 1; fi
+done
 REGION="${REGION:-us-central1}"
 VERTEX_MODEL="${VERTEX_MODEL:-gemini-2.5-flash}"
 VERTEX_LOCATION="${VERTEX_LOCATION:-$REGION}"
@@ -22,5 +31,5 @@ done
 
 echo "3. Deploying Dua AI Engine to Cloud Run..."
 gcloud run deploy dua-ai-engine --source . --region "$REGION" \
-  --set-env-vars "GOOGLE_CLOUD_PROJECT=${PROJECT_ID},VERTEX_LOCATION=${VERTEX_LOCATION},VERTEX_MODEL=${VERTEX_MODEL}${TOKEN_VAR}" \
+  --update-env-vars "GOOGLE_CLOUD_PROJECT=${PROJECT_ID},VERTEX_LOCATION=${VERTEX_LOCATION},VERTEX_MODEL=${VERTEX_MODEL},SUPABASE_URL=${SUPABASE_URL},SUPABASE_PUBLISHABLE_KEY=${AUTH_KEY},DUA_ALLOWED_EMAIL=${DUA_ALLOWED_EMAIL}${TOKEN_VAR}" \
   --allow-unauthenticated --project "$PROJECT_ID"

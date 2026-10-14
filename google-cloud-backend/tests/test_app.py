@@ -38,7 +38,9 @@ def fake(monkeypatch):
 
 
 @pytest.fixture
-def client():
+def client(monkeypatch):
+    # These tests cover the existing chat contract; test_owner_auth exercises real verification.
+    monkeypatch.setattr(engine, "verify_owner", lambda authorization: "verified-owner")
     return engine.app.test_client()
 
 
