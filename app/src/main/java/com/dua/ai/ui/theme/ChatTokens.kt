@@ -36,7 +36,8 @@ val ChatLightColors = ChatColors(
     text = Color(0xFF111827), mutedText = Color(0xFF6B7280),
     cardFill = Color(0xFFF9FAFB), divider = Color(0xFFE5E7EB),
     mediaFill = Color(0xFFF3F4F6), shimmer = Color(0xFFE5E7EB),
-    accent = Color(0xFF7C3AED), accentSoft = Color(0xFFEDE9FE), onAccentSoft = Color(0xFF5B21B6),
+    // Same purple as Sheet/Page/Home/Drawer tokens (#8B5CF6), not a chat-only copy.
+    accent = PageLightColors.accent, accentSoft = PageLightColors.accentContainer, onAccentSoft = PageLightColors.onAccentContainer,
     errorFill = Color(0xFFFEF2F2), onErrorFill = Color(0xFF991B1B), errorIcon = Color(0xFFDC2626),
 )
 
@@ -48,7 +49,8 @@ val ChatDarkColors = ChatColors(
     text = Color(0xFFF9FAFB), mutedText = Color(0xFF9CA3AF),
     cardFill = Color(0xFF111827), divider = Color(0xFF374151),
     mediaFill = Color(0xFF1F2937), shimmer = Color(0xFF374151),
-    accent = Color(0xFFA78BFA), accentSoft = Color(0xFF2E1065), onAccentSoft = Color(0xFFDDD6FE),
+    // Same purple as Sheet/Page/Home/Drawer tokens (#8B5CF6), not a chat-only copy.
+    accent = PageDarkColors.accent, accentSoft = PageDarkColors.accentContainer, onAccentSoft = PageDarkColors.onAccentContainer,
     errorFill = Color(0xFF450A0A), onErrorFill = Color(0xFFFECACA), errorIcon = Color(0xFFF87171),
 )
 

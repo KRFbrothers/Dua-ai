@@ -48,13 +48,25 @@ class ChatTokensComponentsTest {
         assertEquals(Color(0xFFF3F4F6), c.chipFill)
         assertEquals(Color(0xFFE5E7EB), c.chipBorder)
         assertEquals(Color(0xFF111827), c.text)
-        assertEquals(Color(0xFF7C3AED), c.accent)
+        assertEquals(Color(0xFF8B5CF6), c.accent)
+    }
+
+    @Test fun accentSharedWithOtherTokens() {
+        listOf(ChatLightColors to com.dua.ai.ui.theme.PageLightColors, ChatDarkColors to com.dua.ai.ui.theme.PageDarkColors).forEach { (c, p) ->
+            assertEquals(Color(0xFF8B5CF6), c.accent)
+            assertEquals(com.dua.ai.ui.theme.SheetLightColors.accent, c.accent)
+            assertEquals(com.dua.ai.ui.theme.HomeLightColors.voice, c.accent)
+            assertEquals(p.accentContainer, c.accentSoft)
+            assertEquals(p.onAccentContainer, c.onAccentSoft)
+        }
+        assertEquals(Color(0xFFEDE9FE), ChatLightColors.accentSoft); assertEquals(Color(0xFF4C1D95), ChatLightColors.onAccentSoft)
+        assertEquals(Color(0xFF2E1065), ChatDarkColors.accentSoft); assertEquals(Color(0xFFEDE9FE), ChatDarkColors.onAccentSoft)
     }
 
     @Test fun darkTokensDifferFromLight() {
         val l = ChatLightColors; val d = ChatDarkColors
         listOf(l.chipFill to d.chipFill, l.chipBorder to d.chipBorder, l.text to d.text, l.mutedText to d.mutedText, l.cardFill to d.cardFill,
-            l.accentSoft to d.accentSoft, l.errorFill to d.errorFill, l.onErrorFill to d.onErrorFill).forEach { (a, b) -> assertNotEquals(a, b) }
+            l.accentSoft to d.accentSoft, l.onAccentSoft to d.onAccentSoft, l.errorFill to d.errorFill, l.onErrorFill to d.onErrorFill).forEach { (a, b) -> assertNotEquals(a, b) }
     }
 
     private fun toggle(theme: String, on: Boolean, calls: MutableList<Boolean>) = show(theme) {
