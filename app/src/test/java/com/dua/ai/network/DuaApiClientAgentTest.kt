@@ -18,7 +18,7 @@ import org.junit.Test
 /** Agent mode (Cloud Run engine) sends mode "agent" on the existing streaming /api/chat path. */
 class DuaApiClientAgentTest {
     private val history = listOf(ChatMessage(text = "Latest AI news?", isUser = true))
-    private val api = DuaApiClient("https://engine.example.run.app", sendAccountToken = false)
+    private val api = DuaApiClient("https://engine.example.run.app")
 
     private fun body(agent: Boolean, reasoning: Boolean = false, build: String? = null): JSONObject {
         val request = api.buildRequest("Dua", history, emptyList(), "", null, null, reasoning = reasoning, stream = true, build = build, agent = agent)
@@ -67,7 +67,7 @@ class DuaApiClientAgentTest {
         val server = MockWebServer().apply { useHttps(serverTls.sslSocketFactory(), false); start() }
         val transport = OkHttpClient.Builder().sslSocketFactory(clientTls.sslSocketFactory(), clientTls.trustManager).build()
         try {
-            val engine = DuaApiClient(server.url("/").toString(), transport, appToken = "abc", sendAccountToken = false)
+            val engine = DuaApiClient(server.url("/").toString(), transport, appToken = "abc")
             server.enqueue(MockResponse().setHeader("Content-Type", "application/json").setBody("""{"status":"ok","agent":true}"""))
             assertTrue(engine.engineAgentAvailable())
             val request = server.takeRequest()

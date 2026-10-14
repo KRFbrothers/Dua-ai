@@ -37,6 +37,8 @@ def model(monkeypatch):
     monkeypatch.setattr(engine, "make_content", lambda role, parts: {"role": role, "parts": parts})
     monkeypatch.setattr(engine, "google_search_tool", lambda: "GOOGLE_SEARCH")
     monkeypatch.delenv("DUA_APP_TOKEN", raising=False)
+    # Owner verification is covered by test_owner_auth; agent tests focus on the agent flow.
+    monkeypatch.setattr(engine, "verify_owner", lambda authorization: "verified-owner")
     return m
 
 

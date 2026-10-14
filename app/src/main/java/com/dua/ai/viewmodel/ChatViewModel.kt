@@ -369,10 +369,10 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         _xSearch.value = false
         account.notice("${result.added} server chats added; ${result.conflicts} phone versions kept as unsynced copies. Server memories and project settings restored.")
     }
-    /** Chat goes to DUA_CHAT_BASE_URL (Cloud Run by default); a separate engine gets no account token or server saving. */
+    /** Chat goes to DUA_CHAT_BASE_URL with the owner session; separate-engine server saving remains disabled. */
     private val separateChatEngine = com.dua.ai.BuildConfig.DUA_CHAT_BASE_URL.trimEnd('/') != com.dua.ai.BuildConfig.DUA_API_BASE_URL.trimEnd('/')
     private val api = DuaApiClient(com.dua.ai.BuildConfig.DUA_CHAT_BASE_URL, appToken = com.dua.ai.BuildConfig.DUA_APP_TOKEN,
-        sendAccountToken = !separateChatEngine, apiBaseUrl = com.dua.ai.BuildConfig.DUA_API_BASE_URL)
+        apiBaseUrl = com.dua.ai.BuildConfig.DUA_API_BASE_URL)
 
     // ---- Imagine (Phase 3): image and video generation through /api/imagine ----
     private val imagineApi = com.dua.ai.imagine.ImagineApi()

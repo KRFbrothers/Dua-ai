@@ -4,6 +4,14 @@ Flask service that answers chats with Gemini on Vertex AI. The Android app sends
 messages here by default (`DUA_CHAT_BASE_URL`); everything else (sign-in, cloud history, files,
 Imagine, voice, setup/config) still uses the Vercel `web/` backend.
 
+Both chat endpoints require the owner's existing Supabase access token in `Authorization: Bearer <token>`.
+The engine verifies it with the configured Supabase project's `GET /auth/v1/user`, then matches the
+verified, non-anonymous account's confirmed email to `DUA_ALLOWED_EMAIL`. It does not trust decoded
+JWT payloads, client-provided emails or `user_metadata` for authorization. Missing/invalid sessions
+return 401, non-owner/unconfirmed accounts return 403, and missing setup or unavailable verification
+returns 503 **before calling Vertex**. The health check remains public. Owner login cannot be disabled
+with `DUA_REQUIRE_LOGIN=0`; `DUA_APP_TOKEN`, if retained, is an additional gate only.
+
 ## Endpoints
 - `GET /` – health check.
 - `POST /api/chat` – same format the app uses with Vercel:
@@ -16,10 +24,10 @@ Imagine, voice, setup/config) still uses the Vercel `web/` backend.
   Not supported here (a short notice is shown instead): other models (ChatGPT/Claude/Grok/Kimi – Gemini answers),
   web search, Run code, Build mode, server-side reply saving.
 - **Dua Agent (phase 1)**: `POST /api/chat` with `"mode": "agent"` and `"stream": true`. Steps: plan ->
-  research with Google Search grounding (`google_search` tool, Gemini 2.x) -> summary with sources
+  research with Google Search grounding (`google_search` tool) -> summary with sources
   (`sources` event, numbered [1], [2]) -> prioritized Dua AI feature ideas with effort. Progress shows in the
   app's Thinking block. Cost caps: 3 model calls per request, only 1 grounded; output tokens capped
-  (`AGENT_PLAN_TOKENS`=600, `AGENT_RESEARCH_TOKENS`=2048, `AGENT_ANSWER_TOKENS`=3072).
+  (`AGENT_PLAN_TOKENS`=1024, `AGENT_RESEARCH_TOKENS`=3072, `AGENT_ANSWER_TOKENS`=4096; they include thinking tokens).
   Grounding cost (Vertex): Gemini 3.x models share 5,000 free search queries per month, then $14 per 1,000 search queries
   (billed per query, so one agent request can use several). Older gemini-2.5-flash: 1,500 grounded prompts/day free, then $35 / 1,000.
 - `POST /chat` – old single message endpoint `{"message"}` -> `{"reply"}` (still works).
@@ -31,17 +39,42 @@ Imagine, voice, setup/config) still uses the Vercel `web/` backend.
 | `VERTEX_LOCATION` | Vertex AI location, default `global` (needed for Gemini 3.x; endpoint `aiplatform.googleapis.com`). Not the Cloud Run region. |
 | `VERTEX_MODEL` | default `gemini-3.8-flash` |
 | `VERTEX_THINKING_LEVEL` | Gemini 3 only: `low` (default), `medium` or `high` (`minimal` is not supported by 3.8 Flash) |
-| `DUA_APP_TOKEN` | optional password. When set, requests must send header `X-Dua-App-Token` with the same value. Build the app with `-PduaAppToken=...` (or env `DUA_APP_TOKEN`) so it sends it. Never commit it. Note: anyone who unpacks the APK could still find it, so it only stops casual strangers. |
+| `SUPABASE_URL` | required; the same Supabase Auth project URL used by Vercel, HTTPS only |
+| `SUPABASE_PUBLISHABLE_KEY` / `SUPABASE_ANON_KEY` | required; publishable key preferred, existing anon key supported. Used only by the engine to verify the account; no service-role key is needed |
+| `DUA_ALLOWED_EMAIL` | required; the same owner email used by Vercel, compared case-insensitively against the Auth-verified account |
+| `DUA_APP_TOKEN` | optional **additional** password. When set, requests must also send `X-Dua-App-Token`. Build the app with `-PduaAppToken=...` (or env `DUA_APP_TOKEN`). It never replaces the owner session; APK-embedded values are extractable |
 
 ## Redeploy from Cloud Shell
+
+Configure `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY` (or `SUPABASE_ANON_KEY`) and `DUA_ALLOWED_EMAIL`
+on the **Cloud Run service**, using the same project/owner values as Vercel. Do not paste access tokens
+or keys into chat, source files or screenshots. These settings are never compiled into Android.
+
+For a redeploy with the values already available in your Cloud Shell environment:
 ```bash
 cd ~/Dua-ai && git fetch origin && git pull origin main   # after the PR is merged
 cd google-cloud-backend
+: "${SUPABASE_URL:?Set the same Supabase URL used by Vercel}"
+: "${DUA_ALLOWED_EMAIL:?Set the owner email}"
+AUTH_KEY="${SUPABASE_PUBLISHABLE_KEY:-${SUPABASE_ANON_KEY:-}}"
+: "${AUTH_KEY:?Set the Supabase publishable or anon key}"
 gcloud run deploy dua-ai-engine --source . --region us-central1 \
-  --set-env-vars "GOOGLE_CLOUD_PROJECT=global-healer-m6shk,VERTEX_LOCATION=global,VERTEX_MODEL=gemini-3.8-flash" \
+  --update-env-vars "GOOGLE_CLOUD_PROJECT=global-healer-m6shk,VERTEX_LOCATION=global,VERTEX_MODEL=gemini-3.8-flash,SUPABASE_URL=${SUPABASE_URL},SUPABASE_PUBLISHABLE_KEY=${AUTH_KEY},DUA_ALLOWED_EMAIL=${DUA_ALLOWED_EMAIL}" \
   --allow-unauthenticated --project global-healer-m6shk
 ```
-First-time setup (APIs + permissions + deploy): `PROJECT_ID=<your-project> ./deploy.sh`.
+`--allow-unauthenticated` allows requests to reach the service; application owner verification still
+guards both chat routes. `--update-env-vars` preserves existing settings, including an optional
+`DUA_APP_TOKEN`; if that gate is enabled, the APK must still be built with its matching value.
+
+First-time setup (APIs + permissions + deploy): after setting the three required Auth values above,
+run `PROJECT_ID=<your-project> ./deploy.sh`. Install an APK built from this change so the existing
+Supabase session reaches Cloud Run. Older APKs omit that session and will correctly receive 401.
+Deploying the engine alone does not update Android. There is no change to chat persistence, project
+memory, capabilities, UI or the Vercel APIs in this authentication fix.
+
+After deployment, confirm both `/api/chat` and `/chat` reject a request without `Authorization`,
+reject a non-owner/expired session, and allow a fresh owner session. No rejected request should
+invoke Vertex. Tests mock Auth/Vertex; successful tests do not certify the live service settings.
 
 ## Tests
 ```bash

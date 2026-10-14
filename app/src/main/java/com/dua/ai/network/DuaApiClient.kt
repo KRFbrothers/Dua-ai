@@ -30,8 +30,6 @@ class DuaApiClient(
     private val client: OkHttpClient = sharedClient,
     /** Optional shared secret for the Cloud Run engine (X-Dua-App-Token); blank = not sent. */
     private val appToken: String = "",
-    /** False when [baseUrl] is a separate chat engine: the account session token is then never sent to it. */
-    private val sendAccountToken: Boolean = true,
     private val apiBaseUrl: String = baseUrl,
 ) {
     val separateChatEngine = baseUrl.trimEnd('/') != apiBaseUrl.trimEnd('/')
@@ -211,7 +209,7 @@ class DuaApiClient(
                 if (stream && xSearch && model == "Grok") put("xSearch", true)
                 // Run code (Phase 5): only sent when the server advertised it, so older servers never see the field.
                 if (stream && code && build == null) put("code", true)
-                if (persistence != null) { require(stream && token != null && sendAccountToken && !separateChatEngine); put("persistence", persistence.json) }
+                if (persistence != null) { require(stream && token != null && !separateChatEngine); put("persistence", persistence.json) }
             }
             .toString().toByteArray(Charsets.UTF_8)
         require(body.size <= (if (separateChatEngine || historyBytes > MAX_HISTORY_BYTES || longContext) 4 else 3) * 1024 * 1024) { "Conversation too large. New chat shuru karein." }
@@ -220,7 +218,8 @@ class DuaApiClient(
             .header("x-dua-native", "1")
             .post(body.toRequestBody("application/json; charset=utf-8".toMediaType()))
         if (appToken.isNotBlank()) builder.header("X-Dua-App-Token", appToken)
-        if (token != null && sendAccountToken && !separateChatEngine) {
+        // Both configured chat backends verify the same owner Supabase session.
+        if (token != null) {
             require(token.length <= 10000 && token.matches(Regex("[A-Za-z0-9._-]+"))) { "Invalid account session." }
             builder.header("Authorization", "Bearer $token")
         }
