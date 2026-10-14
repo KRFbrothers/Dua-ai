@@ -42,7 +42,7 @@ fun DuaSheet(onDismiss: () -> Unit, sheetState: SheetState = rememberModalBottom
         shape = SheetShapes.sheet, scrimColor = colors.scrim, dragHandle = {
             Box(Modifier.padding(vertical = SheetSizes.handlePadding).size(SheetSizes.handleWidth, SheetSizes.handleHeight)
                 .background(colors.handle, SheetShapes.handle))
-        }, content = content)
+        }) { com.dua.ai.ui.theme.DuaPageTheme { Column(content = content) } }
 }
 
 @Composable
@@ -93,7 +93,7 @@ fun DuaDialog(
 ) {
     val c = SheetTheme.colors
     AlertDialog(onDismissRequest = onDismissRequest, confirmButton = confirmButton, dismissButton = dismissButton, modifier = modifier,
-        properties = properties, title = { Text(title, style = SheetTitleStyle) }, text = text, shape = SheetShapes.dialog,
+        properties = properties, title = { Text(title, style = SheetTitleStyle) }, text = text?.let { t -> { com.dua.ai.ui.theme.DuaPageTheme(t) } }, shape = SheetShapes.dialog,
         containerColor = c.container, titleContentColor = c.title, textContentColor = c.subText, tonalElevation = 0.dp)
 }
 

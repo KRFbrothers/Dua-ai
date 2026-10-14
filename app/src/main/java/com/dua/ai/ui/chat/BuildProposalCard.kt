@@ -98,6 +98,20 @@ fun BuildProposalCard(
     onCreate: (String) -> Unit,
     modifier: Modifier = Modifier,
     initiallyConfirming: Boolean = false,
+) = com.dua.ai.ui.theme.DuaPageTheme {
+    BuildProposalCardBody(messageId = messageId, proposal = proposal, state = state, unavailable = unavailable, draft = draft, onCreate = onCreate, modifier = modifier, initiallyConfirming = initiallyConfirming)
+}
+
+@Composable
+private fun BuildProposalCardBody(
+    messageId: String,
+    proposal: BuildProposal,
+    state: BuildPrUiState?,
+    unavailable: String,
+    draft: Boolean,
+    onCreate: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    initiallyConfirming: Boolean = false,
 ) {
     val scheme = MaterialTheme.colorScheme
     val context = LocalContext.current

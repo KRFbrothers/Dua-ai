@@ -67,7 +67,7 @@ internal fun ProjectTasksContent(project: ChatProject, notice: String, enabled: 
                 items(project.tasks.sortedBy { it.completed }, key = { it.id }) { task ->
                     Column {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Checkbox(task.completed, { onToggle(project.id, task.id) }, enabled = enabled,
+                            Checkbox(task.completed, { onToggle(project.id, task.id) }, enabled = enabled, colors = com.dua.ai.ui.components.pageCheckboxColors(),
                                 modifier = Modifier.semantics { contentDescription = "${if (task.completed) "Reopen" else "Complete"} task: ${task.title}" })
                             Text(task.title, modifier = Modifier.weight(1f))
                         }
@@ -85,7 +85,7 @@ internal fun ProjectTasksContent(project: ChatProject, notice: String, enabled: 
                                 Text("Delete", modifier = Modifier.semantics { contentDescription = "Delete task: ${task.title}" })
                             }
                         }
-                        HorizontalDivider()
+                        com.dua.ai.ui.components.PageDivider(start = androidx.compose.ui.unit.Dp(0f))
                     }
                 }
             }

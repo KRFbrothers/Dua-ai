@@ -1,0 +1,62 @@
+package com.dua.ai.ui.theme
+
+import androidx.compose.material3.ColorScheme
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.ReadOnlyComposable
+import androidx.compose.material3.LocalContentColor
+import androidx.compose.ui.graphics.Color
+
+/**
+ * Full-page tokens: the Settings page look (SettingsTokens) + sheet controls (SheetTokens) applied to whole screens.
+ * Gray-50 page, white cards with E5E7EB borders, #111827 text, #6B7280 secondary, purple #8B5CF6 accent; dark is the
+ * matching Tailwind-gray steps inverted. Material defaults inside [DuaPageTheme] resolve to these, so every default
+ * Button / TextField / Switch / Checkbox / RadioButton / Slider / Card / DropdownMenu on a page picks them up.
+ */
+@Immutable
+data class PageColors(
+    val background: Color, val card: Color, val cardBorder: Color, val fill: Color, val text: Color, val subText: Color,
+    val divider: Color, val accent: Color, val onAccent: Color, val accentContainer: Color, val onAccentContainer: Color,
+    val danger: Color, val outline: Color,
+)
+
+val PageLightColors = PageColors(
+    background = SettingsLightColors.background, card = SettingsLightColors.card, cardBorder = SettingsLightColors.cardBorder,
+    fill = SheetLightColors.fill, text = SettingsLightColors.rowText, subText = SettingsLightColors.value, divider = SheetLightColors.divider,
+    accent = SheetLightColors.accent, onAccent = SheetLightColors.onAccent, accentContainer = SheetLightColors.selectedFill,
+    onAccentContainer = Color(0xFF4C1D95), danger = SettingsLightColors.danger, outline = Color(0xFFD1D5DB),
+)
+
+val PageDarkColors = PageColors(
+    background = SettingsDarkColors.background, card = SettingsDarkColors.card, cardBorder = SettingsDarkColors.cardBorder,
+    fill = SheetDarkColors.fill, text = SettingsDarkColors.rowText, subText = SettingsDarkColors.value, divider = SheetDarkColors.divider,
+    accent = SheetDarkColors.accent, onAccent = SheetDarkColors.onAccent, accentContainer = SheetDarkColors.selectedFill,
+    onAccentContainer = Color(0xFFEDE9FE), danger = SettingsDarkColors.danger, outline = Color(0xFF4B5563),
+)
+
+object PageTheme {
+    val colors: PageColors
+        @Composable @ReadOnlyComposable get() = if (DuaTheme.colors.isDark) PageDarkColors else PageLightColors
+}
+
+/** Maps page tokens onto a Material scheme (pure, so it is unit-testable). */
+fun pageColorScheme(base: ColorScheme, p: PageColors): ColorScheme = base.copy(
+    primary = p.accent, onPrimary = p.onAccent, primaryContainer = p.accentContainer, onPrimaryContainer = p.onAccentContainer,
+    secondary = p.accent, onSecondary = p.onAccent, secondaryContainer = p.accentContainer, onSecondaryContainer = p.onAccentContainer,
+    tertiary = p.accent, onTertiary = p.onAccent,
+    background = p.background, onBackground = p.text, surface = p.card, onSurface = p.text, surfaceVariant = p.fill, onSurfaceVariant = p.subText,
+    surfaceTint = Color.Transparent, surfaceBright = p.card, surfaceDim = p.background,
+    surfaceContainerLowest = p.card, surfaceContainerLow = p.card, surfaceContainer = p.fill, surfaceContainerHigh = p.fill, surfaceContainerHighest = p.fill,
+    outline = p.outline, outlineVariant = p.divider, error = p.danger,
+)
+
+/** Wrap a full page so Material defaults use the Dabba page palette (light + dark). Typography stays Soehne via DuaTheme. */
+@Composable
+fun DuaPageTheme(content: @Composable () -> Unit) {
+    val p = PageTheme.colors
+    MaterialTheme(colorScheme = pageColorScheme(MaterialTheme.colorScheme, p), typography = MaterialTheme.typography, shapes = MaterialTheme.shapes) {
+        CompositionLocalProvider(LocalContentColor provides p.text, content = content)
+    }
+}

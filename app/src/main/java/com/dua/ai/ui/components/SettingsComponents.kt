@@ -38,14 +38,12 @@ fun SettingsSection(title: String?, modifier: Modifier = Modifier, content: @Com
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
         if (title != null) Text(title, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(start = Spacing.xs, top = Spacing.sm).semantics { heading() })
-        Surface(color = MaterialTheme.colorScheme.surfaceContainer, shape = DuaShape.card, modifier = Modifier.fillMaxWidth()) {
-            Column(content = content)
-        }
+        PageCard(content = content)
     }
 }
 
 @Composable
-fun SettingsDivider() = HorizontalDivider(Modifier.padding(start = 56.dp), color = MaterialTheme.colorScheme.outlineVariant)
+fun SettingsDivider() = PageDivider(start = Sizes.touchTarget + Spacing.sm)
 
 @Composable
 private fun RowScope.RowContent(icon: ImageVector?, title: String, subtitle: String?, titleColor: Color, trailing: @Composable () -> Unit) {
@@ -78,6 +76,6 @@ fun SettingsSwitchRow(icon: ImageVector?, title: String, subtitle: String? = nul
     Row(Modifier.fillMaxWidth().heightIn(min = 56.dp)
         .toggleable(value = checked, enabled = enabled, role = Role.Switch, onValueChange = onCheckedChange)
         .padding(horizontal = Spacing.lg, vertical = Spacing.md), verticalAlignment = Alignment.CenterVertically) {
-        RowContent(icon, title, subtitle, Color.Unspecified) { Switch(checked = checked, onCheckedChange = null, enabled = enabled) }
+        RowContent(icon, title, subtitle, Color.Unspecified) { Switch(checked = checked, onCheckedChange = null, enabled = enabled, colors = com.dua.ai.ui.chat.sheetSwitchColors()) }
     }
 }

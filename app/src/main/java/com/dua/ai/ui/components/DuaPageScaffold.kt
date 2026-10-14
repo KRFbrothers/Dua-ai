@@ -32,6 +32,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import com.dua.ai.ui.theme.Sizes
+import com.dua.ai.ui.theme.SettingsShapes
+import com.dua.ai.ui.theme.SettingsSizes
+import com.dua.ai.ui.theme.SettingsTheme
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.draw.clip
 import com.dua.ai.ui.theme.Spacing
 
 /** Standard top app bar for secondary pages: back arrow, title, optional actions. */
@@ -40,10 +46,13 @@ import com.dua.ai.ui.theme.Spacing
 fun DuaTopBar(title: String, onBack: (() -> Unit)?, backEnabled: Boolean = true, backLabel: String = "Back",
     actions: @Composable RowScope.() -> Unit = {}) {
     TopAppBar(
-        title = { Text(title, style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+        title = { Text(title, style = com.dua.ai.ui.theme.SettingsNameStyle, color = com.dua.ai.ui.theme.PageTheme.colors.text, maxLines = 1, overflow = TextOverflow.Ellipsis) },
         navigationIcon = {
-            if (onBack != null) IconButton(onClick = onBack, enabled = backEnabled) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = backLabel)
+            if (onBack != null) IconButton(onClick = onBack, enabled = backEnabled,
+                modifier = Modifier.size(SettingsSizes.touch).padding((SettingsSizes.touch - SettingsSizes.circleButton) / 2)
+                    .clip(SettingsShapes.circle).background(SettingsTheme.colors.circleButton)
+                    .border(SettingsSizes.border, SettingsTheme.colors.circleBorder, SettingsShapes.circle)) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = backLabel, tint = SettingsTheme.colors.circleIcon)
             }
         },
         actions = actions,
@@ -65,6 +74,7 @@ fun DuaPageScaffold(
     scrollable: Boolean = true,
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    com.dua.ai.ui.theme.DuaPageTheme {
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
         .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))) {
         DuaTopBar(title, onBack, backEnabled, backLabel, actions)
@@ -78,5 +88,6 @@ fun DuaPageScaffold(
                 content = content,
             )
         }
+    }
     }
 }

@@ -98,6 +98,12 @@ fun LiveVoiceScreen(viewModel: ChatViewModel, onClose: () -> Unit, onHandsFree: 
 
 @Composable
 fun LiveVoiceContent(state: LiveState, starting: Boolean, error: String, fallback: Boolean, usage: LiveUsage?, voiceName: String,
+    onStart: () -> Unit, onMute: () -> Unit, onEnd: () -> Unit, onClose: () -> Unit, onHandsFree: () -> Unit) = com.dua.ai.ui.theme.DuaPageTheme {
+    LiveVoiceContentBody(state = state, starting = starting, error = error, fallback = fallback, usage = usage, voiceName = voiceName, onStart = onStart, onMute = onMute, onEnd = onEnd, onClose = onClose, onHandsFree = onHandsFree)
+}
+
+@Composable
+private fun LiveVoiceContentBody(state: LiveState, starting: Boolean, error: String, fallback: Boolean, usage: LiveUsage?, voiceName: String,
     onStart: () -> Unit, onMute: () -> Unit, onEnd: () -> Unit, onClose: () -> Unit, onHandsFree: () -> Unit) {
     val colors = MaterialTheme.colorScheme
     // No Surface here, so set the content colour for icons and titles (dark theme).
