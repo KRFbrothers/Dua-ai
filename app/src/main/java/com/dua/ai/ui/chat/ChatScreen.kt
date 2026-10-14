@@ -21,6 +21,7 @@ import androidx.compose.material.icons.outlined.Lightbulb
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Tag
 import androidx.compose.material.icons.outlined.Terminal
+import androidx.compose.material.icons.outlined.TravelExplore
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.key
@@ -177,6 +178,7 @@ fun ChatScreen(
     val tap = { actions.haptic(ChatHaptic.Tap) }
     val onWebMode: (String?) -> Unit = { tap(); actions.onWebMode(it) }
     val onReasoning: (Boolean) -> Unit = { tap(); actions.onReasoning(it) }
+    val onAgent: (Boolean) -> Unit = { tap(); actions.onAgent(it) }
     val onXSearch: (Boolean) -> Unit = { tap(); actions.onXSearch(it) }
     val onImagine: (Boolean) -> Unit = { tap(); actions.onImagine(it) }
     val onRunCode: (Boolean) -> Unit = { tap(); actions.onRunCode(it) }
@@ -299,7 +301,7 @@ fun ChatScreen(
                                 onSwipeUp = { tap(); sheet = ChatSheet.Attach })
                             .semantics { customActions = listOf(CustomAccessibilityAction("Open add to chat") { sheet = ChatSheet.Attach; true }) }) {
                             ChatNotices(state = state, actions = actions)
-                            val visibleModes = modeToggles(state, onWebMode, onReasoning, onXSearch, onRunCode)
+                            val visibleModes = modeToggles(state, onWebMode, onReasoning, onXSearch, onRunCode, onAgent)
                                 .filter { !home && it.on }
                             if (visibleModes.isNotEmpty()) {
                                 Row(
@@ -361,7 +363,7 @@ fun ChatScreen(
                 imagine = state.imagineConfig?.let { config -> if (config.enabled) "Create images from your message" else config.imageReason.ifBlank { "Turned off on the server" } },
                 imagineOn = state.imagine,
                 build = state.buildHint.ifEmpty { if (state.buildRepo != null) "On: ${state.buildRepo}" else "Chat about one of your GitHub repositories, read-only" },
-                toggles = modeToggles(state, onWebMode, onReasoning, onXSearch, onRunCode),
+                toggles = modeToggles(state, onWebMode, onReasoning, onXSearch, onRunCode, onAgent),
             ),
             onTurnOffModes = if (state.auto) null else ({ sheet = null; actions.onAuto() }),
             onImagine = { on -> sheet = null; onImagine(on) },
@@ -425,8 +427,9 @@ fun ChatScreen(
 /** Mode switches for the + sheet in a conversation: Run code (when offered), Reasoning, Search and X (Grok only). */
 private fun modeToggles(
     state: ChatUiState, onWebMode: (String?) -> Unit, onReasoning: (Boolean) -> Unit,
-    onXSearch: (Boolean) -> Unit, onRunCode: (Boolean) -> Unit,
+    onXSearch: (Boolean) -> Unit, onRunCode: (Boolean) -> Unit, onAgent: (Boolean) -> Unit = {},
 ): List<ModeToggle> = buildList {
+    if (state.agentAvailable) add(ModeToggle("Agent", "Dua Agent: research latest AI news and suggest Dua AI ideas", Icons.Outlined.TravelExplore, state.agent) { onAgent(it) })
     if (state.codeConfig != null) add(ModeToggle("Run code", "Let the AI run Python code", Icons.Outlined.Terminal, state.runCode) { onRunCode(it) })
     if (state.reasoningSupported) add(ModeToggle("Think", "Think before answering", Icons.Outlined.Lightbulb, state.reasoning) { onReasoning(it) })
     add(ModeToggle("Search", "Search the web", Icons.Outlined.Public, state.webMode == "search") { onWebMode(if (it) "search" else null) })

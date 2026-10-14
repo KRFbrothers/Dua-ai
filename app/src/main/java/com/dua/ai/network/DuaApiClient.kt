@@ -41,6 +41,26 @@ class DuaApiClient(
                 com.dua.ai.setup.IntegrationCapabilities.ATTACHMENT_TYPES + com.dua.ai.files.StoredFileTypes.AUDIO_TYPES, supportsReasoning = false)
         else providers.firstOrNull { it.name == model && it.configured }
 
+    /**
+     * Asks the chat engine (GET /) whether it offers Dua Agent mode. Only an explicit `"agent": true`
+     * JSON answer counts; any other status, body or network failure means not available.
+     */
+    suspend fun engineAgentAvailable(): Boolean = withContext(Dispatchers.IO) {
+        runCatching {
+            val base = URL(baseUrl.trimEnd('/') + "/")
+            if (base.protocol != "https") return@runCatching false
+            val builder = Request.Builder().url(base).get().header("Accept", "application/json")
+            if (appToken.isNotBlank()) builder.header("X-Dua-App-Token", appToken)
+            client.newCall(builder.build()).execute().use { response ->
+                if (response.code !in 200..299) return@use false
+                val source = response.body?.source() ?: return@use false
+                source.request(65537)
+                if (source.buffer.size > 65536) return@use false
+                parseAgentCapability(source.readUtf8())
+            }
+        }.getOrDefault(false)
+    }
+
     internal fun chatConfiguration(state: com.dua.ai.setup.IntegrationState): com.dua.ai.setup.IntegrationState =
         if (!separateChatEngine) state else state.copy(providers =
             (state.providers.map { if (it.name in setOf("Dua", "Gemini")) chatProvider(it.name, state.providers)!! else it } +
@@ -87,8 +107,8 @@ class DuaApiClient(
     fun streamReply(model: String, history: List<ChatMessage>, attachments: List<ChatAttachment> = emptyList(), memory: String = "",
         token: String? = null, web: String? = null, reasoning: Boolean = false, historyBytes: Int = MAX_HISTORY_BYTES,
         context: com.dua.ai.model.ConversationContext? = null, xSearch: Boolean = false, code: Boolean = false, build: String? = null,
-        persistence: com.dua.ai.account.ReplyPersistence? = null): Flow<ReplyEvent> = callbackFlow {
-        val request = withContext(Dispatchers.IO) { buildRequest(model, history, attachments, memory, token, web, reasoning, stream = true, historyBytes = historyBytes, context = context, xSearch = xSearch, code = code, build = build, persistence = persistence) }
+        persistence: com.dua.ai.account.ReplyPersistence? = null, agent: Boolean = false): Flow<ReplyEvent> = callbackFlow {
+        val request = withContext(Dispatchers.IO) { buildRequest(model, history, attachments, memory, token, web, reasoning, stream = true, historyBytes = historyBytes, context = context, xSearch = xSearch, code = code, build = build, persistence = persistence, agent = agent) }
         val call = client.newCall(request)
         call.enqueue(object : Callback {
             override fun onFailure(call: Call, error: IOException) { close(error) }
@@ -152,7 +172,7 @@ class DuaApiClient(
      */
     internal fun buildRequest(model: String, history: List<ChatMessage>, attachments: List<ChatAttachment>, memory: String, token: String?, web: String?,
         reasoning: Boolean, stream: Boolean, historyBytes: Int = MAX_HISTORY_BYTES, context: com.dua.ai.model.ConversationContext? = null, xSearch: Boolean = false,
-        code: Boolean = false, build: String? = null, persistence: com.dua.ai.account.ReplyPersistence? = null): Request {
+        code: Boolean = false, build: String? = null, persistence: com.dua.ai.account.ReplyPersistence? = null, agent: Boolean = false): Request {
         require(build == null || com.dua.ai.model.BuildInfos.validRepository(build)) { "Choose a repository for Build mode." }
         require(model in com.dua.ai.setup.IntegrationCapabilities.MODELS) { "Supported model select karein." }
         require(memory.length <= 3000) { "Memory notes are too large." }
@@ -179,7 +199,7 @@ class DuaApiClient(
                 if (web != null) put("web", web)
                 // Older servers reject unknown fields, so these are only sent by the streaming path.
                 // Build mode (Phase 5B, read-only) replaces Auto/Reasoning and names the repository.
-                if (stream) put("stream", true).put("mode", if (build != null) "build" else if (reasoning) "reasoning" else "auto")
+                if (stream) put("stream", true).put("mode", if (build != null) "build" else if (agent) "agent" else if (reasoning) "reasoning" else "auto")
                 if (stream && build != null) put("repository", build)
                 if (longContext) put("context", context!!.toJson())
                 if (longContext) context?.projectId?.let { project ->
@@ -236,6 +256,9 @@ class DuaApiClient(
     }
 
     companion object {
+        /** True only for a JSON object with `"agent": true` (the Cloud Run engine's GET / answer). */
+        internal fun parseAgentCapability(body: String): Boolean =
+            runCatching { JSONObject(body).opt("agent") == true }.getOrDefault(false)
         private fun attachmentJson(files: List<ChatAttachment>) = JSONArray().apply { files.forEach { file ->
             put(JSONObject().put("name", file.name).put("mimeType", file.mimeType).put("data", file.data))
         } }

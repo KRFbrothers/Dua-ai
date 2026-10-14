@@ -23,14 +23,22 @@ with `DUA_REQUIRE_LOGIN=0`; `DUA_APP_TOKEN`, if retained, is an additional gate 
   Streaming flushes an initial SSE heartbeat and sends another every 15 seconds while the Vertex worker is waiting. Cancelling the stream stops queueing results.
   Not supported here (a short notice is shown instead): other models (ChatGPT/Claude/Grok/Kimi – Gemini answers),
   web search, Run code, Build mode, server-side reply saving.
+- **Dua Agent (phase 1)**: `POST /api/chat` with `"mode": "agent"` and `"stream": true`. Steps: plan ->
+  research with Google Search grounding (`google_search` tool) -> summary with sources
+  (`sources` event, numbered [1], [2]) -> prioritized Dua AI feature ideas with effort. Progress shows in the
+  app's Thinking block. Cost caps: 3 model calls per request, only 1 grounded; output tokens capped
+  (`AGENT_PLAN_TOKENS`=1024, `AGENT_RESEARCH_TOKENS`=3072, `AGENT_ANSWER_TOKENS`=4096; they include thinking tokens).
+  Grounding cost (Vertex): Gemini 3.x models share 5,000 free search queries per month, then $14 per 1,000 search queries
+  (billed per query, so one agent request can use several). Older gemini-2.5-flash: 1,500 grounded prompts/day free, then $35 / 1,000.
 - `POST /chat` – old single message endpoint `{"message"}` -> `{"reply"}` (still works).
 
 ## Settings (environment variables only, no secrets in code)
 | Name | Meaning |
 | --- | --- |
 | `GOOGLE_CLOUD_PROJECT` | your project id (required) |
-| `VERTEX_LOCATION` | default `us-central1` (`global` is needed for preview models such as `gemini-3-flash-preview`) |
-| `VERTEX_MODEL` | default `gemini-2.5-flash` |
+| `VERTEX_LOCATION` | Vertex AI location, default `global` (needed for Gemini 3.x; endpoint `aiplatform.googleapis.com`). Not the Cloud Run region. |
+| `VERTEX_MODEL` | default `gemini-3.8-flash` |
+| `VERTEX_THINKING_LEVEL` | Gemini 3 only: `low` (default), `medium` or `high` (`minimal` is not supported by 3.8 Flash) |
 | `SUPABASE_URL` | required; the same Supabase Auth project URL used by Vercel, HTTPS only |
 | `SUPABASE_PUBLISHABLE_KEY` / `SUPABASE_ANON_KEY` | required; publishable key preferred, existing anon key supported. Used only by the engine to verify the account; no service-role key is needed |
 | `DUA_ALLOWED_EMAIL` | required; the same owner email used by Vercel, compared case-insensitively against the Auth-verified account |
@@ -51,7 +59,7 @@ cd google-cloud-backend
 AUTH_KEY="${SUPABASE_PUBLISHABLE_KEY:-${SUPABASE_ANON_KEY:-}}"
 : "${AUTH_KEY:?Set the Supabase publishable or anon key}"
 gcloud run deploy dua-ai-engine --source . --region us-central1 \
-  --update-env-vars "GOOGLE_CLOUD_PROJECT=global-healer-m6shk,VERTEX_LOCATION=us-central1,VERTEX_MODEL=gemini-2.5-flash,SUPABASE_URL=${SUPABASE_URL},SUPABASE_PUBLISHABLE_KEY=${AUTH_KEY},DUA_ALLOWED_EMAIL=${DUA_ALLOWED_EMAIL}" \
+  --update-env-vars "GOOGLE_CLOUD_PROJECT=global-healer-m6shk,VERTEX_LOCATION=global,VERTEX_MODEL=gemini-3.8-flash,SUPABASE_URL=${SUPABASE_URL},SUPABASE_PUBLISHABLE_KEY=${AUTH_KEY},DUA_ALLOWED_EMAIL=${DUA_ALLOWED_EMAIL}" \
   --allow-unauthenticated --project global-healer-m6shk
 ```
 `--allow-unauthenticated` allows requests to reach the service; application owner verification still

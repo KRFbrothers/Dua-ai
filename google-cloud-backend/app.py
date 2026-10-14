@@ -5,12 +5,14 @@ Endpoints
 - POST /api/chat    drop-in replacement for the web/ backend's chat endpoint used by the Android app:
                     full conversation history, inline attachments, SSE streaming (`"stream": true`)
                     with the same wire format as web/src/core/sse.mjs, or one JSON reply `{"text": ...}`.
+                    `"mode": "agent"` runs the Dua Agent (phase 1): plan -> one Google Search grounded
+                    research step -> summary with sources -> prioritized Dua AI feature ideas.
 - POST /chat        old single-turn endpoint: {"message"} -> {"reply"} (kept for backward compat).
 
 Configuration comes only from environment variables; no secrets in code.
-  GOOGLE_CLOUD_PROJECT (required), VERTEX_LOCATION (default us-central1),
-  VERTEX_MODEL (default gemini-2.5-flash), SUPABASE_URL, SUPABASE_ANON_KEY (or
-  SUPABASE_PUBLISHABLE_KEY), DUA_ALLOWED_EMAIL (required owner authentication).
+  GOOGLE_CLOUD_PROJECT (required), VERTEX_LOCATION (default global),
+  VERTEX_MODEL (default gemini-3.8-flash), VERTEX_THINKING_LEVEL (Gemini 3: low|medium|high, default low),
+  SUPABASE_URL, SUPABASE_ANON_KEY (or SUPABASE_PUBLISHABLE_KEY), DUA_ALLOWED_EMAIL (required owner authentication).
   DUA_APP_TOKEN is an optional additional gate, never a replacement for owner login.
 """
 import base64
@@ -28,8 +30,12 @@ app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 5 * 1024 * 1024
 
 PROJECT_ID = os.environ.get("GOOGLE_CLOUD_PROJECT", "")
-LOCATION = os.environ.get("VERTEX_LOCATION", "us-central1")
-MODEL_NAME = os.environ.get("VERTEX_MODEL", "gemini-2.5-flash")
+LOCATION = os.environ.get("VERTEX_LOCATION", "global")
+MODEL_NAME = os.environ.get("VERTEX_MODEL", "gemini-3.8-flash")
+# Gemini 3 uses thinking_level (low/medium/high; "minimal" is rejected by 3.8 Flash), not thinking_budget.
+THINKING_LEVEL = os.environ.get("VERTEX_THINKING_LEVEL", "low").strip().lower()
+if THINKING_LEVEL not in ("low", "medium", "high"):
+    THINKING_LEVEL = "low"
 MAX_MESSAGE_CHARS = 8000
 MAX_TURNS = 400
 MAX_TURN_CHARS = 100_000
@@ -44,12 +50,40 @@ APP_MODELS = {"Dua", "ChatGPT", "Gemini", "Claude", "Grok", "Kimi"}
 SYSTEM_PROMPT = "You are Dua AI, a helpful, smart, and polite personal AI assistant."
 GENERIC_ERROR = "The Dua AI engine could not answer right now. Please try again."
 
+# Dua Agent cost caps: exactly 3 model calls per agent request and only ONE of them uses
+# Google Search grounding (billed per grounded prompt after the free daily quota).
+# Output caps include thinking tokens on Gemini 2.5/3, so leave room for low-level thinking.
+AGENT_PLAN_TOKENS = int(os.environ.get("AGENT_PLAN_TOKENS", "1024"))
+AGENT_RESEARCH_TOKENS = int(os.environ.get("AGENT_RESEARCH_TOKENS", "3072"))
+AGENT_ANSWER_TOKENS = int(os.environ.get("AGENT_ANSWER_TOKENS", "4096"))
+AGENT_MAX_SOURCES = 12
+AGENT_PLAN_PROMPT = (
+    "You are the Dua Agent planning step. Do not answer yet. In at most 5 short bullet points, write a research "
+    "plan for the user's request: which latest AI news, models, tools or app features to look up on the web. "
+    "Keep it simple, Hinglish-friendly English."
+)
+AGENT_RESEARCH_PROMPT = (
+    "You are the Dua Agent research step. Use Google Search to find the LATEST, real information for this plan. "
+    "Write compact factual notes (dates, names, what is new). No feature ideas yet.\n\nPlan:\n"
+)
+AGENT_ANSWER_PROMPT = (
+    "You are the Dua Agent. Dua AI is the user's own ChatGPT-like Android app (Kotlin, Jetpack Compose) with a "
+    "Google Cloud Run + Vertex AI Gemini backend. The user is a student who cannot code and wants free tools. "
+    "Using ONLY the research notes below, reply in simple, Hinglish-friendly English with these sections:\n"
+    "1. **Kya naya hai (findings)** - short bullets, cite sources like [1], [2].\n"
+    "2. **Dua AI ke liye ideas** - a numbered list ordered by priority. For each idea: what it is, why it helps, "
+    "effort (Small / Medium / Large) and whether it can stay free.\n"
+    "3. **Next step** - the one thing to do first.\n"
+    "If the notes do not cover something, say so instead of guessing."
+)
+
 SSE_HEADERS = {
     "Cache-Control": "no-store",
     "X-Accel-Buffering": "no",
     "X-Content-Type-Options": "nosniff",
 }
 
+_client = None
 _models = {}
 
 
@@ -60,30 +94,73 @@ class BadRequest(Exception):
         self.status = status
 
 
-def get_model(system_text=SYSTEM_PROMPT):
-    """Returns a cached Vertex AI GenerativeModel for this system instruction."""
-    model = _models.get(system_text)
-    if model is None:
+def get_client():
+    """google-genai client on Vertex AI. Location "global" uses https://aiplatform.googleapis.com."""
+    global _client
+    if _client is None:
         if not PROJECT_ID:
             raise RuntimeError("GOOGLE_CLOUD_PROJECT is not set")
-        import vertexai
-        from vertexai.generative_models import GenerativeModel
-        vertexai.init(project=PROJECT_ID, location=LOCATION)
-        model = GenerativeModel(MODEL_NAME, system_instruction=[system_text])
+        from google import genai
+        _client = genai.Client(vertexai=True, project=PROJECT_ID, location=LOCATION)
+    return _client
+
+
+def thinking_config(model_name=None):
+    """Gemini 3 models take thinking_level; older models keep their default thinking."""
+    if not (model_name or MODEL_NAME).startswith("gemini-3"):
+        return None
+    from google.genai import types
+    return types.ThinkingConfig(thinking_level=THINKING_LEVEL.upper())
+
+
+class GenaiModel:
+    """Small adapter with the generate_content(contents, stream, generation_config, tools) shape used here."""
+
+    def __init__(self, system):
+        self.system = system
+
+    def config(self, generation_config=None, tools=None):
+        from google.genai import types
+        options = {"system_instruction": self.system, **(generation_config or {})}
+        if tools:
+            options["tools"] = tools
+        thinking = thinking_config()
+        if thinking is not None:
+            options["thinking_config"] = thinking
+        return types.GenerateContentConfig(**options)
+
+    def generate_content(self, contents, stream=False, generation_config=None, tools=None):
+        models = get_client().models
+        config = self.config(generation_config, tools)
+        if stream:
+            return models.generate_content_stream(model=MODEL_NAME, contents=contents, config=config)
+        return models.generate_content(model=MODEL_NAME, contents=contents, config=config)
+
+
+def get_model(system_text=SYSTEM_PROMPT):
+    """Returns a cached model adapter for this system instruction."""
+    model = _models.get(system_text)
+    if model is None:
         if len(_models) > 32:
             _models.clear()
-        _models[system_text] = model
+        model = _models[system_text] = GenaiModel(system_text)
     return model
 
 
 def make_part(text=None, data=None, mime_type=None):
-    from vertexai.generative_models import Part
-    return Part.from_text(text) if data is None else Part.from_data(data=data, mime_type=mime_type)
+    from google.genai import types
+    return types.Part.from_text(text=text) if data is None else types.Part.from_bytes(data=data, mime_type=mime_type)
+
+
+def google_search_tool():
+    """Google Search grounding (`google_search` tool) for Gemini 2.x / 3.x on Vertex AI."""
+    from google.genai import types
+    return types.Tool(google_search=types.GoogleSearch())
 
 
 def make_content(role, parts):
-    from vertexai.generative_models import Content
-    return Content(role=role, parts=parts)
+    from google.genai import types
+    return types.Content(role=role, parts=parts)
 
 
 def app_token_matches():
@@ -225,6 +302,87 @@ def unsupported_notice(data):
     return " ".join(notes)[:300] or None
 
 
+def with_last_user_suffix(messages, suffix):
+    """Copy of the app history whose last user turn ends with an agent instruction."""
+    copied = [dict(m) if isinstance(m, dict) else m for m in messages]
+    if copied and isinstance(copied[-1], dict) and isinstance(copied[-1].get("text"), str):
+        copied[-1]["text"] = (copied[-1]["text"] + "\n\n" + suffix).strip()
+    return copied
+
+
+def _domain(url):
+    from urllib.parse import urlparse
+    try:
+        return urlparse(url).hostname or ""
+    except ValueError:
+        return ""
+
+
+def sources_footer(sources):
+    """Plain-text footer in the exact format of web/src/core/chat-web.mjs sourcesFooter, which the app
+    (ReplySources.split) turns into clickable source chips and keeps in saved history."""
+    if not sources:
+        return ""
+    clean = lambda value: " ".join(str(value).split())
+    return "\n\nSources:\n" + "\n\n".join(f"[{item['id']}] {clean(item['title'])}\n{item['url']}" for item in sources)
+
+
+def grounding_sources(response, limit=AGENT_MAX_SOURCES):
+    """Web sources from Vertex grounding metadata in the app's `sources` event shape."""
+    sources, seen = [], set()
+    try:
+        chunks = response.candidates[0].grounding_metadata.grounding_chunks
+    except (AttributeError, IndexError, TypeError):
+        return sources
+    for chunk in chunks or []:
+        web = getattr(chunk, "web", None)
+        url = str(getattr(web, "uri", "") or "")
+        if not url.startswith("https://") or url in seen:
+            continue
+        seen.add(url)
+        title = str(getattr(web, "title", "") or "")[:200]
+        domain = str(getattr(web, "domain", "") or "") or (title if "." in title and " " not in title else _domain(url))
+        sources.append({"id": len(sources) + 1, "title": title or domain or "Source", "url": url, "domain": domain[:253]})
+        if len(sources) >= limit:
+            break
+    return sources
+
+
+def agent_producer(messages, attachments, system):
+    """Dua Agent: plan -> grounded research -> streamed answer. Emits progress as `thinking`."""
+    def produce(enqueue):
+        model = get_model(system)
+        if not enqueue("event", {"type": "thinking", "delta": "**Step 1 - Plan**\n"}):
+            return
+        plan = chunk_text(model.generate_content(
+            build_contents(with_last_user_suffix(messages, AGENT_PLAN_PROMPT), attachments),
+            generation_config={"max_output_tokens": AGENT_PLAN_TOKENS, "temperature": 0.3}))[:4000]
+        if not enqueue("event", {"type": "thinking", "delta": (plan or "- Research latest AI news and tools") + "\n\n**Step 2 - Research (Google Search)**\n"}):
+            return
+        research = model.generate_content(
+            build_contents(with_last_user_suffix(messages, AGENT_RESEARCH_PROMPT + plan), attachments),
+            generation_config={"max_output_tokens": AGENT_RESEARCH_TOKENS, "temperature": 0.2},
+            tools=[google_search_tool()])
+        notes = chunk_text(research)[:20000]
+        sources = grounding_sources(research)
+        if not enqueue("event", {"type": "thinking", "delta": f"Found {len(sources)} sources.\n\n**Step 3 - Summary and ideas**\n"}):
+            return
+        if sources and not enqueue("event", {"type": "sources", "sources": sources}):
+            return
+        listed = "\n".join(f"[{item['id']}] {item['title']} - {item['url']}" for item in sources) or "(no web sources found)"
+        answer_prompt = f"{AGENT_ANSWER_PROMPT}\n\nResearch notes:\n{notes or '(empty)'}\n\nSources:\n{listed}"
+        for chunk in model.generate_content(
+                build_contents(with_last_user_suffix(messages, answer_prompt), attachments),
+                generation_config={"max_output_tokens": AGENT_ANSWER_TOKENS, "temperature": 0.4}, stream=True):
+            if not enqueue("chunk", chunk):
+                return
+        footer = sources_footer(sources)
+        if footer and not enqueue("event", {"type": "text", "delta": footer}):
+            return
+        enqueue("done")
+    return produce
+
+
 def sse(event):
     return f"event: {event['type']}\ndata: {json.dumps(event, ensure_ascii=False)}\n\n"
 
@@ -246,7 +404,8 @@ def chunk_text(chunk):
 
 @app.route("/", methods=["GET"])
 def home():
-    return jsonify({"status": "Dua AI Engine is running!"})
+    # Capabilities: the app shows Agent mode only when this says "agent": true.
+    return jsonify({"status": "Dua AI Engine is running!", "engine": "google-cloud", "agent": True, "model": MODEL_NAME})
 
 
 @app.route("/api/chat", methods=["POST"])
@@ -268,6 +427,9 @@ def api_chat():
     except BadRequest as error:
         return jsonify({"error": error.message}), error.status
 
+    agent = data.get("mode") == "agent"
+    if agent and data.get("stream") is not True:
+        return jsonify({"error": "Agent mode needs streaming. Update the app."}), 400
     if data.get("stream") is not True:
         try:
             response = get_model(system).generate_content(contents)
@@ -297,6 +459,9 @@ def api_chat():
         def vertex_stream():
             iterator = None
             try:
+                if agent:
+                    agent_producer(data.get("messages"), attachments, system)(enqueue)
+                    return
                 iterator = iter(get_model(system).generate_content(contents, stream=True))
                 for chunk in iterator:
                     if not enqueue("chunk", chunk):
@@ -331,6 +496,9 @@ def api_chat():
                     return
                 if kind == "done":
                     break
+                if kind == "event":
+                    yield sse(chunk)
+                    continue
                 truncated = truncated or is_truncated(chunk)
                 text = chunk_text(chunk)
                 if text:
