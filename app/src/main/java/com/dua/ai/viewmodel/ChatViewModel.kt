@@ -354,7 +354,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         _xSearch.value = false
         account.notice("${result.added} server chats added; ${result.conflicts} phone versions kept as unsynced copies. Server memories and project settings restored.")
     }
-    private val api = DuaApiClient()
+    /** Chat goes to DUA_CHAT_BASE_URL (Cloud Run by default); a separate engine gets no account token or server saving. */
+    private val separateChatEngine = com.dua.ai.BuildConfig.DUA_CHAT_BASE_URL.trimEnd('/') != com.dua.ai.BuildConfig.DUA_API_BASE_URL.trimEnd('/')
+    private val api = DuaApiClient(com.dua.ai.BuildConfig.DUA_CHAT_BASE_URL, appToken = com.dua.ai.BuildConfig.DUA_APP_TOKEN, sendAccountToken = !separateChatEngine)
 
     // ---- Imagine (Phase 3): image and video generation through /api/imagine ----
     private val imagineApi = com.dua.ai.imagine.ImagineApi()
@@ -1632,7 +1634,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         webModeError(requestWebMode, plan.model)?.let { _error.value = it; return }
         val request = requestTurns(plan.full, plan.context, inlineFiles = false)
         val persistenceBase = _messages.value.toList()
-        val persistenceOwner = account.state.value.user?.id.takeIf { _integrations.value.serverRepliesEnabled }
+        val persistenceOwner = account.state.value.user?.id.takeIf { _integrations.value.serverRepliesEnabled && !separateChatEngine }
         val currentGeneration = generation
         val startedAt = System.currentTimeMillis()
         _error.value = null; _isTyping.value = true; refreshSyncBusy()
@@ -1721,7 +1723,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             build = requestBuild?.let { com.dua.ai.model.BuildInfo(it) })
         val request = requestTurns(_messages.value + userMessage, _messages.value.takeLast(38) + userMessage, inlineFiles = files.isNotEmpty())
         val persistenceBase = _messages.value.toList()
-        val persistenceOwner = account.state.value.user?.id.takeIf { _integrations.value.serverRepliesEnabled }
+        val persistenceOwner = account.state.value.user?.id.takeIf { _integrations.value.serverRepliesEnabled && !separateChatEngine }
         val currentGeneration = generation
         replyWebModes[reply.id] = requestWebMode
         replyXSearch[reply.id] = requestXSearch

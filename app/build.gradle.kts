@@ -19,6 +19,22 @@ require(duaApiBaseUrl.startsWith("https://") && !duaApiBaseUrl.contains('"')) {
     "duaApiBaseUrl must be an HTTPS URL"
 }
 
+// Chat (POST /api/chat) can use a separate engine, by default the Google Cloud Run backend
+// (google-cloud-backend/). Everything else (account, files, imagine, voice, setup) stays on duaApiBaseUrl.
+// Set -PduaChatBaseUrl=https://dua-cyan.vercel.app (or DUA_CHAT_BASE_URL) to send chat to Vercel again.
+val duaChatBaseUrl = providers.gradleProperty("duaChatBaseUrl")
+    .orElse(providers.environmentVariable("DUA_CHAT_BASE_URL"))
+    .orElse("https://dua-ai-engine-228305912525.us-central1.run.app").get()
+require(duaChatBaseUrl.startsWith("https://") && !duaChatBaseUrl.contains('"')) {
+    "duaChatBaseUrl must be an HTTPS URL"
+}
+// Optional shared secret for the Cloud Run engine (its DUA_APP_TOKEN). Never commit it: pass
+// -PduaAppToken=... or the DUA_APP_TOKEN environment variable when building. Empty = header not sent.
+val duaAppToken = providers.gradleProperty("duaAppToken")
+    .orElse(providers.environmentVariable("DUA_APP_TOKEN"))
+    .orElse("").get().trim()
+require(duaAppToken.matches(Regex("[A-Za-z0-9._-]*"))) { "DUA_APP_TOKEN may only use letters, digits, '.', '_' and '-'." }
+
 val googleWebClientId = providers.gradleProperty("duaGoogleWebClientId")
     .orElse(providers.environmentVariable("GOOGLE_CLIENT_ID"))
     .orElse(providers.gradleProperty("duaDefaultGoogleWebClientId"))
@@ -97,6 +113,8 @@ android {
         manifestPlaceholders["crashlyticsCollectionEnabled"] = "false"
         buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"" + googleWebClientId + "\"")
         buildConfigField("String", "DUA_API_BASE_URL", "\"" + duaApiBaseUrl + "\"")
+        buildConfigField("String", "DUA_CHAT_BASE_URL", "\"" + duaChatBaseUrl + "\"")
+        buildConfigField("String", "DUA_APP_TOKEN", "\"" + duaAppToken + "\"")
     }
 
     buildTypes {

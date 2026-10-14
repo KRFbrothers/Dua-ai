@@ -27,7 +27,11 @@ import java.io.ByteArrayOutputStream
 /** Provider credentials and model names remain on the server. */
 class DuaApiClient(
     private val baseUrl: String = BuildConfig.DUA_API_BASE_URL,
-    private val client: OkHttpClient = sharedClient
+    private val client: OkHttpClient = sharedClient,
+    /** Optional shared secret for the Cloud Run engine (X-Dua-App-Token); blank = not sent. */
+    private val appToken: String = "",
+    /** False when [baseUrl] is a separate chat engine: the account session token is then never sent to it. */
+    private val sendAccountToken: Boolean = true
 ) {
     /** Legacy single-JSON reply (kept for older flows and tests). Chat uses [streamReply]. */
     suspend fun reply(model: String, history: List<ChatMessage>, attachments: List<ChatAttachment> = emptyList(), memory: String = "", token: String? = null, web: String? = null): String {
@@ -149,7 +153,7 @@ class DuaApiClient(
                 if (stream && xSearch && model == "Grok") put("xSearch", true)
                 // Run code (Phase 5): only sent when the server advertised it, so older servers never see the field.
                 if (stream && code && build == null) put("code", true)
-                if (persistence != null) { require(stream && token != null); put("persistence", persistence.json) }
+                if (persistence != null) { require(stream && token != null && sendAccountToken); put("persistence", persistence.json) }
             }
             .toString().toByteArray(Charsets.UTF_8)
         require(body.size <= (if (historyBytes > MAX_HISTORY_BYTES || longContext) 4 else 3) * 1024 * 1024) { "Conversation too large. New chat shuru karein." }
@@ -157,7 +161,8 @@ class DuaApiClient(
             .header("Accept", if (stream) "text/event-stream, application/json" else "application/json")
             .header("x-dua-native", "1")
             .post(body.toRequestBody("application/json; charset=utf-8".toMediaType()))
-        if (token != null) {
+        if (appToken.isNotBlank()) builder.header("X-Dua-App-Token", appToken)
+        if (token != null && sendAccountToken) {
             require(token.length <= 10000 && token.matches(Regex("[A-Za-z0-9._-]+"))) { "Invalid account session." }
             builder.header("Authorization", "Bearer $token")
         }
