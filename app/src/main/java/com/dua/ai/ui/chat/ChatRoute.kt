@@ -111,7 +111,8 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
         attachments = attachments, readingFiles = readingFiles,
         uploads = uploads, recordingSince = recordingSince,
         storedFiles = integrations.filesEnabled && account.user != null,
-        storedFilesHint = remember(integrations.filesEnabled, account.user, integrations.filesMaxBytes) { viewModel.storedFilesHint() },
+        inlineChatFiles = viewModel.inlineChatFilesAvailable(),
+        storedFilesHint = viewModel.storedFilesHint(),
         storedFilesMaxBytes = integrations.filesMaxBytes,
         attachmentStatus = if (readingFiles) "Reading files…" else fileError.ifBlank { attachmentNotice },
         savedChats = savedChats,
@@ -188,7 +189,9 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
                 }
             },
             onPickPhotos = { pick { files.launch(arrayOf("image/jpeg", "image/png", "image/webp")) } },
-            onPickFiles = { pick { files.launch(if (viewModel.storedFilesAvailable()) AttachmentReader.types + com.dua.ai.files.StoredFileTypes.PICKER_EXTRA else AttachmentReader.types) } },
+            onPickFiles = { pick { files.launch(
+                if (viewModel.inlineChatFilesAvailable()) AttachmentReader.types + com.dua.ai.files.StoredFileTypes.AUDIO_PICKER
+                else if (viewModel.storedFilesAvailable()) AttachmentReader.types + com.dua.ai.files.StoredFileTypes.PICKER_EXTRA else AttachmentReader.types) } },
             onPickAudio = { pick { audioFiles.launch(com.dua.ai.files.StoredFileTypes.AUDIO_PICKER) } },
             onStartRecording = {
                 if (androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED) viewModel.startRecording()

@@ -32,6 +32,7 @@ object StoredFileTypes {
     )
     /** Picker MIME filters for the Audio tile. */
     val AUDIO_PICKER = arrayOf("audio/*")
+    val AUDIO_TYPES = byMime.filterValues { it == "audio" }.keys.toList()
     /** Extra picker types (spreadsheets, audio) offered by Files when stored files are available. */
     val PICKER_EXTRA = arrayOf("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/vnd.ms-excel",
         "application/vnd.oasis.opendocument.spreadsheet", "text/csv", "audio/*")

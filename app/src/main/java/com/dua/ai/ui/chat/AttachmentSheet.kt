@@ -69,10 +69,11 @@ fun AttachmentSheet(
     onImagine: (Boolean) -> Unit = {},
     onBuild: () -> Unit = {},
     onTurnOffModes: (() -> Unit)? = null,
+    inlineChatFiles: Boolean = false,
 ) {
     DuaSheet(onDismiss = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         AttachmentSheetContent(webMode, pageReadingAvailable, enabled, onCamera, onPhotos, onFiles, onReadLink, onAudio, storedFiles, storedFilesHint, storedFilesMaxBytes,
-            modes, onImagine, onBuild, onTurnOffModes)
+            modes, onImagine, onBuild, onTurnOffModes, inlineChatFiles)
     }
 }
 
@@ -93,6 +94,7 @@ fun AttachmentSheetContent(
     onImagine: (Boolean) -> Unit = {},
     onBuild: () -> Unit = {},
     onTurnOffModes: (() -> Unit)? = null,
+    inlineChatFiles: Boolean = false,
 ) {
     val c = SheetTheme.colors
     Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = SheetSizes.paddingH).padding(bottom = SheetSizes.paddingBottom)
@@ -104,7 +106,9 @@ fun AttachmentSheetContent(
             SheetTile("Files", Icons.Outlined.UploadFile, enabled, onFiles, Modifier.weight(1f))
             SheetTile("Audio", Icons.Outlined.GraphicEq, enabled, onAudio, Modifier.weight(1f))
         }
-        if (storedFiles) Text("Photos and files up to ${com.dua.ai.files.StoredFileTypes.sizeLabel(storedFilesMaxBytes.takeIf { it > 0 } ?: 52428800L)} each — images, PDFs, spreadsheets (XLSX, XLS, ODS, CSV), text and audio — upload to your private storage and remain available for follow-ups. Deleting a cached chat keeps stored files; remove them explicitly in Data controls. Camera photos and code files go with the message directly.",
+        if (inlineChatFiles) Text("Up to 3 files / 2 MB total — images, PDFs, CSV/text and audio — go directly with chat. Photos over the limit are resized. XLSX/ODS need conversion to CSV. Media stays available for follow-ups in this session; reselect it after restoring a chat.",
+            style = SheetNoteStyle, color = c.subText)
+        else if (storedFiles) Text("Photos and files up to ${com.dua.ai.files.StoredFileTypes.sizeLabel(storedFilesMaxBytes.takeIf { it > 0 } ?: 52428800L)} each — images, PDFs, spreadsheets (XLSX, XLS, ODS, CSV), text and audio — upload to your private storage and remain available for follow-ups. Deleting a cached chat keeps stored files; remove them explicitly in Data controls. Camera photos and code files go with the message directly.",
             style = SheetNoteStyle, color = c.subText)
         else {
             Text("Up to 3 files, 2 MB in total: JPEG, PNG, WebP, PDF or text and code files like TXT, CSV, MD, JSON (256 KB each). Photos and PDFs go with your next message only; extracted text is saved with the chat for follow-ups and cloud sync. Large photos are resized to JPEG; originals stay unchanged.",

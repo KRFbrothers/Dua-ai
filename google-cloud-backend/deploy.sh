@@ -1,9 +1,13 @@
 #!/usr/bin/env bash
-# Usage: PROJECT_ID=your-gcp-project ./deploy.sh
+# Usage: PROJECT_ID=your-gcp-project [VERTEX_MODEL=gemini-2.5-flash] [DUA_APP_TOKEN=...] ./deploy.sh
 set -euo pipefail
 
 : "${PROJECT_ID:?Set PROJECT_ID to your Google Cloud project id}"
 REGION="${REGION:-us-central1}"
+VERTEX_MODEL="${VERTEX_MODEL:-gemini-2.5-flash}"
+VERTEX_LOCATION="${VERTEX_LOCATION:-$REGION}"
+TOKEN_VAR=""
+if [ -n "${DUA_APP_TOKEN:-}" ]; then TOKEN_VAR=",DUA_APP_TOKEN=${DUA_APP_TOKEN}"; fi
 PROJECT_NUMBER=$(gcloud projects describe "$PROJECT_ID" --format="value(projectNumber)")
 
 echo "1. Enabling required Google Cloud APIs..."
@@ -18,5 +22,5 @@ done
 
 echo "3. Deploying Dua AI Engine to Cloud Run..."
 gcloud run deploy dua-ai-engine --source . --region "$REGION" \
-  --set-env-vars "GOOGLE_CLOUD_PROJECT=${PROJECT_ID},VERTEX_LOCATION=${REGION}" \
+  --set-env-vars "GOOGLE_CLOUD_PROJECT=${PROJECT_ID},VERTEX_LOCATION=${VERTEX_LOCATION},VERTEX_MODEL=${VERTEX_MODEL}${TOKEN_VAR}" \
   --allow-unauthenticated --project "$PROJECT_ID"

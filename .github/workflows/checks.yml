@@ -14,6 +14,26 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  google-cloud:
+    name: Google Cloud engine tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Install isolated test dependencies
+        run: |
+          python3 -m venv /tmp/dua-gcb-tests
+          /tmp/dua-gcb-tests/bin/python -m pip install Flask==3.0.3 pytest==8.3.5
+      - name: Run mocked Vertex engine tests
+        run: /tmp/dua-gcb-tests/bin/python -m pytest -q google-cloud-backend/tests --junitxml=google-cloud-backend/pytest-results.xml
+      - name: Preserve engine test report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: google-cloud-engine-test-report
+          path: google-cloud-backend/pytest-results.xml
+          if-no-files-found: ignore
+
   backend:
     name: Backend tests
     runs-on: ubuntu-latest

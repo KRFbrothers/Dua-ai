@@ -27,8 +27,40 @@ import java.io.ByteArrayOutputStream
 /** Provider credentials and model names remain on the server. */
 class DuaApiClient(
     private val baseUrl: String = BuildConfig.DUA_API_BASE_URL,
-    private val client: OkHttpClient = sharedClient
+    private val client: OkHttpClient = sharedClient,
+    /** Optional shared secret for the Cloud Run engine (X-Dua-App-Token); blank = not sent. */
+    private val appToken: String = "",
+    /** False when [baseUrl] is a separate chat engine: the account session token is then never sent to it. */
+    private val sendAccountToken: Boolean = true,
+    private val apiBaseUrl: String = baseUrl,
 ) {
+    val separateChatEngine = baseUrl.trimEnd('/') != apiBaseUrl.trimEnd('/')
+
+    /** Cloud Run uses its own Vertex credentials, independently of the base backend's keys. */
+    internal fun chatProvider(model: String, providers: List<com.dua.ai.setup.ProviderCapability>): com.dua.ai.setup.ProviderCapability? =
+        if (separateChatEngine && model in com.dua.ai.setup.IntegrationCapabilities.MODELS)
+            com.dua.ai.setup.ProviderCapability(model, true, "Gemini (Cloud Run)", true,
+                com.dua.ai.setup.IntegrationCapabilities.ATTACHMENT_TYPES + com.dua.ai.files.StoredFileTypes.AUDIO_TYPES, supportsReasoning = false)
+        else providers.firstOrNull { it.name == model && it.configured }
+
+    internal fun chatConfiguration(state: com.dua.ai.setup.IntegrationState): com.dua.ai.setup.IntegrationState =
+        if (!separateChatEngine) state else state.copy(providers =
+            (state.providers.map { if (it.name in setOf("Dua", "Gemini")) chatProvider(it.name, state.providers)!! else it } +
+                listOf("Dua", "Gemini").filter { name -> state.providers.none { it.name == name } }.map { chatProvider(it, state.providers)!! }))
+
+    internal fun usesInlineChatFiles(imagine: Boolean) = separateChatEngine && !imagine
+
+    /** An authoritative history refresh omits transient bytes; retain them only for unchanged turns. */
+    internal fun keepInlineContext(incoming: List<ChatMessage>, prior: List<ChatMessage>): List<ChatMessage> {
+        if (!separateChatEngine) return incoming
+        val previous = prior.associateBy { it.id }
+        return incoming.map { message ->
+            val old = previous[message.id]
+            if (message.isUser && old?.isUser == true && old.inlineAttachments.isNotEmpty() && message.inlineAttachments.isEmpty() &&
+                message.text == old.text && message.attachmentText == old.attachmentText && message.files == old.files)
+                message.copy(inlineAttachments = old.inlineAttachments) else message
+        }
+    }
     /** Legacy single-JSON reply (kept for older flows and tests). Chat uses [streamReply]. */
     suspend fun reply(model: String, history: List<ChatMessage>, attachments: List<ChatAttachment> = emptyList(), memory: String = "", token: String? = null, web: String? = null): String {
         val request = withContext(Dispatchers.IO) { buildRequest(model, history, attachments, memory, token, web, reasoning = false, stream = false) }
@@ -130,7 +162,17 @@ class DuaApiClient(
         val base = URL(baseUrl.trimEnd('/') + "/")
         require(base.protocol == "https") { "Dua backend ke liye HTTPS URL set karein." }
         val longContext = stream && context != null
-        val messages = historyJson(history, includeFileText = stream, maxBytes = historyBytes, maxTurns = if (longContext) com.dua.ai.model.ContextWindow.MAX_TURNS else LEGACY_TURNS)
+        val maxTurns = if (longContext) com.dua.ai.model.ContextWindow.MAX_TURNS else LEGACY_TURNS
+        val messages = historyJson(history, includeFileText = stream || separateChatEngine, maxBytes = historyBytes, maxTurns = maxTurns)
+        if (separateChatEngine) {
+            history.filter { it.state == "complete" }.takeLast(maxTurns).forEachIndexed { index, message ->
+                if (message.isUser && message.inlineAttachments.isNotEmpty() && (index != messages.length() - 1 || attachments.isEmpty()))
+                    messages.getJSONObject(index).put("attachments", attachmentJson(message.inlineAttachments))
+                // Restored text attachments still have useful context even when their transient bytes are gone.
+                if (message.isUser && index == messages.length() - 1 && attachments.isEmpty() && !message.attachmentText.isNullOrEmpty())
+                    messages.getJSONObject(index).put("attachmentText", message.attachmentText)
+            }
+        }
         val files = JSONArray().apply { attachments.forEach { file ->
             put(JSONObject().put("name", file.name).put("mimeType", file.mimeType).put("data", file.data))
         } }
@@ -149,15 +191,16 @@ class DuaApiClient(
                 if (stream && xSearch && model == "Grok") put("xSearch", true)
                 // Run code (Phase 5): only sent when the server advertised it, so older servers never see the field.
                 if (stream && code && build == null) put("code", true)
-                if (persistence != null) { require(stream && token != null); put("persistence", persistence.json) }
+                if (persistence != null) { require(stream && token != null && sendAccountToken && !separateChatEngine); put("persistence", persistence.json) }
             }
             .toString().toByteArray(Charsets.UTF_8)
-        require(body.size <= (if (historyBytes > MAX_HISTORY_BYTES || longContext) 4 else 3) * 1024 * 1024) { "Conversation too large. New chat shuru karein." }
+        require(body.size <= (if (separateChatEngine || historyBytes > MAX_HISTORY_BYTES || longContext) 4 else 3) * 1024 * 1024) { "Conversation too large. New chat shuru karein." }
         val builder = Request.Builder().url(URL(base, "api/chat"))
             .header("Accept", if (stream) "text/event-stream, application/json" else "application/json")
             .header("x-dua-native", "1")
             .post(body.toRequestBody("application/json; charset=utf-8".toMediaType()))
-        if (token != null) {
+        if (appToken.isNotBlank()) builder.header("X-Dua-App-Token", appToken)
+        if (token != null && sendAccountToken && !separateChatEngine) {
             require(token.length <= 10000 && token.matches(Regex("[A-Za-z0-9._-]+"))) { "Invalid account session." }
             builder.header("Authorization", "Bearer $token")
         }
@@ -194,6 +237,9 @@ class DuaApiClient(
     }
 
     companion object {
+        private fun attachmentJson(files: List<ChatAttachment>) = JSONArray().apply { files.forEach { file ->
+            put(JSONObject().put("name", file.name).put("mimeType", file.mimeType).put("data", file.data))
+        } }
         const val MAX_STREAM_BYTES = 4L * 1024 * 1024
         /** Budget for earlier turns' stored text-file content re-sent with follow-ups. */
         const val FILE_CONTEXT_CHARS = 96_000
