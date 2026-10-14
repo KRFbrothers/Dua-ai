@@ -20,6 +20,7 @@ import androidx.core.content.FileProvider
 import com.dua.ai.attachments.AttachmentReader
 import com.dua.ai.attachments.CameraCaptureStore
 import com.dua.ai.ui.voice.ReplyVoice
+import com.dua.ai.ui.navigation.DuaDestination
 import com.dua.ai.viewmodel.ChatViewModel
 import java.time.LocalTime
 
@@ -27,7 +28,7 @@ import java.time.LocalTime
 @Composable
 fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () -> Unit, onOpenVoice: () -> Unit, onOpenSetup: () -> Unit,
     onOpenDestination: (com.dua.ai.ui.navigation.DuaDestination) -> Unit = {},
-    onOpenComputer: () -> Unit = {},
+    onOpenComputer: () -> Unit = { onOpenDestination(DuaDestination.Computer) },
     onOpenVoiceMode: () -> Unit = {}) {
     val preferences by viewModel.localSettings.collectAsState()
     val chatId by viewModel.activeChatId.collectAsState()
@@ -208,7 +209,10 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
             },
             onClearAttachments = { viewModel.clearAttachments(); attachmentNotice = "" },
             onOpenSettings = onOpenSettings,
-            onOpenDestination = onOpenDestination,
+            // Drawer and Home use the same destination dispatch, including the existing Computer screen.
+            onOpenDestination = { destination ->
+                if (destination == DuaDestination.Computer) onOpenComputer() else onOpenDestination(destination)
+            },
             onOpenVoice = onOpenVoice,
             onOpenComputer = onOpenComputer,
             onOpenVoiceMode = onOpenVoiceMode,

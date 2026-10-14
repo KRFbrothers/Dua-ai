@@ -34,8 +34,8 @@ import com.dua.ai.ui.components.ReferenceIcons
 enum class HomeTab(val label: String) { Chat("Chat"), Work("Work") }
 
 /**
- * Top bar from the reference shell: menu, centre [ Chat | Work ] pill and dashed new-chat icon.
- * In a conversation an extra "Find in chat" button sits beside the new-chat action.
+ * Home has a Computer shortcut beside the [ Chat | Work ] pill.
+ * Conversations retain Find in chat and the existing new-chat action.
  */
 @Composable
 fun ChatTopBar(
@@ -45,6 +45,8 @@ fun ChatTopBar(
     tab: HomeTab = HomeTab.Chat,
     onTab: (HomeTab) -> Unit = {},
     onSearch: (() -> Unit)? = null,
+    showComputer: Boolean = false,
+    onComputer: () -> Unit = {},
 ) {
     Row(
         modifier = Modifier
@@ -58,7 +60,8 @@ fun ChatTopBar(
         SegmentedPill(tab, onTab, Modifier.weight(1f, fill = false))
         Row(verticalAlignment = Alignment.CenterVertically) {
             onSearch?.let { RoundButton(ReferenceIcons.Search, "Find in chat", it) }
-            RoundButton(ReferenceIcons.NewChat, "New chat", onNewChat, newChatEnabled)
+            if (showComputer) RoundButton(ReferenceIcons.Computer, "Computer", onComputer)
+            else RoundButton(ReferenceIcons.NewChat, "New chat", onNewChat, newChatEnabled)
         }
     }
 }

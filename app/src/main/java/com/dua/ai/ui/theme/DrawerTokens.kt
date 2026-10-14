@@ -45,8 +45,8 @@ object DrawerTheme {
 
 /** Reference sizes. Visuals keep the reference sizes; each control sits in a 48 dp touch slot. */
 object DrawerSizes {
-    val width = 320.dp
-    val paddingH = 28.dp
+    val width = 286.dp
+    val paddingH = 22.dp
     val paddingV = 16.dp
     val headerTop = 4.dp
     val headerBottom = 20.dp
@@ -55,8 +55,8 @@ object DrawerSizes {
     val menuIcon = 24.dp
     val menuGap = 14.dp
     val menuPaddingV = 12.dp
-    val subIcon = 18.dp
-    val subGap = 12.dp
+    val subIcon = menuIcon
+    val subGap = menuGap
     val subIndent = 38.dp
     val chevron = 20.dp
     val dividerThickness = 1.dp
@@ -91,7 +91,7 @@ object DrawerShapes {
 
 val DrawerTitleStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.SemiBold, fontSize = 24.sp)
 val DrawerMenuStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Bold, fontSize = 17.sp)
-val DrawerSubStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Normal, fontSize = 15.sp)
+val DrawerSubStyle = DrawerMenuStyle
 val DrawerChatStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Normal, fontSize = 16.sp)
 val DrawerNewChatStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.SemiBold, fontSize = 17.sp)
 val DrawerAvatarStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Bold, fontSize = 16.sp)

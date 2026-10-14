@@ -33,6 +33,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
@@ -43,6 +46,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.AlertDialog
@@ -64,10 +68,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import com.dua.ai.ui.history.HistoryDrawer
 import com.dua.ai.ui.theme.Sizes
 import com.dua.ai.ui.theme.Spacing
+import com.dua.ai.ui.theme.DrawerSizes
+import com.dua.ai.ui.theme.HomeSizes
+import com.dua.ai.ui.navigation.DuaDestination
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -210,114 +218,123 @@ fun ChatScreen(
     fun closeDrawerThen(action: () -> Unit) { scope.launch { drawerState.close() }; action() }
 
     key(conversationKey) {
-        ModalNavigationDrawer(
-            drawerState = drawerState,
-            // Only swipe to close: an edge swipe to open would fight horizontal scrolling in code blocks.
-            gesturesEnabled = drawerState.isOpen,
-            drawerContent = {
-                HistoryDrawer(
-                    chats = state.savedChats.filter { it.projectId == state.projectId },
-                    currentChatId = state.chatId,
-                    newChatEnabled = !state.typing,
-                    onNewChat = { if (!state.typing) closeDrawerThen(actions.onNewChat) },
-                    onSelectChat = { id -> closeDrawerThen { actions.onOpenChat(id) } },
-                    onDeleteChat = { id -> deletingId = id },
-                    onRenameChat = { id, title -> actions.onRenameChat(id, title) },
-                    pinEnabled = state.chatPinEnabled,
-                    onPinChat = { id, pinned -> actions.onPinChat(id, pinned) },
-                    serverDeletionEnabled = state.serverChatDeletionEnabled,
-                    onDeleteServerChat = { id -> actions.onDismissChatDeletion(); deletingServerId = id },
-                    onOpenSettings = { closeDrawerThen(actions.onOpenSettings) },
-                    onProjects = { closeDrawerThen { sheet = ChatSheet.Projects } },
-                    onDestination = { destination -> closeDrawerThen { actions.onOpenDestination(destination) } },
-                    profileName = state.profileName,
-                    profilePhotoUrl = state.profilePhotoUrl,
-                )
-            },
-        ) {
-            Column(Modifier.fillMaxSize().background(com.dua.ai.ui.theme.ChatTheme.colors.background)
-                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))) {
-                ChatTopBar(
-                    newChatEnabled = !state.typing,
-                    onMenu = { scope.launch { drawerState.open() } },
-                    onNewChat = actions.onNewChat,
-                    // Work is an existing destination; the pill stays on Chat while this screen shows.
-                    onTab = { if (it == HomeTab.Work) actions.onOpenDestination(com.dua.ai.ui.navigation.DuaDestination.Work) },
-                    onSearch = if (state.messages.isEmpty()) null else ({ followTail = false; searchOpen = true }),
-                )
-                if (searchOpen) ConversationSearchBar(searchQuery,
-                    onQuery = { searchQuery = it; selectedSearchId = null; lastSearchJump = null },
-                    searching = needle.isNotEmpty() && searchResults?.takeIf { it.messages == state.messages && it.query == needle } == null,
-                    matches = matches, currentIndex = matchIndex,
-                    onPrevious = { if (matches.isNotEmpty()) selectedSearchId = matches[(matchIndex - 1 + matches.size) % matches.size].messageId },
-                    onNext = { if (matches.isNotEmpty()) selectedSearchId = matches[(matchIndex + 1) % matches.size].messageId },
-                    onClose = { closeSearch() })
-                Box(Modifier.weight(1f).fillMaxWidth()) {
-                    if (home) {
-                        EmptyState(suggestions = state.suggestions, showPrompts = state.draft.isBlank(),
-                            onSuggestion = { prompt -> actions.onDraftChange(prompt); inputFocus.requestFocus() })
-                    } else {
-                        key(conversationKey) {
-                            MessageList(state = state, actions = actions, listState = listState, imagineActions = mediaActions,
-                                searchMessageId = selectedMatch?.messageId)
-                        }
-                        if (!searchOpen && !followTail && listState.canScrollForward) FilledTonalButton(
-                            onClick = { scope.launch { followTail = true; goToLatest() } },
-                            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = Spacing.md)
-                                .heightIn(min = Sizes.touchTarget).semantics { contentDescription = "Go to latest reply" },
-                            colors = androidx.compose.material3.ButtonDefaults.filledTonalButtonColors(containerColor = com.dua.ai.ui.theme.PageTheme.colors.card,
-                                contentColor = com.dua.ai.ui.theme.PageTheme.colors.text),
-                            border = androidx.compose.foundation.BorderStroke(com.dua.ai.ui.theme.SettingsSizes.border, com.dua.ai.ui.theme.PageTheme.colors.cardBorder),
-                        ) {
-                            Icon(Icons.Outlined.ArrowDownward, contentDescription = null, modifier = Modifier.size(Sizes.iconSmall))
-                            Text("Latest reply", modifier = Modifier.padding(start = Spacing.xs))
-                        }
-                    }
-                }
-                Column(Modifier.fillMaxWidth().imePadding().navigationBarsPadding(), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Column(Modifier.widthIn(max = Sizes.contentMaxWidth).fillMaxWidth()
-                        .onGloballyPositioned { bottomCoordinates = it }
-                        .swipeUpToOpen(enabled = sheet == null && !state.typing,
-                            isExcluded = { local -> inputFocused && bottomCoordinates?.let { inputBounds.contains(it.localToRoot(local)) } == true },
-                            onSwipeUp = { tap(); sheet = ChatSheet.Attach })
-                        .semantics { customActions = listOf(CustomAccessibilityAction("Open add to chat") { sheet = ChatSheet.Attach; true }) }) {
-                        ChatNotices(state = state, actions = actions)
-                        val visibleModes = modeToggles(state, onWebMode, onReasoning, onXSearch, onRunCode)
-                            .filter { !home && it.on }
-                        if (visibleModes.isNotEmpty()) {
-                            Row(
-                                Modifier.fillMaxWidth().let { if (visibleModes.size > 3) it.horizontalScroll(rememberScrollState()) else it }
-                                    .padding(horizontal = Spacing.md, vertical = Spacing.xs),
-                                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+        BoxWithConstraints(Modifier.fillMaxSize()) {
+            // Keep the entire right-hand Home touch target in the scrim, including on narrow windows.
+            val endInset = WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal).asPaddingValues()
+                .calculateEndPadding(LocalLayoutDirection.current)
+            val controlInset = maxOf(HomeSizes.topBarPaddingH, Spacing.lg + HomeSizes.barPaddingH)
+            val drawerWidth = minOf(DrawerSizes.width, (maxWidth - endInset - controlInset - Sizes.touchTarget).coerceAtLeast(0.dp))
+            ModalNavigationDrawer(
+                drawerState = drawerState,
+                // Only swipe to close: an edge swipe to open would fight horizontal scrolling in code blocks.
+                gesturesEnabled = drawerState.isOpen,
+                drawerContent = {
+                    HistoryDrawer(
+                        chats = state.savedChats.filter { it.projectId == state.projectId },
+                        currentChatId = state.chatId,
+                        newChatEnabled = !state.typing,
+                        onNewChat = { if (!state.typing) closeDrawerThen(actions.onNewChat) },
+                        onSelectChat = { id -> closeDrawerThen { actions.onOpenChat(id) } },
+                        onDeleteChat = { id -> deletingId = id },
+                        onRenameChat = { id, title -> actions.onRenameChat(id, title) },
+                        pinEnabled = state.chatPinEnabled,
+                        onPinChat = { id, pinned -> actions.onPinChat(id, pinned) },
+                        serverDeletionEnabled = state.serverChatDeletionEnabled,
+                        onDeleteServerChat = { id -> actions.onDismissChatDeletion(); deletingServerId = id },
+                        onOpenSettings = { closeDrawerThen(actions.onOpenSettings) },
+                        onProjects = { closeDrawerThen { sheet = ChatSheet.Projects } },
+                        onDestination = { destination -> closeDrawerThen { actions.onOpenDestination(destination) } },
+                        profileName = state.profileName,
+                        profilePhotoUrl = state.profilePhotoUrl,
+                        modifier = Modifier.width(drawerWidth),
+                    )
+                },
+            ) {
+                Column(Modifier.fillMaxSize().background(com.dua.ai.ui.theme.ChatTheme.colors.background)
+                    .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))) {
+                    ChatTopBar(
+                        newChatEnabled = !state.typing,
+                        onMenu = { scope.launch { drawerState.open() } },
+                        onNewChat = actions.onNewChat,
+                        showComputer = home,
+                        onComputer = { actions.onOpenDestination(DuaDestination.Computer) },
+                        // Work is an existing destination; the pill stays on Chat while this screen shows.
+                        onTab = { if (it == HomeTab.Work) actions.onOpenDestination(com.dua.ai.ui.navigation.DuaDestination.Work) },
+                        onSearch = if (state.messages.isEmpty()) null else ({ followTail = false; searchOpen = true }),
+                    )
+                    if (searchOpen) ConversationSearchBar(searchQuery,
+                        onQuery = { searchQuery = it; selectedSearchId = null; lastSearchJump = null },
+                        searching = needle.isNotEmpty() && searchResults?.takeIf { it.messages == state.messages && it.query == needle } == null,
+                        matches = matches, currentIndex = matchIndex,
+                        onPrevious = { if (matches.isNotEmpty()) selectedSearchId = matches[(matchIndex - 1 + matches.size) % matches.size].messageId },
+                        onNext = { if (matches.isNotEmpty()) selectedSearchId = matches[(matchIndex + 1) % matches.size].messageId },
+                        onClose = { closeSearch() })
+                    Box(Modifier.weight(1f).fillMaxWidth()) {
+                        if (home) {
+                            EmptyState(suggestions = state.suggestions, showPrompts = state.draft.isBlank(),
+                                onSuggestion = { prompt -> actions.onDraftChange(prompt); inputFocus.requestFocus() })
+                        } else {
+                            key(conversationKey) {
+                                MessageList(state = state, actions = actions, listState = listState, imagineActions = mediaActions,
+                                    searchMessageId = selectedMatch?.messageId)
+                            }
+                            if (!searchOpen && !followTail && listState.canScrollForward) FilledTonalButton(
+                                onClick = { scope.launch { followTail = true; goToLatest() } },
+                                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = Spacing.md)
+                                    .heightIn(min = Sizes.touchTarget).semantics { contentDescription = "Go to latest reply" },
+                                colors = androidx.compose.material3.ButtonDefaults.filledTonalButtonColors(containerColor = com.dua.ai.ui.theme.PageTheme.colors.card,
+                                    contentColor = com.dua.ai.ui.theme.PageTheme.colors.text),
+                                border = androidx.compose.foundation.BorderStroke(com.dua.ai.ui.theme.SettingsSizes.border, com.dua.ai.ui.theme.PageTheme.colors.cardBorder),
                             ) {
-                                val fill = visibleModes.size <= 3
-                                visibleModes.forEach { toggle -> HomeActionButton(toggle, if (fill) Modifier.weight(1f) else Modifier) }
+                                Icon(Icons.Outlined.ArrowDownward, contentDescription = null, modifier = Modifier.size(Sizes.iconSmall))
+                                Text("Latest reply", modifier = Modifier.padding(start = Spacing.xs))
                             }
                         }
-                        Composer(
-                            state = state,
-                            focusRequester = inputFocus,
-                            onDraftChange = actions.onDraftChange,
-                            onAttach = { sheet = ChatSheet.Attach },
-                            onClearAttachments = actions.onClearAttachments,
-                            onMic = actions.onOpenVoice,
-                            onVoiceClick = { actions.haptic(ChatHaptic.Tap); actions.onOpenVoiceMode() },
-                            onVoiceMode = { actions.haptic(ChatHaptic.Tap); actions.onOpenVoiceMode() },
-                            onTextFieldFocus = { inputFocused = it },
-                            onTextFieldBounds = { inputBounds = it },
-                            value = state.draft,
-                            onSend = { actions.onSend() },
-                            onStop = actions.onStop,
-                            onModelClick = { sheet = ChatSheet.Model },
-                            currentModel = state.model,
-                            onCancelUpload = { state.uploads.filter { it.uploading }.forEach { actions.onCancelUpload(it.id) } },
-                            onImagineOptions = { sheet = ChatSheet.Imagine },
-                        )
+                    }
+                    Column(Modifier.fillMaxWidth().imePadding().navigationBarsPadding(), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Column(Modifier.widthIn(max = Sizes.contentMaxWidth).fillMaxWidth()
+                            .onGloballyPositioned { bottomCoordinates = it }
+                            .swipeUpToOpen(enabled = sheet == null && !state.typing,
+                                isExcluded = { local -> inputFocused && bottomCoordinates?.let { inputBounds.contains(it.localToRoot(local)) } == true },
+                                onSwipeUp = { tap(); sheet = ChatSheet.Attach })
+                            .semantics { customActions = listOf(CustomAccessibilityAction("Open add to chat") { sheet = ChatSheet.Attach; true }) }) {
+                            ChatNotices(state = state, actions = actions)
+                            val visibleModes = modeToggles(state, onWebMode, onReasoning, onXSearch, onRunCode)
+                                .filter { !home && it.on }
+                            if (visibleModes.isNotEmpty()) {
+                                Row(
+                                    Modifier.fillMaxWidth().let { if (visibleModes.size > 3) it.horizontalScroll(rememberScrollState()) else it }
+                                        .padding(horizontal = Spacing.md, vertical = Spacing.xs),
+                                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                                ) {
+                                    val fill = visibleModes.size <= 3
+                                    visibleModes.forEach { toggle -> HomeActionButton(toggle, if (fill) Modifier.weight(1f) else Modifier) }
+                                }
+                            }
+                            Composer(
+                                state = state,
+                                focusRequester = inputFocus,
+                                onDraftChange = actions.onDraftChange,
+                                onAttach = { sheet = ChatSheet.Attach },
+                                onClearAttachments = actions.onClearAttachments,
+                                onMic = actions.onOpenVoice,
+                                onVoiceClick = { actions.haptic(ChatHaptic.Tap); actions.onOpenVoiceMode() },
+                                onVoiceMode = { actions.haptic(ChatHaptic.Tap); actions.onOpenVoiceMode() },
+                                onTextFieldFocus = { inputFocused = it },
+                                onTextFieldBounds = { inputBounds = it },
+                                value = state.draft,
+                                onSend = { actions.onSend() },
+                                onStop = actions.onStop,
+                                onModelClick = { sheet = ChatSheet.Model },
+                                currentModel = state.model,
+                                onCancelUpload = { state.uploads.filter { it.uploading }.forEach { actions.onCancelUpload(it.id) } },
+                                onImagineOptions = { sheet = ChatSheet.Imagine },
+                            )
+                        }
                     }
                 }
             }
         }
-
     }
     when (sheet) {
         ChatSheet.Projects -> ProjectsSheet(state.projects, state.projectId, state.projectNotice, !state.typing,
