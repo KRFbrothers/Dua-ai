@@ -18,6 +18,9 @@ val InterFont = FontFamily(
 
 val MontserratFontFamily = InterFont
 
+val AgentTitleStyle = TextStyle(fontWeight = FontWeight.SemiBold, fontSize = 18.sp, lineHeight = 24.sp)
+val AgentHeroStyle = TextStyle(fontWeight = FontWeight.Bold, fontSize = 24.sp, lineHeight = 32.sp)
+
 fun fontFamilyFor(preference: String): FontFamily = when (preference) {
     "system" -> FontFamily.Default
     "serif" -> FontFamily.Serif

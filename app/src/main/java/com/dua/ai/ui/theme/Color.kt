@@ -8,6 +8,10 @@ import androidx.compose.ui.graphics.Color
 import dev.snipme.highlights.model.SyntaxTheme
 import dev.snipme.highlights.model.SyntaxThemes
 
+/** Reference Agent task surface, with a readable dark counterpart. */
+val AgentTaskSurfaceLight = Color(0xFFF7F7F8)
+val AgentTaskSurfaceDark = Color(0xFF1A1B1F)
+
 /**
  * Raw palette. Screens never use these directly: they read [ColorScheme] roles from
  * MaterialTheme or the extra roles in [DuaColors] via `DuaTheme.colors`.

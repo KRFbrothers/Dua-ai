@@ -108,6 +108,10 @@ fun DuaNavHost(viewModel: ChatViewModel, voice: ReplyVoice, notificationRoute: P
         composable(DuaDestination.Computer.route) {
             com.dua.ai.ui.screens.ComputerScreen(onBack = navigator::back)
         }
+        composable(DuaDestination.Agent.route) {
+            BusyBackGuard(viewModel)
+            com.dua.ai.ui.agent.AgentScreen(viewModel, onBack = navigator::back, onOpenChat = navigator::toChat)
+        }
         composable(DuaDestination.Voice.route) {
             val draft by viewModel.draft.collectAsState()
             val settings by viewModel.localSettings.collectAsState()
