@@ -7,6 +7,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.FilterList
+import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
@@ -68,18 +71,17 @@ internal fun DailyPlannerContent(projects: List<ChatProject>, notice: String, en
             Text("Daily planner", style = MaterialTheme.typography.titleLarge, modifier = Modifier.semantics { heading() })
             Text("$dayLabel · $date · ${zone.id}", style = MaterialTheme.typography.bodyMedium)
             Row(verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = { selectedDate = date.minusDays(1).toString() }, modifier = Modifier.semantics { contentDescription = "Previous planner day" }) { Text("Previous") }
-                TextButton(onClick = { selectedDate = null }) { Text("Today") }
-                TextButton(onClick = { selectedDate = date.plusDays(1).toString() }, modifier = Modifier.semantics { contentDescription = "Next planner day" }) { Text("Next") }
+                SheetTextButton("Previous", onClick = { selectedDate = date.minusDays(1).toString() }, modifier = Modifier.semantics { contentDescription = "Previous planner day" })
+                SheetTextButton("Today", onClick = { selectedDate = null })
+                SheetTextButton("Next", onClick = { selectedDate = date.plusDays(1).toString() }, modifier = Modifier.semantics { contentDescription = "Next planner day" })
             }
             Box {
-                OutlinedButton(onClick = { filterOpen = true }, modifier = Modifier.semantics { contentDescription = "Planner project filter" }) {
-                    Text(selectedProject?.name ?: "All active projects")
-                }
-                DropdownMenu(expanded = filterOpen, onDismissRequest = { filterOpen = false }) {
-                    DropdownMenuItem(text = { Text("All active projects") }, onClick = { projectId = null; filterOpen = false },
+                SheetTonalButton(selectedProject?.name ?: "All active projects", onClick = { filterOpen = true }, icon = Icons.Outlined.FilterList,
+                    modifier = Modifier.semantics { contentDescription = "Planner project filter" })
+                DuaDropdownMenu(expanded = filterOpen, onDismissRequest = { filterOpen = false }) {
+                    DuaDropdownItem("All active projects", icon = Icons.Outlined.FilterList, selected = projectId == null, onClick = { projectId = null; filterOpen = false },
                         modifier = Modifier.semantics { contentDescription = "Show all active projects in planner" })
-                    active.forEach { project -> DropdownMenuItem(text = { Text(project.name) }, onClick = { projectId = project.id; filterOpen = false },
+                    active.forEach { project -> DuaDropdownItem(project.name, icon = Icons.Outlined.Folder, selected = projectId == project.id, onClick = { projectId = project.id; filterOpen = false },
                         modifier = Modifier.semantics { contentDescription = "Filter planner to ${project.name}" }) }
                 }
             }
@@ -88,7 +90,7 @@ internal fun DailyPlannerContent(projects: List<ChatProject>, notice: String, en
             if (notice.isNotBlank()) Text(notice)
             if (!tasksEnabled) Text("Refresh setup after deploying the Tasks backend to edit tasks.")
             else if (!enabled) Text("Finish the current action before editing tasks.")
-            selectedProject?.let { project -> TextButton(onClick = { onOpenTasks(project.id) }) { Text("Manage ${project.name} tasks") } }
+            selectedProject?.let { project -> SheetTextButton("Manage ${project.name} tasks", onClick = { onOpenTasks(project.id) }) }
         }
         fun group(label: String, values: List<PlannedTask>, empty: String) {
             item(key = "heading/$label") { Text(label, style = MaterialTheme.typography.titleMedium, modifier = Modifier.semantics { heading() }) }
@@ -102,7 +104,7 @@ internal fun DailyPlannerContent(projects: List<ChatProject>, notice: String, en
         group("Completed · due on this day", plan.completed, "No completed tasks due on this day.")
         item { Text("Tasks without a date stay in your inbox until you add a deadline in their project.", style = MaterialTheme.typography.bodySmall) }
         group("No due date", plan.undated, "No undated open tasks.")
-        item { TextButton(onClick = onBack) { Text("Back to projects") } }
+        item { SheetTextButton("Back to projects", onClick = onBack) }
     }
 }
 
@@ -125,7 +127,7 @@ private fun PlannerTaskRow(entry: PlannedTask, now: Long, zone: ZoneId, enabled:
                 style = MaterialTheme.typography.bodySmall,
                 color = if (overdue) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        TextButton(onClick = { onOpenTasks(entry.projectId) }, modifier = Modifier.semantics { contentDescription = "Open tasks: ${entry.projectName} · ${task.title}" }) { Text("Open project tasks") }
+        SheetTextButton("Open project tasks", onClick = { onOpenTasks(entry.projectId) }, modifier = Modifier.semantics { contentDescription = "Open tasks: ${entry.projectName} · ${task.title}" })
         HorizontalDivider()
     }
 }

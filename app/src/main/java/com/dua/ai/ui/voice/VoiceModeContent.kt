@@ -42,8 +42,7 @@ import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.ThumbDown
 import androidx.compose.material.icons.outlined.ThumbUp
 import androidx.compose.material.icons.outlined.Videocam
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconToggleButton
@@ -346,8 +345,8 @@ private fun ReplyActions(feedback: Int, callbacks: VoiceModeCallbacks) {
         ActionIcon(Icons.Outlined.ContentCopy, "Copy reply", tint) { callbacks.onCopy() }
         Box {
             ActionIcon(Icons.Outlined.MoreVert, "More", tint) { menu = true }
-            DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                DropdownMenuItem(text = { Text("Open in chat") }, onClick = { menu = false; callbacks.onOpenChat() })
+            com.dua.ai.ui.chat.DuaDropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                com.dua.ai.ui.chat.DuaDropdownItem("Open in chat", icon = Icons.AutoMirrored.Outlined.OpenInNew, onClick = { menu = false; callbacks.onOpenChat() })
             }
         }
     }
