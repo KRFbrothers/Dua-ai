@@ -224,7 +224,6 @@ fun ChatScreen(
                     newChatEnabled = !state.typing,
                     onNewChat = { if (!state.typing) closeDrawerThen(actions.onNewChat) },
                     onSelectChat = { id -> closeDrawerThen { actions.onOpenChat(id) } },
-                    onVoiceClick = { closeDrawerThen { actions.haptic(ChatHaptic.Tap); actions.onOpenVoiceMode() } },
                     onDeleteChat = { id -> deletingId = id },
                     onRenameChat = { id, title -> actions.onRenameChat(id, title) },
                     pinEnabled = state.chatPinEnabled,

@@ -13,7 +13,6 @@ val SoehneFont = FontFamily(
 )
 
 val MontserratFontFamily = SoehneFont
-val InterFontFamily = SoehneFont
 
 fun fontFamilyFor(preference: String): FontFamily = when (preference) {
     "system" -> FontFamily.Default

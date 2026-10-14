@@ -21,7 +21,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Search
@@ -54,7 +53,7 @@ fun SearchField(query: String = "", onQueryChange: (String) -> Unit = {}, modifi
 
 /**
  * ChatGPT-style sidebar copied from the reference shell's DrawerContent: "Dua AI" + search circle, menu rows,
- * divider, recent chats, then the purple "Chat" pill with profile and voice circles docked at the bottom.
+ * divider, recent chats, then the purple "Chat" pill with the profile circle docked at the bottom.
  * Long-press a chat for Rename / Pin / Delete.
  */
 @Composable
@@ -66,7 +65,6 @@ fun HistoryDrawer(
     onNewChat: () -> Unit = {},
     onSearch: () -> Unit = {},
     onNavigateSettings: () -> Unit = {},
-    onVoiceClick: () -> Unit = {},
     onDeleteChat: (String) -> Unit = {},
     onRenameChat: (String, String) -> String? = { _, _ -> null },
     serverDeletionEnabled: Boolean = false,
@@ -87,7 +85,7 @@ fun HistoryDrawer(
     var renaming by remember { mutableStateOf<SavedChat?>(null) }
     var notice by remember { mutableStateOf<String?>(null) }
     val visible = remember(chats, query) {
-        HistoryGrouping.filter(chats, query).sortedWith(compareByDescending<SavedChat> { it.pinned }.thenByDescending { it.updatedAt })
+        HistoryGrouping.filter(HistoryGrouping.recent(chats), query).sortedWith(compareByDescending<SavedChat> { it.pinned }.thenByDescending { it.updatedAt })
     }
 
     ModalDrawerSheet(drawerContainerColor = colors.container, modifier = modifier.width(DrawerSizes.width).testTag("history-drawer")) {
@@ -163,7 +161,7 @@ fun HistoryDrawer(
                 notice?.let { Text(it, style = DrawerChatStyle, color = colors.subText, modifier = Modifier.padding(vertical = DrawerSizes.chatPaddingV)) }
             }
 
-            // Bottom dock: purple "Chat" pill, profile initial, voice.
+            // Bottom dock: purple "Chat" pill and profile initial. Voice mode lives in the composer.
             Row(
                 Modifier.fillMaxWidth().padding(top = DrawerSizes.dockTop),
                 horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically,
@@ -191,9 +189,6 @@ fun HistoryDrawer(
                         val initial = profileName.firstOrNull { it.isLetterOrDigit() }?.uppercaseChar()
                         if (initial == null) Icon(Icons.Outlined.PersonOutline, null, tint = colors.onAvatar, modifier = Modifier.size(DrawerSizes.voiceIcon))
                         else Text(initial.toString(), style = DrawerAvatarStyle, color = colors.onAvatar)
-                    }
-                    DockCircle(colors.voice, "Voice", onVoiceClick) {
-                        Icon(Icons.Default.GraphicEq, null, tint = colors.onVoice, modifier = Modifier.size(DrawerSizes.voiceIcon))
                     }
                 }
             }

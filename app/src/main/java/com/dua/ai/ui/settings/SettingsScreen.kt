@@ -72,7 +72,7 @@ data class SettingsUiState(
 )
 
 internal fun themeLabel(theme: String) = when (theme) { "light" -> "Light"; "system" -> "Match system"; else -> "Dark" }
-internal fun fontLabel(font: String) = when (font) { "system" -> "Device font"; "serif" -> "Serif"; "monospace" -> "Monospace"; else -> "Inter" }
+internal fun fontLabel(font: String) = when (font) { "system" -> "Device font"; "serif" -> "Serif"; "monospace" -> "Monospace"; else -> "Söhne" }
 
 /** Profile & Settings hub: approved groups plus preserved existing feature destinations. */
 @Composable
