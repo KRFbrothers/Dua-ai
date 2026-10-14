@@ -19,21 +19,19 @@ import androidx.compose.ui.unit.sp
 data class DrawerColors(
     val container: Color, val title: Color, val searchCircle: Color, val searchIcon: Color,
     val menuText: Color, val chevron: Color, val divider: Color, val chatText: Color, val subText: Color,
-    val newChat: Color, val onNewChat: Color, val avatar: Color, val onAvatar: Color, val voice: Color, val onVoice: Color,
+    val newChat: Color, val onNewChat: Color, val avatar: Color, val onAvatar: Color,
 )
 
 val DrawerLightColors = DrawerColors(
     container = Color(0xFFFFFFFF), title = Color(0xFF111827), searchCircle = Color(0xFFF3F4F6), searchIcon = Color(0xFF1F2937),
     menuText = Color(0xFF111827), chevron = Color(0xFF6B7280), divider = Color(0xFFE5E7EB), chatText = Color(0xFF1F2937), subText = Color(0xFF6B7280),
     newChat = Color(0xFF8B5CF6), onNewChat = Color(0xFFFFFFFF), avatar = Color(0xFFFDE68A), onAvatar = Color(0xFF1F2937),
-    voice = Color(0xFF8B5CF6), onVoice = Color(0xFFFFFFFF),
 )
 
 val DrawerDarkColors = DrawerColors(
     container = Color(0xFF111827), title = Color(0xFFF9FAFB), searchCircle = Color(0xFF1F2937), searchIcon = Color(0xFFE5E7EB),
     menuText = Color(0xFFF9FAFB), chevron = Color(0xFF9CA3AF), divider = Color(0xFF374151), chatText = Color(0xFFE5E7EB), subText = Color(0xFF9CA3AF),
     newChat = Color(0xFF8B5CF6), onNewChat = Color(0xFFFFFFFF), avatar = Color(0xFFFDE68A), onAvatar = Color(0xFF1F2937),
-    voice = Color(0xFF8B5CF6), onVoice = Color(0xFFFFFFFF),
 )
 
 object DrawerTheme {
@@ -68,7 +66,6 @@ object DrawerSizes {
     val newChatGap = 8.dp
     val avatar = 38.dp
     val voiceIcon = 18.dp
-    /** Reference gap between avatar and voice is 10 dp; two 48 dp slots around 38 dp circles give exactly that. */
     val dockGap = 0.dp
     val touch = 48.dp
 }

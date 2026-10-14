@@ -21,6 +21,14 @@ object HistoryGrouping {
         }
     }
 
+    /**
+     * Chats shown in the drawer's recent list. Hides placeholders that were never sent (no user message and no custom
+     * title, i.e. titled "Draft") and collapses duplicate ids to the newest copy. Display only: nothing is deleted.
+     */
+    fun recent(chats: List<SavedChat>): List<SavedChat> =
+        chats.filter { chat -> chat.customTitle != null || chat.messages.any { it.isUser && it.text.isNotBlank() } }
+            .groupBy { it.id }.values.map { copies -> copies.maxBy { it.updatedAt } }
+
     fun filter(chats: List<SavedChat>, query: String): List<SavedChat> {
         return HistorySearch.search(chats, query).map { it.chat }
     }

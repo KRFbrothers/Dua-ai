@@ -52,21 +52,31 @@ class HistoryDrawerTest {
         compose.onNodeWithText("Plugins").assertDoesNotExist()
     }
 
-    @Test fun selectNewChatProfileVoiceAndSearch() {
-        var selected: String? = null; var newChats = 0; var settings = 0; var voice = 0
+    @Test fun selectNewChatProfileAndSearchWithoutVoiceCircle() {
+        var selected: String? = null; var newChats = 0; var settings = 0
         compose.setContent { DuaTheme(LocalPreferences()) {
-            HistoryDrawer(chats = chats, onSelectChat = { selected = it }, onNewChat = { newChats++ }, onOpenSettings = { settings++ }, onVoiceClick = { voice++ }, profileName = "Fareed")
+            HistoryDrawer(chats = chats, onSelectChat = { selected = it }, onNewChat = { newChats++ }, onOpenSettings = { settings++ }, profileName = "Fareed")
         } }
         compose.onNodeWithText("Beta plugin").performClick()
         compose.onNodeWithTag("drawer-new-chat").performClick()
         compose.onNodeWithContentDescription("Profile & Settings").performClick()
-        compose.onNodeWithContentDescription("Voice").performClick()
-        compose.runOnIdle { assertEquals("b", selected); assertEquals(1, newChats); assertEquals(1, settings); assertEquals(1, voice) }
+        compose.onNodeWithContentDescription("Voice").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Voice mode").assertDoesNotExist()
+        compose.runOnIdle { assertEquals("b", selected); assertEquals(1, newChats); assertEquals(1, settings) }
         compose.onNodeWithText("F").assertExists()
         compose.onNodeWithContentDescription("Search chats").performClick()
         compose.onNodeWithTag("drawer-search-field").performTextInput("alpha")
         compose.onNodeWithText("Alpha roadmap").assertExists()
         compose.onNodeWithText("Beta plugin").assertDoesNotExist()
+    }
+
+    @Test fun recentListHidesDraftsAndDuplicateIdsButKeepsSeparateChats() {
+        val hi = { id: String, at: Long -> SavedChat(id, "Dua", "", listOf(ChatMessage(text = "hi", isUser = true)), at) }
+        val list = listOf(hi("h1", 5), hi("h2", 4), hi("h1", 3),
+            SavedChat("d1", "Dua", "", emptyList(), 6), SavedChat("d2", "Dua", "unsent text", emptyList(), 7))
+        compose.setContent { DuaTheme(LocalPreferences(theme = "light")) { HistoryDrawer(chats = list) } }
+        compose.onAllNodesWithText("Draft").assertCountEquals(0)
+        compose.onAllNodesWithText("hi").assertCountEquals(2)
     }
 
     private var renamed: Pair<String, String>? = null
