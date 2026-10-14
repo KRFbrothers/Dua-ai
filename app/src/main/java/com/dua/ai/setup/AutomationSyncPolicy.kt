@@ -12,7 +12,9 @@ data class AutomationBaseline(val chatMessageCounts: Map<String, Int>, val chatS
     val pinnedChatIds: Set<String> = emptySet())
 data class AutomationSyncRecord(val enabled: Boolean = false, val accountId: String? = null, val revision: Long? = null,
     val baseline: AutomationBaseline? = null, val reviewRequired: Boolean = false, val failureCount: Int = 0)
-data class AutomationMergePlan(val snapshot: CloudSnapshot, val requiresContentReview: Boolean)
+data class AutomationMergePlan(val snapshot: CloudSnapshot, val requiresContentReview: Boolean,
+    /** Transient selection hints; never persisted in the server snapshot or sync settings. */
+    val recoveredChatIds: Map<String, String> = emptyMap())
 
 object AutomationSyncPolicy {
     private val accountPattern = Regex("[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}")
@@ -75,6 +77,7 @@ object AutomationSyncPolicy {
         val usedIds = (local.chats.map { it.id } + remote.chats.map { it.id }).toMutableSet()
         val chats = mutableListOf<SavedChat>()
         val copies = mutableListOf<SavedChat>()
+        val recoveredChatIds = mutableMapOf<String, String>()
         local.chats.forEach { here ->
             if (here.id in deleted) return@forEach
             val server = remoteById[here.id]
@@ -89,6 +92,7 @@ object AutomationSyncPolicy {
                 var id = stem; var suffix = 0
                 while (id in usedIds) id = "$stem-${++suffix}"
                 usedIds += id; copies += here.copy(id = id)
+                recoveredChatIds[here.id] = id
             }
         }
         val localIds = local.chats.map { it.id }.toSet()
@@ -111,7 +115,7 @@ object AutomationSyncPolicy {
             else if (base == serverHash) here
             else throw IllegalArgumentException("Project changed on both copies. Review cloud data before syncing.")
         } + local.projects.filter { here -> remote.projects.none { it.id == here.id } }
-        return AutomationMergePlan(validate(CloudSnapshot(chats, memory.distinct(), projects, deleted)), false)
+        return AutomationMergePlan(validate(CloudSnapshot(chats, memory.distinct(), projects, deleted)), false, recoveredChatIds)
     }
 
     /** Stop after five failures; retry should require an explicit user action thereafter. */

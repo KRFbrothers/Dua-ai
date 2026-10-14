@@ -35,6 +35,8 @@ class AutomaticCloudSync(
         fun read(): CloudSnapshot
         /** Read includes pending edits; commit persists with rollback and rebinds the active chat's buffers. */
         fun commit(snapshot: CloudSnapshot)
+        /** Preserve the open phone conversation when this merge moved it into a recovery copy. */
+        fun commit(plan: AutomationMergePlan) { commit(plan.snapshot) }
     }
     interface StorePort {
         fun read(): AutomationSyncRecord?
@@ -233,7 +235,7 @@ class AutomaticCloudSync(
         firstRead?.takeIf { it.first == owner }?.let { return it.second }
         return AutomationSyncPolicy.baseline(readLocal()).also { firstRead = owner to it }
     }
-    private fun commitLocal(snapshot: CloudSnapshot) { try { local.commit(snapshot) } catch (failure: Exception) { throw AutomaticSyncLocalException(failure) } }
+    private fun commitLocal(plan: AutomationMergePlan) { try { local.commit(plan) } catch (failure: Exception) { throw AutomaticSyncLocalException(failure) } }
     private fun recordFailure() {
         val failures = minOf(5, record.failureCount + 1)
         if (!persist(record.copy(failureCount = failures))) return
@@ -260,7 +262,7 @@ class AutomaticCloudSync(
             val plan = AutomationSyncPolicy.merge(here, remote, record.baseline, initial)
             if (!AutomationSyncPolicy.same(here, plan.snapshot)) {
                 if (!ready(ticket)) return
-                commitLocal(plan.snapshot)
+                commitLocal(plan)
                 if (!ready(ticket)) return
                 here = readLocal()
                 if (AutomationSyncPolicy.requiresDeletionReview(AutomationSyncPolicy.baseline(plan.snapshot), here)) { review("Local data changed during download. Review before uploading."); return }
@@ -296,7 +298,7 @@ class AutomaticCloudSync(
                         if (!AutomationSyncPolicy.requiresDeletionReview(record.baseline, here) && !AutomationSyncPolicy.requiresDeletionReview(record.baseline, remoteSnapshot)) {
                             val plan = AutomationSyncPolicy.merge(here, remoteSnapshot, record.baseline)
                             if (!ready(ticket)) return
-                            if (!AutomationSyncPolicy.same(here, plan.snapshot)) commitLocal(plan.snapshot)
+                            if (!AutomationSyncPolicy.same(here, plan.snapshot)) commitLocal(plan)
                         }
                         if (ready(ticket)) review("Another device changed the cloud copy. Safe additions were kept locally; review before uploading again.")
                         return

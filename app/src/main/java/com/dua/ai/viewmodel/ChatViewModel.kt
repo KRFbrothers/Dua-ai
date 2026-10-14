@@ -36,6 +36,7 @@ import com.dua.ai.account.CloudSnapshot
 import com.dua.ai.account.CloudReview
 import com.dua.ai.setup.AutomaticCloudSync
 import com.dua.ai.setup.AutomaticSyncAccount
+import com.dua.ai.setup.AutomationMergePlan
 import com.dua.ai.setup.AutomationSyncStore
 import com.dua.ai.files.AudioRecorder
 import com.dua.ai.files.FileRef
@@ -1319,7 +1320,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             }
             // Read, merge and commit run without suspension on Main. Rebind the open chat only
             // after persistence; otherwise its next draft save would write the stale cache back.
-            override fun commit(snapshot: CloudSnapshot) {
+            override fun commit(snapshot: CloudSnapshot) = commit(AutomationMergePlan(snapshot, false))
+            override fun commit(plan: AutomationMergePlan) {
+                val snapshot = plan.snapshot
                 check(!syncBlocked()) { "Sync paused during a reply or manual review." }
                 check(!draftSaver.pending) { "The draft changed after reading the cache. Retry sync before applying server data." }
                 historyWriter.flush()
@@ -1330,7 +1333,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 val previousDeletionOwner = preferences.getString("deleted_chat_owner", null)
                 // The server snapshot is authoritative, including long-context summaries.
                 val chats = snapshot.chats
-                val encoded = ChatHistoryCodec.encode(chats, activeId)
+                val selectedId = plan.recoveredChatIds[activeId]?.takeIf { id -> chats.any { it.id == id } } ?: activeId
+                val encoded = ChatHistoryCodec.encode(chats, selectedId)
                 localPreferences.update(settings.copy(memory = snapshot.memory, projects = snapshot.projects))
                 try {
                     // Kept synchronous: the sync controller expects the commit to finish before it records the revision.
@@ -1341,7 +1345,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                         }
                     }
                     if (!saved) error("Synced chats could not be saved. Local data was kept.")
-                    bindCloudHistory(chats, snapshot.deletedChatIds)
+                    bindCloudHistory(chats, snapshot.deletedChatIds, selectedId)
                 } catch (failure: Exception) {
                     try { localPreferences.update(settings) }
                     catch (_: Exception) { throw IllegalStateException("Sync interrupted. Review local memories before retrying.", failure) }
@@ -1504,7 +1508,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /** Apply authoritative deletion IDs after persistence, including the active chat's draft buffers. */
-    private fun bindCloudHistory(chats: List<SavedChat>, deleted: List<String>) {
+    private fun bindCloudHistory(chats: List<SavedChat>, deleted: List<String>, selectedId: String = activeId) {
         val removed = _savedChats.value.filter { it.id in deleted }.flatMap { it.messages }
         _deletedChatIds.value = deleted
         deletionOwnerId = account.state.value.user?.id
@@ -1515,6 +1519,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
         val used = pathsOf(chats.flatMap { it.messages }).toSet()
         runCatching { mediaCache.forget(pathsOf(removed).filterNot { it in used }.distinct()) }
+        activeId = selectedId
         if (activeId in deleted) {
             activeId = UUID.randomUUID().toString()
             _messages.value = emptyList(); _draft.value = ""; _summary.value = null
