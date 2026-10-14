@@ -39,7 +39,7 @@ import com.dua.ai.history.SavedChat
 import com.dua.ai.ui.navigation.DuaDestination
 import com.dua.ai.ui.theme.*
 
-/** Search box for chat history (also used by [SidebarPanel]). */
+/** Search box for chat history. */
 @Composable
 fun SearchField(query: String = "", onQueryChange: (String) -> Unit = {}, modifier: Modifier = Modifier) {
     OutlinedTextField(

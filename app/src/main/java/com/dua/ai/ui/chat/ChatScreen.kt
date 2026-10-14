@@ -89,8 +89,6 @@ fun ChatScreen(
     initialSheet: ChatSheet? = null,
     /** Fullscreen media viewer: message id and index (screenshots open it directly). */
     initialViewer: Pair<String, Int>? = null,
-    attachRequest: Int = 0,
-    onAttachRequestHandled: () -> Unit = {},
 ) {
     val drawerState = rememberDrawerState(initialDrawerValue)
     val scope = rememberCoroutineScope()
@@ -178,7 +176,6 @@ fun ChatScreen(
     var inputFocused by remember { mutableStateOf(false) }
     var inputBounds by remember { mutableStateOf(Rect.Zero) }
     var bottomCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
-    LaunchedEffect(attachRequest) { if (attachRequest > 0) { sheet = ChatSheet.Attach; onAttachRequestHandled() } }
     BackHandler(enabled = drawerState.isOpen) { scope.launch { drawerState.close() } }
     LaunchedEffect(listState) {
         listState.interactionSource.interactions.collect { interaction ->

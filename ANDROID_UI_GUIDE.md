@@ -10,7 +10,7 @@ Dua AI keeps its original name and artwork. This is the owner's personal assista
 | Home | `ui/chat/ChatScreen.kt`, `ChatTopBar.kt`, `EmptyState.kt`: current-project header, Computer shortcut, logo and suggested prompts that fill the draft, without sending |
 | Conversation | `MessageList.kt`, `UserMessage.kt`, `AssistantMessage.kt`, `MarkdownMessage.kt`: bubbles, streamed replies, Markdown, copyable code blocks, sources, typing and partial-stop states |
 | Composer | `Composer.kt`, `AttachmentSheet.kt`, `StoredFileChips.kt`: multiline input, send/stop, model choice, mic/voice and file tools |
-| History / Aura | `ui/history/HistoryDrawer.kt`, `SidebarPanel.kt`: project search, fixed navigation/footer and independently scrolling recent chats |
+| History / Aura | `ui/history/HistoryDrawer.kt`: project search, fixed navigation/footer and independently scrolling recent chats |
 | Projects | `ProjectsSheet.kt` and project task/memory/planner components: selected project, instructions, archive, tasks, memory and planner |
 | Profile and settings | `ui/navigation/DuaNavHost.kt`, `ui/settings/`, `ui/screens/ProfileScreen.kt`: owner account, appearance/accent, fonts, haptics, notifications; Voice contains its input/mode/reply controls, and History and data contains Data controls/privacy/sharing/permissions |
 

@@ -45,15 +45,6 @@ import com.dua.ai.ui.theme.Spacing
 const val AUTO_MODEL = "Auto"
 
 @Composable
-fun ModelChipRow(
-    modifier: Modifier = Modifier,
-    selectedModel: String = "Auto",
-    onModelClick: () -> Unit = {}
-) {
-    // Model chip header stub
-}
-
-@Composable
 fun Composer(
     modifier: Modifier = Modifier,
     state: Any? = null,
