@@ -1,5 +1,7 @@
 package com.dua.ai.ui.components
 
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -46,7 +48,8 @@ import com.dua.ai.ui.theme.Spacing
 fun DuaTopBar(title: String, onBack: (() -> Unit)?, backEnabled: Boolean = true, backLabel: String = "Back",
     actions: @Composable RowScope.() -> Unit = {}) {
     TopAppBar(
-        title = { Text(title, style = com.dua.ai.ui.theme.SettingsNameStyle, color = com.dua.ai.ui.theme.PageTheme.colors.text, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+        title = { Text(title, style = com.dua.ai.ui.theme.SettingsNameStyle, color = com.dua.ai.ui.theme.PageTheme.colors.text, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.semantics { heading() }) },
         navigationIcon = {
             if (onBack != null) IconButton(onClick = onBack, enabled = backEnabled,
                 modifier = Modifier.size(SettingsSizes.touch).padding((SettingsSizes.touch - SettingsSizes.circleButton) / 2)
