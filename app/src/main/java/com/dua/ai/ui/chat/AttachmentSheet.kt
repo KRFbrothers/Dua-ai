@@ -1,22 +1,18 @@
 package com.dua.ai.ui.chat
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.selection.toggleable
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.ToggleOff
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.SwitchDefaults
-import com.dua.ai.ui.theme.DuaTheme
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Brush
 import androidx.compose.material.icons.outlined.Build
@@ -24,26 +20,34 @@ import androidx.compose.material.icons.outlined.GraphicEq
 import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.PhotoCamera
 import androidx.compose.material.icons.outlined.PhotoLibrary
+import androidx.compose.material.icons.outlined.ToggleOff
 import androidx.compose.material.icons.outlined.UploadFile
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
-import com.dua.ai.ui.theme.DuaShape
-import com.dua.ai.ui.theme.Sizes
-import com.dua.ai.ui.theme.Spacing
+import com.dua.ai.ui.theme.SheetButtonStyle
+import com.dua.ai.ui.theme.SheetDisabledAlpha
+import com.dua.ai.ui.theme.SheetNoteStyle
+import com.dua.ai.ui.theme.SheetRowStyle
+import com.dua.ai.ui.theme.SheetShapes
+import com.dua.ai.ui.theme.SheetSizes
+import com.dua.ai.ui.theme.SheetSubStyle
+import com.dua.ai.ui.theme.SheetTheme
+import com.dua.ai.ui.theme.SheetTileStyle
 
 /** Attach sheet: camera, photos, files (existing types only) and the Read-link web mode. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -66,8 +70,7 @@ fun AttachmentSheet(
     onBuild: () -> Unit = {},
     onTurnOffModes: (() -> Unit)? = null,
 ) {
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = MaterialTheme.colorScheme.surfaceContainerLow) {
+    DuaSheet(onDismiss = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         AttachmentSheetContent(webMode, pageReadingAvailable, enabled, onCamera, onPhotos, onFiles, onReadLink, onAudio, storedFiles, storedFilesHint, storedFilesMaxBytes,
             modes, onImagine, onBuild, onTurnOffModes)
     }
@@ -91,80 +94,74 @@ fun AttachmentSheetContent(
     onBuild: () -> Unit = {},
     onTurnOffModes: (() -> Unit)? = null,
 ) {
-    Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = Spacing.xl).padding(bottom = Spacing.xxl), verticalArrangement = Arrangement.spacedBy(Spacing.lg)) {
-        Text("Add to chat", style = MaterialTheme.typography.titleMedium, modifier = Modifier.semantics { heading() })
-        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
+    val c = SheetTheme.colors
+    Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = SheetSizes.paddingH).padding(bottom = SheetSizes.paddingBottom)
+        .testTag("attachment-sheet"), verticalArrangement = Arrangement.spacedBy(SheetSizes.sectionGap)) {
+        SheetTitle("Add to chat", Modifier.padding(bottom = 0.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(SheetSizes.tileGap)) {
             SheetTile("Camera", Icons.Outlined.PhotoCamera, enabled, onCamera, Modifier.weight(1f))
             SheetTile("Photos", Icons.Outlined.PhotoLibrary, enabled, onPhotos, Modifier.weight(1f))
             SheetTile("Files", Icons.Outlined.UploadFile, enabled, onFiles, Modifier.weight(1f))
             SheetTile("Audio", Icons.Outlined.GraphicEq, enabled, onAudio, Modifier.weight(1f))
         }
         if (storedFiles) Text("Photos and files up to ${com.dua.ai.files.StoredFileTypes.sizeLabel(storedFilesMaxBytes.takeIf { it > 0 } ?: 52428800L)} each — images, PDFs, spreadsheets (XLSX, XLS, ODS, CSV), text and audio — upload to your private storage and remain available for follow-ups. Deleting a cached chat keeps stored files; remove them explicitly in Data controls. Camera photos and code files go with the message directly.",
-            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            style = SheetNoteStyle, color = c.subText)
         else {
             Text("Up to 3 files, 2 MB in total: JPEG, PNG, WebP, PDF or text and code files like TXT, CSV, MD, JSON (256 KB each). Photos and PDFs go with your next message only; extracted text is saved with the chat for follow-ups and cloud sync. Large photos are resized to JPEG; originals stay unchanged.",
-                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            if (storedFilesHint.isNotBlank()) Text(storedFilesHint, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                style = SheetNoteStyle, color = c.subText)
+            if (storedFilesHint.isNotBlank()) Text(storedFilesHint, style = SheetNoteStyle, color = c.accent)
         }
-        Surface(shape = DuaShape.card, color = MaterialTheme.colorScheme.surfaceContainerHigh) {
-            Row(Modifier.fillMaxWidth().heightIn(min = 64.dp)
-                .toggleable(value = webMode == "page", enabled = enabled, role = Role.Switch, onValueChange = onReadLink)
-                .padding(horizontal = Spacing.lg, vertical = Spacing.md), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Outlined.Link, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                Column(Modifier.weight(1f).padding(horizontal = Spacing.lg)) {
-                    Text("Read a link", style = MaterialTheme.typography.bodyLarge)
-                    Text(if (pageReadingAvailable) "Reads the first HTTPS link in your message" else "Unavailable until setup is refreshed",
-                        style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                Switch(checked = webMode == "page", onCheckedChange = null, enabled = enabled, colors = duaSwitchColors())
+        // Read a link, the mode switches (Run code, Think, Search, X), Imagine and Build share one gray group.
+        SheetGroup {
+            SwitchRow("Read a link", if (pageReadingAvailable) "Reads the first HTTPS link in your message" else "Unavailable until setup is refreshed",
+                Icons.Outlined.Link, webMode == "page", enabled, onReadLink)
+            modes?.toggles.orEmpty().forEach { toggle ->
+                SheetDivider()
+                SwitchRow(toggle.label, toggle.detail, toggle.icon, toggle.on, enabled, toggle.onChange)
             }
-        }
-        // In a conversation the chip row only shows modes that are on, so every mode can be switched here.
-        if (!modes?.toggles.isNullOrEmpty()) ModeToggleGroup(modes!!.toggles, enabled)
-        // Imagine and Build live here, with Run code, Think and Search.
-        modes?.imagine?.let { detail ->
-            Surface(shape = DuaShape.card, color = MaterialTheme.colorScheme.surfaceContainerHigh) {
-                Row(Modifier.fillMaxWidth().heightIn(min = 64.dp)
-                    .toggleable(value = modes.imagineOn, enabled = enabled, role = Role.Switch, onValueChange = onImagine)
-                    .padding(horizontal = Spacing.lg, vertical = Spacing.md), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Outlined.Brush, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Column(Modifier.weight(1f).padding(horizontal = Spacing.lg)) {
-                        Text("Imagine", style = MaterialTheme.typography.bodyLarge)
-                        Text(detail, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    Switch(checked = modes.imagineOn, onCheckedChange = null, enabled = enabled, colors = duaSwitchColors())
-                }
+            modes?.imagine?.let { detail ->
+                SheetDivider()
+                SwitchRow("Imagine", detail, Icons.Outlined.Brush, modes.imagineOn, enabled, onImagine)
             }
-        }
-        modes?.build?.let { detail ->
-            Surface(onClick = onBuild, enabled = enabled, shape = DuaShape.card, color = MaterialTheme.colorScheme.surfaceContainerHigh) {
-                Row(Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(horizontal = Spacing.lg, vertical = Spacing.md), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Outlined.Build, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Column(Modifier.weight(1f).padding(horizontal = Spacing.lg)) {
-                        Text("Build", style = MaterialTheme.typography.bodyLarge)
-                        Text(detail, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            modes?.build?.let { detail ->
+                SheetDivider()
+                Row(Modifier.fillMaxWidth().heightIn(min = SheetSizes.rowMin).clickable(enabled = enabled, role = Role.Button, onClick = onBuild)
+                    .padding(horizontal = SheetSizes.rowPaddingH, vertical = SheetSizes.rowPaddingV), verticalAlignment = Alignment.CenterVertically) {
+                    RowText(Icons.Outlined.Build, "Build", detail, false, enabled)
+                    Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, contentDescription = null, tint = c.subText, modifier = Modifier.size(SheetSizes.rowIcon))
                 }
             }
         }
         // Shown only while a mode is on: one tap back to a plain reply (what the old "Auto" pill used to do).
-        if (onTurnOffModes != null) TextButton(onClick = onTurnOffModes, enabled = enabled, modifier = Modifier.align(Alignment.CenterHorizontally),
-            colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurface)) {
-            Icon(Icons.Outlined.ToggleOff, contentDescription = null, modifier = Modifier.size(Sizes.iconSmall))
-            Text("Turn off all modes", modifier = Modifier.padding(start = Spacing.sm))
+        if (onTurnOffModes != null) TextButton(onClick = onTurnOffModes, enabled = enabled, shape = SheetShapes.button,
+            modifier = Modifier.align(Alignment.CenterHorizontally).heightIn(min = SheetSizes.touch),
+            colors = ButtonDefaults.textButtonColors(contentColor = c.text)) {
+            Icon(Icons.Outlined.ToggleOff, contentDescription = null, modifier = Modifier.size(SheetSizes.rowIcon))
+            Text("Turn off all modes", style = SheetButtonStyle, modifier = Modifier.padding(start = SheetSizes.tileGap))
         }
     }
 }
 
-/** Switches in the + sheet use the selected-chip palette: silver (dark) or ink (light) track with a gold thumb. */
 @Composable
-private fun duaSwitchColors() = SwitchDefaults.colors(
-    checkedTrackColor = DuaTheme.colors.chipSelected,
-    checkedBorderColor = DuaTheme.colors.chipSelected,
-    checkedThumbColor = DuaTheme.colors.chipSelectedIcon,
-    checkedIconColor = DuaTheme.colors.chipSelected,
-)
+private fun RowScope.RowText(icon: ImageVector, label: String, detail: String, on: Boolean, enabled: Boolean) {
+    val c = SheetTheme.colors
+    val alpha = if (enabled) 1f else SheetDisabledAlpha
+    Icon(icon, contentDescription = null, tint = (if (on) c.accent else c.icon).copy(alpha = alpha), modifier = Modifier.size(SheetSizes.rowIcon))
+    Column(Modifier.weight(1f).padding(horizontal = SheetSizes.rowGap)) {
+        Text(label, style = SheetRowStyle, color = c.text.copy(alpha = alpha))
+        Text(detail, style = SheetSubStyle, color = c.subText.copy(alpha = alpha))
+    }
+}
+
+@Composable
+private fun SwitchRow(label: String, detail: String, icon: ImageVector, on: Boolean, enabled: Boolean, onChange: (Boolean) -> Unit) {
+    Row(Modifier.fillMaxWidth().heightIn(min = SheetSizes.rowMin)
+        .toggleable(value = on, enabled = enabled, role = Role.Switch, onValueChange = onChange)
+        .padding(horizontal = SheetSizes.rowPaddingH, vertical = SheetSizes.rowPaddingV), verticalAlignment = Alignment.CenterVertically) {
+        RowText(icon, label, detail, on, enabled)
+        Switch(checked = on, onCheckedChange = null, enabled = enabled, colors = sheetSwitchColors())
+    }
+}
 
 /**
  * Mode rows in the + sheet: [toggles] (Run code, Think, Search, X), Imagine
@@ -176,33 +173,14 @@ data class AttachModes(val imagine: String? = null, val imagineOn: Boolean = fal
 data class ModeToggle(val label: String, val detail: String, val icon: ImageVector, val on: Boolean, val onChange: (Boolean) -> Unit)
 
 @Composable
-private fun ModeToggleGroup(toggles: List<ModeToggle>, enabled: Boolean) {
-    Surface(shape = DuaShape.card, color = MaterialTheme.colorScheme.surfaceContainerHigh) {
-        Column {
-            toggles.forEachIndexed { index, toggle ->
-                if (index > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, modifier = Modifier.padding(start = 56.dp))
-                Row(Modifier.fillMaxWidth().heightIn(min = 56.dp)
-                    .toggleable(value = toggle.on, enabled = enabled, role = Role.Switch, onValueChange = toggle.onChange)
-                    .padding(horizontal = Spacing.lg, vertical = Spacing.sm), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(toggle.icon, contentDescription = null, tint = if (toggle.on) DuaTheme.colors.sparkle else MaterialTheme.colorScheme.onSurfaceVariant)
-                    Column(Modifier.weight(1f).padding(horizontal = Spacing.lg)) {
-                        Text(toggle.label, style = MaterialTheme.typography.bodyLarge)
-                        Text(toggle.detail, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    Switch(checked = toggle.on, onCheckedChange = null, enabled = enabled, colors = duaSwitchColors())
-                }
-            }
-        }
-    }
-}
-
-@Composable
 private fun SheetTile(label: String, icon: ImageVector, enabled: Boolean, onClick: () -> Unit, modifier: Modifier) {
-    Surface(onClick = onClick, enabled = enabled, shape = DuaShape.card, color = MaterialTheme.colorScheme.surfaceContainerHigh, modifier = modifier) {
-        Column(Modifier.fillMaxWidth().heightIn(min = 96.dp).padding(vertical = Spacing.lg), horizontalAlignment = Alignment.CenterHorizontally,
+    val c = SheetTheme.colors
+    val alpha = if (enabled) 1f else SheetDisabledAlpha
+    Surface(onClick = onClick, enabled = enabled, shape = SheetShapes.tile, color = c.fill, modifier = modifier.semantics { role = Role.Button }) {
+        Column(Modifier.fillMaxWidth().heightIn(min = SheetSizes.tileMin).padding(vertical = SheetSizes.rowPaddingV), horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center) {
-            Icon(icon, contentDescription = null, modifier = Modifier.size(Sizes.icon + 4.dp))
-            Text(label, style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = Spacing.sm))
+            Icon(icon, contentDescription = null, tint = c.icon.copy(alpha = alpha), modifier = Modifier.size(SheetSizes.tileIcon))
+            Text(label, style = SheetTileStyle, color = c.text.copy(alpha = alpha), modifier = Modifier.padding(top = SheetSizes.tileGap))
         }
     }
 }
