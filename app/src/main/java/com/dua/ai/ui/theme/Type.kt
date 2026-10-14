@@ -8,20 +8,24 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import com.dua.ai.R
 
-val SoehneFont = FontFamily(
-    Font(R.font.soehne_kraeftig, FontWeight.Normal)
+/** Inter (SIL OFL 1.1, rsms/inter v4.1); license in assets/licenses/Inter-OFL.txt. */
+val InterFont = FontFamily(
+    Font(R.font.inter_regular, FontWeight.Normal),
+    Font(R.font.inter_medium, FontWeight.Medium),
+    Font(R.font.inter_semibold, FontWeight.SemiBold),
+    Font(R.font.inter_bold, FontWeight.Bold)
 )
 
-val MontserratFontFamily = SoehneFont
+val MontserratFontFamily = InterFont
 
 fun fontFamilyFor(preference: String): FontFamily = when (preference) {
     "system" -> FontFamily.Default
     "serif" -> FontFamily.Serif
     "monospace" -> FontFamily.Monospace
-    else -> SoehneFont
+    else -> InterFont
 }
 
-fun duaTypography(family: FontFamily = SoehneFont): Typography {
+fun duaTypography(family: FontFamily = InterFont): Typography {
     return Typography(
         displayLarge = TextStyle(fontFamily = family, fontWeight = FontWeight.SemiBold, fontSize = 48.sp),
         displayMedium = TextStyle(fontFamily = family, fontWeight = FontWeight.SemiBold, fontSize = 40.sp),
@@ -42,7 +46,7 @@ fun duaTypography(family: FontFamily = SoehneFont): Typography {
 }
 
 val CodeTextStyle = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 13.5.sp)
-val HomeTaglineStyle = TextStyle(fontFamily = SoehneFont, fontWeight = FontWeight.Medium, fontSize = 20.sp)
+val HomeTaglineStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Medium, fontSize = 20.sp)
 val HomeTaglineCompactStyle = HomeTaglineStyle.copy(fontSize = 18.sp)
 val VoiceGreetingStyle = HomeTaglineStyle.copy(fontSize = 26.sp, lineHeight = 34.sp)
 
@@ -50,12 +54,12 @@ fun voiceTranscriptStyle(type: Typography): TextStyle = type.bodyLarge.copy(line
 val VoiceReplyCaptionStyle = TextStyle(fontSize = 24.sp, lineHeight = 33.sp, fontWeight = FontWeight.Normal)
 val VoicePermissionHeadingStyle = VoiceGreetingStyle.copy(fontSize = 22.sp, lineHeight = 28.sp)
 
-// Home screen + composer styles, taken from the "Dua AI Dabba" reference shell (Söhne, ChatGPT sizes).
+// Home screen + composer styles, taken from the "Dua AI Dabba" reference shell (Inter, standard chat sizes).
 /** Quick prompt rows on Home ("Create an image…"), Dabba bodyLarge. */
-val HomePromptStyle = TextStyle(fontFamily = SoehneFont, fontWeight = FontWeight.Normal, fontSize = 16.sp)
+val HomePromptStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Normal, fontSize = 16.sp)
 /** Composer input and its "Ask Dua AI" placeholder. */
-val ComposerTextStyle = TextStyle(fontFamily = SoehneFont, fontWeight = FontWeight.Normal, fontSize = 16.sp, lineHeight = 22.sp)
+val ComposerTextStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Normal, fontSize = 16.sp, lineHeight = 22.sp)
 /** Small pill labels. */
-val PillLabelStyle = TextStyle(fontFamily = SoehneFont, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+val PillLabelStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
 /** Labels on the three Home action buttons. */
-val HomeActionLabelStyle = TextStyle(fontFamily = SoehneFont, fontWeight = FontWeight.Medium, fontSize = 14.sp)
+val HomeActionLabelStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Medium, fontSize = 14.sp)

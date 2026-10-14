@@ -2,17 +2,17 @@ package com.dua.ai.ui.settings
 
 import com.dua.ai.settings.LocalPreferences
 import com.dua.ai.settings.PreferencesCodec
-import com.dua.ai.ui.theme.SoehneFont
+import com.dua.ai.ui.theme.InterFont
 import com.dua.ai.ui.theme.fontFamilyFor
 import androidx.compose.ui.text.font.FontFamily
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class FontDefaultTest {
-    @Test fun defaultFontIsSoehne() {
+    @Test fun defaultFontIsInter() {
         assertEquals("default", LocalPreferences().font)
-        assertEquals(SoehneFont, fontFamilyFor(LocalPreferences().font))
-        assertEquals("Söhne", fontLabel("default"))
+        assertEquals(InterFont, fontFamilyFor(LocalPreferences().font))
+        assertEquals("Inter", fontLabel("default"))
     }
 
     @Test fun explicitChoicesAreRespectedAndRoundTrip() {

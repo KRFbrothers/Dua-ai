@@ -52,7 +52,7 @@ fun SearchField(query: String = "", onQueryChange: (String) -> Unit = {}, modifi
 }
 
 /**
- * ChatGPT-style sidebar copied from the reference shell's DrawerContent: "Dua AI" + search circle, menu rows,
+ * Sidebar copied from the reference shell's DrawerContent: "Dua AI" + search circle, menu rows,
  * divider, recent chats, then the purple "Chat" pill with the profile circle docked at the bottom.
  * Long-press a chat for Rename / Pin / Delete.
  */

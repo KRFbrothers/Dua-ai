@@ -76,9 +76,9 @@ object DrawerShapes {
     val row = RoundedCornerShape(12.dp)
 }
 
-val DrawerTitleStyle = TextStyle(fontFamily = SoehneFont, fontWeight = FontWeight.Bold, fontSize = 26.sp)
-val DrawerMenuStyle = TextStyle(fontFamily = SoehneFont, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
-val DrawerSubStyle = TextStyle(fontFamily = SoehneFont, fontWeight = FontWeight.Normal, fontSize = 15.sp)
-val DrawerChatStyle = TextStyle(fontFamily = SoehneFont, fontWeight = FontWeight.Normal, fontSize = 15.sp)
-val DrawerNewChatStyle = TextStyle(fontFamily = SoehneFont, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
-val DrawerAvatarStyle = TextStyle(fontFamily = SoehneFont, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+val DrawerTitleStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Bold, fontSize = 26.sp)
+val DrawerMenuStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+val DrawerSubStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Normal, fontSize = 15.sp)
+val DrawerChatStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Normal, fontSize = 15.sp)
+val DrawerNewChatStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+val DrawerAvatarStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Bold, fontSize = 16.sp)

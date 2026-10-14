@@ -73,10 +73,10 @@ object SettingsShapes {
     val circle = CircleShape
 }
 
-val SettingsAvatarStyle = TextStyle(fontFamily = SoehneFont, fontWeight = FontWeight.Bold, fontSize = 24.sp)
-val SettingsNameStyle = TextStyle(fontFamily = SoehneFont, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-val SettingsRowStyle = TextStyle(fontFamily = SoehneFont, fontWeight = FontWeight.Medium, fontSize = 15.sp)
-val SettingsUpgradeStyle = TextStyle(fontFamily = SoehneFont, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
-val SettingsValueStyle = TextStyle(fontFamily = SoehneFont, fontWeight = FontWeight.Normal, fontSize = 13.sp)
+val SettingsAvatarStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Bold, fontSize = 24.sp)
+val SettingsNameStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+val SettingsRowStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Medium, fontSize = 15.sp)
+val SettingsUpgradeStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+val SettingsValueStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Normal, fontSize = 13.sp)
 /** Group heading above a card on the inner settings pages. */
-val SettingsSectionStyle = TextStyle(fontFamily = SoehneFont, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+val SettingsSectionStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)

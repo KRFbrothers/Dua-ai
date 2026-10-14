@@ -92,4 +92,4 @@ object ChatShapes {
 }
 
 /** Reference message text: 16 sp. Line height 24 sp keeps multi-line markdown readable. */
-val ChatMessageStyle = TextStyle(fontFamily = SoehneFont, fontSize = 16.sp, lineHeight = 24.sp)
+val ChatMessageStyle = TextStyle(fontFamily = InterFont, fontSize = 16.sp, lineHeight = 24.sp)
