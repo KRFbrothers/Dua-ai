@@ -357,7 +357,8 @@ AGENT_ROUTER_TURNS = 6
 AGENT_ROUTER_PROMPT = (
     "You are a router for the Dua Agent. Decide if the user's LAST message needs web research. "
     "Answer \"agent\" for real tasks: research, latest news, new AI models/tools, trends, comparisons, "
-    "feature or upgrade ideas, plans, reviews, anything that needs current web facts. Answer \"chat\" for "
+    "feature or upgrade ideas, plans, reviews, anything that needs current web facts. Answer \"code\" when the user "
+    "wants the Dua AI app's code changed (fix a bug, add or change a feature in the app, write code, open a PR). Answer \"chat\" for "
     "greetings, thanks, small talk, short follow-ups or simple questions you can answer without searching. "
     "Reply only with JSON like {\"route\": \"chat\"}."
 )
@@ -368,6 +369,12 @@ _GREETING = re.compile(
 _TASK_WORDS = re.compile(
     r"\b(research|news|latest|trend\w*|compare|comparison|vs|ideas?|features?|upgrades?|roadmap|tools?|"
     r"search|find|look\s+up|launch\w*|release\w*|what'?s\s+new|kya\s+naya|suggest\w*)\b", re.IGNORECASE)
+
+
+_CODING_WORDS = re.compile(
+    r"\b(fix|bug|bugs|crash\w*|implement|refactor|code\s+likho|likho\s+code|pull\s+request|open\s+a\s+pr|"
+    r"make\s+a\s+pr|kotlin|jetpack|change\s+the\s+code|add\s+.{1,60}\s+(to|in)\s+(the|my|dua)\s+(app|repo|code))\b",
+    re.IGNORECASE)
 
 
 def last_user_text(messages):
@@ -385,6 +392,8 @@ def route_agent(messages, attachments, system):
     text = last_user_text(messages)
     if not text or _GREETING.match(text):
         return "chat"
+    if _CODING_WORDS.search(text):
+        return "code"
     if _TASK_WORDS.search(text):
         return "agent"
     fallback = "agent" if len(text.split()) > 12 else "chat"
@@ -393,20 +402,60 @@ def route_agent(messages, attachments, system):
             build_contents(with_last_user_suffix(messages[-AGENT_ROUTER_TURNS:], AGENT_ROUTER_PROMPT), attachments),
             generation_config={"max_output_tokens": AGENT_ROUTER_TOKENS, "temperature": 0.0, "thinking_level": "low",
                                "response_mime_type": "application/json",
-                               "response_schema": {"type": "OBJECT", "properties": {"route": {"type": "STRING", "enum": ["chat", "agent"]}},
+                               "response_schema": {"type": "OBJECT", "properties": {"route": {"type": "STRING", "enum": ["chat", "agent", "code"]}},
                                                    "required": ["route"]}})
         route = json.loads(chunk_text(response) or "{}").get("route")
-        return route if route in ("chat", "agent") else fallback
+        return route if route in ("chat", "agent", "code") else fallback
     except Exception:
         app.logger.warning("agent router failed; using fallback route")
         return fallback
+
+
+CODING_NOT_SET_UP = (
+    "Coding mode abhi set up nahi hai. To let the Dua Agent open pull requests, add a GitHub token "
+    "to the Cloud Run service (see google-cloud-backend/README.md, \"Coding agent setup\"). Until then I can "
+    "still chat and research."
+)
+
+
+class _Text:
+    def __init__(self, text):
+        self.text, self.candidates = text, []
+
+
+def coding_reply(messages, attachments, system, enqueue):
+    """Phase 2: coding on DUA_REPO through the locked-down GitHub client (opens a PR, never merges)."""
+    import coding_agent
+    token = os.environ.get("GITHUB_TOKEN", "").strip()
+    if not token:
+        enqueue("chunk", _Text(CODING_NOT_SET_UP))
+        enqueue("done")
+        return
+    try:
+        repo = coding_agent.repo_name()
+        github = coding_agent.GitHubClient(token, repo)
+        if not enqueue("event", {"type": "thinking", "delta": f"**Coding on {repo}** (reads files, then opens a PR; never merges)\n"}):
+            return
+        contents = build_contents(with_last_user_suffix(messages, coding_agent.CODING_PROMPT.format(
+            repo=repo, max_files=coding_agent.MAX_FILES_CHANGED)), attachments)
+        text = coding_agent.run_coding(get_model(system), contents, github,
+                                       lambda delta: enqueue("event", {"type": "thinking", "delta": delta}),
+                                       last_user_text(messages))
+    except coding_agent.CodingError as error:
+        text = f"Coding stopped: {str(error)[:300]} No pull request was opened."
+    enqueue("chunk", _Text(text))
+    enqueue("done")
 
 
 def agent_producer(messages, attachments, system):
     """Dua Agent: route -> (direct reply) or plan -> grounded research -> streamed answer."""
     def produce(enqueue):
         model = get_model(system)
-        if route_agent(messages, attachments, system) == "chat":
+        route = route_agent(messages, attachments, system)
+        if route == "code":
+            coding_reply(messages, attachments, system, enqueue)
+            return
+        if route == "chat":
             # Casual message: one normal streamed reply with full history, no Search, no plan or sources.
             for chunk in model.generate_content(build_contents(messages, attachments),
                                                 generation_config={"max_output_tokens": AGENT_ANSWER_TOKENS}, stream=True):

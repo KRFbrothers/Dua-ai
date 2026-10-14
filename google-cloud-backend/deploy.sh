@@ -33,4 +33,4 @@ done
 echo "3. Deploying Dua AI Engine to Cloud Run..."
 gcloud run deploy dua-ai-engine --source . --region "$REGION" \
   --update-env-vars "GOOGLE_CLOUD_PROJECT=${PROJECT_ID},VERTEX_LOCATION=${VERTEX_LOCATION},VERTEX_MODEL=${VERTEX_MODEL},SUPABASE_URL=${SUPABASE_URL},SUPABASE_PUBLISHABLE_KEY=${AUTH_KEY},DUA_ALLOWED_EMAIL=${DUA_ALLOWED_EMAIL}${TOKEN_VAR}" \
-  --allow-unauthenticated --project "$PROJECT_ID"
+  --timeout 900 --allow-unauthenticated --project "$PROJECT_ID"

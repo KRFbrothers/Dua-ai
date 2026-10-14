@@ -80,6 +80,36 @@ After deployment, confirm both `/api/chat` and `/chat` reject a request without 
 reject a non-owner/expired session, and allow a fresh owner session. No rejected request should
 invoke Vertex. Tests mock Auth/Vertex; successful tests do not certify the live service settings.
 
+## Coding agent setup (phase 2, optional)
+
+In Agent mode, coding requests ("fix the login bug", "add X to the app", "code likho …") make the Dua Agent
+read the repository, prepare a change, push it to a **new branch `dua-agent/…`** and open a **pull request
+into main**. It never merges, never pushes to main, never force-pushes and never deletes branches; the server
+blocks every other GitHub request (allowlist in `coding_agent.py`). Repository: `DUA_REPO` (default
+`KRFbrothers/Dua-ai`). Caps: 15 tool steps, 40 files read, 10 files changed, 200 KB per file, 10 minutes.
+Without `GITHUB_TOKEN` it just says coding is not set up yet.
+
+**1. Create the GitHub token** (on github.com, signed in as KRFbrothers)
+1. Profile picture → **Settings** → **Developer settings** → **Personal access tokens** → **Fine-grained tokens** → **Generate new token**.
+2. Name: `dua-agent`. Expiration: 90 days (make a new one when it expires).
+3. Repository access: **Only select repositories** → `KRFbrothers/Dua-ai`.
+4. Permissions → Repository permissions: **Contents: Read and write**, **Pull requests: Read and write**
+   (Metadata: Read-only is added automatically). Nothing else.
+5. **Generate token** and copy it (it starts with `github_pat_`). Do not paste it in chat, code or screenshots.
+
+**2. Store it in Secret Manager and give it to Cloud Run** (Cloud Shell)
+```bash
+gcloud services enable secretmanager.googleapis.com --project global-healer-m6shk
+read -s -p "Paste GitHub token: " GH && printf %s "$GH" | gcloud secrets create dua-github-token --data-file=- --project global-healer-m6shk; unset GH; echo
+gcloud secrets add-iam-policy-binding dua-github-token --project global-healer-m6shk \
+  --member="serviceAccount:228305912525-compute@developer.gserviceaccount.com" --role="roles/secretmanager.secretAccessor"
+gcloud run services update dua-ai-engine --region us-central1 --project global-healer-m6shk \
+  --update-secrets GITHUB_TOKEN=dua-github-token:latest --timeout 900
+```
+New token later: `read -s -p "Paste GitHub token: " GH && printf %s "$GH" | gcloud secrets versions add dua-github-token --data-file=- --project global-healer-m6shk; unset GH`
+then run the `gcloud run services update … --update-secrets GITHUB_TOKEN=dua-github-token:latest` line again.
+To switch coding off: `gcloud run services update dua-ai-engine --region us-central1 --project global-healer-m6shk --remove-secrets GITHUB_TOKEN`.
+
 ## Tests
 ```bash
 pip install -r requirements.txt pytest && python -m pytest -q tests
