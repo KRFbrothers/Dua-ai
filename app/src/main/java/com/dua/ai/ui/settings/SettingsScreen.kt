@@ -136,7 +136,7 @@ fun SettingsContent(state: SettingsUiState, onBack: () -> Unit, onOpen: (DuaDest
         SettingsCardBox {
             SettingsItemRow(ReferenceIcons.Account, "Account", state.email ?: "Not signed in") { onOpen(DuaDestination.Account) }
             SettingsItemRow(ReferenceIcons.Work, "Workspace", state.workspace) { onOpen(DuaDestination.Work) }
-            SettingsItemRow(ReferenceIcons.Sparkle, "Upgrade to Dua AI Pro", tint = c.upgrade, showDivider = false) { onOpen(DuaDestination.UsageLimits) }
+            SettingsItemRow(ReferenceIcons.Sparkle, "Upgrade to Dua AI Pro", tint = c.upgrade, showDivider = false, onClickLabel = "Open plans and usage limits") { onOpen(DuaDestination.UsageLimits) }
         }
         if (state.accountNotice.isNotBlank()) Text(state.accountNotice, style = SettingsValueStyle, color = c.value,
             modifier = Modifier.padding(top = SettingsSizes.rowGap).semantics { liveRegion = LiveRegionMode.Polite })
@@ -203,13 +203,13 @@ fun SettingsCardBox(content: @Composable ColumnScope.() -> Unit) {
 /** Reference row: icon, label, optional right-hand value and chevron. Full-width 48 dp+ touch target. */
 @Composable
 fun SettingsItemRow(icon: ImageVector, label: String, value: String? = null, showDivider: Boolean = true, tint: Color = Color.Unspecified,
-    chevron: Boolean = false, enabled: Boolean = true, onClick: () -> Unit) {
+    chevron: Boolean = false, enabled: Boolean = true, onClickLabel: String = label, onClick: () -> Unit) {
     val c = SettingsTheme.colors
     val color = if (tint == Color.Unspecified) c.rowText else tint
     BoxWithConstraints {
         val valueMaxWidth = maxWidth / 2
         Column {
-            Row(Modifier.fillMaxWidth().heightIn(min = SettingsSizes.touch).clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            Row(Modifier.fillMaxWidth().heightIn(min = SettingsSizes.touch).clickable(enabled = enabled, role = Role.Button, onClickLabel = onClickLabel, onClick = onClick)
                 .padding(SettingsSizes.rowPadding), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(SettingsSizes.rowGap), verticalAlignment = Alignment.CenterVertically) {
                     Icon(icon, null, tint = if (tint == Color.Unspecified) c.rowIcon else tint, modifier = Modifier.size(SettingsSizes.rowIcon))
