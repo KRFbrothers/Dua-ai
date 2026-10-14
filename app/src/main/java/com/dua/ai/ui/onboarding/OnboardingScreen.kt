@@ -44,7 +44,8 @@ fun OnboardingContent(busy: Boolean, error: String?, onSignIn: () -> Unit, onSki
             Box(Modifier.weight(1f).fillMaxWidth().heightIn(min = PageSizes.onboardingLogo), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(WelcomeSizes.gap)) {
                     // Preserve the original artwork; no accent tint or replacement branding.
-                    Image(painterResource(R.drawable.dua_logo), "Dua logo", Modifier.size(WelcomeSizes.logo))
+                    Image(painterResource(if (DuaTheme.colors.isDark) R.drawable.dua_logo_home else R.drawable.dua_logo_home_light),
+                        "Dua logo", Modifier.size(WelcomeSizes.logo))
                     Text("Dua AI", style = WelcomeTitleStyle, color = c.text, modifier = Modifier.semantics { heading() })
                 }
             }
