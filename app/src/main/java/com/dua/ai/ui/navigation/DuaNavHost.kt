@@ -20,6 +20,9 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.dua.ai.ui.chat.ChatRoute
+import com.dua.ai.ui.chat.ChatFeature
+import com.dua.ai.ui.chat.HomeTab
+import com.dua.ai.ui.screens.ProjectsScreen
 import com.dua.ai.ui.onboarding.OnboardingScreen
 import com.dua.ai.ui.screens.CloudSyncScreen
 import com.dua.ai.ui.screens.DataControlsScreen
@@ -71,6 +74,15 @@ private fun BusyBackGuard(viewModel: ChatViewModel) {
 fun DuaNavHost(viewModel: ChatViewModel, voice: ReplyVoice, notificationRoute: Pair<String, String>?, nav: NavHostController = rememberNavController()) {
     val haptics = LocalHapticFeedback.current
     val navigator = remember(nav, viewModel, haptics) { DuaNavigator(nav, viewModel, haptics) }
+    val exitFeature: () -> Unit = {
+        if (!viewModel.dataBusy.value) {
+            voice.stopAll()
+            viewModel.startNewChat()
+            viewModel.selectAuto()
+            navigator.toChat()
+        }
+    }
+    val openDestination: (DuaDestination) -> Unit = { if (it == DuaDestination.Chat) navigator.toChat() else navigator.open(it) }
     // Decided once per launch: signed-out users who have not skipped it start on the welcome screen.
     val startDestination = remember { if (viewModel.shouldShowOnboarding()) DuaDestination.Onboarding else DuaDestination.Chat }
     DisposableEffect(nav, voice) {
@@ -98,7 +110,7 @@ fun DuaNavHost(viewModel: ChatViewModel, voice: ReplyVoice, notificationRoute: P
             BusyBackGuard(viewModel)
             ChatRoute(viewModel, voice,
                 onOpenSettings = { navigator.open(DuaDestination.Profile) },
-                onOpenDestination = { navigator.open(it) },
+                onOpenDestination = openDestination,
                 onOpenVoice = { navigator.open(DuaDestination.Voice) },
                 onOpenSetup = { navigator.open(DuaDestination.FeatureSetup) },
                 onOpenComputer = { navigator.open(DuaDestination.Computer) },
@@ -106,11 +118,35 @@ fun DuaNavHost(viewModel: ChatViewModel, voice: ReplyVoice, notificationRoute: P
                 onOpenVoiceMode = { navigator.open(if (viewModel.liveVoiceAvailable()) DuaDestination.LiveVoice else DuaDestination.HandsFree, haptic = false) })
         }
         composable(DuaDestination.Computer.route) {
-            com.dua.ai.ui.screens.ComputerScreen(onBack = navigator::back)
+            BackHandler { exitFeature() }
+            BusyBackGuard(viewModel)
+            com.dua.ai.ui.screens.ComputerScreen(onBack = exitFeature)
         }
         composable(DuaDestination.Agent.route) {
+            BackHandler { exitFeature() }
             BusyBackGuard(viewModel)
-            com.dua.ai.ui.agent.AgentScreen(viewModel, onBack = navigator::back, onOpenChat = navigator::toChat)
+            com.dua.ai.ui.agent.AgentScreen(viewModel, onBack = exitFeature, voice = voice,
+                onOpenSettings = { navigator.open(DuaDestination.Profile) }, onOpenDestination = openDestination,
+                onOpenVoice = { navigator.open(DuaDestination.Voice) }, onOpenSetup = { navigator.open(DuaDestination.FeatureSetup) },
+                onOpenVoiceMode = { navigator.open(if (viewModel.liveVoiceAvailable()) DuaDestination.LiveVoice else DuaDestination.HandsFree, haptic = false) })
+        }
+        composable(DuaDestination.Projects.route) {
+            BackHandler { exitFeature() }
+            BusyBackGuard(viewModel)
+            ProjectsScreen(viewModel, onBack = exitFeature, onOpenProject = { navigator.open(DuaDestination.ProjectChat) })
+        }
+        listOf(DuaDestination.ProjectChat, DuaDestination.Work).forEach { destination ->
+            composable(destination.route) {
+                BackHandler { exitFeature() }
+                BusyBackGuard(viewModel)
+                ChatRoute(viewModel, voice,
+                    onOpenSettings = { navigator.open(DuaDestination.Profile) }, onOpenDestination = openDestination,
+                    onOpenVoice = { navigator.open(DuaDestination.Voice) }, onOpenSetup = { navigator.open(DuaDestination.FeatureSetup) },
+                    onOpenVoiceMode = { navigator.open(if (viewModel.liveVoiceAvailable()) DuaDestination.LiveVoice else DuaDestination.HandsFree, haptic = false) },
+                    feature = if (destination == DuaDestination.ProjectChat) ChatFeature.Projects else null,
+                    homeTab = if (destination == DuaDestination.Work) HomeTab.Work else HomeTab.Chat,
+                    onExitFeature = exitFeature)
+            }
         }
         composable(DuaDestination.Voice.route) {
             val draft by viewModel.draft.collectAsState()
@@ -152,7 +188,7 @@ fun DuaNavHost(viewModel: ChatViewModel, voice: ReplyVoice, notificationRoute: P
                 com.dua.ai.ui.settings.AppearanceScreen(viewModel, onBack = navigator::back, accentPage = destination == DuaDestination.Accent)
             }
         }
-        comingSoonPages(onBack = navigator::back) { BusyBackGuard(viewModel) }
+        comingSoonPages(onBack = navigator::back, onFeatureBack = exitFeature) { BusyBackGuard(viewModel) }
         composable(DuaDestination.CloudSync.route) {
             BusyBackGuard(viewModel)
             CloudSyncScreen(viewModel, onBack = navigator::back, onProfile = { navigator.open(DuaDestination.Profile) })

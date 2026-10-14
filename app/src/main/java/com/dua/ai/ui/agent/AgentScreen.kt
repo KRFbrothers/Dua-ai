@@ -9,8 +9,6 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -24,6 +22,12 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import com.dua.ai.ui.components.ReferenceIcons
+import com.dua.ai.ui.components.FeatureTopBar
+import com.dua.ai.ui.chat.ChatFeature
+import com.dua.ai.ui.chat.ChatRoute
+import com.dua.ai.ui.navigation.DuaDestination
+import com.dua.ai.ui.voice.ReplyVoice
+import com.dua.ai.ui.voice.rememberReplyVoice
 import com.dua.ai.ui.theme.*
 import com.dua.ai.viewmodel.ChatViewModel
 import java.time.LocalDate
@@ -36,18 +40,26 @@ internal fun briefingPrompt(date: LocalDate = LocalDate.now()) =
 
 /** Every task uses the existing capability-gated Agent mode and ordinary chat/error handling. */
 @Composable
-fun AgentScreen(viewModel: ChatViewModel, onBack: () -> Unit, onOpenChat: () -> Unit) {
+fun AgentScreen(viewModel: ChatViewModel, onBack: () -> Unit, voice: ReplyVoice? = null,
+    onOpenSettings: () -> Unit = {}, onOpenDestination: (DuaDestination) -> Unit = {},
+    onOpenVoice: () -> Unit = {}, onOpenSetup: () -> Unit = {}, onOpenVoiceMode: () -> Unit = {}) {
     val available by viewModel.agentAvailable.collectAsState()
     val typing by viewModel.isTyping.collectAsState()
     val dataBusy by viewModel.dataBusy.collectAsState()
+    val agent by viewModel.agent.collectAsState()
     LaunchedEffect(Unit) { viewModel.refreshEngineCapabilities() }
+    if (agent) {
+        ChatRoute(viewModel, voice ?: rememberReplyVoice(viewModel), onOpenSettings, onOpenVoice, onOpenSetup,
+            onOpenDestination = onOpenDestination, onOpenVoiceMode = onOpenVoiceMode,
+            feature = ChatFeature.Agent, onExitFeature = onBack)
+        return
+    }
     fun openTask(prompt: String = "", send: Boolean = false) {
         if (!available || typing || dataBusy) return
         viewModel.startNewChat()
         viewModel.setAgent(true)
         if (!viewModel.agent.value) return
         viewModel.updateDraft(prompt)
-        onOpenChat()
         if (send) viewModel.sendMessage(prompt)
     }
     AgentContent(available = available, busy = typing || dataBusy, onBack = onBack,
@@ -61,22 +73,16 @@ fun AgentScreen(viewModel: ChatViewModel, onBack: () -> Unit, onOpenChat: () -> 
 
 @Composable
 internal fun AgentContent(available: Boolean, busy: Boolean = false, onBack: () -> Unit,
-    onNewTask: () -> Unit, onRefresh: () -> Unit = {}, onTask: (AgentTask) -> Unit, onSend: (String) -> Unit) {
+    onNewTask: () -> Unit, onRefresh: () -> Unit = {}, onTask: (AgentTask) -> Unit, onSend: (String) -> Unit,
+    showChrome: Boolean = true) {
     var draft by rememberSaveable { mutableStateOf("") }
     val c = PageTheme.colors
     val enabled = available && !busy
     val taskSurface = if (DuaTheme.colors.isDark) AgentTaskSurfaceDark else AgentTaskSurfaceLight
     val send = { if (enabled && draft.isNotBlank()) onSend(draft.trim()) }
-    Column(Modifier.fillMaxSize().background(c.background).windowInsetsPadding(WindowInsets.safeDrawing).imePadding()) {
-        Box(Modifier.fillMaxWidth().padding(horizontal = AgentSizes.padding, vertical = Spacing.sm)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                AgentCircleButton("Back", Icons.AutoMirrored.Filled.ArrowBack, onBack)
-                AgentCircleButton("New Agent Task", Icons.Default.Add, onNewTask, enabled = enabled)
-            }
-            Text("AI Agent", Modifier.align(Alignment.Center).padding(horizontal = Sizes.touchTarget)
-                .semantics { heading() }, style = MaterialTheme.typography.titleLarge.merge(AgentTitleStyle), color = c.text,
-                textAlign = TextAlign.Center)
-        }
+    Column(Modifier.fillMaxSize().background(c.background)
+        .then(if (showChrome) Modifier.windowInsetsPadding(WindowInsets.safeDrawing).imePadding() else Modifier)) {
+        if (showChrome) FeatureTopBar("AI Agent", onBack, onNewTask, newSessionEnabled = enabled)
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
             val viewport = maxHeight
             Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).heightIn(min = viewport)
@@ -105,12 +111,9 @@ internal fun AgentContent(available: Boolean, busy: Boolean = false, onBack: () 
                 }
             }
         }
-        Column(Modifier.fillMaxWidth().widthIn(max = AgentSizes.maxWidth).align(Alignment.CenterHorizontally)
-            .padding(horizontal = AgentSizes.padding, vertical = Spacing.sm)) {
-            Surface(shape = AgentShapes.pill, color = c.accentContainer, contentColor = c.onAccentContainer) {
-                Text("✨ Agent", Modifier.heightIn(min = Sizes.touchTarget).wrapContentHeight().padding(horizontal = AgentSizes.composerPaddingH),
-                    style = MaterialTheme.typography.labelLarge)
-            }
+        if (showChrome) Column(Modifier.widthIn(max = AgentSizes.maxWidth).fillMaxWidth().align(Alignment.CenterHorizontally)
+            .padding(horizontal = AgentSizes.padding, vertical = Spacing.sm), horizontalAlignment = Alignment.CenterHorizontally) {
+            AgentModePill()
             Spacer(Modifier.height(Spacing.sm))
             Surface(shape = AgentShapes.pill, color = c.card, border = BorderStroke(AgentSizes.border, c.cardBorder)) {
                 Row(Modifier.fillMaxWidth().padding(start = AgentSizes.composerPaddingH, end = Spacing.xs,
@@ -137,14 +140,12 @@ internal fun AgentContent(available: Boolean, busy: Boolean = false, onBack: () 
 }
 
 @Composable
-private fun AgentCircleButton(label: String, icon: androidx.compose.ui.graphics.vector.ImageVector,
-    onClick: () -> Unit, enabled: Boolean = true) {
+internal fun AgentModePill(modifier: Modifier = Modifier) {
     val c = PageTheme.colors
-    IconButton(onClick, enabled = enabled, modifier = Modifier.size(Sizes.touchTarget)) {
-        Surface(Modifier.size(AgentSizes.circle), shape = AgentShapes.circle, color = c.card,
-            border = BorderStroke(AgentSizes.border, c.cardBorder)) {
-            Box(contentAlignment = Alignment.Center) { Icon(icon, label, Modifier.size(AgentSizes.icon), tint = c.text) }
-        }
+    Surface(modifier.wrapContentWidth().testTag("agent-mode-pill"), shape = AgentShapes.pill,
+        color = c.accentContainer, contentColor = c.onAccentContainer) {
+        Text("✨ Agent", Modifier.heightIn(min = Sizes.touchTarget).wrapContentHeight().padding(horizontal = AgentSizes.composerPaddingH),
+            style = MaterialTheme.typography.labelLarge)
     }
 }
 

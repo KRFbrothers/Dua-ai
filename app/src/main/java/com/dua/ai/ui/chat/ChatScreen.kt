@@ -83,6 +83,10 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import com.dua.ai.model.ChatMessage
+import com.dua.ai.ui.components.FeatureTopBar
+import com.dua.ai.ui.agent.AgentContent
+import com.dua.ai.ui.agent.AgentModePill
+import com.dua.ai.ui.screens.ProjectsFeaturePage
 
 private data class ConversationResults(val messages: List<ChatMessage>, val query: String, val matches: List<ConversationMatch>)
 
@@ -102,8 +106,19 @@ fun ChatScreen(
     val drawerState = rememberDrawerState(initialDrawerValue)
     val scope = rememberCoroutineScope()
     var sheet by rememberSaveable { mutableStateOf(initialSheet) }
+    if (sheet == ChatSheet.Projects) {
+        BackHandler { sheet = null }
+        ProjectsFeaturePage(state, actions, onBack = { sheet = null })
+        return
+    }
+    val feature = state.activeFeature
+    // Switching + → Agent keeps the existing request context and attachments, but shows only
+    // turns written in the Agent view. The saved conversation and handlers stay unchanged.
+    var agentStartAfterId by rememberSaveable(state.chatId) { mutableStateOf<String?>(null) }
+    val boundaryIndex = state.messages.indexOfFirst { it.id == agentStartAfterId }
+    val visibleState = if (state.agent && boundaryIndex >= 0) state.copy(messages = state.messages.drop(boundaryIndex + 1)) else state
     /** Empty Home (new chat): logo and tagline, full mode chip row. */
-    val home = state.messages.isEmpty() && !state.typing
+    val home = visibleState.messages.isEmpty() && !state.typing
     var deletingId by rememberSaveable { mutableStateOf<String?>(null) }
     var deletingServerId by rememberSaveable { mutableStateOf<String?>(null) }
     LaunchedEffect(state.chatDeletion.id, state.chatDeletion.completed) {
@@ -114,7 +129,7 @@ fun ChatScreen(
     var viewer by remember { mutableStateOf(initialViewer) }
     val mediaActions = remember(actions) { ImagineActions(onOpen = { id, index -> viewer = id to index }, onSave = actions.imagine.onSave, onShare = actions.imagine.onShare,
         onEdit = actions.imagine.onEdit, onAnimate = actions.imagine.onAnimate, onCancelVideo = actions.imagine.onCancelVideo, onReuse = actions.imagine.onReuse) }
-    val conversationKey = state.chatId.ifEmpty { state.messages.firstOrNull()?.id.orEmpty() }
+    val conversationKey = "${feature?.name}:" + state.chatId.ifEmpty { state.messages.firstOrNull()?.id.orEmpty() }
     var searchOpen by rememberSaveable(conversationKey) { mutableStateOf(false) }
     var searchQuery by rememberSaveable(conversationKey) { mutableStateOf("") }
     var selectedSearchId by rememberSaveable(conversationKey) { mutableStateOf<String?>(null) }
@@ -178,7 +193,12 @@ fun ChatScreen(
     val tap = { actions.haptic(ChatHaptic.Tap) }
     val onWebMode: (String?) -> Unit = { tap(); actions.onWebMode(it) }
     val onReasoning: (Boolean) -> Unit = { tap(); actions.onReasoning(it) }
-    val onAgent: (Boolean) -> Unit = { tap(); actions.onAgent(it) }
+    val onAgent: (Boolean) -> Unit = { enabled ->
+        tap()
+        if (enabled && !state.agent) agentStartAfterId = state.messages.lastOrNull()?.id
+        actions.onAgent(enabled)
+        if (enabled) sheet = null
+    }
     val onXSearch: (Boolean) -> Unit = { tap(); actions.onXSearch(it) }
     val onImagine: (Boolean) -> Unit = { tap(); actions.onImagine(it) }
     val onRunCode: (Boolean) -> Unit = { tap(); actions.onRunCode(it) }
@@ -186,6 +206,7 @@ fun ChatScreen(
     var inputFocused by remember { mutableStateOf(false) }
     var inputBounds by remember { mutableStateOf(Rect.Zero) }
     var bottomCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
+    BackHandler(enabled = feature != null && sheet == null && viewer == null && !searchOpen) { actions.onExitFeature() }
     BackHandler(enabled = drawerState.isOpen) { scope.launch { drawerState.close() } }
     LaunchedEffect(listState) {
         listState.interactionSource.interactions.collect { interaction ->
@@ -231,7 +252,7 @@ fun ChatScreen(
                 // Only swipe to close: an edge swipe to open would fight horizontal scrolling in code blocks.
                 gesturesEnabled = drawerState.isOpen,
                 drawerContent = {
-                    HistoryDrawer(
+                    if (feature == null) HistoryDrawer(
                         chats = state.savedChats.filter { it.projectId == state.projectId },
                         currentChatId = state.chatId,
                         newChatEnabled = !state.typing,
@@ -244,7 +265,7 @@ fun ChatScreen(
                         serverDeletionEnabled = state.serverChatDeletionEnabled,
                         onDeleteServerChat = { id -> actions.onDismissChatDeletion(); deletingServerId = id },
                         onOpenSettings = { closeDrawerThen(actions.onOpenSettings) },
-                        onProjects = { closeDrawerThen { sheet = ChatSheet.Projects } },
+                        onProjects = { closeDrawerThen { actions.onOpenDestination(DuaDestination.Projects) } },
                         onDestination = { destination -> closeDrawerThen { actions.onOpenDestination(destination) } },
                         profileName = state.profileName,
                         profilePhotoUrl = state.profilePhotoUrl,
@@ -254,15 +275,13 @@ fun ChatScreen(
             ) {
                 Column(Modifier.fillMaxSize().background(com.dua.ai.ui.theme.ChatTheme.colors.background)
                     .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))) {
-                    ChatTopBar(
-                        newChatEnabled = !state.typing,
+                    if (feature != null) FeatureTopBar(feature.title, actions.onExitFeature, actions.onNewFeatureSession,
+                        newSessionEnabled = !state.typing && (feature != ChatFeature.Agent || state.agentAvailable))
+                    else ChatTopBar(
                         onMenu = { scope.launch { drawerState.open() } },
-                        onNewChat = actions.onNewChat,
-                        showComputer = home,
+                        tab = state.homeTab, onTab = { actions.onOpenDestination(if (it == HomeTab.Work) DuaDestination.Work else DuaDestination.Chat) },
                         onComputer = { actions.onOpenDestination(DuaDestination.Computer) },
-                        // Work is an existing destination; the pill stays on Chat while this screen shows.
-                        onTab = { if (it == HomeTab.Work) actions.onOpenDestination(com.dua.ai.ui.navigation.DuaDestination.Work) },
-                        onSearch = if (state.messages.isEmpty()) null else ({ followTail = false; searchOpen = true }),
+                        onFindInChat = if (state.messages.isEmpty() || state.homeTab == HomeTab.Work) null else ({ followTail = false; searchOpen = true }),
                     )
                     if (searchOpen) ConversationSearchBar(searchQuery,
                         onQuery = { searchQuery = it; selectedSearchId = null; lastSearchJump = null },
@@ -272,12 +291,21 @@ fun ChatScreen(
                         onNext = { if (matches.isNotEmpty()) selectedSearchId = matches[(matchIndex + 1) % matches.size].messageId },
                         onClose = { closeSearch() })
                     Box(Modifier.weight(1f).fillMaxWidth()) {
-                        if (home) {
+                        if (feature == null && state.homeTab == HomeTab.Work) {
+                            Text("Coming soon", Modifier.align(Alignment.Center), style = MaterialTheme.typography.bodyLarge)
+                        } else if (home && feature == ChatFeature.Agent) {
+                            AgentContent(state.agentAvailable, busy = state.typing, onBack = actions.onExitFeature,
+                                onNewTask = actions.onNewFeatureSession, onRefresh = actions.onRefreshAgent,
+                                onTask = actions.onAgentTask, onSend = {}, showChrome = false)
+                        } else if (home && feature != null) {
+                            Text(if (feature == ChatFeature.Projects) state.projects.firstOrNull { it.id == state.projectId }?.name ?: "Projects" else "Create an image with Dua",
+                                Modifier.align(Alignment.Center).padding(Spacing.lg), style = MaterialTheme.typography.titleLarge)
+                        } else if (home) {
                             EmptyState(suggestions = state.suggestions, showPrompts = state.draft.isBlank(),
                                 onSuggestion = { prompt -> actions.onDraftChange(prompt); inputFocus.requestFocus() })
                         } else {
                             key(conversationKey) {
-                                MessageList(state = state, actions = actions, listState = listState, imagineActions = mediaActions,
+                                MessageList(state = visibleState, actions = actions, listState = listState, imagineActions = mediaActions,
                                     searchMessageId = selectedMatch?.messageId)
                             }
                             if (!searchOpen && !followTail && listState.canScrollForward) FilledTonalButton(
@@ -293,7 +321,7 @@ fun ChatScreen(
                             }
                         }
                     }
-                    Column(Modifier.fillMaxWidth().imePadding().navigationBarsPadding(), horizontalAlignment = Alignment.CenterHorizontally) {
+                    if (feature != null || state.homeTab != HomeTab.Work) Column(Modifier.fillMaxWidth().imePadding().navigationBarsPadding(), horizontalAlignment = Alignment.CenterHorizontally) {
                         Column(Modifier.widthIn(max = Sizes.contentMaxWidth).fillMaxWidth()
                             .onGloballyPositioned { bottomCoordinates = it }
                             .swipeUpToOpen(enabled = sheet == null && !state.typing,
@@ -302,7 +330,8 @@ fun ChatScreen(
                             .semantics { customActions = listOf(CustomAccessibilityAction("Open add to chat") { sheet = ChatSheet.Attach; true }) }) {
                             ChatNotices(state = state, actions = actions)
                             val visibleModes = modeToggles(state, onWebMode, onReasoning, onXSearch, onRunCode, onAgent)
-                                .filter { !home && it.on }
+                                .filter { feature == null && !home && it.on }
+                            if (feature == ChatFeature.Agent) Box(Modifier.fillMaxWidth().padding(vertical = Spacing.xs), contentAlignment = Alignment.Center) { AgentModePill() }
                             if (visibleModes.isNotEmpty()) {
                                 Row(
                                     Modifier.fillMaxWidth().let { if (visibleModes.size > 3) it.horizontalScroll(rememberScrollState()) else it }
@@ -331,6 +360,7 @@ fun ChatScreen(
                                 currentModel = state.model,
                                 onCancelUpload = { state.uploads.filter { it.uploading }.forEach { actions.onCancelUpload(it.id) } },
                                 onImagineOptions = { sheet = ChatSheet.Imagine },
+                                showModelSelector = feature == null,
                             )
                         }
                     }
@@ -350,6 +380,7 @@ fun ChatScreen(
         )
         ChatSheet.Attach -> AttachmentSheet(
             webMode = state.webMode, pageReadingAvailable = state.pageReadingAvailable,
+            showModeControls = feature == null,
             enabled = !state.typing && !state.readingFiles,
             onCamera = { sheet = null; actions.onPickCamera() },
             onPhotos = { sheet = null; actions.onPickPhotos() },

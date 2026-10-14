@@ -95,9 +95,11 @@ class ComputerDrawerUiTest(private val dark: Boolean, private val small: Boolean
         var newChats = 0
         val state = ChatUiState(messages = listOf(ChatMessage(text = "Hello", isUser = true)))
         show { ChatScreen(state, ChatActions(onNewChat = { newChats++ })) }
-        compose.onNodeWithContentDescription("Computer").assertDoesNotExist()
-        compose.onNodeWithContentDescription("Find in chat").assertIsDisplayed()
-        compose.onNodeWithContentDescription("New chat").assertIsDisplayed().performClick()
+        compose.onNodeWithContentDescription("Computer").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Find in chat").assertDoesNotExist()
+        compose.onNodeWithContentDescription("New chat").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Open chat history").performClick()
+        compose.onNode(hasText("Chat") and hasAnyAncestor(hasTestTag("history-drawer"))).assertIsDisplayed().performClick()
         compose.runOnIdle { assertEquals(1, newChats) }
     }
 
