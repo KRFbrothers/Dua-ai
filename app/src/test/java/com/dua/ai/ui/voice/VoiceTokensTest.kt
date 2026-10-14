@@ -54,8 +54,7 @@ class VoiceTokensTest {
     }
 
     @Test fun settingsUpgradeUsesTheRequestedLightPurpleAndReadableDarkVariant() {
-        assertEquals(androidx.compose.ui.graphics.Color(0xFF7C3AED), SettingsLightColors.upgrade); assertEquals(purple, SettingsDarkColors.upgrade)
-        assertEquals(SheetDarkColors.accent, SettingsDarkColors.upgrade)
+        assertEquals(androidx.compose.ui.graphics.Color(0xFF7C3AED), SettingsLightColors.upgrade); assertEquals(androidx.compose.ui.graphics.Color(0xFFA78BFA), SettingsDarkColors.upgrade)
     }
 
     @Test fun voiceTouchSlotsAreAtLeast48dp() {
