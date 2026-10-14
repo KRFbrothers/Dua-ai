@@ -101,7 +101,7 @@ class AccountRepository(private val api: AccountApi, private val store: SessionP
         check(user == null || user.id == expected.value?.user?.id) { "Account response changed. Sign in again." }
         if (user == null) {
             writeSession(null, authenticationChange = true); notice("Session expired. Sign in again.")
-        } else writeSession(session!!.copy(user = user))
+        } else writeSession(session!!.copy(user = user.withAvatarFallback(session!!.user)))
         true
     }
     suspend fun load() {
@@ -131,10 +131,13 @@ class AccountRepository(private val api: AccountApi, private val store: SessionP
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (_: Exception) { mutable.update { it.copy(deletionConfigured = false, emailAuthConfigured = false) } }
     }
-    suspend fun signInWithGoogle(idToken: String, nonce: String) {
+    suspend fun signInWithGoogle(idToken: String, nonce: String, photoUrl: String = "") {
         val ticket = beginAuthentication()
         val result = api.request("/api/account/google-token", "POST", JSONObject().put("idToken", idToken).put("nonce", nonce))
-        val installed = installAuthentication(ticket, AccountSessionCodec.decode(result))
+        val decoded = AccountSessionCodec.decode(result)
+        // The Google credential carries the account photo; use it when the backend does not report one.
+        val photo = decoded.user.avatarUrl.ifBlank { safeAvatarUrl(photoUrl) }
+        val installed = installAuthentication(ticket, decoded.copy(user = decoded.user.copy(avatarUrl = photo)))
         noticeIfCurrent(installed, "Signed in with Google. Local data was not uploaded.")
     }
     fun cancelAuthentication() = synchronized(sessionLock) { ++authGeneration; Unit }
@@ -209,3 +212,7 @@ class AccountRepository(private val api: AccountApi, private val store: SessionP
 }
 
 data class CloudChatDeletion(val ownerId: String, val chatId: String, val revision: Long, val deletedChatIds: List<String>)
+
+/** Keep a photo learned at Google sign-in when a later profile load for the same account has none. */
+internal fun AccountUser.withAvatarFallback(prior: AccountUser?): AccountUser =
+    if (avatarUrl.isBlank() && prior?.id == id && prior.avatarUrl.isNotBlank()) copy(avatarUrl = prior.avatarUrl) else this

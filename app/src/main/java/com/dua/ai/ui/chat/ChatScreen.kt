@@ -231,6 +231,7 @@ fun ChatScreen(
                     onProjects = { closeDrawerThen { sheet = ChatSheet.Projects } },
                     onDestination = { destination -> closeDrawerThen { actions.onOpenDestination(destination) } },
                     profileName = state.profileName,
+                    profilePhotoUrl = state.profilePhotoUrl,
                 )
             },
         ) {

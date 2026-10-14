@@ -6,7 +6,7 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Menu
-import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.AddComment
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -59,7 +59,7 @@ fun ChatTopBar(
         SegmentedPill(tab, onTab, Modifier.weight(1f, fill = false))
         Row(verticalAlignment = Alignment.CenterVertically) {
             onSearch?.let { RoundButton(Icons.Outlined.Search, "Find in chat", it) }
-            RoundButton(Icons.Outlined.Refresh, "New chat", onNewChat, newChatEnabled)
+            RoundButton(Icons.Outlined.AddComment, "New chat", onNewChat, newChatEnabled)
         }
     }
 }

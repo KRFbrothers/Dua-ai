@@ -15,7 +15,7 @@ import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import java.security.MessageDigest
 import java.security.SecureRandom
 
-data class GoogleIdentity(val idToken: String, val nonce: String)
+data class GoogleIdentity(val idToken: String, val nonce: String, val photoUrl: String = "")
 
 /** Native Google Sign-In. The backend verifies the ID token with Supabase and the app stores only the Dua session (encrypted by AccountSessionStore). */
 object GoogleSignIn {
@@ -38,7 +38,8 @@ object GoogleSignIn {
         }
         val credential = result.credential
         check(credential is CustomCredential && credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) { "Unexpected Google credential." }
-        return GoogleIdentity(GoogleIdTokenCredential.createFrom(credential.data).idToken, rawNonce)
+        val google = GoogleIdTokenCredential.createFrom(credential.data)
+        return GoogleIdentity(google.idToken, rawNonce, google.profilePictureUri?.toString().orEmpty())
     }
 
     fun friendlyMessage(failure: Throwable): String = when (failure) {
