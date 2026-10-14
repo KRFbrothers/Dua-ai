@@ -26,16 +26,16 @@ fun EmailAuthScreen(viewModel: ChatViewModel, onBack: () -> Unit) {
     val account by viewModel.account.state.collectAsState()
     val progress by viewModel.emailAuth.collectAsState()
     val owner by rememberSaveable { mutableStateOf(account.user?.id) }
-    val email = remember { account.user?.email.orEmpty() }
+    val email = remember { account.user?.email ?: viewModel.emailSignInHint }
     DisposableEffect(Unit) { viewModel.clearEmailAuth(); onDispose { viewModel.clearEmailAuth() } }
     LaunchedEffect(Unit) { if (!account.emailAuthConfigured) viewModel.loadAccount() }
     LaunchedEffect(progress.completed, account.user?.id) {
-        if (progress.completed || owner == null && account.user != null) onBack()
+        if (progress.completed || owner == null && account.user != null) { viewModel.prepareEmailSignIn(); onBack() }
     }
     EmailAuthContent(initialMode = if (owner == null) EmailAuthMode.SignIn else EmailAuthMode.SetPassword,
         initialEmail = email, configured = account.emailAuthConfigured, busy = progress.busy || account.busy,
         error = if (owner != null && account.user?.id != owner) "Account changed. Return to Account before setting a password." else progress.error,
-        notice = progress.confirmation, onBack = { viewModel.clearEmailAuth(); onBack() }, onRefresh = viewModel::loadAccount,
+        notice = progress.confirmation, onBack = { viewModel.clearEmailAuth(); viewModel.prepareEmailSignIn(); onBack() }, onRefresh = viewModel::loadAccount,
         onSubmit = { address, password, signup -> viewModel.submitEmailAuth(address, password, signup, owner) })
 }
 

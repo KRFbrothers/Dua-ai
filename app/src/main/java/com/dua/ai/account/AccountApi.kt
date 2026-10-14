@@ -34,18 +34,24 @@ class AccountApi(private val baseUrl: String = BuildConfig.DUA_API_BASE_URL, pri
 }
 interface SessionPersistence { fun read(): AccountSession?; fun write(value: AccountSession?) }
 class AccountException(val status: Int, message: String) : Exception(message)
-data class AccountUser(val id: String, val email: String, val displayName: String, val avatarUrl: String = "")
+data class AccountUser(val id: String, val email: String, val displayName: String, val avatarUrl: String = "", val phoneNumber: String = "")
 /** Only https profile photos (Google's googleusercontent.com, or what the backend reports) are loaded; anything else is dropped. */
 fun safeAvatarUrl(value: String?): String = value?.trim()?.takeIf { it.length <= 2048 && it.startsWith("https://") && !it.any(Char::isWhitespace) }.orEmpty()
-data class AccountSession(val user: AccountUser, val accessToken: String, val refreshToken: String, val expiresAt: Long)
+/** Last successful login method is a local UI hint, never an authorization claim. */
+enum class AccountProvider(val wire: String) { Google("google"), Email("email");
+    companion object { fun fromWire(value: String): AccountProvider? = entries.firstOrNull { it.wire == value } }
+}
+data class AccountSession(val user: AccountUser, val accessToken: String, val refreshToken: String, val expiresAt: Long,
+    val provider: AccountProvider? = null)
 object AccountSessionCodec {
-    fun user(json: JSONObject) = AccountUser(json.getString("id").also { require(it.matches(Regex("[a-fA-F0-9-]{36}"))) }, json.getString("email"), json.optString("displayName"), safeAvatarUrl(json.optString("avatarUrl")))
+    fun user(json: JSONObject) = AccountUser(json.getString("id").also { require(it.matches(Regex("[a-fA-F0-9-]{36}"))) }, json.getString("email"), json.optString("displayName"), safeAvatarUrl(json.optString("avatarUrl")), PhoneNumbers.normalize(json.optString("phoneNumber")).orEmpty())
     fun decode(json: JSONObject): AccountSession {
         val tokens = json.getJSONObject("session")
         val access = tokens.getString("accessToken"); val refresh = tokens.getString("refreshToken")
         require(access.length <= 10000 && refresh.length <= 10000 && access.matches(Regex("[A-Za-z0-9._-]+")) && refresh.matches(Regex("[A-Za-z0-9._-]+")))
-        return AccountSession(user(json.getJSONObject("user")), access, refresh, tokens.getLong("expiresAt"))
+        return AccountSession(user(json.getJSONObject("user")), access, refresh, tokens.getLong("expiresAt"), AccountProvider.fromWire(json.optString("loginProvider")))
     }
-    fun encode(value: AccountSession) = JSONObject().put("user", JSONObject().put("id", value.user.id).put("email", value.user.email).put("displayName", value.user.displayName).put("avatarUrl", value.user.avatarUrl))
+    fun encode(value: AccountSession) = JSONObject().put("user", JSONObject().put("id", value.user.id).put("email", value.user.email).put("displayName", value.user.displayName).put("avatarUrl", value.user.avatarUrl).put("phoneNumber", value.user.phoneNumber))
+        .apply { value.provider?.let { put("loginProvider", it.wire) } }
         .put("session", JSONObject().put("accessToken", value.accessToken).put("refreshToken", value.refreshToken).put("expiresAt", value.expiresAt))
 }

@@ -39,7 +39,7 @@ class SettingsScreenTest {
     @Test fun everyExistingDestinationIsReachable() {
         var dest: DuaDestination? = null
         show(onOpen = { dest = it })
-        val expected = mapOf("Account" to DuaDestination.Account, "Workspace" to DuaDestination.Work, "Sync" to DuaDestination.CloudSync,
+        val expected = mapOf("Account" to DuaDestination.Account, "Workspace" to DuaDestination.Work,
             "Upgrade to Dua AI Pro" to DuaDestination.UsageLimits, "Personalization" to DuaDestination.Appearance, "Memory" to DuaDestination.Memory,
             "Plugins" to DuaDestination.Plugins, "Imagine" to DuaDestination.Imagine, "Accent color" to DuaDestination.Accent,
             "General" to DuaDestination.General, "Feature setup" to DuaDestination.FeatureSetup, "Usage and limits" to DuaDestination.UsageLimits,
@@ -75,12 +75,14 @@ class SettingsScreenTest {
 
     @Test fun workspaceAndSyncShowNoFakeState() {
         show()
-        compose.onNodeWithText("Personal").assertDoesNotExist()
+        compose.onNodeWithText("Personal").assertExists()
         compose.onNodeWithText("On account").assertDoesNotExist()
     }
 
     @Test fun syncShowsRealState() {
         show(s = state.copy(sync = "On"))
-        assertTrue(compose.onAllNodesWithText("On", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty())
+        compose.onNodeWithText("Sync").assertDoesNotExist()
+        compose.onNodeWithText("Set email password").assertDoesNotExist()
+        compose.onNodeWithText("Log out").assertDoesNotExist()
     }
 }

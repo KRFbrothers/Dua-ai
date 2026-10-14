@@ -24,7 +24,7 @@ object GoogleSignIn {
     /** Lowercase hex SHA-256. Google embeds this in the ID token; Supabase hashes the raw nonce and compares. */
     fun sha256Hex(value: String): String = MessageDigest.getInstance("SHA-256").digest(value.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
 
-    suspend fun requestIdToken(context: Context): GoogleIdentity {
+    suspend fun requestIdToken(context: Context, emailHint: String? = null): GoogleIdentity {
         check(BuildConfig.GOOGLE_WEB_CLIENT_ID.isNotBlank()) { "Google sign-in is not configured for this build." }
         val rawNonce = newNonce()
         val hashedNonce = sha256Hex(rawNonce)
@@ -39,8 +39,13 @@ object GoogleSignIn {
         val credential = result.credential
         check(credential is CustomCredential && credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) { "Unexpected Google credential." }
         val google = GoogleIdTokenCredential.createFrom(credential.data)
+        // googleid 1.1.1 has no email-hint setter. Reject a different selection before exchanging its token.
+        check(matchesAccountHint(google.id, emailHint)) { "Select $emailHint to continue, or use Continue with Google for another account." }
         return GoogleIdentity(google.idToken, rawNonce, google.profilePictureUri?.toString().orEmpty())
     }
+
+    internal fun matchesAccountHint(selectedEmail: String, emailHint: String?): Boolean =
+        emailHint == null || selectedEmail.trim().equals(emailHint.trim(), ignoreCase = true)
 
     fun friendlyMessage(failure: Throwable): String = when (failure) {
         is GetCredentialCancellationException -> "Google sign-in was cancelled."

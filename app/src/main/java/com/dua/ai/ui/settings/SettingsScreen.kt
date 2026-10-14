@@ -11,20 +11,16 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.automirrored.outlined.TrendingUp
-import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.*
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.collectAsState
@@ -45,11 +41,12 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
+import com.dua.ai.ui.components.AccountAvatar
+import com.dua.ai.ui.components.ReferenceIcons
 import com.dua.ai.BuildConfig
 import com.dua.ai.ui.navigation.DuaDestination
 import com.dua.ai.ui.theme.*
 import com.dua.ai.viewmodel.ChatViewModel
-
 
 
 @Immutable
@@ -71,12 +68,14 @@ data class SettingsUiState(
     val accent: String = "Purple",
     val accountBusy: Boolean = false,
     val accountNotice: String = "",
+    val avatarUrl: String = "",
+    val workspace: String = "Personal",
 )
 
 internal fun themeLabel(theme: String) = when (theme) { "light" -> "Light"; "system" -> "Match system"; else -> "Dark" }
 internal fun fontLabel(font: String) = when (font) { "system" -> "Device font"; "serif" -> "Serif"; "monospace" -> "Monospace"; else -> "Inter" }
 
-/** Profile & Settings hub: approved groups plus preserved existing feature destinations. */
+/** Settings hub: account operations live in the dedicated Account destination. */
 @Composable
 fun SettingsScreen(viewModel: ChatViewModel, onBack: () -> Unit, onOpen: (DuaDestination) -> Unit) {
     val preferences by viewModel.localSettings.collectAsState()
@@ -86,7 +85,7 @@ fun SettingsScreen(viewModel: ChatViewModel, onBack: () -> Unit, onOpen: (DuaDes
     val integrations by viewModel.integrations.collectAsState()
     val state = SettingsUiState(
         displayName = account.user?.displayName.orEmpty(), accent = appearance.resolvedAccent(DuaTheme.colors.isDark).label, accountBusy = account.busy, accountNotice = account.notice,
-        email = account.user?.email, theme = appearance.theme, font = preferences.font, haptic = preferences.haptic,
+        avatarUrl = account.user?.avatarUrl.orEmpty(), email = account.user?.email, theme = appearance.theme, font = preferences.font, haptic = preferences.haptic,
         memoryEnabled = preferences.memoryEnabled, notifications = preferences.notifications,
         sync = if (sync.enabled) "On" else "Off",
         voice = integrations.voice?.let { config ->
@@ -101,16 +100,14 @@ fun SettingsScreen(viewModel: ChatViewModel, onBack: () -> Unit, onOpen: (DuaDes
                 com.dua.ai.imagine.ImagineCodec.aspectLabel(preferences.imagineAspect), if (config.videoEnabled) "video on" else null).joinToString(" · ")
         },
     )
-    SettingsContent(state, onBack, onOpen, onLogOut = viewModel::logOut)
+    SettingsContent(state, onBack, onOpen)
 }
 
 /**
- * Settings hub laid out exactly like the Dabba reference (header + three cards). Every existing destination is kept;
- * settings the reference has no slot for sit in the closest card.
+ * Reference Settings layout with three cards; existing feature destinations remain reachable.
  */
 @Composable
-fun SettingsContent(state: SettingsUiState, onBack: () -> Unit, onOpen: (DuaDestination) -> Unit, onLogOut: () -> Unit = {}) {
-    var logout by rememberSaveable { mutableStateOf(false) }
+fun SettingsContent(state: SettingsUiState, onBack: () -> Unit, onOpen: (DuaDestination) -> Unit) {
     var about by rememberSaveable { mutableStateOf(false) }
     val c = SettingsTheme.colors
     val name = state.displayName.ifBlank { if (state.email == null) "Profile & Settings" else "Google account" }
@@ -119,40 +116,27 @@ fun SettingsContent(state: SettingsUiState, onBack: () -> Unit, onOpen: (DuaDest
         Row(Modifier.fillMaxWidth().padding(bottom = SettingsSizes.headerBottom), horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically) {
             CircleButton(Icons.AutoMirrored.Filled.ArrowBack, "Back", onBack)
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Column(Modifier.weight(1f).padding(horizontal = Spacing.sm), horizontalAlignment = Alignment.CenterHorizontally) {
                 Box(Modifier.size(SettingsSizes.avatar).clickable(role = Role.Button, onClickLabel = "Edit profile photo") { onOpen(DuaDestination.AvatarEdit) }
                     .semantics { contentDescription = "Edit profile photo" }, contentAlignment = Alignment.BottomEnd) {
-                    Box(Modifier.size(SettingsSizes.avatar).clip(SettingsShapes.circle).background(c.avatar), contentAlignment = Alignment.Center) {
-                        // An account initial, never a fabricated photo.
-                        val initial = state.displayName.firstOrNull { it.isLetterOrDigit() } ?: state.email?.firstOrNull { it.isLetterOrDigit() }
-                        if (initial != null) Text(initial.uppercaseChar().toString(), style = SettingsAvatarStyle, color = c.onAvatar)
-                        else Icon(Icons.Outlined.PersonOutline, null, tint = c.onAvatar)
-                    }
+                    AccountAvatar(state.email, state.displayName, state.avatarUrl, SettingsSizes.avatar)
                     Box(Modifier.size(SettingsSizes.editBadge).clip(SettingsShapes.circle).background(c.editBadge)
                         .border(SettingsSizes.border, c.circleBorder, SettingsShapes.circle), contentAlignment = Alignment.Center) {
                         Icon(Icons.Filled.Edit, null, Modifier.size(SettingsSizes.editIcon), tint = c.editIcon)
                     }
                 }
                 Spacer(Modifier.height(SettingsSizes.nameTop))
-                Text(name, style = SettingsNameStyle, color = c.name, modifier = Modifier.semantics { heading() })
+                Text(name, style = SettingsNameStyle, color = c.name, maxLines = 2, textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.semantics { heading() })
             }
-            CircleButton(Icons.Outlined.Info, "About Dua AI") { about = true }
+            CircleButton(ReferenceIcons.Info, "About Dua AI") { about = true }
         }
         Spacer(Modifier.height(SettingsSizes.cardsTop))
 
         // CARD 1: Account
         SettingsCardBox {
-            SettingsItemRow(Icons.Outlined.Person, "Account", state.email ?: "Not signed in") { onOpen(DuaDestination.Account) }
-            SettingsItemRow(Icons.Outlined.WorkOutline, "Workspace") { onOpen(DuaDestination.Work) }
-            SettingsItemRow(Icons.Outlined.CloudSync, "Sync", state.sync) { onOpen(DuaDestination.CloudSync) }
-            if (state.email != null) SettingsItemRow(Icons.AutoMirrored.Outlined.Logout, "Logout", tint = c.danger, chevron = false,
-                enabled = !state.accountBusy) { logout = true }
-            Row(Modifier.fillMaxWidth().heightIn(min = SettingsSizes.touch).clickable(role = Role.Button, onClickLabel = "Open plans and usage limits") { onOpen(DuaDestination.UsageLimits) }
-                .padding(SettingsSizes.rowPadding), verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(SettingsSizes.rowGap)) {
-                Icon(Icons.Filled.AutoAwesome, null, tint = c.upgrade, modifier = Modifier.size(SettingsSizes.rowIcon))
-                Text("Upgrade to Dua AI Pro", style = SettingsUpgradeStyle, color = c.upgrade)
-            }
+            SettingsItemRow(ReferenceIcons.Account, "Account", state.email ?: "Not signed in") { onOpen(DuaDestination.Account) }
+            SettingsItemRow(ReferenceIcons.Work, "Workspace", state.workspace) { onOpen(DuaDestination.Work) }
+            SettingsItemRow(ReferenceIcons.Sparkle, "Upgrade to Dua AI Pro", tint = c.upgrade, showDivider = false, onClickLabel = "Open plans and usage limits") { onOpen(DuaDestination.UsageLimits) }
         }
         if (state.accountNotice.isNotBlank()) Text(state.accountNotice, style = SettingsValueStyle, color = c.value,
             modifier = Modifier.padding(top = SettingsSizes.rowGap).semantics { liveRegion = LiveRegionMode.Polite })
@@ -167,7 +151,7 @@ fun SettingsContent(state: SettingsUiState, onBack: () -> Unit, onOpen: (DuaDest
             Row(Modifier.fillMaxWidth().heightIn(min = SettingsSizes.touch)
                 .clickable(role = Role.Button, onClickLabel = "Change accent color") { onOpen(DuaDestination.Accent) }
                 .padding(SettingsSizes.rowPadding), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Row(horizontalArrangement = Arrangement.spacedBy(SettingsSizes.rowGap), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(SettingsSizes.rowGap), verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Outlined.Palette, null, tint = c.rowIcon, modifier = Modifier.size(SettingsSizes.rowIcon))
                     Text("Accent color", style = SettingsRowStyle, color = c.rowText)
                 }
@@ -194,17 +178,13 @@ fun SettingsContent(state: SettingsUiState, onBack: () -> Unit, onOpen: (DuaDest
             SettingsItemRow(Icons.Outlined.Archive, "History and data", showDivider = false) { onOpen(DuaDestination.HistoryData) }
         }
     }
-    if (logout) DuaDialog(onDismissRequest = { logout = false }, title = "Log out?",
-        text = { Text(style = SheetBodyStyle, text = "Your chats and memories stay on the server. This phone only holds a cache.") },
-        confirmButton = { SheetTextButton("Log out", onClick = { logout = false; onLogOut() }, enabled = !state.accountBusy, destructive = true) },
-        dismissButton = { SheetTextButton("Cancel", onClick = { logout = false }) })
     if (about) DuaDialog(onDismissRequest = { about = false }, title = "About Dua AI",
         text = { Text(style = SheetBodyStyle, text = "Version ${state.version} · personal assistant") },
         confirmButton = { SheetTextButton("Close", onClick = { about = false }) })
 }
 
 @Composable
-private fun CircleButton(icon: ImageVector, label: String, onClick: () -> Unit) {
+internal fun CircleButton(icon: ImageVector, label: String, onClick: () -> Unit) {
     val c = SettingsTheme.colors
     IconButton(onClick = onClick, modifier = Modifier.size(SettingsSizes.touch)) {
         Box(Modifier.size(SettingsSizes.circleButton).clip(SettingsShapes.circle).background(c.circleButton)
@@ -223,23 +203,26 @@ fun SettingsCardBox(content: @Composable ColumnScope.() -> Unit) {
 /** Reference row: icon, label, optional right-hand value and chevron. Full-width 48 dp+ touch target. */
 @Composable
 fun SettingsItemRow(icon: ImageVector, label: String, value: String? = null, showDivider: Boolean = true, tint: Color = Color.Unspecified,
-    chevron: Boolean = true, enabled: Boolean = true, onClick: () -> Unit) {
+    chevron: Boolean = false, enabled: Boolean = true, onClickLabel: String = label, onClick: () -> Unit) {
     val c = SettingsTheme.colors
     val color = if (tint == Color.Unspecified) c.rowText else tint
-    Column {
-        Row(Modifier.fillMaxWidth().heightIn(min = SettingsSizes.touch).clickable(enabled = enabled, role = Role.Button, onClick = onClick)
-            .padding(SettingsSizes.rowPadding), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Row(horizontalArrangement = Arrangement.spacedBy(SettingsSizes.rowGap), verticalAlignment = Alignment.CenterVertically) {
-                Icon(icon, null, tint = if (tint == Color.Unspecified) c.rowIcon else tint, modifier = Modifier.size(SettingsSizes.rowIcon))
-                Text(label, style = SettingsRowStyle, color = color, maxLines = 1)
+    BoxWithConstraints {
+        val valueMaxWidth = maxWidth / 2
+        Column {
+            Row(Modifier.fillMaxWidth().heightIn(min = SettingsSizes.touch).clickable(enabled = enabled, role = Role.Button, onClickLabel = onClickLabel, onClick = onClick)
+                .padding(SettingsSizes.rowPadding), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(SettingsSizes.rowGap), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(icon, null, tint = if (tint == Color.Unspecified) c.rowIcon else tint, modifier = Modifier.size(SettingsSizes.rowIcon))
+                    Text(label, style = SettingsRowStyle, color = color)
+                }
+                if (!value.isNullOrBlank() || chevron) Row(Modifier.widthIn(max = valueMaxWidth).padding(start = SettingsSizes.rowGap), verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(SettingsSizes.valueGap)) {
+                    if (!value.isNullOrBlank()) Text(value, Modifier.weight(1f, fill = false), style = SettingsValueStyle, color = c.value,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    if (chevron) Icon(Icons.Filled.ChevronRight, null, tint = c.chevron, modifier = Modifier.size(SettingsSizes.chevron))
+                }
             }
-            Row(Modifier.weight(1f, fill = false).padding(start = SettingsSizes.rowGap), verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(SettingsSizes.valueGap)) {
-                if (!value.isNullOrBlank()) Text(value, Modifier.weight(1f, fill = false), style = SettingsValueStyle, color = c.value,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis)
-                if (chevron) Icon(Icons.Filled.ChevronRight, null, tint = c.chevron, modifier = Modifier.size(SettingsSizes.chevron))
-            }
+            if (showDivider) HorizontalDivider(thickness = SettingsSizes.border, color = c.divider)
         }
-        if (showDivider) HorizontalDivider(Modifier.padding(start = SettingsSizes.dividerStart), thickness = SettingsSizes.border, color = c.divider)
     }
 }

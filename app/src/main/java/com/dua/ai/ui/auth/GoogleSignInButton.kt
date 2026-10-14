@@ -39,7 +39,7 @@ import kotlinx.coroutines.launch
 
 /** Starts native Google sign-in: the account picker runs in the UI scope (it needs the Activity), the token exchange in the view model. */
 @Composable
-fun rememberGoogleSignIn(viewModel: ChatViewModel): () -> Unit {
+fun rememberGoogleSignIn(viewModel: ChatViewModel, emailHint: String? = null): () -> Unit {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     return {
@@ -47,8 +47,8 @@ fun rememberGoogleSignIn(viewModel: ChatViewModel): () -> Unit {
             viewModel.googleSignInStarted()
             scope.launch {
                 try {
-                    val identity = GoogleSignIn.requestIdToken(context)
-                    viewModel.signInWithGoogle(identity.idToken, identity.nonce, identity.photoUrl)
+                    val identity = GoogleSignIn.requestIdToken(context, emailHint)
+                    viewModel.signInWithGoogle(identity.idToken, identity.nonce, identity.photoUrl, expectedEmail = emailHint)
                 } catch (cancelled: CancellationException) { viewModel.googleSignInFailed(null); throw cancelled }
                 catch (_: GetCredentialCancellationException) { viewModel.googleSignInFailed(null) }
                 catch (failure: Exception) { viewModel.googleSignInFailed(GoogleSignIn.friendlyMessage(failure)) }

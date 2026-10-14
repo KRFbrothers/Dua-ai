@@ -26,7 +26,7 @@ function cookies(req){return Object.fromEntries((req.headers.get('cookie')||'').
 function metadataName(metadata){for(const key of ['full_name','name','display_name']){const value=metadata?.[key];if(typeof value==='string'&&value.trim())return value.trim().slice(0,80);}return '';}
 // Google profile photo (Supabase stores it as avatar_url / picture); https only.
 function metadataAvatar(metadata){for(const key of ['avatar_url','picture']){const value=metadata?.[key];if(typeof value==='string'&&/^https:\/\/\S+$/.test(value.trim())&&value.length<=2048)return value.trim();}return '';}
-function publicUser(user){if(!user||typeof user.id!=='string'||! /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(user.id))throw Error('Invalid account response');return {id:user.id,email:typeof user.email==='string'?user.email:'',displayName:metadataName(user.user_metadata),avatarUrl:metadataAvatar(user.user_metadata)};}
+function publicUser(user){if(!user||typeof user.id!=='string'||! /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(user.id))throw Error('Invalid account response');return {id:user.id,email:typeof user.email==='string'?user.email:'',displayName:metadataName(user.user_metadata),avatarUrl:metadataAvatar(user.user_metadata),phoneNumber:typeof user.user_metadata?.dua_phone_number==='string'&&/^\+[1-9][0-9]{6,14}$/.test(user.user_metadata.dua_phone_number)?user.user_metadata.dua_phone_number:''};}
 function sessionCookies(session,clear=false){return [cookieNames.access,cookieNames.refresh].map((name,index)=>`${name}=${clear?'':index===0?session.access_token:session.refresh_token}; Path=/api; HttpOnly; Secure; SameSite=Strict; Max-Age=${clear?0:index===0?Math.min(86400,Math.max(60,session.expires_in||3600)):2592000}`);}
 function validSession(data){if(!data||typeof data.access_token!=='string'||typeof data.refresh_token!=='string'||! /^[A-Za-z0-9._-]+$/.test(data.access_token)||! /^[A-Za-z0-9._-]+$/.test(data.refresh_token)||data.access_token.length>10000||data.refresh_token.length>10000)throw Error('Invalid session response');publicUser(data.user);return data;}
 export async function handleAccount(req,env={}){
@@ -102,6 +102,21 @@ export async function handleAccount(req,env={}){
    if(!native)extraCookies=sessionCookies(null,true);return json({user:null,revoked,message:revoked?'Signed out on this device.':'Signed out locally; server revocation could not be confirmed.'});
   }
   const user=await authenticated();if(!user)return json({error:'Sign in from Profile to continue.'},401);if(!ownerAllowed(user))return ownerDenied();
+  if(url.pathname==='/api/account/phone'){
+   if(req.method!=='PUT')return json({error:'Method not allowed.'},405);
+   if(!owner)return json({error:'Configure the owner email before editing the phone number.'},503);
+   if(body.expectedAccountId!==user.id)return json({error:'Account changed. Review the current account before editing the phone number.'},409);
+   if(Object.keys(body).some(key=>!['phoneNumber','expectedAccountId'].includes(key)))return json({error:'Only the phone number can be updated here.'},400);
+   if(typeof body.phoneNumber!=='string'||body.phoneNumber.length>64||!/^[+0-9(). -]*$/.test(body.phoneNumber))return json({error:'Use an international phone number with a country code, or leave it blank to remove it.'},400);
+   const phoneNumber=body.phoneNumber.replace(/[(). -]/g,'');
+   if(phoneNumber&&!/^\+[1-9][0-9]{6,14}$/.test(phoneNumber))return json({error:'Use an international phone number with a country code, or leave it blank to remove it.'},400);
+   // Profile contact data only. Do not modify Supabase's verified phone, identities, email or password.
+   const result=await request('/auth/v1/user','PUT',{data:{dua_phone_number:phoneNumber}},token);
+   if(!result.response.ok)return json({error:'Phone number could not be saved. Retry or sign in again.',retryAfter:result.response.status===429?60:undefined},result.response.status===429?429:502);
+   const updated=publicUser(result.data);
+   if(updated.id!==user.id||!ownerAllowed(updated)||updated.phoneNumber!==phoneNumber)throw Error('Invalid phone update response');
+   return json({phoneUpdated:true,ownerId:user.id,user:updated});
+  }
   if(url.pathname==='/api/account/password'&&req.method==='PUT'){
    if(body.expectedAccountId!==user.id)return json({error:'Account changed. Review the current account before setting a password.'},409);
    if(typeof body.password!=='string'||!body.password.trim()||body.password.length<8||body.password.length>128)return json({error:'Use a password with 8–128 characters.'},400);

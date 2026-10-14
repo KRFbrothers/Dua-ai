@@ -324,7 +324,7 @@ internal fun ChatOptionsContent(title: String, pinned: Boolean, pinEnabled: Bool
 
 /** Loads the signed-in account's https profile photo (Google photoUrl); null keeps the initial fallback. */
 @Composable
-private fun rememberProfilePhoto(url: String): ImageBitmap? {
+internal fun rememberProfilePhoto(url: String): ImageBitmap? {
     if (url.isBlank()) return null
     if (androidx.compose.ui.platform.LocalInspectionMode.current) return null
     val photo by produceState<ImageBitmap?>(null, url) { value = withContext(Dispatchers.IO) { ProfilePhotoCache.load(url) } }
