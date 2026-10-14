@@ -14,7 +14,7 @@ import androidx.compose.ui.unit.sp
 /**
  * Bottom-sheet and dialog tokens. The "Dua AI Dabba" reference (DuaApp.kt) has no sheet or dialog designs,
  * so these are DERIVED from its palette: white surface, #F3F4F6 fills, #111827 text, #E5E7EB dividers,
- * #8B5CF6 purple accent, Soehne 16 sp semibold rows with 22 dp icons (the drawer menu row).
+ * #8B5CF6 purple accent, Inter 16 sp semibold rows with 22 dp icons (the drawer menu row).
  * Dark values are the matching Tailwind-gray steps inverted, same as DrawerTokens.
  */
 @Immutable
@@ -78,10 +78,10 @@ object SheetShapes {
 
 const val SheetDisabledAlpha = 0.38f
 
-val SheetTitleStyle = TextStyle(fontFamily = SoehneFont, fontWeight = FontWeight.Bold, fontSize = 20.sp, lineHeight = 26.sp)
-val SheetRowStyle = TextStyle(fontFamily = SoehneFont, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, lineHeight = 22.sp)
-val SheetSubStyle = TextStyle(fontFamily = SoehneFont, fontWeight = FontWeight.Normal, fontSize = 14.sp, lineHeight = 20.sp)
-val SheetNoteStyle = TextStyle(fontFamily = SoehneFont, fontWeight = FontWeight.Normal, fontSize = 13.sp, lineHeight = 18.sp)
-val SheetTileStyle = TextStyle(fontFamily = SoehneFont, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
-val SheetButtonStyle = TextStyle(fontFamily = SoehneFont, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
-val SheetBodyStyle = TextStyle(fontFamily = SoehneFont, fontWeight = FontWeight.Normal, fontSize = 15.sp, lineHeight = 22.sp)
+val SheetTitleStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Bold, fontSize = 20.sp, lineHeight = 26.sp)
+val SheetRowStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, lineHeight = 22.sp)
+val SheetSubStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Normal, fontSize = 14.sp, lineHeight = 20.sp)
+val SheetNoteStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Normal, fontSize = 13.sp, lineHeight = 18.sp)
+val SheetTileStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+val SheetButtonStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+val SheetBodyStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Normal, fontSize = 15.sp, lineHeight = 22.sp)

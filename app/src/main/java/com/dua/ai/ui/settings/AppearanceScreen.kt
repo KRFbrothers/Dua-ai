@@ -53,7 +53,7 @@ fun AppearanceContent(appearance: AppearancePreferences, settings: LocalPreferen
         }
         Text("System default follows your device.", color = MaterialTheme.colorScheme.onSurfaceVariant)
         SettingsGroup("Font", Modifier.selectableGroup()) {
-            listOf("default" to "Söhne (default)", "system" to "Device font", "serif" to "Serif", "monospace" to "Monospace").forEachIndexed { i, (key, title) ->
+            listOf("default" to "Inter (default)", "system" to "Device font", "serif" to "Serif", "monospace" to "Monospace").forEachIndexed { i, (key, title) ->
                 if (i > 0) SettingsRowDivider()
                 PreferenceChoice(title, settings.font == key) { onFont(key) }
             }

@@ -70,7 +70,7 @@ class InnerSettingsRowsTest {
 
     @Test fun appearanceAllOptionsAndHandlers() {
         appearance("light")
-        assertTexts("System default", "Light", "Dark", "Font", "Söhne (default)", "Device font", "Serif", "Monospace", "Haptic feedback")
+        assertTexts("System default", "Light", "Dark", "Font", "Inter (default)", "Device font", "Serif", "Monospace", "Haptic feedback")
         compose.onNodeWithText("Dark").performClick(); compose.runOnIdle { assertEquals("dark", theme) }
         compose.onNodeWithText("Dark").assertIsSelected()
         compose.onNodeWithText("Serif").performScrollTo().performClick(); compose.runOnIdle { assertEquals("serif", font) }

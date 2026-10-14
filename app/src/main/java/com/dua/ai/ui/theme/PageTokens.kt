@@ -56,7 +56,7 @@ fun pageColorScheme(base: ColorScheme, p: PageColors): ColorScheme = base.copy(
     outline = p.outline, outlineVariant = p.divider, error = p.danger,
 )
 
-/** Wrap a full page so Material defaults use the Dabba page palette (light + dark). Typography stays Soehne via DuaTheme. */
+/** Wrap a full page so Material defaults use the Dabba page palette (light + dark). Typography stays Inter via DuaTheme. */
 @Composable
 fun DuaPageTheme(content: @Composable () -> Unit) {
     val p = PageTheme.colors
@@ -85,10 +85,10 @@ object PageSizes {
 }
 
 /** Large page heading (Onboarding welcome, Computer). */
-val PageHeadlineStyle = TextStyle(fontFamily = SoehneFont, fontWeight = FontWeight.Bold, fontSize = 26.sp, lineHeight = 32.sp)
+val PageHeadlineStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Bold, fontSize = 26.sp, lineHeight = 32.sp)
 /** Card heading on full pages. */
-val PageCardTitleStyle = TextStyle(fontFamily = SoehneFont, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, lineHeight = 22.sp)
+val PageCardTitleStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, lineHeight = 22.sp)
 /** Body copy on full pages. */
-val PageBodyStyle = TextStyle(fontFamily = SoehneFont, fontWeight = FontWeight.Normal, fontSize = 15.sp, lineHeight = 22.sp)
+val PageBodyStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Normal, fontSize = 15.sp, lineHeight = 22.sp)
 /** Secondary / explanatory notes on full pages. */
-val PageNoteStyle = TextStyle(fontFamily = SoehneFont, fontWeight = FontWeight.Normal, fontSize = 13.sp, lineHeight = 18.sp)
+val PageNoteStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Normal, fontSize = 13.sp, lineHeight = 18.sp)
