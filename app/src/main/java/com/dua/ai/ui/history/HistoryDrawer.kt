@@ -33,6 +33,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.foundation.border
 import androidx.compose.foundation.Image
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
@@ -100,7 +101,8 @@ fun HistoryDrawer(
         HistoryGrouping.filter(HistoryGrouping.recent(chats), query).sortedWith(compareByDescending<SavedChat> { it.pinned }.thenByDescending { it.updatedAt })
     }
 
-    ModalDrawerSheet(drawerContainerColor = colors.container, modifier = modifier.width(DrawerSizes.width).testTag("history-drawer")) {
+    ModalDrawerSheet(drawerShape = RectangleShape, drawerContainerColor = colors.container,
+        modifier = modifier.width(DrawerSizes.width).testTag("history-drawer")) {
         Box(
             Modifier.fillMaxSize().background(colors.container)
                 .background(Brush.verticalGradient(0f to colors.gradientTop, 1f to colors.container, endY = with(androidx.compose.ui.platform.LocalDensity.current) { DrawerSizes.gradientHeight.toPx() }))
@@ -154,8 +156,8 @@ fun HistoryDrawer(
                 }
                 AnimatedVisibility(auraExpanded, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
                     Column(Modifier.fillMaxWidth().padding(start = DrawerSizes.subIndent)) {
-                        DrawerSubRow(Icons.Outlined.Extension, "Plugins") { onDestination(DuaDestination.Plugins) }
-                        DrawerSubRow(Icons.Outlined.WorkOutline, "Work") { onDestination(DuaDestination.Work) }
+                        DrawerSubRow(ReferenceIcons.Plugins, "Plugins") { onDestination(DuaDestination.Plugins) }
+                        DrawerSubRow(ReferenceIcons.Work, "Work") { onDestination(DuaDestination.Work) }
                     }
                 }
 
@@ -288,10 +290,10 @@ private fun DrawerSubRow(icon: ImageVector, label: String, onClick: () -> Unit) 
     val colors = DrawerTheme.colors
     Row(
         Modifier.fillMaxWidth().heightIn(min = DrawerSizes.touch).clickable(role = Role.Button, onClick = onClick),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(DrawerSizes.subGap),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(DrawerSizes.menuGap),
     ) {
-        Icon(icon, null, tint = colors.chevron, modifier = Modifier.size(DrawerSizes.subIcon))
-        Text(label, style = DrawerSubStyle, color = colors.chatText)
+        Icon(icon, null, tint = colors.menuText, modifier = Modifier.size(DrawerSizes.menuIcon))
+        Text(label, style = DrawerMenuStyle, color = colors.menuText)
     }
 }
 

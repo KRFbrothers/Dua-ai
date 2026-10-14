@@ -60,7 +60,7 @@ class CompactChatUiTest(private val dark: Boolean, private val small: Boolean) {
                 com.dua.ai.model.PromptSuggestion("Draft a proposal", "Draft a proposal", "Business"))),
             ChatActions(onDraftChange = { suggested = it }, onNewChat = { newChat++ }, onOpenVoiceMode = { voice++ },
                 onOpenDestination = { opened = it })) }
-        for (description in listOf("Open chat history", "New chat", "Voice mode", "Add photos and files", "Dictate", "Model, Dua")) {
+        for (description in listOf("Open chat history", "Computer", "Voice mode", "Add photos and files", "Dictate", "Model, Dua")) {
             compose.onNodeWithContentDescription(description).assertIsDisplayed().assertWidthIsAtLeast(48.dp).assertHeightIsAtLeast(48.dp)
         }
         compose.onNode(hasText("Chat") and isSelectable()).assertIsDisplayed().assertIsSelected().assertHeightIsAtLeast(48.dp)
@@ -73,10 +73,12 @@ class CompactChatUiTest(private val dark: Boolean, private val small: Boolean) {
         val chat = compose.onNode(hasText("Chat") and isSelectable()).fetchSemanticsNode().boundsInRoot
         val message = compose.onNodeWithContentDescription("Message").fetchSemanticsNode().boundsInRoot
         assertTrue(chat.bottom <= message.top)
-        compose.onNodeWithContentDescription("New chat").performClick()
+        compose.onNodeWithContentDescription("New chat").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Computer").performClick()
+        compose.runOnIdle { assertEquals(com.dua.ai.ui.navigation.DuaDestination.Computer, opened); assertEquals(0, newChat) }
         compose.onNodeWithContentDescription("Voice mode").performClick()
         compose.onNode(hasText("Work") and isSelectable()).performClick()
-        compose.runOnIdle { assertEquals(1, newChat); assertEquals(1, voice); assertEquals(com.dua.ai.ui.navigation.DuaDestination.Work, opened) }
+        compose.runOnIdle { assertEquals(0, newChat); assertEquals(1, voice); assertEquals(com.dua.ai.ui.navigation.DuaDestination.Work, opened) }
         capture("compact-home")
         compose.onNodeWithText("Create an image or sticker").performClick()
         compose.runOnIdle { assertEquals("Create an image or sticker of ", suggested) }
