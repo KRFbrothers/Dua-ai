@@ -51,7 +51,9 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.painterResource
 import com.dua.ai.R
-import com.dua.ai.ui.theme.DuaTheme
+import com.dua.ai.ui.theme.ChatShapes
+import com.dua.ai.ui.theme.ChatSizes
+import com.dua.ai.ui.theme.ChatTheme
 import com.dua.ai.ui.theme.Sizes
 import com.dua.ai.ui.theme.Spacing
 
@@ -66,8 +68,8 @@ fun MessageList(state: ChatUiState, actions: ChatActions, listState: LazyListSta
     LazyColumn(
         state = listState,
         modifier = modifier.fillMaxSize().testTag("chat-messages"),
-        contentPadding = PaddingValues(horizontal = Spacing.lg, vertical = Spacing.md),
-        verticalArrangement = Arrangement.spacedBy(Spacing.md),
+        contentPadding = PaddingValues(start = ChatSizes.listPaddingH, end = ChatSizes.listPaddingH, top = ChatSizes.listPaddingTop, bottom = ChatSizes.listPaddingBottom),
+        verticalArrangement = Arrangement.spacedBy(ChatSizes.messageSpacing),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         itemsIndexed(state.messages, key = { _, message -> message.id }, contentType = { _, message -> if (message.isUser) "user" else "assistant" }) { index, message ->
@@ -80,8 +82,7 @@ fun MessageList(state: ChatUiState, actions: ChatActions, listState: LazyListSta
                 val longPressHaptic = { actions.haptic(ChatHaptic.LongPress) }
                 if (message.isUser) UserMessage(message.text, files = message.files, onOpenFile = actions.onOpenFile,
                     onLongPress = openActions, longPressHaptic = longPressHaptic)
-                else AssistantTurn(showAvatar = index == 0 || state.messages[index - 1].isUser,
-                    modifier = Modifier.messageLongPress(openActions, longPressHaptic)) {
+                else AssistantTurn(modifier = Modifier.messageLongPress(openActions, longPressHaptic)) {
                     if (message.isImagine) ImagineReply(message, imagineActions, videoAvailable = state.videoAvailable)
                     else AssistantMessage(
                         message = message,
@@ -109,23 +110,18 @@ fun MessageList(state: ChatUiState, actions: ChatActions, listState: LazyListSta
         }
         // Streaming replies render their own progress; the dots cover non-streaming waits.
         if (state.typing && state.messages.none { it.streaming }) item(key = "typing") {
-            AssistantTurn(showAvatar = state.messages.lastOrNull()?.isUser != false,
-                modifier = Modifier.widthIn(max = Sizes.contentMaxWidth)) { TypingIndicator(Modifier.heightIn(min = Sizes.touchTarget)) }
+            AssistantTurn(modifier = Modifier.widthIn(max = Sizes.contentMaxWidth)) { TypingIndicator(Modifier.heightIn(min = Sizes.touchTarget)) }
         }
     }
     if (selectedMessage != null) MessageActionsSheet(selectedMessage, state, actions, imagineActions, onDismiss = { actionsId = null })
 }
 
-/** One avatar per adjacent group, with a consistent gutter for later assistant chunks. */
+/** Reference assistant turn: no avatar, transparent box with 16/10 dp padding, left aligned. */
 @Composable
-private fun AssistantTurn(showAvatar: Boolean, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
-    Row(modifier.fillMaxWidth().heightIn(min = Sizes.touchTarget), verticalAlignment = Alignment.Top) {
-        Box(Modifier.size(Sizes.touchTarget), contentAlignment = Alignment.Center) {
-            if (showAvatar) Image(painterResource(if (DuaTheme.colors.isDark) R.drawable.dua_logo_home else R.drawable.dua_logo_home_light),
-                contentDescription = "Dua", modifier = Modifier.size(Sizes.icon).testTag("dua-avatar"))
-        }
-        Column(Modifier.weight(1f)) { content() }
-    }
+private fun AssistantTurn(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+    Column(modifier.fillMaxWidth().heightIn(min = Sizes.touchTarget).testTag("assistant-turn")
+        .background(ChatTheme.colors.assistantBubble, ChatShapes.bubble)
+        .padding(horizontal = ChatSizes.bubblePaddingH, vertical = ChatSizes.bubblePaddingV)) { content() }
 }
 
 /** Marks where the model's view switches from a summary to the full messages (long context). */

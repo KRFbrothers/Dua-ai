@@ -83,13 +83,13 @@ class MessageLongPressTest(private val dark: Boolean) {
         }
     }
 
-    @Test fun onlyLatestFinishedAssistantHasAnActionRowAndAvatarsGroupAdjacentChunks() {
+    @Test fun onlyLatestFinishedAssistantHasAnActionRowAndNoAvatars() {
         show()
         compose.onAllNodesWithContentDescription("Copy response").assertCountEquals(1)
         compose.onNode(hasContentDescription("Copy response") and hasAnyAncestor(hasTestTag("message-old"))).assertDoesNotExist()
         compose.onNode(hasContentDescription("Copy response") and hasAnyAncestor(hasTestTag("message-latest"))).assertExists()
-        compose.onAllNodesWithTag("dua-avatar", useUnmergedTree = true).assertCountEquals(1)
-        compose.onNodeWithTag("dua-avatar", useUnmergedTree = true).assertContentDescriptionEquals("Dua")
+        // Reference (Dabba) design: assistant turns have no avatar.
+        compose.onAllNodesWithTag("dua-avatar", useUnmergedTree = true).assertCountEquals(0)
         val user = compose.onNodeWithText(prompt.text).fetchSemanticsNode().boundsInRoot
         val bot = compose.onNodeWithText(old.text).fetchSemanticsNode().boundsInRoot
         assertTrue("User bubble stays to the right", user.right > bot.left)
@@ -203,14 +203,14 @@ class MessageLongPressTest(private val dark: Boolean) {
         compose.onAllNodesWithContentDescription("Copy response").assertCountEquals(1)
     }
 
-    @Test fun pendingAndStreamingTypingIndicatorsKeepOneDuaAvatar() {
+    @Test fun pendingAndStreamingTypingIndicatorsShowNoAvatar() {
         state.value = state.value.copy(messages = listOf(prompt), typing = true)
         show()
         compose.onNodeWithContentDescription("Dua is thinking", useUnmergedTree = true).assertExists()
-        compose.onAllNodesWithTag("dua-avatar", useUnmergedTree = true).assertCountEquals(1)
+        compose.onAllNodesWithTag("dua-avatar", useUnmergedTree = true).assertCountEquals(0)
         compose.runOnIdle { state.value = state.value.copy(messages = listOf(prompt, latest.copy(text = "", state = ChatMessage.STREAMING))) }
         compose.onNodeWithContentDescription("Dua is thinking", useUnmergedTree = true).assertExists()
-        compose.onAllNodesWithTag("dua-avatar", useUnmergedTree = true).assertCountEquals(1)
+        compose.onAllNodesWithTag("dua-avatar", useUnmergedTree = true).assertCountEquals(0)
     }
 
     @Test fun switchingChatDismissesMessageActions() {

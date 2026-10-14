@@ -7,10 +7,10 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.sp
 
-/** Markdown reply body text (Fareed's values); colour follows the theme so dark mode works. */
+/** Markdown reply body text: the reference shell's 16 sp assistant text ([ChatMessageStyle]); light/dark via [ChatTheme]. */
 val markdownBodyStyle: TextStyle
     @Composable @ReadOnlyComposable
-    get() = TextStyle(fontFamily = SoehneFont, fontSize = 15.sp, lineHeight = 22.sp, color = MaterialTheme.colorScheme.onSurface)
+    get() = ChatMessageStyle.copy(color = ChatTheme.colors.assistantText)
 
 /** Inline `code` in markdown replies. */
 val markdownInlineCodeStyle: TextStyle
