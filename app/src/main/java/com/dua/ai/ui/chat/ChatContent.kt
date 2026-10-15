@@ -44,7 +44,7 @@ internal fun ChatContent(task: Boolean, onFocusComposer: () -> Unit, onTask: (St
                 Column(Modifier.fillMaxWidth().padding(vertical = Spacing.lg), horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(Spacing.lg)) {
                     DuaCalligraphyLogo(modifier = Modifier.width(156.dp))
-                    Text(if (task) "What can I take off\nyour plate?" else "Look what you can\ndo with Dua AI",
+                    Text(if (task) "I Know Everything" else "Dua always with you",
                         style = MaterialTheme.typography.headlineMedium, color = ChatTheme.colors.text, textAlign = TextAlign.Center)
                     if (!task) Surface(onClick = onFocusComposer, color = c.bar, contentColor = c.promptText,
                         shape = HomeShapes.segmentTrack, border = BorderStroke(HomeSizes.barBorder, c.barBorder),
