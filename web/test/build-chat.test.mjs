@@ -41,7 +41,7 @@ function world({ gemini = [], files = FILES, email, tree } = {}) {
         if (name === 'web') return Response.json([{ path: 'web/src', type: 'dir' }]);
         return files[name] === undefined ? new Response('{"message":"Not Found"}', { status: 404 }) : Response.json({ type: 'file', path: name, size: files[name].length, encoding: 'base64', content: b64(files[name]) });
       }
-      if (path.startsWith('/search/code?')) return Response.json({ total_count: 1, items: [{ path: 'README.md', html_url: 'x' }] });
+      if (path.startsWith('/search/code?')) return Response.json({ total_count: 1, items: [{ path: 'README.md', html_url: 'x', repository: { full_name: REPO } }] });
       if (path.startsWith('/repos/') && path.endsWith('/Dua-ai')) return new Response('{}', { status: 404 });
       throw new Error('Unexpected GitHub path ' + path);
     }],
@@ -202,11 +202,23 @@ test('size caps: per-file cut, total budget, file count, cache, binary/oversized
   assert.match(tools[4].error, /binary/);
   assert.match(tools[5].error, /folder/);
   assert.match(tools[6].error, /relative to the repository root/);
-  assert.match(tools[7].error, /Not found/, 'a leading slash is read as repository-relative, never outside the repository');
+  assert.match(tools[7].error, /relative to the repository root/, 'absolute paths are rejected before any GitHub read');
   assert.deepEqual(reply.build.files, [{ path: 'big.txt', bytes: 64 * 1024, truncated: true }, { path: 'README.md', bytes: README.length }]);
   assert.equal(fetcher.github().filter(c => c.url.includes('/contents/README.md')).length, 1);
   assert.equal(fetcher.github().filter(c => c.url.includes('secrets')).length, 0);
-  assert.ok(fetcher.github().filter(c => c.url.includes('passwd')).every(c => c.url === `${GH}/repos/${REPO}/contents/etc/passwd`));
+  assert.equal(fetcher.github().filter(c => c.url.includes('passwd')).length, 0);
+
+  // Reject controls before normalization/cache lookup, including a previously cached file.
+  let guarded;
+  const unsafe = world({ gemini: [reads('README.md', 'README.md\n', '/README.md', './README.md', '\tREADME.md'), body => {
+    guarded = body.contents[2].parts.map(p => p.functionResponse.response);
+    return geminiReply([{ text: 'ok' }]);
+  }] });
+  await handleChat(authedChat(ask()), { env: buildEnv, fetcher: unsafe });
+  assert.equal(guarded[0].content, README);
+  assert.equal(guarded[3].content, README);
+  for (const i of [1, 2, 4]) assert.match(guarded[i].error, /relative to the repository root/);
+  assert.equal(unsafe.github().filter(c => c.url.includes('/contents/')).length, 1);
 
   // Total budget: 16 KB total with 64 KB files → the second large read is refused.
   let budget;

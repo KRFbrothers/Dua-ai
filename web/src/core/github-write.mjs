@@ -6,7 +6,7 @@
 // no PATCH (so no force-push or ref moves), no PUT (no merge) and no DELETE (no branch deletion).
 // New refs must be refs/heads/dua/*, and pull requests can only come from a dua/* branch.
 import { boundedBytes, GITHUB_REPOSITORY_HINT } from './github.mjs';
-import { validRepository, GITHUB_REPOSITORY_API_PATTERN as repo } from './github-validation.mjs';
+import { validRepository, validGitHubApiPath, repositoryWritePathIssue, GITHUB_REPOSITORY_API_PATTERN as repo } from './github-validation.mjs';
 
 const API = 'https://api.github.com';
 const sha = '[0-9a-f]{40}(?:[0-9a-f]{24})?';
@@ -46,7 +46,10 @@ const MESSAGES = {
  * or logged) so callers can tell e.g. "Reference already exists" apart.
  */
 export async function githubWrite(method, path, { env, fetcher = fetch, signal, body, maxBytes = 2 * 1024 * 1024, notFound } = {}) {
-  if (!ALLOWED_WRITE_REQUESTS.some(([allowed, pattern]) => allowed === method && pattern.test(path))) throw new GitHubWriteError('This GitHub request is not allowed.', 400);
+  if (!validGitHubApiPath(path) || !ALLOWED_WRITE_REQUESTS.some(([allowed, pattern]) => allowed === method && pattern.test(path))) throw new GitHubWriteError('This GitHub request is not allowed.', 400);
+  if (method === 'POST' && path.endsWith('/git/trees') &&
+      !(Array.isArray(body?.tree) && body.tree.length > 0 && body.tree.every(entry => repositoryWritePathIssue(entry?.path) === null && entry.type === 'blob' && ['100644', '100755'].includes(entry.mode))))
+    throw new GitHubWriteError('Git tree changes must use allowed file paths and regular files.', 400);
   if (method === 'POST' && path.endsWith('/git/refs') && !(typeof body?.ref === 'string' && /^refs\/heads\/dua\/[A-Za-z0-9._/-]{1,200}$/.test(body.ref) && !body.ref.includes('..') && Object.keys(body).every(key => key === 'ref' || key === 'sha')))
     throw new GitHubWriteError('Dua can only create new dua/* branches.', 400);
   if (method === 'POST' && path.endsWith('/pulls') && !(typeof body?.head === 'string' && body.head.startsWith('dua/')))

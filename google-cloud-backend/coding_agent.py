@@ -53,6 +53,28 @@ SLUG = re.compile(r"[^a-z0-9]+")
 PATH_OK = re.compile(r"^(?!/)(?!.*\.\.)(?!\.git/)[A-Za-z0-9._\-/ ]{1,300}$")
 
 
+def valid_repository(repo):
+    return (isinstance(repo, str) and
+            re.fullmatch(r"[A-Za-z0-9-]{1,39}/[A-Za-z0-9._-]{1,100}", repo) is not None and
+            repo.split("/")[1] not in (".", ".."))
+
+
+def valid_path(path, write=False):
+    if not isinstance(path, str) or not PATH_OK.fullmatch(path) or path != path.strip():
+        return False
+    if any(part in ("", ".", "..") or part.lower() == ".git" for part in path.split("/")):
+        return False
+    return not write or (not path.lower().startswith(".github/") and path.lower() not in (".github", ".gitmodules"))
+
+
+def scoped_search(query, repo):
+    if not isinstance(query, str) or re.search(r'["\\()\x00-\x1f\x7f]|\b(?:OR|NOT)\b', query, re.I):
+        return False
+    scopes = list(re.finditer(r"\b(?:repo|org|user):\S*", query, re.I))
+    return (len(scopes) == 1 and scopes[0].group().lower() == f"repo:{repo}".lower() and
+            (scopes[0].start() == 0 or query[scopes[0].start() - 1].isspace()))
+
+
 class CodingError(Exception):
     """Message is safe to show to the user."""
 
@@ -62,8 +84,8 @@ class BlockedRequest(CodingError):
 
 
 def repo_name():
-    repo = os.environ.get("DUA_REPO", "KRFbrothers/Dua-ai").strip()
-    if not re.fullmatch(r"[A-Za-z0-9-]{1,39}/[A-Za-z0-9._-]{1,100}", repo):
+    repo = os.environ.get("DUA_REPO", "KRFbrothers/Dua-ai").strip(" ")
+    if not valid_repository(repo):
         raise CodingError("DUA_REPO is not a valid owner/name.")
     return repo
 
@@ -75,6 +97,10 @@ def slugify(text, limit=40):
 
 def allowed(method, path, body, repo):
     """The only GitHub requests this server may send. Returns a reason string when blocked, else None."""
+    if not valid_repository(repo) or not isinstance(path, str) or re.search(r"[\x00-\x1f\x7f]", path):
+        return "invalid repository or request path"
+    if any(part in ("", ".", "..") for part in path.split("/")[1:]):
+        return "non-canonical request path"
     r = re.escape(repo)
     base = f"/repos/{r}"
     rules = {
@@ -83,8 +109,16 @@ def allowed(method, path, body, repo):
         "POST": [rf"^{base}/git/blobs$", rf"^{base}/git/trees$", rf"^{base}/git/commits$",
                  rf"^{base}/git/refs$", rf"^{base}/pulls$"],
     }
-    if method not in rules or not any(re.match(p, path) for p in rules[method]):
+    if method not in rules or not any(re.fullmatch(p, path) for p in rules[method]):
         return f"{method} {path} is not allowed"
+    if "/contents/" in path and not valid_path(path.split("/contents/", 1)[1]):
+        return "invalid file path"
+    if method == "POST" and path.endswith("/git/trees"):
+        entries = body.get("tree") if isinstance(body, dict) else None
+        if not isinstance(entries, list) or not entries or not all(
+                isinstance(item, dict) and valid_path(item.get("path"), write=True) and
+                item.get("type") == "blob" and item.get("mode") in ("100644", "100755") for item in entries):
+            return "git trees must contain allowed regular file paths"
     if method == "POST" and path.endswith("/git/refs"):
         ref = str((body or {}).get("ref", ""))
         if not ref.startswith("refs/heads/" + BRANCH_PREFIX) or ".." in ref:
@@ -97,6 +131,8 @@ def allowed(method, path, body, repo):
 
 class GitHubClient:
     def __init__(self, token, repo, opener=None):
+        if not valid_repository(repo):
+            raise CodingError("DUA_REPO is not a valid owner/name.")
         self.token, self.repo = token, repo
         self.opener = opener or build_opener(type("NoRedirect", (HTTPRedirectHandler,), {"redirect_request": lambda *a, **k: None}))
 
@@ -105,8 +141,8 @@ class GitHubClient:
         if reason:
             raise BlockedRequest(f"Blocked GitHub request: {reason}.")
         if method == "GET" and path == "/search/code":
-            q = str((query or {}).get("q", ""))
-            if f"repo:{self.repo}" not in q.split():
+            q = (query or {}).get("q", "")
+            if not scoped_search(q, self.repo):
                 raise BlockedRequest("Blocked GitHub request: code search must stay inside the repository.")
         url = API + quote(path, safe="/._-~") + (("?" + urlencode(query)) if query else "")
         data = json.dumps(body).encode("utf-8") if body is not None else None
@@ -130,7 +166,7 @@ class GitHubClient:
         return [item["path"] for item in data.get("tree", []) if item.get("type") == "blob"]
 
     def read(self, path):
-        if not PATH_OK.match(path or ""):
+        if not valid_path(path):
             raise CodingError("Invalid path.")
         data = self.request("GET", f"/repos/{self.repo}/contents/{path}", query={"ref": BASE_BRANCH})
         if not isinstance(data, dict) or data.get("type") != "file":
@@ -138,13 +174,24 @@ class GitHubClient:
         return base64.b64decode(data.get("content", "")).decode("utf-8", errors="replace")
 
     def search(self, text):
+        text = re.sub(r"\b(?:repo|org|user):\S*", " ", text, flags=re.I) if isinstance(text, str) else ""
+        text = " ".join(text.split())[:200]
+        if not text or not scoped_search(f"{text} repo:{self.repo}", self.repo):
+            raise CodingError("Use plain search terms without quotes, parentheses, backslashes or OR/NOT operators.")
         data = self.request("GET", "/search/code", query={"q": f"{text} repo:{self.repo}", "per_page": "20"})
-        return [item.get("path") for item in (data or {}).get("items", [])][:20]
+        items = data.get("items") if isinstance(data, dict) else None
+        if not isinstance(items, list) or any(
+                not isinstance(item, dict) or not isinstance(item.get("repository"), dict) or
+                not valid_repository(item["repository"].get("full_name")) or
+                item["repository"]["full_name"].lower() != self.repo.lower() or not valid_path(item.get("path")) for item in items):
+            raise CodingError("GitHub returned search results outside the selected repository or with invalid paths.")
+        return [item["path"] for item in items[:20]]
 
     # --- the only write sequence: new branch + one commit + PR into main ---
     def open_pull_request(self, files, title, description, branch):
         if not branch.startswith(BRANCH_PREFIX):
             raise BlockedRequest("Blocked GitHub request: branch must start with dua-agent/.")
+        files = validate_changes(files)
         base_sha = self.request("GET", f"/repos/{self.repo}/git/ref/heads/{BASE_BRANCH}")["object"]["sha"]
         base_commit = self.request("GET", f"/repos/{self.repo}/git/trees/{base_sha}")
         entries = []
@@ -165,10 +212,13 @@ def validate_changes(files):
         raise CodingError(f"Too many files changed (max {MAX_FILES_CHANGED}).")
     total, clean, seen = 0, [], set()
     for item in files:
-        path = str((item or {}).get("path", "")).strip()
-        content = (item or {}).get("content")
-        if not PATH_OK.match(path) or path.startswith(".github/") or path in seen or not isinstance(content, str):
-            raise CodingError(f"Invalid file change: {path[:100]}")
+        if not isinstance(item, dict):
+            raise CodingError("Invalid file change.")
+        path = item.get("path")
+        path = path.strip(" ") if isinstance(path, str) else path
+        content = item.get("content")
+        if not valid_path(path, write=True) or path in seen or not isinstance(content, str):
+            raise CodingError("Invalid or protected file change.")
         size = len(content.encode("utf-8"))
         total += size
         if size > MAX_FILE_BYTES or total > MAX_TOTAL_CHANGE_BYTES:
@@ -225,7 +275,7 @@ class CodingSession:
             if name == "read_file":
                 if self.files_read >= MAX_FILES_READ or self.bytes_read >= MAX_TOTAL_READ_BYTES:
                     return {"error": "Read limit reached; propose changes now."}
-                text = self.github.read(str(args.get("path", "")))
+                text = self.github.read(args.get("path", ""))
                 self.files_read += 1
                 clipped = text[:MAX_READ_BYTES]
                 self.bytes_read += len(clipped)
