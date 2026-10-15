@@ -7,10 +7,15 @@ import { spawnSync } from 'node:child_process';
 
 const required = ['SUPABASE_URL', 'SUPABASE_ANON_KEY', 'DUA_ALLOWED_EMAIL'];
 
-function deployment({ secrets = required, version = '7', listFailure = false, buildFailure = false, resourcesExist = false, settings = {} } = {}) {
+function deployment({ secrets = required, version = '7', listFailure = false, buildFailure = false, resourcesExist = false, omitTemplateFlags = [], settings = {} } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'dua-cloudrun-deploy-'));
   try {
     for (const file of ['deploy-cloudrun.sh', '.env.example', 'cloudbuild.yaml']) copyFileSync(new URL('../' + file, import.meta.url), join(dir, file));
+    if (omitTemplateFlags.length) {
+      const template = join(dir, '.env.example');
+      writeFileSync(template, readFileSync(template, 'utf8').split('\n')
+        .filter(line => !omitTemplateFlags.some(flag => new RegExp('^#?\\s*' + flag + '=').test(line))).join('\n'));
+    }
     // This would execute if a deployment ever sourced local .env files.
     writeFileSync(join(dir, '.env'), 'touch "$GCLOUD_CALLS.leaked"\nGEMINI_API_KEY=must-not-enter-build-or-command-args\n');
     const log = join(dir, 'gcloud-calls');
@@ -92,6 +97,23 @@ test('deployment fails closed on missing secrets, missing versions or a failed i
     assert.notEqual(result.status, 0);
     assert.ok(!result.calls.some(args => ['iam', 'builds', 'run'].includes(args[0])));
   }
+});
+
+test('existing feature flag secrets must be attached from the template before any IAM, build or deployment', () => {
+  const flags = ['DUA_FILES', 'ENABLE_GITHUB_CONNECTOR', 'DUA_BUILD_PR', 'ENABLE_GENERATED_VOICE'];
+  for (const flag of flags) {
+    const result = deployment({ secrets: [...required, flag], omitTemplateFlags: [flag] });
+    assert.notEqual(result.status, 0, flag);
+    assert.ok(result.stderr.includes(flag), result.stderr);
+    assert.match(result.stderr, /exists in Secret Manager but was not attached from web\/\.env\.example/);
+    assert.match(result.stderr, /Restore its NAME=value entry/);
+    assert.ok(!result.calls.some(args => ['iam', 'projects', 'artifacts', 'builds', 'run'].includes(args[0])));
+    assert.ok(!result.calls.some(args => args.includes('add-iam-policy-binding')));
+  }
+  const absent = deployment({ omitTemplateFlags: flags });
+  assert.equal(absent.status, 0, absent.stderr);
+  const env = absent.calls.find(args => args[0] === 'run' && args[1] === 'deploy').find(arg => arg.startsWith('--set-env-vars='));
+  for (const flag of flags) assert.ok(env.includes(`${flag}=0`));
 });
 
 test('deployment validates project/deadline and supports a longer explicit deadline', () => {

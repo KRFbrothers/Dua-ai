@@ -41,6 +41,7 @@ done
 
 secret_refs=()
 for_settings=()
+declare -A attached_settings=()
 while IFS= read -r line; do
   if [[ "$line" =~ ^#?[[:space:]]*([A-Z][A-Z0-9_]*)= ]]; then
     name="${BASH_REMATCH[1]}"
@@ -55,9 +56,18 @@ while IFS= read -r line; do
       fi
       secret_refs+=("${name}=${name}:${version}")
       for_settings+=("$name")
+      attached_settings["$name"]=1
     fi
   fi
 done < "$web_dir/.env.example"
+
+feature_flags=(DUA_FILES ENABLE_GITHUB_CONNECTOR DUA_BUILD_PR ENABLE_GENERATED_VOICE)
+for flag in "${feature_flags[@]}"; do
+  if [[ -v "secret_names[$flag]" && ! -v "attached_settings[$flag]" ]]; then
+    echo "Feature flag $flag exists in Secret Manager but was not attached from web/.env.example. Restore its NAME=value entry in web/.env.example, then retry." >&2
+    exit 1
+  fi
+done
 
 echo "Preparing separate build and runtime service accounts..."
 for account in dua-api dua-api-build; do
@@ -88,8 +98,8 @@ gcloud builds submit "$web_dir" --project "$PROJECT_ID" --region "$region" \
 # Keep optional write/file features off unless the matching Secret Manager flag enables them.
 # --set-* replaces this service's old settings, so removed secret bindings do not linger.
 settings=("NODE_ENV=production" "DUA_REQUIRE_LOGIN=1" "DUA_CHAT_DEADLINE_SECONDS=${deadline}")
-for flag in DUA_FILES ENABLE_GITHUB_CONNECTOR DUA_BUILD_PR ENABLE_GENERATED_VOICE; do
-  [[ -v "secret_names[$flag]" ]] || settings+=("${flag}=0")
+for flag in "${feature_flags[@]}"; do
+  [[ -v "attached_settings[$flag]" ]] || settings+=("${flag}=0")
 done
 join_csv() { local IFS=,; printf '%s' "$*"; }
 echo "Deploying dua-api in us-central1; application owner authentication remains required..."
