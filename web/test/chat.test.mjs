@@ -147,6 +147,7 @@ test('config advertises reasoning support and Grok image types without WebP', ()
 test('service handler applies the configurable chat deadline', async () => {
   assert.equal(chatDeadlineMs({}), 280000);
   assert.equal(chatDeadlineMs({ DUA_CHAT_DEADLINE_SECONDS: '120' }), 120000);
+  assert.equal(chatDeadlineMs({ K_SERVICE: 'dua-api', DUA_CHAT_DEADLINE_SECONDS: '780' }), 780000);
   assert.equal(chatDeadlineMs({ DUA_CHAT_DEADLINE_SECONDS: '5000' }), 280000);
   const hanging = (url, init) => new Promise((resolve, reject) => init.signal.addEventListener('abort', () => reject(init.signal.reason), { once: true }));
   const started = Date.now();

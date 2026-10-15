@@ -1,0 +1,9 @@
+# Allow only runtime inputs. In particular, never send .env, credentials or tests.
+**
+!Dockerfile
+!.dockerignore
+!package.json
+!package-lock.json
+!.npmrc
+!src/
+!src/**
