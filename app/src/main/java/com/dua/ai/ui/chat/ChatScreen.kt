@@ -381,7 +381,7 @@ fun ChatScreen(
                                 onSend = { actions.onSend() },
                                 onStop = actions.onStop,
                                 onModelClick = { sheet = ChatSheet.Model },
-                                currentModel = state.model,
+                                currentModel = state.modelLabel,
                                 onCancelUpload = rememberUpdatedState(state.uploads).let { uploads -> remember(actions) { { uploads.value.filter { it.uploading }.forEach { actions.onCancelUpload(it.id) } } } },
                                 onImagineOptions = { sheet = ChatSheet.Imagine },
                                 showModelSelector = feature == null,
@@ -403,6 +403,7 @@ fun ChatScreen(
             memoryEnabled = state.projectMemoryEnabled, onSaveMemory = actions.onSaveProjectMemory)
         ChatSheet.Model -> ModelPickerSheet(
             current = state.model, providers = state.providers,
+            freeModels = state.freeModels, currentFree = state.freeModel?.id, onSelectFree = actions.onSelectFreeModel,
             onSelect = actions.onSelectModel, onOpenSetup = { sheet = null; actions.onOpenSetup() },
             onDismiss = { sheet = null },
         )

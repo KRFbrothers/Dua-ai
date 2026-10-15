@@ -550,10 +550,24 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val _agentAvailable = MutableStateFlow(false)
     val agentAvailable = _agentAvailable.asStateFlow()
     private var engineCheck: kotlinx.coroutines.Job? = null
+    /** Free OpenRouter models the engine offers, and the chosen one (only while still offered). */
+    private val _freeModels = MutableStateFlow<List<com.dua.ai.model.FreeModel>>(emptyList())
+    val freeModels = _freeModels.asStateFlow()
+    val freeModel: kotlinx.coroutines.flow.StateFlow<com.dua.ai.model.FreeModel?> = combine(_freeModels, localSettings) { models, settings ->
+        models.firstOrNull { it.id == settings.freeModel } }.stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, null)
+    fun selectFreeModel(id: String) {
+        if (_isTyping.value || _freeModels.value.none { it.id == id }) return
+        _selectedModel.value = "Dua"; _xSearch.value = false
+        updateSettings(localSettings.value.copy(freeModel = id))
+        saveHistory()
+    }
+    private fun requestFreeModel(): String? = freeModel.value?.id
     fun refreshEngineCapabilities() {
         if (_agentAvailable.value || engineCheck?.isActive == true) return
         engineCheck = viewModelScope.launch {
-            val available = try { api.engineAgentAvailable() } catch (cancelled: CancellationException) { throw cancelled } catch (_: Exception) { false }
+            val engine = try { api.engineCapabilities() } catch (cancelled: CancellationException) { throw cancelled } catch (_: Exception) { com.dua.ai.network.EngineCapabilities() }
+            val available = engine.agent
+            _freeModels.value = engine.freeModels
             _agentAvailable.value = available
             if (!available) _agent.value = false
         }
@@ -1828,6 +1842,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setModel(model: String) {
         if (api.chatProvider(model, _integrations.value.providers) == null) return
+        if (localSettings.value.freeModel.isNotEmpty()) updateSettings(localSettings.value.copy(freeModel = ""))
         _selectedModel.value = model
         if (model != "Grok") _xSearch.value = false
         if (!codeUsable(model)) _runCode.value = false
@@ -1899,7 +1914,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     check(projectContext.ownerId == null || account.state.value.user?.id == projectContext.ownerId) { "Account changed. Retry the project chat." }
                     val attempt = com.dua.ai.network.StreamAccumulator(startedAt).also { accumulator = it }
                     collectReply(messageId, attempt, api.streamReply(plan.model, request.turns, (plan.full.last().inlineAttachments + projectContext.attachments), projectContext.memory, token, requestWebMode.takeIf { requestBuild == null }, requestReasoning && requestBuild == null,
-                        request.historyBytes, request.context, requestXSearch && requestBuild == null, requestCode && requestBuild == null, requestBuild, persistence, agent = requestAgent && requestBuild == null), request)
+                        request.historyBytes, request.context, requestXSearch && requestBuild == null, requestCode && requestBuild == null, requestBuild, persistence, agent = requestAgent && requestBuild == null, freeModel = requestFreeModel()), request)
                 }
                 if (accumulator?.snapshot()?.text.isNullOrBlank()) throw DuaApiException(EMPTY_REPLY)
                 if (generation == currentGeneration) {
@@ -2015,7 +2030,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     check(projectContext.ownerId == null || account.state.value.user?.id == projectContext.ownerId) { "Account changed. Retry the project chat." }
                     collectReply(reply.id, attempt, api.streamReply(responseModel, request.turns, prepared,
                         projectContext.memory, token, requestWebMode.takeIf { requestBuild == null }, requestReasoning && requestBuild == null,
-                        request.historyBytes, request.context, requestXSearch && requestBuild == null, requestCode && requestBuild == null, requestBuild, persistence, agent = requestAgent && requestBuild == null), request)
+                        request.historyBytes, request.context, requestXSearch && requestBuild == null, requestCode && requestBuild == null, requestBuild, persistence, agent = requestAgent && requestBuild == null, freeModel = requestFreeModel()), request)
                 }
                 if (accumulator?.snapshot()?.text.isNullOrBlank()) throw DuaApiException(EMPTY_REPLY)
                 if (generation == currentGeneration) {

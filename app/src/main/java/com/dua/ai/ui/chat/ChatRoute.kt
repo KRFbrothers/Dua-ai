@@ -50,6 +50,8 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
     val reasoning by viewModel.reasoning.collectAsState()
     val agent by viewModel.agent.collectAsState()
     val agentAvailable by viewModel.agentAvailable.collectAsState()
+    val freeModels by viewModel.freeModels.collectAsState()
+    val freeModel by viewModel.freeModel.collectAsState()
     val xSearch by viewModel.xSearch.collectAsState()
     val summary by viewModel.summary.collectAsState()
     val integrations by viewModel.integrations.collectAsState()
@@ -122,7 +124,7 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
         providers = integrations.providers, webMode = webMode, reasoning = reasoning,
         webSearchConfigured = integrations.searchAvailable(model), pageReadingAvailable = integrations.pageReadingAvailable,
         xSearchAvailable = model == "Grok" && integrations.xSearchAvailable, xSearch = xSearch,
-        agentAvailable = agentAvailable, agent = agent,
+        agentAvailable = agentAvailable, agent = agent, freeModels = freeModels, freeModel = freeModel,
         summarisedThroughId = summary?.throughId,
         attachments = attachments, readingFiles = readingFiles,
         uploads = uploads, recordingSince = recordingSince,
@@ -189,6 +191,7 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
             onXSearch = viewModel::setXSearch,
             onAuto = viewModel::selectAuto,
             onSelectModel = viewModel::setModel,
+            onSelectFreeModel = viewModel::selectFreeModel,
             onNewChat = { pulse(); voice.stopAll(); viewModel.startNewChat(); viewModel.clearAttachments(); attachmentNotice = ""; if (homeTab == HomeTab.Work) onOpenDestination(DuaDestination.Chat) },
             onExitFeature = { if (!viewModel.dataBusy.value) { voice.stopAll(); if (onExitFeature != null) onExitFeature() else { viewModel.startNewChat(); viewModel.selectAuto() } } },
             onNewFeatureSession = { if (!viewModel.dataBusy.value && !viewModel.isTyping.value) {

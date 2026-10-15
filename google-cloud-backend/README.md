@@ -129,6 +129,29 @@ New token later: `read -s -p "Paste GitHub token: " GH && printf %s "$GH" | gclo
 then run the `gcloud run services update … --update-secrets GITHUB_TOKEN=dua-github-token:latest` line again.
 To switch coding off: `gcloud run services update dua-ai-engine --region us-central1 --project global-healer-m6shk --remove-secrets GITHUB_TOKEN`.
 
+## Free models (OpenRouter, optional)
+
+With `OPENROUTER_API_KEY` set, `GET /` lists a few curated **free** OpenRouter models (`freeModels`, ids ending
+`:free`, re-checked against OpenRouter hourly) and the app shows them in the model picker under **Free models**.
+They answer plain chat (and Reasoning) with the full multi-turn history, streamed in the app's SSE format. Agent,
+web, code and Build always stay on Gemini, and Gemini stays the default. Only text is sent; images and audio are not.
+Owner sign-in still applies. The free tier allows about **20 requests a minute and 50 a day** (1,000 a day once you
+have bought at least 10 credits in total); past that the app shows a friendly "limit reached" message.
+
+**1. Create the key** (free): sign up at https://openrouter.ai → **Settings → Keys** → **Create key** (name `dua`,
+leave the credit limit empty or set it to 0). Copy the key (`sk-or-…`). Do not paste it in chat, code or screenshots.
+
+**2. Store it in Secret Manager and give it to Cloud Run** (Cloud Shell)
+```bash
+read -s -p "Paste OpenRouter key: " OR && printf %s "$OR" | gcloud secrets create openrouter-key --data-file=- --project global-healer-m6shk; unset OR; echo
+gcloud secrets add-iam-policy-binding openrouter-key --project global-healer-m6shk \
+  --member="serviceAccount:228305912525-compute@developer.gserviceaccount.com" --role="roles/secretmanager.secretAccessor"
+gcloud run services update dua-ai-engine --region us-central1 --project global-healer-m6shk \
+  --update-secrets OPENROUTER_API_KEY=openrouter-key:latest
+```
+New key later: `read -s -p "Paste OpenRouter key: " OR && printf %s "$OR" | gcloud secrets versions add openrouter-key --data-file=- --project global-healer-m6shk; unset OR`
+then run the `--update-secrets` line again. To switch free models off: `gcloud run services update dua-ai-engine --region us-central1 --project global-healer-m6shk --remove-secrets OPENROUTER_API_KEY`.
+
 ## Tests
 ```bash
 pip install -r requirements.txt pytest && python -m pytest -q tests
