@@ -13,7 +13,7 @@ import com.dua.ai.R
 import com.dua.ai.ui.components.DuaPageScaffold
 import com.dua.ai.ui.theme.Sizes
 
-data class EntryDispatch(val entry: ExternalEntry, val consumed: (String) -> Unit)
+data class EntryDispatch(val entry: ExternalEntry, val consumed: (String) -> Unit, val ready: Boolean = true, val notice: String = "")
 val LocalEntryDispatch = staticCompositionLocalOf<EntryDispatch?> { null }
 
 /** Receipt never saves anything: the owner reviews and edits the note first. */

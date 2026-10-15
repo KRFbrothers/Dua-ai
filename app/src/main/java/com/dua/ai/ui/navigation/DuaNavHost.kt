@@ -108,10 +108,15 @@ fun DuaNavHost(viewModel: ChatViewModel, voice: ReplyVoice, notificationRoute: P
     val dataBusy by viewModel.dataBusy.collectAsState()
     val typing by viewModel.isTyping.collectAsState()
     val reading by viewModel.readingFiles.collectAsState()
+    val preparing by viewModel.preparingFiles.collectAsState()
+    val attachments by viewModel.attachments.collectAsState()
+    val uploads by viewModel.uploads.collectAsState()
     val account by viewModel.account.state.collectAsState()
     val live by com.dua.ai.voice.live.LiveVoiceController.state.collectAsState()
     val context = androidx.compose.ui.platform.LocalContext.current
-    val entryBlocked = !entryReady || dataBusy || typing || reading || account.busy || live.active
+    val waitingForAttachments = externalEntry?.let { it.action == EntryAction.Share && it.uris.isNotEmpty() } == true &&
+        (attachments.isNotEmpty() || uploads.isNotEmpty())
+    val entryBlocked = !entryReady || dataBusy || typing || preparing || reading || account.busy || live.active || waitingForAttachments
     var memoryReviewId by rememberSaveable { mutableStateOf<String?>(null) }
     LaunchedEffect(externalEntry?.id, route, entryBlocked) {
         val entry = externalEntry ?: return@LaunchedEffect
@@ -147,8 +152,9 @@ fun DuaNavHost(viewModel: ChatViewModel, voice: ReplyVoice, notificationRoute: P
     }
     // Keep the graph builder stable as entry/route state changes; rebuilding the graph can reset an open voice destination.
     val entryDispatch = rememberUpdatedState(externalEntry?.takeIf {
-        !entryBlocked && it.action !in setOf(EntryAction.Remember, EntryAction.Mic, EntryAction.Live, EntryAction.Screenshare) && route == DuaDestination.Chat.route
-    }?.let { EntryDispatch(it, onEntryConsumed) })
+        it.action !in setOf(EntryAction.Remember, EntryAction.Mic, EntryAction.Live, EntryAction.Screenshare) && route == DuaDestination.Chat.route
+    }?.let { EntryDispatch(it, onEntryConsumed, ready = !entryBlocked,
+        notice = if (waitingForAttachments) "Shared files are waiting. Send or remove current attachments first." else "") })
     val rememberedRequest = rememberUpdatedState(externalEntry?.takeIf { it.action == EntryAction.Remember && it.id == memoryReviewId })
     val consumeEntry = rememberUpdatedState(onEntryConsumed)
     val processAllowed = rememberUpdatedState(!entryBlocked)

@@ -1,6 +1,12 @@
 package com.dua.ai.entry
 
 import android.app.Application
+import android.net.Uri
+import android.os.Looper
+import com.dua.ai.attachments.ChatAttachment
+import com.dua.ai.files.PendingUpload
+import org.robolectric.Shadows.shadowOf
+import org.robolectric.shadows.ShadowContentResolver
 import androidx.compose.runtime.*
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -43,10 +49,15 @@ class ExternalRoutingTest {
     private lateinit var nav: NavHostController
     private var entry by mutableStateOf<ExternalEntry?>(null)
     private var consumed = 0
+    private val queue = ArrayDeque<ExternalEntry>()
+    private lateinit var provider: SharedTextProvider
     @Before fun setup() {
         val app = RuntimeEnvironment.getApplication()
         for (key in listOf("dua_chat_history", "dua_preferences", "dua_account_session", "dua_auto_sync", "dua_files", "dua_onboarding")) app.getSharedPreferences(key, 0).edit().clear().commit()
         vm = ChatViewModel(app).also { store.put("chat", it) }
+        provider = SharedTextProvider()
+        provider.attachInfo(app, android.content.pm.ProviderInfo().apply { authority = "shared.test" })
+        ShadowContentResolver.registerProviderInternal("shared.test", provider)
         // Onboarding loads account capabilities. Never contact the production backend from UI tests.
         accountClient = OkHttpClient.Builder().addInterceptor { chain ->
             check(chain.request().url.host == "account.test")
@@ -60,6 +71,7 @@ class ExternalRoutingTest {
         ChatViewModel::class.java.getDeclaredField("account").apply { isAccessible = true }.set(vm, repository)
     }
     @After fun close() {
+        provider.releaseMetadata.countDown()
         store.clear(); accountClient.dispatcher.cancelAll(); accountClient.connectionPool.evictAll(); accountClient.dispatcher.executorService.shutdown()
     }
     private fun show(skip: Boolean = true) {
@@ -69,7 +81,7 @@ class ExternalRoutingTest {
             DuaTheme(LocalPreferences(theme = "light")) {
                 val controller = rememberNavController()
                 SideEffect { nav = controller }
-                DuaNavHost(vm, rememberReplyVoice(vm), null, controller, pending) { consumed++; entry = null }
+                DuaNavHost(vm, rememberReplyVoice(vm), null, controller, pending) { consumed++; entry = queue.removeFirstOrNull() }
             }
         }
     }
@@ -130,6 +142,54 @@ class ExternalRoutingTest {
         compose.onNodeWithContentDescription("Memory note").assertExists()
         compose.onNodeWithText("Cancel").performClick()
         compose.runOnIdle { assertEquals("Wait for import", vm.draft.value); assertEquals(2, consumed) }
+    }
+    private fun awaitFile(name: String) {
+        compose.waitUntil(10000) {
+            shadowOf(Looper.getMainLooper()).idle()
+            vm.attachments.value.singleOrNull()?.name == name && !vm.preparingFiles.value && !vm.readingFiles.value
+        }
+        compose.waitForIdle()
+    }
+    @Suppress("UNCHECKED_CAST")
+    @Test fun fileSharePreservesExistingAttachmentsAndUploadsUntilTheyAreExplicitlyRemoved() {
+        val selected = listOf(ChatAttachment("existing.txt", "text/plain", "ZXhpc3Rpbmc="))
+        val inline = ChatViewModel::class.java.getDeclaredField("_attachments").apply { isAccessible = true }.get(vm) as kotlinx.coroutines.flow.MutableStateFlow<List<ChatAttachment>>
+        val uploads = ChatViewModel::class.java.getDeclaredField("_uploads").apply { isAccessible = true }.get(vm) as kotlinx.coroutines.flow.MutableStateFlow<List<PendingUpload>>
+        inline.value = selected
+        vm.updateDraft("Unsent draft")
+        entry = ExternalEntry(action = EntryAction.Share, text = "Shared text", uris = listOf(Uri.parse("content://shared.test/second.txt")))
+        show()
+        compose.onNodeWithText("Shared files are waiting.", substring = true).assertExists()
+        compose.runOnIdle { assertEquals(0, consumed); assertEquals(selected, vm.attachments.value); assertEquals("Unsent draft", vm.draft.value); vm.clearAttachments() }
+        awaitFile("second.txt")
+        compose.runOnIdle {
+            assertEquals(1, consumed); assertEquals("Unsent draft\n\nShared text", vm.draft.value)
+            vm.clearAttachments()
+            uploads.value = listOf(PendingUpload("pending", "upload.txt", "text/plain", 1, state = PendingUpload.FAILED))
+            entry = ExternalEntry(action = EntryAction.Share, text = "Third", uris = listOf(Uri.parse("content://shared.test/third.txt")))
+        }
+        compose.onNodeWithText("Shared files are waiting.", substring = true).assertExists()
+        compose.runOnIdle { assertEquals(1, consumed); assertEquals(1, vm.uploads.value.size); vm.cancelUpload("pending") }
+        awaitFile("third.txt")
+        compose.runOnIdle { assertEquals(2, consumed); assertEquals("Unsent draft\n\nShared text\n\nThird", vm.draft.value) }
+    }
+    @Test fun queuedOnboardingSharesWaitThroughMetadataAndNeverReplaceTheEarlierFile() {
+        provider.blockFirstMetadata = true
+        entry = ExternalEntry(action = EntryAction.Share, text = "First", uris = listOf(Uri.parse("content://shared.test/first.txt")))
+        queue.addLast(ExternalEntry(action = EntryAction.Share, text = "Second", uris = listOf(Uri.parse("content://shared.test/second.txt"))))
+        show(skip = false)
+        compose.waitUntil(5000) { !vm.account.state.value.busy }
+        compose.onNodeWithText("Skip for now").assertIsEnabled().performClick()
+        compose.waitForIdle()
+        compose.runOnIdle { assertEquals(1, consumed); assertTrue(vm.preparingFiles.value); assertEquals("First", vm.draft.value)
+            vm.sendMessage("First"); assertTrue(vm.messages.value.isEmpty()); assertNull(vm.error.value)
+        }
+        provider.releaseMetadata.countDown()
+        awaitFile("first.txt")
+        compose.onNodeWithText("Shared files are waiting.", substring = true).assertExists()
+        compose.runOnIdle { assertEquals(1, consumed); assertEquals("First", vm.draft.value); vm.clearAttachments() }
+        awaitFile("second.txt")
+        compose.runOnIdle { assertEquals(2, consumed); assertEquals("First\n\nSecond", vm.draft.value); assertTrue(vm.messages.value.isEmpty()) }
     }
     @Test fun rememberShareRequiresReviewInsteadOfChangingDraftOrMemory() {
         entry = ExternalEntry(action = EntryAction.Remember, text = "I like Hindi")
