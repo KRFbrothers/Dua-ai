@@ -64,6 +64,8 @@ Use Node 24+ for `web/`, Python 3 for the engine (the examples below were checke
 
 This is the minimum configuration and integration index; linked setup guides contain optional limits and provider-specific variables. Put Vercel/local API settings in Vercel's environment or ignored `web/.env`; `npm start` loads that file. Cloud Run settings belong in its service environment; for local Python, export them in the shell (`app.py` does not load `.env` automatically). Never commit provider keys, GitHub tokens, service-role keys or signing material.
 
+Start from [web/.env.example](web/.env.example) or [google-cloud-backend/.env.example](google-cloud-backend/.env.example). Required account/project values and all credentials are empty; optional integrations are labeled. The examples are safe setup templates, not working credentials. Copy only when a local `.env` does not already exist, fill your own values, and keep login required. Do not replace existing deployment settings with the blank examples.
+
 | Runtime / purpose | Required settings | Notes / full setup |
 | --- | --- | --- |
 | Vercel owner sign-in and data | `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `DUA_ALLOWED_EMAIL`; keep `DUA_REQUIRE_LOGIN=1` | Root project URL such as `https://PROJECT.supabase.co`, without `/rest/v1/`. Use a public publishable/anon key in `SUPABASE_ANON_KEY`, never a service-role key. Auth providers, redirects and snapshot/Storage migrations are in [SUPABASE.md](SUPABASE.md). |
@@ -81,6 +83,9 @@ The backend lives in `web/`: Vercel functions in `web/api/` route to `web/src/se
 ```sh
 cd web
 npm ci --ignore-scripts --no-audit --no-fund
+# Preserve an existing .env; otherwise create it from the safe template.
+[ -e .env ] || cp .env.example .env
+# Edit .env for real integrations; the unfilled template reports missing setup.
 npm start
 ```
 
@@ -97,6 +102,8 @@ python3 -m venv /tmp/dua-gcb-tests
 ```
 
 To run the actual service locally, install [requirements.txt](google-cloud-backend/requirements.txt) in a separate virtual environment, export its runtime settings, then run `python app.py` from `google-cloud-backend/`. It serves HTTP on port 8080 by default (`PORT` overrides it); `GET /` is a public health/capability response, not an authenticated generation test. Deployment uses the [Procfile](google-cloud-backend/Procfile); follow the [engine README](google-cloud-backend/README.md) for Google credentials, permissions and deployment.
+
+For a local engine `.env`, follow the [copy/export instructions](google-cloud-backend/README.md#local-environment-file). The Python service and `deploy.sh` do not load that file themselves. Keep the deployment script's `PROJECT_ID` separate from the runtime `GOOGLE_CLOUD_PROJECT`; set both to your intended project when using that script.
 
 ### Android app
 
