@@ -7,10 +7,15 @@ import { spawnSync } from 'node:child_process';
 
 const required = ['SUPABASE_URL', 'SUPABASE_ANON_KEY', 'DUA_ALLOWED_EMAIL'];
 
-function deployment({ secrets = required, version = '7', listFailure = false, buildFailure = false, resourcesExist = false, settings = {} } = {}) {
+function deployment({ secrets = required, version = '7', listFailure = false, buildFailure = false, resourcesExist = false, omitTemplateFlags = [], settings = {} } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'dua-cloudrun-deploy-'));
   try {
     for (const file of ['deploy-cloudrun.sh', '.env.example', 'cloudbuild.yaml']) copyFileSync(new URL('../' + file, import.meta.url), join(dir, file));
+    if (omitTemplateFlags.length) {
+      const template = join(dir, '.env.example');
+      writeFileSync(template, readFileSync(template, 'utf8').split('\n')
+        .filter(line => !omitTemplateFlags.some(flag => new RegExp('^#?\\s*' + flag + '=').test(line))).join('\n'));
+    }
     // This would execute if a deployment ever sourced local .env files.
     writeFileSync(join(dir, '.env'), 'touch "$GCLOUD_CALLS.leaked"\nGEMINI_API_KEY=must-not-enter-build-or-command-args\n');
     const log = join(dir, 'gcloud-calls');
@@ -68,9 +73,15 @@ test('Cloud Run deployment keeps secrets out of builds and grants runtime access
     assert.ok(args.includes('--member=serviceAccount:dua-api@dua-test-project.iam.gserviceaccount.com'));
   }
   const projectGrants = result.calls.filter(args => args[0] === 'projects');
-  assert.equal(projectGrants.length, 1);
-  assert.ok(projectGrants[0].includes('--role=roles/cloudbuild.builds.builder'));
-  assert.ok(projectGrants[0].includes('--member=serviceAccount:dua-api-build@dua-test-project.iam.gserviceaccount.com'));
+  assert.deepEqual(projectGrants.map(args => args.find(arg => arg.startsWith('--role='))).sort(), ['--role=roles/cloudbuild.builds.builder', '--role=roles/logging.logWriter']);
+  for (const args of projectGrants) assert.ok(args.includes('--member=serviceAccount:dua-api-build@dua-test-project.iam.gserviceaccount.com'));
+  const repositoryGrants = result.calls.filter(args => args[0] === 'artifacts' && args[2] === 'add-iam-policy-binding');
+  assert.deepEqual(repositoryGrants, [['artifacts', 'repositories', 'add-iam-policy-binding', 'dua-api', '--location', 'us-central1', '--project', 'dua-test-project',
+    '--member=serviceAccount:dua-api-build@dua-test-project.iam.gserviceaccount.com', '--role=roles/artifactregistry.writer', '--quiet', '--format=none']]);
+  const repositoryCreatedAt = result.calls.findIndex(args => args[0] === 'artifacts' && args[2] === 'create');
+  const repositoryGrantedAt = result.calls.indexOf(repositoryGrants[0]);
+  const buildAt = result.calls.findIndex(args => args[0] === 'builds');
+  assert.ok(repositoryCreatedAt < repositoryGrantedAt && repositoryGrantedAt < buildAt, 'repository writer access is granted after creation and before building');
   const build = result.calls.find(args => args[0] === 'builds');
   assert.ok(build.includes('--service-account=projects/dua-test-project/serviceAccounts/dua-api-build@dua-test-project.iam.gserviceaccount.com'));
   assert.ok(build.some(arg => arg.startsWith('--substitutions=_IMAGE=us-central1-docker.pkg.dev/dua-test-project/dua-api/api:')));
@@ -88,6 +99,23 @@ test('deployment fails closed on missing secrets, missing versions or a failed i
   }
 });
 
+test('existing feature flag secrets must be attached from the template before any IAM, build or deployment', () => {
+  const flags = ['DUA_FILES', 'ENABLE_GITHUB_CONNECTOR', 'DUA_BUILD_PR', 'ENABLE_GENERATED_VOICE'];
+  for (const flag of flags) {
+    const result = deployment({ secrets: [...required, flag], omitTemplateFlags: [flag] });
+    assert.notEqual(result.status, 0, flag);
+    assert.ok(result.stderr.includes(flag), result.stderr);
+    assert.match(result.stderr, /exists in Secret Manager but was not attached from web\/\.env\.example/);
+    assert.match(result.stderr, /Restore its NAME=value entry/);
+    assert.ok(!result.calls.some(args => ['iam', 'projects', 'artifacts', 'builds', 'run'].includes(args[0])));
+    assert.ok(!result.calls.some(args => args.includes('add-iam-policy-binding')));
+  }
+  const absent = deployment({ omitTemplateFlags: flags });
+  assert.equal(absent.status, 0, absent.stderr);
+  const env = absent.calls.find(args => args[0] === 'run' && args[1] === 'deploy').find(arg => arg.startsWith('--set-env-vars='));
+  for (const flag of flags) assert.ok(env.includes(`${flag}=0`));
+});
+
 test('deployment validates project/deadline and supports a longer explicit deadline', () => {
   for (const settings of [{ PROJECT_ID: '' }, { PROJECT_ID: 'Display Name' }, { DUA_CHAT_DEADLINE_SECONDS: '900' }, { DUA_CHAT_DEADLINE_SECONDS: 'bad' }]) {
     const result = deployment({ settings });
@@ -100,6 +128,8 @@ test('deployment validates project/deadline and supports a longer explicit deadl
   assert.match(deploy.find(arg => arg.startsWith('--set-env-vars=')), /DUA_CHAT_DEADLINE_SECONDS=600/);
   assert.match(deploy.find(arg => arg.startsWith('--set-env-vars=')), /DUA_FILES=0/);
   assert.ok(!result.calls.some(args => ['iam', 'artifacts'].includes(args[0]) && args.includes('create')));
+  assert.ok(result.calls.some(args => args[0] === 'artifacts' && args[2] === 'add-iam-policy-binding' && args.includes('--role=roles/artifactregistry.writer')),
+    'an existing repository still receives the scoped writer grant');
 });
 
 test('a failed container build cannot deploy a stale image', () => {
