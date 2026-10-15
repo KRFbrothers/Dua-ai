@@ -15,7 +15,8 @@ import com.dua.ai.viewmodel.ChatViewModel
 
 /** App root: theme from the saved appearance settings, shared reply voice, and navigation. */
 @Composable
-fun DuaApp(viewModel: ChatViewModel = viewModel(), notificationRoute: Pair<String, String>? = null) {
+fun DuaApp(viewModel: ChatViewModel = viewModel(), notificationRoute: Pair<String, String>? = null,
+    externalEntry: com.dua.ai.entry.ExternalEntry? = null, onEntryConsumed: (String) -> Unit = {}) {
     val preferences by viewModel.localSettings.collectAsState()
     val appearance by viewModel.appearance.collectAsState()
     LaunchedEffect(Unit) {
@@ -36,6 +37,6 @@ fun DuaApp(viewModel: ChatViewModel = viewModel(), notificationRoute: Pair<Strin
     }
     DuaTheme(preferences.copy(theme = appearance.theme), accent = appearance.accent) {
         val voice = rememberReplyVoice(viewModel)
-        DuaNavHost(viewModel, voice, notificationRoute)
+        DuaNavHost(viewModel, voice, notificationRoute, externalEntry = externalEntry, onEntryConsumed = onEntryConsumed)
     }
 }

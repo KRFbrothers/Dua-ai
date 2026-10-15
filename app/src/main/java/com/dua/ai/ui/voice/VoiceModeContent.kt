@@ -28,7 +28,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ScreenShare
 import androidx.compose.material.icons.filled.ThumbDown
 import androidx.compose.material.icons.filled.ThumbUp
 import androidx.compose.material.icons.outlined.Close
@@ -41,7 +40,8 @@ import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.ThumbDown
 import androidx.compose.material.icons.outlined.ThumbUp
-import androidx.compose.material.icons.outlined.Videocam
+import androidx.compose.ui.res.vectorResource
+import com.dua.ai.R
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -90,7 +90,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.min
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.repeatOnLifecycle
-import com.dua.ai.R
 import com.dua.ai.ui.theme.DuaColors
 import com.dua.ai.ui.theme.DuaVoiceColors
 import com.dua.ai.ui.theme.DuaTheme
@@ -378,8 +377,8 @@ private fun Controls(ui: VoiceModeUi, callbacks: VoiceModeCallbacks, energy: () 
         val circle = min(VoiceSizes.controlMax, width / 6.6f).coerceAtLeast(Sizes.touchTarget)
         val orbWidth = min(circle * 2.5f, width - circle * 4 - VoiceSizes.controlGap * 4)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            ControlCircle(Icons.Outlined.Videocam, "Camera, coming soon", circle, onClick = callbacks.onCamera)
-            ControlCircle(Icons.AutoMirrored.Outlined.ScreenShare, "Share screen or upload, coming soon", circle, onClick = callbacks.onUpload)
+            ControlCircle(ImageVector.vectorResource(R.drawable.gs_video_camera), "Camera, coming soon", circle, onClick = callbacks.onCamera)
+            ControlCircle(ImageVector.vectorResource(R.drawable.gs_screenshare), "Share screen or upload, coming soon", circle, onClick = callbacks.onUpload)
             VoiceOrb(ui.phase, ui.muted, energy, time, Modifier.width(orbWidth).height(circle * 1.2f), callbacks.onOrb)
             ControlCircle(if (ui.muted) Icons.Outlined.MicOff else Icons.Outlined.Mic, "Microphone", circle, selected = ui.muted,
                 state = if (ui.muted) "Muted" else "On", onClick = callbacks.onMute)

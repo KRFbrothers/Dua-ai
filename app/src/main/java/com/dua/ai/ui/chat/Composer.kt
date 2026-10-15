@@ -13,7 +13,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Stop
@@ -26,6 +25,9 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.dua.ai.R
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -154,7 +156,7 @@ fun Composer(
                 chatState?.typing == true -> Triple(Icons.Default.Stop, "Stop response", { onStop() })
                 uploading && activeText.isBlank() -> Triple(Icons.Default.Close, "Cancel upload", { onCancelUpload() })
                 activeText.isNotBlank() -> Triple(Icons.Default.ArrowUpward, "Send message", { submit() })
-                else -> Triple(Icons.Default.GraphicEq, "Voice mode", { onVoiceMode() })
+                else -> Triple(ImageVector.vectorResource(R.drawable.ls_live_wave), "Voice mode", { onVoiceMode() })
             }
             Box(
                 modifier = Modifier

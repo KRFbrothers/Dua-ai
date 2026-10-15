@@ -1,0 +1,6 @@
+<resources>
+    <color name="dua_widget_pill">#202124</color>
+    <color name="dua_widget_circle">#303136</color>
+    <color name="dua_widget_icon">#F9FAFB</color>
+    <color name="dua_widget_border">#44464C</color>
+</resources>

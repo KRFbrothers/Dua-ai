@@ -8,6 +8,7 @@ enum class DuaDestination(val route: String) {
     Computer("computer"),
     HandsFree("voice/hands-free"),
     LiveVoice("voice/live"),
+    Screenshare("voice/screenshare"),
     Settings("settings"),
     Profile("settings/account/profile"),
     CloudSync("settings/account/cloud-sync"),
@@ -40,6 +41,7 @@ enum class DuaDestination(val route: String) {
         SecurityLogin -> "Security and login"; Storage -> "Storage"
         SettingsSearch -> "Search settings"; AvatarEdit -> "Edit profile photo"
         Memory -> "Memory"; Privacy -> "Privacy"; Sharing -> "Sharing"; Permissions -> "Permissions"; Notifications -> "Notifications"
+        Screenshare -> "Screenshare / Video"
         else -> null
     }
 }

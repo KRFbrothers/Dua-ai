@@ -23,6 +23,10 @@ import com.dua.ai.ui.voice.ReplyVoice
 import com.dua.ai.ui.navigation.DuaDestination
 import com.dua.ai.viewmodel.ChatViewModel
 import java.time.LocalTime
+import kotlinx.coroutines.flow.first
+import com.dua.ai.entry.EntryAction
+import com.dua.ai.entry.ExternalEntry
+import com.dua.ai.entry.LocalEntryDispatch
 import com.dua.ai.ui.agent.AgentTask
 import com.dua.ai.ui.agent.GITHUB_AGENT_PROMPT
 import com.dua.ai.ui.agent.briefingPrompt
@@ -284,8 +288,32 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
             ),
         )
     }
+    var entryFocus by rememberSaveable { mutableStateOf<String?>(null) }
+    var entryUiKey by rememberSaveable { mutableStateOf<String?>(null) }
+    val dispatch = LocalEntryDispatch.current
+    val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(dispatch?.entry?.id) {
+        val entry = dispatch?.entry ?: return@LaunchedEffect
+        lifecycle.currentStateFlow.first { it.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED) }
+        if (viewModel.dataBusy.value || viewModel.isTyping.value || viewModel.readingFiles.value) return@LaunchedEffect
+        dispatch.consumed(entry.id)
+        entryUiKey = entry.id
+        attachmentNotice = entry.notice
+        when (entry.action) {
+            EntryAction.Share -> {
+                viewModel.updateDraft(ExternalEntry.mergedDraft(viewModel.draft.value, entry.text))
+                if (entry.uris.isNotEmpty()) viewModel.selectAttachments(entry.uris)
+                entryFocus = entry.id
+            }
+            EntryAction.Query -> entryFocus = entry.id
+            EntryAction.Camera -> actions.onPickCamera()
+            EntryAction.Photos -> actions.onPickPhotos()
+            EntryAction.Files -> actions.onPickFiles()
+            else -> Unit
+        }
+    }
     androidx.compose.runtime.CompositionLocalProvider(LocalMediaLoader provides viewModel.mediaCache) {
-        ChatScreen(state, actions, topBar = topBar)
+        ChatScreen(state, actions, topBar = topBar, requestComposerFocus = entryFocus, dismissOverlaysRequest = entryUiKey)
     }
 }
 

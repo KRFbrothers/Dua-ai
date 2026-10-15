@@ -1,5 +1,6 @@
 package com.dua.ai.ui.navigation
 
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -11,6 +12,17 @@ import androidx.compose.runtime.Stable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.navigation.compose.currentBackStackEntryAsState
+import com.dua.ai.entry.EntryAction
+import com.dua.ai.entry.ExternalEntry
+import com.dua.ai.entry.EntryDispatch
+import com.dua.ai.entry.LocalEntryDispatch
+import com.dua.ai.entry.RememberThisScreen
 import androidx.compose.ui.hapticfeedback.HapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -72,7 +84,8 @@ private fun BusyBackGuard(viewModel: ChatViewModel) {
 }
 
 @Composable
-fun DuaNavHost(viewModel: ChatViewModel, voice: ReplyVoice, notificationRoute: Pair<String, String>?, nav: NavHostController = rememberNavController()) {
+fun DuaNavHost(viewModel: ChatViewModel, voice: ReplyVoice, notificationRoute: Pair<String, String>?, nav: NavHostController = rememberNavController(),
+    externalEntry: ExternalEntry? = null, onEntryConsumed: (String) -> Unit = {}) {
     val haptics = LocalHapticFeedback.current
     val navigator = remember(nav, viewModel, haptics) { DuaNavigator(nav, viewModel, haptics) }
     val exitFeature: () -> Unit = {
@@ -87,6 +100,33 @@ fun DuaNavHost(viewModel: ChatViewModel, voice: ReplyVoice, notificationRoute: P
     val openDestination: (DuaDestination) -> Unit = { if (it == DuaDestination.Chat) navigator.toChat() else navigator.open(it) }
     // Decided once per launch: signed-out users who have not skipped it start on the welcome screen.
     val startDestination = remember { if (viewModel.shouldShowOnboarding()) DuaDestination.Onboarding else DuaDestination.Chat }
+    val backStack by nav.currentBackStackEntryAsState()
+    val route = backStack?.destination?.route
+    val unstarted = remember { kotlinx.coroutines.flow.MutableStateFlow(androidx.lifecycle.Lifecycle.State.INITIALIZED) }
+    val entryLifecycle by (backStack?.lifecycle?.currentStateFlow ?: unstarted).collectAsState()
+    val entryReady = entryLifecycle.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)
+    val dataBusy by viewModel.dataBusy.collectAsState()
+    val typing by viewModel.isTyping.collectAsState()
+    val reading by viewModel.readingFiles.collectAsState()
+    val account by viewModel.account.state.collectAsState()
+    val live by com.dua.ai.voice.live.LiveVoiceController.state.collectAsState()
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val entryBlocked = !entryReady || dataBusy || typing || reading || account.busy || live.active
+    var memoryReviewId by rememberSaveable { mutableStateOf<String?>(null) }
+    LaunchedEffect(externalEntry?.id, route, entryBlocked) {
+        val entry = externalEntry ?: return@LaunchedEffect
+        // External entries wait for login/Skip; no authentication or busy-operation bypass.
+        if (route == null || route in setOf(DuaDestination.Onboarding.route, DuaDestination.EmailAccount.route, DuaDestination.Account.route) || entryBlocked) return@LaunchedEffect
+        when (entry.action) {
+            EntryAction.Mic, EntryAction.Live, EntryAction.Screenshare -> {
+                onEntryConsumed(entry.id)
+                navigator.toChat()
+                navigator.open(when (entry.action) { EntryAction.Mic -> DuaDestination.Voice; EntryAction.Live -> DuaDestination.LiveVoice; else -> DuaDestination.Screenshare })
+            }
+            EntryAction.Remember -> if (route != DuaDestination.Chat.route) navigator.toChat() else memoryReviewId = entry.id
+            else -> if (route != DuaDestination.Chat.route) navigator.toChat()
+        }
+    }
     DisposableEffect(nav, voice) {
         val listener = NavController.OnDestinationChangedListener { _, _, _ -> voice.stopAll() }
         nav.addOnDestinationChangedListener(listener)
@@ -105,6 +145,13 @@ fun DuaNavHost(viewModel: ChatViewModel, voice: ReplyVoice, notificationRoute: P
             } else if (viewModel.savedChats.value.any { it.id == id }) { viewModel.openChat(id); navigator.toChat() }
         }
     }
+    // Keep the graph builder stable as entry/route state changes; rebuilding the graph can reset an open voice destination.
+    val entryDispatch = rememberUpdatedState(externalEntry?.takeIf {
+        !entryBlocked && it.action !in setOf(EntryAction.Remember, EntryAction.Mic, EntryAction.Live, EntryAction.Screenshare) && route == DuaDestination.Chat.route
+    }?.let { EntryDispatch(it, onEntryConsumed) })
+    val rememberedRequest = rememberUpdatedState(externalEntry?.takeIf { it.action == EntryAction.Remember && it.id == memoryReviewId })
+    val consumeEntry = rememberUpdatedState(onEntryConsumed)
+    val processAllowed = rememberUpdatedState(!entryBlocked)
     NavHost(
         navController = nav,
         startDestination = startDestination.route,
@@ -117,25 +164,37 @@ fun DuaNavHost(viewModel: ChatViewModel, voice: ReplyVoice, notificationRoute: P
             OnboardingScreen(viewModel, onDone = navigator::toChat, onEmail = { navigator.open(DuaDestination.EmailAccount) })
         }
         composable(DuaDestination.Chat.route) {
-            BusyBackGuard(viewModel)
-            val activeProject by viewModel.projectId.collectAsState()
-            if (activeProject != com.dua.ai.projects.ProjectCodec.PERSONAL) ProjectChatRoute(viewModel, voice,
-                onBack = exitFeature,
-                onDetail = { page ->
-                    navigator.open(DuaDestination.Projects)
-                    nav.currentBackStackEntry?.savedStateHandle?.set("open_project", activeProject)
-                    nav.currentBackStackEntry?.savedStateHandle?.set("project_page", page)
-                }, onSettings = { navigator.open(DuaDestination.Profile) }, onDestination = openDestination,
-                onMic = { navigator.open(DuaDestination.Voice) }, onSetup = { navigator.open(DuaDestination.FeatureSetup) },
-                onVoice = { navigator.open(DuaDestination.HandsFree) })
-            else ChatRoute(viewModel, voice,
-                onOpenSettings = { navigator.open(DuaDestination.Profile) },
-                onOpenDestination = openDestination,
-                onOpenVoice = { navigator.open(DuaDestination.Voice) },
-                onOpenSetup = { navigator.open(DuaDestination.FeatureSetup) },
-                onOpenComputer = { navigator.open(DuaDestination.Computer) },
-                // The mic long-press already gave its own haptic.
-                onOpenVoiceMode = { navigator.open(if (viewModel.liveVoiceAvailable()) DuaDestination.LiveVoice else DuaDestination.HandsFree, haptic = false) })
+            val remembered = rememberedRequest.value
+            if (remembered != null) {
+                val owner by viewModel.account.state.collectAsState()
+                val dismiss = { consumeEntry.value(remembered.id) }
+                BackHandler { dismiss() }
+                RememberThisScreen(remembered, owner.user?.email, processAllowed.value, onSave = { text ->
+                    viewModel.confirmSharedMemory(text, owner.user?.id.orEmpty()).also { error ->
+                        if (error == null) { dismiss(); Toast.makeText(context, "Memory cached. Sync to save it to your account.", Toast.LENGTH_LONG).show() }
+                    }
+                }, onSignIn = { navigator.open(DuaDestination.Account) }, onDismiss = dismiss)
+            } else CompositionLocalProvider(LocalEntryDispatch provides entryDispatch.value) {
+                BusyBackGuard(viewModel)
+                val activeProject by viewModel.projectId.collectAsState()
+                if (activeProject != com.dua.ai.projects.ProjectCodec.PERSONAL) ProjectChatRoute(viewModel, voice,
+                    onBack = exitFeature,
+                    onDetail = { page ->
+                        navigator.open(DuaDestination.Projects)
+                        nav.currentBackStackEntry?.savedStateHandle?.set("open_project", activeProject)
+                        nav.currentBackStackEntry?.savedStateHandle?.set("project_page", page)
+                    }, onSettings = { navigator.open(DuaDestination.Profile) }, onDestination = openDestination,
+                    onMic = { navigator.open(DuaDestination.Voice) }, onSetup = { navigator.open(DuaDestination.FeatureSetup) },
+                    onVoice = { navigator.open(DuaDestination.HandsFree) })
+                else ChatRoute(viewModel, voice,
+                    onOpenSettings = { navigator.open(DuaDestination.Profile) },
+                    onOpenDestination = openDestination,
+                    onOpenVoice = { navigator.open(DuaDestination.Voice) },
+                    onOpenSetup = { navigator.open(DuaDestination.FeatureSetup) },
+                    onOpenComputer = { navigator.open(DuaDestination.Computer) },
+                    // The mic long-press already gave its own haptic.
+                    onOpenVoiceMode = { navigator.open(if (viewModel.liveVoiceAvailable()) DuaDestination.LiveVoice else DuaDestination.HandsFree, haptic = false) })
+            }
         }
         composable(DuaDestination.Computer.route) {
             BackHandler { exitFeature() }

@@ -182,6 +182,16 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         } catch (failure: Exception) { integrationNotice(failure.message ?: "Memory could not be saved.") }
     }
     fun dismissMemoryNote(note: String) { _memoryCandidates.value = _memoryCandidates.value.filterNot { it == note } }
+    /** Share target writes only after explicit review, using the existing personal-memory cache/sync protocol. */
+    fun confirmSharedMemory(note: String, expectedOwnerId: String): String? = try {
+        check(account.state.value.user?.id == expectedOwnerId && expectedOwnerId.isNotBlank()) { "Sign in to the account shown before saving memory." }
+        check(!syncBlocked()) { "Finish the current reply or sync action, then save this note." }
+        localPreferences.requireReadable()
+        val settings = localSettings.value
+        val notes = com.dua.ai.setup.AutomationMemoryCandidates.confirm(note, settings.memory)
+        localPreferences.update(settings.copy(memory = notes))
+        null
+    } catch (failure: Exception) { failure.message ?: "Memory could not be saved. Try again." }
     fun integrationNotice(text: String) { _integrations.value = _integrations.value.copy(notice = text) }
     fun loadProviderConfiguration() = viewModelScope.launch {
         refreshEngineCapabilities()
