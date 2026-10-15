@@ -559,7 +559,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     val reasoning = _reasoning.asStateFlow()
     private val replyReasoning = mutableMapOf<String, Boolean>()
     fun setReasoning(enabled: Boolean) { if (!_isTyping.value) { _reasoning.value = enabled; if (enabled) { _imagine.value = false; _agent.value = false; leaveBuild() } } }
-    // Dua Agent (phase 1, Cloud Run engine only): plan -> Google Search research -> summary with sources -> feature ideas.
+    // Dua Agent (Cloud Run engine only): router, then a server-side tool-calling loop (search, pages, code, images, GitHub).
     // Per-session like Reasoning and never saved; it replaces the other modes for the next reply.
     private val _agent = MutableStateFlow(false)
     val agent = _agent.asStateFlow()

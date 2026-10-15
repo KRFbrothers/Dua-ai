@@ -5,8 +5,8 @@ Endpoints
 - POST /api/chat    drop-in replacement for the web/ backend's chat endpoint used by the Android app:
                     full conversation history, inline attachments, SSE streaming (`"stream": true`)
                     with the same wire format as web/src/core/sse.mjs, or one JSON reply `{"text": ...}`.
-                    `"mode": "agent"` runs the Dua Agent (phase 1): plan -> one Google Search grounded
-                    research step -> summary with sources -> prioritized Dua AI feature ideas.
+                    `"mode": "agent"` runs the Dua Agent: router (casual -> direct reply), otherwise the
+                    tool-calling loop in agent_tools.py (search, pages, code, images, memory, GitHub).
 - POST /chat        old single-turn endpoint: {"message"} -> {"reply"} (kept for backward compat).
 
 Configuration comes only from environment variables; no secrets in code.
@@ -54,29 +54,8 @@ GENERIC_ERROR = "The Dua AI engine could not answer right now. Please try again.
 # Dua Agent: casual messages get one direct reply; tasks run the tool loop in agent_tools.py
 # (max AGENT_MAX_STEPS model calls, at most 3 grounded searches and 2 code runs per request).
 # Output caps include thinking tokens on Gemini 2.5/3, so leave room for low-level thinking.
-AGENT_PLAN_TOKENS = int(os.environ.get("AGENT_PLAN_TOKENS", "1024"))
-AGENT_RESEARCH_TOKENS = int(os.environ.get("AGENT_RESEARCH_TOKENS", "3072"))
 AGENT_ANSWER_TOKENS = int(os.environ.get("AGENT_ANSWER_TOKENS", "4096"))
 AGENT_MAX_SOURCES = 12
-AGENT_PLAN_PROMPT = (
-    "You are the Dua Agent planning step. Do not answer yet. In at most 5 short bullet points, write a research "
-    "plan for the user's request: which latest AI news, models, tools or app features to look up on the web. "
-    "Keep it simple, Hinglish-friendly English."
-)
-AGENT_RESEARCH_PROMPT = (
-    "You are the Dua Agent research step. Use Google Search to find the LATEST, real information for this plan. "
-    "Write compact factual notes (dates, names, what is new). No feature ideas yet.\n\nPlan:\n"
-)
-AGENT_ANSWER_PROMPT = (
-    "You are the Dua Agent. Dua AI is the user's own ChatGPT-like Android app (Kotlin, Jetpack Compose) with a "
-    "Google Cloud Run + Vertex AI Gemini backend. The user is a student who cannot code and wants free tools. "
-    "Using ONLY the research notes below, reply in simple, Hinglish-friendly English with these sections:\n"
-    "1. **Kya naya hai (findings)** - short bullets, cite sources like [1], [2].\n"
-    "2. **Dua AI ke liye ideas** - a numbered list ordered by priority. For each idea: what it is, why it helps, "
-    "effort (Small / Medium / Large) and whether it can stay free.\n"
-    "3. **Next step** - the one thing to do first.\n"
-    "If the notes do not cover something, say so instead of guessing."
-)
 
 SSE_HEADERS = {
     "Cache-Control": "no-store",
@@ -428,33 +407,6 @@ class _Text:
 def progress_event(step, label, state="active"):
     """Structured agent progress for the app's step UI. Older clients ignore unknown event types."""
     return {"type": "progress", "step": step, "label": label, "state": state}
-
-
-def coding_reply(messages, attachments, system, enqueue):
-    """Phase 2: coding on DUA_REPO through the locked-down GitHub client (opens a PR, never merges)."""
-    import coding_agent
-    token = os.environ.get("GITHUB_TOKEN", "").strip()
-    if not token:
-        enqueue("chunk", _Text(CODING_NOT_SET_UP))
-        enqueue("done")
-        return
-    try:
-        repo = coding_agent.repo_name()
-        github = coding_agent.GitHubClient(token, repo)
-        if not enqueue("event", {"type": "thinking", "delta": f"**Coding on {repo}** (reads files, then opens a PR; never merges)\n"}):
-            return
-        if not enqueue("event", progress_event("plan", "Planning\u2026")):
-            return
-        contents = build_contents(with_last_user_suffix(messages, coding_agent.CODING_PROMPT.format(
-            repo=repo, max_files=coding_agent.MAX_FILES_CHANGED)), attachments)
-        text = coding_agent.run_coding(get_model(system), contents, github,
-                                       lambda delta: enqueue("event", {"type": "thinking", "delta": delta}),
-                                       last_user_text(messages),
-                                       progress=lambda step, label, state="active": enqueue("event", progress_event(step, label, state)))
-    except coding_agent.CodingError as error:
-        text = f"Coding stopped: {str(error)[:300]} No pull request was opened."
-    enqueue("chunk", _Text(text))
-    enqueue("done")
 
 
 def imagine_for_agent(owner):
