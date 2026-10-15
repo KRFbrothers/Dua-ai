@@ -81,6 +81,8 @@ For Vercel project chat, [`projects.mjs`](../web/src/core/projects.mjs) resolves
 
 These are three separate access surfaces. Configuration or validation in one does not automatically protect another.
 
+Vercel's shared repository/path policy and its read/write compatibility rules are documented in [GitHub validation](GITHUB_VALIDATION.md); implementation lives in [github-validation.mjs](../web/src/core/github-validation.mjs).
+
 | Flow | Configuration / enforcement | Side effects |
 | --- | --- | --- |
 | Vercel connector and Build reads | `ENABLE_GITHUB_CONNECTOR=1`, `GITHUB_CONNECTOR_TOKEN`; [`github.mjs`](../web/src/core/github.mjs) allows bounded GET requests to supported GitHub routes. [`advanced-integrations.mjs`](../web/src/core/advanced-integrations.mjs) dispatches the owner-restricted connector actions. [`build-chat.mjs`](../web/src/core/build-chat.mjs) runs bounded model read/proposal tools. | Read repository context and return diffs/proposals. A `propose_changes` result alone does not write to GitHub. |

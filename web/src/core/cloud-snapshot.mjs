@@ -1,5 +1,5 @@
 import { STORED_PATH, validFileRef } from './file-types.mjs';
-import { REPOSITORY } from './github.mjs';
+import { validRepository, validRepositoryPath, repositoryWritePathIssue } from './github-validation.mjs';
 import { validateProjects, validProjectId, defaultProjects } from './projects.mjs';
 
 const MEDIA_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'video/mp4'];
@@ -53,17 +53,12 @@ function codeRun(value) {
   return result;
 }
 
-function relativePath(value) {
-  return text(value, 400, true) && value === value.trim() && !value.startsWith('/') && !/^[A-Za-z]:/.test(value) &&
-    !/[\\\x00-\x1f\x7f]/.test(value) && !value.split('/').some(part => !part || part === '.' || part === '..');
-}
-
 function build(value) {
-  requireValid(object(value) && typeof value.repository === 'string' && REPOSITORY.test(value.repository) &&
+  requireValid(object(value) && validRepository(value.repository) &&
     Array.isArray(value.files) && value.files.length <= 100);
   const paths = new Set();
   const result = { repository: value.repository, files: value.files.map(file => {
-    requireValid(object(file) && relativePath(file.path) && !paths.has(file.path)); paths.add(file.path);
+    requireValid(object(file) && validRepositoryPath(file.path) && !paths.has(file.path)); paths.add(file.path);
     const item = { path: file.path };
     optional(file, 'bytes', n => integer(n) && n <= 2147483647, item);
     optional(file, 'truncated', v => typeof v === 'boolean', item);
@@ -75,14 +70,12 @@ function build(value) {
 
 function proposal(value) {
   requireValid(object(value) && typeof value.id === 'string' && UUID.test(value.id) &&
-    typeof value.repository === 'string' && REPOSITORY.test(value.repository) &&
+    validRepository(value.repository) &&
     typeof value.baseBranch === 'string' && BRANCH.test(value.baseBranch) && typeof value.branch === 'string' && PROPOSAL_BRANCH.test(value.branch) &&
     text(value.title, 120, true) && text(value.summary, 4000) && Array.isArray(value.files) && value.files.length >= 1 && value.files.length <= 50);
   const paths = new Set(); let contentChars = 0;
   const files = value.files.map(file => {
-    requireValid(object(file) && relativePath(file.path) && !paths.has(file.path) &&
-      !file.path.split('/').some(part => part.toLowerCase() === '.git') &&
-      !file.path.toLowerCase().startsWith('.github/workflows/') && file.path.toLowerCase() !== '.gitmodules' &&
+    requireValid(object(file) && repositoryWritePathIssue(file.path) === null && !paths.has(file.path) &&
       ['create', 'update', 'delete'].includes(file.action));
     paths.add(file.path);
     const item = { path: file.path, action: file.action };
@@ -155,7 +148,7 @@ export function validateCloudSnapshot(data) {
     requireValid((projects || defaultProjects()).some(p => p.id === (chat.projectId || 'personal')));
     const messageIds = result.messages.filter(item => item.id !== undefined).map(item => item.id);
     requireValid(new Set(messageIds).size === messageIds.length);
-    optional(chat, 'buildRepository', v => typeof v === 'string' && REPOSITORY.test(v), result);
+    optional(chat, 'buildRepository', validRepository, result);
     if (chat.summary !== undefined) {
       requireValid(object(chat.summary) && text(chat.summary.text, 16_000, true) && text(chat.summary.throughId, 100, true));
       result.summary = { text: chat.summary.text, throughId: chat.summary.throughId };

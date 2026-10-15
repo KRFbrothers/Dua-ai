@@ -6,7 +6,9 @@
 // GitHub: only the owner's Create PR tap (POST /api/build/pr) can, with a separate token. No command tool exists.
 import { envInteger, extractReply, historyTurns, maxOutputTokens } from './adapters.mjs';
 import { readJsonLimited } from './limited-json.mjs';
-import { githubReady, GitHubError, repositoryFile, repositoryInfo, repositoryTree, searchRepository, REPOSITORY } from './github.mjs';
+import { githubReady, GitHubError, repositoryFile, repositoryInfo, repositoryTree, searchRepository } from './github.mjs';
+import { validRepository } from './github-validation.mjs';
+export { validRepository } from './github-validation.mjs';
 import { GEMINI_SYSTEM_PROMPT } from './gemini.mjs';
 import { buildPrConfiguration, prAllowedFor, prLimits, proposeChanges, PROPOSE_DECLARATION } from './build-pr.mjs';
 
@@ -47,7 +49,6 @@ export function buildConfiguration(env = {}, configured = new Set()) {
   return { enabled: !reason, ...(reason ? { reason } : {}), providers: ['Dua', 'Gemini'], readOnly: true, tools: [...BUILD_TOOLS, ...(pr.enabled ? [PROPOSE_DECLARATION.name] : [])],
     maxRounds, maxFiles, fileMaxKb: fileMaxChars / 1024, totalMaxKb: totalMaxChars / 1024, pr };
 }
-export const validRepository = value => typeof value === 'string' && REPOSITORY.test(value);
 
 /** Gemini function declarations (OpenAPI schema subset). Read tools only. */
 export const FUNCTION_DECLARATIONS = Object.freeze([

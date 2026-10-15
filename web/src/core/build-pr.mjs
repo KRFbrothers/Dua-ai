@@ -7,7 +7,8 @@
 import { randomUUID } from 'node:crypto';
 import { envInteger } from './adapters.mjs';
 import { readJsonLimited } from './limited-json.mjs';
-import { REPOSITORY, GITHUB_REPOSITORY_HINT, GITHUB_PATH_HINT } from './github.mjs';
+import { GITHUB_REPOSITORY_HINT, GITHUB_PATH_HINT } from './github.mjs';
+import { validRepository, repositoryWritePathIssue } from './github-validation.mjs';
 import { encodeBranch, githubWrite, GitHubWriteError, repoApi, writeToken } from './github-write.mjs';
 import { resolveOwner, StorageError } from './storage.mjs';
 
@@ -38,7 +39,7 @@ export function prLimits(env = {}) {
 /** DUA_BUILD_PR_REPOS: comma-separated owner/repo (case-insensitive), or null when unset (then: repositories owned by the write token's account). */
 export function prRepositories(env = {}) {
   const list = String(env.DUA_BUILD_PR_REPOS ?? '').split(',').map(item => item.trim()).filter(Boolean);
-  return list.length ? list.filter(item => REPOSITORY.test(item)).map(item => item.toLowerCase()) : null;
+  return list.length ? list.filter(validRepository).map(item => item.toLowerCase()) : null;
 }
 export const prDraft = (env = {}) => !off(env.DUA_BUILD_PR_DRAFT);
 
@@ -63,15 +64,12 @@ export function prAllowedFor(env, repository) {
 
 /** Why a repository path cannot be changed, or null. Blocks workflows, .git, .gitmodules, absolute and `..` paths. */
 export function pathProblem(path) {
-  if (typeof path !== 'string' || !path || path.length > 400) return GITHUB_PATH_HINT;
-  if (path !== path.trim() || path.startsWith('/') || path.includes('\\') || /^[A-Za-z]:/.test(path) || CONTROL.test(path) || /[\r\n\t]/.test(path)) return GITHUB_PATH_HINT;
-  const segments = path.split('/');
-  if (segments.some(segment => !segment || segment === '.' || segment === '..')) return GITHUB_PATH_HINT;
-  const lower = path.toLowerCase();
-  if (segments.some(segment => segment.toLowerCase() === '.git')) return 'Files inside .git cannot be changed. Remove this file from the proposal.';
-  if (lower === '.gitmodules') return 'Submodules (.gitmodules) cannot be changed from Dua. Remove this file from the proposal.';
-  if (lower.startsWith('.github/workflows/')) return 'GitHub Actions workflows (.github/workflows) cannot be changed from Dua. Remove this file from the proposal.';
-  return null;
+  const issue = repositoryWritePathIssue(path);
+  if (issue === null) return null;
+  if (issue === 'git') return 'Files inside .git cannot be changed. Remove this file from the proposal.';
+  if (issue === 'submodule') return 'Submodules (.gitmodules) cannot be changed from Dua. Remove this file from the proposal.';
+  if (issue === 'workflow') return 'GitHub Actions workflows (.github/workflows) cannot be changed from Dua. Remove this file from the proposal.';
+  return GITHUB_PATH_HINT;
 }
 const bytes = text => Buffer.byteLength(text, 'utf8');
 
@@ -260,7 +258,7 @@ const REQUEST_KEYS = ['repository', 'proposalId', 'title', 'summary', 'branch', 
 /** Validates the create-pr body (the proposal the owner approved, possibly with an edited title). */
 export function validatePrRequest(body, limits) {
   if (!body || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).some(key => !REQUEST_KEYS.includes(key))) throw new BuildPrError('Invalid pull request data. Ask Dua to regenerate the proposal, then review it again.');
-  if (typeof body.repository !== 'string' || !REPOSITORY.test(body.repository)) throw new BuildPrError(GITHUB_REPOSITORY_HINT);
+  if (!validRepository(body.repository)) throw new BuildPrError(GITHUB_REPOSITORY_HINT);
   if (typeof body.proposalId !== 'string' || !PROPOSAL_ID.test(body.proposalId)) throw new BuildPrError('Invalid proposal id. Ask Dua to regenerate the proposal.');
   const title = cleanText(body.title, MAX_TITLE + 1).replace(/\s+/g, ' ');
   if (!title || title.length > MAX_TITLE) throw new BuildPrError(`Use a title of 1 to ${MAX_TITLE} characters.`);
@@ -323,7 +321,7 @@ export async function createPullRequest(request, { env, fetcher = fetch, signal 
   const call = (method, path, options = {}) => githubWrite(method, path, { env, fetcher, signal, ...options });
   const api = repoApi(request.repository);
   const repo = await call('GET', api, { maxBytes: 512 * 1024 });
-  if (!repo || typeof repo.full_name !== 'string' || !REPOSITORY.test(repo.full_name) || typeof repo.default_branch !== 'string' || !/^[A-Za-z0-9._/-]{1,200}$/.test(repo.default_branch)) throw new GitHubWriteError('GitHub returned an invalid response. Retry the same proposal so Dua can find any existing branch or pull request.', 502);
+  if (!repo || !validRepository(repo.full_name) || typeof repo.default_branch !== 'string' || !/^[A-Za-z0-9._/-]{1,200}$/.test(repo.default_branch)) throw new GitHubWriteError('GitHub returned an invalid response. Retry the same proposal so Dua can find any existing branch or pull request.', 502);
   if (repo.archived === true) throw new BuildPrError('This repository is archived, so Dua cannot open a pull request.', 409);
   const repository = repo.full_name;
   const list = prRepositories(env);

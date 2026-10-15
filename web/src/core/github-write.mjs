@@ -5,10 +5,10 @@
 // The allowlist below is the complete list of requests it can make. It has GET and POST only:
 // no PATCH (so no force-push or ref moves), no PUT (no merge) and no DELETE (no branch deletion).
 // New refs must be refs/heads/dua/*, and pull requests can only come from a dua/* branch.
-import { boundedBytes, REPOSITORY, GITHUB_REPOSITORY_HINT } from './github.mjs';
+import { boundedBytes, GITHUB_REPOSITORY_HINT } from './github.mjs';
+import { validRepository, GITHUB_REPOSITORY_API_PATTERN as repo } from './github-validation.mjs';
 
 const API = 'https://api.github.com';
-const repo = '/repos/[A-Za-z0-9_-]{1,100}/[A-Za-z0-9_.-]{1,100}';
 const sha = '[0-9a-f]{40}(?:[0-9a-f]{24})?';
 const branchPath = '[A-Za-z0-9._%-]{1,250}(?:/[A-Za-z0-9._%-]{1,250}){0,9}';
 /** [method, pattern]: every request this client can make. */
@@ -72,7 +72,7 @@ export async function githubWrite(method, path, { env, fetcher = fetch, signal, 
 }
 
 export const repoApi = repository => {
-  if (typeof repository !== 'string' || !REPOSITORY.test(repository)) throw new GitHubWriteError(GITHUB_REPOSITORY_HINT, 400);
+  if (!validRepository(repository)) throw new GitHubWriteError(GITHUB_REPOSITORY_HINT, 400);
   return '/repos/' + repository;
 };
 export const encodeBranch = branch => branch.split('/').map(encodeURIComponent).join('/');
