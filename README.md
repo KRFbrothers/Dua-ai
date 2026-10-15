@@ -22,6 +22,8 @@ For Vercel server reply saving, deploy the Vercel backend first, route chat to t
 
 ## How the pieces fit together
 
+For a directory map, request traces, persistence contracts and GitHub permission boundaries, read the [contributor architecture guide](docs/ARCHITECTURE.md).
+
 | Layer | Entry points | Responsibility |
 | --- | --- | --- |
 | Android | [MainActivity.kt](app/src/main/java/com/dua/ai/MainActivity.kt), [ChatRoute.kt](app/src/main/java/com/dua/ai/ui/chat/ChatRoute.kt), [DuaApiClient.kt](app/src/main/java/com/dua/ai/network/DuaApiClient.kt) | Native Compose/Material 3 UI, ViewModels, account session, composer/attachments, disposable offline cache and foreground sync. |
