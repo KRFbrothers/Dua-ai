@@ -1,6 +1,5 @@
-// Spreadsheet (XLSX, XLS, ODS, CSV) -> compact CSV text for any provider, using SheetJS
-// (installed from the SheetJS CDN, cdn.sheetjs.com, as its docs recommend; the npm registry copy is outdated).
-import * as XLSX from 'xlsx';
+// Bounded worksheet text extraction. XLSX/ODS/CSV are parsed locally; CFB is only for legacy XLS.
+import { readXlsx, readXls, readOds, readCsv } from './spreadsheet-formats.mjs';
 import { envInteger } from './adapters.mjs';
 
 /** DUA_SHEET_MAX_ROWS (default 300 per sheet), DUA_SHEET_MAX_COLS (default 40), DUA_SHEET_MAX_CHARS (default 120000 total). */
@@ -24,9 +23,11 @@ export function spreadsheetToText(buffer, { name = 'spreadsheet', mimeType = '',
   const csv = mimeType === 'text/csv' || /\.csv$/i.test(name);
   let workbook;
   try {
-    workbook = csv
-      ? XLSX.read(new TextDecoder('utf-8').decode(buffer).replace(/^\uFEFF/, ''), { type: 'string', dense: true, sheetRows: limits.rows + 1, raw: true })
-      : XLSX.read(buffer, { type: 'buffer', dense: true, cellDates: true, cellFormula: false, cellHTML: false, sheetRows: limits.rows + 1 });
+    const bytes = Buffer.from(buffer);
+    workbook = csv ? readCsv(bytes, limits)
+      : bytes.subarray(0, 8).equals(Buffer.from('d0cf11e0a1b11ae1', 'hex')) ? readXls(bytes, limits)
+      : mimeType === 'application/vnd.oasis.opendocument.spreadsheet' || /\.ods$/i.test(name) ? readOds(bytes, limits)
+      : readXlsx(bytes, limits);
   } catch {
     throw Object.assign(new Error(`"${name}" could not be read as a spreadsheet.`), { status: 422 });
   }
@@ -34,14 +35,11 @@ export function spreadsheetToText(buffer, { name = 'spreadsheet', mimeType = '',
   const sheets = [];
   let used = 0;
   let truncated = false;
-  for (const sheetName of workbook.SheetNames.slice(0, limits.sheets)) {
-    const sheet = workbook.Sheets[sheetName];
-    const ref = sheet?.['!fullref'] || sheet?.['!ref'];
-    const range = ref ? XLSX.utils.decode_range(ref) : null;
-    const totalRows = range ? range.e.r - range.s.r + 1 : 0;
-    const totalCols = range ? range.e.c - range.s.c + 1 : 0;
-    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true, defval: '', blankrows: false });
-    const shown = rows.slice(0, limits.rows).map(row => row.slice(0, limits.cols));
+  for (const sheet of workbook.sheets) {
+    const sheetName = sheet.name;
+    const totalRows = sheet.totalRows;
+    const totalCols = sheet.totalCols;
+    const shown = sheet.rows.slice(0, limits.rows).map(row => row.slice(0, limits.cols));
     const shownCols = Math.min(totalCols, limits.cols);
     let block = shown.map(row => row.map(cellText).join(',').replace(/,+$/, '')).join('\n');
     const notes = [];
@@ -59,6 +57,6 @@ export function spreadsheetToText(buffer, { name = 'spreadsheet', mimeType = '',
     sheets.push({ name: String(sheetName), rows: totalRows, cols: totalCols, shownRows: shown.length, shownCols });
     if (used >= limits.chars) break;
   }
-  if (workbook.SheetNames.length > sheets.length) { truncated = true; parts.push(`[${workbook.SheetNames.length - sheets.length} more sheet(s) not shown]`); }
+  if (workbook.count > sheets.length) { truncated = true; parts.push(`[${workbook.count - sheets.length} more sheet(s) not shown]`); }
   return { text: `Spreadsheet "${name}" as CSV (untrusted file content):\n` + parts.join('\n\n'), sheets, truncated };
 }

@@ -69,7 +69,9 @@ npm ci --ignore-scripts --no-audit --no-fund
 npm run test:ci
 ```
 
-These are the install/test commands from CI. `npm test` runs the same test files without writing the CI JUnit report; `npm run test:ci` writes `web/backend-test-results.xml` (repository-relative path). Install the locked dependencies first (`unpdf` and SheetJS); SheetJS is fetched from `cdn.sheetjs.com`, which must be accessible from the build environment. The scripts and Node requirement are declared in [web/package.json](web/package.json).
+These are the install/test commands from CI. `npm test` runs the same test files without writing the CI JUnit report; `npm run test:ci` writes `web/backend-test-results.xml` (repository-relative path). Root `.nvmrc` and `.node-version` select Node 24; `web/.npmrc` enforces the package's Node >=24.0.0 requirement at install time. CI already pins Node 24. All locked packages come from the npm registry with integrity hashes: `unpdf` handles PDFs, and `cfb` reads the container for legacy BIFF8 XLS files. XLSX/ODS ZIP/XML and CSV worksheet extraction run locally without the `xlsx` package or a CDN download, formula evaluation or external XML entities. ZIP parts/inflation and output rows/columns/characters are bounded; encrypted, malformed or oversized worksheet XML returns a clear 422 error. The scripts and Node requirement are declared in [web/package.json](web/package.json).
+
+For a non-mutating anonymous database access smoke check, see [Supabase verification](SUPABASE.md#anonymous-access-smoke-check). `cd web && npm run verify:rls` uses exported public Supabase credentials and skips cleanly when they are absent. Live verification is optional and is not run by the credential-free CI suite.
 
 After installation, the separate Imagine smoke check is `node scripts/imagine-smoke.mjs` **from `web/`**. [That script](web/scripts/imagine-smoke.mjs) starts an ephemeral loopback HTTP server and uses fake providers/storage; it needs no real provider keys and is not run by `Project checks`.
 
