@@ -69,6 +69,7 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
     val uploads by viewModel.uploads.collectAsState()
     val recordingSince by viewModel.recordingSince.collectAsState()
     val imagine by viewModel.imagine.collectAsState()
+    val imagineSettings by viewModel.imagineSettings.collectAsState()
     val imagineOptions by viewModel.imagineOptions.collectAsState()
     val imagineUsage by viewModel.imagineUsage.collectAsState()
     val runCode by viewModel.runCode.collectAsState()
@@ -141,7 +142,7 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
         deviceVoiceStatus = speech.status, deviceVoiceActive = speech.activeId != null,
         generatedVoiceStatus = generatedSpeech.status, generatedVoiceActive = generatedSpeech.activeId != null,
         greeting = greeting, suggestions = viewModel.promptSuggestions,
-        imagine = imagine, imagineOptions = imagineOptions, imagineConfig = integrations.imagine, imagineUsage = imagineUsage,
+        imagine = imagine, imagineOptions = imagineOptions, imagineConfig = imagineSettings, imagineUsage = imagineUsage,
         runCode = runCode, codeConfig = integrations.codeExecution,
         buildRepo = buildRepo, buildConfig = integrations.build, buildRepositories = buildRepositories,
         buildPr = buildPr, buildPrHint = remember(integrations.build, account.user) { viewModel.buildPrUnavailableReason().orEmpty() },

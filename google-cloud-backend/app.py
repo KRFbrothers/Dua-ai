@@ -530,7 +530,9 @@ def chunk_text(chunk):
 @app.route("/", methods=["GET"])
 def home():
     # Capabilities: the app shows Agent mode only when this says "agent": true.
-    return jsonify({"status": "Dua AI Engine is running!", "engine": "google-cloud", "agent": True, "titles": True, "model": MODEL_NAME})
+    import imagine
+    return jsonify({"status": "Dua AI Engine is running!", "engine": "google-cloud", "agent": True, "titles": True, "model": MODEL_NAME,
+                    "imagine": imagine.capability()})
 
 
 @app.route("/api/chat", methods=["POST"])
@@ -642,6 +644,33 @@ def api_chat():
 
     return Response(stream_with_context(events()), headers=SSE_HEADERS,
                     content_type="text/event-stream; charset=utf-8")
+
+
+@app.route("/api/imagine/image", methods=["POST"])
+def api_imagine_image():
+    """Imagine on Vertex AI (one image per request, owner only). Same response shape as the Vercel endpoint."""
+    import imagine
+    if not app_token_matches():
+        return unauthorized()
+    try:
+        user_id = verify_owner(request.headers.get("Authorization", ""))
+    except OwnerAuthError as error:
+        response = jsonify({"error": error.message})
+        response.headers["Cache-Control"] = "no-store"
+        return response, error.status
+    if not imagine.enabled():
+        return jsonify({"error": "Imagine is turned off on the Google Cloud engine."}), 503
+    token = request.headers.get("Authorization", "").split(" ", 1)[1]
+    try:
+        result = imagine.handle(request.get_json(silent=True), token, user_id, get_client())
+    except imagine.ImagineError as error:
+        return jsonify({"error": error.message}), error.status
+    except Exception:
+        app.logger.exception("imagine failed")
+        return jsonify({"error": "Image generation failed. Try again."}), 502
+    response = jsonify(result)
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 TITLE_TOKENS = int(os.environ.get("TITLE_TOKENS", "256"))

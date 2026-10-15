@@ -387,6 +387,16 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     // ---- Imagine (Phase 3): image and video generation through /api/imagine ----
     private val imagineApi = com.dua.ai.imagine.ImagineApi()
+    /** Google Cloud Imagine (Vertex AI), used for new images when the engine advertises it; Vercel stays for edits and video. */
+    private val cloudImagineApi = com.dua.ai.imagine.ImagineApi(com.dua.ai.BuildConfig.DUA_CHAT_BASE_URL, appToken = com.dua.ai.BuildConfig.DUA_APP_TOKEN)
+    private val _cloudImagine = MutableStateFlow<com.dua.ai.imagine.CloudImagine?>(null)
+    private var cloudImagineCheck: kotlinx.coroutines.Job? = null
+    fun refreshCloudImagine() {
+        if (!separateChatEngine || _cloudImagine.value != null || cloudImagineCheck?.isActive == true) return
+        cloudImagineCheck = viewModelScope.launch {
+            _cloudImagine.value = com.dua.ai.imagine.CloudImagine.fetch(com.dua.ai.BuildConfig.DUA_CHAT_BASE_URL, com.dua.ai.BuildConfig.DUA_APP_TOKEN)
+        }
+    }
     /** Generated media cache; signed links come from /api/files/url (owner checked on the server). */
     val mediaCache = com.dua.ai.imagine.MediaCache(application.cacheDir, { path -> storedFileUrl(path) })
     private val _imagine = MutableStateFlow(false)
@@ -1579,6 +1589,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 _error.value = "Saved chats could not be loaded. Stored data has not been deleted."
             }
         }
+        refreshCloudImagine()
         refreshSyncNetwork()
         networkObserverRegistered = runCatching { connectivity.registerDefaultNetworkCallback(networkObserver); true }.getOrDefault(false)
         viewModelScope.launch {
@@ -2056,12 +2067,18 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     // ---- Imagine ----
 
-    private fun imagineConfig() = _integrations.value.imagine
+    private fun imagineConfig() = com.dua.ai.imagine.CloudImagine.merge(_integrations.value.imagine, _cloudImagine.value)
+    /** Imagine settings the chat shows: the backend's, plus Google Cloud when the engine offers it. */
+    val imagineSettings: StateFlow<com.dua.ai.imagine.ImagineConfig?> by lazy {
+        combine(_integrations, _cloudImagine) { state, cloud -> com.dua.ai.imagine.CloudImagine.merge(state.imagine, cloud) }
+            .stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, imagineConfig())
+    }
 
     /** Imagine chip: turns the composer into image/video generation (Reasoning, Search and X off). */
     fun setImagine(enabled: Boolean) {
         if (_isTyping.value) return
         if (!enabled) { _imagine.value = false; return }
+        refreshCloudImagine()
         _agent.value = false
         val config = imagineConfig()
         when {
@@ -2144,10 +2161,15 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                         pollVideo(reply.id, firstDelayMs = job.pollAfterSeconds * 1000L)
                     }
                 } else {
+                    val cloud = com.dua.ai.imagine.CloudImagine.routes(_cloudImagine.value, options, sources.size)
+                    // Google Cloud: always one image. Vercel providers never receive the Google Cloud provider id.
+                    val sent = if (cloud) options.copy(count = 1, provider = null)
+                        else options.copy(provider = options.provider?.takeIf { it != com.dua.ai.imagine.CloudImagine.PROVIDER })
                     val result = account.withToken { token ->
                         check(token != null) { "Sign in from Profile to use Imagine." }
-                        imagineApi.image(prompt, options, sources.map { it.path }, token)
-                    }
+                        (if (cloud) cloudImagineApi else imagineApi).image(prompt, sent, sources.map { it.path }, token)
+                    }.let { if (cloud) it.copy(provider = com.dua.ai.imagine.CloudImagine.PROVIDER,
+                        notice = it.notice ?: if (options.count > 1) "Google Cloud makes one image per request." else null) else it }
                     result.links.forEach { (path, url) -> mediaCache.remember(path, url) }
                     if (generation == currentGeneration) {
                         _uploads.update { list -> list.filterNot { it.id in sentIds } }

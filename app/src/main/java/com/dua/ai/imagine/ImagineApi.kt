@@ -11,8 +11,8 @@ import java.util.concurrent.TimeUnit
  * Image requests can take a while (several images, stored before replying), so this client waits
  * longer than account calls. Video uses a job: submit returns at once, then [status] is polled.
  */
-class ImagineApi(baseUrl: String = BuildConfig.DUA_API_BASE_URL, client: OkHttpClient = longClient) {
-    private val api = AccountApi(baseUrl, client)
+class ImagineApi(baseUrl: String = BuildConfig.DUA_API_BASE_URL, client: OkHttpClient = longClient, appToken: String = "") {
+    private val api = AccountApi(baseUrl, client, appToken)
 
     suspend fun image(prompt: String, options: ImagineOptions, sourcePaths: List<String>, token: String): ImageResult =
         ImagineCodec.imageResult(api.request("/api/imagine/image", "POST", ImagineCodec.imageBody(prompt, options, sourcePaths), token))

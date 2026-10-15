@@ -11,11 +11,14 @@ import java.io.IOException
 import java.util.concurrent.TimeUnit
 import java.net.URL
 
-class AccountApi(private val baseUrl: String = BuildConfig.DUA_API_BASE_URL, private val client: OkHttpClient = OkHttpClient.Builder().followRedirects(false).followSslRedirects(false).connectTimeout(10, TimeUnit.SECONDS).readTimeout(45, TimeUnit.SECONDS).build()) {
+class AccountApi(private val baseUrl: String = BuildConfig.DUA_API_BASE_URL, private val client: OkHttpClient = OkHttpClient.Builder().followRedirects(false).followSslRedirects(false).connectTimeout(10, TimeUnit.SECONDS).readTimeout(45, TimeUnit.SECONDS).build(),
+    /** Cloud Run engine gate (X-Dua-App-Token); blank = not sent. */
+    private val appToken: String = "") {
     suspend fun request(path: String, method: String = "GET", body: JSONObject? = null, token: String? = null): JSONObject {
         val base = URL(baseUrl.trimEnd('/') + "/"); require(base.protocol == "https") { "Account backend requires HTTPS." }
         val builder = Request.Builder().url(URL(base, path.removePrefix("/"))).header("Accept", "application/json").header("x-dua-native", "1")
         if (token != null) builder.header("Authorization", "Bearer $token")
+        if (appToken.isNotBlank()) builder.header("X-Dua-App-Token", appToken)
         if (method != "GET") builder.method(method, (body ?: JSONObject()).toString().toRequestBody("application/json; charset=utf-8".toMediaType()))
         return suspendCancellableCoroutine { continuation ->
             val call = client.newCall(builder.build()); continuation.invokeOnCancellation { call.cancel() }
