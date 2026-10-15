@@ -9,6 +9,7 @@ import pytest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import app as engine  # noqa: E402
 import coding_agent as ca  # noqa: E402
+import agent_tools  # noqa: E402
 
 REPO = "KRFbrothers/Dua-ai"
 
@@ -188,19 +189,19 @@ def test_missing_token_replies_politely_without_model_or_github(monkeypatch, own
 
 def test_coding_route_runs_pipeline_and_streams_pr_link(monkeypatch, owner):
     monkeypatch.setenv("GITHUB_TOKEN", "tok")
-    model = CodingModel()
-    monkeypatch.setattr(engine, "get_model", lambda system=engine.SYSTEM_PROMPT: model)
+    model, systems = CodingModel(), []
+    monkeypatch.setattr(engine, "get_model", lambda system=engine.SYSTEM_PROMPT: systems.append(system) or model)
     opener = Opener()
     real = ca.GitHubClient
     monkeypatch.setattr(ca, "GitHubClient", lambda token, repo: real(token, repo, opener=opener))
-    monkeypatch.setattr(ca, "default_tools", lambda: ["TOOLS"])
+    monkeypatch.setattr(agent_tools, "default_tools", lambda github: ["TOOLS"])
     monkeypatch.setattr(ca, "default_tool_response", lambda results: ("tool", results))
     evs = post("code likho: add a hello screen to the app")
     kinds = [e["type"] for e in evs]
     assert "thinking" in kinds and kinds[-1] == "done"
     text = "".join(e["delta"] for e in evs if e["type"] == "text")
     assert "pull/201" in text
-    assert "48dp" in model.calls[0]["contents"][-1]["parts"][0][1]  # repo rules in the prompt
+    assert any("48dp" in s for s in systems)  # repo rules in the agent instructions
     assert any(p.endswith("/pulls") for _, p, _ in opener.calls)
 
 
@@ -233,11 +234,11 @@ def test_coding_reports_read_and_pr_progress(monkeypatch, owner):
     opener = Opener()
     real = ca.GitHubClient
     monkeypatch.setattr(ca, "GitHubClient", lambda token, repo: real(token, repo, opener=opener))
-    monkeypatch.setattr(ca, "default_tools", lambda: ["TOOLS"])
+    monkeypatch.setattr(agent_tools, "default_tools", lambda github: ["TOOLS"])
     monkeypatch.setattr(ca, "default_tool_response", lambda results: ("tool", results))
     evs = post("code likho: add a hello screen to the app")
     steps = [e["step"] for e in evs if e["type"] == "progress"]
-    assert steps[0] == "plan" and steps[-1] == "pr" and "Opening PR\u2026" in [e["label"] for e in evs if e["type"] == "progress"]
+    assert steps[0] == "plan" and steps[-2:] == ["pr", "answer"] and "Opening PR\u2026" in [e["label"] for e in evs if e["type"] == "progress"]
 
 
 def test_run_coding_progress_is_optional():

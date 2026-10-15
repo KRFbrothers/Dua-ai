@@ -24,7 +24,7 @@ import queue
 import re
 import threading
 
-from flask import Flask, Response, jsonify, request, stream_with_context
+from flask import Flask, Response, g, jsonify, request, stream_with_context
 from owner_auth import OwnerAuthError, verify_owner
 
 app = Flask(__name__)
@@ -51,8 +51,8 @@ APP_MODELS = {"Dua", "ChatGPT", "Gemini", "Claude", "Grok", "Kimi"}
 SYSTEM_PROMPT = "You are Dua AI, a helpful, smart, and polite personal AI assistant."
 GENERIC_ERROR = "The Dua AI engine could not answer right now. Please try again."
 
-# Dua Agent cost caps: exactly 3 model calls per agent request and only ONE of them uses
-# Google Search grounding (billed per grounded prompt after the free daily quota).
+# Dua Agent: casual messages get one direct reply; tasks run the tool loop in agent_tools.py
+# (max AGENT_MAX_STEPS model calls, at most 3 grounded searches and 2 code runs per request).
 # Output caps include thinking tokens on Gemini 2.5/3, so leave room for low-level thinking.
 AGENT_PLAN_TOKENS = int(os.environ.get("AGENT_PLAN_TOKENS", "1024"))
 AGENT_RESEARCH_TOKENS = int(os.environ.get("AGENT_RESEARCH_TOKENS", "3072"))
@@ -183,11 +183,13 @@ def owner_access_error():
     if not app_token_matches():
         return unauthorized()
     try:
-        verify_owner(request.headers.get("Authorization", ""))
+        g.owner_id = verify_owner(request.headers.get("Authorization", ""))
     except OwnerAuthError as error:
         response = jsonify({"error": error.message})
         response.headers["Cache-Control"] = "no-store"
         return response, error.status
+    header = request.headers.get("Authorization", "")
+    g.owner_token = header.split(" ", 1)[1].strip() if header.lower().startswith("bearer ") else ""
     return None
 
 
@@ -455,14 +457,67 @@ def coding_reply(messages, attachments, system, enqueue):
     enqueue("done")
 
 
-def agent_producer(messages, attachments, system):
-    """Dua Agent: route -> (direct reply) or plan -> grounded research -> streamed answer."""
+def imagine_for_agent(owner):
+    """Agent generate_image: reuses the Cloud Run Imagine path (owner storage + daily cap); None when off."""
+    import imagine
+    if not imagine.enabled() or not owner.get("id") or not owner.get("token"):
+        return None
+    return lambda body: imagine.handle(body, owner["token"], owner["id"], get_client())
+
+
+def tool_loop(messages, attachments, system, enqueue, owner, coding=False):
+    import agent_tools
+    import coding_agent
+    token = os.environ.get("GITHUB_TOKEN", "").strip()
+    if coding and not token:
+        enqueue("chunk", _Text(CODING_NOT_SET_UP))
+        enqueue("done")
+        return
+    github, repo = None, ""
+    try:
+        if token:
+            repo = coding_agent.repo_name()
+            github = coding_agent.GitHubClient(token, repo)
+    except coding_agent.CodingError:
+        github = None
+    prompt = agent_tools.AGENT_PROMPT.format(github=agent_tools.GITHUB_HINT.format(repo=repo) if github else "")
+    if coding and github:
+        prompt += "\n\n" + coding_agent.CODING_PROMPT.format(repo=repo, max_files=coding_agent.MAX_FILES_CHANGED)
+    model = get_model(system + "\n\n" + prompt)
+    if not enqueue("event", progress_event("plan", "Planning\u2026")):
+        return
+    last = last_user_text(messages)
+    env = {
+        "model": model, "enqueue": enqueue, "chunk_text": chunk_text, "grounding_sources": grounding_sources,
+        "search_tool": google_search_tool, "code_tool": agent_tools.code_tool, "fetch": agent_tools.fetch_page,
+        "contents_for": lambda text: [make_content("user", [make_part(text=text)])],
+        "imagine": imagine_for_agent(owner), "memory": owner.get("memory", ""), "github": github, "request_text": last,
+        "progress": lambda step, label, state="active": enqueue("event", progress_event(step, label, state)),
+        "thinking": lambda delta: enqueue("event", {"type": "thinking", "delta": delta}),
+    }
+    try:
+        text, run = agent_tools.run(env, build_contents(messages, attachments), agent_tools.default_tools(github is not None),
+                                    coding_agent.default_tool_response)
+    except coding_agent.CodingError as error:
+        text, run = f"Stopped: {str(error)[:300]} No pull request was opened.", None
+    sources = run.sources if run else []
+    if sources and not enqueue("event", {"type": "sources", "sources": sources}):
+        return
+    if not enqueue("event", progress_event("answer", "Writing the answer\u2026")):
+        return
+    if not enqueue("chunk", _Text(text)):
+        return
+    footer = sources_footer(sources)
+    if footer and not enqueue("event", {"type": "text", "delta": footer}):
+        return
+    enqueue("done")
+
+
+def agent_producer(messages, attachments, system, owner=None):
+    """Dua Agent: route -> (direct reply) or one general tool-calling loop (agent_tools)."""
     def produce(enqueue):
         model = get_model(system)
         route = route_agent(messages, attachments, system)
-        if route == "code":
-            coding_reply(messages, attachments, system, enqueue)
-            return
         if route == "chat":
             # Casual message: one normal streamed reply with full history, no Search, no plan or sources.
             for chunk in model.generate_content(build_contents(messages, attachments),
@@ -471,40 +526,7 @@ def agent_producer(messages, attachments, system):
                     return
             enqueue("done")
             return
-        if not enqueue("event", progress_event("plan", "Planning\u2026")):
-            return
-        if not enqueue("event", {"type": "thinking", "delta": "**Step 1 - Plan**\n"}):
-            return
-        plan = chunk_text(model.generate_content(
-            build_contents(with_last_user_suffix(messages, AGENT_PLAN_PROMPT), attachments),
-            generation_config={"max_output_tokens": AGENT_PLAN_TOKENS, "temperature": 0.3}))[:4000]
-        if not enqueue("event", {"type": "thinking", "delta": (plan or "- Research latest AI news and tools") + "\n\n**Step 2 - Research (Google Search)**\n"}):
-            return
-        if not enqueue("event", progress_event("search", "Searching the web\u2026")):
-            return
-        research = model.generate_content(
-            build_contents(with_last_user_suffix(messages, AGENT_RESEARCH_PROMPT + plan), attachments),
-            generation_config={"max_output_tokens": AGENT_RESEARCH_TOKENS, "temperature": 0.2},
-            tools=[google_search_tool()])
-        notes = chunk_text(research)[:20000]
-        sources = grounding_sources(research)
-        if not enqueue("event", {"type": "thinking", "delta": f"Found {len(sources)} sources.\n\n**Step 3 - Summary and ideas**\n"}):
-            return
-        if sources and not enqueue("event", {"type": "sources", "sources": sources}):
-            return
-        if not enqueue("event", progress_event("answer", f"Reading {len(sources)} sources\u2026" if sources else "Writing the answer\u2026")):
-            return
-        listed = "\n".join(f"[{item['id']}] {item['title']} - {item['url']}" for item in sources) or "(no web sources found)"
-        answer_prompt = f"{AGENT_ANSWER_PROMPT}\n\nResearch notes:\n{notes or '(empty)'}\n\nSources:\n{listed}"
-        for chunk in model.generate_content(
-                build_contents(with_last_user_suffix(messages, answer_prompt), attachments),
-                generation_config={"max_output_tokens": AGENT_ANSWER_TOKENS, "temperature": 0.4}, stream=True):
-            if not enqueue("chunk", chunk):
-                return
-        footer = sources_footer(sources)
-        if footer and not enqueue("event", {"type": "text", "delta": footer}):
-            return
-        enqueue("done")
+        tool_loop(messages, attachments, system, enqueue, owner or {}, coding=route == "code")
     return produce
 
 
@@ -582,6 +604,9 @@ def api_chat():
         has_files = bool(attachments) or any(isinstance(m, dict) and m.get("attachments") for m in data.get("messages") or [])
         notice = "Free models read text only; attached images and audio were not sent." if has_files else None
 
+    owner = {"id": getattr(g, "owner_id", None), "token": getattr(g, "owner_token", ""),
+             "memory": data.get("memory") if isinstance(data.get("memory"), str) else ""}
+
     def events():
         chunks = queue.Queue(maxsize=16)
         stopped = threading.Event()
@@ -599,7 +624,7 @@ def api_chat():
             iterator = None
             try:
                 if agent:
-                    agent_producer(data.get("messages"), attachments, system)(enqueue)
+                    agent_producer(data.get("messages"), attachments, system, owner)(enqueue)
                     return
                 if use_free:
                     openrouter.stream(free_model, system, data.get("messages"), enqueue, reasoning=data.get("mode") == "reasoning")

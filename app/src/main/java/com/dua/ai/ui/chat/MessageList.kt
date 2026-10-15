@@ -81,9 +81,11 @@ fun MessageList(state: ChatUiState, actions: ChatActions, listState: LazyListSta
                 if (message.isUser) UserMessage(message.text, files = message.files, onOpenFile = actions.onOpenFile,
                     onLongPress = openActions, longPressHaptic = longPressHaptic)
                 else AssistantTurn(modifier = Modifier.messageLongPress(openActions, longPressHaptic)) {
-                    if (message.isImagine) ImagineReply(message, imagineActions, videoAvailable = state.videoAvailable)
+                    // Imagine replies own their layout; Agent replies with a created image keep their text (image above it).
+                    if (message.isImagine && (message.imagine != null || message.text.isBlank() && !message.streaming)) ImagineReply(message, imagineActions, videoAvailable = state.videoAvailable)
                     else AssistantMessage(
                         message = message,
+                        onOpenMedia = { imagineActions.onOpen(message.id, it) },
                         isLast = message.id == lastId,
                         typing = state.typing,
                         speaking = state.speakingId == message.id,
