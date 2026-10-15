@@ -14,6 +14,10 @@ plugins {
 
 // Account, cloud sync, files, Imagine, voice, setup and connectors: the Node API (web/) on Cloud Run (dua-api).
 // To use Vercel again, build with -PduaApiBaseUrl=https://dua-cyan.vercel.app (or DUA_API_BASE_URL).
+val duaBuildNumber = providers.environmentVariable("GITHUB_RUN_NUMBER").orNull?.toIntOrNull()?.takeIf { it in 1..1_000_000 }
+val duaVersionCode = 11 + (duaBuildNumber ?: 0)
+val duaVersionName = "1.0.10" + (duaBuildNumber?.let { " (build $it)" } ?: "")
+
 val duaApiBaseUrl = providers.gradleProperty("duaApiBaseUrl")
     .orElse(providers.environmentVariable("DUA_API_BASE_URL"))
     .orElse("https://dua-api-228305912525.us-central1.run.app").get()
@@ -110,8 +114,10 @@ android {
         applicationId = "com.dua.ai"
         minSdk = 26
         targetSdk = 35
-        versionCode = 11
-        versionName = "1.0.10"
+        // Each personal-APK workflow run gets a higher versionCode, so Android sees a real update
+        // (local builds stay at the base). Never lower the base: Android refuses downgrades.
+        versionCode = duaVersionCode
+        versionName = duaVersionName
         manifestPlaceholders["crashlyticsCollectionEnabled"] = "false"
         buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"" + googleWebClientId + "\"")
         buildConfigField("String", "DUA_API_BASE_URL", "\"" + duaApiBaseUrl + "\"")
