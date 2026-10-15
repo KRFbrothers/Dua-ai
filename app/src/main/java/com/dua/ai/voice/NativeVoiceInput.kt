@@ -13,6 +13,8 @@ import kotlinx.coroutines.flow.asStateFlow
 
 data class VoiceInputState(
     val busy: Boolean = false,
+    /** True when the final transcript came from the recognizer's own end-of-speech (not a manual stop or confirm). */
+    val endedBySilence: Boolean = false,
     val transcript: String = "",
     val partial: String = "",
     val status: String = "Tap mic to speak. Review before sending.",
@@ -33,6 +35,7 @@ class NativeVoiceInput(private val context: Context) {
     private var generation = 0
     private var closed = false
     private var timeout: Runnable? = null
+    private var confirming = false
     /** Recognition language from Voice settings: "auto" (device language) or a BCP-47 tag such as hi-IN or ur-PK. */
     var language: String = "auto"
 
@@ -49,6 +52,7 @@ class NativeVoiceInput(private val context: Context) {
             return
         }
         release()
+        confirming = false
         val token = ++generation
         mutableState.value = VoiceInputState(busy = true, status = "Starting microphone…")
         try {
@@ -75,11 +79,14 @@ class NativeVoiceInput(private val context: Context) {
                         SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "Speech service is busy. Tap mic to retry."
                         else -> "Voice input unavailable. Tap mic to retry or type in Chat."
                     }
-                    finish(status, denied = error == SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS, error = error)
+                    val partial = mutableState.value.partial.trim()
+                    if (confirming && partial.isNotEmpty()) finish("Review transcript, then use it in Chat.", partial)
+                    else finish(status, denied = error == SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS, error = error)
                 }
                 override fun onResults(results: Bundle?) {
                     val words = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull().orEmpty()
-                    try { finish("Review transcript, then use it in Chat.", VoiceDraft.merge("", words)) }
+                    val silence = !confirming
+                    try { finish("Review transcript, then use it in Chat.", VoiceDraft.merge("", words.ifBlank { mutableState.value.partial })); if (token + 1 == generation) mutableState.value = mutableState.value.copy(endedBySilence = silence) }
                     catch (error: IllegalArgumentException) { finish(error.message ?: "Speech could not be read.") }
                 }
                 override fun onPartialResults(partialResults: Bundle?) {
@@ -96,6 +103,22 @@ class NativeVoiceInput(private val context: Context) {
             })
         } catch (_: SecurityException) { permissionDenied() }
         catch (_: Exception) { stop(); mutableState.value = mutableState.value.copy(status = "Voice input unavailable. Tap mic to retry or type in Chat.") }
+    }
+
+    /**
+     * Stop listening but keep the words: asks the recognizer for its final result (delivered to [state] as the
+     * transcript). Falls back to the last partial when the recognizer is gone.
+     */
+    fun confirm() {
+        val speech = recognizer
+        if (!mutableState.value.busy || speech == null) return
+        confirming = true
+        val partial = mutableState.value.partial
+        mutableState.value = mutableState.value.copy(status = "Processing speech…")
+        runCatching { speech.stopListening() }.onFailure {
+            generation++; release()
+            mutableState.value = VoiceInputState(transcript = partial.trim(), status = "Review transcript, then use it in Chat.")
+        }
     }
 
     fun stop() {

@@ -423,6 +423,11 @@ class _Text:
         self.text, self.candidates = text, []
 
 
+def progress_event(step, label, state="active"):
+    """Structured agent progress for the app's step UI. Older clients ignore unknown event types."""
+    return {"type": "progress", "step": step, "label": label, "state": state}
+
+
 def coding_reply(messages, attachments, system, enqueue):
     """Phase 2: coding on DUA_REPO through the locked-down GitHub client (opens a PR, never merges)."""
     import coding_agent
@@ -436,11 +441,14 @@ def coding_reply(messages, attachments, system, enqueue):
         github = coding_agent.GitHubClient(token, repo)
         if not enqueue("event", {"type": "thinking", "delta": f"**Coding on {repo}** (reads files, then opens a PR; never merges)\n"}):
             return
+        if not enqueue("event", progress_event("plan", "Planning\u2026")):
+            return
         contents = build_contents(with_last_user_suffix(messages, coding_agent.CODING_PROMPT.format(
             repo=repo, max_files=coding_agent.MAX_FILES_CHANGED)), attachments)
         text = coding_agent.run_coding(get_model(system), contents, github,
                                        lambda delta: enqueue("event", {"type": "thinking", "delta": delta}),
-                                       last_user_text(messages))
+                                       last_user_text(messages),
+                                       progress=lambda step, label, state="active": enqueue("event", progress_event(step, label, state)))
     except coding_agent.CodingError as error:
         text = f"Coding stopped: {str(error)[:300]} No pull request was opened."
     enqueue("chunk", _Text(text))
@@ -463,12 +471,16 @@ def agent_producer(messages, attachments, system):
                     return
             enqueue("done")
             return
+        if not enqueue("event", progress_event("plan", "Planning\u2026")):
+            return
         if not enqueue("event", {"type": "thinking", "delta": "**Step 1 - Plan**\n"}):
             return
         plan = chunk_text(model.generate_content(
             build_contents(with_last_user_suffix(messages, AGENT_PLAN_PROMPT), attachments),
             generation_config={"max_output_tokens": AGENT_PLAN_TOKENS, "temperature": 0.3}))[:4000]
         if not enqueue("event", {"type": "thinking", "delta": (plan or "- Research latest AI news and tools") + "\n\n**Step 2 - Research (Google Search)**\n"}):
+            return
+        if not enqueue("event", progress_event("search", "Searching the web\u2026")):
             return
         research = model.generate_content(
             build_contents(with_last_user_suffix(messages, AGENT_RESEARCH_PROMPT + plan), attachments),
@@ -479,6 +491,8 @@ def agent_producer(messages, attachments, system):
         if not enqueue("event", {"type": "thinking", "delta": f"Found {len(sources)} sources.\n\n**Step 3 - Summary and ideas**\n"}):
             return
         if sources and not enqueue("event", {"type": "sources", "sources": sources}):
+            return
+        if not enqueue("event", progress_event("answer", f"Reading {len(sources)} sources\u2026" if sources else "Writing the answer\u2026")):
             return
         listed = "\n".join(f"[{item['id']}] {item['title']} - {item['url']}" for item in sources) or "(no web sources found)"
         answer_prompt = f"{AGENT_ANSWER_PROMPT}\n\nResearch notes:\n{notes or '(empty)'}\n\nSources:\n{listed}"

@@ -20,7 +20,9 @@ data class LocalPreferences(val theme: String = "dark", val font: String = "defa
     val replyLanguage: String = "auto", val inputLanguage: String = "auto",
     /** Live voice (xAI realtime) voice id; "" = server default. */
     val liveVoice: String = "",
-    val projects: List<com.dua.ai.projects.ChatProject> = com.dua.ai.projects.ProjectCodec.defaults)
+    val projects: List<com.dua.ai.projects.ChatProject> = com.dua.ai.projects.ProjectCodec.defaults,
+    /** Chat dictation: send automatically when you stop speaking (off = review in the composer first). */
+    val dictationAutoSend: Boolean = false)
 
 object PreferencesCodec {
     fun validate(value: LocalPreferences): LocalPreferences {
@@ -41,6 +43,7 @@ object PreferencesCodec {
             .put("imagineProvider", value.imagineProvider).put("imagineAspect", value.imagineAspect)
             .put("voiceProvider", value.voiceProvider).put("voiceName", value.voiceName).put("deviceVoice", value.deviceVoice)
             .put("voiceSpeed", value.voiceSpeed.toDouble()).put("replyLanguage", value.replyLanguage).put("inputLanguage", value.inputLanguage).put("liveVoice", value.liveVoice)
+            .put("dictationAutoSend", value.dictationAutoSend)
             .put("projects", com.dua.ai.projects.ProjectCodec.toJson(value.projects)).toString()
     }
     fun decode(raw: String): LocalPreferences {
@@ -60,7 +63,8 @@ object PreferencesCodec {
         return validate(LocalPreferences(data.getString("theme"), data.getString("font"), data.getBoolean("haptic"),
             data.getBoolean("notifications"), data.getBoolean("memoryEnabled"), (0 until notes.length()).map { (notes.get(it) as? String ?: error("Invalid memory note")) }, generatedVoice,
             imagineProvider, imagineAspect, voiceProvider, voiceName, deviceVoice, voiceSpeed, replyLanguage, inputLanguage, liveVoice,
-            com.dua.ai.projects.ProjectCodec.fromJson(if (data.has("projects")) data.getJSONArray("projects") else null)))
+            com.dua.ai.projects.ProjectCodec.fromJson(if (data.has("projects")) data.getJSONArray("projects") else null),
+            dictationAutoSend = data.optBoolean("dictationAutoSend", false)))
     }
     fun memoryText(value: LocalPreferences): String = if (value.memoryEnabled) value.memory.joinToString("\n") { "- $it" } else ""
 }

@@ -237,3 +237,20 @@ def test_clean_title_limits():
     assert engine.clean_title("one two three four five six seven eight nine ten") == "one two three four five six seven eight"
     assert len(engine.clean_title("x" * 200)) <= 60
     assert engine.clean_title("**Hello world!**") == "Hello world!"
+
+
+def test_agent_emits_structured_progress_in_order(model):
+    evs = events(engine.app.test_client().post("/api/chat", json=BODY))
+    steps = [(e["step"], e["label"], e["state"]) for e in evs if e["type"] == "progress"]
+    assert [s[0] for s in steps] == ["plan", "search", "answer"]
+    assert steps[0][1] == "Planning\u2026" and steps[1][1] == "Searching the web\u2026"
+    assert steps[2][1] == "Reading 2 sources\u2026" and all(s[2] == "active" for s in steps)
+    kinds = [e["type"] for e in evs]
+    # Backward compatible: the raw thinking text is still sent, and progress comes before the answer text.
+    assert "thinking" in kinds and kinds.index("progress") < kinds.index("text")
+
+
+def test_casual_agent_message_has_no_progress(model):
+    body = dict(BODY, messages=[{"role": "user", "text": "hi"}])
+    evs = events(engine.app.test_client().post("/api/chat", json=body))
+    assert not any(e["type"] == "progress" for e in evs)

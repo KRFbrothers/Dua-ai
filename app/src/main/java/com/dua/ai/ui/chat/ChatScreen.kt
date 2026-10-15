@@ -62,6 +62,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -359,8 +360,14 @@ fun ChatScreen(
                                     visibleModes.forEach { toggle -> HomeActionButton(toggle, if (fill) Modifier.weight(1f) else Modifier) }
                                 }
                             }
+                            val dictation = if (actions.inlineDictation) rememberChatDictation(actions.dictationLanguage, actions.dictationAutoSend,
+                                draft = rememberUpdatedState(state.draft).let { d -> remember { { d.value } } }, onDraft = actions.onDraftChange, onSend = actions.onSend, onNotice = actions.onDictationNotice) else null
                             Composer(
-                                state = state,
+                                dictation = dictation,
+                                // Only what the composer needs, so streamed tokens do not recompose it.
+                                controlled = true,
+                                typing = state.typing,
+                                uploading = state.uploads.any { it.uploading },
                                 focusRequester = inputFocus,
                                 onDraftChange = actions.onDraftChange,
                                 onAttach = { sheet = ChatSheet.Attach },
@@ -375,7 +382,7 @@ fun ChatScreen(
                                 onStop = actions.onStop,
                                 onModelClick = { sheet = ChatSheet.Model },
                                 currentModel = state.model,
-                                onCancelUpload = { state.uploads.filter { it.uploading }.forEach { actions.onCancelUpload(it.id) } },
+                                onCancelUpload = rememberUpdatedState(state.uploads).let { uploads -> remember(actions) { { uploads.value.filter { it.uploading }.forEach { actions.onCancelUpload(it.id) } } } },
                                 onImagineOptions = { sheet = ChatSheet.Imagine },
                                 showModelSelector = feature == null,
                                 attachmentPopup = {

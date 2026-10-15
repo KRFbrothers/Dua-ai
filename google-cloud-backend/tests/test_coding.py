@@ -225,3 +225,24 @@ def test_real_genai_tool_declarations():
     assert [f.name for f in tools[0].function_declarations] == ["list_files", "read_file", "search_code", "propose_changes"]
     content = ca.default_tool_response([("read_file", {"content": "x"})])
     assert content.role == "user" and content.parts[0].function_response.name == "read_file"
+
+
+def test_coding_reports_read_and_pr_progress(monkeypatch, owner):
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    monkeypatch.setattr(engine, "get_model", lambda system=engine.SYSTEM_PROMPT: CodingModel())
+    opener = Opener()
+    real = ca.GitHubClient
+    monkeypatch.setattr(ca, "GitHubClient", lambda token, repo: real(token, repo, opener=opener))
+    monkeypatch.setattr(ca, "default_tools", lambda: ["TOOLS"])
+    monkeypatch.setattr(ca, "default_tool_response", lambda results: ("tool", results))
+    evs = post("code likho: add a hello screen to the app")
+    steps = [e["step"] for e in evs if e["type"] == "progress"]
+    assert steps[0] == "plan" and steps[-1] == "pr" and "Opening PR\u2026" in [e["label"] for e in evs if e["type"] == "progress"]
+
+
+def test_run_coding_progress_is_optional():
+    gh = client()
+    calls = []
+    ca.run_coding(CodingModel(), [], gh, lambda d: None, "x", tools=[], tool_response=lambda r: r,
+                  progress=lambda step, label, state="active": calls.append(step))
+    assert calls[-1] == "pr"

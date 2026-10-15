@@ -71,10 +71,14 @@ fun ThinkingBlock(
     startedAt: Long,
     modifier: Modifier = Modifier,
     initiallyExpanded: Boolean = false,
+    /** False when another view (Agent progress) shows the live state: stay collapsed unless the user opens it. */
+    followStream: Boolean = true,
 ) {
-    var expanded by rememberSaveable(messageId) { mutableStateOf(initiallyExpanded || (live && !answering)) }
+    var expanded by rememberSaveable(messageId) { mutableStateOf(initiallyExpanded || (followStream && live && !answering)) }
     // Follow the stream: open while thinking, fold away when the answer begins or the reply ends.
-    LaunchedEffect(live, answering) { if (!live || answering) { if (!initiallyExpanded) expanded = false } else expanded = true }
+    LaunchedEffect(live, answering, followStream) {
+        if (!live || answering) { if (!initiallyExpanded) expanded = false } else if (followStream) expanded = true
+    }
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     val ticking = live && !answering
     LaunchedEffect(ticking) { while (ticking) { now = System.currentTimeMillis(); delay(1000) } }

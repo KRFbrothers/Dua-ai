@@ -19,6 +19,8 @@ sealed interface ReplyEvent {
     data class Build(val info: com.dua.ai.model.BuildInfo) : ReplyEvent
     /** Build mode: a change proposal for the owner to review (nothing was written to GitHub). */
     data class Proposal(val proposal: com.dua.ai.model.BuildProposal) : ReplyEvent
+    /** Agent step update (Cloud Run): [step] id, user-facing [label], finished when [done]. */
+    data class Progress(val step: String, val label: String, val done: Boolean) : ReplyEvent
     data class Saved(val receipt: com.dua.ai.account.ReplySaved) : ReplyEvent
     data class Done(val truncated: Boolean) : ReplyEvent
     data class Failed(val message: String, val status: Int) : ReplyEvent
@@ -95,6 +97,11 @@ class ChatStreamParser {
                 }
                 "build" -> com.dua.ai.model.BuildInfos.fromJson(json)?.let { ReplyEvent.Build(it) }
                 "proposal" -> com.dua.ai.model.BuildProposals.fromJson(json)?.let { ReplyEvent.Proposal(it) }
+                "progress" -> {
+                    val step = json.optString("step"); val label = json.optString("label").trim()
+                    if (com.dua.ai.model.AgentProgress.validId(step) && label.isNotEmpty())
+                        ReplyEvent.Progress(step, label.take(com.dua.ai.model.AgentProgress.MAX_LABEL), json.optString("state") == "done") else null
+                }
                 "saved" -> ReplyEvent.Saved(com.dua.ai.account.ReplyPersistenceCodec.receipt(json))
                 "done" -> ReplyEvent.Done(json.optBoolean("truncated"))
                 "error" -> ReplyEvent.Failed(json.optString("message").takeIf { it.isNotBlank() }?.take(300)
@@ -114,6 +121,7 @@ class StreamAccumulator(private val startedAt: Long, private val clock: () -> Lo
     private var codeRuns: List<com.dua.ai.model.CodeRun> = emptyList()
     private var build: com.dua.ai.model.BuildInfo? = null
     private var proposal: com.dua.ai.model.BuildProposal? = null
+    private var progress: List<com.dua.ai.model.AgentStep> = emptyList()
     var finished = false
         private set
 
@@ -127,12 +135,14 @@ class StreamAccumulator(private val startedAt: Long, private val clock: () -> Lo
                 text.append(event.delta)
             }
             is ReplyEvent.Notice -> notice = event.message
+            is ReplyEvent.Progress -> progress = com.dua.ai.model.AgentProgress.apply(progress, event.step, event.label, event.done)
             is ReplyEvent.Build -> build = event.info
             is ReplyEvent.Proposal -> proposal = event.proposal
             is ReplyEvent.Code -> codeRuns = com.dua.ai.model.CodeRuns.merge(codeRuns, event.index, event.language, event.code, event.output, event.outcome)
             is ReplyEvent.Saved -> thinkingSeconds = event.receipt.thinkingSeconds
             is ReplyEvent.Done -> {
                 finished = true
+                progress = com.dua.ai.model.AgentProgress.finish(progress)
                 if (thinking.isNotEmpty() && thinkingSeconds == null) thinkingSeconds = elapsedSeconds()
                 if (event.truncated) notice = "Reply reached the output limit and may be cut off."
             }
@@ -145,7 +155,7 @@ class StreamAccumulator(private val startedAt: Long, private val clock: () -> Lo
         val visibleThinking = thinking.toString().takeIf { it.isNotBlank() }
         return StreamSnapshot(text.toString(), visibleThinking,
             if (visibleThinking == null) null else thinkingSeconds ?: if (ended) elapsedSeconds() else null,
-            notice, finished, codeRuns, build, proposal)
+            notice, finished, codeRuns, build, proposal, progress)
     }
 
     private fun elapsedSeconds() = (((clock() - startedAt) + 500) / 1000).toInt().coerceIn(1, 86400)
@@ -153,4 +163,4 @@ class StreamAccumulator(private val startedAt: Long, private val clock: () -> Lo
 
 data class StreamSnapshot(val text: String = "", val thinking: String? = null, val thinkingSeconds: Int? = null, val notice: String? = null, val finished: Boolean = false,
     val codeRuns: List<com.dua.ai.model.CodeRun> = emptyList(), val build: com.dua.ai.model.BuildInfo? = null,
-    val proposal: com.dua.ai.model.BuildProposal? = null)
+    val proposal: com.dua.ai.model.BuildProposal? = null, val progress: List<com.dua.ai.model.AgentStep> = emptyList())
