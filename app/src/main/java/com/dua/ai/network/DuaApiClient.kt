@@ -45,6 +45,29 @@ class DuaApiClient(
      * Asks the chat engine (GET /) whether it offers Dua Agent mode. Only an explicit `"agent": true`
      * JSON answer counts; any other status, body or network failure means not available.
      */
+    /**
+     * Short drawer title from the Cloud Run engine (POST /api/title, owner session required). Returns null
+     * on any failure or invalid title, so the caller keeps the default title (the first message).
+     */
+    suspend fun chatTitle(user: String, reply: String, token: String?): String? = withContext(Dispatchers.IO) {
+        runCatching {
+            val base = URL(baseUrl.trimEnd('/') + "/")
+            if (base.protocol != "https") return@runCatching null
+            val body = JSONObject().put("user", user.take(4000)).put("reply", reply.take(4000)).toString()
+                .toRequestBody("application/json; charset=utf-8".toMediaType())
+            val builder = Request.Builder().url(URL(base, "api/title")).post(body).header("Accept", "application/json").header("x-dua-native", "1")
+            if (appToken.isNotBlank()) builder.header("X-Dua-App-Token", appToken)
+            if (token != null && token.length <= 10000 && token.matches(Regex("[A-Za-z0-9._-]+"))) builder.header("Authorization", "Bearer $token")
+            client.newCall(builder.build()).execute().use { response ->
+                if (response.code !in 200..299) return@use null
+                val source = response.body?.source() ?: return@use null
+                source.request(16385)
+                if (source.buffer.size > 16384) return@use null
+                parseTitle(source.readUtf8())
+            }
+        }.getOrNull()
+    }
+
     suspend fun engineAgentAvailable(): Boolean = withContext(Dispatchers.IO) {
         runCatching {
             val base = URL(baseUrl.trimEnd('/') + "/")
@@ -256,6 +279,12 @@ class DuaApiClient(
     }
 
     companion object {
+        /** A usable title from the engine's `{"title": ...}` answer, or null. */
+        internal fun parseTitle(body: String): String? = runCatching {
+            val raw = JSONObject(body).opt("title") as? String ?: return@runCatching null
+            val title = raw.split(Regex("\\s+")).filter { it.isNotEmpty() }.joinToString(" ").take(60).trim()
+            title.takeIf { com.dua.ai.history.ChatTitles.valid(it) }
+        }.getOrNull()
         /** True only for a JSON object with `"agent": true` (the Cloud Run engine's GET / answer). */
         internal fun parseAgentCapability(body: String): Boolean =
             runCatching { JSONObject(body).opt("agent") == true }.getOrDefault(false)

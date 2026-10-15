@@ -255,8 +255,10 @@ private fun ChatRow(chat: SavedChat, current: Boolean, serverDeletion: Boolean, 
                 .padding(vertical = DrawerSizes.chatPaddingV),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(chat.title.ifBlank { "New chat" }, style = DrawerChatStyle, color = colors.chatText, maxLines = 1,
-                overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            // Auto titles arrive after the first reply; cross-fade instead of jumping.
+            androidx.compose.animation.Crossfade(chat.title.ifBlank { "New chat" }, Modifier.weight(1f), label = "chat-title") { shown ->
+                Text(shown, style = DrawerChatStyle, color = colors.chatText, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
             if (chat.pinned) Icon(Icons.Outlined.PushPin, "Pinned", tint = colors.subText, modifier = Modifier.size(DrawerSizes.pinIcon))
         }
         if (menu) ChatOptionsSheet(chat.title.ifBlank { "New chat" }, chat.pinned, pinEnabled, serverDeletion, onDismiss = { menu = false },
