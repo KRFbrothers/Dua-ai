@@ -173,3 +173,24 @@ sign-in (no service-role key). The daily cap uses the same Supabase counter as V
 default 20). Owner sign-in is required. The app uses Google Cloud for new images when `GET /` shows
 `"imagine": {"image": true}`; photo edits and video stay on Vercel. Turn it off with `DUA_IMAGINE=0`.
 Needs the existing `SUPABASE_URL` / `SUPABASE_ANON_KEY` settings and the Supabase Imagine migration. No new secret is needed.
+
+## Dua Agent tools (general tool loop)
+
+Agent mode first runs the cheap router: greetings and simple questions get one direct reply. Real tasks run one
+tool-calling loop on `VERTEX_MODEL` (default `gemini-3.8-flash`) in `agent_tools.py`. The model picks the tools;
+each one runs on this server, behind the same owner sign-in as `/api/chat`.
+
+| Tool | What it does | Cap per request |
+| --- | --- | --- |
+| `google_search` | One grounded Gemini call with Google Search; notes + numbered sources (Sources footer) | 3 |
+| `fetch_url` | Reads one public page as text. http(s), ports 80/443 only; private, loopback, link-local and metadata IPs blocked; connection pinned to the checked IP; redirects re-checked; 2 MB / 20k chars | 5 |
+| `run_python` | One Gemini call with the built-in code execution sandbox (Google runs the code, not this server) | 2 |
+| `calculator` | Safe math (no Python eval) | 20 |
+| `current_time` | Date and time in IST | 5 |
+| `generate_image` | Same path as `/api/imagine/image` (owner storage, `IMAGINE_DAILY_IMAGES` cap); needs `DUA_IMAGINE` on | 1 |
+| `remember` / `recall` | Suggests a note to the app's Memory (you confirm it in Settings > Integrations); reads the Memory the app sends | 3 / 3 |
+| `list_files`, `read_file`, `search_code`, `propose_changes` | GitHub tools on `DUA_REPO`, only when `GITHUB_TOKEN` is set; same allowlist (new `dua-agent/` branch + PR, never merges) | coding caps |
+
+Loop caps: `AGENT_MAX_STEPS` model calls (default 12), `AGENT_STEP_TOKENS` output tokens per step (16384),
+`AGENT_SUB_TOKENS` per search/code call (3072) and `AGENT_MAX_SECONDS` total (600). Each tool shows a step chip
+in the app ("Searching the web…", "Opening page…", "Running code…", "Creating image…").

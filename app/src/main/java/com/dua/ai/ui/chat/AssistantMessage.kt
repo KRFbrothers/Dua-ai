@@ -1,5 +1,6 @@
 package com.dua.ai.ui.chat
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -37,6 +38,7 @@ fun AssistantMessage(
     confirmPr: Boolean = false,
     onCreatePr: (String) -> Unit = {},
     showActions: Boolean = isLast,
+    onOpenMedia: (Int) -> Unit = {},
 ) {
     val parts = remember(message.text) { ReplySources.split(message.text) }
     val streaming = message.streaming
@@ -59,7 +61,10 @@ fun AssistantMessage(
         message.build?.let { BuildFiles(message.id, it, live = streaming, Modifier.padding(bottom = Spacing.sm), initiallyExpanded = buildExpanded) }
         // Run code: what the provider executed, collapsed above the answer (the answer explains the result).
         if (message.codeRuns.isNotEmpty()) CodeRuns(message.id, message.codeRuns, Modifier.padding(bottom = Spacing.sm), initiallyExpanded = codeExpanded, live = streaming)
-        if (streaming && message.text.isEmpty() && message.thinking == null && !showProgress && message.codeRuns.isEmpty() && message.build == null) ReplyPlaceholder()
+        // Dua Agent generate_image: the created image sits above the answer (same grid and viewer as Imagine).
+        val images = message.media.filter { !it.isVideo }
+        if (images.isNotEmpty()) Box(Modifier.padding(bottom = Spacing.sm)) { ImageGrid(images, null, onOpen = onOpenMedia) }
+        if (streaming && message.text.isEmpty() && message.thinking == null && !showProgress && message.codeRuns.isEmpty() && message.build == null && images.isEmpty()) ReplyPlaceholder()
         if (parts.body.isNotEmpty()) {
             // New replies fade in once; restored/finished replies render immediately.
             if (streaming) FadeInOnce { MarkdownMessage(parts.body) } else MarkdownMessage(parts.body)

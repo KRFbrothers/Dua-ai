@@ -181,6 +181,12 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             integrationNotice("Note saved and cached on this phone; the server copy wins on sync. Notes are sent with chat only when Memory is enabled.")
         } catch (failure: Exception) { integrationNotice(failure.message ?: "Memory could not be saved.") }
     }
+    /** Dua Agent `remember`: queued as a reviewable suggestion (Personal chats only); nothing is saved without a tap. */
+    private fun suggestAgentMemory(fact: String) {
+        if (_projectId.value != com.dua.ai.projects.ProjectCodec.PERSONAL) return
+        if (fact in localSettings.value.memory) return
+        _memoryCandidates.value = (_memoryCandidates.value + fact).distinct().takeLast(4)
+    }
     fun dismissMemoryNote(note: String) { _memoryCandidates.value = _memoryCandidates.value.filterNot { it == note } }
     /** Share target writes only after explicit review, using the existing personal-memory cache/sync protocol. */
     fun confirmSharedMemory(note: String, expectedOwnerId: String): String? = try {
@@ -500,6 +506,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         val chatId = activeId
         events.onEach {
             if (it is com.dua.ai.network.ReplyEvent.Files) applyTranscripts(it.transcripts)
+            if (it is com.dua.ai.network.ReplyEvent.Media) it.links.forEach { (path, url) -> mediaCache.remember(path, url) }
+            if (it is com.dua.ai.network.ReplyEvent.Memory) suggestAgentMemory(it.fact)
             if (it is com.dua.ai.network.ReplyEvent.Context && request?.context != null) applySummary(chatId, request.turns, it)
             if (it is com.dua.ai.network.ReplyEvent.Saved) {
                 val receipt = it.receipt
@@ -524,7 +532,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             accumulator.apply(it)
         }.conflate().collect {
             val snapshot = accumulator.snapshot()
-            updateMessage(id) { it.copy(progress = snapshot.progress, text = snapshot.text, thinking = snapshot.thinking, thinkingSeconds = snapshot.thinkingSeconds, notice = snapshot.notice, codeRuns = snapshot.codeRuns, build = snapshot.build ?: it.build, proposal = snapshot.proposal ?: it.proposal) }
+            updateMessage(id) { it.copy(progress = snapshot.progress, media = snapshot.media.ifEmpty { it.media }, text = snapshot.text, thinking = snapshot.thinking, thinkingSeconds = snapshot.thinkingSeconds, notice = snapshot.notice, codeRuns = snapshot.codeRuns, build = snapshot.build ?: it.build, proposal = snapshot.proposal ?: it.proposal) }
             delay(STREAM_FRAME_MS)
         }
     }

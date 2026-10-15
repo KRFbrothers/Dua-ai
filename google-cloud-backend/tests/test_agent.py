@@ -20,6 +20,12 @@ class AgentModel:
 
     def generate_content(self, contents, stream=False, generation_config=None, tools=None):
         self.calls.append({"contents": contents, "stream": stream, "config": generation_config, "tools": tools})
+        if tools == ["TOOLS"]:
+            # Tool loop: first step searches, the next one answers.
+            if sum(1 for c in self.calls if c["tools"] == ["TOOLS"]) == 1:
+                return SimpleNamespace(function_calls=[SimpleNamespace(name="google_search", args={"query": "latest AI news"})],
+                                       candidates=[SimpleNamespace(content="model-turn")], text=None)
+            return SimpleNamespace(function_calls=[], candidates=[], text="## Ideas\n1. Voice [1]")
         if tools:
             if self.fail_research:
                 raise RuntimeError("secret quota detail")
@@ -36,6 +42,11 @@ def model(monkeypatch):
     monkeypatch.setattr(engine, "make_part", lambda text=None, data=None, mime_type=None: ("text", text))
     monkeypatch.setattr(engine, "make_content", lambda role, parts: {"role": role, "parts": parts})
     monkeypatch.setattr(engine, "google_search_tool", lambda: "GOOGLE_SEARCH")
+    import agent_tools
+    import coding_agent
+    monkeypatch.setattr(agent_tools, "default_tools", lambda github: ["TOOLS"])
+    monkeypatch.setattr(coding_agent, "default_tool_response", lambda results: ("tool", results))
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
     monkeypatch.delenv("DUA_APP_TOKEN", raising=False)
     # Owner verification is covered by test_owner_auth; agent tests focus on the agent flow.
     monkeypatch.setattr(engine, "verify_owner", lambda authorization: "verified-owner")
@@ -49,7 +60,7 @@ def events(response):
 BODY = {"model": "Dua", "messages": [{"role": "user", "text": "Latest AI news?"}], "stream": True, "mode": "agent"}
 
 
-def test_agent_plans_researches_once_and_streams_ideas_with_sources(model):
+def test_agent_tool_loop_searches_and_answers_with_sources(model):
     r = engine.app.test_client().post("/api/chat", json=BODY)
     evs = events(r)
     kinds = [e["type"] for e in evs]
@@ -58,20 +69,22 @@ def test_agent_plans_researches_once_and_streams_ideas_with_sources(model):
     sources = next(e for e in evs if e["type"] == "sources")["sources"]
     assert [s["url"] for s in sources] == ["https://example.com/a", "https://news.test/b"]
     assert sources[0]["domain"] == "example.com" and sources[1]["domain"] == "news.test"
-    assert "".join(e["delta"] for e in evs if e["type"] == "text").startswith("## Ideas\n1. Voice\n\nSources:\n[1]")
-    # Cost caps: 3 calls, exactly one grounded, every call token-capped.
-    assert len(model.calls) == 3
-    assert [c["tools"] for c in model.calls] == [None, ["GOOGLE_SEARCH"], None]
-    assert all(c["config"]["max_output_tokens"] <= 4096 for c in model.calls)
-    final_text = model.calls[2]["contents"][-1]["parts"][0][1]
-    assert "Gemini 3 Flash launched." in final_text and "[1]" in final_text
+    assert "".join(e["delta"] for e in evs if e["type"] == "text").startswith("## Ideas\n1. Voice [1]\n\nSources:\n[1]")
+    # Loop: step (search) -> grounded sub-call -> step (answer); every call token-capped.
+    assert [c["tools"] for c in model.calls] == [["TOOLS"], ["GOOGLE_SEARCH"], ["TOOLS"]]
+    assert all(c["config"]["max_output_tokens"] <= 16384 for c in model.calls)
+    tool_turn = model.calls[2]["contents"][-1]
+    assert tool_turn[0] == "tool" and tool_turn[1][0][1]["notes"] == "Gemini 3 Flash launched."
+    assert [s["id"] for s in tool_turn[1][0][1]["sources"]] == [1, 2]
 
 
 def test_agent_failure_does_not_leak(model):
     model.fail_research = True
     r = engine.app.test_client().post("/api/chat", json=BODY)
     evs = events(r)
-    assert evs[-1] == {"type": "error", "message": engine.GENERIC_ERROR, "status": 502}
+    # A failing tool goes back to the model as a safe error; the reply still finishes and nothing leaks.
+    assert evs[-1]["type"] == "done"
+    assert model.calls[-1]["contents"][-1][1][0][1] == {"error": "The tool failed."}
     assert "secret" not in r.get_data(as_text=True)
 
 
@@ -164,7 +177,7 @@ def test_direct_reply_keeps_multi_turn_history(model):
 
 def test_task_words_run_full_pipeline_with_search(model):
     post("Dua AI ke liye latest AI tools aur feature ideas batao")
-    assert [c["tools"] for c in model.calls] == [None, ["GOOGLE_SEARCH"], None]
+    assert [c["tools"] for c in model.calls] == [["TOOLS"], ["GOOGLE_SEARCH"], ["TOOLS"]]
 
 
 def test_router_call_is_cheap_and_decides(monkeypatch, model):
@@ -177,7 +190,7 @@ def test_router_call_is_cheap_and_decides(monkeypatch, model):
 
     m = use(monkeypatch, RouterModel(route="agent"))
     post("Can you go deep on how other assistant apps handle offline mode these days?")
-    assert [c["tools"] for c in m.calls] == [None, None, ["GOOGLE_SEARCH"], None]
+    assert [c["tools"] for c in m.calls] == [None, ["TOOLS"], ["GOOGLE_SEARCH"], ["TOOLS"]]
 
 
 def test_router_failure_falls_back_safely(monkeypatch, model):
@@ -244,7 +257,7 @@ def test_agent_emits_structured_progress_in_order(model):
     steps = [(e["step"], e["label"], e["state"]) for e in evs if e["type"] == "progress"]
     assert [s[0] for s in steps] == ["plan", "search", "answer"]
     assert steps[0][1] == "Planning\u2026" and steps[1][1] == "Searching the web\u2026"
-    assert steps[2][1] == "Reading 2 sources\u2026" and all(s[2] == "active" for s in steps)
+    assert steps[2][1] == "Writing the answer\u2026" and all(s[2] == "active" for s in steps)
     kinds = [e["type"] for e in evs]
     # Backward compatible: the raw thinking text is still sent, and progress comes before the answer text.
     assert "thinking" in kinds and kinds.index("progress") < kinds.index("text")
