@@ -41,6 +41,8 @@ fun AssistantMessage(
     val parts = remember(message.text) { ReplySources.split(message.text) }
     val streaming = message.streaming
     Column(modifier.fillMaxWidth()) {
+        val showProgress = streaming && message.progress.isNotEmpty()
+        if (showProgress) AgentProgressView(message.progress, Modifier.padding(bottom = Spacing.xs))
         if (message.thinking != null) ThinkingBlock(
             messageId = message.id,
             thinking = message.thinking,
@@ -49,13 +51,15 @@ fun AssistantMessage(
             answering = message.text.isNotEmpty(),
             startedAt = message.startedAt,
             initiallyExpanded = thinkingExpanded,
+            // Agent steps replace the raw live text; the details stay one tap away.
+            followStream = !showProgress,
             modifier = Modifier.padding(bottom = Spacing.xs),
         )
         // Build mode: which repository files the server read for this reply (read-only).
         message.build?.let { BuildFiles(message.id, it, live = streaming, Modifier.padding(bottom = Spacing.sm), initiallyExpanded = buildExpanded) }
         // Run code: what the provider executed, collapsed above the answer (the answer explains the result).
         if (message.codeRuns.isNotEmpty()) CodeRuns(message.id, message.codeRuns, Modifier.padding(bottom = Spacing.sm), initiallyExpanded = codeExpanded, live = streaming)
-        if (streaming && message.text.isEmpty() && message.thinking == null && message.codeRuns.isEmpty() && message.build == null) ReplyPlaceholder()
+        if (streaming && message.text.isEmpty() && message.thinking == null && !showProgress && message.codeRuns.isEmpty() && message.build == null) ReplyPlaceholder()
         if (parts.body.isNotEmpty()) {
             // New replies fade in once; restored/finished replies render immediately.
             if (streaming) FadeInOnce { MarkdownMessage(parts.body) } else MarkdownMessage(parts.body)

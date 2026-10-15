@@ -514,7 +514,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             accumulator.apply(it)
         }.conflate().collect {
             val snapshot = accumulator.snapshot()
-            updateMessage(id) { it.copy(text = snapshot.text, thinking = snapshot.thinking, thinkingSeconds = snapshot.thinkingSeconds, notice = snapshot.notice, codeRuns = snapshot.codeRuns, build = snapshot.build ?: it.build, proposal = snapshot.proposal ?: it.proposal) }
+            updateMessage(id) { it.copy(progress = snapshot.progress, text = snapshot.text, thinking = snapshot.thinking, thinkingSeconds = snapshot.thinkingSeconds, notice = snapshot.notice, codeRuns = snapshot.codeRuns, build = snapshot.build ?: it.build, proposal = snapshot.proposal ?: it.proposal) }
             delay(STREAM_FRAME_MS)
         }
     }

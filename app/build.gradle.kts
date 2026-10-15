@@ -177,6 +177,8 @@ dependencies {
     implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
     implementation("androidx.exifinterface:exifinterface:1.4.1")
     implementation(libs.androidx.core.ktx)
+    // Installs the bundled baseline profile (src/main/baseline-prof.txt) on sideloaded APKs too: faster cold start.
+    implementation(libs.androidx.profileinstaller)
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.core.splashscreen)
     implementation(libs.androidx.lifecycle.runtime.ktx)

@@ -69,6 +69,13 @@ object VoiceSizes {
     val micButton = 72.dp
     val micIcon = 32.dp
     val buttonIcon = 18.dp
+    // Inline chat dictation (composer waveform)
+    val waveBar = 3.dp
+    val waveGap = 2.dp
+    val waveMinHeight = 3.dp
+    val waveHeight = 28.dp
+    const val waveSampleMs = 70L
+    const val waveSamples = 48
 }
 
 object VoiceShapes {

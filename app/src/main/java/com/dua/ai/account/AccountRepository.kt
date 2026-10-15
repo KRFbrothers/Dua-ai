@@ -11,7 +11,7 @@ import org.json.JSONObject
 
 data class AccountState(val configured: Boolean = false, val user: AccountUser? = null, val busy: Boolean = false, val notice: String = "", val deletionConfigured: Boolean = false, val emailAuthConfigured: Boolean = false, val rememberedUser: AccountUser? = null, val rememberedProvider: AccountProvider? = null)
 class AccountRepository(private val api: AccountApi, private val store: SessionPersistence) {
-    constructor(context: Context) : this(AccountApi(), AccountSessionStore(context))
+    constructor(context: Context) : this(AccountApi(), AccountSessionPreload.store(AccountSessionStore(context)))
     private var session = runCatching { store.read() }.getOrNull()
     private val mutable = MutableStateFlow(AccountState(user = session?.user, rememberedUser = session?.user?.copy(phoneNumber = ""), rememberedProvider = session?.provider)); val state = mutable.asStateFlow()
     private val mutex = Mutex()

@@ -71,10 +71,15 @@ fun Composer(
     currentModel: String = "Auto",
     showModelSelector: Boolean = true,
     attachmentPopup: @Composable () -> Unit = {},
+    /** Inline dictation (chat). Null = the mic calls [onMic] (opens the Voice page). */
+    dictation: ChatDictation? = null,
+    /** [value] is the source of truth (chat). Defaults to true whenever [state] is given. */
+    controlled: Boolean = state != null,
+    typing: Boolean = (state as? ChatUiState)?.typing == true,
+    uploading: Boolean = (state as? ChatUiState)?.uploads?.any { it.uploading } == true,
 ) {
     var localText by remember { mutableStateOf(value) }
-    val chatState = state as? ChatUiState
-    val activeText = if (state != null) value else if (value.isNotEmpty()) value else localText
+    val activeText = if (controlled) value else if (value.isNotEmpty()) value else localText
 
     val c = HomeTheme.colors
     fun submit() {
@@ -117,6 +122,7 @@ fun Composer(
                 .padding(horizontal = HomeSizes.barPaddingH, vertical = HomeSizes.barPaddingV),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            if (dictation?.listening == true) { DictationBar(dictation.level, dictation.cancel, dictation.confirm); return@Row }
             Box { IconButton(onClick = onAttach, modifier = Modifier.size(Sizes.touchTarget)) {
                 Icon(Icons.Default.Add, contentDescription = "Add photos and files", tint = c.barIcon,
                     modifier = Modifier.size(HomeSizes.plusIcon))
@@ -148,12 +154,11 @@ fun Composer(
                     }
                 }
             )
-            IconButton(onClick = onMic, modifier = Modifier.size(Sizes.touchTarget)) {
+            IconButton(onClick = { dictation?.start?.invoke() ?: onMic() }, modifier = Modifier.size(Sizes.touchTarget)) {
                 Icon(Icons.Default.Mic, contentDescription = "Dictate", tint = c.barIcon, modifier = Modifier.size(HomeSizes.micIcon))
             }
-            val uploading = chatState?.uploads?.any { it.uploading } == true
             val (icon, label, action) = when {
-                chatState?.typing == true -> Triple(Icons.Default.Stop, "Stop response", { onStop() })
+                typing -> Triple(Icons.Default.Stop, "Stop response", { onStop() })
                 uploading && activeText.isBlank() -> Triple(Icons.Default.Close, "Cancel upload", { onCancelUpload() })
                 activeText.isNotBlank() -> Triple(Icons.Default.ArrowUpward, "Send message", { submit() })
                 else -> Triple(ImageVector.vectorResource(R.drawable.ls_live_wave), "Voice mode", { onVoiceMode() })

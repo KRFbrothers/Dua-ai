@@ -99,7 +99,8 @@ fun VoiceSettingsScreen(viewModel: ChatViewModel, voice: ReplyVoice, onBack: () 
         onProvider = { id -> voice.stopAll(); viewModel.updateSettings(selectProvider(viewModel.localSettings.value, id)) },
         onSpeed = { value -> viewModel.updateSettings(viewModel.localSettings.value.copy(voiceSpeed = (Math.round(value * 20) / 20f).coerceIn(0.5f, 2f))) },
         onPreview = { previewSelected(viewModel, voice) }, onOpen = onOpen,
-        onGeneratedVoice = { enabled -> voice.stopAll(); viewModel.updateSettings(viewModel.localSettings.value.copy(generatedVoice = enabled)) })
+        onGeneratedVoice = { enabled -> voice.stopAll(); viewModel.updateSettings(viewModel.localSettings.value.copy(generatedVoice = enabled)) },
+        onAutoSend = { enabled -> viewModel.updateSettings(viewModel.localSettings.value.copy(dictationAutoSend = enabled)) })
 }
 
 @Composable
@@ -135,12 +136,16 @@ internal fun previewSelected(viewModel: ChatViewModel, voice: ReplyVoice) {
 
 @Composable
 fun VoiceSettingsContent(state: VoiceSettingsUiState, onBack: () -> Unit, onPicker: (String) -> Unit, onProvider: (String) -> Unit,
-    onSpeed: (Float) -> Unit, onPreview: () -> Unit, onOpen: (DuaDestination) -> Unit = {}, onGeneratedVoice: (Boolean) -> Unit = {}) {
+    onSpeed: (Float) -> Unit, onPreview: () -> Unit, onOpen: (DuaDestination) -> Unit = {}, onGeneratedVoice: (Boolean) -> Unit = {},
+    onAutoSend: (Boolean) -> Unit = {}) {
     val config = state.config
     val provider = state.provider
     DuaPageScaffold(title = "Voice", onBack = onBack) {
         SettingsGroup("Talk with Dua") {
             SettingsNavRow(Icons.Outlined.Mic, "Voice input", "Dictate, review, then send") { onOpen(DuaDestination.Voice) }
+            SettingsRowDivider()
+            com.dua.ai.ui.components.SettingsToggleRow(null, "Auto-send dictation", "Send when you stop speaking in chat",
+                checked = state.preferences.dictationAutoSend, onCheckedChange = onAutoSend)
             SettingsRowDivider()
             if (config?.live?.enabled == true && state.signedIn)
                 SettingsNavRow(Icons.Outlined.GraphicEq, "Live conversation", "Talk with Grok in real time · interrupt any time") { onOpen(DuaDestination.LiveVoice) }

@@ -34,6 +34,8 @@ data class ChatMessage(
     val build: BuildInfo? = null,
     /** Model turns: Build mode change proposal and, once the owner approved it, its pull request (Phase 5C). */
     val proposal: BuildProposal? = null,
+    /** In memory only: live Agent steps from "progress" stream events. */
+    val progress: List<AgentStep> = emptyList(),
 ) {
     /** An Imagine reply (generated images or video, finished or not). */
     val isImagine: Boolean get() = !isUser && (imagine != null || media.isNotEmpty())

@@ -5,6 +5,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.unit.dp
 
 object AgentSizes {
+    /** Live progress: spinner/check size and spinner stroke. */
+    val stepIcon = 16.dp
+    val stepStroke = 2.dp
     val circle = 44.dp
     val icon = 24.dp
     val heroIcon = 56.dp

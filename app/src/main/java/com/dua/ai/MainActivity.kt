@@ -41,6 +41,8 @@ class MainActivity : ComponentActivity() {
         installSplashScreen()
         // Fresh launch: read and decode saved chats in the background while the UI starts (ChatViewModel takes the result).
         if (savedInstanceState == null) com.dua.ai.history.ChatHistoryPreload.start(getSharedPreferences("dua_chat_history", MODE_PRIVATE))
+        // Same for the signed-in session (Keystore decrypt), so the ViewModel does not block the first frame on it.
+        if (savedInstanceState == null) com.dua.ai.account.AccountSessionPreload.start(com.dua.ai.account.AccountSessionStore(applicationContext))
         super.onCreate(savedInstanceState)
         readRoute(intent)
         if (savedInstanceState == null) readEntry(intent)

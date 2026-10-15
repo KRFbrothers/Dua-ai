@@ -239,10 +239,20 @@ class CodingSession:
             return {"error": str(error)[:300]}
 
 
-def run_coding(model, contents, github, emit, request_text, tools=None, tool_response=None, clock=time.monotonic):
+# Structured, user-facing progress per tool (sent as "progress" events next to the raw thinking lines).
+TOOL_PROGRESS = {
+    "list_files": ("read", "Reading files\u2026"),
+    "read_file": ("read", "Reading files\u2026"),
+    "search_code": ("search_code", "Searching the code\u2026"),
+}
+
+
+def run_coding(model, contents, github, emit, request_text, tools=None, tool_response=None, clock=time.monotonic,
+               progress=None):
     """Tool loop. Returns the final user-facing text (with the PR link when one was opened)."""
     tools = tools if tools is not None else default_tools()
     tool_response = tool_response or default_tool_response
+    progress = progress or (lambda step, label, state="active": True)
     session = CodingSession(github, emit, clock)
     started = clock()
     history = list(contents)
@@ -262,7 +272,10 @@ def run_coding(model, contents, github, emit, request_text, tools=None, tool_res
         results = []
         for name, args in calls:
             if name == "propose_changes":
+                progress("pr", "Opening PR\u2026")
                 return finish(github, emit, args, request_text)
+            if name in TOOL_PROGRESS:
+                progress(*TOOL_PROGRESS[name])
             emit(f"- Step {step}: {name} {json.dumps({k: v for k, v in args.items() if k != 'content'})[:120]}\n")
             results.append((name, session.run_tool(name, args)))
         history.append(tool_response(results))

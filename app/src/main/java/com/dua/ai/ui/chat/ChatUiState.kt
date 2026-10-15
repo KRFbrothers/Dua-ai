@@ -172,6 +172,11 @@ class ChatActions(
     val onOpenVoiceMode: () -> Unit = {},
     /** Light haptic (only when Haptic feedback is on in Settings; the system setting applies too). */
     val haptic: (ChatHaptic) -> Unit = {},
+    /** Inline composer dictation (chat). Off = the mic opens the Voice page via [onOpenVoice]. */
+    val inlineDictation: Boolean = false,
+    val dictationLanguage: () -> String = { "auto" },
+    val dictationAutoSend: () -> Boolean = { false },
+    val onDictationNotice: (String) -> Unit = {},
     val onOpenSetup: () -> Unit = {},
     val onImagine: (Boolean) -> Unit = {},
     val onImagineOptions: (com.dua.ai.imagine.ImagineOptions) -> Unit = {},

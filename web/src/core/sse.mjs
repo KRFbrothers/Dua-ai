@@ -22,6 +22,9 @@
  *                    Build mode (Phase 5C): a change proposal the model made. Nothing was written; the app shows a review
  *                    card and only the owner's confirmed Create PR tap (POST /api/build/pr) can create a pull request.
  *                    Sent once, right before the answer text.
+ *   event: progress  data: {"type":"progress","step":"search","label":"Searching the web…","state":"active|done"}
+ *                    Cloud Run Agent only: a user-facing step for the app's live progress UI (the raw details stay
+ *                    in thinking). A newer step finishes the earlier ones; clients ignore unknown event types.
  *   event: done      data: {"type":"done","truncated":false,"usage":{...}}  last event of a successful reply
  *   event: saved     owner/chat/message-bound receipt with revision, chat metadata, replyHash and original metadata
  *                    before done, only when persistence was requested (see reply-persistence.mjs)

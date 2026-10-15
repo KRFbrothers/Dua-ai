@@ -1,0 +1,18 @@
+# Dua AI baseline profile (hand-written startup + chat paths). Compose, Material 3 and OkHttp ship their own
+# profiles; these rules add the app's own code so it is AOT-compiled at install (via androidx.profileinstaller).
+HSPLcom/dua/ai/MainActivity;->**(**)**
+Lcom/dua/ai/MainActivity;
+HSPLcom/dua/ai/ui/DuaApp*;->**(**)**
+HSPLcom/dua/ai/ui/navigation/**;->**(**)**
+HSPLcom/dua/ai/ui/theme/**;->**(**)**
+HSPLcom/dua/ai/ui/chat/**;->**(**)**
+HSPLcom/dua/ai/ui/history/**;->**(**)**
+HSPLcom/dua/ai/viewmodel/**;->**(**)**
+HSPLcom/dua/ai/history/**;->**(**)**
+HSPLcom/dua/ai/account/**;->**(**)**
+HSPLcom/dua/ai/settings/**;->**(**)**
+HSPLcom/dua/ai/model/**;->**(**)**
+HSPLcom/dua/ai/network/**;->**(**)**
+Lcom/dua/ai/ui/chat/**;
+Lcom/dua/ai/viewmodel/**;
+Lcom/dua/ai/model/**;
