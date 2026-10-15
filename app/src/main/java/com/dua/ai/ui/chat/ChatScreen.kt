@@ -325,7 +325,6 @@ fun ChatScreen(
                                 Modifier.align(Alignment.Center).padding(Spacing.lg), style = MaterialTheme.typography.titleLarge)
                         } else if (home) {
                             ChatContent(task = taskHome,
-                                onFocusComposer = { inputFocus.requestFocus(); keyboard?.show() },
                                 onTask = { prompt -> actions.onDraftChange(prompt); inputFocus.requestFocus(); keyboard?.show() })
                         } else {
                             key(conversationKey) {

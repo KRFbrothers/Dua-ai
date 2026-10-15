@@ -1,6 +1,5 @@
 package com.dua.ai.ui.chat
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -11,7 +10,6 @@ import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -22,7 +20,6 @@ import androidx.compose.ui.unit.dp
 import com.dua.ai.ui.components.DuaCalligraphyLogo
 import com.dua.ai.ui.theme.ChatTheme
 import com.dua.ai.ui.theme.HomePromptStyle
-import com.dua.ai.ui.theme.HomeShapes
 import com.dua.ai.ui.theme.HomeSizes
 import com.dua.ai.ui.theme.HomeTheme
 import com.dua.ai.ui.theme.Sizes
@@ -31,7 +28,7 @@ import com.dua.ai.ui.theme.Spacing
 internal val HomeTaskPrompts = listOf("Nudge me to backup my photos", "Learn React by building an app", "Compare views on a topic I follow")
 
 @Composable
-internal fun ChatContent(task: Boolean, onFocusComposer: () -> Unit, onTask: (String) -> Unit) {
+internal fun ChatContent(task: Boolean, onTask: (String) -> Unit) {
     val c = HomeTheme.colors
     BoxWithConstraints(Modifier.fillMaxSize().padding(horizontal = Spacing.lg)) {
         val contentHeight = maxHeight
@@ -46,13 +43,6 @@ internal fun ChatContent(task: Boolean, onFocusComposer: () -> Unit, onTask: (St
                     DuaCalligraphyLogo(modifier = Modifier.width(156.dp))
                     Text(if (task) "I Know Everything" else "Dua always with you",
                         style = MaterialTheme.typography.headlineMedium, color = ChatTheme.colors.text, textAlign = TextAlign.Center)
-                    if (!task) Surface(onClick = onFocusComposer, color = c.bar, contentColor = c.promptText,
-                        shape = HomeShapes.segmentTrack, border = BorderStroke(HomeSizes.barBorder, c.barBorder),
-                        modifier = Modifier.heightIn(min = Sizes.touchTarget)) {
-                        Box(Modifier.padding(horizontal = Spacing.xl, vertical = Spacing.sm), contentAlignment = Alignment.Center) {
-                            Text("Let's go", style = MaterialTheme.typography.labelLarge)
-                        }
-                    }
                 }
             }
             if (task) Column(Modifier.fillMaxWidth()

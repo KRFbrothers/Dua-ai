@@ -70,7 +70,8 @@ class HomeChatTaskUiTest(private val dark: Boolean, private val compact: Boolean
         compose.onNodeWithContentDescription("Open profile and settings").assertWidthIsAtLeast(48.dp).performClick()
         compose.onNodeWithTag("account-avatar", useUnmergedTree = true).assertWidthIsEqualTo(34.dp).assertHeightIsEqualTo(34.dp)
         compose.onNodeWithContentDescription("New chat").performClick()
-        compose.onNodeWithText("Let's go").performScrollTo().performClick()
+        compose.onNodeWithText("Let's go").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Message").performClick()
         compose.onNodeWithContentDescription("Message").assertIsFocused()
         assertEquals(1, profile); assertEquals(1, newChat)
         val tab = compose.onNode(hasText("Chat") and isSelectable()).fetchSemanticsNode().boundsInRoot
