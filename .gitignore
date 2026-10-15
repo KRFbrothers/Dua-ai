@@ -64,3 +64,7 @@ node_modules/
 /web/backend-test-results.xml
 # Vercel function for Build pull requests (/api/build/pr); the build/ rule above is for Gradle output.
 !/web/api/build/
+
+# Local scripts
+run_emulator.bat
+

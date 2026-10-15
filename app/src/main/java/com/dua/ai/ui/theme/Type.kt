@@ -8,15 +8,32 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import com.dua.ai.R
 
-/** Inter (SIL OFL 1.1, rsms/inter v4.1); license in assets/licenses/Inter-OFL.txt. */
-val InterFont = FontFamily(
+/** KrfBrothers (Söhne styling) typography for Dua AI. */
+val KrfBrothersFont = FontFamily(
+    Font(R.font.krfbrothers_regular, FontWeight.Normal),
+    Font(R.font.krfbrothers_regular, FontWeight.Medium),
+    Font(R.font.krfbrothers_regular, FontWeight.SemiBold),
+    Font(R.font.krfbrothers_regular, FontWeight.Bold)
+)
+
+/** KrfBrothers Menlo code font family. */
+val KrfBrothersCodeFont = FontFamily(
+    Font(R.font.krfbrothers_code, FontWeight.Normal),
+    Font(R.font.krfbrothers_code_bold, FontWeight.Bold)
+)
+
+/** Inter fallback font family. */
+val OriginalInterFont = FontFamily(
     Font(R.font.inter_regular, FontWeight.Normal),
     Font(R.font.inter_medium, FontWeight.Medium),
     Font(R.font.inter_semibold, FontWeight.SemiBold),
     Font(R.font.inter_bold, FontWeight.Bold)
 )
 
-val MontserratFontFamily = InterFont
+/** Primary font family used across Dua AI screens and design tokens. */
+val InterFont = KrfBrothersFont
+
+val MontserratFontFamily = KrfBrothersFont
 
 val AgentTitleStyle = TextStyle(fontWeight = FontWeight.SemiBold, fontSize = 18.sp, lineHeight = 24.sp)
 val AgentHeroStyle = TextStyle(fontWeight = FontWeight.Bold, fontSize = 24.sp, lineHeight = 32.sp)
@@ -24,8 +41,10 @@ val AgentHeroStyle = TextStyle(fontWeight = FontWeight.Bold, fontSize = 24.sp, l
 fun fontFamilyFor(preference: String): FontFamily = when (preference) {
     "system" -> FontFamily.Default
     "serif" -> FontFamily.Serif
-    "monospace" -> FontFamily.Monospace
-    else -> InterFont
+    "monospace" -> KrfBrothersCodeFont
+    "inter" -> OriginalInterFont
+    "krfbrothers" -> KrfBrothersFont
+    else -> KrfBrothersFont
 }
 
 fun duaTypography(family: FontFamily = InterFont): Typography {
@@ -48,7 +67,7 @@ fun duaTypography(family: FontFamily = InterFont): Typography {
     )
 }
 
-val CodeTextStyle = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 13.5.sp)
+val CodeTextStyle = TextStyle(fontFamily = KrfBrothersCodeFont, fontSize = 13.5.sp)
 val HomeTaglineStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Medium, fontSize = 20.sp)
 val HomeTaglineCompactStyle = HomeTaglineStyle.copy(fontSize = 18.sp)
 val VoiceGreetingStyle = HomeTaglineStyle.copy(fontSize = 26.sp, lineHeight = 34.sp)
