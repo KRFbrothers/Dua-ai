@@ -828,6 +828,29 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     val recordingSince: StateFlow<Long?> = _recordingSince.asStateFlow()
     private val _storageUsage = MutableStateFlow<StorageUsage?>(null)
     val storageUsage: StateFlow<StorageUsage?> = _storageUsage.asStateFlow()
+    private val _cloudLibrary = MutableStateFlow(com.dua.ai.library.CloudLibraryState())
+    val cloudLibrary = _cloudLibrary.asStateFlow()
+    private var libraryJob: Job? = null
+
+    fun loadLibraryFiles() {
+        libraryJob?.cancel()
+        val owner = account.state.value.user?.id
+        _cloudLibrary.value = com.dua.ai.library.CloudLibraryState(ownerId = owner)
+        if (owner == null || !_integrations.value.filesEnabled) return
+        _cloudLibrary.value = _cloudLibrary.value.copy(loading = true)
+        libraryJob = viewModelScope.launch {
+            try {
+                val json = account.request("/api/files/list", authenticated = true)
+                val files = com.dua.ai.library.CloudLibrary.files(json, owner)
+                if (account.state.value.user?.id == owner) _cloudLibrary.value = com.dua.ai.library.CloudLibraryState(owner, files,
+                    notice = if (json.optBoolean("truncated")) "Cloud inventory is limited to 10,000 files." else "")
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) {
+                if (account.state.value.user?.id == owner) _cloudLibrary.value = com.dua.ai.library.CloudLibraryState(owner,
+                    notice = "Cloud inventory could not be loaded. Refresh after updating the backend; chat and project files remain available.")
+            }
+        }
+    }
 
     /** Stored files need a Phase 2 backend and a signed-in account (the server also requires the owner email). */
     fun storedFilesAvailable() = _integrations.value.filesEnabled && account.state.value.user != null
@@ -2124,6 +2147,26 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         if (options.kind == com.dua.ai.imagine.ImagineInfo.VIDEO && !config.videoEnabled) { _error.value = config.videoReason.ifBlank { "Video is turned off on the server." }; return }
         if (options.kind == com.dua.ai.imagine.ImagineInfo.IMAGE && !config.imageEnabled) { _error.value = config.imageReason.ifBlank { "Images are turned off on the server." }; return }
         _imagineOptions.value = config.normalize(options)
+    }
+
+    /** Images destination reuses Imagine's auth, capability, upload and generation guards. Never falls back to text chat. */
+    fun generateImageFromHub(prompt: String, aspect: String): Boolean {
+        if (_dataBusy.value || _isTyping.value || _preparingFiles.value) return false
+        if (prompt.isBlank() || prompt.length > com.dua.ai.imagine.ImagineCodec.MAX_PROMPT) { _error.value = "Describe an image in 1 to 4,000 characters."; return false }
+        if (_editingId.value != null) { _error.value = "Finish or cancel the edited chat message before creating an image."; return false }
+        setImagine(true)
+        if (!_imagine.value) return false
+        if (imagineConfig()?.imageEnabled != true) { _error.value = imagineConfig()?.imageReason ?: "Image generation needs setup."; return false }
+        if (_draft.value.isNotBlank()) {
+            if (_attachments.value.isNotEmpty() || _uploads.value.isNotEmpty() || _readingFiles.value || _recordingSince.value != null) {
+                _error.value = "Send or remove the current draft attachments before starting a separate image request."; return false
+            }
+            // Save an unrelated text draft in its own conversation instead of overwriting it.
+            startNewChat()
+        }
+        setImagineOptions(_imagineOptions.value.copy(kind = com.dua.ai.imagine.ImagineInfo.IMAGE, aspectRatio = aspect))
+        sendMessage(prompt)
+        return _isTyping.value
     }
 
     private fun imagineFailure(failure: Throwable): String = when (failure) {

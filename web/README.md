@@ -89,3 +89,7 @@ optional secret from Secret Manager (or disable its flag) before redeploying to 
 using it. Optional file/GitHub/write/generated-voice flags default off unless their
 named secret explicitly enables them. Existing Supabase migrations and provider
 accounts are reused; this script does not create or migrate application data.
+
+### Android feature hubs
+
+The native Library/Images screens use the additive owner-only `GET /api/files/list` route for private cloud inventory. It returns bounded file metadata without signed links; existing `/api/files/url` resolves a selected file on demand. Redeploy this Node service after merging the feature hubs; no new secrets or migration are required. Older deployments keep chat/project references usable and the app shows a cloud-inventory retry/update notice. See [feature hub behavior and validation](../docs/FEATURE_HUBS.md).
