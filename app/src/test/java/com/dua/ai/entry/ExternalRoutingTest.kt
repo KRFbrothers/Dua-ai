@@ -7,6 +7,15 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.lifecycle.ViewModelStore
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.rememberNavController
+import com.dua.ai.account.AccountApi
+import com.dua.ai.account.AccountRepository
+import com.dua.ai.account.AccountSession
+import com.dua.ai.account.SessionPersistence
+import okhttp3.OkHttpClient
+import okhttp3.Protocol
+import okhttp3.Response
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.ResponseBody.Companion.toResponseBody
 import com.dua.ai.settings.LocalPreferences
 import com.dua.ai.ui.navigation.DuaDestination
 import com.dua.ai.ui.navigation.DuaNavHost
@@ -30,6 +39,7 @@ class ExternalRoutingTest {
     @get:Rule val compose = createComposeRule()
     private val store = ViewModelStore()
     private lateinit var vm: ChatViewModel
+    private lateinit var accountClient: OkHttpClient
     private lateinit var nav: NavHostController
     private var entry by mutableStateOf<ExternalEntry?>(null)
     private var consumed = 0
@@ -37,8 +47,21 @@ class ExternalRoutingTest {
         val app = RuntimeEnvironment.getApplication()
         for (key in listOf("dua_chat_history", "dua_preferences", "dua_account_session", "dua_auto_sync", "dua_files", "dua_onboarding")) app.getSharedPreferences(key, 0).edit().clear().commit()
         vm = ChatViewModel(app).also { store.put("chat", it) }
+        // Onboarding loads account capabilities. Never contact the production backend from UI tests.
+        accountClient = OkHttpClient.Builder().addInterceptor { chain ->
+            check(chain.request().url.host == "account.test")
+            Response.Builder().request(chain.request()).protocol(Protocol.HTTP_1_1).code(200).message("OK")
+                .body("{\"configured\":false,\"emailAuth\":false}".toResponseBody("application/json".toMediaType())).build()
+        }.build()
+        val repository = AccountRepository(AccountApi("https://account.test", accountClient), object : SessionPersistence {
+            override fun read(): AccountSession? = null
+            override fun write(value: AccountSession?) = Unit
+        })
+        ChatViewModel::class.java.getDeclaredField("account").apply { isAccessible = true }.set(vm, repository)
     }
-    @After fun close() { store.clear() }
+    @After fun close() {
+        store.clear(); accountClient.dispatcher.cancelAll(); accountClient.connectionPool.evictAll(); accountClient.dispatcher.executorService.shutdown()
+    }
     private fun show(skip: Boolean = true) {
         if (skip) vm.skipOnboarding()
         compose.setContent {
@@ -67,7 +90,8 @@ class ExternalRoutingTest {
         entry = ExternalEntry(action = EntryAction.Share, text = "Held until welcome is done")
         show(skip = false)
         compose.runOnIdle { assertEquals(DuaDestination.Onboarding.route, nav.currentDestination?.route); assertEquals(0, consumed); assertTrue(vm.draft.value.isEmpty()) }
-        compose.onNodeWithText("Skip for now").performClick()
+        compose.waitUntil(5000) { !vm.account.state.value.busy }
+        compose.onNodeWithText("Skip for now").assertIsEnabled().performClick()
         // Drain the Android looper and navigation transition before polling asynchronous dispatch.
         compose.waitForIdle()
         compose.waitUntil(10000) { consumed == 1 }
