@@ -1,7 +1,7 @@
 // Optional personal integrations. Credentials never leave this server module.
 // Reply voice audio moved to voice.mjs (/api/voice/*); the legacy `generatedAudio` flag stays for older apps.
 import { legacyAudioProvider } from './voice.mjs';
-import { boundedBytes, githubReady, GitHubError, listRepositories, repositoryFile, repositoryTree, searchRepository } from './github.mjs';
+import { boundedBytes, githubReady, GITHUB_SETUP_HINT, GitHubError, listRepositories, repositoryFile, repositoryTree, searchRepository } from './github.mjs';
 const noStore = { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' };
 const json = (value, status = 200) => Response.json(value, { status, headers: noStore });
 
@@ -34,7 +34,7 @@ export async function handleAdvanced(req, { env = {}, fetcher = fetch, authorize
   try {
     const keys = ACTION_KEYS[body.action];
     if (!keys || Object.keys(body).some(key => key !== 'action' && !keys.includes(key))) return json({ error: 'Choose a supported read-only repository action.' }, 400);
-    if (!githubReady(env)) return json({ error: 'GitHub connector setup is not enabled.' }, 503);
+    if (!githubReady(env)) return json({ error: GITHUB_SETUP_HINT }, 503);
     const options = { env, fetcher, signal: req.signal };
     if (body.action === 'list-repositories') return json({ repositories: await listRepositories(options), maximumResults: 30, readOnly: true });
     if (body.action === 'get-tree') {
@@ -49,6 +49,6 @@ export async function handleAdvanced(req, { env = {}, fetcher = fetch, authorize
     return json({ repository: body.repository, ...found, readOnly: true });
   } catch (error) {
     if (error instanceof GitHubError) return json({ error: error.message }, error.status === 404 || error.status === 400 || error.status === 413 || error.status === 415 ? error.status : 502);
-    return json({ error: error?.name === 'AbortError' || error?.name === 'TimeoutError' ? 'Integration request timed out. Retry.' : 'Integration is temporarily unavailable.' }, 502);
+    return json({ error: error?.name === 'AbortError' || error?.name === 'TimeoutError' ? 'GitHub read timed out. Retry this read or choose a smaller repository/file.' : 'GitHub connector is temporarily unavailable. Check your connection and GitHub service availability, then retry this read.' }, 502);
   }
 }

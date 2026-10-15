@@ -14,7 +14,7 @@ import { publicImagineConfiguration } from './imagine.mjs';
 import { voiceConfiguration } from './voice.mjs';
 import { codeExecutionConfiguration, codeExecutionProviders } from './code-execution.mjs';
 import { buildConfiguration, BuildError, prepareRepository, runBuildLoop, validRepository } from './build-chat.mjs';
-import { GitHubError } from './github.mjs';
+import { GitHubError, GITHUB_REPOSITORY_HINT } from './github.mjs';
 import { resolveOwner, StorageError } from './storage.mjs';
 import { resolveProjectContext, validProjectId } from './projects.mjs';
 import { prepareReplySave, savedReplyStream, validateReplySave } from './reply-persistence.mjs';
@@ -85,7 +85,7 @@ export function validateChat(data) {
   if (data.web !== undefined && !['search', 'page'].includes(data.web)) return ['Choose Web off, Search or Read link.', 400];
   if (data.stream !== undefined && typeof data.stream !== 'boolean') return ['Invalid stream option.', 400];
   if (data.mode !== undefined && !['auto', 'reasoning', 'build'].includes(data.mode)) return ['Choose Auto, Reasoning or Build mode.', 400];
-  if (data.mode === 'build' && !validRepository(data.repository)) return ['Choose a repository for Build mode.', 400];
+  if (data.mode === 'build' && !validRepository(data.repository)) return ['Choose a repository for Build mode. ' + GITHUB_REPOSITORY_HINT, 400];
   if (data.mode !== 'build' && data.repository !== undefined) return ['A repository is only used in Build mode.', 400];
   if (data.mode === 'build' && !['Dua', 'Gemini'].includes(data.model)) return ['Build mode works with Dua or Gemini. Select one of them.', 400];
   if (!validContext(data.context)) return ['Invalid conversation context.', 400];
@@ -378,9 +378,9 @@ async function handleBuildChat(request, data, provider, { env, fetcher, startedA
   let prepared;
   try { prepared = await prepareRepository(data.repository, { env, fetcher, signal }); }
   catch (error) {
-    if (aborted(error, signal)) return json({ error: 'GitHub request stopped or timed out. Retry.' }, 504);
+    if (aborted(error, signal)) return json({ error: 'GitHub read stopped or timed out. Retry this read or choose a smaller repository/file.' }, 504);
     if (error instanceof GitHubError) return json({ error: error.message }, [400, 404, 429].includes(error.status) ? error.status : 502);
-    return json({ error: 'GitHub connector request failed. Retry.' }, 502);
+    return json({ error: 'GitHub connector request failed. Check your connection and GitHub service availability, then retry this read.' }, 502);
   }
   const { keepFrom } = planContext(data.messages, contextBudget(provider.prefix, env), { lowWater: false });
   const messages = data.messages.slice(keepFrom);

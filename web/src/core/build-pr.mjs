@@ -7,7 +7,7 @@
 import { randomUUID } from 'node:crypto';
 import { envInteger } from './adapters.mjs';
 import { readJsonLimited } from './limited-json.mjs';
-import { REPOSITORY } from './github.mjs';
+import { REPOSITORY, GITHUB_REPOSITORY_HINT, GITHUB_PATH_HINT } from './github.mjs';
 import { encodeBranch, githubWrite, GitHubWriteError, repoApi, writeToken } from './github-write.mjs';
 import { resolveOwner, StorageError } from './storage.mjs';
 
@@ -63,14 +63,14 @@ export function prAllowedFor(env, repository) {
 
 /** Why a repository path cannot be changed, or null. Blocks workflows, .git, .gitmodules, absolute and `..` paths. */
 export function pathProblem(path) {
-  if (typeof path !== 'string' || !path || path.length > 400) return 'Use a file path relative to the repository root.';
-  if (path !== path.trim() || path.startsWith('/') || path.includes('\\') || /^[A-Za-z]:/.test(path) || CONTROL.test(path) || /[\r\n\t]/.test(path)) return `"${path.slice(0, 80)}" is not a safe repository path.`;
+  if (typeof path !== 'string' || !path || path.length > 400) return GITHUB_PATH_HINT;
+  if (path !== path.trim() || path.startsWith('/') || path.includes('\\') || /^[A-Za-z]:/.test(path) || CONTROL.test(path) || /[\r\n\t]/.test(path)) return GITHUB_PATH_HINT;
   const segments = path.split('/');
-  if (segments.some(segment => !segment || segment === '.' || segment === '..')) return `"${path.slice(0, 80)}" is not a safe repository path (empty, "." or ".." segment).`;
+  if (segments.some(segment => !segment || segment === '.' || segment === '..')) return GITHUB_PATH_HINT;
   const lower = path.toLowerCase();
-  if (segments.some(segment => segment.toLowerCase() === '.git')) return 'Files inside .git cannot be changed.';
-  if (lower === '.gitmodules') return 'Submodules (.gitmodules) cannot be changed from Dua.';
-  if (lower.startsWith('.github/workflows/')) return 'GitHub Actions workflows (.github/workflows) cannot be changed from Dua.';
+  if (segments.some(segment => segment.toLowerCase() === '.git')) return 'Files inside .git cannot be changed. Remove this file from the proposal.';
+  if (lower === '.gitmodules') return 'Submodules (.gitmodules) cannot be changed from Dua. Remove this file from the proposal.';
+  if (lower.startsWith('.github/workflows/')) return 'GitHub Actions workflows (.github/workflows) cannot be changed from Dua. Remove this file from the proposal.';
   return null;
 }
 const bytes = text => Buffer.byteLength(text, 'utf8');
@@ -259,8 +259,8 @@ export function proposeChanges(args, { repository, branch, read, tree, limits, n
 const REQUEST_KEYS = ['repository', 'proposalId', 'title', 'summary', 'branch', 'files'];
 /** Validates the create-pr body (the proposal the owner approved, possibly with an edited title). */
 export function validatePrRequest(body, limits) {
-  if (!body || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).some(key => !REQUEST_KEYS.includes(key))) throw new BuildPrError('Invalid request.');
-  if (typeof body.repository !== 'string' || !REPOSITORY.test(body.repository)) throw new BuildPrError('Choose a repository as owner/name.');
+  if (!body || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).some(key => !REQUEST_KEYS.includes(key))) throw new BuildPrError('Invalid pull request data. Ask Dua to regenerate the proposal, then review it again.');
+  if (typeof body.repository !== 'string' || !REPOSITORY.test(body.repository)) throw new BuildPrError(GITHUB_REPOSITORY_HINT);
   if (typeof body.proposalId !== 'string' || !PROPOSAL_ID.test(body.proposalId)) throw new BuildPrError('Invalid proposal id. Ask Dua to regenerate the proposal.');
   const title = cleanText(body.title, MAX_TITLE + 1).replace(/\s+/g, ' ');
   if (!title || title.length > MAX_TITLE) throw new BuildPrError(`Use a title of 1 to ${MAX_TITLE} characters.`);
@@ -287,7 +287,7 @@ async function currentEntries(paths, rootTree, call, api) {
     if (!listings.has(treeSha)) {
       if ((fetches += 1) > MAX_TREE_FETCHES) throw new BuildPrError('The proposal touches too many folders to check. Split it into smaller proposals.', 413);
       listings.set(treeSha, call('GET', `${api}/git/trees/${treeSha}`, { maxBytes: 8 * 1024 * 1024 }).then(tree => {
-        if (!tree || !Array.isArray(tree.tree)) throw new GitHubWriteError('GitHub returned an invalid response.', 502);
+        if (!tree || !Array.isArray(tree.tree)) throw new GitHubWriteError('GitHub returned an invalid response. Retry the same proposal so Dua can find any existing branch or pull request.', 502);
         return { truncated: tree.truncated === true, entries: new Map(tree.tree.filter(item => typeof item?.path === 'string').map(item => [item.path, { type: item.type, mode: item.mode, sha: item.sha }])) };
       }));
     }
@@ -323,7 +323,7 @@ export async function createPullRequest(request, { env, fetcher = fetch, signal 
   const call = (method, path, options = {}) => githubWrite(method, path, { env, fetcher, signal, ...options });
   const api = repoApi(request.repository);
   const repo = await call('GET', api, { maxBytes: 512 * 1024 });
-  if (!repo || typeof repo.full_name !== 'string' || !REPOSITORY.test(repo.full_name) || typeof repo.default_branch !== 'string' || !/^[A-Za-z0-9._/-]{1,200}$/.test(repo.default_branch)) throw new GitHubWriteError('GitHub returned an invalid response.', 502);
+  if (!repo || typeof repo.full_name !== 'string' || !REPOSITORY.test(repo.full_name) || typeof repo.default_branch !== 'string' || !/^[A-Za-z0-9._/-]{1,200}$/.test(repo.default_branch)) throw new GitHubWriteError('GitHub returned an invalid response. Retry the same proposal so Dua can find any existing branch or pull request.', 502);
   if (repo.archived === true) throw new BuildPrError('This repository is archived, so Dua cannot open a pull request.', 409);
   const repository = repo.full_name;
   const list = prRepositories(env);
@@ -350,12 +350,12 @@ export async function createPullRequest(request, { env, fetcher = fetch, signal 
       if (!(error instanceof GitHubWriteError) || error.status !== 422) throw error;
       if (/already exists/i.test(error.detail)) { const existing = await findPr(); if (existing) return { ...existing, existing: true }; }
       // Draft pull requests are not available on some plans (e.g. private repositories on GitHub Free): open a normal one.
-      if (!draft || !/draft/i.test(error.detail)) throw new GitHubWriteError('GitHub refused to open the pull request.', 422);
+      if (!draft || !/draft/i.test(error.detail)) throw new GitHubWriteError('GitHub refused to open the pull request. Check the repository pull request settings, then retry the same proposal to reuse its branch.', 422);
       pr = await call('POST', `${api}/pulls`, { body: { ...body, draft: false } });
-      if (!prUrl(pr, repository)) throw new GitHubWriteError('GitHub returned an invalid response.', 502);
+      if (!prUrl(pr, repository)) throw new GitHubWriteError('GitHub returned an invalid response. Retry the same proposal so Dua can find any existing branch or pull request.', 502);
       return { url: pr.html_url, number: pr.number, draft: false, state: 'open', existing: false, notice: 'Draft pull requests are not available for this repository, so a normal (ready for review) pull request was opened.' };
     }
-    if (!prUrl(pr, repository)) throw new GitHubWriteError('GitHub returned an invalid response.', 502);
+    if (!prUrl(pr, repository)) throw new GitHubWriteError('GitHub returned an invalid response. Retry the same proposal so Dua can find any existing branch or pull request.', 502);
     return { url: pr.html_url, number: pr.number, draft: pr.draft === true, state: 'open', existing: false };
   };
   /** The branch exists already: ours (same proposal id) → reuse it; otherwise refuse. */
@@ -372,10 +372,10 @@ export async function createPullRequest(request, { env, fetcher = fetch, signal 
 
   const head = await call('GET', `${api}/git/ref/heads/${encodeBranch(base)}`, { maxBytes: 256 * 1024 });
   const headSha = head?.object?.sha;
-  if (typeof headSha !== 'string' || !SHA.test(headSha)) throw new GitHubWriteError('GitHub returned an invalid response.', 502);
+  if (typeof headSha !== 'string' || !SHA.test(headSha)) throw new GitHubWriteError('GitHub returned an invalid response. Retry the same proposal so Dua can find any existing branch or pull request.', 502);
   const headCommit = await call('GET', `${api}/git/commits/${headSha}`, { maxBytes: 512 * 1024 });
   const rootTree = headCommit?.tree?.sha;
-  if (typeof rootTree !== 'string' || !SHA.test(rootTree)) throw new GitHubWriteError('GitHub returned an invalid response.', 502);
+  if (typeof rootTree !== 'string' || !SHA.test(rootTree)) throw new GitHubWriteError('GitHub returned an invalid response. Retry the same proposal so Dua can find any existing branch or pull request.', 502);
   // Conflict check: every file must still be exactly the version the proposal was based on.
   const current = await currentEntries(request.files.map(file => file.path), rootTree, call, api);
   for (const file of request.files) {
@@ -388,13 +388,13 @@ export async function createPullRequest(request, { env, fetcher = fetch, signal 
   for (const file of request.files) {
     if (file.action === 'delete') { entries.push({ path: file.path, mode: current.get(file.path).mode, type: 'blob', sha: null }); continue; }
     const blob = await call('POST', `${api}/git/blobs`, { body: { content: Buffer.from(file.content, 'utf8').toString('base64'), encoding: 'base64' }, maxBytes: 64 * 1024 });
-    if (typeof blob?.sha !== 'string' || !SHA.test(blob.sha)) throw new GitHubWriteError('GitHub returned an invalid response.', 502);
+    if (typeof blob?.sha !== 'string' || !SHA.test(blob.sha)) throw new GitHubWriteError('GitHub returned an invalid response. Retry the same proposal so Dua can find any existing branch or pull request.', 502);
     entries.push({ path: file.path, mode: current.get(file.path)?.mode || '100644', type: 'blob', sha: blob.sha });
   }
   const tree = await call('POST', `${api}/git/trees`, { body: { base_tree: rootTree, tree: entries }, maxBytes: 8 * 1024 * 1024 });
-  if (typeof tree?.sha !== 'string' || !SHA.test(tree.sha)) throw new GitHubWriteError('GitHub returned an invalid response.', 502);
+  if (typeof tree?.sha !== 'string' || !SHA.test(tree.sha)) throw new GitHubWriteError('GitHub returned an invalid response. Retry the same proposal so Dua can find any existing branch or pull request.', 502);
   const commit = await call('POST', `${api}/git/commits`, { body: { message: commitMessage(request), tree: tree.sha, parents: [headSha] }, maxBytes: 512 * 1024 });
-  if (typeof commit?.sha !== 'string' || !SHA.test(commit.sha)) throw new GitHubWriteError('GitHub returned an invalid response.', 502);
+  if (typeof commit?.sha !== 'string' || !SHA.test(commit.sha)) throw new GitHubWriteError('GitHub returned an invalid response. Retry the same proposal so Dua can find any existing branch or pull request.', 502);
   try { await call('POST', `${api}/git/refs`, { body: { ref: `refs/heads/${request.branch}`, sha: commit.sha }, maxBytes: 256 * 1024 }); }
   catch (error) {
     // A double tap raced us to the branch: return that attempt's pull request instead of a second one.
@@ -439,7 +439,7 @@ export async function handleBuildPr(request, { env = {}, fetcher = fetch } = {})
     }
     if (error?.name === 'AbortError' || error?.name === 'TimeoutError' || request.signal.aborted) return json({ error: 'GitHub request stopped or timed out. Check GitHub before retrying: the pull request may already exist (a retry will not open a second one).' }, 504);
     console.error('[dua-build-pr] failed', error?.name);
-    return json({ error: 'Creating the pull request failed. Retry.' }, 502);
+    return json({ error: 'Creating the pull request failed. Check your connection and GitHub service availability, then retry the same proposal so Dua can find any existing branch or pull request.' }, 502);
   }
   return json({ ok: true, ...pr });
 }

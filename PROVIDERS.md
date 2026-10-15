@@ -4,6 +4,8 @@ Dua and Gemini retain the existing Gemini setup and attachment support. ChatGPT,
 
 ## Build mode: read-only repository chat (Phase 5B)
 
+For repository/path examples, missing setup, GitHub credentials, rate limits and safe PR retry steps, see [GitHub connector and Build recovery](docs/GITHUB_TROUBLESHOOTING.md).
+
 Build mode ties a chat to one of the owner's GitHub repositories. Dua/Gemini answers questions about the code and proposes changes as unified diffs (```diff blocks). It is **strictly read-only**: the server only sends `GET` requests to five allowlisted GitHub paths (repository list, repository info, `git/trees/HEAD?recursive=1`, `contents/{path}`, `search/code` inside the chosen repository). The model has no branch, commit, pull request or command tool. Pull requests (Phase 5C, below) are a separate, opt-in step that only the owner's confirmed tap can trigger.
 
 Request: `"mode": "build", "repository": "owner/name"` on `POST /api/chat` (Dua or Gemini only). Checks run in this order, each with a clear error: server setup (503 with the reason), signed-in owner (`DUA_ALLOWED_EMAIL`, 401/403), then the repository (404 if the token cannot read it). The server loads the repository info and file tree, puts a trimmed file list in the system prompt (all paths if they fit in 12,000 characters, otherwise the shallowest first), and runs a Gemini function-calling loop with three tools:

@@ -413,7 +413,7 @@ test('write client: GET/POST allowlist only (no PATCH/PUT/DELETE), dua/* refs an
 
 test('request validation and the unified diff used by the review card', () => {
   const limits = prLimits({});
-  assert.throws(() => validatePrRequest({ ...approved(), extra: 1 }, limits), /Invalid request/);
+  assert.throws(() => validatePrRequest({ ...approved(), extra: 1 }, limits), /Invalid pull request data.*regenerate.*review/);
   assert.throws(() => validatePrRequest(approved({ proposalId: 'x' }), limits), /proposal id/);
   assert.throws(() => validatePrRequest(approved({ title: 'x'.repeat(121) }), limits), /1 to 120/);
   assert.throws(() => validatePrRequest(approved({ repository: '../x' }), limits), /owner\/name/);
@@ -431,4 +431,40 @@ test('request validation and the unified diff used by the review card', () => {
   assert.equal(huge.truncated, true);
   assert.ok(huge.diff.length <= DIFF_MAX_CHARS + 200);
   assert.equal(huge.additions, 20000);
+});
+
+test('PR failure recovery reaches the owner without exposing write-token or upstream details', async () => {
+  for (const [upstream, expected, hint] of [
+    [401, 502, /Replace it.*redeploy.*same proposal/],
+    [403, 403, /GITHUB_BUILD_WRITE_TOKEN.*If rate-limited.*reset/],
+    [404, 404, /selected-repository access for GITHUB_BUILD_WRITE_TOKEN/],
+    [409, 409, /regenerate the proposal/],
+    [422, 422, /Review the proposal.*same proposal/],
+    [429, 429, /Wait.*limit to reset.*same proposal/],
+    [500, 502, /retry the same proposal.*existing branch or pull request/]
+  ]) {
+    const fetcher = router([[url => url.startsWith(GH), () => Response.json({ message: `raw upstream ${WRITE}` }, { status: upstream })]]);
+    const result = await create(approved(), { fetcher });
+    assert.equal(result.status, expected);
+    assert.match(result.body.error, hint);
+    assert.doesNotMatch(JSON.stringify(result.body), /raw upstream/);
+    const calls = fetcher.calls.filter(call => call.url.startsWith(GH));
+    assert.equal(calls.length, 1, 'no automatic retries or writes after a failed repository read');
+    assert.equal(calls[0].method, 'GET');
+  }
+  const missing = await create(approved(), { env: { ...prEnv, GITHUB_BUILD_WRITE_TOKEN: '' } });
+  assert.equal(missing.status, 503);
+  assert.match(missing.body.error, /GITHUB_BUILD_WRITE_TOKEN.*selected repositories/);
+  assert.equal(missing.fetcher.gh().length, 0);
+  const network = await create(approved(), { fetcher: router([[url => url.startsWith(GH), () => { throw new Error(`network ${WRITE}`); }]]) });
+  assert.equal(network.status, 502);
+  assert.match(network.body.error, /retry the same proposal.*existing branch or pull request/);
+});
+
+test('unsafe PR paths offer a valid example without reflecting the rejected value', async () => {
+  const result = await create(approved({ files: [{ path: '../private-value', action: 'create', content: 'x' }] }));
+  assert.equal(result.status, 400);
+  assert.match(result.body.error, /relative to the repository root.*README.md/);
+  assert.doesNotMatch(result.body.error, /private-value/);
+  assert.equal(result.fetcher.gh().length, 0);
 });
