@@ -44,6 +44,7 @@ class FeatureIsolationUiTest(private val dark: Boolean, private val compact: Boo
     private fun assertNoHome() {
         compose.onNodeWithText("Chat").assertDoesNotExist()
         compose.onNodeWithText("Work").assertDoesNotExist()
+        compose.onNode(hasText("Task") and isSelectable()).assertDoesNotExist()
         compose.onNodeWithContentDescription("Open chat history").assertDoesNotExist()
         compose.onNodeWithContentDescription("Find in chat").assertDoesNotExist()
         compose.onNodeWithContentDescription("New chat").assertDoesNotExist()
@@ -52,18 +53,19 @@ class FeatureIsolationUiTest(private val dark: Boolean, private val compact: Boo
     }
     @Test fun normalHeaderIsUnchangedBySendStreamingAndCompletion() {
         val state = mutableStateOf(ChatUiState())
-        var destination: com.dua.ai.ui.navigation.DuaDestination? = null
-        show { ChatScreen(state.value, ChatActions(onOpenDestination = { destination = it })) }
+        var newChats = 0
+        show { ChatScreen(state.value, ChatActions(onNewChat = { newChats++ })) }
         for (messages in listOf(emptyList(), listOf(ChatMessage("u", "Question", true)),
             listOf(ChatMessage("a", "Answer", false, state = ChatMessage.STREAMING)), listOf(ChatMessage("a", "Answer", false)))) {
             compose.runOnIdle { state.value = state.value.copy(messages = messages, typing = messages.any { it.streaming }) }
             compose.onNode(hasText("Chat") and isSelectable()).assertIsDisplayed()
-            compose.onNode(hasText("Work") and isSelectable()).assertIsDisplayed()
-            compose.onNodeWithContentDescription("Computer").assertIsDisplayed().performClick()
+            compose.onNode(hasText("Task") and isSelectable()).assertIsDisplayed()
+            compose.onNodeWithContentDescription("Open profile and settings").assertIsDisplayed()
             compose.onNodeWithContentDescription("Find in chat").assertDoesNotExist()
-            compose.onNodeWithContentDescription("New chat").assertDoesNotExist()
-            assertEquals(com.dua.ai.ui.navigation.DuaDestination.Computer, destination)
+            compose.onNodeWithContentDescription("New chat").assertIsDisplayed()
         }
+        compose.onNodeWithContentDescription("New chat").performClick()
+        assertEquals(1, newChats)
     }
     @Test fun agentStartersDisappearAfterSendAndCompactPillStaysCentered() {
         val state = mutableStateOf(ChatUiState(agent = true, agentAvailable = true))
@@ -98,7 +100,7 @@ class FeatureIsolationUiTest(private val dark: Boolean, private val compact: Boo
         compose.onNodeWithText("Deep Web Research").performScrollTo().assertExists()
         compose.onNodeWithContentDescription("Back").performClick()
         compose.onNode(hasText("Chat") and isSelectable()).assertIsDisplayed()
-        compose.onNodeWithContentDescription("Computer").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Open profile and settings").assertIsDisplayed()
         compose.runOnIdle { state.value = ChatUiState(agent = true, agentAvailable = true) }
         compose.onNodeWithContentDescription("Add photos and files").performClick()
         compose.onNodeWithText("Files", substring = false).assertExists()

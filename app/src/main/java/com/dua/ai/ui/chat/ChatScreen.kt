@@ -116,13 +116,14 @@ fun ChatScreen(
         ProjectsFeaturePage(state, actions, onBack = { sheet = null })
         return
     }
-    val feature = state.activeFeature
+    var taskHome by rememberSaveable { mutableStateOf(false) }
+    val feature = state.activeFeature.takeUnless { taskHome && state.feature == null && it == ChatFeature.Agent }
     // Switching + → Agent keeps the existing request context and attachments, but shows only
     // turns written in the Agent view. The saved conversation and handlers stay unchanged.
     var agentStartAfterId by rememberSaveable(state.chatId) { mutableStateOf<String?>(null) }
     val boundaryIndex = state.messages.indexOfFirst { it.id == agentStartAfterId }
-    val visibleState = if (state.agent && boundaryIndex >= 0) state.copy(messages = state.messages.drop(boundaryIndex + 1)) else state
-    /** Empty Home (new chat): logo and tagline, full mode chip row. */
+    val visibleState = if (state.agent && !taskHome && boundaryIndex >= 0) state.copy(messages = state.messages.drop(boundaryIndex + 1)) else state
+    /** Empty conversations show Home's Chat/Task hero or their dedicated feature starters. */
     val home = visibleState.messages.isEmpty() && !state.typing
     var deletingId by rememberSaveable { mutableStateOf<String?>(null) }
     var deletingServerId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -207,17 +208,20 @@ fun ChatScreen(
     LaunchedEffect(state.editingId) { if (state.editingId != null) runCatching { inputFocus.requestFocus() } }
     // Mode toggles (chips and + sheet switches) give a light haptic.
     val tap = { actions.haptic(ChatHaptic.Tap) }
-    val onWebMode: (String?) -> Unit = { tap(); actions.onWebMode(it) }
-    val onReasoning: (Boolean) -> Unit = { tap(); actions.onReasoning(it) }
+    val onWebMode: (String?) -> Unit = { tap(); if (it != null) taskHome = false; actions.onWebMode(it) }
+    val onReasoning: (Boolean) -> Unit = { tap(); if (it) taskHome = false; actions.onReasoning(it) }
     val onAgent: (Boolean) -> Unit = { enabled ->
         tap()
+        taskHome = false
         if (enabled && !state.agent) agentStartAfterId = state.messages.lastOrNull()?.id
         actions.onAgent(enabled)
         if (enabled) sheet = null
     }
-    val onXSearch: (Boolean) -> Unit = { tap(); actions.onXSearch(it) }
-    val onImagine: (Boolean) -> Unit = { tap(); actions.onImagine(it) }
-    val onRunCode: (Boolean) -> Unit = { tap(); actions.onRunCode(it) }
+    val onXSearch: (Boolean) -> Unit = { tap(); if (it) taskHome = false; actions.onXSearch(it) }
+    val onImagine: (Boolean) -> Unit = { tap(); if (it) taskHome = false; actions.onImagine(it) }
+    val onRunCode: (Boolean) -> Unit = { tap(); if (it) taskHome = false; actions.onRunCode(it) }
+    val taskReady = !taskHome || (state.agent && state.agentAvailable)
+    val sendFromComposer: () -> Unit = { if (taskReady) actions.onSend() }
     // Swipe up on the input card or the chips above it opens the + sheet, except from inside the text field while typing.
     var inputFocused by remember { mutableStateOf(false) }
     var inputBounds by remember { mutableStateOf(Rect.Zero) }
@@ -272,8 +276,8 @@ fun ChatScreen(
                         chats = state.savedChats.filter { it.projectId == state.projectId },
                         currentChatId = state.chatId,
                         newChatEnabled = !state.typing,
-                        onNewChat = { if (!state.typing) closeDrawerThen(actions.onNewChat) },
-                        onSelectChat = { id -> closeDrawerThen { actions.onOpenChat(id) } },
+                        onNewChat = { if (!state.typing) closeDrawerThen { taskHome = false; actions.onNewChat() } },
+                        onSelectChat = { id -> closeDrawerThen { taskHome = false; actions.onOpenChat(id) } },
                         onDeleteChat = { id -> deletingId = id },
                         onRenameChat = { id, title -> actions.onRenameChat(id, title) },
                         pinEnabled = state.chatPinEnabled,
@@ -281,8 +285,8 @@ fun ChatScreen(
                         serverDeletionEnabled = state.serverChatDeletionEnabled,
                         onDeleteServerChat = { id -> actions.onDismissChatDeletion(); deletingServerId = id },
                         onOpenSettings = { closeDrawerThen(actions.onOpenSettings) },
-                        onProjects = { closeDrawerThen { actions.onOpenDestination(DuaDestination.Projects) } },
-                        onDestination = { destination -> closeDrawerThen { actions.onOpenDestination(destination) } },
+                        onProjects = { closeDrawerThen { taskHome = false; actions.onOpenDestination(DuaDestination.Projects) } },
+                        onDestination = { destination -> closeDrawerThen { taskHome = false; actions.onOpenDestination(destination) } },
                         profileName = state.profileName,
                         profilePhotoUrl = state.profilePhotoUrl,
                         modifier = Modifier.width(drawerWidth),
@@ -296,8 +300,10 @@ fun ChatScreen(
                         newSessionEnabled = !state.typing && (feature != ChatFeature.Agent || state.agentAvailable))
                     else ChatTopBar(
                         onMenu = { scope.launch { drawerState.open() } },
-                        tab = state.homeTab, onTab = { actions.onOpenDestination(if (it == HomeTab.Work) DuaDestination.Work else DuaDestination.Chat) },
-                        onComputer = { actions.onOpenDestination(DuaDestination.Computer) },
+                        task = taskHome, modelName = homeModelName(state),
+                        profileName = state.profileName, profilePhotoUrl = state.profilePhotoUrl,
+                        onModel = { sheet = ChatSheet.Model }, onProfile = actions.onOpenSettings,
+                        onNewChat = actions.onNewChat, newChatEnabled = !state.typing,
                         onFindInChat = if (state.messages.isEmpty() || state.homeTab == HomeTab.Work) null else ({ followTail = false; searchOpen = true }),
                     )
                     if (searchOpen) ConversationSearchBar(searchQuery,
@@ -318,8 +324,8 @@ fun ChatScreen(
                             Text(if (feature == ChatFeature.Projects) state.projects.firstOrNull { it.id == state.projectId }?.name ?: "Projects" else "Create an image with Dua",
                                 Modifier.align(Alignment.Center).padding(Spacing.lg), style = MaterialTheme.typography.titleLarge)
                         } else if (home) {
-                            EmptyState(suggestions = state.suggestions, showPrompts = state.draft.isBlank(),
-                                onSuggestion = { prompt -> actions.onDraftChange(prompt); inputFocus.requestFocus() })
+                            ChatContent(task = taskHome,
+                                onTask = { prompt -> actions.onDraftChange(prompt); inputFocus.requestFocus(); keyboard?.show() })
                         } else {
                             key(conversationKey) {
                                 MessageList(state = visibleState, actions = actions, listState = listState, imagineActions = mediaActions,
@@ -338,7 +344,8 @@ fun ChatScreen(
                             }
                         }
                     }
-                    if (feature != null || state.homeTab != HomeTab.Work) Column(Modifier.fillMaxWidth().imePadding().navigationBarsPadding(), horizontalAlignment = Alignment.CenterHorizontally) {
+                    if (feature != null || state.homeTab != HomeTab.Work) Column(Modifier.fillMaxWidth()
+                        .let { if (feature != null) it.imePadding().navigationBarsPadding() else it }, horizontalAlignment = Alignment.CenterHorizontally) {
                         Column(Modifier.widthIn(max = Sizes.contentMaxWidth).fillMaxWidth()
                             .onGloballyPositioned { bottomCoordinates = it }
                             .swipeUpToOpen(enabled = sheet == null && !state.typing,
@@ -348,7 +355,7 @@ fun ChatScreen(
                             ChatNotices(state = state, actions = actions)
                             if (state.editingId != null) EditingBanner(onCancel = actions.onCancelEdit)
                             val visibleModes = modeToggles(state, onWebMode, onReasoning, onXSearch, onRunCode, onAgent)
-                                .filter { feature == null && !home && it.on }
+                                .filter { feature == null && !home && it.on && !(taskHome && it.label == "Agent") }
                             if (feature == ChatFeature.Agent) Box(Modifier.fillMaxWidth().padding(vertical = Spacing.xs), contentAlignment = Alignment.Center) { AgentModePill() }
                             if (visibleModes.isNotEmpty()) {
                                 Row(
@@ -361,7 +368,7 @@ fun ChatScreen(
                                 }
                             }
                             val dictation = if (actions.inlineDictation) rememberChatDictation(actions.dictationLanguage, actions.dictationAutoSend,
-                                draft = rememberUpdatedState(state.draft).let { d -> remember { { d.value } } }, onDraft = actions.onDraftChange, onSend = actions.onSend, onNotice = actions.onDictationNotice) else null
+                                draft = rememberUpdatedState(state.draft).let { d -> remember { { d.value } } }, onDraft = actions.onDraftChange, onSend = sendFromComposer, onNotice = actions.onDictationNotice) else null
                             Composer(
                                 dictation = dictation,
                                 // Only what the composer needs, so streamed tokens do not recompose it.
@@ -378,13 +385,21 @@ fun ChatScreen(
                                 onTextFieldFocus = { inputFocused = it },
                                 onTextFieldBounds = { inputBounds = it },
                                 value = state.draft,
-                                onSend = { actions.onSend() },
+                                onSend = { sendFromComposer() },
                                 onStop = actions.onStop,
                                 onModelClick = { sheet = ChatSheet.Model },
                                 currentModel = state.modelLabel,
                                 onCancelUpload = rememberUpdatedState(state.uploads).let { uploads -> remember(actions) { { uploads.value.filter { it.uploading }.forEach { actions.onCancelUpload(it.id) } } } },
                                 onImagineOptions = { sheet = ChatSheet.Imagine },
-                                showModelSelector = feature == null,
+                                showModelSelector = false,
+                                placeholder = if (feature == null && taskHome) "Describe..." else "Ask Dua AI",
+                                sendEnabled = taskReady,
+                                aboveInput = {
+                                    if (feature == null) HomeModeSwitcher(if (taskHome) HomeMode.Task else HomeMode.Chat,
+                                        onSelect = { mode ->
+                                            if (!state.typing) { tap(); taskHome = mode == HomeMode.Task; actions.onAgent(taskHome) }
+                                        }, enabled = !state.typing)
+                                },
                                 attachmentPopup = {
                                     if (feature == ChatFeature.Projects) com.dua.ai.ui.projects.ProjectAttachmentMenu(sheet == ChatSheet.Attach, { sheet = null },
                                         { actions.onPickCamera() }, { actions.onPickPhotos() }, { actions.onPickFiles() }, { actions.onOpenDestination(DuaDestination.Plugins) })
@@ -425,7 +440,7 @@ fun ChatScreen(
                 build = state.buildHint.ifEmpty { if (state.buildRepo != null) "On: ${state.buildRepo}" else "Chat about one of your GitHub repositories, read-only" },
                 toggles = modeToggles(state, onWebMode, onReasoning, onXSearch, onRunCode, onAgent),
             ),
-            onTurnOffModes = if (state.auto) null else ({ sheet = null; actions.onAuto() }),
+            onTurnOffModes = if (state.auto) null else ({ sheet = null; taskHome = false; actions.onAuto() }),
             onImagine = { on -> sheet = null; onImagine(on) },
             onBuild = { sheet = ChatSheet.Build; actions.onOpenBuild() },
         )
@@ -443,7 +458,7 @@ fun ChatScreen(
         }
         ChatSheet.Build -> BuildSheet(
             current = state.buildRepo, hint = state.buildHint, repositories = state.buildRepositories, enabled = !state.typing,
-            onSelect = { repository -> sheet = null; actions.onBuildRepository(repository) },
+            onSelect = { repository -> sheet = null; taskHome = false; actions.onBuildRepository(repository) },
             onTurnOff = { sheet = null; actions.onBuildRepository(null) },
             onRetry = actions.onRetryBuildRepositories,
             onOpenSetup = { sheet = null; actions.onOpenSetup() },

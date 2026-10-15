@@ -60,11 +60,11 @@ class CompactChatUiTest(private val dark: Boolean, private val small: Boolean) {
                 com.dua.ai.model.PromptSuggestion("Draft a proposal", "Draft a proposal", "Business"))),
             ChatActions(onDraftChange = { suggested = it }, onNewChat = { newChat++ }, onOpenVoiceMode = { voice++ },
                 onOpenDestination = { opened = it })) }
-        for (description in listOf("Open chat history", "Computer", "Voice mode", "Add photos and files", "Dictate", "Model, Dua")) {
+        for (description in listOf("Open chat history", "Open profile and settings", "Voice mode", "Add photos and files", "Dictate", "Model, Gemini")) {
             compose.onNodeWithContentDescription(description).assertIsDisplayed().assertWidthIsAtLeast(48.dp).assertHeightIsAtLeast(48.dp)
         }
         compose.onNode(hasText("Chat") and isSelectable()).assertIsDisplayed().assertIsSelected().assertHeightIsAtLeast(48.dp)
-        compose.onNode(hasText("Work") and isSelectable()).assertIsDisplayed().assertIsNotSelected()
+        compose.onNode(hasText("Task") and isSelectable()).assertIsDisplayed().assertIsNotSelected()
         compose.onNodeWithText("Ask Dua AI").assertIsDisplayed()
         // README-only elements are gone.
         compose.onAllNodesWithContentDescription("Computer, coming soon").assertCountEquals(0)
@@ -73,19 +73,14 @@ class CompactChatUiTest(private val dark: Boolean, private val small: Boolean) {
         val chat = compose.onNode(hasText("Chat") and isSelectable()).fetchSemanticsNode().boundsInRoot
         val message = compose.onNodeWithContentDescription("Message").fetchSemanticsNode().boundsInRoot
         assertTrue(chat.bottom <= message.top)
-        compose.onNodeWithContentDescription("New chat").assertDoesNotExist()
-        compose.onNodeWithContentDescription("Computer").performClick()
-        compose.runOnIdle { assertEquals(com.dua.ai.ui.navigation.DuaDestination.Computer, opened); assertEquals(0, newChat) }
+        compose.onNodeWithContentDescription("New chat").assertIsDisplayed().performClick()
+        compose.runOnIdle { assertEquals(1, newChat) }
         compose.onNodeWithContentDescription("Voice mode").performClick()
-        compose.onNode(hasText("Work") and isSelectable()).performClick()
-        compose.runOnIdle { assertEquals(0, newChat); assertEquals(1, voice); assertEquals(com.dua.ai.ui.navigation.DuaDestination.Work, opened) }
+        compose.onNode(hasText("Task") and isSelectable()).performClick()
+        compose.runOnIdle { assertEquals(1, newChat); assertEquals(1, voice) }
         capture("compact-home")
-        compose.onNodeWithText("Create an image or sticker").performClick()
-        compose.runOnIdle { assertEquals("Create an image or sticker of ", suggested) }
-        if (!small) {
-            compose.onNodeWithText("Explain some code").performClick()
-            compose.runOnIdle { assertEquals("Explain Kotlin", suggested) }
-        }
+        compose.onNodeWithText(HomeTaskPrompts[1]).performScrollTo().performClick()
+        compose.runOnIdle { assertEquals(HomeTaskPrompts[1], suggested) }
         // Mode switches moved from Home buttons into the + sheet.
         compose.onNodeWithContentDescription("Add photos and files").performClick()
         compose.onNodeWithText("Run code", substring = true).performScrollTo().assertIsDisplayed()

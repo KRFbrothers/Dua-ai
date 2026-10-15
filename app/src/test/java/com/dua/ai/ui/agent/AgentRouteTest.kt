@@ -121,7 +121,7 @@ class AgentRouteTest {
         compose.onNodeWithContentDescription("Back").performClick()
         assertFalse(model.agent.value)
         compose.onNode(hasText("Chat") and isSelectable()).assertIsDisplayed()
-        compose.onNodeWithContentDescription("Computer").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Open profile and settings").assertIsDisplayed()
         assertEquals(previous.messages, model.savedChats.value.single { it.id == previous.id }.messages)
         assertEquals("Unsent agent prompt", model.savedChats.value.single { it.id == previous.id }.draft)
     }
@@ -140,6 +140,22 @@ class AgentRouteTest {
             compose.onNodeWithContentDescription("Model, Dua").assertDoesNotExist()
             assertEquals(0, openedChat)
         }
+    }
+
+    @Test fun homeTaskTabUsesRealAgentStateWithoutReplacingTheCurrentChat() {
+        show(home = true)
+        compose.onNode(hasText("Task") and isSelectable()).performClick()
+        assertTrue(model.agent.value)
+        assertEquals(previous.id, model.activeChatId.value)
+        assertEquals(previous.messages, model.messages.value)
+        assertEquals(previous.draft, model.draft.value)
+        compose.onNodeWithTag("message-previous").assertIsDisplayed()
+        compose.onNodeWithTag("feature-top-bar").assertDoesNotExist()
+        compose.onNodeWithContentDescription("New chat").assertDoesNotExist()
+        compose.onNode(hasText("Chat") and isSelectable()).performClick()
+        assertFalse(model.agent.value)
+        assertEquals(previous.id, model.activeChatId.value)
+        compose.onNodeWithContentDescription("New chat").assertIsDisplayed()
     }
 
 }
