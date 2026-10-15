@@ -138,6 +138,7 @@ class ChatActions(
     val onRefreshAgent: () -> Unit = {},
     val onSelectProject: (String) -> Unit = {},
     val onSaveProject: (String?, String, String, Boolean) -> Boolean = { _, _, _, _ -> false },
+    val onCreateProject: (String, String, String, String) -> Boolean = { name, instructions, _, _ -> onSaveProject(null, name, instructions, false) },
     val onSaveProjectMemory: (String, Boolean, List<String>) -> Boolean = { _, _, _ -> false },
     val onSaveTask: (String, String?, String, Long?) -> Boolean = { _, _, _, _ -> false },
     val onToggleTask: (String, String) -> Boolean = { _, _ -> false },

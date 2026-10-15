@@ -19,7 +19,7 @@ import org.robolectric.annotation.Config
 class ProjectMemoryInteractionTest {
     @get:Rule val compose = createComposeRule()
     @Test fun pickerAddsToCodingOnlyAndToggleOffRetainsNotes() {
-        val projects = mutableStateOf(ProjectCodec.defaults)
+        val projects = mutableStateOf(com.dua.ai.projects.ProjectFixtures.owned)
         compose.setContent { DuaTheme(LocalPreferences()) { ProjectsContent(projects.value, "personal", "", true, {}, { _, _, _, _ -> true },
             memoryEnabled = true, onSaveMemory = { id, enabled, notes ->
                 projects.value = projects.value.map { if (it.id == id) it.copy(memory = ProjectMemory(enabled, notes)) else it }; true
@@ -41,7 +41,7 @@ class ProjectMemoryInteractionTest {
         compose.onNodeWithText("No notes saved. Add preferences or facts you want this project to remember.").assertExists()
     }
     @Test fun changedNoteDuringEditBlocksSaveAndFailurePreservesTypedText() {
-        val project = mutableStateOf(ProjectCodec.defaults[1].copy(memory = ProjectMemory(true, listOf("Old note"))))
+        val project = mutableStateOf(com.dua.ai.projects.ProjectFixtures.owned[1].copy(memory = ProjectMemory(true, listOf("Old note"))))
         var saves = 0
         compose.setContent { DuaTheme(LocalPreferences()) { ProjectMemoryContent(project.value, "", true, "", { _, _, _ -> saves++; false }, {}) } }
         compose.onNodeWithText("Edit note 1").performClick()
@@ -57,7 +57,7 @@ class ProjectMemoryInteractionTest {
         compose.onNodeWithText("Memory note").assertTextContains("Another edit")
     }
     @Test fun deletionNeedsConfirmationAndDoesNotDeleteAChangedRow() {
-        val project = mutableStateOf(ProjectCodec.defaults[2].copy(memory = ProjectMemory(false, listOf("Keep me"))))
+        val project = mutableStateOf(com.dua.ai.projects.ProjectFixtures.owned[2].copy(memory = ProjectMemory(false, listOf("Keep me"))))
         var saves = 0
         compose.setContent { DuaTheme(LocalPreferences()) { ProjectMemoryContent(project.value, "", true, "", { _, enabled, notes ->
             saves++; project.value = project.value.copy(memory = ProjectMemory(enabled, notes)); true
@@ -73,7 +73,7 @@ class ProjectMemoryInteractionTest {
     @Test fun archivedOrUnavailableMemoryShowsNotesWithoutAllowingChanges() {
         val enabled = mutableStateOf(false)
         var saves = 0
-        val project = ProjectCodec.defaults[1].copy(archived = true, memory = ProjectMemory(true, listOf("Read only")))
+        val project = com.dua.ai.projects.ProjectFixtures.owned[1].copy(archived = true, memory = ProjectMemory(true, listOf("Read only")))
         compose.setContent { DuaTheme(LocalPreferences()) { ProjectMemoryContent(project, "", enabled.value, "Restore this project to edit its memory.", { _, _, _ -> saves++; true }, {}) } }
         compose.onNodeWithText("Read only").assertExists()
         compose.onNodeWithText("Edit note 1").assertIsNotEnabled()

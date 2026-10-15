@@ -1,3 +1,4 @@
+import { testProjects } from './project-fixtures.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -7,7 +8,7 @@ import { handleChat } from '../src/core/providers.mjs';
 import { mockFetch, chatRequest, env } from './helpers.mjs';
 const owner = '11111111-1111-4111-8111-111111111111';
 const settings = { ...env, SUPABASE_URL: 'https://project.supabase.co', SUPABASE_ANON_KEY: 'public-anon-key', DUA_ALLOWED_EMAIL: 'owner@example.com' };
-const snapshot = () => ({ format: 'dua-cloud-snapshot', version: 1, memory: ['Private personal note'], projects: defaultProjects().map(p => p.id === 'coding' ? { ...p, instructions: 'Use Kotlin and show a diff.' } : p), chats: [] });
+const snapshot = () => ({ format: 'dua-cloud-snapshot', version: 1, memory: ['Private personal note'], projects: testProjects().map(p => p.id === 'coding' ? { ...p, instructions: 'Use Kotlin and show a diff.' } : p), chats: [] });
 const body = (projectId = 'coding') => ({ model: 'Dua', projectId, context: { id: 'chat-id-1234' }, memory: 'Private personal note', messages: [{ role: 'user', text: 'Review code' }] });
 const user = email => Response.json({ id: owner, email: email || 'owner@example.com' });
 const reader = (value, ...extra) => mockFetch(user(), Response.json([{ revision: 1, payload: value }]), ...extra);
@@ -61,5 +62,5 @@ test('stored file references from other projects are refused', async () => {
 test('legacy requests keep their protocol; empty cloud has default projects', async () => {
   const legacy = body(); delete legacy.projectId;
   await resolveProjectContext(request(legacy), legacy, { env: {}, fetcher: mockFetch() }); assert.equal(legacy.memory, 'Private personal note');
-  const data = body(); await resolveProjectContext(request(data), data, { env: settings, fetcher: mockFetch(user(), Response.json([])) }); assert.equal(data.memory, '');
+  const data = body('personal'); await resolveProjectContext(request(data), data, { env: settings, fetcher: mockFetch(user(), Response.json([])) }); assert.equal(data.memory, '');
 });

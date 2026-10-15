@@ -1,3 +1,4 @@
+import { testProjects } from './project-fixtures.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { defaultProjects, resolveProjectContext } from '../src/core/projects.mjs';
@@ -7,7 +8,7 @@ import { mockFetch } from './helpers.mjs';
 const owner = '11111111-1111-4111-8111-111111111111';
 const settings = { SUPABASE_URL: 'https://project.supabase.co', SUPABASE_ANON_KEY: 'public-anon', DUA_ALLOWED_EMAIL: 'owner@example.com' };
 const snapshot = () => ({ format: 'dua-cloud-snapshot', version: 1, chats: [], memory: ['Server Personal note'],
-  projects: defaultProjects().map(p => p.id === 'personal' ? p : { ...p, memory: { enabled: true, notes: [`Server ${p.name} note`] } }) });
+  projects: testProjects().map(p => p.id === 'personal' ? p : { ...p, memory: { enabled: true, notes: [`Server ${p.name} note`] } }) });
 const request = () => new Request('https://dua.example/api/chat', { headers: { authorization: 'Bearer fake-access' } });
 const reader = s => mockFetch(Response.json({ id: owner, email: 'owner@example.com' }), Response.json([{ revision: 1, payload: s }]));
 const data = projectId => ({ projectId, context: { id: 'new-chat' }, memory: 'Forged or stale client note', messages: [{ role: 'user', text: 'Hello' }] });
@@ -16,7 +17,7 @@ test('project memory survives validation alongside tasks and default legacy proj
   const s = snapshot(); s.projects[1].tasks = [{ id: 't', title: 'Review', completed: false, dueAt: 1893456000000 }];
   s.projects[1].memory = { enabled: false, notes: ['🙂'.repeat(100), 'Line one\nLine two'] };
   assert.deepEqual(validateCloudSnapshot(s), s);
-  s.projects = defaultProjects(); assert.deepEqual(validateCloudSnapshot(s), s);
+  s.projects = testProjects(); assert.deepEqual(validateCloudSnapshot(s), s);
   s.projects[1].memory = { enabled: false, notes: [] }; assert.deepEqual(validateCloudSnapshot(s), s);
 });
 test('invalid types, extra fields and limits fail before snapshot persistence', () => {

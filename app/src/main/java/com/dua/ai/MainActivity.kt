@@ -12,7 +12,11 @@ import com.dua.ai.ui.DuaApp
 class MainActivity : ComponentActivity() {
     private var notificationRoute by androidx.compose.runtime.mutableStateOf<Pair<String, String>?>(null)
     override fun onNewIntent(intent: android.content.Intent) { super.onNewIntent(intent); setIntent(intent); readRoute(intent) }
-    private fun readRoute(intent: android.content.Intent) { intent.getStringExtra("open_chat_id")?.let { notificationRoute = java.util.UUID.randomUUID().toString() to it } }
+    private fun readRoute(intent: android.content.Intent) {
+        val projectId = intent.getStringExtra("open_project_id")
+        if (projectId != null && com.dua.ai.projects.ProjectCodec.validId(projectId)) notificationRoute = "project:${java.util.UUID.randomUUID()}" to projectId
+        else intent.getStringExtra("open_chat_id")?.let { notificationRoute = java.util.UUID.randomUUID().toString() to it }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         // Branded launch splash (Theme.App.Starting); it hands over to Theme.Dua once the first frame is drawn.

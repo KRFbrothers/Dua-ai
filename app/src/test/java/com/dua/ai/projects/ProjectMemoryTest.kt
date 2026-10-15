@@ -13,7 +13,7 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ProjectMemoryTest {
-    private fun snapshot(memory: ProjectMemory) = CloudSnapshot(emptyList(), listOf("Personal only"), ProjectCodec.defaults.map {
+    private fun snapshot(memory: ProjectMemory) = CloudSnapshot(emptyList(), listOf("Personal only"), com.dua.ai.projects.ProjectFixtures.owned.map {
         if (it.id == "coding") it.copy(instructions = "Use Kotlin", tasks = listOf(ProjectTask("t", "Review", dueAt = 1893456000000L)), memory = memory) else it
     })
     @Test fun cloudPreferencesAndChatlessExportKeepNotesSwitchAndOtherProjectFields() {
@@ -26,14 +26,14 @@ class ProjectMemoryTest {
         }
     }
     @Test fun defaultsKeepOldWireSignaturesAndAcceptExplicitEmptyMemory() {
-        ProjectCodec.defaults.forEach { p ->
+        com.dua.ai.projects.ProjectFixtures.owned.forEach { p ->
             val legacy = JSONObject().put("id", p.id).put("name", p.name).put("instructions", p.instructions).put("archived", p.archived)
             assertEquals(AutomationSyncPolicy.digest(legacy.toString()), AutomationSyncPolicy.projectSignature(p))
             assertFalse(ProjectCodec.encodedProject(p).has("memory"))
         }
-        val json = ProjectCodec.toJson(ProjectCodec.defaults)
+        val json = ProjectCodec.toJson(com.dua.ai.projects.ProjectFixtures.owned)
         json.getJSONObject(1).put("memory", JSONObject().put("enabled", false).put("notes", JSONArray()))
-        assertEquals(ProjectCodec.defaults, ProjectCodec.fromJson(json))
+        assertEquals(com.dua.ai.projects.ProjectFixtures.owned, ProjectCodec.fromJson(json))
     }
     @Test fun invalidMemoryFailsWithoutAcceptingLossyTypesOrOversizedNotes() {
         val mutations: List<(JSONObject) -> Unit> = listOf(
@@ -51,7 +51,7 @@ class ProjectMemoryTest {
             mutation(json.getJSONArray("projects").getJSONObject(1))
             assertTrue(runCatching { CloudSnapshotCodec.decode(json) }.isFailure)
         }
-        assertTrue(runCatching { ProjectCodec.validate(ProjectCodec.defaults.map { if (it.id == "personal") it.copy(memory = ProjectMemory(true, listOf("Duplicate Personal"))) else it }) }.isFailure)
+        assertTrue(runCatching { ProjectCodec.validate(com.dua.ai.projects.ProjectFixtures.owned.map { if (it.id == "personal") it.copy(memory = ProjectMemory(true, listOf("Duplicate Personal"))) else it }) }.isFailure)
     }
     @Test fun memoryChangesSyncAndConflictingEditsPauseBeforeOverwriting() {
         val original = snapshot(ProjectMemory(true, listOf("Old preference")))

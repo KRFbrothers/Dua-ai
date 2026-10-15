@@ -1,3 +1,4 @@
+import { testProjects } from './project-fixtures.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { defaultProjects } from '../src/core/projects.mjs';
@@ -5,7 +6,7 @@ import { validateCloudSnapshot } from '../src/core/cloud-snapshot.mjs';
 
 const task = () => ({ id: 'task-1', title: 'Review changes', completed: false });
 const snapshot = () => ({ format: 'dua-cloud-snapshot', version: 1, chats: [], memory: [],
-  projects: defaultProjects().map(p => p.id === 'coding' ? { ...p, tasks: [task()] } : p) });
+  projects: testProjects().map(p => p.id === 'coding' ? { ...p, tasks: [task()] } : p) });
 test('cloud validator retains task completion and accepts old project definitions', () => {
   const value = snapshot(); value.projects[1].tasks[0].completed = true;
   assert.deepEqual(validateCloudSnapshot(value), value);

@@ -69,6 +69,27 @@ class StoredFileClient(private val client: OkHttpClient = uploadClient) {
         }
     }
 
+    /** Bounded source hydration for the separate chat engine; the owner backend supplies the signed URL. */
+    suspend fun readAttachment(url: String, name: String, mimeType: String): com.dua.ai.attachments.ChatAttachment {
+        val parsed = URI(url)
+        require(parsed.scheme == "https" && !parsed.host.isNullOrBlank() && parsed.userInfo == null) { "Invalid source URL." }
+        return suspendCancellableCoroutine { continuation ->
+            val call = client.newCall(Request.Builder().url(url).get().build())
+            continuation.invokeOnCancellation { call.cancel() }
+            call.enqueue(object : Callback {
+                override fun onFailure(call: Call, e: IOException) { if (continuation.isActive) continuation.resumeWith(Result.failure(e)) }
+                override fun onResponse(call: Call, response: Response) {
+                    val result = runCatching { response.use {
+                        check(it.isSuccessful) { "Source could not be loaded. Remove the unavailable source or retry." }
+                        val body = it.body ?: error("Source is empty.")
+                        body.byteStream().use { input -> com.dua.ai.attachments.AttachmentReader.read(name, mimeType, input) }
+                    } }
+                    if (continuation.isActive) continuation.resumeWith(result)
+                }
+            })
+        }
+    }
+
     private class ProgressBody(private val type: MediaType, private val size: Long, private val open: () -> InputStream, private val onProgress: (Long) -> Unit) : RequestBody() {
         override fun contentType() = type
         override fun contentLength() = size

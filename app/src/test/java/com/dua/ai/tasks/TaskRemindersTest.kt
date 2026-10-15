@@ -29,7 +29,7 @@ class TaskRemindersTest {
         shadowOf(app).grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
         TaskReminders.reset(app)
     }
-    private fun save(completed: Boolean = false, dueAt: Long = due) = DevicePreferences(app).update(LocalPreferences(projects = ProjectCodec.defaults.map {
+    private fun save(completed: Boolean = false, dueAt: Long = due) = DevicePreferences(app).update(LocalPreferences(projects = com.dua.ai.projects.ProjectFixtures.owned.map {
         if (it.id == "coding") it.copy(tasks = listOf(ProjectTask("t1", "Private client task", completed, dueAt))) else it
     }))
     @Test fun consentDefaultsOffAndTaskEditsReconcileOneAlarmWithoutErasingDueDates() {

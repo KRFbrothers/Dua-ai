@@ -123,9 +123,9 @@ class FeatureIsolationUiTest(private val dark: Boolean, private val compact: Boo
         var saved = ""
         show { ProjectsFeaturePage(ChatUiState(), ChatActions(onSaveProject = { _, name, _, _ -> saved = name; true }), {}) }
         assertNoHome()
-        compose.onNodeWithContentDescription("New Projects session").assertIsDisplayed().performClick()
-        compose.onNodeWithText("Project name").performTextInput("Client")
-        compose.onNodeWithText("Save project").performScrollTo().performClick()
+        compose.onNodeWithContentDescription("New Project").assertIsDisplayed().performClick()
+        compose.onNodeWithContentDescription("Project name").performTextInput("Client")
+        compose.onNodeWithText("Create Project").assertIsDisplayed().performClick()
         assertEquals("Client", saved)
         assertNoHome()
     }

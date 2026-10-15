@@ -33,7 +33,7 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
     onOpenDestination: (DuaDestination) -> Unit = {},
     onOpenComputer: () -> Unit = { onOpenDestination(DuaDestination.Computer) },
     onOpenVoiceMode: () -> Unit = {}, feature: ChatFeature? = null, homeTab: HomeTab = HomeTab.Chat,
-    onExitFeature: (() -> Unit)? = null) {
+    onExitFeature: (() -> Unit)? = null, topBar: (@Composable () -> Unit)? = null) {
     val preferences by viewModel.localSettings.collectAsState()
     val chatId by viewModel.activeChatId.collectAsState()
     val draft by viewModel.draft.collectAsState()
@@ -200,6 +200,7 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
             },
             onSelectProject = { id -> voice.stopAll(); viewModel.selectProject(id) },
             onSaveProject = viewModel::saveProject,
+            onCreateProject = { name, instructions, icon, color -> viewModel.createProject(name, instructions, icon, color) != null },
             onSaveProjectMemory = viewModel::saveProjectMemory,
             onSaveTask = viewModel::saveTask, onToggleTask = viewModel::toggleTask, onDeleteTask = viewModel::deleteTask,
             onOpenChat = { id -> pulse(); voice.stopAll(); viewModel.openChat(id); viewModel.clearAttachments(); if (homeTab == HomeTab.Work) onOpenDestination(DuaDestination.Chat) },
@@ -284,7 +285,7 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
         )
     }
     androidx.compose.runtime.CompositionLocalProvider(LocalMediaLoader provides viewModel.mediaCache) {
-        ChatScreen(state, actions)
+        ChatScreen(state, actions, topBar = topBar)
     }
 }
 

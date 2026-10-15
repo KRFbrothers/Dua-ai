@@ -22,7 +22,8 @@ import androidx.navigation.compose.rememberNavController
 import com.dua.ai.ui.chat.ChatRoute
 import com.dua.ai.ui.chat.ChatFeature
 import com.dua.ai.ui.chat.HomeTab
-import com.dua.ai.ui.screens.ProjectsScreen
+import com.dua.ai.ui.projects.ProjectsFeatureFlow
+import com.dua.ai.ui.projects.ProjectChatRoute
 import com.dua.ai.ui.onboarding.OnboardingScreen
 import com.dua.ai.ui.screens.CloudSyncScreen
 import com.dua.ai.ui.screens.DataControlsScreen
@@ -79,6 +80,7 @@ fun DuaNavHost(viewModel: ChatViewModel, voice: ReplyVoice, notificationRoute: P
             voice.stopAll()
             viewModel.startNewChat()
             viewModel.selectAuto()
+            viewModel.selectProject(com.dua.ai.projects.ProjectCodec.PERSONAL)
             navigator.toChat()
         }
     }
@@ -92,7 +94,15 @@ fun DuaNavHost(viewModel: ChatViewModel, voice: ReplyVoice, notificationRoute: P
     }
     LaunchedEffect(notificationRoute) {
         notificationRoute?.second?.let { id ->
-            if (viewModel.savedChats.value.any { it.id == id }) { viewModel.openChat(id); navigator.toChat() }
+            if (notificationRoute.first.startsWith("project:")) {
+                if (viewModel.localSettings.value.projects.any { it.id == id && !it.archived && it.details?.deleted != true }) {
+                    viewModel.selectProject(id)
+                    if (viewModel.projectId.value == id) {
+                        navigator.open(DuaDestination.Projects)
+                        nav.currentBackStackEntry?.savedStateHandle?.set("open_project", id)
+                    }
+                }
+            } else if (viewModel.savedChats.value.any { it.id == id }) { viewModel.openChat(id); navigator.toChat() }
         }
     }
     NavHost(
@@ -108,7 +118,17 @@ fun DuaNavHost(viewModel: ChatViewModel, voice: ReplyVoice, notificationRoute: P
         }
         composable(DuaDestination.Chat.route) {
             BusyBackGuard(viewModel)
-            ChatRoute(viewModel, voice,
+            val activeProject by viewModel.projectId.collectAsState()
+            if (activeProject != com.dua.ai.projects.ProjectCodec.PERSONAL) ProjectChatRoute(viewModel, voice,
+                onBack = exitFeature,
+                onDetail = { page ->
+                    navigator.open(DuaDestination.Projects)
+                    nav.currentBackStackEntry?.savedStateHandle?.set("open_project", activeProject)
+                    nav.currentBackStackEntry?.savedStateHandle?.set("project_page", page)
+                }, onSettings = { navigator.open(DuaDestination.Profile) }, onDestination = openDestination,
+                onMic = { navigator.open(DuaDestination.Voice) }, onSetup = { navigator.open(DuaDestination.FeatureSetup) },
+                onVoice = { navigator.open(DuaDestination.HandsFree) })
+            else ChatRoute(viewModel, voice,
                 onOpenSettings = { navigator.open(DuaDestination.Profile) },
                 onOpenDestination = openDestination,
                 onOpenVoice = { navigator.open(DuaDestination.Voice) },
@@ -133,9 +153,30 @@ fun DuaNavHost(viewModel: ChatViewModel, voice: ReplyVoice, notificationRoute: P
         composable(DuaDestination.Projects.route) {
             BackHandler { exitFeature() }
             BusyBackGuard(viewModel)
-            ProjectsScreen(viewModel, onBack = exitFeature, onOpenProject = { navigator.open(DuaDestination.ProjectChat) })
+            val requestedProject by it.savedStateHandle.getStateFlow<String?>("open_project", null).collectAsState()
+            val requestedPage by it.savedStateHandle.getStateFlow<String?>("project_page", null).collectAsState()
+            ProjectsFeatureFlow(viewModel, onBack = exitFeature, onOpenChat = { navigator.open(DuaDestination.ProjectChat) },
+                onPlugins = { navigator.open(DuaDestination.Plugins) }, onMic = { navigator.open(DuaDestination.Voice) },
+                onVoice = { navigator.open(DuaDestination.HandsFree) },
+                requestedProject = requestedProject, requestedPage = requestedPage,
+                onRequestConsumed = { it.savedStateHandle["open_project"] = null; it.savedStateHandle["project_page"] = null })
         }
-        listOf(DuaDestination.ProjectChat, DuaDestination.Work).forEach { destination ->
+        composable(DuaDestination.ProjectChat.route) {
+            val displayedProject by viewModel.projectId.collectAsState()
+            fun detail(page: String? = null) {
+                if (!viewModel.dataBusy.value) {
+                    navigator.back()
+                    nav.currentBackStackEntry?.savedStateHandle?.set("open_project", displayedProject)
+                    nav.currentBackStackEntry?.savedStateHandle?.set("project_page", page)
+                }
+            }
+            BusyBackGuard(viewModel)
+            ProjectChatRoute(viewModel, voice, onBack = { detail() }, onDetail = { page -> detail(page) },
+                onSettings = { navigator.open(DuaDestination.Profile) }, onDestination = openDestination,
+                onMic = { navigator.open(DuaDestination.Voice) }, onSetup = { navigator.open(DuaDestination.FeatureSetup) },
+                onVoice = { navigator.open(DuaDestination.HandsFree) })
+        }
+        listOf(DuaDestination.Work).forEach { destination ->
             composable(destination.route) {
                 BackHandler { exitFeature() }
                 BusyBackGuard(viewModel)
@@ -154,9 +195,11 @@ fun DuaNavHost(viewModel: ChatViewModel, voice: ReplyVoice, notificationRoute: P
             val integrations by viewModel.integrations.collectAsState()
             val account by viewModel.account.state.collectAsState()
             // Same condition as viewModel.liveVoiceAvailable(), so the label matches where the button goes.
-            val live = integrations.voice?.live?.enabled == true && account.user != null
-            VoiceScreen(draft = draft, onBack = navigator::back, onHandsFree = { navigator.open(if (viewModel.liveVoiceAvailable()) DuaDestination.LiveVoice else DuaDestination.HandsFree) },
-                onUse = { text -> viewModel.updateDraft(text); navigator.toChat() }, inputLanguage = settings.inputLanguage, liveAvailable = live)
+            val live = integrations.voice?.live?.enabled == true && account.user != null && viewModel.projectId.value == com.dua.ai.projects.ProjectCodec.PERSONAL
+            VoiceScreen(draft = draft, onBack = navigator::back, onHandsFree = { navigator.open(if (viewModel.projectId.value == com.dua.ai.projects.ProjectCodec.PERSONAL && viewModel.liveVoiceAvailable()) DuaDestination.LiveVoice else DuaDestination.HandsFree) },
+                onUse = { text -> viewModel.updateDraft(text)
+                    if (nav.previousBackStackEntry?.destination?.route in setOf(DuaDestination.Projects.route, DuaDestination.ProjectChat.route)) navigator.back() else navigator.toChat()
+                }, inputLanguage = settings.inputLanguage, liveAvailable = live)
         }
         composable(DuaDestination.LiveVoice.route) {
             com.dua.ai.ui.voice.LiveVoiceScreen(viewModel, onClose = navigator::back,
@@ -164,7 +207,12 @@ fun DuaNavHost(viewModel: ChatViewModel, voice: ReplyVoice, notificationRoute: P
         }
         composable(DuaDestination.HandsFree.route) {
             // Voice mode (device speech loop). The route keeps its old name so saved navigation state still resolves.
-            com.dua.ai.ui.voice.VoiceModeScreen(viewModel, voice, onClose = navigator::back, onOpenChat = navigator::toChat)
+            com.dua.ai.ui.voice.VoiceModeScreen(viewModel, voice, onClose = navigator::back, onOpenChat = {
+                if (runCatching { nav.getBackStackEntry(DuaDestination.ProjectChat.route) }.isSuccess) nav.popBackStack(DuaDestination.ProjectChat.route, false)
+                else if (runCatching { nav.getBackStackEntry(DuaDestination.Projects.route) }.isSuccess) {
+                    nav.popBackStack(DuaDestination.Projects.route, false); navigator.open(DuaDestination.ProjectChat)
+                } else navigator.toChat()
+            })
         }
         composable(DuaDestination.Settings.route) {
             BusyBackGuard(viewModel)

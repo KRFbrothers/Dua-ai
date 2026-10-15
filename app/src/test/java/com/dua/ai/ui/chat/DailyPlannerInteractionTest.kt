@@ -27,7 +27,7 @@ class DailyPlannerInteractionTest {
 
     @Test fun browsedDayAndProjectFilterSurviveSavedStateRestoration() {
         val restoration = StateRestorationTester(compose)
-        restoration.setContent { DuaTheme(LocalPreferences()) { DailyPlannerContent(ProjectCodec.defaults, "", true, true, now, utc, { _, _ -> true }, {}, {}) } }
+        restoration.setContent { DuaTheme(LocalPreferences()) { DailyPlannerContent(com.dua.ai.projects.ProjectFixtures.owned, "", true, true, now, utc, { _, _ -> true }, {}, {}) } }
         compose.onNodeWithContentDescription("Next planner day").performClick()
         compose.onNodeWithContentDescription("Planner project filter").performClick()
         compose.onNodeWithContentDescription("Filter planner to Business").performClick()
@@ -39,7 +39,7 @@ class DailyPlannerInteractionTest {
 
     @Test fun completionTargetsTheCorrectProjectWhenTaskIdsMatchAndKeepsTheDeadline() {
         val due = now + 60_000
-        val projects = mutableStateOf(ProjectCodec.defaults.map { if (it.id == "personal") it else it.copy(tasks = listOf(ProjectTask("same", "${it.name} work", dueAt = due))) })
+        val projects = mutableStateOf(com.dua.ai.projects.ProjectFixtures.owned.map { if (it.id == "personal") it else it.copy(tasks = listOf(ProjectTask("same", "${it.name} work", dueAt = due))) })
         compose.setContent { DuaTheme(LocalPreferences()) { DailyPlannerContent(projects.value, "", true, true, now, utc,
             { projectId, taskId -> projects.value = projects.value.map { if (it.id == projectId) it.copy(tasks = it.tasks.map { task -> if (task.id == taskId) task.copy(completed = !task.completed) else task }) else it }; true }, {}, {}) } }
         val complete = hasContentDescription("Complete planner task: Coding · Coding work")
@@ -57,7 +57,7 @@ class DailyPlannerInteractionTest {
 
     @Test fun disabledBackendLeavesCachedTasksReadableAndAFailedToggleKeepsItsState() {
         val enabled = mutableStateOf(false)
-        val project = ProjectCodec.defaults[0].copy(tasks = listOf(ProjectTask("one", "Cached task", dueAt = now - 1)))
+        val project = com.dua.ai.projects.ProjectFixtures.owned[0].copy(tasks = listOf(ProjectTask("one", "Cached task", dueAt = now - 1)))
         var toggles = 0
         compose.setContent { DuaTheme(LocalPreferences()) { DailyPlannerContent(listOf(project), "", true, enabled.value, now, utc,
             { _, _ -> toggles++; false }, {}, {}) } }
@@ -73,7 +73,7 @@ class DailyPlannerInteractionTest {
     @Test fun todayFollowsMidnightAndTimeZoneButABrowsedDateStaysFixed() {
         val clock = mutableStateOf(now)
         val zone = mutableStateOf(utc)
-        compose.setContent { DuaTheme(LocalPreferences()) { DailyPlannerContent(ProjectCodec.defaults, "", true, true, clock.value, zone.value, { _, _ -> true }, {}, {}) } }
+        compose.setContent { DuaTheme(LocalPreferences()) { DailyPlannerContent(com.dua.ai.projects.ProjectFixtures.owned, "", true, true, clock.value, zone.value, { _, _ -> true }, {}, {}) } }
         compose.onNodeWithText("Today · 2030-01-02 · UTC").assertExists()
         compose.onNodeWithContentDescription("Next planner day").performClick()
         compose.onNodeWithText("Tomorrow · 2030-01-03 · UTC").assertExists()
@@ -86,7 +86,7 @@ class DailyPlannerInteractionTest {
     }
 
     @Test fun filterResetsAfterArchivingAndOpenProjectTasksReturnsToTheSamePlannerDayAndFilter() {
-        val projects = mutableStateOf(ProjectCodec.defaults.map { if (it.id == "coding") it.copy(tasks = listOf(ProjectTask("one", "Code inbox"))) else it })
+        val projects = mutableStateOf(com.dua.ai.projects.ProjectFixtures.owned.map { if (it.id == "coding") it.copy(tasks = listOf(ProjectTask("one", "Code inbox"))) else it })
         compose.setContent { DuaTheme(LocalPreferences()) { ProjectsContent(projects.value, "personal", "", true, {}, { _, _, _, _ -> true }, tasksEnabled = true) } }
         compose.onNodeWithText("Daily planner").performClick()
         compose.onNodeWithContentDescription("Next planner day").performClick()

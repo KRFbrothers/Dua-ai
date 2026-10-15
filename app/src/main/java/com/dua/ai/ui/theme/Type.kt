@@ -80,3 +80,13 @@ val WelcomeTitleStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeigh
 val WelcomeButtonStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
 val WelcomeContinueStyle = WelcomeButtonStyle.copy(fontSize = 15.sp)
 val WelcomeEmailStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Normal, fontSize = 13.sp)
+
+internal val ProjectHeaderStyle = TextStyle(fontSize = 18.sp, lineHeight = 24.sp, fontWeight = FontWeight.SemiBold)
+internal val ProjectDetailTitleStyle = TextStyle(fontSize = 17.sp, lineHeight = 23.sp, fontWeight = FontWeight.SemiBold)
+internal val ProjectRowStyle = TextStyle(fontSize = 17.sp, lineHeight = 24.sp, fontWeight = FontWeight.Normal)
+internal val ProjectChatRowStyle = TextStyle(fontSize = 16.sp, lineHeight = 23.sp, fontWeight = FontWeight.Normal)
+internal val ProjectBodyStyle = TextStyle(fontSize = 14.sp, lineHeight = 21.sp, fontWeight = FontWeight.Normal)
+internal val ProjectTabStyle = TextStyle(fontSize = 15.sp, lineHeight = 21.sp, fontWeight = FontWeight.Medium)
+internal val ProjectTabSelectedStyle = TextStyle(fontSize = 15.sp, lineHeight = 21.sp, fontWeight = FontWeight.SemiBold)
+internal val ProjectInputStyle = TextStyle(fontSize = 18.sp, lineHeight = 26.sp, fontWeight = FontWeight.Normal)
+internal val ProjectEmptyTitleStyle = TextStyle(fontSize = 17.sp, lineHeight = 24.sp, fontWeight = FontWeight.Medium)

@@ -68,6 +68,7 @@ fun Composer(
     onTextFieldBounds: ((Rect) -> Unit)? = null,
     currentModel: String = "Auto",
     showModelSelector: Boolean = true,
+    attachmentPopup: @Composable () -> Unit = {},
 ) {
     var localText by remember { mutableStateOf(value) }
     val chatState = state as? ChatUiState
@@ -114,10 +115,10 @@ fun Composer(
                 .padding(horizontal = HomeSizes.barPaddingH, vertical = HomeSizes.barPaddingV),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(onClick = onAttach, modifier = Modifier.size(Sizes.touchTarget)) {
+            Box { IconButton(onClick = onAttach, modifier = Modifier.size(Sizes.touchTarget)) {
                 Icon(Icons.Default.Add, contentDescription = "Add photos and files", tint = c.barIcon,
                     modifier = Modifier.size(HomeSizes.plusIcon))
-            }
+            }; attachmentPopup() }
             BasicTextField(
                 value = activeText,
                 onValueChange = {

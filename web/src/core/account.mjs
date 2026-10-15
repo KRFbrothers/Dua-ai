@@ -1,3 +1,4 @@
+import { ownsPath } from './file-types.mjs';
 import { validateCloudSnapshot } from './cloud-snapshot.mjs';
 const cookieNames={access:'dua_access',refresh:'dua_refresh'};
 function configuration(env){
@@ -168,6 +169,12 @@ export async function handleAccount(req,env={}){
    if(!deleteChat&&req.method==='PUT'){
     const serverPins=new Map(remote.snapshot.chats.map(chat=>[chat.id,chat.pinned]));
     snapshot.chats=snapshot.chats.map(chat=>chat.pinned===undefined&&serverPins.get(chat.id)!==undefined?{...chat,pinned:serverPins.get(chat.id)}:chat);
+   }
+   // Project deletion is a retained definition/tombstone: stale APKs may not resurrect it or its source links.
+   if (!deleteChat && req.method === 'PUT') {
+    const removed = (remote.snapshot.projects || []).filter(p => p.details?.deleted);
+    if (removed.length) snapshot.projects = [...(snapshot.projects || []).filter(p => !removed.some(r => r.id === p.id)), ...removed];
+    if ((snapshot.projects || []).some(p => (p.sources || []).some(f => !ownsPath(f.path, user.id)))) return json({error:'A project source belongs to another account.'},403);
    }
    // Only the server creates deletion IDs. Older clients may omit them, but cannot remove them.
    delete snapshot.deletedChatIds;

@@ -46,7 +46,7 @@ object AutomationSyncPolicy {
             require(value.accountId != null && baseline.chatMessageCounts.size <= 100 && baseline.chatMessageCounts.keys == baseline.chatSignatures.keys && baseline.memoryDigests.size <= 10)
             require(baseline.chatMessageCounts.all { (id, count) -> id.isNotBlank() && id.length <= 200 && count in 0..500 })
             require(baseline.chatSignatures.values.all(digestPattern::matches) && baseline.memoryDigests.all(digestPattern::matches))
-            require(baseline.projectSignatures.size <= 20 && baseline.projectSignatures.all { (id, hash) -> com.dua.ai.projects.ProjectCodec.validId(id) && digestPattern.matches(hash) })
+            require(baseline.projectSignatures.size <= com.dua.ai.projects.ProjectCodec.MAX_STORED_PROJECTS && baseline.projectSignatures.all { (id, hash) -> com.dua.ai.projects.ProjectCodec.validId(id) && digestPattern.matches(hash) })
             require(baseline.pinnedChatIds.size <= 100 && baseline.pinnedChatIds.all { it in baseline.chatMessageCounts })
         }
         return value

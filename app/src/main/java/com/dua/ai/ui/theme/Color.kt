@@ -273,3 +273,20 @@ internal val DuaLightColors = DuaColors(
     chipSelectedIcon = DuaPalette.Gold80,
     isDark = false,
 )
+
+/** Projects reference palette; screen code never embeds colors. */
+internal data class ProjectPalette(val background: Color, val surface: Color, val input: Color, val selected: Color,
+    val text: Color, val subText: Color, val date: Color, val border: Color, val danger: Color,
+    val purple: Color, val purpleBg: Color, val coral: Color, val coralBg: Color,
+    val blue: Color, val blueBg: Color, val teal: Color, val tealBg: Color,
+    val blackButton: Color, val onBlackButton: Color, val attachmentIconBackground: Color, val voice: Color, val onVoice: Color)
+internal val ProjectPaletteLight = ProjectPalette(Color.White, Color.White, Color(0xFFF2F2F6), Color(0xFFE5E5EA),
+    Color(0xFF0D0D0D), Color(0xFF6E6E80), Color(0xFF8E8E93), Color(0xFFE5E5EA), Color(0xFFC62828),
+    Color(0xFF8B5CF6), Color(0xFFF2EAFF), Color(0xFFEF4444), Color(0xFFFDECEC),
+    Color(0xFF3B82F6), Color(0xFFEBF3FF), Color(0xFF10B981), Color(0xFFE6F8F3), Color(0xFF0D0D0D), Color.White, Color(0xFFEBEBEF), Color(0xFF8B5CF6), Color.White)
+internal val ProjectPaletteDark = ProjectPalette(Color(0xFF101114), Color(0xFF202127), Color(0xFF292A32), Color(0xFF34353F),
+    Color(0xFFF5F5F7), Color(0xFFB9BAC7), Color(0xFFA6A7B5), Color(0xFF42434D), Color(0xFFFF8F91),
+    Color(0xFFC4ACFF), Color(0xFF302443), Color(0xFFFFA6A6), Color(0xFF43262A),
+    Color(0xFF9FC4FF), Color(0xFF20324C), Color(0xFF75D8B4), Color(0xFF193D35), Color(0xFFF5F5F7), Color(0xFF101114), Color(0xFF34353F), Color(0xFF8B5CF6), Color.White)
+
+internal val ProjectHomeworkBlueLight = Color(0xFF2563EB)
