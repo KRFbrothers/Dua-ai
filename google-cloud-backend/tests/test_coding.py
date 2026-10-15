@@ -132,7 +132,7 @@ def test_unsafe_reads_and_proposals_never_reach_github(path):
     assert gh.opener.calls == []
 
 
-@pytest.mark.parametrize("path", [".github/workflows/ci.yml", ".GitHub/Workflows/ci.yml", ".GITHUB/CODEOWNERS", ".gitmodules", ".GitModules", "src/.GiT/config"])
+@pytest.mark.parametrize("path", [".github", ".GitHub/Workflows", ".github/workflows/ci.yml", ".GitHub/Workflows/ci.yml", ".GITHUB/CODEOWNERS", ".gitmodules", ".GitModules", "src/.GiT/config"])
 def test_protected_writes_cannot_bypass_proposals_via_client(path):
     gh = client()
     with pytest.raises(ca.CodingError):

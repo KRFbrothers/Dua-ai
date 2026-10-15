@@ -140,7 +140,10 @@ test('raw and encoded URL normalization cannot bypass read/write allowlists', as
 });
 
 test('low-level git tree writes cannot bypass protected paths or create symlinks/submodules', async () => {
-  for (const path of ['.github/workflows/ci.yml', '.GitHub/Workflows/ci.yml', 'nested/.GiT/config', '.GitModules', 'a/../b', 'a//b', 'a\n']) {
+  for (const path of ['.github', '.GitHub/Workflows', '.github/workflows/ci.yml', '.GitHub/Workflows/ci.yml', 'nested/.GiT/config', '.GitModules', 'a/../b', 'a//b', 'a\n']) {
+    assert.notEqual(repositoryWritePathIssue(path), null);
+    assert.notEqual(pathProblem(path), null);
+    assert.throws(() => validateCloudSnapshot(snapshotPath(path, 'proposal')), /Invalid cloud snapshot/);
     await assert.rejects(githubWrite('POST', '/repos/owner/repo/git/trees', { env: boundaryEnv, fetcher: noNetwork, body: { tree: [{ path, type: 'blob', mode: '100644', sha: 'abc' }] } }), { status: 400 });
   }
   for (const [type, mode] of [['blob', '120000'], ['commit', '160000'], ['tree', '040000']]) {

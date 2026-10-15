@@ -64,7 +64,7 @@ def valid_path(path, write=False):
         return False
     if any(part in ("", ".", "..") or part.lower() == ".git" for part in path.split("/")):
         return False
-    return not write or (not path.lower().startswith(".github/") and path.lower() != ".gitmodules")
+    return not write or (not path.lower().startswith(".github/") and path.lower() not in (".github", ".gitmodules"))
 
 
 def scoped_search(query, repo):

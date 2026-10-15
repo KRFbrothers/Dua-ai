@@ -54,6 +54,6 @@ export function repositoryWritePathIssue(value) {
   const lower = value.toLowerCase();
   if (value.split('/').some(part => part.toLowerCase() === '.git')) return 'git';
   if (lower === '.gitmodules') return 'submodule';
-  if (lower.startsWith('.github/workflows/')) return 'workflow';
+  if (lower === '.github' || lower === '.github/workflows' || lower.startsWith('.github/workflows/')) return 'workflow';
   return null;
 }
