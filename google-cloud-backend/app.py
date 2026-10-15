@@ -667,6 +667,45 @@ def api_chat():
                     content_type="text/event-stream; charset=utf-8")
 
 
+@app.after_request
+def add_imagine_capability(response):
+    """Adds `"imagine": {...}` to the GET / capabilities (kept next to the Imagine endpoint)."""
+    if request.endpoint == "home" and request.method == "GET" and response.is_json:
+        import imagine
+        data = response.get_json()
+        if isinstance(data, dict):
+            data["imagine"] = imagine.capability()
+            response.set_data(json.dumps(data))
+    return response
+
+
+@app.route("/api/imagine/image", methods=["POST"])
+def api_imagine_image():
+    """Imagine on Vertex AI (one image per request, owner only). Same response shape as the Vercel endpoint."""
+    import imagine
+    if not app_token_matches():
+        return unauthorized()
+    try:
+        user_id = verify_owner(request.headers.get("Authorization", ""))
+    except OwnerAuthError as error:
+        response = jsonify({"error": error.message})
+        response.headers["Cache-Control"] = "no-store"
+        return response, error.status
+    if not imagine.enabled():
+        return jsonify({"error": "Imagine is turned off on the Google Cloud engine."}), 503
+    token = request.headers.get("Authorization", "").split(" ", 1)[1]
+    try:
+        result = imagine.handle(request.get_json(silent=True), token, user_id, get_client())
+    except imagine.ImagineError as error:
+        return jsonify({"error": error.message}), error.status
+    except Exception:
+        app.logger.exception("imagine failed")
+        return jsonify({"error": "Image generation failed. Try again."}), 502
+    response = jsonify(result)
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
 TITLE_TOKENS = int(os.environ.get("TITLE_TOKENS", "256"))
 TITLE_PROMPT = ("Write a short title (3 to 6 words) for this chat, in the language of the user's message. "
                 "No quotes, no emoji, no ending punctuation. Reply only with JSON like {\"title\": \"...\"}.")
