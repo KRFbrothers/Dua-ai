@@ -318,7 +318,7 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
             else -> Unit
         }
     }
-    androidx.compose.runtime.CompositionLocalProvider(LocalMediaLoader provides viewModel.mediaCache) {
+    androidx.compose.runtime.CompositionLocalProvider(LocalMediaLoader provides viewModel.mediaCache, LocalChatHaptic provides actions.haptic) {
         ChatScreen(state, actions, topBar = topBar, requestComposerFocus = entryFocus, dismissOverlaysRequest = entryUiKey)
     }
 }

@@ -1667,6 +1667,26 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         return null
     }
 
+    /**
+     * Auto title (ChatGPT-style): after the first reply of a new chat, ask the Cloud Run engine for a 3–6 word
+     * title. Only when chat goes to that engine and the backend accepts titles; any failure keeps the
+     * default title (the first message). A title the user set themselves is never replaced.
+     */
+    private fun maybeAutoTitle(chatId: String) {
+        if (!separateChatEngine || !_integrations.value.chatRenameEnabled) return
+        val messages = _messages.value
+        if (!com.dua.ai.model.AutoTitles.shouldTitle(messages)) return
+        if (_savedChats.value.find { it.id == chatId }?.customTitle != null) return
+        viewModelScope.launch {
+            val title = try { account.withToken { token -> api.chatTitle(messages[0].text, messages[1].text, token) } }
+                catch (cancelled: CancellationException) { throw cancelled } catch (_: Exception) { null } ?: return@launch
+            val chat = _savedChats.value.find { it.id == chatId } ?: return@launch
+            if (chat.customTitle != null) return@launch
+            _savedChats.value = _savedChats.value.map { if (it.id == chatId) it.copy(customTitle = title) else it }
+            historyWriter.save(_savedChats.value, activeId)
+        }
+    }
+
     /** Pin is chat metadata, queued for the existing reviewed/automatic sync flow. */
     fun setChatPinned(id: String, pinned: Boolean): String? {
         if (syncBlocked()) return "Finish the current reply or sync action, then try again."
@@ -2003,6 +2023,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     clearAttachments()
                     val final = accumulator!!.snapshot(ended = true)
                     updateMessage(reply.id) { it.copy(text = final.text, thinking = final.thinking, thinkingSeconds = final.thinkingSeconds, notice = final.notice, codeRuns = final.codeRuns, build = final.build ?: it.build, proposal = final.proposal ?: it.proposal, state = "complete") }
+                    maybeAutoTitle(activeId)
                 }
             } catch (cancelled: CancellationException) {
                 throw cancelled

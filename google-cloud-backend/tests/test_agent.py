@@ -194,3 +194,46 @@ def test_router_thinking_level_override():
     config = engine.GenaiModel("sys").config({"max_output_tokens": 5, "thinking_level": "low"})
     if engine.MODEL_NAME.startswith("gemini-3"):
         assert config.thinking_config.thinking_level.value == "LOW"
+
+
+class TitleModel:
+    def __init__(self, text='{"title": "  \\"Kotlin Compose Dark Mode Help.\\" "}', fail=False):
+        self.text, self.fail, self.calls = text, fail, []
+
+    def generate_content(self, contents, stream=False, generation_config=None, tools=None):
+        self.calls.append({"contents": contents, "config": generation_config, "tools": tools})
+        if self.fail:
+            raise RuntimeError("secret detail")
+        return SimpleNamespace(text=self.text)
+
+
+def test_title_is_cheap_clean_and_owner_only(monkeypatch):
+    m = TitleModel()
+    monkeypatch.setattr(engine, "get_model", lambda system=engine.SYSTEM_PROMPT: m)
+    monkeypatch.delenv("DUA_APP_TOKEN", raising=False)
+    monkeypatch.setattr(engine, "verify_owner", lambda authorization: "verified-owner")
+    r = engine.app.test_client().post("/api/title", json={"user": "dark mode kaise add karun?", "reply": "Use MaterialTheme..."})
+    assert r.status_code == 200 and r.get_json() == {"title": "Kotlin Compose Dark Mode Help"}
+    cfg = m.calls[0]["config"]
+    assert cfg["max_output_tokens"] <= 256 and cfg["thinking_level"] == "low" and m.calls[0]["tools"] is None
+    assert engine.app.test_client().post("/api/title", json={}).status_code == 400
+
+
+def test_title_failure_is_generic(monkeypatch):
+    monkeypatch.setattr(engine, "get_model", lambda system=engine.SYSTEM_PROMPT: TitleModel(fail=True))
+    monkeypatch.setattr(engine, "verify_owner", lambda authorization: "verified-owner")
+    r = engine.app.test_client().post("/api/title", json={"user": "hi"})
+    assert r.status_code == 502 and "secret" not in r.get_data(as_text=True)
+
+
+def test_title_requires_owner(monkeypatch):
+    calls = []
+    monkeypatch.setattr(engine, "get_model", lambda system=engine.SYSTEM_PROMPT: calls.append(1))
+    monkeypatch.setattr(engine, "owner_access_error", lambda: (engine.jsonify({"error": "Sign in"}), 401))
+    assert engine.app.test_client().post("/api/title", json={"user": "hi"}).status_code == 401 and calls == []
+
+
+def test_clean_title_limits():
+    assert engine.clean_title("one two three four five six seven eight nine ten") == "one two three four five six seven eight"
+    assert len(engine.clean_title("x" * 200)) <= 60
+    assert engine.clean_title("**Hello world!**") == "Hello world!"

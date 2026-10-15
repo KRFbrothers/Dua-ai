@@ -65,6 +65,10 @@ object ChatSizes {
     val streamingCursor = 10.dp
     const val streamingCursorBlinkMs = 530
     const val streamingFadeInMs = 180
+    /** Pulsing placeholder lines while waiting for the first token. */
+    val placeholderLineHeight = 12.dp
+    val placeholderLineGap = 8.dp
+    const val placeholderPulseMs = 900
     val listPaddingH = 16.dp
     val listPaddingTop = 20.dp
     val listPaddingBottom = 12.dp

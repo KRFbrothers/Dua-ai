@@ -81,10 +81,11 @@ internal class TextMessageActions(val copied: Boolean, val shareError: String?, 
 private fun rememberTextMessageActions(copyText: String, assistant: Boolean = true): TextMessageActions {
     val clipboard = LocalClipboardManager.current
     val context = LocalContext.current
+    val haptic = LocalChatHaptic.current
     var copied by remember(copyText) { mutableStateOf(false) }
     var shareError by remember(copyText) { mutableStateOf<String?>(null) }
     LaunchedEffect(copied) { if (copied) { delay(2000); copied = false } }
-    return TextMessageActions(copied, shareError, copy = { clipboard.setText(AnnotatedString(copyText)); copied = true }, share = {
+    return TextMessageActions(copied, shareError, copy = { clipboard.setText(AnnotatedString(copyText)); haptic(ChatHaptic.Tap); copied = true }, share = {
         try {
             context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
                 type = "text/plain"
@@ -118,6 +119,7 @@ internal fun MessageActionsSheet(message: ChatMessage, state: ChatUiState, actio
     val assistant = !message.isUser
     val copyText = message.text + if (assistant) CodeRuns.copyText(message.codeRuns) else ""
     val textActions = rememberTextMessageActions(copyText, assistant)
+    val haptic = LocalChatHaptic.current
     val retryEnabled = assistant && !message.isImagine && state.messages.lastOrNull()?.id == message.id && !state.typing &&
         message.state in listOf("complete", "stopped")
     val speaking = state.speakingId == message.id
@@ -137,7 +139,7 @@ internal fun MessageActionsSheet(message: ChatMessage, state: ChatUiState, actio
             }
             if (assistant) SheetDivider()
             if (assistant) SheetMessageAction("retry", "Retry", replyRetryDescription(actions.retryWebMode(message.id)), Icons.Outlined.Refresh, retryEnabled) {
-                onDismiss(); actions.onRetry(message.id)
+                haptic(ChatHaptic.Tap); onDismiss(); actions.onRetry(message.id)
             }
             SheetDivider()
             SheetMessageAction("share", "Share", if (assistant) "Share response" else "Share message", Icons.Outlined.Share,
@@ -185,6 +187,7 @@ fun MessageActions(
     onSpeak: () -> Unit,
 ) {
     val actions = rememberTextMessageActions(copyText)
+    val haptic = LocalChatHaptic.current
     val tint = MaterialTheme.colorScheme.onSurface.copy(alpha = .86f)
     val copyTint = if (copyText.isNotBlank()) tint else tint.copy(alpha = .38f)
     FlowRow(Modifier.fillMaxWidth().padding(top = Spacing.xs),
@@ -195,7 +198,7 @@ fun MessageActions(
                 tint = copyTint, modifier = Modifier.size(Sizes.iconSmall))
             Text(if (actions.copied) "Copied" else "Copy", color = copyTint, modifier = Modifier.padding(start = Spacing.xs))
         }
-        if (showRetry) TextButton(onClick = onRetry, enabled = retryEnabled, modifier = Modifier.heightIn(min = Sizes.touchTarget)) {
+        if (showRetry) TextButton(onClick = { haptic(ChatHaptic.Tap); onRetry() }, enabled = retryEnabled, modifier = Modifier.heightIn(min = Sizes.touchTarget)) {
             Icon(Icons.Outlined.Refresh, retryDescription, tint = if (retryEnabled) tint else tint.copy(alpha = .38f), modifier = Modifier.size(Sizes.iconSmall))
             Text("Retry", modifier = Modifier.padding(start = Spacing.xs))
         }

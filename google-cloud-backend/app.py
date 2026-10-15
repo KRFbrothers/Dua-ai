@@ -516,7 +516,7 @@ def chunk_text(chunk):
 @app.route("/", methods=["GET"])
 def home():
     # Capabilities: the app shows Agent mode only when this says "agent": true.
-    return jsonify({"status": "Dua AI Engine is running!", "engine": "google-cloud", "agent": True, "model": MODEL_NAME})
+    return jsonify({"status": "Dua AI Engine is running!", "engine": "google-cloud", "agent": True, "titles": True, "model": MODEL_NAME})
 
 
 @app.route("/api/chat", methods=["POST"])
@@ -628,6 +628,48 @@ def api_chat():
 
     return Response(stream_with_context(events()), headers=SSE_HEADERS,
                     content_type="text/event-stream; charset=utf-8")
+
+
+TITLE_TOKENS = int(os.environ.get("TITLE_TOKENS", "256"))
+TITLE_PROMPT = ("Write a short title (3 to 6 words) for this chat, in the language of the user's message. "
+                "No quotes, no emoji, no ending punctuation. Reply only with JSON like {\"title\": \"...\"}.")
+
+
+def clean_title(value, limit=60):
+    text = " ".join(str(value or "").replace("\u2028", " ").replace("\u2029", " ").split())
+    text = text.strip(" \"'`*#.:;-")
+    words = text.split()
+    if len(words) > 8:
+        text = " ".join(words[:8])
+    if len(text) > limit:
+        text = text[:limit].rsplit(" ", 1)[0] or text[:limit]
+    return "".join(ch for ch in text if ch.isprintable())
+
+
+@app.route("/api/title", methods=["POST"])
+def api_title():
+    """Short chat title for the drawer: one cheap call (low thinking, small cap, JSON), owner-only."""
+    denied = owner_access_error()
+    if denied is not None:
+        return denied
+    data = request.get_json(silent=True) or {}
+    user = str(data.get("user", "")).strip()[:4000]
+    reply = str(data.get("reply", "")).strip()[:4000]
+    if not user:
+        return jsonify({"error": "Message is empty"}), 400
+    try:
+        response = get_model(SYSTEM_PROMPT).generate_content(
+            f"{TITLE_PROMPT}\n\nUser: {user}\n\nAssistant: {reply}",
+            generation_config={"max_output_tokens": TITLE_TOKENS, "temperature": 0.2, "thinking_level": "low",
+                               "response_mime_type": "application/json",
+                               "response_schema": {"type": "OBJECT", "properties": {"title": {"type": "STRING"}}, "required": ["title"]}})
+        title = clean_title(json.loads(chunk_text(response) or "{}").get("title"))
+    except Exception:
+        app.logger.warning("title generation failed")
+        return jsonify({"error": GENERIC_ERROR}), 502
+    if not title:
+        return jsonify({"error": GENERIC_ERROR}), 502
+    return jsonify({"title": title})
 
 
 @app.route("/chat", methods=["POST"])

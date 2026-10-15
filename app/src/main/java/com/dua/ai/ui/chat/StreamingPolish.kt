@@ -11,6 +11,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.ui.platform.testTag
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -66,5 +68,26 @@ fun EditingBanner(onCancel: () -> Unit, modifier: Modifier = Modifier) {
         Text("Editing message. Send replaces it and the replies after it.", style = MaterialTheme.typography.bodySmall,
             color = ChatTheme.colors.mutedText, modifier = Modifier.weight(1f).padding(start = Spacing.sm))
         TextButton(onClick = onCancel, modifier = Modifier.heightIn(min = Sizes.touchTarget)) { Text("Cancel") }
+    }
+}
+
+
+/**
+ * Waiting for the first token: the existing "Thinking" dots plus two softly pulsing placeholder lines
+ * (theme colors, draw-phase alpha only). Replaced by the streaming text as soon as it arrives.
+ */
+@Composable
+fun ReplyPlaceholder(modifier: Modifier = Modifier) {
+    val transition = rememberInfiniteTransition(label = "reply-placeholder")
+    val alpha = transition.animateFloat(0.35f, 0.9f,
+        infiniteRepeatable(tween(ChatSizes.placeholderPulseMs, easing = LinearEasing), RepeatMode.Reverse), label = "placeholder-alpha")
+    val fill = ChatTheme.colors.chipFill
+    androidx.compose.foundation.layout.Column(modifier.fillMaxWidth().testTag("reply-placeholder")) {
+        TypingIndicator(Modifier.heightIn(min = Sizes.touchTarget))
+        listOf(0.92f, 0.6f).forEach { width ->
+            Box(Modifier.padding(top = ChatSizes.placeholderLineGap).fillMaxWidth(width).height(ChatSizes.placeholderLineHeight)
+                .graphicsLayer { this.alpha = alpha.value }.background(fill, com.dua.ai.ui.theme.DuaShape.chip)
+                .clearAndSetSemantics { })
+        }
     }
 }

@@ -55,7 +55,7 @@ fun AssistantMessage(
         message.build?.let { BuildFiles(message.id, it, live = streaming, Modifier.padding(bottom = Spacing.sm), initiallyExpanded = buildExpanded) }
         // Run code: what the provider executed, collapsed above the answer (the answer explains the result).
         if (message.codeRuns.isNotEmpty()) CodeRuns(message.id, message.codeRuns, Modifier.padding(bottom = Spacing.sm), initiallyExpanded = codeExpanded, live = streaming)
-        if (streaming && message.text.isEmpty() && message.thinking == null && message.codeRuns.isEmpty() && message.build == null) TypingIndicator(Modifier.heightIn(min = Sizes.touchTarget))
+        if (streaming && message.text.isEmpty() && message.thinking == null && message.codeRuns.isEmpty() && message.build == null) ReplyPlaceholder()
         if (parts.body.isNotEmpty()) {
             // New replies fade in once; restored/finished replies render immediately.
             if (streaming) FadeInOnce { MarkdownMessage(parts.body) } else MarkdownMessage(parts.body)

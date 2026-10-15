@@ -17,3 +17,10 @@ internal fun ChatHaptic.constant(sdk: Int = Build.VERSION.SDK_INT): Int = when (
 }
 
 internal fun View.performChatHaptic(kind: ChatHaptic) { performHapticFeedback(kind.constant()) }
+
+/**
+ * The one chat haptic helper for composables that do not get [ChatActions] (copy buttons, retry).
+ * ChatRoute provides `actions.haptic`, which checks the app's Haptics setting; the View call above
+ * respects the system Touch feedback setting. Default: no haptics (previews, tests).
+ */
+val LocalChatHaptic = androidx.compose.runtime.staticCompositionLocalOf<(ChatHaptic) -> Unit> { {} }
