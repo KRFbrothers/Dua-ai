@@ -4,6 +4,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Menu
 import androidx.compose.material3.Icon
@@ -33,19 +35,13 @@ import com.dua.ai.ui.components.ReferenceIcons
 /** Top-level tab in the centre pill, as in the reference shell. */
 enum class HomeTab(val label: String) { Chat("Chat"), Work("Work") }
 
-/**
- * Home has a Computer shortcut beside the [ Chat | Work ] pill.
- * Conversations retain Find in chat and the existing new-chat action.
- */
+/** Stable normal Chat/Work header, independent of message count. Find remains a Menu long-press. */
 @Composable
 fun ChatTopBar(
-    newChatEnabled: Boolean = true,
     onMenu: () -> Unit = {},
-    onNewChat: () -> Unit = {},
     tab: HomeTab = HomeTab.Chat,
     onTab: (HomeTab) -> Unit = {},
-    onSearch: (() -> Unit)? = null,
-    showComputer: Boolean = false,
+    onFindInChat: (() -> Unit)? = null,
     onComputer: () -> Unit = {},
 ) {
     Row(
@@ -56,13 +52,9 @@ fun ChatTopBar(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        RoundButton(Icons.Outlined.Menu, "Open chat history", onMenu)
+        RoundButton(Icons.Outlined.Menu, "Open chat history", onMenu, onLongPress = onFindInChat)
         SegmentedPill(tab, onTab, Modifier.weight(1f, fill = false))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            onSearch?.let { RoundButton(ReferenceIcons.Search, "Find in chat", it) }
-            if (showComputer) RoundButton(ReferenceIcons.Computer, "Computer", onComputer)
-            else RoundButton(ReferenceIcons.NewChat, "New chat", onNewChat, newChatEnabled)
-        }
+        RoundButton(ReferenceIcons.Computer, "Computer", onComputer)
     }
 }
 
@@ -105,12 +97,20 @@ private fun SegmentedPill(tab: HomeTab, onTab: (HomeTab) -> Unit, modifier: Modi
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun RoundButton(icon: ImageVector, description: String, onClick: () -> Unit, enabled: Boolean = true) {
+private fun RoundButton(icon: ImageVector, description: String, onClick: () -> Unit, enabled: Boolean = true,
+    onLongPress: (() -> Unit)? = null) {
     val c = HomeTheme.colors
-    IconButton(onClick = onClick, enabled = enabled, modifier = Modifier.size(Sizes.touchTarget).semantics { contentDescription = description }) {
+    val body: @Composable () -> Unit = {
         Box(Modifier.size(HomeSizes.roundButton).clip(HomeShapes.round).background(c.roundButton), contentAlignment = Alignment.Center) {
             Icon(icon, contentDescription = null, tint = c.roundButtonIcon)
         }
     }
+    if (onLongPress == null) IconButton(onClick = onClick, enabled = enabled,
+        modifier = Modifier.size(Sizes.touchTarget).semantics { contentDescription = description }) { body() }
+    else Box(Modifier.size(Sizes.touchTarget)
+        .combinedClickable(enabled = enabled, role = Role.Button, onClick = onClick,
+            onLongClickLabel = "Find in chat", onLongClick = onLongPress)
+        .semantics { contentDescription = description }, contentAlignment = Alignment.Center) { body() }
 }

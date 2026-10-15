@@ -1,0 +1,132 @@
+package com.dua.ai.ui.chat
+
+import androidx.compose.foundation.layout.*
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.test.*
+import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.dp
+import com.dua.ai.model.ChatMessage
+import com.dua.ai.settings.LocalPreferences
+import com.dua.ai.ui.screens.FeatureComingSoonScreen
+import com.dua.ai.ui.screens.ProjectsFeaturePage
+import com.dua.ai.ui.theme.DuaTheme
+import com.github.takahirom.roborazzi.captureRoboImage
+import java.io.File
+import org.junit.Assert.*
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.ParameterizedRobolectricTestRunner
+import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
+
+@RunWith(ParameterizedRobolectricTestRunner::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+@Config(sdk = [34], qualifiers = "w360dp-h800dp-mdpi")
+class FeatureIsolationUiTest(private val dark: Boolean, private val compact: Boolean) {
+    companion object {
+        @JvmStatic @ParameterizedRobolectricTestRunner.Parameters(name = "dark={0},compact={1}")
+        fun modes() = listOf(arrayOf(false, false), arrayOf(true, false), arrayOf(false, true), arrayOf(true, true))
+    }
+    @get:Rule val compose = createComposeRule()
+    private fun show(content: @androidx.compose.runtime.Composable () -> Unit) = compose.setContent {
+        val density = LocalDensity.current
+        CompositionLocalProvider(LocalDensity provides Density(density.density, if (compact) 2f else 1f)) {
+            DuaTheme(LocalPreferences(theme = if (dark) "dark" else "light")) {
+                Box(Modifier.requiredSize(if (compact) 320.dp else 360.dp, if (compact) 568.dp else 752.dp)) { content() }
+            }
+        }
+    }
+    private fun assertNoHome() {
+        compose.onNodeWithText("Chat").assertDoesNotExist()
+        compose.onNodeWithText("Work").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Open chat history").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Find in chat").assertDoesNotExist()
+        compose.onNodeWithContentDescription("New chat").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Model, Dua").assertDoesNotExist()
+        ReferencePrompts.forEach { compose.onNodeWithText(it.second).assertDoesNotExist() }
+    }
+    @Test fun normalHeaderIsUnchangedBySendStreamingAndCompletion() {
+        val state = mutableStateOf(ChatUiState())
+        var destination: com.dua.ai.ui.navigation.DuaDestination? = null
+        show { ChatScreen(state.value, ChatActions(onOpenDestination = { destination = it })) }
+        for (messages in listOf(emptyList(), listOf(ChatMessage("u", "Question", true)),
+            listOf(ChatMessage("a", "Answer", false, state = ChatMessage.STREAMING)), listOf(ChatMessage("a", "Answer", false)))) {
+            compose.runOnIdle { state.value = state.value.copy(messages = messages, typing = messages.any { it.streaming }) }
+            compose.onNode(hasText("Chat") and isSelectable()).assertIsDisplayed()
+            compose.onNode(hasText("Work") and isSelectable()).assertIsDisplayed()
+            compose.onNodeWithContentDescription("Computer").assertIsDisplayed().performClick()
+            compose.onNodeWithContentDescription("Find in chat").assertDoesNotExist()
+            compose.onNodeWithContentDescription("New chat").assertDoesNotExist()
+            assertEquals(com.dua.ai.ui.navigation.DuaDestination.Computer, destination)
+        }
+    }
+    @Test fun agentStartersDisappearAfterSendAndCompactPillStaysCentered() {
+        val state = mutableStateOf(ChatUiState(agent = true, agentAvailable = true))
+        show { ChatScreen(state.value, ChatActions()) }
+        assertNoHome()
+        compose.onNodeWithText("Deep Web Research").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("GitHub Repo & PR Assistant").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Daily Morning Briefing").performScrollTo().assertIsDisplayed()
+        val pill = compose.onNodeWithTag("agent-mode-pill").fetchSemanticsNode().boundsInRoot
+        val input = compose.onNodeWithContentDescription("Message").fetchSemanticsNode().boundsInRoot
+        assertTrue(pill.width < (if (compact) 320f else 360f))
+        assertTrue(pill.bottom <= input.top)
+        val screen = compose.onRoot().fetchSemanticsNode().boundsInRoot
+        assertEquals(screen.center.x, pill.center.x, 1f)
+        for (streaming in listOf(true, false)) {
+            compose.runOnIdle { state.value = state.value.copy(typing = streaming, messages = listOf(
+                ChatMessage("u", "Research Dua", true), ChatMessage("a", "Research output", false,
+                    state = if (streaming) ChatMessage.STREAMING else "complete", thinking = "Review sources"))) }
+            assertNoHome()
+            compose.onNodeWithText("Deep Web Research").assertDoesNotExist()
+            compose.onNodeWithText("Research output").assertIsDisplayed()
+            compose.onNodeWithText("AI Agent").assertIsDisplayed()
+        }
+        val output = File("build/approved-ui/agent-conversation-${if (dark) "dark" else "light"}-${if (compact) "compact" else "regular"}.png")
+        output.parentFile!!.mkdirs(); compose.onRoot().captureRoboImage(output.absolutePath)
+    }
+    @Test fun agentPlusBackAndAttachmentsStayInsideFeature() {
+        val state = mutableStateOf(ChatUiState(agent = true, agentAvailable = true, messages = listOf(ChatMessage("a", "Agent answer", false))))
+        show { ChatScreen(state.value, ChatActions(onNewFeatureSession = { state.value = state.value.copy(messages = emptyList()) },
+            onExitFeature = { state.value = ChatUiState() })) }
+        compose.onNodeWithContentDescription("New AI Agent session").performClick()
+        compose.onNodeWithText("Deep Web Research").performScrollTo().assertExists()
+        compose.onNodeWithContentDescription("Back").performClick()
+        compose.onNode(hasText("Chat") and isSelectable()).assertIsDisplayed()
+        compose.onNodeWithContentDescription("Computer").assertIsDisplayed()
+        compose.runOnIdle { state.value = ChatUiState(agent = true, agentAvailable = true) }
+        compose.onNodeWithContentDescription("Add photos and files").performClick()
+        compose.onNodeWithText("Files", substring = false).assertExists()
+        compose.onNodeWithText("Turn off all modes").assertDoesNotExist()
+        compose.onNodeWithText("Search", substring = false).assertDoesNotExist()
+    }
+    @Test fun comingSoonDestinationsHaveOnlyTheirOwnHeader() {
+        val title = mutableStateOf("Images")
+        var back = 0
+        show { FeatureComingSoonScreen(title.value) { back++ } }
+        for (feature in listOf("Images", "Library", "Plugins")) {
+            compose.runOnIdle { title.value = feature }
+            assertNoHome()
+            compose.onNodeWithText(feature).assertIsDisplayed()
+            compose.onNodeWithContentDescription("New $feature session").assertIsDisplayed().assertIsNotEnabled()
+            compose.onNodeWithText("Coming soon").assertIsDisplayed()
+            compose.onNodeWithContentDescription("Back").performClick()
+        }
+        assertEquals(3, back)
+    }
+    @Test fun projectsPlusUsesExistingEditorWithoutHomeChrome() {
+        var saved = ""
+        show { ProjectsFeaturePage(ChatUiState(), ChatActions(onSaveProject = { _, name, _, _ -> saved = name; true }), {}) }
+        assertNoHome()
+        compose.onNodeWithContentDescription("New Projects session").assertIsDisplayed().performClick()
+        compose.onNodeWithText("Project name").performTextInput("Client")
+        compose.onNodeWithText("Save project").performScrollTo().performClick()
+        assertEquals("Client", saved)
+        assertNoHome()
+    }
+}

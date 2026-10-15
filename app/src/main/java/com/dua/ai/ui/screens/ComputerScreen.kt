@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.DesktopWindows
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
@@ -29,46 +28,29 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.heading
-import androidx.compose.ui.semantics.role
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import com.dua.ai.ui.icons.DuaIcons
 import com.dua.ai.ui.theme.DuaTheme
 import com.dua.ai.ui.theme.Sizes
-import androidx.compose.foundation.BorderStroke
 import com.dua.ai.ui.theme.DuaPageTheme
 import com.dua.ai.ui.theme.PageBodyStyle
-import com.dua.ai.ui.theme.PageHeadlineStyle
 import com.dua.ai.ui.theme.PageNoteStyle
 import com.dua.ai.ui.theme.PageSizes
 import com.dua.ai.ui.theme.PageTheme
 import com.dua.ai.ui.theme.SettingsShapes
 import com.dua.ai.ui.theme.SettingsSizes
-import com.dua.ai.ui.theme.SettingsTheme
 import com.dua.ai.ui.theme.SheetButtonStyle
 import com.dua.ai.ui.theme.SheetShapes
 import com.dua.ai.ui.theme.Spacing
+import com.dua.ai.ui.components.FeatureTopBar
 
 /** "Computer" (from the Home top bar): a placeholder until computer use ships. Back arrow, monitor icon, title and a short note. */
 @Composable
 fun ComputerScreen(onBack: () -> Unit) = DuaPageTheme {
     val p = PageTheme.colors
-    val c = SettingsTheme.colors
     val colors = DuaTheme.colors
     Column(Modifier.fillMaxSize().background(p.background).statusBarsPadding().navigationBarsPadding()) {
-        Row(Modifier.fillMaxWidth().height(Sizes.topBarHeight).padding(horizontal = Spacing.lg), verticalAlignment = Alignment.CenterVertically) {
-            // Settings-style bordered round back button filling the 48 dp touch target.
-            Box(Modifier.size(SettingsSizes.touch), contentAlignment = Alignment.Center) {
-                Surface(onClick = onBack, shape = SettingsShapes.circle, color = c.circleButton, contentColor = c.circleIcon,
-                    border = BorderStroke(SettingsSizes.border, c.circleBorder),
-                    modifier = Modifier.size(SettingsSizes.touch).semantics { contentDescription = "Back"; role = Role.Button }) {
-                    Box(contentAlignment = Alignment.Center) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = null, modifier = Modifier.size(Sizes.icon)) }
-                }
-            }
-        }
+        FeatureTopBar("Computer", onBack, onNewSession = {}, newSessionEnabled = false)
         Box(Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState())) {
             Column(Modifier.fillMaxWidth().heightIn(min = PageSizes.heroMinHeight).padding(horizontal = Spacing.xxl).align(BiasAlignment(0f, -0.2f)),
                 horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
@@ -83,7 +65,6 @@ fun ComputerScreen(onBack: () -> Unit) = DuaPageTheme {
                         modifier = Modifier.align(Alignment.TopEnd).offset(x = PageSizes.heroSparkleX, y = PageSizes.heroSparkleY).size(PageSizes.heroSparkle))
                 }
                 Spacer(Modifier.height(Spacing.xxl + Spacing.sm))
-                Text("Computer", style = PageHeadlineStyle, color = p.text, modifier = Modifier.semantics { heading() })
                 Spacer(Modifier.height(Spacing.md))
                 Surface(shape = SheetShapes.button, color = p.accentContainer, contentColor = p.onAccentContainer) {
                     Row(Modifier.padding(horizontal = Spacing.md, vertical = Spacing.xs + Spacing.xxs), verticalAlignment = Alignment.CenterVertically) {

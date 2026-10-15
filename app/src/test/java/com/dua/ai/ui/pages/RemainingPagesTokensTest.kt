@@ -176,7 +176,9 @@ class RemainingPagesTokensTest {
     private fun computer(theme: String) = show(theme) { ComputerScreen(onBack = { calls += "back" }) }
     @Test fun computerBackAndCopy() {
         computer("dark")
-        assertTexts("Computer", "Coming soon", "This feature is coming soon.")
+        compose.onNodeWithText("Computer").assertIsDisplayed()
+        compose.onNodeWithContentDescription("New Computer session").assertIsDisplayed().assertIsNotEnabled()
+        assertTexts("Coming soon", "This feature is coming soon.")
         compose.onNodeWithContentDescription("Back").performClick(); compose.runOnIdle { assertEquals("back", calls.last()) }
         assertEquals(Role.Button, compose.onNodeWithContentDescription("Back").fetchSemanticsNode().config.getOrNull(SemanticsProperties.Role))
     }

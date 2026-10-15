@@ -23,13 +23,17 @@ import com.dua.ai.ui.voice.ReplyVoice
 import com.dua.ai.ui.navigation.DuaDestination
 import com.dua.ai.viewmodel.ChatViewModel
 import java.time.LocalTime
+import com.dua.ai.ui.agent.AgentTask
+import com.dua.ai.ui.agent.GITHUB_AGENT_PROMPT
+import com.dua.ai.ui.agent.briefingPrompt
 
 /** Binds [ChatScreen] to [ChatViewModel]. Activity-result launchers live here so they survive sheets closing. */
 @Composable
 fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () -> Unit, onOpenVoice: () -> Unit, onOpenSetup: () -> Unit,
-    onOpenDestination: (com.dua.ai.ui.navigation.DuaDestination) -> Unit = {},
+    onOpenDestination: (DuaDestination) -> Unit = {},
     onOpenComputer: () -> Unit = { onOpenDestination(DuaDestination.Computer) },
-    onOpenVoiceMode: () -> Unit = {}) {
+    onOpenVoiceMode: () -> Unit = {}, feature: ChatFeature? = null, homeTab: HomeTab = HomeTab.Chat,
+    onExitFeature: (() -> Unit)? = null) {
     val preferences by viewModel.localSettings.collectAsState()
     val chatId by viewModel.activeChatId.collectAsState()
     val draft by viewModel.draft.collectAsState()
@@ -106,6 +110,7 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
         profileName = account.user?.displayName.orEmpty().ifBlank { account.user?.email.orEmpty() },
         profilePhotoUrl = account.user?.avatarUrl.orEmpty(),
         chatId = chatId, messages = messages, draft = draft, typing = typing, error = error, model = model,
+        feature = feature, homeTab = homeTab,
         providers = integrations.providers, webMode = webMode, reasoning = reasoning,
         webSearchConfigured = integrations.searchAvailable(model), pageReadingAvailable = integrations.pageReadingAvailable,
         xSearchAvailable = model == "Grok" && integrations.xSearchAvailable, xSearch = xSearch,
@@ -174,12 +179,30 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
             onXSearch = viewModel::setXSearch,
             onAuto = viewModel::selectAuto,
             onSelectModel = viewModel::setModel,
-            onNewChat = { pulse(); voice.stopAll(); viewModel.startNewChat(); viewModel.clearAttachments(); attachmentNotice = "" },
+            onNewChat = { pulse(); voice.stopAll(); viewModel.startNewChat(); viewModel.clearAttachments(); attachmentNotice = ""; if (homeTab == HomeTab.Work) onOpenDestination(DuaDestination.Chat) },
+            onExitFeature = { if (!viewModel.dataBusy.value) { voice.stopAll(); if (onExitFeature != null) onExitFeature() else { viewModel.startNewChat(); viewModel.selectAuto() } } },
+            onNewFeatureSession = { if (!viewModel.dataBusy.value && !viewModel.isTyping.value) {
+                voice.stopAll(); viewModel.startNewChat(); attachmentNotice = ""
+                if (feature == ChatFeature.Agent || viewModel.agent.value) viewModel.setAgent(true)
+            } },
+            onRefreshAgent = viewModel::refreshEngineCapabilities,
+            onAgentTask = { task ->
+                if (viewModel.agentAvailable.value && !viewModel.isTyping.value && !viewModel.dataBusy.value) {
+                    voice.stopAll(); viewModel.startNewChat(); viewModel.setAgent(true)
+                    val prompt = when (task) {
+                        AgentTask.Research -> ""
+                        AgentTask.GitHub -> GITHUB_AGENT_PROMPT
+                        AgentTask.Briefing -> briefingPrompt()
+                    }
+                    viewModel.updateDraft(prompt)
+                    if (task == AgentTask.Briefing) viewModel.sendMessage(prompt)
+                }
+            },
             onSelectProject = { id -> voice.stopAll(); viewModel.selectProject(id) },
             onSaveProject = viewModel::saveProject,
             onSaveProjectMemory = viewModel::saveProjectMemory,
             onSaveTask = viewModel::saveTask, onToggleTask = viewModel::toggleTask, onDeleteTask = viewModel::deleteTask,
-            onOpenChat = { id -> pulse(); voice.stopAll(); viewModel.openChat(id); viewModel.clearAttachments() },
+            onOpenChat = { id -> pulse(); voice.stopAll(); viewModel.openChat(id); viewModel.clearAttachments(); if (homeTab == HomeTab.Work) onOpenDestination(DuaDestination.Chat) },
             onDeleteChat = viewModel::deleteChat,
             onRenameChat = viewModel::renameChat,
             onPinChat = viewModel::setChatPinned,

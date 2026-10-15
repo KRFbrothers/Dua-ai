@@ -64,7 +64,7 @@ class ConversationSearchInteractionTest(private val dark: Boolean, private val s
         .assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Selected search result"))
     @Test fun searchNavigatesInBothDirectionsWrapsAndKeepsDraft() {
         val state = show()
-        compose.onNodeWithContentDescription("Find in chat").performClick(); query("invoice")
+        compose.onNodeWithContentDescription("Open chat history").performTouchInput { longClick() }; query("invoice")
         compose.onNodeWithText("1 of 2 matching messages").assertIsDisplayed(); selected("m2")
         compose.onNodeWithContentDescription("Next matching message").performClick()
         compose.onNodeWithText("2 of 2 matching messages").assertIsDisplayed(); selected("m9")
@@ -80,7 +80,7 @@ class ConversationSearchInteractionTest(private val dark: Boolean, private val s
     }
     @Test fun noMatchesClearAndSwitchingConversationsInvalidateResults() {
         val state = show()
-        compose.onNodeWithContentDescription("Find in chat").performClick(); query("absent")
+        compose.onNodeWithContentDescription("Open chat history").performTouchInput { longClick() }; query("absent")
         compose.onNodeWithText("No matching messages").assertIsDisplayed()
         compose.onNodeWithContentDescription("Next matching message").assertIsNotEnabled()
         query(""); compose.onNodeWithText("Search messages in this chat").assertIsDisplayed()
@@ -93,7 +93,7 @@ class ConversationSearchInteractionTest(private val dark: Boolean, private val s
     }
     @Test fun streamingUpdatesDoNotPullSearchBackToTheTailAndBackClosesSearch() {
         val state = show(chat().copy(typing = true, messages = chat().messages.map { if (it.id == "m12") it.copy(state = "streaming") else it }))
-        compose.onNodeWithContentDescription("Find in chat").performClick(); query("invoice"); selected("m2")
+        compose.onNodeWithContentDescription("Open chat history").performTouchInput { longClick() }; query("invoice"); selected("m2")
         repeat(3) { n ->
             compose.runOnIdle { state.value = state.value.copy(messages = state.value.messages.map {
                 if (it.streaming) it.copy(text = "Streaming token $n") else it
@@ -111,7 +111,7 @@ class ConversationSearchInteractionTest(private val dark: Boolean, private val s
     @Test fun codeOutputSnippetIsSearchableWithoutExpandingTheCodeBlock() {
         show(ChatUiState(chatId = "code", messages = listOf(ChatMessage("code", "Finished", false,
             codeRuns = listOf(CodeRun(code = "print(42)", output = "result-marker 42", outcome = "ok"))))))
-        compose.onNodeWithContentDescription("Find in chat").performClick(); query("result-marker")
+        compose.onNodeWithContentDescription("Open chat history").performTouchInput { longClick() }; query("result-marker")
         compose.onNodeWithText("1 of 1 matching messages").assertIsDisplayed()
         compose.onNodeWithText("Output: result-marker 42").assertIsDisplayed(); selected("code")
         for (description in listOf("Close chat search", "Previous matching message", "Next matching message")) {
@@ -120,7 +120,7 @@ class ConversationSearchInteractionTest(private val dark: Boolean, private val s
     }
     @Test fun incomingTokensDoNotRestartANewQueriesDebounce() {
         val state = show(chat().copy(typing = true))
-        compose.onNodeWithContentDescription("Find in chat").performClick()
+        compose.onNodeWithContentDescription("Open chat history").performTouchInput { longClick() }
         compose.waitForIdle()
         compose.mainClock.autoAdvance = false
         val started = compose.mainClock.currentTime

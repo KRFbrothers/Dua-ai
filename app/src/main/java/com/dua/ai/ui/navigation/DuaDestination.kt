@@ -31,11 +31,11 @@ enum class DuaDestination(val route: String) {
     Images("images"), Library("library"), Agent("agent"), Work("work"), Plugins("plugins"),
     General("settings/general"), UsageLimits("settings/usage-limits"), Safety("settings/safety"),
     SecurityLogin("settings/security-login"), Storage("settings/storage"), HistoryData("settings/history-data"),
-    SettingsSearch("settings/search"), AvatarEdit("settings/avatar");
+    SettingsSearch("settings/search"), AvatarEdit("settings/avatar"), Projects("projects"), ProjectChat("projects/chat");
 
     /** Dedicated screens absent from the source inventory; navigation stays honest about availability. */
     val comingSoonTitle: String? get() = when (this) {
-        Images -> "Images"; Library -> "Library"; Agent -> "AI Agent"; Work -> "Work"; Plugins -> "Plugins"
+        Images -> "Images"; Library -> "Library"; Plugins -> "Plugins"
         General -> "General"; UsageLimits -> "Usage and limits"; Safety -> "Safety"
         SecurityLogin -> "Security and login"; Storage -> "Storage"
         SettingsSearch -> "Search settings"; AvatarEdit -> "Edit profile photo"

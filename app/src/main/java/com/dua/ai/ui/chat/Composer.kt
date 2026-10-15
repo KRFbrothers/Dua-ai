@@ -66,7 +66,8 @@ fun Composer(
     modeToggles: Any? = null,
     onTextFieldFocus: ((Boolean) -> Unit)? = null,
     onTextFieldBounds: ((Rect) -> Unit)? = null,
-    currentModel: String = "Auto"
+    currentModel: String = "Auto",
+    showModelSelector: Boolean = true,
 ) {
     var localText by remember { mutableStateOf(value) }
     val chatState = state as? ChatUiState
@@ -91,7 +92,7 @@ fun Composer(
             .imePadding()
     ) {
         // Not in the reference: the current model, small and right-aligned above the bar, opens the model sheet.
-        Row(
+        if (showModelSelector) Row(
             Modifier.align(Alignment.End)
                 .heightIn(min = Sizes.touchTarget).widthIn(min = Sizes.touchTarget)
                 .clip(HomeShapes.segmentTab)

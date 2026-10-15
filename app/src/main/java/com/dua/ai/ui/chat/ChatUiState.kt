@@ -8,6 +8,10 @@ import com.dua.ai.model.PromptSuggestion
 import com.dua.ai.setup.IntegrationCapabilities
 import com.dua.ai.setup.ProviderCapability
 
+enum class ChatFeature(val title: String) {
+    Agent("AI Agent"), Computer("Computer"), Images("Images"), Library("Library"), Projects("Projects"), Plugins("Plugins")
+}
+
 /** Everything the chat surface renders. Built from ChatViewModel flows in [ChatRoute]. */
 @Immutable
 data class ChatUiState(
@@ -92,7 +96,14 @@ data class ChatUiState(
     val buildPr: Map<String, BuildPrUiState> = emptyMap(),
     val buildPrHint: String = "",
     val confirmPr: String? = null,
+    val feature: ChatFeature? = null,
+    val homeTab: HomeTab = HomeTab.Chat,
 ) {
+    val activeFeature: ChatFeature? get() = when {
+        agent -> ChatFeature.Agent
+        imagine -> ChatFeature.Images
+        else -> feature
+    }
     val canSend: Boolean get() = (draft.isNotBlank() || attachments.isNotEmpty() || uploads.any { it.ref != null }) && !typing && !readingFiles &&
         uploads.none { it.uploading } && recordingSince == null
     val modelLabel: String get() = model
@@ -121,6 +132,10 @@ class ChatActions(
     val onAuto: () -> Unit = {},
     val onSelectModel: (String) -> Unit = {},
     val onNewChat: () -> Unit = {},
+    val onExitFeature: () -> Unit = {},
+    val onNewFeatureSession: () -> Unit = {},
+    val onAgentTask: (com.dua.ai.ui.agent.AgentTask) -> Unit = {},
+    val onRefreshAgent: () -> Unit = {},
     val onSelectProject: (String) -> Unit = {},
     val onSaveProject: (String?, String, String, Boolean) -> Boolean = { _, _, _, _ -> false },
     val onSaveProjectMemory: (String, Boolean, List<String>) -> Boolean = { _, _, _ -> false },

@@ -47,7 +47,8 @@ internal fun ProjectsContent(projects: List<ChatProject>, selected: String, noti
     onSelect: (String) -> Unit, onSave: (String?, String, String, Boolean) -> Boolean,
     tasksEnabled: Boolean = false, onSaveTask: (String, String?, String, Long?) -> Boolean = { _, _, _, _ -> false },
     onToggleTask: (String, String) -> Boolean = { _, _ -> false }, onDeleteTask: (String, String) -> Boolean = { _, _ -> false }, dueDatesEnabled: Boolean = false,
-    memoryEnabled: Boolean = false, onSaveMemory: (String, Boolean, List<String>) -> Boolean = { _, _, _ -> false }) {
+    memoryEnabled: Boolean = false, onSaveMemory: (String, Boolean, List<String>) -> Boolean = { _, _, _ -> false },
+    showTitle: Boolean = true, startCreating: Boolean = false) {
     var memoryProjectId by rememberSaveable { mutableStateOf<String?>(null) }
     projects.find { it.id == memoryProjectId }?.let { project ->
         key("memory", project.id) {
@@ -76,7 +77,7 @@ internal fun ProjectsContent(projects: List<ChatProject>, selected: String, noti
         }
         return
     }
-    var editing by rememberSaveable { mutableStateOf(false) }
+    var editing by rememberSaveable { mutableStateOf(startCreating) }
     var editingId by rememberSaveable { mutableStateOf<String?>(null) }
     var name by rememberSaveable { mutableStateOf("") }
     var instructions by rememberSaveable { mutableStateOf("") }
@@ -88,7 +89,7 @@ internal fun ProjectsContent(projects: List<ChatProject>, selected: String, noti
     Column(Modifier.fillMaxWidth().imePadding().verticalScroll(rememberScrollState())
         .padding(horizontal = SheetSizes.paddingH).padding(bottom = SheetSizes.paddingBottom), verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
         val c = SheetTheme.colors
-        SheetTitle(if (editing) "Project settings" else "Projects")
+        if (showTitle) SheetTitle(if (editing) "Project settings" else "Projects")
         Text(if (editing) "Instructions and memory stay within this project. Sync edits before using them in replies."
             else "Separate spaces for your chats, instructions and memory.",
             style = SheetBodyStyle, color = c.subText)

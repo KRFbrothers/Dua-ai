@@ -70,10 +70,11 @@ fun AttachmentSheet(
     onBuild: () -> Unit = {},
     onTurnOffModes: (() -> Unit)? = null,
     inlineChatFiles: Boolean = false,
+    showModeControls: Boolean = true,
 ) {
     DuaSheet(onDismiss = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         AttachmentSheetContent(webMode, pageReadingAvailable, enabled, onCamera, onPhotos, onFiles, onReadLink, onAudio, storedFiles, storedFilesHint, storedFilesMaxBytes,
-            modes, onImagine, onBuild, onTurnOffModes, inlineChatFiles)
+            modes, onImagine, onBuild, onTurnOffModes, inlineChatFiles, showModeControls)
     }
 }
 
@@ -95,6 +96,7 @@ fun AttachmentSheetContent(
     onBuild: () -> Unit = {},
     onTurnOffModes: (() -> Unit)? = null,
     inlineChatFiles: Boolean = false,
+    showModeControls: Boolean = true,
 ) {
     val c = SheetTheme.colors
     Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = SheetSizes.paddingH).padding(bottom = SheetSizes.paddingBottom)
@@ -116,7 +118,7 @@ fun AttachmentSheetContent(
             if (storedFilesHint.isNotBlank()) Text(storedFilesHint, style = SheetNoteStyle, color = c.accent)
         }
         // Read a link, the mode switches (Run code, Think, Search, X), Imagine and Build share one gray group.
-        SheetGroup {
+        if (showModeControls) SheetGroup {
             SwitchRow("Read a link", if (pageReadingAvailable) "Reads the first HTTPS link in your message" else "Unavailable until setup is refreshed",
                 Icons.Outlined.Link, webMode == "page", enabled, onReadLink)
             modes?.toggles.orEmpty().forEach { toggle ->
@@ -137,7 +139,7 @@ fun AttachmentSheetContent(
             }
         }
         // Shown only while a mode is on: one tap back to a plain reply (what the old "Auto" pill used to do).
-        if (onTurnOffModes != null) TextButton(onClick = onTurnOffModes, enabled = enabled, shape = SheetShapes.button,
+        if (showModeControls && onTurnOffModes != null) TextButton(onClick = onTurnOffModes, enabled = enabled, shape = SheetShapes.button,
             modifier = Modifier.align(Alignment.CenterHorizontally).heightIn(min = SheetSizes.touch),
             colors = ButtonDefaults.textButtonColors(contentColor = c.text)) {
             Icon(Icons.Outlined.ToggleOff, contentDescription = null, modifier = Modifier.size(SheetSizes.rowIcon))
