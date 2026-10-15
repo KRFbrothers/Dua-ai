@@ -12,16 +12,18 @@ plugins {
     id("com.google.firebase.crashlytics")
 }
 
+// Account, cloud sync, files, Imagine, voice, setup and connectors: the Node API (web/) on Cloud Run (dua-api).
+// To use Vercel again, build with -PduaApiBaseUrl=https://dua-cyan.vercel.app (or DUA_API_BASE_URL).
 val duaApiBaseUrl = providers.gradleProperty("duaApiBaseUrl")
     .orElse(providers.environmentVariable("DUA_API_BASE_URL"))
-    .orElse("https://dua-cyan.vercel.app").get()
+    .orElse("https://dua-api-228305912525.us-central1.run.app").get()
 require(duaApiBaseUrl.startsWith("https://") && !duaApiBaseUrl.contains('"')) {
     "duaApiBaseUrl must be an HTTPS URL"
 }
 
 // Chat (POST /api/chat) can use a separate engine, by default the Google Cloud Run backend
 // (google-cloud-backend/). Everything else (account, files, imagine, voice, setup) stays on duaApiBaseUrl.
-// Set -PduaChatBaseUrl=https://dua-cyan.vercel.app (or DUA_CHAT_BASE_URL) to send chat to Vercel again.
+// Set -PduaChatBaseUrl=https://dua-api-228305912525.us-central1.run.app (or DUA_CHAT_BASE_URL) to send chat to the Node API instead.
 val duaChatBaseUrl = providers.gradleProperty("duaChatBaseUrl")
     .orElse(providers.environmentVariable("DUA_CHAT_BASE_URL"))
     .orElse("https://dua-ai-engine-228305912525.us-central1.run.app").get()
