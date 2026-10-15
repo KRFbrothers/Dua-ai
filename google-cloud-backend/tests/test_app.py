@@ -217,3 +217,16 @@ def test_metadata_only_chunks_also_keep_the_connection_alive(client, fake):
     response = client.post("/api/chat", json={"messages": HISTORY, "stream": True})
     assert response.get_data(as_text=True).count(": heartbeat\n\n") == 3
     assert events(response) == [{"type": "text", "delta": "Late text"}, {"type": "done", "truncated": False}]
+
+
+def test_project_instructions_and_memory_fit_the_bounded_system_context(client, fake):
+    context = 'Project instructions: ' + ('x' * 4000) + '\nProject notes: ' + ('y' * 2000)
+    response = client.post('/api/chat', json={'model': 'Dua', 'messages': HISTORY, 'memory': context})
+    assert response.status_code == 200
+    assert context in fake.systems[-1]
+
+
+def test_project_system_context_still_has_a_hard_limit(client, fake):
+    response = client.post('/api/chat', json={'model': 'Dua', 'messages': HISTORY, 'memory': 'x' * (engine.MAX_MEMORY_CHARS + 1)})
+    assert response.status_code == 400
+    assert not fake.calls

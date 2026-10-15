@@ -93,11 +93,11 @@ class CompactChatUiTest(private val dark: Boolean, private val small: Boolean) {
     @Test fun projectsSheetStillOpens() {
         show { ChatScreen(ChatUiState(), ChatActions(), initialSheet = ChatSheet.Projects) }
         compose.onNode(hasText("Projects") and SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.Heading, Unit)).assertIsDisplayed()
-        compose.onAllNodesWithText("Personal").onFirst().assertExists()
+        compose.onNodeWithText("No projects yet").assertIsDisplayed()
     }
     @Test fun projectCardsKeepSelectionEditMemoryTasksAndPlannerReachable() {
         var selected = "personal"
-        val projects = ProjectCodec.defaults.map { if (it.id == "business") it.copy(archived = true) else it }
+        val projects = com.dua.ai.projects.ProjectFixtures.owned.map { if (it.id == "business") it.copy(archived = true) else it }
         show { ProjectsContent(projects, "personal", "", true, { selected = it }, { _, _, _, _ -> true }, tasksEnabled = true, memoryEnabled = true) }
         compose.onNodeWithText("Daily planner").assertIsDisplayed()
         compose.onNodeWithText("Personal").assertIsDisplayed()

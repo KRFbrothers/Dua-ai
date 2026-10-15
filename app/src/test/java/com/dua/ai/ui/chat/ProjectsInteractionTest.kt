@@ -18,7 +18,7 @@ class ProjectsInteractionTest {
     @get:Rule val compose = createComposeRule()
     @Test fun pickerSelectsActiveProjectsAndKeepsArchivedProjectSettingsAccessible() {
         var selected = "personal"
-        val projects = ProjectCodec.defaults.map { if (it.id == "business") it.copy(archived = true) else it }
+        val projects = com.dua.ai.projects.ProjectFixtures.owned.map { if (it.id == "business") it.copy(archived = true) else it }
         compose.setContent { DuaTheme(LocalPreferences()) { ProjectsContent(projects, "personal", "", true, { selected = it }, { _, _, _, _ -> true }) } }
         compose.onNodeWithText("Coding").performClick()
         compose.runOnIdle { assertEquals("coding", selected) }
@@ -29,7 +29,7 @@ class ProjectsInteractionTest {
     @Test fun customProjectEditorSavesNameAndInstructionsAndKeepsFailedEdits() {
         var saved: Pair<String, String>? = null
         var accept = false
-        compose.setContent { DuaTheme(LocalPreferences()) { ProjectsContent(ProjectCodec.defaults, "personal", "", true, {},
+        compose.setContent { DuaTheme(LocalPreferences()) { ProjectsContent(com.dua.ai.projects.ProjectFixtures.owned, "personal", "", true, {},
             { _, name, instructions, _ -> saved = name to instructions; accept }) } }
         compose.onNodeWithText("New project").performClick()
         compose.onNodeWithText("Project name").performTextInput("Client work")

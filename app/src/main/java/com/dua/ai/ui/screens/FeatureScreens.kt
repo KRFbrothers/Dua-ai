@@ -45,21 +45,16 @@ fun ProjectsScreen(viewModel: ChatViewModel, onBack: () -> Unit, onOpenProject: 
             onToggleTask = viewModel::toggleTask, onDeleteTask = viewModel::deleteTask), onBack)
 }
 
-/** Reuses existing project editing/tasks/memory; + opens the existing New project editor. */
+/** Compatibility entry for the old Projects sheet: same empty-by-default reference list and editor. */
 @Composable
 fun ProjectsFeaturePage(state: ChatUiState, actions: ChatActions, onBack: () -> Unit) = DuaPageTheme {
-    var createRequest by rememberSaveable { mutableIntStateOf(0) }
-    Column(Modifier.fillMaxSize().background(PageTheme.colors.background).navigationBarsPadding()) {
-        FeatureTopBar(ChatFeature.Projects.title, onBack, onNewSession = { createRequest++ },
-            newSessionEnabled = !state.typing && state.projects.size < ProjectCodec.MAX_PROJECTS)
-        Box(Modifier.weight(1f).fillMaxWidth()) {
-            key(createRequest) {
-                ProjectsContent(state.projects, state.projectId, state.projectNotice, !state.typing,
-                    actions.onSelectProject, actions.onSaveProject, tasksEnabled = state.projectTasksEnabled,
-                    onSaveTask = actions.onSaveTask, onToggleTask = actions.onToggleTask, onDeleteTask = actions.onDeleteTask,
-                    dueDatesEnabled = state.taskDueDatesEnabled, memoryEnabled = state.projectMemoryEnabled,
-                    onSaveMemory = actions.onSaveProjectMemory, showTitle = false, startCreating = createRequest > 0)
-            }
-        }
+    var creating by rememberSaveable { mutableStateOf(false) }
+    Column(Modifier.fillMaxSize().background(com.dua.ai.ui.theme.ProjectTheme.colors.background)) {
+        if (creating) com.dua.ai.ui.projects.NewProjectScreen(notice = state.projectNotice, busy = state.typing,
+            onBack = { creating = false }, onSave = { name, instructions, icon, color ->
+                actions.onCreateProject(name, instructions, icon, color).also { if (it) creating = false }
+            })
+        else com.dua.ai.ui.projects.ProjectsList(state.projects, state.savedChats, state.typing, state.projectNotice, onBack,
+            onNew = { creating = true }, onOpen = { id -> actions.onSelectProject(id); actions.onOpenDestination(com.dua.ai.ui.navigation.DuaDestination.ProjectChat) })
     }
 }

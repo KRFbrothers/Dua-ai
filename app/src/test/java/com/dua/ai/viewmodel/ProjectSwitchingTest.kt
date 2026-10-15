@@ -33,7 +33,7 @@ class ProjectSwitchingTest {
         app = RuntimeEnvironment.getApplication()
         for (name in listOf("dua_chat_history", "dua_files", "dua_auto_sync", "dua_account_session", "dua_preferences")) app.getSharedPreferences(name, 0).edit().clear().commit()
         app.getSharedPreferences("dua_chat_history", 0).edit().putString("history", ChatHistoryCodec.encode(listOf(personal), personal.id)).commit()
-        DevicePreferences(app).update(LocalPreferences(memoryEnabled = true, memory = listOf("Private note")))
+        DevicePreferences(app).update(LocalPreferences(memoryEnabled = true, memory = listOf("Private note"), projects = com.dua.ai.projects.ProjectFixtures.owned))
         model = ChatViewModel(app).also { store.put("chat", it) }
     }
     @After fun teardown() { store.clear() }
@@ -114,7 +114,7 @@ class ProjectSwitchingTest {
     }
     @Test fun automaticDownloadRestoresProjectSettingsAndActiveChatBeforeDraftEdits() {
         val coding = personal.copy(projectId = "coding", draft = "Server draft")
-        val projects = ProjectCodec.defaults.map { if (it.id == "coding") it.copy(instructions = "Use Kotlin") else it }
+        val projects = com.dua.ai.projects.ProjectFixtures.owned.map { if (it.id == "coding") it.copy(instructions = "Use Kotlin") else it }
         val sync = ChatViewModel::class.java.getDeclaredField("automaticSync").apply { isAccessible = true }.get(model)
         val port = AutomaticCloudSync::class.java.getDeclaredField("local").apply { isAccessible = true }.get(sync) as AutomaticCloudSync.LocalPort
         port.commit(CloudSnapshot(listOf(coding), emptyList(), projects))

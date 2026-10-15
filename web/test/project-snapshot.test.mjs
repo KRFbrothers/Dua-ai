@@ -1,8 +1,9 @@
+import { testProjects } from './project-fixtures.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { defaultProjects, validateProjects } from '../src/core/projects.mjs';
 import { validateCloudSnapshot } from '../src/core/cloud-snapshot.mjs';
-const snapshot = () => ({ format: 'dua-cloud-snapshot', version: 1, memory: [], projects: defaultProjects(), chats: [] });
+const snapshot = () => ({ format: 'dua-cloud-snapshot', version: 1, memory: [], projects: testProjects(), chats: [] });
 test('project snapshot round-trip and legacy Personal chats', () => {
   const value = snapshot(); value.chats = [{ id: 'chat-id-1234', model: 'Dua', projectId: 'coding', draft: '', updatedAt: 0, messages: [] }];
   assert.deepEqual(validateCloudSnapshot(value), value);

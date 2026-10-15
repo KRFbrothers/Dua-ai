@@ -1217,21 +1217,142 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         _projectNotice.value = ""
     }
 
-    fun saveProject(id: String?, name: String, instructions: String, archived: Boolean): Boolean {
+    private fun commitProjects(projects: List<com.dua.ai.projects.ChatProject>): Boolean {
         if (syncBlocked()) { _projectNotice.value = "Finish the current action before editing projects."; return false }
         return try {
             localPreferences.requireReadable()
-            val settings = localSettings.value
-            val project = (settings.projects.find { it.id == id } ?: com.dua.ai.projects.ChatProject(id ?: UUID.randomUUID().toString(), name.trim()))
-                .copy(name = name.trim(), instructions = instructions, archived = archived)
-            check(id == null || settings.projects.any { it.id == id }) { "Project changed. Reopen the editor." }
-            val next = if (id == null) settings.projects + project else settings.projects.map { if (it.id == id) project else it }
-            com.dua.ai.projects.ProjectCodec.validate(next)
-            com.dua.ai.account.CloudSnapshotCodec.encode(CloudSnapshot(_savedChats.value, settings.memory, next))
-            localPreferences.update(settings.copy(projects = next))
-            _projectNotice.value = "Saved to the cache. Sync to apply these project settings on the server."
+            com.dua.ai.projects.ProjectCodec.validate(projects)
+            com.dua.ai.account.CloudSnapshotCodec.encode(CloudSnapshot(_savedChats.value, localSettings.value.memory, projects))
+            localPreferences.update(localSettings.value.copy(projects = projects))
+            _projectNotice.value = "Project saved. Changes follow your account through Cloud Sync."
             true
         } catch (failure: Exception) { _projectNotice.value = failure.message ?: "Project could not be saved."; false }
+    }
+
+    fun saveProject(id: String?, name: String, instructions: String, archived: Boolean): Boolean {
+        val existing = localSettings.value.projects.find { it.id == id }
+        if (id != null && existing == null) { _projectNotice.value = "Project changed. Reopen the editor."; return false }
+        val now = System.currentTimeMillis()
+        val original = existing ?: com.dua.ai.projects.ChatProject(UUID.randomUUID().toString(), name.trim(),
+            details = com.dua.ai.projects.ProjectDetails(now, now))
+        val updated = original.copy(name = name.trim(), instructions = instructions.trim(), archived = archived,
+            details = original.details?.copy(updatedAt = now))
+        return commitProjects(if (existing == null) localSettings.value.projects + updated else localSettings.value.projects.map { if (it.id == id) updated else it })
+    }
+
+    fun createProject(name: String, instructions: String, icon: String, color: String): String? {
+        val now = System.currentTimeMillis()
+        val project = com.dua.ai.projects.ChatProject(UUID.randomUUID().toString(), name.trim(), instructions.trim(),
+            details = com.dua.ai.projects.ProjectDetails(now, now, icon, color))
+        return project.id.takeIf { commitProjects(localSettings.value.projects + project) }
+    }
+    fun updateProjectPresentation(id: String, name: String, instructions: String, icon: String, color: String): Boolean =
+        changeProject(id) { p -> p.copy(name = name.trim(), instructions = instructions.trim(),
+            details = projectDetails(p).copy(icon = icon, color = color, updatedAt = System.currentTimeMillis())) }
+    private fun projectDetails(project: com.dua.ai.projects.ChatProject) = project.details ?:
+        com.dua.ai.projects.ProjectDetails(_savedChats.value.filter { it.projectId == project.id }.minOfOrNull { it.updatedAt } ?: System.currentTimeMillis(), System.currentTimeMillis())
+    private fun changeProject(id: String, change: (com.dua.ai.projects.ChatProject) -> com.dua.ai.projects.ChatProject): Boolean {
+        val project = localSettings.value.projects.find { it.id == id && it.details?.deleted != true }
+            ?: run { _projectNotice.value = "Project is no longer available."; return false }
+        return try { commitProjects(localSettings.value.projects.map { if (it.id == id) change(project) else it }) }
+        catch (failure: Exception) { _projectNotice.value = failure.message ?: "Project could not be saved."; false }
+    }
+    fun pinProject(id: String): Boolean = changeProject(id) { p ->
+        val details = projectDetails(p); p.copy(details = details.copy(pinned = !details.pinned, updatedAt = System.currentTimeMillis()))
+    }
+    /** Retain the authoritative definition and chats/files; hidden tombstones cannot be resurrected by stale clients. */
+    fun deleteProject(id: String): Boolean {
+        if (id == com.dua.ai.projects.ProjectCodec.PERSONAL) return false
+        val saved = changeProject(id) { p -> p.copy(archived = true, details = projectDetails(p).copy(deleted = true, pinned = false, updatedAt = System.currentTimeMillis())) }
+        if (saved && _projectId.value == id) { startNewChat(); selectAuto() }
+        return saved
+    }
+    fun removeProjectSource(projectId: String, path: String): Boolean = changeProject(projectId) { p ->
+        p.copy(sources = p.sources.filterNot { it.path == path }, details = projectDetails(p).copy(updatedAt = System.currentTimeMillis()))
+    }
+    private val sourceRequests = mutableMapOf<String, Pair<String, Uri>>()
+    private val _projectSourceUploads = MutableStateFlow<List<com.dua.ai.projects.ProjectSourceUpload>>(emptyList())
+    val projectSourceUploads = _projectSourceUploads.asStateFlow()
+    fun retryProjectSourceUpload(id: String) { sourceRequests[id]?.let { (projectId, uri) -> dismissProjectSourceUpload(id); uploadProjectSources(projectId, listOf(uri)) } }
+    fun dismissProjectSourceUpload(id: String) { sourceRequests.remove(id); _projectSourceUploads.update { it.filterNot { upload -> upload.id == id } } }
+    fun uploadProjectSources(projectId: String, uris: List<Uri>) {
+        if (syncBlocked() || account.state.value.user == null || !_integrations.value.filesEnabled) {
+            _projectNotice.value = "Sign in and finish private file storage setup to add project sources."; return
+        }
+        val project = localSettings.value.projects.find { it.id == projectId && !it.archived } ?: return
+        if (_projectSourceUploads.value.any { it.projectId == projectId && !it.complete && it.error == null }) return
+        val count = com.dua.ai.projects.ProjectCodec.MAX_SOURCES - project.sources.size
+        if (count <= 0) { _projectNotice.value = "Keep at most 3 project sources. Remove one before adding another."; return }
+        val ownerId = account.state.value.user!!.id
+        val resolver = getApplication<Application>().contentResolver
+        uris.take(count).forEach { uri ->
+            val uploadId = UUID.randomUUID().toString()
+            sourceRequests[uploadId] = projectId to uri
+            _projectSourceUploads.update { it + com.dua.ai.projects.ProjectSourceUpload(uploadId, projectId, "Source") }
+            viewModelScope.launch {
+                var uploadedPath: String? = null
+                fun update(change: (com.dua.ai.projects.ProjectSourceUpload) -> com.dua.ai.projects.ProjectSourceUpload) {
+                    _projectSourceUploads.update { list -> list.map { if (it.id == uploadId) change(it) else it } }
+                }
+                var temp: File? = null
+                try {
+                    val info = withContext(Dispatchers.IO) {
+                        var name = "Source"; var size: Long? = null
+                        resolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME, android.provider.OpenableColumns.SIZE), null, null, null)?.use { cursor ->
+                            if (cursor.moveToFirst()) { name = cursor.getString(0).orEmpty().take(200); if (!cursor.isNull(1)) size = cursor.getLong(1) }
+                        }
+                        Triple(name, resolver.getType(uri).orEmpty(), size)
+                    }
+                    val type = StoredFileTypes.storedType(info.first, info.second) ?: if (com.dua.ai.attachments.TextFiles.isText(info.first, info.second)) "text/plain" else error("Choose a supported image, PDF, text or document file.")
+                    val limit = if (separateChatEngine) com.dua.ai.attachments.AttachmentReader.MAX_BYTES.toLong() else maxStoredBytes()
+                    temp = withContext(Dispatchers.IO) { copyCapped(uri, limit) } ?: error("Source exceeds the file size limit.")
+                    val size = temp!!.length()
+                    if (separateChatEngine && com.dua.ai.attachments.TextFiles.isText(info.first, type) && size > com.dua.ai.attachments.TextFiles.MAX_BYTES) error("Cloud Run text sources must be 256 KB or smaller.")
+                    if (separateChatEngine && type !in setOf("image/jpeg", "image/png", "image/webp", "application/pdf", "text/plain", "text/markdown", "application/json", "text/csv"))
+                        error("Use PDF, images, CSV or UTF-8 text with the Cloud Run engine.")
+                    if (separateChatEngine && project.sources.sumOf { it.size } + size > com.dua.ai.attachments.AttachmentReader.MAX_BYTES) error("Cloud Run project sources must fit within 2 MB total.")
+                    update { it.copy(name = info.first, total = size) }
+                    val signed = SignedUpload.parse(account.request("/api/files/sign", "POST", org.json.JSONObject().put("name", info.first).put("mimeType", type).put("size", size), authenticated = true))
+                    check(signed.path.substringBefore('/') == ownerId.lowercase()) { "Source upload belongs to another account." }
+                    uploadedPath = signed.path
+                    withContext(Dispatchers.IO) { fileClient.upload(signed, size, { temp!!.inputStream() }) { sent -> update { it.copy(sent = sent) } } }
+                    check(account.state.value.user?.id == ownerId) { "Account changed. Source was not added." }
+                    val ref = FileRef(signed.path, info.first, signed.mimeType.ifBlank { type }, size)
+                    check(changeProject(projectId) { p -> check(!p.archived); if (separateChatEngine) check(p.sources.sumOf { it.size } + ref.size <= com.dua.ai.attachments.AttachmentReader.MAX_BYTES) { "Cloud Run project sources must fit within 2 MB total." }; p.copy(sources = p.sources + ref, details = projectDetails(p).copy(updatedAt = System.currentTimeMillis())) }) { _projectNotice.value }
+                    uploadedPath = null
+                    sourceRequests.remove(uploadId)
+                    update { it.copy(sent = size, complete = true) }
+                } catch (cancelled: CancellationException) { throw cancelled }
+                catch (failure: Exception) { update { it.copy(error = failure.message ?: "Source upload failed. Try again.") } }
+                finally { temp?.delete(); uploadedPath?.let { if (account.state.value.user?.id == ownerId) deleteStoredPaths(listOf(it)) } }
+            }
+        }
+    }
+
+    private data class EngineProjectContext(val memory: String, val attachments: List<com.dua.ai.attachments.ChatAttachment>, val ownerId: String? = null)
+    private suspend fun engineProjectContext(projectId: String): EngineProjectContext {
+        if (!separateChatEngine) return EngineProjectContext(projectMemory(), emptyList())
+        val settings = localSettings.value
+        val id = projectId
+        val cached = settings.projects.find { it.id == id } ?: error("Restore project settings from cloud history before chatting.")
+        // Plain Home chat does not acquire an unrelated base-backend provider/configuration gate.
+        if (id == com.dua.ai.projects.ProjectCodec.PERSONAL && !settings.memoryEnabled && cached.instructions.isBlank() && cached.sources.isEmpty())
+            return EngineProjectContext("", emptyList())
+        val ownerId = account.state.value.user?.id ?: error("Sign in to load this project's server context.")
+        val remote = account.cloud()
+        check(remote.ownerId == ownerId && account.state.value.user?.id == ownerId) { "Account changed. Reopen the project and retry." }
+        val context = com.dua.ai.projects.ProjectRequestContextPolicy.resolve(id, cached, remote.snapshot, settings.memoryEnabled)
+        val result = mutableListOf<com.dua.ai.attachments.ChatAttachment>()
+        var bytes = 0L
+        for (source in context.sources) {
+            check(source.path.substringBefore('/') == ownerId.lowercase()) { "A project source belongs to another account." }
+            bytes += source.size
+            check(bytes <= com.dua.ai.attachments.AttachmentReader.MAX_BYTES) { "Project sources exceed Cloud Run's 2 MB context limit. Remove a source and retry." }
+            val url = storedFileUrl(source)
+            result += fileClient.readAttachment(url, source.name, source.mimeType)
+        }
+        check(account.state.value.user?.id == ownerId) { "Account changed. Reopen the project and retry." }
+        return EngineProjectContext(context.memory, result, ownerId)
     }
 
     private fun changeTasks(projectId: String, change: (List<com.dua.ai.projects.ProjectTask>) -> List<com.dua.ai.projects.ProjectTask>): Boolean {
@@ -1663,6 +1784,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun retryResponse(messageId: String) {
+        val requestProjectId = _projectId.value
         projectUnavailable()?.let { _error.value = it; return }
         if (_isTyping.value || _readingFiles.value || _dataBusy.value) return
         val original = _messages.value.lastOrNull() ?: return
@@ -1680,7 +1802,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         val requestBuild = replyBuild[messageId] ?: original.build?.repository
         if (requestBuild != null) (buildUnavailableReason() ?: if (!buildUsable(plan.model)) "Build mode works with Dua or Gemini." else null)?.let { _error.value = it; return }
         webModeError(requestWebMode, plan.model)?.let { _error.value = it; return }
-        val request = requestTurns(plan.full, plan.context, inlineFiles = false)
+        val request = requestTurns(plan.full, plan.context, inlineFiles = separateChatEngine && (plan.full.last().inlineAttachments.isNotEmpty() || localSettings.value.projects.find { it.id == _projectId.value }?.sources?.isNotEmpty() == true))
         val persistenceBase = _messages.value.toList()
         val persistenceOwner = account.state.value.user?.id.takeIf { _integrations.value.serverRepliesEnabled && !separateChatEngine }
         val currentGeneration = generation
@@ -1695,9 +1817,11 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     com.dua.ai.account.ReplyPersistenceCodec.create(activeId, owner, persistenceBase, plan.full.last(), messageId,
                         request.turns.filter { it.state == "complete" }.takeLast(if (request.context != null) 400 else 39), plan.full.last().text, replacing = true)
                 } }
+                val projectContext = engineProjectContext(requestProjectId)
                 account.withToken { token ->
+                    check(projectContext.ownerId == null || account.state.value.user?.id == projectContext.ownerId) { "Account changed. Retry the project chat." }
                     val attempt = com.dua.ai.network.StreamAccumulator(startedAt).also { accumulator = it }
-                    collectReply(messageId, attempt, api.streamReply(plan.model, request.turns, emptyList(), projectMemory(), token, requestWebMode.takeIf { requestBuild == null }, requestReasoning && requestBuild == null,
+                    collectReply(messageId, attempt, api.streamReply(plan.model, request.turns, (plan.full.last().inlineAttachments + projectContext.attachments), projectContext.memory, token, requestWebMode.takeIf { requestBuild == null }, requestReasoning && requestBuild == null,
                         request.historyBytes, request.context, requestXSearch && requestBuild == null, requestCode && requestBuild == null, requestBuild, persistence, agent = requestAgent && requestBuild == null), request)
                 }
                 if (accumulator?.snapshot()?.text.isNullOrBlank()) throw DuaApiException(EMPTY_REPLY)
@@ -1726,6 +1850,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun sendMessage(userText: String) {
+        val requestProjectId = _projectId.value
         projectUnavailable()?.let { _error.value = it; return }
         if (_imagine.value) { sendImagine(userText); return }
         val storedFiles = _uploads.value.filter { it.state == PendingUpload.DONE }.mapNotNull { it.ref }
@@ -1775,7 +1900,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         val startedAt = System.currentTimeMillis()
         val reply = ChatMessage(text = "", isUser = false, model = responseModel, state = ChatMessage.STREAMING, startedAt = startedAt,
             build = requestBuild?.let { com.dua.ai.model.BuildInfo(it) })
-        val request = requestTurns(_messages.value + userMessage, _messages.value.takeLast(38) + userMessage, inlineFiles = files.isNotEmpty())
+        val request = requestTurns(_messages.value + userMessage, _messages.value.takeLast(38) + userMessage, inlineFiles = files.isNotEmpty() || (separateChatEngine && localSettings.value.projects.find { it.id == _projectId.value }?.sources?.isNotEmpty() == true))
         val persistenceBase = _messages.value.toList()
         val persistenceOwner = account.state.value.user?.id.takeIf { _integrations.value.serverRepliesEnabled && !separateChatEngine }
         val currentGeneration = generation
@@ -1793,15 +1918,20 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         replyJob = viewModelScope.launch {
             var accumulator: com.dua.ai.network.StreamAccumulator? = null
             try {
-                val prepared = if (files.any(convert)) withContext(Dispatchers.Default) { PhotoAttachmentReader.convertToJpeg(files, convert) } else files
+                val ownFiles = if (files.any(convert)) withContext(Dispatchers.Default) { PhotoAttachmentReader.convertToJpeg(files, convert) } else files
+                val projectContext = engineProjectContext(requestProjectId)
+                val prepared = ownFiles + projectContext.attachments
+                check(prepared.size <= 3 || !separateChatEngine) { "Use at most 3 files across project sources and this message." }
+                if (separateChatEngine) check(prepared.sumOf { java.util.Base64.getDecoder().decode(it.data).size.toLong() } <= com.dua.ai.attachments.AttachmentReader.MAX_BYTES) { "Project sources and message attachments must fit within 2 MB total." }
                 val persistence = persistenceOwner?.let { owner -> withContext(Dispatchers.Default) {
                     com.dua.ai.account.ReplyPersistenceCodec.create(activeId, owner, persistenceBase, userMessage, reply.id,
                         request.turns.filter { it.state == "complete" }.takeLast(if (request.context != null) 400 else 39), userText)
                 } }
                 account.withToken { token ->
                     val attempt = com.dua.ai.network.StreamAccumulator(startedAt).also { accumulator = it }
+                    check(projectContext.ownerId == null || account.state.value.user?.id == projectContext.ownerId) { "Account changed. Retry the project chat." }
                     collectReply(reply.id, attempt, api.streamReply(responseModel, request.turns, prepared,
-                        projectMemory(), token, requestWebMode.takeIf { requestBuild == null }, requestReasoning && requestBuild == null,
+                        projectContext.memory, token, requestWebMode.takeIf { requestBuild == null }, requestReasoning && requestBuild == null,
                         request.historyBytes, request.context, requestXSearch && requestBuild == null, requestCode && requestBuild == null, requestBuild, persistence, agent = requestAgent && requestBuild == null), request)
                 }
                 if (accumulator?.snapshot()?.text.isNullOrBlank()) throw DuaApiException(EMPTY_REPLY)

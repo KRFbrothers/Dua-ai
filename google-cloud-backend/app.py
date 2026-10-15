@@ -40,7 +40,7 @@ if THINKING_LEVEL not in ("low", "medium", "high"):
 MAX_MESSAGE_CHARS = 8000
 MAX_TURNS = 400
 MAX_TURN_CHARS = 100_000
-MAX_MEMORY_CHARS = 3000
+MAX_MEMORY_CHARS = 8192  # Bounded owner project instructions (4000) plus up to 10 project memories.
 MAX_ATTACHMENTS = 10
 MAX_ATTACHMENT_BYTES = 4 * 1024 * 1024
 HEARTBEAT_SECONDS = 15

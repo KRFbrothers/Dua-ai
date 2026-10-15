@@ -21,7 +21,7 @@ class ProjectTasksInteractionTest {
     @Test fun invalidPartialDueDateKeepsEditorAndValidDateIsPassedToSave() {
         var savedAt: Long? = null
         var saves = 0
-        compose.setContent { DuaTheme(LocalPreferences()) { ProjectTasksContent(ProjectCodec.defaults[1], "", true, "",
+        compose.setContent { DuaTheme(LocalPreferences()) { ProjectTasksContent(com.dua.ai.projects.ProjectFixtures.owned[1], "", true, "",
             { _, _, _, at -> savedAt = at; saves++; true }, { _, _ -> true }, { _, _ -> true }, {}, dueDatesEnabled = true) } }
         compose.onNodeWithText("Add task").performClick()
         compose.onNodeWithText("Task title").performTextInput("Timed task")
@@ -35,7 +35,7 @@ class ProjectTasksInteractionTest {
     }
     @Test fun titleOnlyEditPreservesExactTimestampAndRemoveDateClearsIt() {
         val original = 1893456000123L
-        val project = mutableStateOf(ProjectCodec.defaults[1].copy(tasks = listOf(ProjectTask("dated", "Dated task", dueAt = original))))
+        val project = mutableStateOf(com.dua.ai.projects.ProjectFixtures.owned[1].copy(tasks = listOf(ProjectTask("dated", "Dated task", dueAt = original))))
         var savedAt: Long? = null
         compose.setContent { DuaTheme(LocalPreferences()) { ProjectTasksContent(project.value, "", true, "",
             { _, _, title, at -> savedAt = at; project.value = project.value.copy(tasks = listOf(ProjectTask("dated", title, dueAt = at))); true },
@@ -50,7 +50,7 @@ class ProjectTasksInteractionTest {
         compose.runOnIdle { assertNull(savedAt) }
     }
     @Test fun projectPickerOpensOnlyThatProjectsTasksAndAddsThenCompletesATask() {
-        val projects = mutableStateOf(ProjectCodec.defaults)
+        val projects = mutableStateOf(com.dua.ai.projects.ProjectFixtures.owned)
         compose.setContent { DuaTheme(LocalPreferences()) { ProjectsContent(projects.value, "personal", "", true, {}, { _, _, _, _ -> true },
             tasksEnabled = true, onSaveTask = { projectId, _, title, _ ->
                 projects.value = projects.value.map { if (it.id == projectId) it.copy(tasks = it.tasks + ProjectTask("new-task", title)) else it }; true
@@ -70,7 +70,7 @@ class ProjectTasksInteractionTest {
         compose.onNodeWithText("0 open · 1 completed. Sync changes to save them on the server.").assertExists()
     }
     @Test fun failedEditKeepsTypedTitleAndDeleteRequiresConfirmation() {
-        val project = mutableStateOf(ProjectCodec.defaults[1].copy(tasks = listOf(ProjectTask("task-1", "Review diff"))))
+        val project = mutableStateOf(com.dua.ai.projects.ProjectFixtures.owned[1].copy(tasks = listOf(ProjectTask("task-1", "Review diff"))))
         var deletes = 0
         compose.setContent { DuaTheme(LocalPreferences()) { ProjectTasksContent(project.value, "", true, "", { _, _, _, _ -> false }, { _, _ -> true },
             { _, id -> deletes++; project.value = project.value.copy(tasks = project.value.tasks.filterNot { it.id == id }); true }, {}) } }
@@ -88,7 +88,7 @@ class ProjectTasksInteractionTest {
         compose.onNodeWithText("No tasks yet.").assertExists()
     }
     @Test fun unavailableTasksRemainReadableButCannotBeEdited() {
-        val project = ProjectCodec.defaults[1].copy(tasks = listOf(ProjectTask("task-1", "Saved task")))
+        val project = com.dua.ai.projects.ProjectFixtures.owned[1].copy(tasks = listOf(ProjectTask("task-1", "Saved task")))
         compose.setContent { DuaTheme(LocalPreferences()) { ProjectTasksContent(project, "", false, "Restore this project to edit its tasks.",
             { _, _, _, _ -> fail("Disabled save"); false }, { _, _ -> fail("Disabled toggle"); false }, { _, _ -> fail("Disabled delete"); false }, {}) } }
         compose.onNodeWithText("Saved task").assertExists()

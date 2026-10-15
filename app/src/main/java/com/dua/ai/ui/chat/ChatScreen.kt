@@ -102,6 +102,7 @@ fun ChatScreen(
     initialSheet: ChatSheet? = null,
     /** Fullscreen media viewer: message id and index (screenshots open it directly). */
     initialViewer: Pair<String, Int>? = null,
+    topBar: (@Composable () -> Unit)? = null,
 ) {
     val drawerState = rememberDrawerState(initialDrawerValue)
     val scope = rememberCoroutineScope()
@@ -275,7 +276,8 @@ fun ChatScreen(
             ) {
                 Column(Modifier.fillMaxSize().background(com.dua.ai.ui.theme.ChatTheme.colors.background)
                     .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))) {
-                    if (feature != null) FeatureTopBar(feature.title, actions.onExitFeature, actions.onNewFeatureSession,
+                    if (topBar != null) topBar()
+                    else if (feature != null) FeatureTopBar(feature.title, actions.onExitFeature, actions.onNewFeatureSession,
                         newSessionEnabled = !state.typing && (feature != ChatFeature.Agent || state.agentAvailable))
                     else ChatTopBar(
                         onMenu = { scope.launch { drawerState.open() } },
@@ -361,6 +363,10 @@ fun ChatScreen(
                                 onCancelUpload = { state.uploads.filter { it.uploading }.forEach { actions.onCancelUpload(it.id) } },
                                 onImagineOptions = { sheet = ChatSheet.Imagine },
                                 showModelSelector = feature == null,
+                                attachmentPopup = {
+                                    if (feature == ChatFeature.Projects) com.dua.ai.ui.projects.ProjectAttachmentMenu(sheet == ChatSheet.Attach, { sheet = null },
+                                        { actions.onPickCamera() }, { actions.onPickPhotos() }, { actions.onPickFiles() }, { actions.onOpenDestination(DuaDestination.Plugins) })
+                                },
                             )
                         }
                     }
@@ -378,7 +384,7 @@ fun ChatScreen(
             onSelect = actions.onSelectModel, onOpenSetup = { sheet = null; actions.onOpenSetup() },
             onDismiss = { sheet = null },
         )
-        ChatSheet.Attach -> AttachmentSheet(
+        ChatSheet.Attach -> if (feature != ChatFeature.Projects) AttachmentSheet(
             webMode = state.webMode, pageReadingAvailable = state.pageReadingAvailable,
             showModeControls = feature == null,
             enabled = !state.typing && !state.readingFiles,

@@ -13,7 +13,7 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ProjectsTest {
-    private val projects = ProjectCodec.defaults + ChatProject("client", "Client work", "Cite sources")
+    private val projects = ProjectFixtures.owned + ChatProject("client", "Client work", "Cite sources")
     private val chat = SavedChat("chat-id", "Dua", "Draft", emptyList(), 1, projectId = "client")
     private fun snapshot(p: List<ChatProject>) = CloudSnapshot(listOf(chat), emptyList(), p)
     @Test fun cloudCachePreferencesAndExportKeepProjectSettingsAndChatReferences() {
@@ -58,12 +58,12 @@ class ProjectsTest {
     }
     @Test fun defaultInstructionsEditedBeforeFirstSyncAreUploadedButRemoteEditsWinUnchangedCache() {
         val original = CloudSnapshot(emptyList(), emptyList())
-        val edited = original.copy(projects = original.projects.map { if (it.id == "coding") it.copy(instructions = "Use Kotlin") else it })
+        val edited = original.copy(projects = original.projects.map { if (it.id == "personal") it.copy(instructions = "Use Kotlin") else it })
         assertEquals(edited, AutomationSyncPolicy.merge(edited, original, null).snapshot)
         assertEquals(edited, AutomationSyncPolicy.merge(original, edited, null).snapshot)
     }
     @Test fun reviewedDownloadKeepsPhoneOnlyProjectDefinitionsAndUsesServerInstructions() {
-        val remote = CloudSnapshot(emptyList(), emptyList(), ProjectCodec.defaults.map { if (it.id == "coding") it.copy(instructions = "Use Kotlin") else it })
+        val remote = CloudSnapshot(emptyList(), emptyList(), ProjectFixtures.owned.map { if (it.id == "coding") it.copy(instructions = "Use Kotlin") else it })
         val merged = CloudSnapshotCodec.mergeDownload(snapshot(projects), remote).snapshot
         assertEquals(chat, merged.chats.single())
         assertEquals(projects.last(), merged.projects.last())

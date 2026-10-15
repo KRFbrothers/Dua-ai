@@ -111,7 +111,7 @@ class ChatImportRecoveryTest {
         val restored = ChatHistoryCodec.decode(application.getSharedPreferences("dua_chat_history", 0).getString("history", null)!!).second
         val imported = restored.single { it.id != original.id }
         val settings = com.dua.ai.settings.DevicePreferences(application).state.value.projects
-        assertEquals(com.dua.ai.projects.ProjectCodec.defaults, settings.take(3))
+        assertEquals(com.dua.ai.projects.ProjectCodec.defaults, settings.take(com.dua.ai.projects.ProjectCodec.defaults.size))
         assertEquals("Cite invoice numbers", settings.single { it.id == imported.projectId }.instructions)
         assertEquals("personal", restored.single { it.id == original.id }.projectId)
         assertNull(model.importPreview.value)

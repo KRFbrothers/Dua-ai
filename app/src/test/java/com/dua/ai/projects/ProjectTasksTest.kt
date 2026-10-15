@@ -14,7 +14,7 @@ import org.junit.Test
 
 class ProjectTasksTest {
     private val task = ProjectTask("task-1", "Review Kotlin changes")
-    private fun snapshot(tasks: List<ProjectTask>) = CloudSnapshot(emptyList(), emptyList(), ProjectCodec.defaults.map {
+    private fun snapshot(tasks: List<ProjectTask>) = CloudSnapshot(emptyList(), emptyList(), com.dua.ai.projects.ProjectFixtures.owned.map {
         if (it.id == "coding") it.copy(tasks = tasks) else it
     })
     @Test fun cloudPreferencesAndChatlessJsonBackupPreserveTasks() {
@@ -26,7 +26,7 @@ class ProjectTasksTest {
         assertEquals(original.projects, ChatHistoryCodec.readBackup(raw.byteInputStream()).projects)
     }
     @Test fun emptyTasksKeepLegacyWireFormatAndSyncSignaturesIncludingArchivedProjects() {
-        for (project in ProjectCodec.defaults + ChatProject("archived", "Archived", archived = true)) {
+        for (project in com.dua.ai.projects.ProjectFixtures.owned + ChatProject("archived", "Archived", archived = true)) {
             val legacy = JSONObject().put("id", project.id).put("name", project.name).put("instructions", project.instructions).put("archived", project.archived)
             assertEquals(AutomationSyncPolicy.digest(legacy.toString()), AutomationSyncPolicy.projectSignature(project))
             assertFalse(ProjectCodec.encodedProject(project).has("tasks"))
