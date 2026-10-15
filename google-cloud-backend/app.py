@@ -530,9 +530,7 @@ def chunk_text(chunk):
 @app.route("/", methods=["GET"])
 def home():
     # Capabilities: the app shows Agent mode only when this says "agent": true.
-    import imagine
-    return jsonify({"status": "Dua AI Engine is running!", "engine": "google-cloud", "agent": True, "titles": True, "model": MODEL_NAME,
-                    "imagine": imagine.capability()})
+    return jsonify({"status": "Dua AI Engine is running!", "engine": "google-cloud", "agent": True, "titles": True, "model": MODEL_NAME})
 
 
 @app.route("/api/chat", methods=["POST"])
@@ -644,6 +642,18 @@ def api_chat():
 
     return Response(stream_with_context(events()), headers=SSE_HEADERS,
                     content_type="text/event-stream; charset=utf-8")
+
+
+@app.after_request
+def add_imagine_capability(response):
+    """Adds `"imagine": {...}` to the GET / capabilities (kept next to the Imagine endpoint)."""
+    if request.endpoint == "home" and request.method == "GET" and response.is_json:
+        import imagine
+        data = response.get_json()
+        if isinstance(data, dict):
+            data["imagine"] = imagine.capability()
+            response.set_data(json.dumps(data))
+    return response
 
 
 @app.route("/api/imagine/image", methods=["POST"])

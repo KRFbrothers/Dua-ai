@@ -129,17 +129,6 @@ New token later: `read -s -p "Paste GitHub token: " GH && printf %s "$GH" | gclo
 then run the `gcloud run services update … --update-secrets GITHUB_TOKEN=dua-github-token:latest` line again.
 To switch coding off: `gcloud run services update dua-ai-engine --region us-central1 --project global-healer-m6shk --remove-secrets GITHUB_TOKEN`.
 
-## Imagine on Google Cloud (images)
-
-`POST /api/imagine/image` makes **one image per request** with the Gemini image model on Vertex AI
-(`IMAGINE_MODEL`, default `gemini-3.1-flash-lite-image`, "Nano Banana 2 Lite", global endpoint; list price
-$30 per 1M image-output tokens = about **$0.034 per 1K image**, plus a tiny text-input cost). It takes the same request and returns the same
-response as the Vercel backend, and stores the image in your private Supabase `dua-files` bucket using your own
-sign-in (no service-role key). The daily cap uses the same Supabase counter as Vercel (`IMAGINE_DAILY_IMAGES`,
-default 20). Owner sign-in is required. The app uses Google Cloud for new images when `GET /` shows
-`"imagine": {"image": true}`; photo edits and video stay on Vercel. Turn it off with `DUA_IMAGINE=0`.
-Needs the existing `SUPABASE_URL` / `SUPABASE_ANON_KEY` settings and the Supabase Imagine migration. No new secret is needed.
-
 ## Tests
 ```bash
 pip install -r requirements.txt pytest && python -m pytest -q tests
@@ -150,3 +139,14 @@ For mocked unit tests only, Vertex credentials/SDK are unnecessary: install `Fla
 Separate-engine Android builds treat Dua/Gemini chat as configured independently of the base backend's provider keys. Chat file selection uses the existing bounded inline path (up to 3 files / 2 MB total; oversized photos are resized). Audio can also be sent inline. Use CSV/UTF-8 text for spreadsheets; XLSX/ODS and documents over the inline limit are rejected rather than uploaded as inaccessible storage references. Imagine retains the base-backend storage path.
 
 Inline media bytes stay with their original turns for follow-ups/retry during the live process and are not persisted, exported or synced. Existing `attachmentText` is persisted with history (up to 32,000 characters per user turn). After restoring a chat, reselect media files if their bytes are needed again. Aggregate request/history size limits still apply; oversized inline history fails explicitly instead of silently dropping its media.
+
+## Imagine on Google Cloud (images)
+
+`POST /api/imagine/image` makes **one image per request** with the Gemini image model on Vertex AI
+(`IMAGINE_MODEL`, default `gemini-3.1-flash-lite-image`, "Nano Banana 2 Lite", global endpoint; list price
+$30 per 1M image-output tokens = about **$0.034 per 1K image**, plus a tiny text-input cost). It takes the same request and returns the same
+response as the Vercel backend, and stores the image in your private Supabase `dua-files` bucket using your own
+sign-in (no service-role key). The daily cap uses the same Supabase counter as Vercel (`IMAGINE_DAILY_IMAGES`,
+default 20). Owner sign-in is required. The app uses Google Cloud for new images when `GET /` shows
+`"imagine": {"image": true}`; photo edits and video stay on Vercel. Turn it off with `DUA_IMAGINE=0`.
+Needs the existing `SUPABASE_URL` / `SUPABASE_ANON_KEY` settings and the Supabase Imagine migration. No new secret is needed.
