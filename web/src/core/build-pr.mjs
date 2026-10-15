@@ -11,6 +11,7 @@ import { GITHUB_REPOSITORY_HINT, GITHUB_PATH_HINT } from './github.mjs';
 import { validRepository, normalizeRepositoryReadPath, repositoryWritePathIssue } from './github-validation.mjs';
 import { encodeBranch, githubWrite, GitHubWriteError, repoApi, writeToken } from './github-write.mjs';
 import { resolveOwner, StorageError } from './storage.mjs';
+import { loggedStage } from './request-logging.mjs';
 
 const noStore = { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' };
 const json = (value, status = 200) => Response.json(value, { status, headers: noStore });
@@ -222,7 +223,7 @@ export const PROPOSE_DECLARATION = Object.freeze({
  * `tree` is the default branch file list. Returns {proposal, response} or {response: {error}} for the model.
  * The proposal is returned to the app for review; nothing here touches GitHub.
  */
-export function proposeChanges(args, { repository, branch, read, tree, limits, now = Date.now, id = randomUUID }) {
+export const proposeChanges = loggedStage('proposal_creation', function (args, { repository, branch, read, tree, limits, now = Date.now, id = randomUUID }) {
   try {
     const title = cleanText(args?.title, MAX_TITLE).replace(/\s+/g, ' ');
     if (!title) throw new BuildPrError('Give the pull request a short title.');
@@ -251,7 +252,7 @@ export function proposeChanges(args, { repository, branch, read, tree, limits, n
     if (error instanceof BuildPrError) return { response: { error: error.message + ' Nothing was proposed.' } };
     throw error;
   }
-}
+}, result => result.proposal ? 'success' : 'refused');
 
 // ---------------------------------------------------------------- 2. owner-approved create route
 const REQUEST_KEYS = ['repository', 'proposalId', 'title', 'summary', 'branch', 'files'];
@@ -317,7 +318,7 @@ async function currentEntries(paths, rootTree, call, api) {
  * is fixed by the proposal, so a second tap finds the branch (its commit carries Dua-Proposal-Id) and returns the
  * existing pull request instead of opening another.
  */
-export async function createPullRequest(request, { env, fetcher = fetch, signal }) {
+export const createPullRequest = loggedStage('pr_submission', async function (request, { env, fetcher = fetch, signal }) {
   const call = (method, path, options = {}) => githubWrite(method, path, { env, fetcher, signal, ...options });
   const api = repoApi(request.repository);
   const repo = await call('GET', api, { maxBytes: 512 * 1024 });
@@ -403,7 +404,7 @@ export async function createPullRequest(request, { env, fetcher = fetch, signal 
     throw error;
   }
   return { repository, branch: request.branch, base, commit: commit.sha, ...(await openPr()) };
-}
+});
 
 /** POST /api/build/pr: the only route that writes to GitHub. Runs after the owner's Create PR tap + confirmation. */
 export async function handleBuildPr(request, { env = {}, fetcher = fetch } = {}) {
@@ -432,11 +433,9 @@ export async function handleBuildPr(request, { env = {}, fetcher = fetch } = {})
     pr = await createPullRequest(approved, { env, fetcher, signal: request.signal });
   } catch (error) {
     if (error instanceof BuildPrError || error instanceof GitHubWriteError) {
-      console.warn('[dua-build-pr] refused', error.status);
       return json({ error: error.message }, error.status);
     }
     if (error?.name === 'AbortError' || error?.name === 'TimeoutError' || request.signal.aborted) return json({ error: 'GitHub request stopped or timed out. Check GitHub before retrying: the pull request may already exist (a retry will not open a second one).' }, 504);
-    console.error('[dua-build-pr] failed', error?.name);
     return json({ error: 'Creating the pull request failed. Check your connection and GitHub service availability, then retry the same proposal so Dua can find any existing branch or pull request.' }, 502);
   }
   return json({ ok: true, ...pr });

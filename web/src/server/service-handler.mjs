@@ -9,11 +9,16 @@ import { handleFiles } from '../core/files.mjs';
 import { handleImagine } from '../core/imagine.mjs';
 import { handleVoice } from '../core/voice.mjs';
 import { handleBuildPr } from '../core/build-pr.mjs';
+import { withRequestLog } from '../core/request-logging.mjs';
 
 /** DUA_CHAT_DEADLINE_SECONDS: whole-request chat deadline (default 280 s, allowed 10–790 s). */
 export const chatDeadlineMs = env => envInteger(env, 'DUA_CHAT_DEADLINE_SECONDS', 280, 10, 790) * 1000;
 
-export async function handleService(request,{env=process.env,fetcher=fetch}={}) {
+export async function handleService(request, options = {}) {
+ return withRequestLog(request, () => routeService(request, options), { logWriter: options.logWriter });
+}
+
+async function routeService(request,{env=process.env,fetcher=fetch}={}) {
  const url=new URL(request.url),path=url.pathname;
  const deadlineAt=path==='/api/chat'?Date.now()+chatDeadlineMs(env):undefined;
  // Include authentication/quota work in the chat deadline. Keep it below the function maxDuration

@@ -83,6 +83,8 @@ These are three separate access surfaces. Configuration or validation in one doe
 
 Vercel's shared repository/path policy and its read/write compatibility rules are documented in [GitHub validation](GITHUB_VALIDATION.md); implementation lives in [github-validation.mjs](../web/src/core/github-validation.mjs).
 
+The shared Node router also emits privacy-aware request/stage logs for GitHub reads, proposals and owner-approved PR submissions. See [GitHub logging](GITHUB_LOGGING.md) for correlation IDs, event meanings and operational limits; response creation is distinct from streaming completion.
+
 | Flow | Configuration / enforcement | Side effects |
 | --- | --- | --- |
 | Vercel connector and Build reads | `ENABLE_GITHUB_CONNECTOR=1`, `GITHUB_CONNECTOR_TOKEN`; [`github.mjs`](../web/src/core/github.mjs) allows bounded GET requests to supported GitHub routes. [`advanced-integrations.mjs`](../web/src/core/advanced-integrations.mjs) dispatches the owner-restricted connector actions. [`build-chat.mjs`](../web/src/core/build-chat.mjs) runs bounded model read/proposal tools. | Read repository context and return diffs/proposals. A `propose_changes` result alone does not write to GitHub. |
