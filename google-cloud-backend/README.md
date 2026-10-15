@@ -48,6 +48,25 @@ with `DUA_REQUIRE_LOGIN=0`; `DUA_APP_TOKEN`, if retained, is an additional gate 
 | `DUA_ALLOWED_EMAIL` | required; the same owner email used by Vercel, compared case-insensitively against the Auth-verified account |
 | `DUA_APP_TOKEN` | optional **additional** password. When set, requests must also send `X-Dua-App-Token`. Build the app with `-PduaAppToken=...` (or env `DUA_APP_TOKEN`). It never replaces the owner session; APK-embedded values are extractable |
 
+### Local environment file
+
+Use [.env.example](.env.example) as the local template. It leaves project/account values and credentials empty, documents the separate coding-agent token and keeps an empty repository target until you choose one. From `google-cloud-backend/`, with your Python virtual environment active and runtime dependencies installed:
+
+```bash
+# Preserve an existing local file.
+[ -e .env ] || cp .env.example .env
+# Edit .env with your own settings before sourcing it.
+# Only source your trusted local file; quote values with shell metacharacters.
+set -a
+. ./.env
+set +a
+python app.py
+```
+
+Python does not automatically read `.env`; these commands export it for this shell. A copied, unfilled template may serve the public health check, but authenticated generation remains unavailable until owner Auth settings and Google runtime credentials are ready. Tests use mocks and need neither real credentials nor this file.
+
+On Cloud Run, configure runtime settings on the service and keep the optional GitHub token in Secret Manager; do not upload a populated `.env`. Let Cloud Run supply `PORT`. For `deploy.sh`, export `PROJECT_ID` as well (same project as `GOOGLE_CLOUD_PROJECT`) and optionally `REGION`; the script only forwards its explicitly listed settings, not every value in `.env`.
+
 ## Redeploy from Cloud Shell
 
 Configure `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY` (or `SUPABASE_ANON_KEY`) and `DUA_ALLOWED_EMAIL`
