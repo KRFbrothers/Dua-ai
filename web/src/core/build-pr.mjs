@@ -65,11 +65,11 @@ export function prAllowedFor(env, repository) {
 /** Why a repository path cannot be changed, or null. Blocks workflows, .git, .gitmodules, absolute and `..` paths. */
 export function pathProblem(path) {
   const issue = repositoryWritePathIssue(path);
-  if (issue === 'invalid') return GITHUB_PATH_HINT;
+  if (issue === null) return null;
   if (issue === 'git') return 'Files inside .git cannot be changed. Remove this file from the proposal.';
   if (issue === 'submodule') return 'Submodules (.gitmodules) cannot be changed from Dua. Remove this file from the proposal.';
   if (issue === 'workflow') return 'GitHub Actions workflows (.github/workflows) cannot be changed from Dua. Remove this file from the proposal.';
-  return null;
+  return GITHUB_PATH_HINT;
 }
 const bytes = text => Buffer.byteLength(text, 'utf8');
 
