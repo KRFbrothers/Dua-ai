@@ -20,6 +20,8 @@ from urllib.request import Request, build_opener, HTTPRedirectHandler
 API = "https://api.github.com"
 BASE_BRANCH = "main"
 BRANCH_PREFIX = "dua-agent/"
+# Matches the generated flat slug/timestamp branch; never accept Git ref syntax from a tool caller.
+AGENT_BRANCH = re.compile(r"dua-agent/[a-z0-9](?:[a-z0-9-]{0,78}[a-z0-9])?")
 MAX_TOOL_STEPS = int(os.environ.get("CODING_MAX_STEPS", "15"))
 MAX_FILES_READ = 40
 MAX_READ_BYTES = 60_000           # per file returned to the model
@@ -105,6 +107,24 @@ def slugify(text, limit=40):
     return slug or "change"
 
 
+def valid_agent_branch(branch):
+    return isinstance(branch, str) and AGENT_BRANCH.fullmatch(branch) is not None
+
+
+def conflicting_change_paths(paths):
+    """Call only after path validation. Reject duplicate files and file/folder clashes in either order."""
+    seen = set(paths)
+    if len(seen) != len(paths):
+        return True
+    for path in paths:
+        parent = path
+        while "/" in parent:
+            parent = parent.rsplit("/", 1)[0]
+            if parent in seen:
+                return True
+    return False
+
+
 def allowed(method, path, body, repo):
     """The only GitHub requests this server may send. Returns a reason string when blocked, else None."""
     if not valid_repository(repo) or not isinstance(path, str) or re.search(r"[\x00-\x1f\x7f]", path):
@@ -130,14 +150,18 @@ def allowed(method, path, body, repo):
         return "invalid file path"
     if method == "POST" and path.endswith("/git/trees"):
         entries = body.get("tree") if isinstance(body, dict) else None
-        if not isinstance(entries, list) or not entries or not all(
+        if not isinstance(entries, list) or not entries or len(entries) > MAX_FILES_CHANGED or not all(
                 isinstance(item, dict) and valid_path(item.get("path"), write=True) and
                 item.get("type") == "blob" and item.get("mode") in ("100644", "100755") for item in entries):
             return "git trees must contain allowed regular file paths"
+        if conflicting_change_paths([item["path"] for item in entries]):
+            return "git trees cannot contain duplicate files or file/folder conflicts"
     if method == "POST" and path.endswith("/git/refs"):
-        ref = str((body or {}).get("ref", ""))
-        if not ref.startswith("refs/heads/" + BRANCH_PREFIX) or ".." in ref:
-            return "only new dua-agent/ branches may be created"
+        if not isinstance(body, dict) or set(body) != {"ref", "sha"}:
+            return "new branch requests may only set ref and sha"
+        ref = body.get("ref")
+        if not isinstance(ref, str) or not ref.startswith("refs/heads/") or not valid_agent_branch(ref[len("refs/heads/"):]):
+            return "only valid new dua-agent/ branches may be created"
     if method == "POST" and re.fullmatch(rf"{base}/issues", path):
         if not isinstance(body, dict) or set(body) - {"title", "body", "labels"} or not isinstance(body.get("title"), str):
             return "new issues may only set title, body and labels"
@@ -145,8 +169,8 @@ def allowed(method, path, body, repo):
         if not isinstance(body, dict) or set(body) != {"body"}:
             return "comments may only set a body"
     if method == "POST" and path.endswith("/pulls"):
-        if (body or {}).get("base") != BASE_BRANCH or not str((body or {}).get("head", "")).startswith(BRANCH_PREFIX):
-            return "pull requests must go from a dua-agent/ branch into main"
+        if not isinstance(body, dict) or body.get("base") != BASE_BRANCH or not valid_agent_branch(body.get("head")):
+            return "pull requests must go from a valid dua-agent/ branch into main"
     return None
 
 
@@ -285,9 +309,11 @@ class GitHubClient:
 
     # --- the only write sequence: new branch + one commit + PR into main ---
     def open_pull_request(self, files, title, description, branch):
-        if not branch.startswith(BRANCH_PREFIX):
-            raise BlockedRequest("Blocked GitHub request: branch must start with dua-agent/.")
+        if not valid_agent_branch(branch):
+            raise BlockedRequest("Use a new dua-agent/ branch with 1 to 80 lowercase letters, digits or dashes; start and end with a letter or digit.")
         files = validate_changes(files)
+        if not files:
+            raise CodingError("No file changes to submit. No pull request was opened.")
         base_sha = self.request("GET", f"/repos/{self.repo}/git/ref/heads/{BASE_BRANCH}")["object"]["sha"]
         base_commit = self.request("GET", f"/repos/{self.repo}/git/trees/{base_sha}")
         entries = []
@@ -313,14 +339,18 @@ def validate_changes(files):
         path = item.get("path")
         path = path.strip(" ") if isinstance(path, str) else path
         content = item.get("content")
-        if not valid_path(path, write=True) or path in seen or not isinstance(content, str):
+        if not valid_path(path, write=True) or not isinstance(content, str):
             raise CodingError("Invalid or protected file change.")
+        if path in seen:
+            raise CodingError("Duplicate file change. Keep each file path only once before retrying.")
         size = len(content.encode("utf-8"))
         total += size
         if size > MAX_FILE_BYTES or total > MAX_TOTAL_CHANGE_BYTES:
             raise CodingError("Change is too large.")
         seen.add(path)
         clean.append({"path": path, "content": content})
+    if conflicting_change_paths([item["path"] for item in clean]):
+        raise CodingError("A file change conflicts with another file's folder. Split or correct the conflicting paths before retrying.")
     return clean
 
 

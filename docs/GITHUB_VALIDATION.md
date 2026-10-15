@@ -21,6 +21,14 @@ Consumers: [read client](../web/src/core/github.mjs), [write client](../web/src/
 
 Android and the Python Cloud Run agent have their own runtime implementations. Cloud Run's [coding_agent.py](../google-cloud-backend/coding_agent.py) validates its configured repository at construction, uses full-match request/path checks, and blocks case-insensitive `.git` segments on reads and writes. Its write policy also blocks root `.gitmodules` and all root `.github/` files (a deliberately stricter policy than Vercel's workflow-only restriction). Its existing 300-character ASCII path cap and rejection of any `..` substring remain. Both direct PR creation and the low-level tree request check protected paths; code search enforces one selected repository and validates result metadata. See [architecture boundaries](ARCHITECTURE.md#github-permission-boundaries) before changing either backend.
 
+## Cloud Run Agent PR preflight
+
+The Python client shares `valid_agent_branch` across direct PR creation and low-level ref/PR requests. A branch must be `dua-agent/` plus 1–80 lowercase ASCII letters, digits or dashes, starting and ending with a letter/digit. Empty suffixes, nested refs, Git ref operators, whitespace/control characters and overlong names are rejected before any network call. Existing generated slug/timestamp names remain valid; new ref payloads accept only `ref` and `sha`, without force/update fields.
+
+Proposal validation also rejects duplicate normalized paths and file/folder conflicts **within the proposed batch**, independent of file order. Low-level tree requests enforce these conflicts, the same 10-file count cap, protected paths and regular-file modes. Non-conflicting files retain their input order. The direct PR method rejects empty change lists without contacting GitHub; the Agent's existing no-change response still opens nothing. Content budgets remain 200,000 UTF-8 bytes per file and 600,000 total, including multibyte text.
+
+These checks do not inspect current main for stale file versions, provide retry idempotency, or prevent every remote GitHub rejection. They do not add merge, push-to-main or branch-update permissions. Regression cases live in [test_coding.py](../google-cloud-backend/tests/test_coding.py).
+
 ## Related size limits
 
 These bounds serve different protocols and units; they must not be silently replaced with one global limit. Values below are defaults unless noted. `KiB`/`MiB` mean multiples of 1024; JavaScript string lengths count UTF-16 code units.
