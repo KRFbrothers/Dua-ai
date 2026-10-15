@@ -328,7 +328,7 @@ def test_agent_image_streams_media_event_with_owner_identity(monkeypatch):
     monkeypatch.setattr(engine, "get_client", lambda: "client")
     monkeypatch.setattr(im, "enabled", lambda: True)
     monkeypatch.setattr(im, "handle", lambda body, token, user_id, client: seen.update(token=token, user=user_id) or {"images": [{"path": "p.png", "url": "https://s"}], "model": "m"})
-    monkeypatch.setattr(at, "default_tools", lambda github: ["TOOLS"])
+    monkeypatch.setattr(at, "default_tools", lambda github, issues=False: ["TOOLS"])
     import coding_agent
     monkeypatch.setattr(coding_agent, "default_tool_response", lambda results: ("tool", results))
     model = Script([call("generate_image", {"prompt": "sunset"}), final("Here is your image.")])

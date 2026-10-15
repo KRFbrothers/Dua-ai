@@ -268,7 +268,7 @@ def test_coding_route_runs_pipeline_and_streams_pr_link(monkeypatch, owner):
     opener = Opener()
     real = ca.GitHubClient
     monkeypatch.setattr(ca, "GitHubClient", lambda token, repo: real(token, repo, opener=opener))
-    monkeypatch.setattr(agent_tools, "default_tools", lambda github: ["TOOLS"])
+    monkeypatch.setattr(agent_tools, "default_tools", lambda github, issues=False: ["TOOLS"])
     monkeypatch.setattr(ca, "default_tool_response", lambda results: ("tool", results))
     evs = post("code likho: add a hello screen to the app")
     kinds = [e["type"] for e in evs]
@@ -308,7 +308,7 @@ def test_coding_reports_read_and_pr_progress(monkeypatch, owner):
     opener = Opener()
     real = ca.GitHubClient
     monkeypatch.setattr(ca, "GitHubClient", lambda token, repo: real(token, repo, opener=opener))
-    monkeypatch.setattr(agent_tools, "default_tools", lambda github: ["TOOLS"])
+    monkeypatch.setattr(agent_tools, "default_tools", lambda github, issues=False: ["TOOLS"])
     monkeypatch.setattr(ca, "default_tool_response", lambda results: ("tool", results))
     evs = post("code likho: add a hello screen to the app")
     steps = [e["step"] for e in evs if e["type"] == "progress"]

@@ -432,7 +432,9 @@ def tool_loop(messages, attachments, system, enqueue, owner, coding=False):
             github = coding_agent.GitHubClient(token, repo)
     except coding_agent.CodingError:
         github = None
-    prompt = agent_tools.AGENT_PROMPT.format(github=agent_tools.GITHUB_HINT.format(repo=repo) if github else "")
+    issues = github is not None and github.issues_enabled()
+    hint = (agent_tools.GITHUB_HINT.format(repo=repo) if github else "") + (agent_tools.ISSUES_HINT.format(repo=repo) if issues else "")
+    prompt = agent_tools.AGENT_PROMPT.format(github=hint)
     if coding and github:
         prompt += "\n\n" + coding_agent.CODING_PROMPT.format(repo=repo, max_files=coding_agent.MAX_FILES_CHANGED)
     model = get_model(system + "\n\n" + prompt)
@@ -448,7 +450,7 @@ def tool_loop(messages, attachments, system, enqueue, owner, coding=False):
         "thinking": lambda delta: enqueue("event", {"type": "thinking", "delta": delta}),
     }
     try:
-        text, run = agent_tools.run(env, build_contents(messages, attachments), agent_tools.default_tools(github is not None),
+        text, run = agent_tools.run(env, build_contents(messages, attachments), agent_tools.default_tools(github is not None, issues),
                                     coding_agent.default_tool_response)
     except coding_agent.CodingError as error:
         text, run = f"Stopped: {str(error)[:300]} No pull request was opened.", None
