@@ -9,6 +9,23 @@ Supabase provides Google-backed accounts, device logout, the authoritative serve
 3. In Authentication → URL Configuration, review Site URL and the allowed redirect URLs. The removed web client used `https://YOUR-SITE/profile.html` (and the web Google OAuth flow used `/api/account/oauth/callback`); neither page exists any more, so remove those redirect entries. The Android app does not consume confirmation or redirect links (native Google sign-in needs none). Set Site URL to an HTTPS page you control (for example your backend origin); the confirmation itself succeeds regardless of where the browser lands afterwards.
 4. Run `supabase/migrations/202610040001_dua_cloud.sql` in the SQL editor. It creates the snapshot table, owner-only read policy and authenticated revision-checked write function. Do not disable RLS or grant direct snapshot writes to app users.
 
+## Anonymous access smoke check
+
+Use Node 24+ from `web/` with `SUPABASE_URL` and `SUPABASE_ANON_KEY` (or `SUPABASE_PUBLISHABLE_KEY`) exported, then run `npm run verify:rls`. For an ignored local `.env` instead, run `node --env-file-if-exists=.env scripts/verify-rls.mjs`. Do not use a user access token, secret key or service-role key. The URL must be the project root, not `/rest/v1/`. Missing credentials print a helpful SKIP and exit 0; configuration, network and unverified access results exit 1. The script never prints keys or returned row contents.
+
+The requested default table names are `chats`, `messages`, `projects`, and `memories`. **This repo stores those collections together in `public.dua_cloud_snapshots`, not four separate tables.** For the deployed schema from the migration above, run:
+
+```sh
+cd web
+npm run verify:rls -- --tables=dua_cloud_snapshots
+```
+
+Optional `--tables=name,name` checks other exposed public tables. A missing table/REST schema-cache error is UNVERIFIED, never a pass. This script does not create tables or change grants/policies.
+
+The checker first validates the public key through `/auth/v1/settings`, so a bad credential's 401 cannot make all tables look secure. Each anonymous GET uses `select=*&limit=1`: only an empty array or 401/403 passes. Each POST sends **an empty array, never a row**, with `Prefer: return=minimal,tx=rollback`. Only 401/403 proves INSERT admission is denied. A successful empty batch is inconclusive (and exits 1), because it cannot evaluate a row-level `WITH CHECK` expression. Constraint/validation errors also do not prove protection. No rows can be inserted even if rollback preferences are ignored or RLS is broken. Restrictive row policies that allow empty batches require separate SQL/advisor verification; this conservative script does not claim to audit policy definitions. An empty table returning `[]` also does not, by itself, prove RLS is enabled.
+
+The credential-free backend test suite verifies these outcomes with mocked responses. Live database verification is a separate operator check, not part of PR CI.
+
 ## 1b. Stored files bucket (Phase 2: uploads, PDFs, spreadsheets, audio)
 
 Run `supabase/migrations/202610080001_dua_files_storage.sql` once (SQL editor → New query → paste → Run, or `supabase db push` from a linked CLI project). It:

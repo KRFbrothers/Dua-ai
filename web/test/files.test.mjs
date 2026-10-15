@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import * as XLSX from 'xlsx';
+import { makeSpreadsheet } from './spreadsheet-fixtures.mjs';
 import { handleFiles, validateUploadRequest, filesConfiguration } from '../src/core/files.mjs';
 import { storedType, ownsPath, validFileRef } from '../src/core/file-types.mjs';
 import { storageConfig } from '../src/core/storage.mjs';
@@ -121,12 +121,10 @@ test('service handler routes /api/files/* and rejects cross-origin calls', async
 test('spreadsheets become compact CSV with row/column caps and truncation notes', () => {
   const rows = [Array.from({ length: 50 }, (_, index) => 'col' + index)];
   for (let index = 0; index < 400; index++) rows.push(Array.from({ length: 50 }, (_, col) => index * col));
-  const book = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(book, XLSX.utils.aoa_to_sheet(rows), 'Big');
-  XLSX.utils.book_append_sheet(book, XLSX.utils.aoa_to_sheet([['Name', 'Note'], ['Ali', 'says "hi", ok'], ['Sara', 'line\nbreak']]), 'Small');
+  const book = [{ name: 'Big', rows }, { name: 'Small', rows: [['Name', 'Note'], ['Ali', 'says "hi", ok'], ['Sara', 'line\nbreak']] }];
   const limits = sheetLimits({ DUA_SHEET_MAX_ROWS: '100', DUA_SHEET_MAX_COLS: '10' });
   for (const bookType of ['xlsx', 'biff8', 'ods']) {
-    const result = spreadsheetToText(XLSX.write(book, { type: 'buffer', bookType }), { name: 'data.' + bookType, limits });
+    const result = spreadsheetToText(makeSpreadsheet(book, bookType), { name: 'data.' + bookType, limits });
     assert.equal(result.truncated, true);
     assert.deepEqual(result.sheets[0], { name: 'Big', rows: 401, cols: 50, shownRows: 100, shownCols: 10 });
     assert.match(result.text, /Sheet "Big" \(401 rows × 50 columns; showing the first 100 of 401 rows, showing the first 10 of 50 columns\):\ncol0,col1,col2,col3,col4,col5,col6,col7,col8,col9\n/);
@@ -135,7 +133,7 @@ test('spreadsheets become compact CSV with row/column caps and truncation notes'
   const csv = spreadsheetToText(Buffer.from('\uFEFFdate,amount\n2026-01-01,5\n2026-01-02,"1,200"\n'), { name: 'a.csv', mimeType: 'text/csv' });
   assert.equal(csv.truncated, false);
   assert.match(csv.text, /date,amount\n2026-01-01,5\n2026-01-02,"1,200"$/);
-  const tight = spreadsheetToText(XLSX.write(book, { type: 'buffer', bookType: 'xlsx' }), { name: 'x.xlsx', limits: { ...limits, chars: 2000 } });
+  const tight = spreadsheetToText(makeSpreadsheet(book), { name: 'x.xlsx', limits: { ...limits, chars: 2000 } });
   assert.ok(tight.text.length < 2600);
   assert.match(tight.text, /sheet truncated to fit the size limit/);
 });
