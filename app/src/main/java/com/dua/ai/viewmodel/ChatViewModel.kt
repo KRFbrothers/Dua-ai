@@ -1227,6 +1227,30 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _draft = MutableStateFlow("")
     val draft: StateFlow<String> = _draft.asStateFlow()
+    // Edit a sent message (ChatGPT-style): the composer holds the edited text; sending replaces that message and every later turn.
+    private val _editingId = MutableStateFlow<String?>(null)
+    val editingId: StateFlow<String?> = _editingId.asStateFlow()
+    fun startEdit(messageId: String) {
+        if (_isTyping.value) return
+        val message = _messages.value.firstOrNull { it.id == messageId } ?: return
+        if (!com.dua.ai.model.MessageEdits.editable(message)) { _error.value = "Messages with files cannot be edited. Send a new message instead."; return }
+        _editingId.value = messageId
+        _draft.value = message.text
+        _error.value = null
+    }
+    fun cancelEdit() { if (_editingId.value != null) { _editingId.value = null; _draft.value = "" } }
+    /** Applies a pending edit: drops the edited message and later turns. Returns true when an edit was applied. */
+    private fun applyEdit(): Boolean {
+        val id = _editingId.value ?: return false
+        _editingId.value = null
+        val kept = com.dua.ai.model.MessageEdits.keptBefore(_messages.value, id) ?: return false
+        com.dua.ai.model.MessageEdits.removedIds(_messages.value, id).forEach { removed ->
+            replyWebModes.remove(removed); replyReasoning.remove(removed); replyAgent.remove(removed); replyCode.remove(removed); replyBuild.remove(removed); replyXSearch.remove(removed)
+        }
+        _messages.value = kept
+        _summary.value = com.dua.ai.model.ContextWindow.validSummary(kept, _summary.value)
+        return true
+    }
     private var historyReadable = true
     private val _projectId = MutableStateFlow(com.dua.ai.projects.ProjectCodec.PERSONAL)
     val projectId = _projectId.asStateFlow()
@@ -1886,8 +1910,10 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         if (_preparingFiles.value) return
         val requestProjectId = _projectId.value
         projectUnavailable()?.let { _error.value = it; return }
+        if (_imagine.value && _editingId.value != null) { _error.value = "Turn off Imagine to resend an edited message."; return }
         if (_imagine.value) { sendImagine(userText); return }
         val storedFiles = _uploads.value.filter { it.state == PendingUpload.DONE }.mapNotNull { it.ref }
+        if (_editingId.value != null && (_attachments.value.isNotEmpty() || storedFiles.isNotEmpty())) { _error.value = "Edited messages are text only. Remove the attachments or cancel editing."; return }
         if ((userText.isBlank() && _attachments.value.isEmpty() && storedFiles.isEmpty()) || _isTyping.value || _readingFiles.value) return
         if (_uploads.value.any { it.uploading } || _recordingSince.value != null) { _error.value = "Wait for uploads to finish, or remove them."; return }
         _error.value = null
@@ -1928,6 +1954,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             _error.value = "Cloud Run cannot read stored file references. Remove these files and select them again for inline chat (2 MB total); use CSV for spreadsheets."
             return
         }
+        // An edit replaces the edited message and later turns; the server copy is refreshed by the normal chat sync.
+        val edited = applyEdit()
         val userMessage = ChatMessage(text = text, isUser = true, model = responseModel, attachmentText = fileText, files = storedFiles,
             inlineAttachments = if (separateChatEngine) files else emptyList())
         val sentPaths = storedFiles.map { it.path }.toSet()
@@ -1936,7 +1964,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             build = requestBuild?.let { com.dua.ai.model.BuildInfo(it) })
         val request = requestTurns(_messages.value + userMessage, _messages.value.takeLast(38) + userMessage, inlineFiles = files.isNotEmpty() || (separateChatEngine && localSettings.value.projects.find { it.id == _projectId.value }?.sources?.isNotEmpty() == true))
         val persistenceBase = _messages.value.toList()
-        val persistenceOwner = account.state.value.user?.id.takeIf { _integrations.value.serverRepliesEnabled && !separateChatEngine }
+        // Server reply saving appends to the stored conversation, so an edited (shortened) conversation skips it and syncs as a snapshot.
+        val persistenceOwner = account.state.value.user?.id.takeIf { _integrations.value.serverRepliesEnabled && !separateChatEngine && !edited }
         val currentGeneration = generation
         replyWebModes[reply.id] = requestWebMode
         replyXSearch[reply.id] = requestXSearch

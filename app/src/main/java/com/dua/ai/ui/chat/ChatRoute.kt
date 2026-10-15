@@ -41,6 +41,7 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
     val preferences by viewModel.localSettings.collectAsState()
     val chatId by viewModel.activeChatId.collectAsState()
     val draft by viewModel.draft.collectAsState()
+    val editingId by viewModel.editingId.collectAsState()
     val savedChats by viewModel.savedChats.collectAsState()
     val projectId by viewModel.projectId.collectAsState()
     val projectNotice by viewModel.projectNotice.collectAsState()
@@ -116,7 +117,7 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
     val state = ChatUiState(
         profileName = account.user?.displayName.orEmpty().ifBlank { account.user?.email.orEmpty() },
         profilePhotoUrl = account.user?.avatarUrl.orEmpty(),
-        chatId = chatId, messages = messages, draft = draft, typing = typing, error = error, model = model,
+        chatId = chatId, messages = messages, draft = draft, editingId = editingId?.takeIf { id -> messages.any { it.id == id } }, typing = typing, error = error, model = model,
         feature = feature, homeTab = homeTab,
         providers = integrations.providers, webMode = webMode, reasoning = reasoning,
         webSearchConfigured = integrations.searchAvailable(model), pageReadingAvailable = integrations.pageReadingAvailable,
@@ -176,6 +177,8 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
             },
             onStop = { pulse(); viewModel.stopReply() },
             onRetry = { id -> voice.stopAll(); viewModel.retryResponse(id) },
+            onEditMessage = viewModel::startEdit,
+            onCancelEdit = viewModel::cancelEdit,
             retryWebMode = viewModel::replyWebMode,
             onSpeak = { message -> voice.toggle(message, viewModel.localSettings.value.generatedVoice) },
             onStopSpeech = voice::stopAll,

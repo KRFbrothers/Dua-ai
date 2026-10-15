@@ -61,6 +61,10 @@ object ChatTheme {
 
 /** Reference sizes: list padding 16 dp (+8 dp outer column top), 12 dp list padding, 14 dp between messages. */
 object ChatSizes {
+    /** Blinking dot after a streaming reply. */
+    val streamingCursor = 10.dp
+    const val streamingCursorBlinkMs = 530
+    const val streamingFadeInMs = 180
     val listPaddingH = 16.dp
     val listPaddingTop = 20.dp
     val listPaddingBottom = 12.dp

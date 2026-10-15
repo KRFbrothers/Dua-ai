@@ -1,5 +1,13 @@
 package com.dua.ai.ui.chat
 
+import androidx.compose.ui.semantics.semantics
+
+import androidx.compose.ui.semantics.liveRegion
+
+import androidx.compose.ui.semantics.LiveRegionMode
+
+import androidx.compose.foundation.layout.heightIn
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
@@ -97,6 +105,7 @@ internal fun highlightDiff(code: String, colors: DuaColors): AnnotatedString {
 fun CodeBlock(code: String, language: String?, modifier: Modifier = Modifier) {
     val colors = DuaTheme.colors
     val clipboard = LocalClipboardManager.current
+    val haptics = androidx.compose.ui.platform.LocalHapticFeedback.current
     var copied by remember(code) { mutableStateOf(false) }
     LaunchedEffect(copied) { if (copied) { delay(2000); copied = false } }
     val text = rememberHighlightedCode(code.trimEnd('\n'), language, colors)
@@ -106,7 +115,8 @@ fun CodeBlock(code: String, language: String?, modifier: Modifier = Modifier) {
             Row(Modifier.fillMaxWidth().background(colors.codeHeader).padding(start = Spacing.md), verticalAlignment = Alignment.CenterVertically) {
                 Text(language?.trim()?.takeIf { it.isNotEmpty() } ?: "code", style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                TextButton(onClick = { clipboard.setText(AnnotatedString(code)); copied = true }) {
+                TextButton(onClick = { clipboard.setText(AnnotatedString(code)); haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress); copied = true },
+                    modifier = Modifier.heightIn(min = Sizes.touchTarget).semantics { liveRegion = LiveRegionMode.Polite }) {
                     Icon(if (copied) Icons.Outlined.Check else Icons.Outlined.ContentCopy, if (copied) "Code copied" else "Copy code",
                         tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(Sizes.iconTiny + 2.dp))
                     Text(if (copied) "Copied" else "Copy", modifier = Modifier.padding(start = Spacing.xs), style = MaterialTheme.typography.labelMedium)

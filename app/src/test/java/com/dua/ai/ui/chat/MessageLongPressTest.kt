@@ -55,6 +55,7 @@ class MessageLongPressTest(private val dark: Boolean) {
     private val prompt = ChatMessage(id = "prompt", text = "A question", isUser = true)
     private val state = mutableStateOf(ChatUiState(chatId = "chat", messages = listOf(prompt, old, latest)))
     private val haptics = mutableListOf<ChatHaptic>()
+    private val edits = mutableListOf<String>()
     private val retries = mutableListOf<String>()
     private val spoken = mutableListOf<String>()
     private lateinit var clipboard: ClipboardManager
@@ -67,7 +68,7 @@ class MessageLongPressTest(private val dark: Boolean) {
             CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, fontScale), LocalTextToolbar provides textToolbar) {
                 DuaTheme(LocalPreferences(theme = if (dark) "dark" else "light")) {
                     Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-                        MessageList(state.value, ChatActions(onRetry = { retries += it }, onSpeak = { spoken += it.id }, haptic = { haptics += it }), rememberLazyListState())
+                        MessageList(state.value, ChatActions(onRetry = { retries += it }, onSpeak = { spoken += it.id }, haptic = { haptics += it }, onEditMessage = { edits += it }), rememberLazyListState())
                     }
                 }
             }
@@ -111,15 +112,24 @@ class MessageLongPressTest(private val dark: Boolean) {
         compose.onNodeWithTag("message-actions-sheet").assertDoesNotExist()
     }
 
-    @Test fun userLongPressShowsOnlyCopyShareAndPreservesFullPrompt() {
+    @Test fun userLongPressShowsCopyEditShareAndPreservesFullPrompt() {
         show()
         compose.onNode(SemanticsMatcher.keyIsDefined(SemanticsActions.OnLongClick) and hasAnyAncestor(hasTestTag("message-prompt")))
             .performSemanticsAction(SemanticsActions.OnLongClick) { assertTrue(it()) }
         sheetAction("retry").assertDoesNotExist(); sheetAction("speak").assertDoesNotExist()
-        compose.onNodeWithText("Edit").assertDoesNotExist()
+        sheetAction("edit").assertIsEnabled().assertContentDescriptionEquals("Edit message and resend")
         sheetAction("share").assertIsEnabled()
         sheetAction("copy").assertContentDescriptionEquals("Copy message").performClick()
         compose.runOnIdle { assertEquals(prompt.text, clipboard.getText()?.text); assertTrue(haptics.isEmpty()) }
+    }
+
+    @Test fun userEditActionStartsEditing() {
+        show()
+        compose.onNode(SemanticsMatcher.keyIsDefined(SemanticsActions.OnLongClick) and hasAnyAncestor(hasTestTag("message-prompt")))
+            .performSemanticsAction(SemanticsActions.OnLongClick) { assertTrue(it()) }
+        sheetAction("edit").performClick()
+        compose.runOnIdle { assertEquals(listOf(prompt.id), edits) }
+        compose.onNodeWithTag("message-actions-sheet").assertDoesNotExist()
     }
 
     @Test @Config(shadows = [SelectionMagnifierShadow::class])
