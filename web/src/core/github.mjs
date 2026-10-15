@@ -1,7 +1,7 @@
 // Read-only GitHub REST client for the personal connector and Build mode (Phase 5B).
 // The token (GITHUB_CONNECTOR_TOKEN) stays on this server. Every request is a GET to an allowlisted
 // api.github.com path, and nothing in this module can send any other method: Dua never writes to GitHub.
-import { validRepository, normalizeRepositoryReadPath, MAX_REPOSITORY_PATH_CHARS, GITHUB_REPOSITORY_API_PATTERN as repoPath } from './github-validation.mjs';
+import { validRepository, validGitHubApiPath, validRepositorySearchQuery, normalizeRepositoryReadPath, MAX_REPOSITORY_PATH_CHARS, GITHUB_REPOSITORY_API_PATTERN as repoPath } from './github-validation.mjs';
 export { REPOSITORY } from './github-validation.mjs';
 const API = 'https://api.github.com';
 /** The only requests this client can make. Anything else is refused before reaching the network. */
@@ -47,7 +47,9 @@ export async function boundedBytes(response, limit) {
 
 /** GET an allowlisted path and parse bounded JSON. Errors are allowlisted messages; GitHub's text never leaves the server. */
 export async function githubGet(path, { env, fetcher = fetch, signal, maxBytes = 1024 * 1024 } = {}) {
-  if (typeof path !== 'string' || !ALLOWED_GITHUB_PATHS.some(pattern => pattern.test(path))) throw new GitHubError('This GitHub request is not allowed.', 400);
+  if (!validGitHubApiPath(path) || !ALLOWED_GITHUB_PATHS.some(pattern => pattern.test(path)) ||
+      (path.startsWith('/search/code?') && !validRepositorySearchQuery(new URLSearchParams(path.split('?')[1]).get('q'))))
+    throw new GitHubError('This GitHub request is not allowed.', 400);
   if (!githubReady(env)) throw new GitHubError(GITHUB_SETUP_HINT, 503);
   const response = await fetcher(API + path, {
     method: 'GET', redirect: 'error', signal: AbortSignal.any([signal || new AbortController().signal, AbortSignal.timeout(15000)]),
@@ -130,8 +132,11 @@ export async function searchRepository(repository, query, options) {
   if (!validRepository(repository)) throw new GitHubError(GITHUB_REPOSITORY_HINT, 400);
   const text = typeof query === 'string' ? query.replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\b(?:repo|org|user):\S*/gi, ' ').replace(/\s+/g, ' ').trim().slice(0, 200) : '';
   if (!text) throw new GitHubError('Enter something to search for.', 400);
+  if (!validRepositorySearchQuery(`${text} repo:${repository}`)) throw new GitHubError('Use plain search terms without quotes, parentheses, backslashes or OR/NOT operators.', 400);
   const q = encodeURIComponent(`${text} repo:${repository}`).replace(/[!'()*]/g, c => '%' + c.charCodeAt(0).toString(16).toUpperCase());
   const result = await githubGet(`/search/code?q=${q}&per_page=20`, { ...options, maxBytes: 2 * 1024 * 1024 });
   const items = Array.isArray(result?.items) ? result.items : [];
+  if (items.some(item => !validRepository(item?.repository?.full_name) || item.repository.full_name.toLowerCase() !== repository.toLowerCase() || typeof item.path !== 'string' || normalizeRepositoryReadPath(item.path) !== item.path))
+    throw new GitHubError('GitHub returned search results outside the selected repository or with invalid paths.', 502);
   return { total: Number.isSafeInteger(result?.total_count) ? result.total_count : items.length, results: items.slice(0, 20).filter(item => typeof item?.path === 'string').map(item => ({ path: item.path })) };
 }

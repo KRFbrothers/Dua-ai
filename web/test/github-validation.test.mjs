@@ -2,10 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { validRepository, validRepositoryPath, normalizeRepositoryReadPath, repositoryWritePathIssue } from '../src/core/github-validation.mjs';
-import { encodeRepoPath, repositoryInfo, repositoryFile, listRepositories, GitHubError } from '../src/core/github.mjs';
-import { repoApi, GitHubWriteError } from '../src/core/github-write.mjs';
+import { encodeRepoPath, repositoryInfo, repositoryFile, listRepositories, githubGet, searchRepository, GitHubError } from '../src/core/github.mjs';
+import { repoApi, githubWrite, GitHubWriteError } from '../src/core/github-write.mjs';
 import { validateChat } from '../src/core/providers.mjs';
-import { checkChanges, pathProblem, prLimits, validatePrRequest } from '../src/core/build-pr.mjs';
+import { checkChanges, pathProblem, prLimits, proposeChanges, validatePrRequest } from '../src/core/build-pr.mjs';
 import { validateCloudSnapshot } from '../src/core/cloud-snapshot.mjs';
 
 const fixture = JSON.parse(readFileSync(new URL('../../app/src/test/resources/cloud-snapshot-v1.json', import.meta.url), 'utf8'));
@@ -94,4 +94,83 @@ test('malformed GitHub repository names fail as safe upstream errors, not coerce
   for (const name of [['owner/repo'], { toString: 'owner/repo' }, 12]) {
     await assert.rejects(listRepositories({ env: { ENABLE_GITHUB_CONNECTOR: '1', GITHUB_CONNECTOR_TOKEN: 'fake-token' }, fetcher: async () => Response.json([{ full_name: name }]) }), error => error instanceof GitHubError && error.status === 502);
   }
+});
+
+const boundaryEnv = { ENABLE_GITHUB_CONNECTOR: '1', GITHUB_CONNECTOR_TOKEN: 'fake-read', GITHUB_BUILD_WRITE_TOKEN: 'fake-write' };
+const noNetwork = async () => { assert.fail('Rejected input must not reach GitHub'); };
+
+test('repository terminators and controls are rejected at all entry points', async () => {
+  for (const name of ['owner/.', 'owner/..', 'owner/repo\n', 'owner/repo\r', 'owner/repo\t']) {
+    assert.equal(validRepository(name), false);
+    assert.throws(() => repoApi(name), /owner\/name/);
+    await assert.rejects(repositoryInfo(name, { env: boundaryEnv, fetcher: noNetwork }), { status: 400 });
+    assert.equal(validateChat({ model: 'Dua', mode: 'build', repository: name, messages: [{ role: 'user', text: 'hi' }] })[1], 400);
+  }
+  for (const path of ['README.md\n', '\tREADME.md', 'README.md\r', 'src/\ud800.kt']) {
+    assert.equal(encodeRepoPath(path), null);
+    await assert.rejects(repositoryFile('owner/repo', path, { env: boundaryEnv, fetcher: noNetwork }), { status: 400 });
+    const result = proposeChanges({ title: 'Change', changes: [{ path, action: 'create', content: 'x' }] }, { repository: 'owner/repo', branch: 'main', read: new Map(), tree: { files: [] }, limits: prLimits({}) });
+    assert.equal(result.proposal, undefined);
+    assert.match(result.response.error, /relative to the repository root/);
+  }
+});
+
+test('raw and encoded URL normalization cannot bypass read/write allowlists', async () => {
+  for (const path of [
+    '/repos/owner/repo\n', '/repos/owner/../repo', '/repos/owner/.',
+    '/repos/owner/repo/contents/../private', '/repos/owner/repo/contents/%2e%2e/private',
+    '/repos/owner/repo/contents/a%2Fb', '/repos/owner/repo/contents/a%5cb',
+    '/repos/owner/repo/contents/a%00b', '/repos/owner/repo/contents/%zz',
+    '/repos/owner/repo/contents/a\n', '/repos/owner/repo/contents/a#fragment'
+  ]) {
+    await assert.rejects(githubGet(path, { env: boundaryEnv, fetcher: noNetwork }), { status: 400 }, path);
+  }
+  for (const path of ['/repos/owner/repo/git/blobs\n', '/repos/owner/../git/blobs']) {
+    await assert.rejects(githubWrite('POST', path, { env: boundaryEnv, fetcher: noNetwork, body: {} }), { status: 400 });
+  }
+  for (const branch of ['..', '%2e%2e', 'a%2fb', 'a%5cb', 'a%0ab']) {
+    await assert.rejects(githubWrite('GET', '/repos/owner/repo/git/ref/heads/' + branch, { env: boundaryEnv, fetcher: noNetwork }), { status: 400 });
+  }
+  const calls = [];
+  await repositoryFile('owner/repo', 'docs/%2e%2e/a b.md', { env: boundaryEnv, fetcher: async url => {
+    calls.push(url);
+    return Response.json({ type: 'file', encoding: 'base64', content: 'b2s=' });
+  } });
+  assert.deepEqual(calls, ['https://api.github.com/repos/owner/repo/contents/docs/%252e%252e/a%20b.md']);
+});
+
+test('low-level git tree writes cannot bypass protected paths or create symlinks/submodules', async () => {
+  for (const path of ['.github/workflows/ci.yml', '.GitHub/Workflows/ci.yml', 'nested/.GiT/config', '.GitModules', 'a/../b', 'a//b', 'a\n']) {
+    await assert.rejects(githubWrite('POST', '/repos/owner/repo/git/trees', { env: boundaryEnv, fetcher: noNetwork, body: { tree: [{ path, type: 'blob', mode: '100644', sha: 'abc' }] } }), { status: 400 });
+  }
+  for (const [type, mode] of [['blob', '120000'], ['commit', '160000'], ['tree', '040000']]) {
+    await assert.rejects(githubWrite('POST', '/repos/owner/repo/git/trees', { env: boundaryEnv, fetcher: noNetwork, body: { tree: [{ path: 'safe', type, mode, sha: 'abc' }] } }), { status: 400 });
+  }
+  let writes = 0;
+  for (const mode of ['100644', '100755']) {
+    await githubWrite('POST', '/repos/owner/repo/git/trees', { env: boundaryEnv, fetcher: async (_url, options) => {
+      assert.equal(options.method, 'POST');
+      assert.equal(options.redirect, 'error');
+      writes++;
+      return Response.json({ sha: 'tree' });
+    }, body: { tree: [{ path: 'src/file.kt', type: 'blob', mode, sha: null }] } });
+  }
+  assert.equal(writes, 2);
+});
+
+test('search is scoped before HTTP and rejects mismatched/malformed repository results', async () => {
+  for (const q of ['term', 'term repo:owner/repo repo:other/repo', 'term repo:owner/repo org:other', 'term OR repo:owner/repo', '"term repo:owner/repo', 'term -repo:owner/repo', '(term) repo:owner/repo']) {
+    await assert.rejects(githubGet('/search/code?q=' + encodeURIComponent(q) + '&per_page=20', { env: boundaryEnv, fetcher: noNetwork }), { status: 400 });
+  }
+  for (const query of ['term OR other', '"unterminated', 'term NOT other', '(term)', 'term\\other']) {
+    await assert.rejects(searchRepository('owner/repo', query, { env: boundaryEnv, fetcher: noNetwork }), { status: 400 });
+  }
+  for (const item of [null, { path: 'x' }, { path: 'x', repository: { full_name: 'other/repo' } }, { path: '../x', repository: { full_name: 'owner/repo' } }, { path: null, repository: { full_name: 'owner/repo' } }]) {
+    await assert.rejects(searchRepository('owner/repo', 'term', { env: boundaryEnv, fetcher: async () => Response.json({ items: [item] }) }), { status: 502 });
+  }
+  const result = await searchRepository('owner/repo', 'term repo:other/repo org:other user:other', { env: boundaryEnv, fetcher: async url => {
+    assert.equal(new URL(url).searchParams.get('q'), 'term repo:owner/repo');
+    return Response.json({ items: Array.from({ length: 25 }, (_, i) => ({ path: `file${i}.kt`, repository: { full_name: 'OWNER/REPO' } })) });
+  } });
+  assert.equal(result.results.length, 20);
 });

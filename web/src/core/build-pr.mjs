@@ -8,7 +8,7 @@ import { randomUUID } from 'node:crypto';
 import { envInteger } from './adapters.mjs';
 import { readJsonLimited } from './limited-json.mjs';
 import { GITHUB_REPOSITORY_HINT, GITHUB_PATH_HINT } from './github.mjs';
-import { validRepository, repositoryWritePathIssue } from './github-validation.mjs';
+import { validRepository, normalizeRepositoryReadPath, repositoryWritePathIssue } from './github-validation.mjs';
 import { encodeBranch, githubWrite, GitHubWriteError, repoApi, writeToken } from './github-write.mjs';
 import { resolveOwner, StorageError } from './storage.mjs';
 
@@ -227,7 +227,7 @@ export function proposeChanges(args, { repository, branch, read, tree, limits, n
     const title = cleanText(args?.title, MAX_TITLE).replace(/\s+/g, ' ');
     if (!title) throw new BuildPrError('Give the pull request a short title.');
     const summary = cleanText(args?.summary, MAX_SUMMARY);
-    const raw = Array.isArray(args?.changes) ? args.changes.map(change => change && typeof change === 'object' ? { path: typeof change.path === 'string' ? change.path.trim().replace(/^\.\//, '') : change.path, action: change.action,
+    const raw = Array.isArray(args?.changes) ? args.changes.map(change => change && typeof change === 'object' ? { path: normalizeRepositoryReadPath(change.path) ?? change.path, action: change.action,
       ...(change.content !== undefined && change.content !== null && change.action !== 'delete' ? { content: change.content } : {}) } : change) : args?.changes;
     const changes = checkChanges(raw, limits);
     const known = new Set(tree.files.map(file => file.path));

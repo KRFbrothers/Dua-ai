@@ -108,6 +108,14 @@ blocks every other GitHub request (allowlist in `coding_agent.py`). Repository: 
 `KRFbrothers/Dua-ai`). Caps: 15 tool steps, 40 files read, 10 files changed, 200 KB per file, 10 minutes.
 Without `GITHUB_TOKEN` it just says coding is not set up yet.
 
+Repository/path checks run at both the tool/proposal and HTTP client boundaries. Reads and writes
+reject traversal, empty/dot path segments, controls and case-insensitive `.git` segments. Writes also
+block root `.gitmodules` and all root `.github/` files; tree entries must be regular files, not symlinks
+or submodules. Code search accepts plain terms, replaces caller-supplied repository/org/user scopes
+with the configured repository, rejects quotes/parentheses/backslashes and OR/NOT operators, and
+verifies each result belongs to that repository. See [GitHub validation policy](../docs/GITHUB_VALIDATION.md)
+for platform-specific limits and mocked regression tests.
+
 **1. Create the GitHub token** (on github.com, signed in as KRFbrothers)
 1. Profile picture → **Settings** → **Developer settings** → **Personal access tokens** → **Fine-grained tokens** → **Generate new token**.
 2. Name: `dua-agent`. Expiration: 90 days (make a new one when it expires).

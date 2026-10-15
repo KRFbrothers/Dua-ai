@@ -4,18 +4,22 @@ The Vercel backend's pure policy lives in [github-validation.mjs](../web/src/cor
 
 ## Call sites and policies
 
-| Input | Shared helper | Preserved behavior |
+| Input | Shared helper | Policy |
 | --- | --- | --- |
-| Repository names | `validRepository` | String `owner/name`, using the existing protocol character/length pattern. Used by chat/PR validation, read/write clients, configured PR repository lists and saved metadata. `REPOSITORY_NAME_PATTERN` also supplies the repository fragment in both HTTP clients' allowlists. |
-| Connector reads | `normalizeRepositoryReadPath` | Trim whitespace, strip one leading `./`, reject absolute paths, backslashes, control characters, empty segments and `.` / `..` segments, then escape each segment for the GitHub URL. A literal `%2e%2e` filename is escaped again rather than decoded into traversal. |
+| Repository names | `validRepository` | String `owner/name`, using the existing protocol character/length pattern, with strict end-of-input matching; reject `.` / `..` repository names and trailing controls. Used by chat/PR validation, read/write clients, configured PR repository lists and saved metadata. `REPOSITORY_NAME_PATTERN` also supplies the repository fragment in both HTTP clients' allowlists. |
+| Connector / Build tool reads | `normalizeRepositoryReadPath` | Reject raw controls before trimming whitespace, strip one leading `./`, reject absolute paths, backslashes, malformed Unicode, empty segments and `.` / `..` segments, then escape each segment for the GitHub URL. A literal `%2e%2e` filename is escaped again rather than decoded into traversal. Build tools validate before cache lookup; a leading `/` is rejected rather than removed. |
 | Saved read metadata / approved PR paths | `validRepositoryPath` | Must already be canonical: no trimming or leading `./` normalization. Also reject an initial drive prefix such as `C:`. The read encoder historically treats such a string as a literal GitHub name; it never resolves it against a local filesystem. |
 | Live and saved write proposals | `repositoryWritePathIssue` | Apply canonical-path validation plus case-insensitive protection for any `.git` segment, root `.gitmodules` and root `.github/workflows/`. Issue categories become recovery copy in `build-pr.mjs`; saved snapshots reject them outright. Read metadata may still describe protected files. |
+| Raw HTTP request paths | `validGitHubApiPath` | Before either client's allowlist, reject paths that URL parsing would normalize, fragments, malformed percent escapes, encoded separators/controls and dot segments. This does not decode literal percent sequences twice. |
+| Code search | `validRepositorySearchQuery` | Exactly one positive `repo:owner/name` qualifier; no `org:` / `user:` scope or quotes, parentheses, backslashes and OR/NOT operators that can obscure the scope. High-level search removes caller-supplied scopes before appending the selected repository. Every result must identify that repository (case-insensitive) and have a valid relative path before any paths are returned; results remain capped at 20. |
 
-All repository file paths share the existing **400 UTF-16 code-unit** cap (`MAX_REPOSITORY_PATH_CHARS`) before URL encoding. HTTP allowlists and response bounds remain additional limits. Folder-prefix filtering in Build chat is not a file write or a filesystem lookup. Model-proposed changes retain their existing normalization before passing through strict write validation; an owner-approved PR request is validated without normalization.
+All Vercel repository file paths share the existing **400 UTF-16 code-unit** cap (`MAX_REPOSITORY_PATH_CHARS`) before URL encoding. HTTP allowlists and response bounds remain additional limits. Folder-prefix filtering in Build chat is not a file write or a filesystem lookup. Model-proposed changes use the read helper's normalization before strict write validation; controls cannot be trimmed into acceptable proposals. An owner-approved PR request is validated without normalization.
+
+The write client's `POST /git/trees` boundary independently checks every entry's protected path, blob type and regular-file mode (`100644` / `100755`). Direct client calls cannot bypass proposal validation to write workflows, Git internals, symlinks or submodules. Regular-file updates and deletions retain their existing behavior. Method allowlists, tokens, owner confirmation and PR flow remain separate checks.
 
 Consumers: [read client](../web/src/core/github.mjs), [write client](../web/src/core/github-write.mjs), [Build chat](../web/src/core/build-chat.mjs), [PR validation](../web/src/core/build-pr.mjs), and [snapshot validation](../web/src/core/cloud-snapshot.mjs). Existing `github.mjs` / `build-chat.mjs` exports remain available for callers.
 
-Android and the Python Cloud Run agent have their own runtime implementations. This refactor centralizes the Vercel policies without replacing those platform contracts or broadening Cloud Run permissions. See [architecture boundaries](ARCHITECTURE.md#github-permission-boundaries) before changing either backend.
+Android and the Python Cloud Run agent have their own runtime implementations. Cloud Run's [coding_agent.py](../google-cloud-backend/coding_agent.py) validates its configured repository at construction, uses full-match request/path checks, and blocks case-insensitive `.git` segments on reads and writes. Its write policy also blocks root `.gitmodules` and all root `.github/` files (a deliberately stricter policy than Vercel's workflow-only restriction). Its existing 300-character ASCII path cap and rejection of any `..` substring remain. Both direct PR creation and the low-level tree request check protected paths; code search enforces one selected repository and validates result metadata. See [architecture boundaries](ARCHITECTURE.md#github-permission-boundaries) before changing either backend.
 
 ## Related size limits
 
@@ -40,5 +44,7 @@ Provider-specific and Cloud Run limits remain documented in [PROVIDERS.md](../PR
 node --test test/github-validation.test.mjs test/build-chat.test.mjs test/build-pr.test.mjs test/cloud-snapshot.test.mjs
 npm run test:ci
 ```
+
+From the repository root, `python -m pytest -q google-cloud-backend/tests` also covers direct client bypass attempts, scoped search, protected paths and the successful mocked coding-to-PR sequence. These tests do not write to GitHub or change deployed token permissions.
 
 When changing policy, test saved snapshots and live requests together. For user-facing recovery steps, see [GitHub troubleshooting](GITHUB_TROUBLESHOOTING.md).

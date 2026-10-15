@@ -6,8 +6,8 @@
 // GitHub: only the owner's Create PR tap (POST /api/build/pr) can, with a separate token. No command tool exists.
 import { envInteger, extractReply, historyTurns, maxOutputTokens } from './adapters.mjs';
 import { readJsonLimited } from './limited-json.mjs';
-import { githubReady, GitHubError, repositoryFile, repositoryInfo, repositoryTree, searchRepository } from './github.mjs';
-import { validRepository } from './github-validation.mjs';
+import { githubReady, GitHubError, GITHUB_PATH_HINT, repositoryFile, repositoryInfo, repositoryTree, searchRepository } from './github.mjs';
+import { validRepository, normalizeRepositoryReadPath } from './github-validation.mjs';
 export { validRepository } from './github-validation.mjs';
 import { GEMINI_SYSTEM_PROMPT } from './gemini.mjs';
 import { buildPrConfiguration, prAllowedFor, prLimits, proposeChanges, PROPOSE_DECLARATION } from './build-pr.mjs';
@@ -107,7 +107,8 @@ async function runTool(call, state, { repository, env, fetcher, signal, limits }
       return { files: matches.slice(0, MAX_LISTED).map(file => `${file.path} (${file.size} bytes)`), total: matches.length, ...(matches.length > MAX_LISTED ? { note: 'List cut; use a longer path_prefix.' } : {}) };
     }
     if (call.name === 'read_file') {
-      const path = typeof args.path === 'string' ? args.path.trim().replace(/^\.?\//, '') : '';
+      const path = normalizeRepositoryReadPath(args.path);
+      if (path === null) throw new GitHubError(GITHUB_PATH_HINT, 400);
       let file = state.cache.get(path);
       if (!file) {
         if (state.files.length >= limits.maxFiles) return { error: `File limit for this reply reached (${limits.maxFiles} files). Answer with what you have.` };

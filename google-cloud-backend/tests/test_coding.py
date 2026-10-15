@@ -40,7 +40,7 @@ class FakeOpener:
         elif path.endswith("/pulls"):
             out = {"number": 201, "html_url": f"https://github.com/{REPO}/pull/201"}
         else:
-            out = {"items": [{"path": "app/Main.kt"}]}
+            out = {"items": [{"path": "app/Main.kt", "repository": {"full_name": REPO}}]}
         return SimpleNamespace(read=lambda n=None: json.dumps(out).encode(), __enter__=None)
 
 
@@ -108,6 +108,87 @@ def test_change_validation_caps():
             ca.validate_changes([{"path": bad, "content": "x"}])
     with pytest.raises(ca.CodingError):
         ca.validate_changes([{"path": "big.kt", "content": "x" * (ca.MAX_FILE_BYTES + 1)}])
+
+
+@pytest.mark.parametrize("repo", ["owner/.", "owner/..", "owner/repo\n", "owner/repo\t", "owner/repo/extra", None, [REPO]])
+def test_invalid_repository_rejected_at_config_and_client_boundary(monkeypatch, repo):
+    opener = Opener()
+    with pytest.raises(ca.CodingError):
+        ca.GitHubClient("tok", repo, opener=opener)
+    assert opener.calls == []
+    if isinstance(repo, str):
+        monkeypatch.setenv("DUA_REPO", repo)
+        with pytest.raises(ca.CodingError):
+            ca.repo_name()
+
+
+@pytest.mark.parametrize("path", ["../x", "a/../b", "a//b", "a/./b", "a\n", "\ta", "a\r", "a\\b", ".GiT/config", "src/.git/config", ".", "a" * 301, None, ["a"]])
+def test_unsafe_reads_and_proposals_never_reach_github(path):
+    gh = client()
+    with pytest.raises(ca.CodingError):
+        gh.read(path)
+    with pytest.raises(ca.CodingError):
+        ca.validate_changes([{"path": path, "content": "x"}])
+    assert gh.opener.calls == []
+
+
+@pytest.mark.parametrize("path", [".github/workflows/ci.yml", ".GitHub/Workflows/ci.yml", ".GITHUB/CODEOWNERS", ".gitmodules", ".GitModules", "src/.GiT/config"])
+def test_protected_writes_cannot_bypass_proposals_via_client(path):
+    gh = client()
+    with pytest.raises(ca.CodingError):
+        gh.open_pull_request([{"path": path, "content": "x"}], "t", "d", "dua-agent/test")
+    with pytest.raises(ca.BlockedRequest):
+        gh.request("POST", f"/repos/{REPO}/git/trees", {"tree": [{"path": path, "type": "blob", "mode": "100644", "sha": "x"}]})
+    assert gh.opener.calls == []
+
+
+@pytest.mark.parametrize("type_,mode", [("blob", "120000"), ("commit", "160000"), ("tree", "040000")])
+def test_tree_writes_only_accept_regular_files(type_, mode):
+    gh = client()
+    with pytest.raises(ca.BlockedRequest):
+        gh.request("POST", f"/repos/{REPO}/git/trees", {"tree": [{"path": "safe", "type": type_, "mode": mode, "sha": "x"}]})
+    assert gh.opener.calls == []
+
+
+@pytest.mark.parametrize("suffix", ["", "../private", "%2e%2e/private", "a//b", "a/./b", "a\n", "a?ref=other", "a\\b", "src/.GiT/config"])
+def test_direct_read_requests_cannot_bypass_path_validation(suffix):
+    gh = client()
+    with pytest.raises(ca.BlockedRequest):
+        gh.request("GET", f"/repos/{REPO}/contents/{suffix}")
+    assert gh.opener.calls == []
+
+
+@pytest.mark.parametrize("query", ["term", f"term repo:{REPO} repo:other/repo", f"term repo:{REPO} org:other", f"term OR repo:{REPO}", f'"term repo:{REPO}', f"term -repo:{REPO}", f"(term) repo:{REPO}", f"term repo:{REPO}\n"])
+def test_direct_search_requires_exactly_one_unambiguous_repo_scope(query):
+    gh = client()
+    with pytest.raises(ca.BlockedRequest):
+        gh.request("GET", "/search/code", query={"q": query})
+    assert gh.opener.calls == []
+
+
+def test_search_sanitizes_scopes_and_checks_actual_result_repository():
+    gh = client()
+    assert gh.search("Theme repo:other/repo org:other user:other") == ["app/Main.kt"]
+    for query in ['"unterminated', "term OR other", "term NOT other", "(term)", "term\\other"]:
+        with pytest.raises(ca.CodingError):
+            gh.search(query)
+    for item in [None, {"path": "x"}, {"path": "x", "repository": {"full_name": "other/repo"}},
+                 {"path": "../x", "repository": {"full_name": REPO}}]:
+        gh.request = lambda *args, **kwargs: {"items": [item]}
+        with pytest.raises(ca.CodingError):
+            gh.search("term")
+    gh.request = lambda *args, **kwargs: {"items": [{"path": f"f{i}.kt", "repository": {"full_name": REPO.lower()}} for i in range(25)]}
+    assert len(gh.search("term")) == 20
+
+
+def test_normal_file_reads_and_proposals_still_work():
+    gh = client()
+    assert gh.read("docs/a b.md") == "fun main() {}"
+    assert gh.read(".github/workflows/checks.yml") == "fun main() {}"
+    assert ca.validate_changes([{"path": " app/Main.kt ", "content": "x"}]) == [{"path": "app/Main.kt", "content": "x"}]
+    for item in [None, "README.md", 12]:
+        with pytest.raises(ca.CodingError):
+            ca.validate_changes([item])
 
 
 class CodingModel:
