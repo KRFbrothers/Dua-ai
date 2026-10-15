@@ -58,6 +58,7 @@ class ExternalRoutingTest {
         compose.onNodeWithContentDescription("Message").assertIsFocused()
         compose.runOnIdle { assertEquals("Existing draft\n\nShared text", vm.draft.value); assertTrue(vm.messages.value.isEmpty()) }
         compose.runOnIdle { entry = ExternalEntry(action = EntryAction.Query) }
+        compose.waitForIdle()
         compose.waitUntil { consumed == 2 }
         compose.onNodeWithContentDescription("Message").assertIsFocused()
         compose.runOnIdle { assertEquals("Existing draft\n\nShared text", vm.draft.value) }
@@ -67,6 +68,8 @@ class ExternalRoutingTest {
         show(skip = false)
         compose.runOnIdle { assertEquals(DuaDestination.Onboarding.route, nav.currentDestination?.route); assertEquals(0, consumed); assertTrue(vm.draft.value.isEmpty()) }
         compose.onNodeWithText("Skip for now").performClick()
+        // Drain the Android looper and navigation transition before polling asynchronous dispatch.
+        compose.waitForIdle()
         compose.waitUntil(10000) { consumed == 1 }
         compose.runOnIdle { assertEquals("Held until welcome is done", vm.draft.value) }
     }
@@ -95,6 +98,7 @@ class ExternalRoutingTest {
         entry = ExternalEntry(action = EntryAction.Share, text = "Wait for import")
         show()
         compose.runOnIdle { assertEquals(0, consumed); assertTrue(vm.draft.value.isEmpty()); busy.value = false }
+        compose.waitForIdle()
         compose.waitUntil(10000) { consumed == 1 }
         compose.runOnIdle { assertEquals("Wait for import", vm.draft.value); busy.value = true; entry = ExternalEntry(action = EntryAction.Remember, text = "A note") }
         compose.onNodeWithContentDescription("Memory note").assertDoesNotExist()
