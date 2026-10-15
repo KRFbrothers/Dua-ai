@@ -20,6 +20,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.VolumeUp
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.StopCircle
@@ -128,6 +129,11 @@ internal fun MessageActionsSheet(message: ChatMessage, state: ChatUiState, actio
             SheetGroup {
             SheetMessageAction("copy", "Copy", if (assistant) "Copy response" else "Copy message", Icons.Outlined.ContentCopy, copyText.isNotBlank()) {
                 textActions.copy(); onDismiss()
+            }
+            if (!assistant) SheetDivider()
+            if (!assistant) SheetMessageAction("edit", "Edit", "Edit message and resend", Icons.Outlined.Edit,
+                !state.typing && com.dua.ai.model.MessageEdits.editable(message)) {
+                onDismiss(); actions.onEditMessage(message.id)
             }
             if (assistant) SheetDivider()
             if (assistant) SheetMessageAction("retry", "Retry", replyRetryDescription(actions.retryWebMode(message.id)), Icons.Outlined.Refresh, retryEnabled) {

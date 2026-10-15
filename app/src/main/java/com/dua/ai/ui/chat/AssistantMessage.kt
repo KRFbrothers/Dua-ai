@@ -56,7 +56,11 @@ fun AssistantMessage(
         // Run code: what the provider executed, collapsed above the answer (the answer explains the result).
         if (message.codeRuns.isNotEmpty()) CodeRuns(message.id, message.codeRuns, Modifier.padding(bottom = Spacing.sm), initiallyExpanded = codeExpanded, live = streaming)
         if (streaming && message.text.isEmpty() && message.thinking == null && message.codeRuns.isEmpty() && message.build == null) TypingIndicator(Modifier.heightIn(min = Sizes.touchTarget))
-        if (parts.body.isNotEmpty()) MarkdownMessage(parts.body)
+        if (parts.body.isNotEmpty()) {
+            // New replies fade in once; restored/finished replies render immediately.
+            if (streaming) FadeInOnce { MarkdownMessage(parts.body) } else MarkdownMessage(parts.body)
+        }
+        if (streaming && parts.body.isNotEmpty()) StreamingCursor()
         if (parts.sources.isNotEmpty() && !streaming) SourceChips(parts.sources, Modifier.padding(top = Spacing.md))
         // Build mode (Phase 5C): the proposed pull request, for review. Only its confirmed Create PR button writes to GitHub.
         if (!streaming) message.proposal?.let {
