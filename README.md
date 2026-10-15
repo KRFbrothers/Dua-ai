@@ -18,7 +18,7 @@ Dua is a personal, single-user app: it is built for its owner only and installed
 
 API keys and optional credentials remain server-side. Preparing a feature does not activate a provider or paid service. OpenAI key setup remains deferred. Background/realtime sync, model-based memory and other advanced integrations remain pending.
 
-For Vercel server reply saving, deploy the Vercel backend first, route chat to that backend, install the updated APK and refresh Feature setup. Existing cached conversations must match their server message history before a follow-up or regeneration; sync/review older or stopped offline turns first. Save conflicts and uncertain acknowledgements keep received text on the phone and require cloud review. The existing snapshot RPC/schema is reused; see [SUPABASE.md](SUPABASE.md#completed-reply-saving) for the contract and limits. Cloud Run does not implement this completed-reply saving contract. Imagine and live realtime voice retain their existing storage flows.
+For Node API server reply saving, deploy the Node API (dua-api) first, route chat to that backend, install the updated APK and refresh Feature setup. Existing cached conversations must match their server message history before a follow-up or regeneration; sync/review older or stopped offline turns first. Save conflicts and uncertain acknowledgements keep received text on the phone and require cloud review. The existing snapshot RPC/schema is reused; see [SUPABASE.md](SUPABASE.md#completed-reply-saving) for the contract and limits. Cloud Run does not implement this completed-reply saving contract. Imagine and live realtime voice retain their existing storage flows.
 
 ## How the pieces fit together
 
@@ -27,7 +27,7 @@ For a directory map, request traces, persistence contracts and GitHub permission
 | Layer | Entry points | Responsibility |
 | --- | --- | --- |
 | Android | [MainActivity.kt](app/src/main/java/com/dua/ai/MainActivity.kt), [ChatRoute.kt](app/src/main/java/com/dua/ai/ui/chat/ChatRoute.kt), [DuaApiClient.kt](app/src/main/java/com/dua/ai/network/DuaApiClient.kt) | Native Compose/Material 3 UI, ViewModels, account session, composer/attachments, disposable offline cache and foreground sync. |
-| Vercel API (`web/`) | [API routes](web/api), [vercel-handler.mjs](web/src/server/vercel-handler.mjs), [service-handler.mjs](web/src/server/service-handler.mjs) | Account/auth, configuration, cloud snapshots, stored files, Imagine, voice, optional provider chat and GitHub Build orchestration. The local Node server uses the same service handler. |
+| Node API (`web/`, Cloud Run `dua-api`) | [API routes](web/api), [vercel-handler.mjs](web/src/server/vercel-handler.mjs), [service-handler.mjs](web/src/server/service-handler.mjs) | Account/auth, configuration, cloud snapshots, stored files, Imagine, voice, optional provider chat and GitHub Build orchestration. Cloud Run and the local Node server use the service handler; the Vercel handler remains as a rollback. |
 | Cloud Run engine | [app.py](google-cloud-backend/app.py), [owner_auth.py](google-cloud-backend/owner_auth.py), [coding_agent.py](google-cloud-backend/coding_agent.py) | Default `/api/chat` destination: Vertex Gemini, conversation/inline-file context, SSE, Agent research and optional repository coding. Verifies the signed-in owner with Supabase before invoking Vertex. |
 | Supabase | [Migrations](supabase/migrations), [setup guide](SUPABASE.md) | Auth, authoritative owner snapshots and private uploaded/generated files, protected by RLS. Both backends must use the same Auth project and owner email. |
 
@@ -37,8 +37,8 @@ For a directory map, request traces, persistence contracts and GitHub permission
 
 ### GitHub read and write boundaries
 
-- **Read-only connector / Build chat on Vercel:** [github.mjs](web/src/core/github.mjs) uses `GITHUB_CONNECTOR_TOKEN` for allowlisted GET requests. [build-chat.mjs](web/src/core/build-chat.mjs) can read repository context and propose diffs; generating a proposal does not create a branch or PR.
-- **Owner-confirmed Build PR on Vercel:** [build-pr.mjs](web/src/core/build-pr.mjs) uses the separate [github-write.mjs](web/src/core/github-write.mjs) client and `GITHUB_BUILD_WRITE_TOKEN` only after the app's Create PR confirmation. Writes require explicit enablement, validated paths and current file SHAs; they create a `dua/*` branch and PR, without merging, force-pushing or deleting branches. [Build setup and token permissions](PROVIDERS.md#build-mode-read-only-repository-chat-phase-5b) covers both steps.
+- **Read-only connector / Build chat on the Node API:** [github.mjs](web/src/core/github.mjs) uses `GITHUB_CONNECTOR_TOKEN` for allowlisted GET requests. [build-chat.mjs](web/src/core/build-chat.mjs) can read repository context and propose diffs; generating a proposal does not create a branch or PR.
+- **Owner-confirmed Build PR on the Node API:** [build-pr.mjs](web/src/core/build-pr.mjs) uses the separate [github-write.mjs](web/src/core/github-write.mjs) client and `GITHUB_BUILD_WRITE_TOKEN` only after the app's Create PR confirmation. Writes require explicit enablement, validated paths and current file SHAs; they create a `dua/*` branch and PR, without merging, force-pushing or deleting branches. [Build setup and token permissions](PROVIDERS.md#build-mode-read-only-repository-chat-phase-5b) covers both steps.
 - **Cloud Run coding agent:** [coding_agent.py](google-cloud-backend/coding_agent.py) uses its own optional `GITHUB_TOKEN`, limited to `DUA_REPO`, to create `dua-agent/*` branches and PRs during coding tasks. This is a separate write-capable agent flow, not the read-only connector or Vercel's confirmation endpoint. See [Cloud Run setup](google-cloud-backend/README.md) before enabling it; without the token, coding is unavailable.
 
 ### Short feature tour
@@ -70,17 +70,17 @@ Start from [web/.env.example](web/.env.example) or [google-cloud-backend/.env.ex
 
 | Runtime / purpose | Required settings | Notes / full setup |
 | --- | --- | --- |
-| Vercel owner sign-in and data | `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `DUA_ALLOWED_EMAIL`; keep `DUA_REQUIRE_LOGIN=1` | Root project URL such as `https://PROJECT.supabase.co`, without `/rest/v1/`. Use a public publishable/anon key in `SUPABASE_ANON_KEY`, never a service-role key. Auth providers, redirects and snapshot/Storage migrations are in [SUPABASE.md](SUPABASE.md). |
-| Vercel chat (when selected) | At least one provider key **and** model ID: e.g. `GEMINI_API_KEY`, `GEMINI_MODEL` | Not required for separate Cloud Run chat. Other providers, web search, Imagine, voice and Run code have their own prerequisites in [PROVIDERS.md](PROVIDERS.md). |
+| Node API (dua-api) owner sign-in and data | `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `DUA_ALLOWED_EMAIL`; keep `DUA_REQUIRE_LOGIN=1` | Root project URL such as `https://PROJECT.supabase.co`, without `/rest/v1/`. Use a public publishable/anon key in `SUPABASE_ANON_KEY`, never a service-role key. Auth providers, redirects and snapshot/Storage migrations are in [SUPABASE.md](SUPABASE.md). |
+| Node API chat (when selected) | At least one provider key **and** model ID: e.g. `GEMINI_API_KEY`, `GEMINI_MODEL` | Not required for separate Cloud Run chat. Other providers, web search, Imagine, voice and Run code have their own prerequisites in [PROVIDERS.md](PROVIDERS.md). |
 | Cloud Run owner chat | `GOOGLE_CLOUD_PROJECT`, `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY` **or** `SUPABASE_ANON_KEY`, `DUA_ALLOWED_EMAIL` | Google runtime credentials/ADC with Vertex access are also required for generation. Use the same Supabase project/owner as Vercel. `VERTEX_LOCATION` defaults to `global`, `VERTEX_MODEL` to `gemini-3.8-flash`; see [engine setup](google-cloud-backend/README.md). |
 | Android backend routing | No override required for checked-in endpoints; override with `DUA_API_BASE_URL` / `DUA_CHAT_BASE_URL` or Gradle `duaApiBaseUrl` / `duaChatBaseUrl` | Both URLs must be HTTPS. Native Google login also needs the matching OAuth web client ID (`GOOGLE_CLIENT_ID` / `duaGoogleWebClientId`), Android package/signing certificate and Supabase Google setup; see [SUPABASE.md](SUPABASE.md). Release signing is separate: [SIGNING.md](SIGNING.md). |
 | Optional engine gate | Matching `DUA_APP_TOKEN` on Cloud Run and the Android build | Additional gate only; does not replace verified owner authentication. A token embedded in an APK is extractable. |
-| Vercel GitHub read / Build | `ENABLE_GITHUB_CONNECTOR=1`, `GITHUB_CONNECTOR_TOKEN`; Build also needs Vercel Gemini chat and owner auth | Read-only token. Writes separately require `DUA_BUILD_PR=1`, `GITHUB_BUILD_WRITE_TOKEN` and owner confirmation; optional `DUA_BUILD_PR_REPOS` narrows repositories. See [Build configuration](PROVIDERS.md#build-mode-read-only-repository-chat-phase-5b). |
+| Node API GitHub read / Build | `ENABLE_GITHUB_CONNECTOR=1`, `GITHUB_CONNECTOR_TOKEN`; Build also needs Node API Gemini chat and owner auth | Read-only token. Writes separately require `DUA_BUILD_PR=1`, `GITHUB_BUILD_WRITE_TOKEN` and owner confirmation; optional `DUA_BUILD_PR_REPOS` narrows repositories. See [Build configuration](PROVIDERS.md#build-mode-read-only-repository-chat-phase-5b). |
 | Cloud Run coding agent | `GITHUB_TOKEN` (optional); `DUA_REPO` defaults to `KRFbrothers/Dua-ai` | Write-capable token for the selected repository. Separate from both Vercel tokens; see [engine setup](google-cloud-backend/README.md). |
 
-### Vercel / local Node API
+### Node API (dua-api on Cloud Run, local, Vercel rollback)
 
-The backend lives in `web/`: Vercel functions in `web/api/` route to `web/src/server/vercel-handler.mjs`, with shared logic in `web/src/core/`. To run the API locally, start from the repository root:
+The backend lives in `web/`. On Cloud Run (`dua-api`, see [web/README.md](web/README.md)) and locally it runs `web/src/server/service-handler.mjs`; the Vercel functions in `web/api/` (kept for rollback) route to `web/src/server/vercel-handler.mjs`. Both share the logic in `web/src/core/`. To run the API locally, start from the repository root:
 
 ```sh
 cd web
@@ -105,7 +105,7 @@ python3 -m venv /tmp/dua-gcb-tests
 
 To run the actual service locally, install [requirements.txt](google-cloud-backend/requirements.txt) in a separate virtual environment, export its runtime settings, then run `python app.py` from `google-cloud-backend/`. It serves HTTP on port 8080 by default (`PORT` overrides it); `GET /` is a public health/capability response, not an authenticated generation test. Deployment uses the [Procfile](google-cloud-backend/Procfile); follow the [engine README](google-cloud-backend/README.md) for Google credentials, permissions and deployment.
 
-For a local engine `.env`, follow the [copy/export instructions](google-cloud-backend/README.md#local-environment-file). The Python service and `deploy.sh` do not load that file themselves. Keep the deployment script's `PROJECT_ID` separate from the runtime `GOOGLE_CLOUD_PROJECT`; set both to your intended project when using that script.
+For a local engine `.env`, follow the [copy/export instructions](google-cloud-backend/README.md#local-environment-file). The Python service does not load that file itself. To redeploy, use the standard command in [Redeploy from Cloud Shell](google-cloud-backend/README.md#redeploy-from-cloud-shell).
 
 ### Android app
 

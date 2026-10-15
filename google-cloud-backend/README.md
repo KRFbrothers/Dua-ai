@@ -23,15 +23,13 @@ with `DUA_REQUIRE_LOGIN=0`; `DUA_APP_TOKEN`, if retained, is an additional gate 
   Streaming flushes an initial SSE heartbeat and sends another every 15 seconds while the Vertex worker is waiting. Cancelling the stream stops queueing results.
   Not supported here (a short notice is shown instead): other models (ChatGPT/Claude/Grok/Kimi – Gemini answers),
   web search, Run code, Build mode, server-side reply saving.
-- **Dua Agent (phase 1)**: `POST /api/chat` with `"mode": "agent"` and `"stream": true`. Steps: plan ->
-  research with Google Search grounding (`google_search` tool) -> summary with sources
-  (`sources` event, numbered [1], [2]) -> prioritized Dua AI feature ideas with effort. Progress shows in the
-  app's Thinking block. Cost caps: 3 model calls per request, only 1 grounded; output tokens capped
-  (`AGENT_PLAN_TOKENS`=1024, `AGENT_RESEARCH_TOKENS`=3072, `AGENT_ANSWER_TOKENS`=4096; they include thinking tokens).
-  Grounding cost (Vertex): Gemini 3.x models share 5,000 free search queries per month, then $14 per 1,000 search queries
-  (billed per query, so one agent request can use several). Older gemini-2.5-flash: 1,500 grounded prompts/day free, then $35 / 1,000.
+- **Dua Agent**: `POST /api/chat` with `"mode": "agent"` and `"stream": true`. Real tasks run one tool-calling
+  loop (web search, page reading, code, calculator/time, images, memory suggestions, GitHub); see
+  [Dua Agent tools](#dua-agent-tools-general-tool-loop) for tools, caps and progress chips. Web results end with a
+  numbered Sources footer (`sources` event, [1], [2]). Grounding cost (Vertex): Gemini 3.x models share 5,000 free
+  search queries per month, then $14 per 1,000 search queries (each `google_search` call counts).
   **Router:** casual messages (hi, thanks, small talk, simple questions) get one direct reply with full history
-  and no Search. Clear task words (latest, news, ideas, compare, tools…) run the full agent. Unclear messages use one
+  and no Search. Clear task words (latest, news, ideas, compare, tools…) run the tool loop. Unclear messages use one
   cheap router call (low thinking, max `AGENT_ROUTER_TOKENS`=256, JSON); if it fails, long messages run the agent
   and short ones get a direct reply.
 - `POST /chat` – old single message endpoint `{"message"}` -> `{"reply"}` (still works).
@@ -65,35 +63,22 @@ python app.py
 
 Python does not automatically read `.env`; these commands export it for this shell. A copied, unfilled template may serve the public health check, but authenticated generation remains unavailable until owner Auth settings and Google runtime credentials are ready. Tests use mocks and need neither real credentials nor this file.
 
-On Cloud Run, configure runtime settings on the service and keep the optional GitHub token in Secret Manager; do not upload a populated `.env`. Let Cloud Run supply `PORT`. For `deploy.sh`, export `PROJECT_ID` as well (same project as `GOOGLE_CLOUD_PROJECT`) and optionally `REGION`; the script only forwards its explicitly listed settings, not every value in `.env`.
+On Cloud Run, configure runtime settings on the service and keep the optional GitHub token in Secret Manager; do not upload a populated `.env`. Let Cloud Run supply `PORT`.
 
 ## Redeploy from Cloud Shell
 
-Configure `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY` (or `SUPABASE_ANON_KEY`) and `DUA_ALLOWED_EMAIL`
-on the **Cloud Run service**, using the same project/owner values as Vercel. Do not paste access tokens
-or keys into chat, source files or screenshots. These settings are never compiled into Android.
+Runtime settings (`GOOGLE_CLOUD_PROJECT`, `VERTEX_LOCATION`, `VERTEX_MODEL`, `SUPABASE_URL`,
+`SUPABASE_PUBLISHABLE_KEY` or `SUPABASE_ANON_KEY`, `DUA_ALLOWED_EMAIL`, optional secrets) already live on the
+**Cloud Run service**. A redeploy keeps them, so the standard command passes no settings:
 
-For a redeploy with the values already available in your Cloud Shell environment:
 ```bash
-cd ~/Dua-ai && git fetch origin && git pull origin main   # after the PR is merged
-cd google-cloud-backend
-: "${SUPABASE_URL:?Set the same Supabase URL used by Vercel}"
-: "${DUA_ALLOWED_EMAIL:?Set the owner email}"
-AUTH_KEY="${SUPABASE_PUBLISHABLE_KEY:-${SUPABASE_ANON_KEY:-}}"
-: "${AUTH_KEY:?Set the Supabase publishable or anon key}"
-gcloud run deploy dua-ai-engine --source . --region us-central1 \
-  --update-env-vars "GOOGLE_CLOUD_PROJECT=global-healer-m6shk,VERTEX_LOCATION=global,VERTEX_MODEL=gemini-3.8-flash,SUPABASE_URL=${SUPABASE_URL},SUPABASE_PUBLISHABLE_KEY=${AUTH_KEY},DUA_ALLOWED_EMAIL=${DUA_ALLOWED_EMAIL}" \
-  --allow-unauthenticated --project global-healer-m6shk
+cd ~/Dua-ai && git fetch origin && git checkout main && git reset --hard origin/main && cd google-cloud-backend && gcloud run deploy dua-ai-engine --source . --region us-central1 --project global-healer-m6shk --allow-unauthenticated --timeout 900
 ```
-`--allow-unauthenticated` allows requests to reach the service; application owner verification still
-guards both chat routes. `--update-env-vars` preserves existing settings, including an optional
-`DUA_APP_TOKEN`; if that gate is enabled, the APK must still be built with its matching value.
 
-First-time setup (APIs + permissions + deploy): after setting the three required Auth values above,
-run `PROJECT_ID=<your-project> ./deploy.sh`. Install an APK built from this change so the existing
-Supabase session reaches Cloud Run. Older APKs omit that session and will correctly receive 401.
-Deploying the engine alone does not update Android. There is no change to chat persistence, project
-memory, capabilities, UI or the Vercel APIs in this authentication fix.
+To change one setting, use `gcloud run services update dua-ai-engine --region us-central1 --project
+global-healer-m6shk --update-env-vars NAME=value` (or `--update-secrets` for Secret Manager values). Never paste
+tokens or keys into chat, source files or screenshots; they are never compiled into Android.
+`--allow-unauthenticated` only lets requests reach the service; owner verification still guards the chat routes.
 
 After deployment, confirm both `/api/chat` and `/chat` reject a request without `Authorization`,
 reject a non-owner/expired session, and allow a fresh owner session. No rejected request should

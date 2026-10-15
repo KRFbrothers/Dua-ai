@@ -212,9 +212,10 @@ class CodingModel:
 
 
 def test_happy_path_opens_pr_from_new_branch_into_main():
-    gh, model, progress = client(), CodingModel(), []
-    text = ca.run_coding(model, ["user turn"], gh, progress.append, "add hello screen",
-                         tools=["TOOLS"], tool_response=lambda results: ("tool", results))
+    gh, lines = client(), []
+    args = {"title": "Add hello screen", "description": "Simple hello screen add kiya.",
+            "files": [{"path": "app/Main.kt", "content": "fun main() { println(\"hi\") }"}]}
+    text = ca.finish(gh, lines.append, args, "add hello screen")
     assert "#201" in text and f"https://github.com/{REPO}/pull/201" in text
     writes = [(m, p.rsplit("/", 2)[-2:], b) for m, p, b in gh.opener.calls if m != "GET"]
     assert [w[1][-1] for w in writes] == ["blobs", "trees", "commits", "refs", "pulls"]
@@ -224,19 +225,11 @@ def test_happy_path_opens_pr_from_new_branch_into_main():
     assert pr["base"] == "main" and pr["head"].startswith("dua-agent/") and pr["title"] == "Dua Agent: Add hello screen"
     assert writes[2][2]["parents"] == ["basesha"]
     assert not any(m in ("PUT", "PATCH", "DELETE") for m, _, _ in gh.opener.calls)
-    assert model.calls[1]["contents"][-1][0] == "tool"  # tool result fed back
-    assert any("read_file" in line for line in progress)
 
 
-def test_step_cap_stops_without_pr():
+def test_proposal_without_files_opens_nothing():
     gh = client()
-    text = ca.run_coding(CodingModel(steps=True), [], gh, lambda d: None, "x", tools=[], tool_response=lambda r: r)
-    assert "steps" in text and not any(m == "POST" for m, _, _ in gh.opener.calls)
-
-
-def test_model_without_proposal_opens_nothing():
-    gh = client()
-    text = ca.run_coding(CodingModel(propose=False), [], gh, lambda d: None, "x", tools=[], tool_response=lambda r: r)
+    text = ca.finish(gh, lambda d: None, {"title": "t", "description": "Need more details.", "files": []}, "x")
     assert "No pull request" in text and not any(m == "POST" for m, _, _ in gh.opener.calls)
 
 
@@ -320,11 +313,3 @@ def test_coding_reports_read_and_pr_progress(monkeypatch, owner):
     evs = post("code likho: add a hello screen to the app")
     steps = [e["step"] for e in evs if e["type"] == "progress"]
     assert steps[0] == "plan" and steps[-2:] == ["pr", "answer"] and "Opening PR\u2026" in [e["label"] for e in evs if e["type"] == "progress"]
-
-
-def test_run_coding_progress_is_optional():
-    gh = client()
-    calls = []
-    ca.run_coding(CodingModel(), [], gh, lambda d: None, "x", tools=[], tool_response=lambda r: r,
-                  progress=lambda step, label, state="active": calls.append(step))
-    assert calls[-1] == "pr"

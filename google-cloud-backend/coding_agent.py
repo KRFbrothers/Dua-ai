@@ -289,49 +289,6 @@ class CodingSession:
             return {"error": str(error)[:300]}
 
 
-# Structured, user-facing progress per tool (sent as "progress" events next to the raw thinking lines).
-TOOL_PROGRESS = {
-    "list_files": ("read", "Reading files\u2026"),
-    "read_file": ("read", "Reading files\u2026"),
-    "search_code": ("search_code", "Searching the code\u2026"),
-}
-
-
-def run_coding(model, contents, github, emit, request_text, tools=None, tool_response=None, clock=time.monotonic,
-               progress=None):
-    """Tool loop. Returns the final user-facing text (with the PR link when one was opened)."""
-    tools = tools if tools is not None else default_tools()
-    tool_response = tool_response or default_tool_response
-    progress = progress or (lambda step, label, state="active": True)
-    session = CodingSession(github, emit, clock)
-    started = clock()
-    history = list(contents)
-    for step in range(1, MAX_TOOL_STEPS + 1):
-        if clock() - started > MAX_SECONDS:
-            return "Coding stopped: time limit reached before a change was ready. Try a smaller request."
-        response = model.generate_content(history, generation_config={"max_output_tokens": STEP_TOKENS, "temperature": 0.2}, tools=tools)
-        calls = function_calls(response)
-        if not calls:
-            text = ""
-            try:
-                text = response.text or ""
-            except (AttributeError, ValueError):
-                pass
-            return (text.strip() or "I could not prepare a code change for this request.") + "\n\n(No pull request was opened.)"
-        history.append(response.candidates[0].content)
-        results = []
-        for name, args in calls:
-            if name == "propose_changes":
-                progress("pr", "Opening PR\u2026")
-                return finish(github, emit, args, request_text)
-            if name in TOOL_PROGRESS:
-                progress(*TOOL_PROGRESS[name])
-            emit(f"- Step {step}: {name} {json.dumps({k: v for k, v in args.items() if k != 'content'})[:120]}\n")
-            results.append((name, session.run_tool(name, args)))
-        history.append(tool_response(results))
-    return f"Coding stopped after {MAX_TOOL_STEPS} steps without a finished change. Try a smaller, more specific request."
-
-
 def finish(github, emit, args, request_text):
     files = validate_changes(args.get("files") or [])
     title = " ".join(str(args.get("title") or "Dua Agent change").split())[:120]

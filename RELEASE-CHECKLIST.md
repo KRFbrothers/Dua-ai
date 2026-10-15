@@ -107,7 +107,7 @@ The app is installed directly on the owner's device(s); there is no store upload
 
 - [ ] Build with `bash ./gradlew :app:assembleDebug --no-daemon` (output: `app/build/outputs/apk/debug/app-debug.apk`), or use Android Studio's Run.
 - [ ] Install with `adb install -r app/build/outputs/apk/debug/app-debug.apk`, or copy the APK to the phone and allow installing from that source.
-- [ ] Confirm the app reaches the intended backend (default `https://dua-cyan.vercel.app`; override with `duaApiBaseUrl` / `DUA_API_BASE_URL` at build time) and that signing in with the owner account works.
+- [ ] Confirm the app reaches the intended backend (default `https://dua-api-228305912525.us-central1.run.app` (dua-api on Cloud Run); chat uses `https://dua-ai-engine-228305912525.us-central1.run.app`; override with `duaApiBaseUrl` / `DUA_API_BASE_URL` at build time) and that signing in with the owner account works.
 
 **Release APK (personal install).** [SIGNING.md](SIGNING.md) describes permanent key storage and GitHub builds. `bash ./gradlew :app:assembleRelease --no-daemon` builds a shrunk APK (R8 code shrinking and optimization plus resource shrinking; class names are kept with `-dontobfuscate`, so Crashlytics traces stay readable and no mapping file is uploaded). Output: `app/build/outputs/apk/release/app-release.apk`. Crashlytics collection is enabled in release builds.
 
