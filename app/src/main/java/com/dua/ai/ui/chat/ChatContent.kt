@@ -16,12 +16,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
-import com.dua.ai.R
+import com.dua.ai.ui.components.DuaCalligraphyLogo
 import com.dua.ai.ui.theme.ChatTheme
 import com.dua.ai.ui.theme.HomePromptStyle
 import com.dua.ai.ui.theme.HomeShapes
@@ -45,8 +43,7 @@ internal fun ChatContent(task: Boolean, onFocusComposer: () -> Unit, onTask: (St
             Box(Modifier.fillMaxWidth().heightIn(min = heroHeight), contentAlignment = Alignment.Center) {
                 Column(Modifier.fillMaxWidth().padding(vertical = Spacing.lg), horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(Spacing.lg)) {
-                    Icon(ImageVector.vectorResource(R.drawable.gs_spark), contentDescription = null,
-                        tint = c.promptIcon, modifier = Modifier.size(36.dp))
+                    DuaCalligraphyLogo(modifier = Modifier.width(156.dp))
                     Text(if (task) "What can I take off\nyour plate?" else "Look what you can\ndo with Dua AI",
                         style = MaterialTheme.typography.headlineMedium, color = ChatTheme.colors.text, textAlign = TextAlign.Center)
                     if (!task) Surface(onClick = onFocusComposer, color = c.bar, contentColor = c.promptText,
