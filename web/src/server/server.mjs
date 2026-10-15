@@ -8,6 +8,14 @@ function json(res, code, data) {
   res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
   res.end(JSON.stringify(data));
 }
+
+/** Containers expose HTTP to the platform; local development stays on loopback. */
+export function listenOptions(env = process.env) {
+  const container = env.NODE_ENV === 'production' || Boolean(env.K_SERVICE);
+  const port = Number(env.PORT || (container ? 8080 : 3000));
+  if (!Number.isInteger(port) || port < 0 || port > 65535) throw new Error('PORT must be an integer between 0 and 65535.');
+  return { port, host: container ? '0.0.0.0' : '127.0.0.1' };
+}
 export function makeServer({ key = process.env.GEMINI_API_KEY, model = process.env.GEMINI_MODEL, fetcher = fetch, supabaseUrl = process.env.SUPABASE_URL, supabaseKey = process.env.SUPABASE_ANON_KEY, env = process.env } = {}) {
   return createServer(async (req, res) => {
     const controller = new AbortController();
@@ -60,5 +68,7 @@ export function makeServer({ key = process.env.GEMINI_API_KEY, model = process.e
   });
 }
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  makeServer().listen(Number(process.env.PORT || 3000), '127.0.0.1', () => console.log(`Dua API ready: http://localhost:${process.env.PORT || 3000}/api/`));
+  const server = makeServer();
+  const options = listenOptions();
+  server.listen(options, () => console.log(`Dua API ready: http://${options.host}:${server.address().port}/api/`));
 }

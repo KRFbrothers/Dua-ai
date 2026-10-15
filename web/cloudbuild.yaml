@@ -1,0 +1,7 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    env: ['DOCKER_BUILDKIT=1']
+    args: ['build', '-t', '${_IMAGE}', '.']
+images: ['${_IMAGE}']
+options:
+  logging: CLOUD_LOGGING_ONLY

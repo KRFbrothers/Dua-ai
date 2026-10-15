@@ -1,0 +1,10 @@
+# Cloud Build uploads happen before Docker applies .dockerignore.
+# Keep secrets, local dependencies and unrelated files out of the upload too.
+**
+!Dockerfile
+!.dockerignore
+!package.json
+!package-lock.json
+!.npmrc
+!src/
+!src/**
