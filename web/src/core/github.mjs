@@ -1,10 +1,9 @@
 // Read-only GitHub REST client for the personal connector and Build mode (Phase 5B).
 // The token (GITHUB_CONNECTOR_TOKEN) stays on this server. Every request is a GET to an allowlisted
 // api.github.com path, and nothing in this module can send any other method: Dua never writes to GitHub.
+import { validRepository, normalizeRepositoryReadPath, MAX_REPOSITORY_PATH_CHARS, GITHUB_REPOSITORY_API_PATTERN as repoPath } from './github-validation.mjs';
+export { REPOSITORY } from './github-validation.mjs';
 const API = 'https://api.github.com';
-/** owner/name, the same shape the repository list returns. */
-export const REPOSITORY = /^[A-Za-z0-9_-]{1,100}\/[A-Za-z0-9_.-]{1,100}$/;
-const repoPath = '/repos/[A-Za-z0-9_-]{1,100}/[A-Za-z0-9_.-]{1,100}';
 /** The only requests this client can make. Anything else is refused before reaching the network. */
 export const ALLOWED_GITHUB_PATHS = Object.freeze([
   /^\/user\/repos\?per_page=30&sort=updated&affiliation=owner$/,
@@ -68,15 +67,11 @@ export async function githubGet(path, { env, fetcher = fetch, signal, maxBytes =
 
 /** Repository-relative file path: no leading slash, no `..`, no control characters. Returns the encoded URL path or null. */
 export function encodeRepoPath(value) {
-  if (typeof value !== 'string') return null;
-  const path = value.trim().replace(/^\.\//, '');
-  if (!path || path.length > 400 || path.startsWith('/') || path.includes('\\') || /[\u0000-\u001f\u007f]/.test(path)) return null;
-  const segments = path.split('/');
-  if (segments.some(segment => !segment || segment === '.' || segment === '..')) return null;
-  return segments.map(segment => encodeURIComponent(segment)).join('/');
+  const path = normalizeRepositoryReadPath(value);
+  return path === null ? null : path.split('/').map(segment => encodeURIComponent(segment)).join('/');
 }
 const repoUrl = repository => {
-  if (typeof repository !== 'string' || !REPOSITORY.test(repository)) throw new GitHubError(GITHUB_REPOSITORY_HINT, 400);
+  if (!validRepository(repository)) throw new GitHubError(GITHUB_REPOSITORY_HINT, 400);
   return '/repos/' + repository;
 };
 
@@ -85,7 +80,7 @@ export async function listRepositories(options) {
   const repositories = await githubGet('/user/repos?per_page=30&sort=updated&affiliation=owner', options);
   if (!Array.isArray(repositories) || repositories.length > 30) throw new GitHubError('GitHub returned an invalid response. Retry this repository read; if it persists, check GitHub service availability.', 502);
   return repositories.map(repo => {
-    if (!repo || !REPOSITORY.test(repo.full_name || '')) throw new GitHubError('GitHub returned an invalid response. Retry this repository read; if it persists, check GitHub service availability.', 502);
+    if (!repo || !validRepository(repo.full_name)) throw new GitHubError('GitHub returned an invalid response. Retry this repository read; if it persists, check GitHub service availability.', 502);
     return { name: repo.full_name.split('/')[1], fullName: repo.full_name, private: repo.private === true, description: typeof repo.description === 'string' ? repo.description.slice(0, 240) : '', url: 'https://github.com/' + repo.full_name };
   });
 }
@@ -93,7 +88,7 @@ export async function listRepositories(options) {
 /** {fullName, defaultBranch, private, description} */
 export async function repositoryInfo(repository, options) {
   const repo = await githubGet(repoUrl(repository), { ...options, maxBytes: 256 * 1024 });
-  if (!repo || !REPOSITORY.test(repo.full_name || '')) throw new GitHubError('GitHub returned an invalid response. Retry this repository read; if it persists, check GitHub service availability.', 502);
+  if (!repo || !validRepository(repo.full_name)) throw new GitHubError('GitHub returned an invalid response. Retry this repository read; if it persists, check GitHub service availability.', 502);
   const branch = typeof repo.default_branch === 'string' && /^[A-Za-z0-9._/-]{1,200}$/.test(repo.default_branch) ? repo.default_branch : 'HEAD';
   return { fullName: repo.full_name, defaultBranch: branch, private: repo.private === true, description: typeof repo.description === 'string' ? repo.description.slice(0, 240) : '' };
 }
@@ -105,7 +100,7 @@ export async function repositoryInfo(repository, options) {
 export async function repositoryTree(repository, { maxEntries = 5000, ...options } = {}) {
   const tree = await githubGet(repoUrl(repository) + '/git/trees/HEAD?recursive=1', { ...options, maxBytes: 8 * 1024 * 1024 });
   if (!tree || !Array.isArray(tree.tree)) throw new GitHubError('GitHub returned an invalid response. Retry this repository read; if it persists, check GitHub service availability.', 502);
-  const blobs = tree.tree.filter(item => item?.type === 'blob' && typeof item.path === 'string' && item.path.length <= 400);
+  const blobs = tree.tree.filter(item => item?.type === 'blob' && typeof item.path === 'string' && item.path.length <= MAX_REPOSITORY_PATH_CHARS);
   return { files: blobs.slice(0, maxEntries).map(item => ({ path: item.path, size: Number.isSafeInteger(item.size) ? item.size : 0 })), total: blobs.length,
     truncated: tree.truncated === true || blobs.length > maxEntries };
 }
@@ -132,7 +127,7 @@ export async function repositoryFile(repository, path, { maxBytes = 100 * 1024, 
 
 /** GitHub code search inside one repository (default branch only; GitHub allows about 10 searches a minute). */
 export async function searchRepository(repository, query, options) {
-  if (typeof repository !== 'string' || !REPOSITORY.test(repository)) throw new GitHubError(GITHUB_REPOSITORY_HINT, 400);
+  if (!validRepository(repository)) throw new GitHubError(GITHUB_REPOSITORY_HINT, 400);
   const text = typeof query === 'string' ? query.replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\b(?:repo|org|user):\S*/gi, ' ').replace(/\s+/g, ' ').trim().slice(0, 200) : '';
   if (!text) throw new GitHubError('Enter something to search for.', 400);
   const q = encodeURIComponent(`${text} repo:${repository}`).replace(/[!'()*]/g, c => '%' + c.charCodeAt(0).toString(16).toUpperCase());
