@@ -243,15 +243,16 @@ fun VideoPlayer(url: String, modifier: Modifier = Modifier, autoPlay: Boolean = 
 
 /** Fullscreen viewer for images (swipe between them, pinch or double-tap to zoom) or one video. */
 @Composable
-fun MediaViewer(media: List<GeneratedMedia>, startIndex: Int, actions: ImagineActions, videoAvailable: Boolean, onDismiss: () -> Unit) {
+fun MediaViewer(media: List<GeneratedMedia>, startIndex: Int, actions: ImagineActions, videoAvailable: Boolean, onDismiss: () -> Unit,
+    prompt: String? = null, showEditActions: Boolean = true) {
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
-        MediaViewerContent(media, startIndex, actions, videoAvailable, onDismiss)
+        MediaViewerContent(media, startIndex, actions, videoAvailable, onDismiss, prompt = prompt, showEditActions = showEditActions)
     }
 }
 
 @Composable
 fun MediaViewerContent(media: List<GeneratedMedia>, startIndex: Int, actions: ImagineActions, videoAvailable: Boolean, onDismiss: () -> Unit,
-    playVideo: Boolean = true) {
+    playVideo: Boolean = true, prompt: String? = null, showEditActions: Boolean = true) {
     val pager = rememberPagerState(initialPage = startIndex.coerceIn(0, (media.size - 1).coerceAtLeast(0))) { media.size }
     val loader = LocalMediaLoader.current
     Box(Modifier.fillMaxSize().background(DuaTheme.colors.mediaBackground)) {
@@ -268,13 +269,15 @@ fun MediaViewerContent(media: List<GeneratedMedia>, startIndex: Int, actions: Im
         Row(Modifier.fillMaxWidth().safeDrawingPadding().padding(Spacing.xs), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onDismiss) { Icon(Icons.Outlined.Close, "Close viewer", tint = DuaTheme.colors.onMedia) }
             if (media.size > 1) Text("${pager.currentPage + 1} / ${media.size}", color = DuaTheme.colors.onMedia, style = MaterialTheme.typography.titleMedium)
+            if (!prompt.isNullOrBlank()) Text(prompt.take(1000), modifier = Modifier.weight(1f).padding(Spacing.sm), maxLines = 3,
+                color = DuaTheme.colors.onMedia, style = MaterialTheme.typography.bodyMedium)
         }
         val current = media.getOrNull(pager.currentPage)
         if (current != null) Row(Modifier.align(Alignment.BottomCenter).fillMaxWidth().safeDrawingPadding().padding(Spacing.md),
             horizontalArrangement = Arrangement.SpaceEvenly) {
             ViewerButton(Icons.Outlined.Download, "Save") { actions.onSave(listOf(current)) }
             ViewerButton(Icons.Outlined.Share, "Share") { actions.onShare(listOf(current)) }
-            if (!current.isVideo && current.path != null) {
+            if (!current.isVideo && current.path != null && showEditActions) {
                 ViewerButton(Icons.Outlined.AutoFixHigh, "Edit") { onDismiss(); actions.onEdit(current) }
                 if (videoAvailable) ViewerButton(Icons.Outlined.Movie, "Animate") { onDismiss(); actions.onAnimate(current) }
             }

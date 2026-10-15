@@ -20,13 +20,14 @@ import com.dua.ai.ui.theme.*
 /** A 44dp visual inside each 48dp accessible target; no Home tabs, model or search controls. */
 @Composable
 fun FeatureTopBar(title: String, onBack: () -> Unit, onNewSession: () -> Unit,
-    newSessionEnabled: Boolean = true, modifier: Modifier = Modifier) {
+    newSessionEnabled: Boolean = true, modifier: Modifier = Modifier,
+    showNewSession: Boolean = true, actionLabel: String = "New $title session", trailing: (@Composable () -> Unit)? = null) {
     val c = PageTheme.colors
     Box(modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = AgentSizes.padding, vertical = Spacing.sm)
         .testTag("feature-top-bar")) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             FeatureCircleButton("Back", onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null, Modifier.size(AgentSizes.icon), tint = c.text) }
-            FeatureCircleButton("New $title session", onNewSession, newSessionEnabled) {
+            if (trailing != null) trailing() else if (showNewSession) FeatureCircleButton(actionLabel, onNewSession, newSessionEnabled) {
                 Icon(Icons.Default.Add, null, Modifier.size(AgentSizes.icon), tint = c.text)
             }
         }

@@ -4,6 +4,7 @@
 //   POST /api/files/delete      {paths: [...]}          -> {deleted}
 //   POST /api/files/delete-all  {}                      -> {deleted}
 //   GET  /api/files/usage                               -> {files, bytes, maxBytes, bucket}
+//   GET  /api/files/list                                -> {files: [{path,name,mimeType,size}], truncated}
 import { randomUUID } from 'node:crypto';
 import { handleCloudRead } from './account.mjs';
 import { readJsonLimited } from './limited-json.mjs';
@@ -33,8 +34,8 @@ export function validateUploadRequest(body, maxBytes) {
 export async function handleFiles(request, { env = process.env, fetcher = fetch } = {}) {
   const url = new URL(request.url);
   const action = url.pathname.replace(/^\/api\/files\//, '');
-  if (!['sign', 'url', 'delete', 'delete-all', 'usage'].includes(action)) return json({ error: 'Not found.' }, 404);
-  if (action === 'usage' ? request.method !== 'GET' : request.method !== 'POST') return json({ error: 'Method not allowed.' }, 405);
+  if (!['sign', 'url', 'delete', 'delete-all', 'usage', 'list'].includes(action)) return json({ error: 'Not found.' }, 404);
+  if (['usage', 'list'].includes(action) ? request.method !== 'GET' : request.method !== 'POST') return json({ error: 'Method not allowed.' }, 405);
   const config = storageConfig(env);
   if (!config.enabled) return json({ error: 'Stored files are not configured. Set Supabase settings and apply the dua-files migration.' }, 503);
   try {
@@ -74,6 +75,10 @@ export async function handleFiles(request, { env = process.env, fetcher = fetch 
       return json({ deleted, ...(retained ? { retained } : {}) });
     }
     const files = await listOwnerFiles(config, token, user.id.toLowerCase(), { fetcher, signal });
+    if (action === 'list') return json({ files: files.filter(file => ownsPath(file.path, user.id)).map(file => {
+      const name = file.path.slice(file.path.lastIndexOf('/') + 1);
+      return { path: file.path, name, mimeType: storedType('application/octet-stream', name) || 'application/octet-stream', size: Math.max(0, file.size) };
+    }), truncated: files.length >= 10000 });
     if (action === 'usage') return json({ files: files.length, bytes: files.reduce((sum, file) => sum + file.size, 0), maxBytes: config.maxBytes, bucket: config.bucket });
     return json({ deleted: files.length ? await removeFiles(config, token, files.map(file => file.path), { fetcher, signal }) : 0 });
   } catch (error) {

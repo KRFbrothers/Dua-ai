@@ -11,7 +11,9 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import com.dua.ai.model.ChatMessage
 import com.dua.ai.settings.LocalPreferences
-import com.dua.ai.ui.screens.FeatureComingSoonScreen
+import com.dua.ai.ui.screens.ImagesContent
+import com.dua.ai.ui.screens.LibraryContent
+import com.dua.ai.ui.screens.PluginsContent
 import com.dua.ai.ui.screens.ProjectsFeaturePage
 import com.dua.ai.ui.theme.DuaTheme
 import com.github.takahirom.roborazzi.captureRoboImage
@@ -107,16 +109,21 @@ class FeatureIsolationUiTest(private val dark: Boolean, private val compact: Boo
         compose.onNodeWithText("Turn off all modes").assertDoesNotExist()
         compose.onNodeWithText("Search", substring = false).assertDoesNotExist()
     }
-    @Test fun comingSoonDestinationsHaveOnlyTheirOwnHeader() {
+    @Test fun functionalDestinationsHaveOnlyTheirOwnHeader() {
         val title = mutableStateOf("Images")
         var back = 0
-        show { FeatureComingSoonScreen(title.value) { back++ } }
+        show {
+            when (title.value) {
+                "Images" -> ImagesContent(emptyList(), "", "1:1", listOf("1:1"), false, true, "", "", { back++ }, {}, {}, {}, {}, {})
+                "Library" -> LibraryContent(emptyList(), false, "", { back++ }, {}, {})
+                else -> PluginsContent(com.dua.ai.setup.IntegrationState(), "Dua", false, false, false, false, false, "", "", { back++ }, {}, {}, {}, {}, {})
+            }
+        }
         for (feature in listOf("Images", "Library", "Plugins")) {
             compose.runOnIdle { title.value = feature }
             assertNoHome()
             compose.onNodeWithText(feature).assertIsDisplayed()
-            compose.onNodeWithContentDescription("New $feature session").assertIsDisplayed().assertIsNotEnabled()
-            compose.onNodeWithText("Coming soon").assertIsDisplayed()
+            compose.onNodeWithText("Coming soon").assertDoesNotExist()
             compose.onNodeWithContentDescription("Back").performClick()
         }
         assertEquals(3, back)

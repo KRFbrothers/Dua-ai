@@ -137,3 +137,29 @@ test('spreadsheets become compact CSV with row/column caps and truncation notes'
   assert.ok(tight.text.length < 2600);
   assert.match(tight.text, /sheet truncated to fit the size limit/);
 });
+
+test('library list is read-only, owner-scoped and returns metadata without links or credentials', async () => {
+  const name = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee.png';
+  const fetcher = router([[SUPA + '/storage/v1/object/list/dua-files', (url, init, recorded) => {
+    assert.equal(recorded.json.prefix, UID + '/');
+    assert.equal(recorded.headers.get('authorization'), 'Bearer user-token');
+    return Response.json([{ id: '1', name, metadata: { size: 123, secret: 'never-return' } },
+      { id: '2', name: '../private.png', metadata: { size: 99 } }, { id: null, name: 'folder' }]);
+  }]]);
+  const response = await handleService(filesRequest('list', null, { method: 'GET' }), { env: filesEnv, fetcher });
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get('cache-control'), 'no-store');
+  assert.deepEqual(await response.json(), { files: [{ path: `${UID}/${name}`, name, mimeType: 'image/png', size: 123 }], truncated: false });
+  assert.equal(fetcher.calls.length, 2, 'only owner verification and a bounded private folder listing');
+  assert.ok(!fetcher.calls.some(call => call.method === 'DELETE' || call.url.includes('/sign/')));
+});
+
+test('library list refuses anonymous, foreign-account, write-method and cross-origin requests', async () => {
+  const anonymous = await handleService(filesRequest('list', null, { method: 'GET', token: null }), { env: filesEnv, fetcher: router([]) });
+  assert.equal(anonymous.status, 401);
+  const foreign = router([], { email: 'other@example.com' });
+  assert.equal((await handleService(filesRequest('list', null, { method: 'GET' }), { env: filesEnv, fetcher: foreign })).status, 403);
+  assert.equal(foreign.calls.length, 1, 'no Storage access for a non-owner');
+  assert.equal((await handleService(filesRequest('list', {}), { env: filesEnv, fetcher: router([]) })).status, 405);
+  assert.equal((await handleService(filesRequest('list', null, { method: 'GET', origin: 'https://evil.test' }), { env: filesEnv, fetcher: router([]) })).status, 403);
+});
