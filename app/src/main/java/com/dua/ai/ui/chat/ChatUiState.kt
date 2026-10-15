@@ -28,6 +28,8 @@ data class ChatUiState(
     val webMode: String? = null,
     /** Reasoning mode for the next reply; Auto = no reasoning and no web mode. */
     val reasoning: Boolean = false,
+    /** User message being edited in the composer (send replaces it and later turns). */
+    val editingId: String? = null,
     /** Thinking blocks shown expanded on first render (previews and screenshots). */
     val expandedThinking: Set<String> = emptySet(),
     /** Search works for the selected model (natively or through Brave). */
@@ -121,6 +123,8 @@ class ChatActions(
     val onSend: () -> Unit = {},
     val onStop: () -> Unit = {},
     val onRetry: (String) -> Unit = {},
+    val onEditMessage: (String) -> Unit = {},
+    val onCancelEdit: () -> Unit = {},
     val retryWebMode: (String) -> String? = { null },
     val onSpeak: (ChatMessage) -> Unit = {},
     val onStopSpeech: () -> Unit = {},

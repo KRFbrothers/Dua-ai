@@ -190,6 +190,7 @@ fun ChatScreen(
         }
     }
     val inputFocus = remember { FocusRequester() }
+    LaunchedEffect(state.editingId) { if (state.editingId != null) runCatching { inputFocus.requestFocus() } }
     // Mode toggles (chips and + sheet switches) give a light haptic.
     val tap = { actions.haptic(ChatHaptic.Tap) }
     val onWebMode: (String?) -> Unit = { tap(); actions.onWebMode(it) }
@@ -331,6 +332,7 @@ fun ChatScreen(
                                 onSwipeUp = { tap(); sheet = ChatSheet.Attach })
                             .semantics { customActions = listOf(CustomAccessibilityAction("Open add to chat") { sheet = ChatSheet.Attach; true }) }) {
                             ChatNotices(state = state, actions = actions)
+                            if (state.editingId != null) EditingBanner(onCancel = actions.onCancelEdit)
                             val visibleModes = modeToggles(state, onWebMode, onReasoning, onXSearch, onRunCode, onAgent)
                                 .filter { feature == null && !home && it.on }
                             if (feature == ChatFeature.Agent) Box(Modifier.fillMaxWidth().padding(vertical = Spacing.xs), contentAlignment = Alignment.Center) { AgentModePill() }
