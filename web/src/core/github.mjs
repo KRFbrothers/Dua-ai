@@ -19,6 +19,10 @@ export class GitHubError extends Error {
 }
 export const githubToken = env => typeof env.GITHUB_CONNECTOR_TOKEN === 'string' ? env.GITHUB_CONNECTOR_TOKEN.trim() : '';
 export const githubReady = (env = {}) => env.ENABLE_GITHUB_CONNECTOR === '1' && Boolean(githubToken(env));
+// Shared recovery copy only; repository/path validation and access rules stay at their existing call sites.
+export const GITHUB_SETUP_HINT = 'GitHub connector setup is not enabled. Set ENABLE_GITHUB_CONNECTOR=1 and a read-only GITHUB_CONNECTOR_TOKEN in backend hosting settings, then redeploy.';
+export const GITHUB_REPOSITORY_HINT = 'Use owner/name (for example owner/repo), not a GitHub URL.';
+export const GITHUB_PATH_HINT = 'Use a file path relative to the repository root, such as README.md. Remove leading slashes, backslashes and empty, . or .. path segments.';
 
 export async function boundedBytes(response, limit) {
   const declared = Number(response.headers.get('content-length'));
@@ -45,20 +49,21 @@ export async function boundedBytes(response, limit) {
 /** GET an allowlisted path and parse bounded JSON. Errors are allowlisted messages; GitHub's text never leaves the server. */
 export async function githubGet(path, { env, fetcher = fetch, signal, maxBytes = 1024 * 1024 } = {}) {
   if (typeof path !== 'string' || !ALLOWED_GITHUB_PATHS.some(pattern => pattern.test(path))) throw new GitHubError('This GitHub request is not allowed.', 400);
-  if (!githubReady(env)) throw new GitHubError('GitHub connector setup is not enabled.', 503);
+  if (!githubReady(env)) throw new GitHubError(GITHUB_SETUP_HINT, 503);
   const response = await fetcher(API + path, {
     method: 'GET', redirect: 'error', signal: AbortSignal.any([signal || new AbortController().signal, AbortSignal.timeout(15000)]),
     headers: { Authorization: 'Bearer ' + githubToken(env), Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', 'User-Agent': 'Dua-Personal-Connector' }
   });
   if (!response.ok) {
     await response.body?.cancel();
-    if (response.status === 404) throw new GitHubError('Not found in this repository, or the connector token cannot read it.', 404);
-    if (response.status === 403 || response.status === 429) throw new GitHubError('GitHub access or rate limit prevented this request. Retry in a minute.', 429);
-    if (response.status === 401) throw new GitHubError('The GitHub connector token is invalid or expired.', 502);
-    throw new GitHubError('GitHub connector request failed.', 502);
+    if (response.status === 404) throw new GitHubError('Not found in this repository, or the connector token cannot read it. Check the repository name/file path and the selected repositories for GITHUB_CONNECTOR_TOKEN.', 404);
+    if (response.status === 403) throw new GitHubError('GitHub refused connector access. Check the selected repository and Contents: Read-only permission for GITHUB_CONNECTOR_TOKEN. If rate-limited, wait for the GitHub limit to reset.', 429);
+    if (response.status === 429) throw new GitHubError('GitHub rate limit reached. Wait for the GitHub limit to reset before retrying this read.', 429);
+    if (response.status === 401) throw new GitHubError('The GitHub connector token is invalid or expired. Replace GITHUB_CONNECTOR_TOKEN in backend hosting settings, then redeploy and retry.', 502);
+    throw new GitHubError('GitHub connector request failed. Check GitHub service availability, then retry this repository read.', 502);
   }
   try { return JSON.parse(new TextDecoder().decode(await boundedBytes(response, maxBytes))); }
-  catch (error) { throw new GitHubError(error?.message === 'Response too large' ? 'GitHub response is too large.' : 'GitHub returned an invalid response.', 502); }
+  catch (error) { throw new GitHubError(error?.message === 'Response too large' ? 'GitHub response is too large. Choose a smaller repository or file.' : 'GitHub returned an invalid response. Retry this repository read; if it persists, check GitHub service availability.', 502); }
 }
 
 /** Repository-relative file path: no leading slash, no `..`, no control characters. Returns the encoded URL path or null. */
@@ -71,16 +76,16 @@ export function encodeRepoPath(value) {
   return segments.map(segment => encodeURIComponent(segment)).join('/');
 }
 const repoUrl = repository => {
-  if (typeof repository !== 'string' || !REPOSITORY.test(repository)) throw new GitHubError('Choose a repository as owner/name.', 400);
+  if (typeof repository !== 'string' || !REPOSITORY.test(repository)) throw new GitHubError(GITHUB_REPOSITORY_HINT, 400);
   return '/repos/' + repository;
 };
 
 /** The owner's 30 most recently updated repositories (affiliation=owner). */
 export async function listRepositories(options) {
   const repositories = await githubGet('/user/repos?per_page=30&sort=updated&affiliation=owner', options);
-  if (!Array.isArray(repositories) || repositories.length > 30) throw new GitHubError('GitHub returned an invalid response.', 502);
+  if (!Array.isArray(repositories) || repositories.length > 30) throw new GitHubError('GitHub returned an invalid response. Retry this repository read; if it persists, check GitHub service availability.', 502);
   return repositories.map(repo => {
-    if (!repo || !REPOSITORY.test(repo.full_name || '')) throw new GitHubError('GitHub returned an invalid response.', 502);
+    if (!repo || !REPOSITORY.test(repo.full_name || '')) throw new GitHubError('GitHub returned an invalid response. Retry this repository read; if it persists, check GitHub service availability.', 502);
     return { name: repo.full_name.split('/')[1], fullName: repo.full_name, private: repo.private === true, description: typeof repo.description === 'string' ? repo.description.slice(0, 240) : '', url: 'https://github.com/' + repo.full_name };
   });
 }
@@ -88,7 +93,7 @@ export async function listRepositories(options) {
 /** {fullName, defaultBranch, private, description} */
 export async function repositoryInfo(repository, options) {
   const repo = await githubGet(repoUrl(repository), { ...options, maxBytes: 256 * 1024 });
-  if (!repo || !REPOSITORY.test(repo.full_name || '')) throw new GitHubError('GitHub returned an invalid response.', 502);
+  if (!repo || !REPOSITORY.test(repo.full_name || '')) throw new GitHubError('GitHub returned an invalid response. Retry this repository read; if it persists, check GitHub service availability.', 502);
   const branch = typeof repo.default_branch === 'string' && /^[A-Za-z0-9._/-]{1,200}$/.test(repo.default_branch) ? repo.default_branch : 'HEAD';
   return { fullName: repo.full_name, defaultBranch: branch, private: repo.private === true, description: typeof repo.description === 'string' ? repo.description.slice(0, 240) : '' };
 }
@@ -99,7 +104,7 @@ export async function repositoryInfo(repository, options) {
  */
 export async function repositoryTree(repository, { maxEntries = 5000, ...options } = {}) {
   const tree = await githubGet(repoUrl(repository) + '/git/trees/HEAD?recursive=1', { ...options, maxBytes: 8 * 1024 * 1024 });
-  if (!tree || !Array.isArray(tree.tree)) throw new GitHubError('GitHub returned an invalid response.', 502);
+  if (!tree || !Array.isArray(tree.tree)) throw new GitHubError('GitHub returned an invalid response. Retry this repository read; if it persists, check GitHub service availability.', 502);
   const blobs = tree.tree.filter(item => item?.type === 'blob' && typeof item.path === 'string' && item.path.length <= 400);
   return { files: blobs.slice(0, maxEntries).map(item => ({ path: item.path, size: Number.isSafeInteger(item.size) ? item.size : 0 })), total: blobs.length,
     truncated: tree.truncated === true || blobs.length > maxEntries };
@@ -112,13 +117,13 @@ export async function repositoryTree(repository, { maxEntries = 5000, ...options
  */
 export async function repositoryFile(repository, path, { maxBytes = 100 * 1024, ...options } = {}) {
   const encoded = encodeRepoPath(path);
-  if (!encoded) throw new GitHubError('Use a file path relative to the repository root.', 400);
+  if (!encoded) throw new GitHubError(GITHUB_PATH_HINT, 400);
   const file = await githubGet(repoUrl(repository) + '/contents/' + encoded, { ...options, maxBytes: 3 * 1024 * 1024 });
-  if (Array.isArray(file) || file?.type !== 'file') throw new GitHubError('That path is a folder, not a file.', 400);
+  if (Array.isArray(file) || file?.type !== 'file') throw new GitHubError('That path is a folder, not a file. Choose a text file inside it.', 400);
   const size = Number.isSafeInteger(file.size) ? file.size : 0;
-  if (file.encoding !== 'base64' || typeof file.content !== 'string') throw new GitHubError(size > 1024 * 1024 ? 'That file is over 1 MB, too large to read here.' : 'That file cannot be read as text.', 413);
+  if (file.encoding !== 'base64' || typeof file.content !== 'string') throw new GitHubError(size > 1024 * 1024 ? 'That file is over 1 MB, too large to read here. Choose a smaller text file.' : 'That file cannot be read as text. Choose a UTF-8 text or source-code file.', 413);
   const bytes = Buffer.from(file.content.replace(/\s+/g, ''), 'base64');
-  if (bytes.subarray(0, 8000).includes(0)) throw new GitHubError('That file is binary, not text.', 415);
+  if (bytes.subarray(0, 8000).includes(0)) throw new GitHubError('That file is binary, not text. Choose a UTF-8 text or source-code file.', 415);
   const text = new TextDecoder('utf-8').decode(bytes).replace(/^\uFEFF/, '');
   const truncated = text.length > maxBytes;
   const sha = typeof file.sha === 'string' && /^[0-9a-f]{40}(?:[0-9a-f]{24})?$/.test(file.sha) ? file.sha : null;
@@ -127,7 +132,7 @@ export async function repositoryFile(repository, path, { maxBytes = 100 * 1024, 
 
 /** GitHub code search inside one repository (default branch only; GitHub allows about 10 searches a minute). */
 export async function searchRepository(repository, query, options) {
-  if (typeof repository !== 'string' || !REPOSITORY.test(repository)) throw new GitHubError('Choose a repository as owner/name.', 400);
+  if (typeof repository !== 'string' || !REPOSITORY.test(repository)) throw new GitHubError(GITHUB_REPOSITORY_HINT, 400);
   const text = typeof query === 'string' ? query.replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\b(?:repo|org|user):\S*/gi, ' ').replace(/\s+/g, ' ').trim().slice(0, 200) : '';
   if (!text) throw new GitHubError('Enter something to search for.', 400);
   const q = encodeURIComponent(`${text} repo:${repository}`).replace(/[!'()*]/g, c => '%' + c.charCodeAt(0).toString(16).toUpperCase());

@@ -5,7 +5,7 @@
 // The allowlist below is the complete list of requests it can make. It has GET and POST only:
 // no PATCH (so no force-push or ref moves), no PUT (no merge) and no DELETE (no branch deletion).
 // New refs must be refs/heads/dua/*, and pull requests can only come from a dua/* branch.
-import { boundedBytes, REPOSITORY } from './github.mjs';
+import { boundedBytes, REPOSITORY, GITHUB_REPOSITORY_HINT } from './github.mjs';
 
 const API = 'https://api.github.com';
 const repo = '/repos/[A-Za-z0-9_-]{1,100}/[A-Za-z0-9_.-]{1,100}';
@@ -32,12 +32,12 @@ export class GitHubWriteError extends Error {
 export const writeToken = env => typeof env?.GITHUB_BUILD_WRITE_TOKEN === 'string' ? env.GITHUB_BUILD_WRITE_TOKEN.trim() : '';
 
 const MESSAGES = {
-  401: ['The GitHub write token (GITHUB_BUILD_WRITE_TOKEN) is invalid or expired.', 502],
-  403: ['The GitHub write token was refused. It needs Contents and Pull requests: Read and write on this repository, or GitHub rate-limited the request. Retry in a minute.', 403],
-  404: ['Repository, branch or file not found, or the GitHub write token cannot access this repository.', 404],
+  401: ['The GitHub write token (GITHUB_BUILD_WRITE_TOKEN) is invalid or expired. Replace it in backend hosting settings, then redeploy and retry the same proposal.', 502],
+  403: ['The GitHub write token was refused. Check selected-repository access and Contents and Pull requests: Read and write permissions for GITHUB_BUILD_WRITE_TOKEN. If rate-limited, wait for the GitHub limit to reset before retrying the same proposal.', 403],
+  404: ['Repository, branch or file not found, or the GitHub write token cannot access this repository. Check the repository and selected-repository access for GITHUB_BUILD_WRITE_TOKEN.', 404],
   409: ['GitHub reported a conflict (the repository may be empty or just changed). Ask Dua to regenerate the proposal.', 409],
-  422: ['GitHub rejected this change.', 422],
-  429: ['GitHub rate limit reached. Retry in a minute.', 429]
+  422: ['GitHub rejected this change. Review the proposal and repository pull request settings before retrying the same proposal.', 422],
+  429: ['GitHub rate limit reached. Wait for the GitHub limit to reset before retrying the same proposal.', 429]
 };
 
 /**
@@ -52,7 +52,7 @@ export async function githubWrite(method, path, { env, fetcher = fetch, signal, 
   if (method === 'POST' && path.endsWith('/pulls') && !(typeof body?.head === 'string' && body.head.startsWith('dua/')))
     throw new GitHubWriteError('Pull requests can only come from a dua/* branch.', 400);
   const token = writeToken(env);
-  if (!token) throw new GitHubWriteError('Build pull requests are not configured.', 503);
+  if (!token) throw new GitHubWriteError('Build pull requests are not configured. Set GITHUB_BUILD_WRITE_TOKEN in backend hosting settings, then redeploy.', 503);
   const response = await fetcher(API + path, {
     method, redirect: 'error', signal: AbortSignal.any([signal || new AbortController().signal, AbortSignal.timeout(20000)]),
     headers: { Authorization: 'Bearer ' + token, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', 'User-Agent': 'Dua-Build-PR',
@@ -64,15 +64,15 @@ export async function githubWrite(method, path, { env, fetcher = fetch, signal, 
     try { const data = JSON.parse(new TextDecoder().decode(await boundedBytes(response, 64 * 1024))); detail = [data?.message, ...(Array.isArray(data?.errors) ? data.errors.map(e => e?.message || e?.code) : [])].filter(v => typeof v === 'string').join(' ').slice(0, 300); }
     catch { await response.body?.cancel().catch(() => {}); }
     if (response.status === 404 && notFound !== undefined) return notFound;
-    const [message, status] = MESSAGES[response.status] || ['GitHub request failed. Retry.', 502];
+    const [message, status] = MESSAGES[response.status] || ['GitHub request failed. Check GitHub service availability, then retry the same proposal so Dua can find any existing branch or pull request.', 502];
     throw new GitHubWriteError(message, status, detail);
   }
   try { return JSON.parse(new TextDecoder().decode(await boundedBytes(response, maxBytes))); }
-  catch (error) { throw new GitHubWriteError(error?.message === 'Response too large' ? 'GitHub response is too large.' : 'GitHub returned an invalid response.', 502); }
+  catch (error) { throw new GitHubWriteError(error?.message === 'Response too large' ? 'GitHub response is too large. Ask Dua for a smaller change; check GitHub for an existing branch or pull request before starting over.' : 'GitHub returned an invalid response. Retry the same proposal so Dua can find any existing branch or pull request.', 502); }
 }
 
 export const repoApi = repository => {
-  if (typeof repository !== 'string' || !REPOSITORY.test(repository)) throw new GitHubWriteError('Choose a repository as owner/name.', 400);
+  if (typeof repository !== 'string' || !REPOSITORY.test(repository)) throw new GitHubWriteError(GITHUB_REPOSITORY_HINT, 400);
   return '/repos/' + repository;
 };
 export const encodeBranch = branch => branch.split('/').map(encodeURIComponent).join('/');

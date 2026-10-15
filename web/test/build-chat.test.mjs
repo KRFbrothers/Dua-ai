@@ -81,9 +81,10 @@ test('Build config explains every missing piece and never leaks the token', asyn
 
 test('chat validation: Build needs a repository and Dua/Gemini; repository is Build-only', () => {
   assert.equal(validateChat(ask()), null);
-  assert.deepEqual(validateChat(ask({ repository: undefined })), ['Choose a repository for Build mode.', 400]);
-  assert.deepEqual(validateChat(ask({ repository: '../etc/passwd' })), ['Choose a repository for Build mode.', 400]);
-  assert.deepEqual(validateChat(ask({ repository: 'a/b/c' })), ['Choose a repository for Build mode.', 400]);
+  const invalidRepository = ['Choose a repository for Build mode. Use owner/name (for example owner/repo), not a GitHub URL.', 400];
+  assert.deepEqual(validateChat(ask({ repository: undefined })), invalidRepository);
+  assert.deepEqual(validateChat(ask({ repository: '../etc/passwd' })), invalidRepository);
+  assert.deepEqual(validateChat(ask({ repository: 'a/b/c' })), invalidRepository);
   assert.deepEqual(validateChat(ask({ model: 'ChatGPT' })), ['Build mode works with Dua or Gemini. Select one of them.', 400]);
   assert.deepEqual(validateChat({ ...ask(), mode: 'auto' }), ['A repository is only used in Build mode.', 400]);
   assert.equal(validateChat(ask({ model: 'Gemini' })), null);
@@ -274,4 +275,96 @@ test('Gemini and GitHub failures map to safe messages', async () => {
   const streamed = world({ gemini: [new Response('{}', { status: 500 })] });
   const events = await readEvents(await handleChat(authedChat(ask({ stream: true })), { env: buildEnv, fetcher: streamed }));
   assert.deepEqual(events.map(e => e.type), ['build', 'error']);
+});
+
+const connectorRequest = body => new Request('https://dua.test/api/connectors/github', {
+  method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer user-token' }, body: JSON.stringify(body)
+});
+
+test('connector setup and invalid inputs explain recovery before any GitHub read', async () => {
+  for (const env of [{ ...buildEnv, ENABLE_GITHUB_CONNECTOR: '0' }, { ...buildEnv, GITHUB_CONNECTOR_TOKEN: '' }]) {
+    const fetcher = world();
+    const response = await handleService(connectorRequest({ action: 'list-repositories' }), { env, fetcher });
+    assert.equal(response.status, 503);
+    const { error } = await response.json();
+    assert.match(error, /ENABLE_GITHUB_CONNECTOR=1/);
+    assert.match(error, /read-only GITHUB_CONNECTOR_TOKEN.*redeploy/);
+    assert.equal(fetcher.github().length, 0);
+  }
+  for (const body of [
+    { action: 'get-tree', repository: 'https://github.com/owner/repo' },
+    { action: 'search-code', repository: 'owner/repo/extra', query: 'test' },
+    { action: 'get-file', repository: REPO, path: '../private-value' }
+  ]) {
+    const fetcher = world();
+    const response = await handleService(connectorRequest(body), { env: buildEnv, fetcher });
+    assert.equal(response.status, 400);
+    const { error } = await response.json();
+    assert.match(error, body.action === 'get-file' ? /relative to the repository root.*README.md/ : /owner\/name.*owner\/repo/);
+    assert.doesNotMatch(error, /private-value/);
+    assert.equal(fetcher.github().length, 0);
+  }
+});
+
+test('read failures give token/access/reset recovery while preserving status mappings and hiding upstream bodies', async () => {
+  for (const [status, clientStatus, routeStatus, hint] of [
+    [401, 502, 502, /Replace GITHUB_CONNECTOR_TOKEN.*redeploy/],
+    [403, 429, 502, /Contents: Read-only.*If rate-limited.*reset/],
+    [404, 404, 404, /Check the repository name\/file path.*GITHUB_CONNECTOR_TOKEN/],
+    [429, 429, 502, /Wait.*limit to reset/],
+    [500, 502, 502, /service availability.*retry/]
+  ]) {
+    const fetcher = router([[url => url.startsWith(GH), () => Response.json({ message: `raw upstream ${TOKEN}` }, { status })]]);
+    await assert.rejects(githubGet(`/repos/${REPO}`, { env: buildEnv, fetcher }), error => {
+      assert.equal(error.status, clientStatus);
+      assert.match(error.message, hint);
+      assert.doesNotMatch(error.message, /raw upstream|fake-secret/);
+      assert.ok(!error.message.includes(TOKEN));
+      return true;
+    });
+    const response = await handleService(connectorRequest({ action: 'get-tree', repository: REPO }), { env: buildEnv, fetcher });
+    assert.equal(response.status, routeStatus);
+    const text = await response.text();
+    assert.match(JSON.parse(text).error, hint);
+    assert.ok(!text.includes(TOKEN));
+    assert.doesNotMatch(text, /raw upstream/);
+    assert.equal(fetcher.calls.filter(c => c.url.startsWith(GH)).length, 2, 'one read per attempt, no automatic retries');
+    assert.ok(fetcher.calls.every(call => call.method === 'GET'));
+  }
+});
+
+test('bounded and malformed GitHub responses offer recovery without exposing response content', async () => {
+  for (const [response, hint] of [
+    [new Response('private malformed data', { headers: { 'content-length': '20' } }), /too large.*smaller repository or file/],
+    [new Response('private malformed data'), /invalid response.*Retry this repository read/]
+  ]) {
+    await assert.rejects(githubGet(`/repos/${REPO}`, { env: buildEnv, maxBytes: response.headers.has('content-length') ? 5 : 100, fetcher: async () => response }), error => {
+      assert.equal(error.status, 502);
+      assert.match(error.message, hint);
+      assert.doesNotMatch(error.message, /private malformed data/);
+      return true;
+    });
+  }
+});
+
+test('connector and Build read network failures keep their existing statuses and safe recovery', async () => {
+  for (const [failure, connectorStatus, buildStatus, hint] of [
+    [new Error(`network ${TOKEN}`), 502, 502, /Check your connection and GitHub service availability.*retry this read/],
+    [new DOMException(`timeout ${TOKEN}`, 'TimeoutError'), 502, 504, /timed out.*Retry this read.*smaller repository/]
+  ]) {
+    const fetcher = router([[url => url.startsWith(GH), () => { throw failure; }]]);
+    const connector = await handleService(connectorRequest({ action: 'get-tree', repository: REPO }), { env: buildEnv, fetcher });
+    const build = await handleChat(authedChat(ask()), { env: buildEnv, fetcher });
+    assert.equal(connector.status, connectorStatus);
+    assert.equal(build.status, buildStatus);
+    for (const response of [connector, build]) {
+      const { error } = await response.json();
+      assert.match(error, hint);
+      assert.ok(!error.includes(TOKEN));
+    }
+    const reads = fetcher.calls.filter(call => call.url.startsWith(GH));
+    assert.equal(reads.length, 3, 'connector reads the tree; Build prepares repository info and tree');
+    assert.equal(reads.filter(call => call.url === `${GH}/repos/${REPO}`).length, 1);
+    assert.ok(fetcher.calls.every(call => call.method === 'GET'));
+  }
 });
