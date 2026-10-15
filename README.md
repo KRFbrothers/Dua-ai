@@ -47,7 +47,7 @@ Start at Home for chat, open History for search/rename/delete, and use Projects 
 
 ## Project roadmap
 
-See [ROADMAP.md](ROADMAP.md) for the Dua AI Improvement Roadmap. Phase 1 starts with README architecture/local setup, followed by environment examples, a contributor project map and actionable errors, each in a focused PR.
+See [ROADMAP.md](ROADMAP.md) for the Dua AI Improvement Roadmap. Phase 1's architecture/local setup, environment examples, contributor project map and actionable GitHub/Build errors are implemented. Phase 2 now includes shared GitHub validation, protected-path regression coverage and [Node request/stage logging](docs/GITHUB_LOGGING.md); the remaining roadmap sections are not implied complete.
 Use [RELEASE-CHECKLIST.md](RELEASE-CHECKLIST.md) to verify the owner-only lock, provider spending limits, device/staging checks, and installing the APK on your own phone. The production configuration cannot be verified from this source checkout alone.
 Use [SIGNING.md](SIGNING.md) to store the permanent personal signing key and run the manual [Build personal APK](.github/workflows/personal-apk.yml) workflow. Release builds require the pinned certificate; they cannot fall back to another machine's debug key.
 

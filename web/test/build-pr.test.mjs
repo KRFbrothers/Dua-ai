@@ -294,6 +294,12 @@ test('success: blobs → tree → commit → new dua/* ref → draft PR with the
   ] });
   const result = await create(body, { fetcher });
   const lines = result.lines;
+  const logs = lines.map(line => JSON.parse(line));
+  assert.deepEqual(logs.map(row => [row.event, row.stage]).filter(([, stage]) => stage), [
+    ['stage.started', 'pr_submission'], ['stage.finished', 'pr_submission']
+  ]);
+  assert.equal(logs.find(row => row.event === 'stage.finished').outcome, 'success');
+  assert.equal(new Set(logs.map(row => row.requestId)).size, 1);
   assert.equal(result.status, 200, JSON.stringify(result.body));
   assert.deepEqual({ ...result.body, commit: undefined }, { ok: true, repository: REPO, branch: BRANCH, base: 'main', commit: undefined, url: `https://github.com/${REPO}/pull/80`, number: 80, draft: true, state: 'open', existing: false });
   const writes = fetcher.writes().map(c => c.url.slice(GH.length + `/repos/${REPO}`.length));
@@ -362,6 +368,10 @@ test('idempotent: a second tap returns the same pull request; a foreign branch w
   taken.state.refs.set(BRANCH, (() => { const sha = 'd'.repeat(40); taken.state.commits.set(sha, { sha, message: 'Unrelated work' }); return sha; })());
   const refused = await create(approved(), { fetcher: taken });
   assert.equal(refused.status, 409);
+  const refusalLogs = refused.lines.map(line => JSON.parse(line));
+  assert.equal(refusalLogs.find(row => row.event === 'stage.finished').outcome, 'error');
+  assert.equal(refusalLogs.find(row => row.event === 'stage.finished').status, 409);
+  assert.equal(refusalLogs.at(-1).status, 409);
   assert.match(refused.body.error, /already exists and was not made for this proposal/);
   assert.equal(taken.writes().length, 0);
   // A double tap racing to create the ref: the loser resumes instead of failing.
