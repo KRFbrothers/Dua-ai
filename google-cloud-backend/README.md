@@ -101,6 +101,8 @@ with the configured repository, rejects quotes/parentheses/backslashes and OR/NO
 verifies each result belongs to that repository. See [GitHub validation policy](../docs/GITHUB_VALIDATION.md)
 for platform-specific limits and mocked regression tests.
 
+Before GitHub writes, the PR client now checks the complete `dua-agent/` branch name (1–80 lowercase letters/digits/dashes after the prefix, with an alphanumeric start/end), rejects empty submissions and file/folder clashes within the proposed changes, and enforces the same changed-file count cap at the tree request boundary. Existing generated branch names and file order are preserved. See [Agent PR preflight](../docs/GITHUB_VALIDATION.md#cloud-run-agent-pr-preflight) for the exact policy and limits; this is roadmap section 2.3 hardening, not a new write capability.
+
 **1. Create the GitHub token** (on github.com, signed in as KRFbrothers)
 1. Profile picture → **Settings** → **Developer settings** → **Personal access tokens** → **Fine-grained tokens** → **Generate new token**.
 2. Name: `dua-agent`. Expiration: 90 days (make a new one when it expires).

@@ -111,6 +111,97 @@ def test_change_validation_caps():
         ca.validate_changes([{"path": "big.kt", "content": "x" * (ca.MAX_FILE_BYTES + 1)}])
 
 
+@pytest.mark.parametrize("branch", [
+    None, 42, [], {}, "main", "other/task", "dua-agent/", "dua-agent/-task", "dua-agent/task-",
+    "dua-agent/nested/task", "dua-agent/task.lock", "dua-agent/task..x", "dua-agent/task@{1}",
+    "dua-agent/task:other", "dua-agent/task*", "dua-agent/task?", "dua-agent/task[0]", "dua-agent/task\\x",
+    "dua-agent/task\n", "dua-agent/task\t", "dua-agent/task ", "dua-agent/Task", "dua-agent/é",
+    "dua-agent/" + "a" * 81,
+])
+def test_invalid_agent_branch_is_rejected_at_both_write_boundaries_before_any_network(branch):
+    gh = client()
+    with pytest.raises(ca.BlockedRequest):
+        gh.open_pull_request([{"path": "safe.kt", "content": "x"}], "t", "d", branch)
+    with pytest.raises(ca.BlockedRequest):
+        gh.request("POST", f"/repos/{REPO}/git/refs", {"ref": "refs/heads/" + branch if isinstance(branch, str) else branch, "sha": "x"})
+    with pytest.raises(ca.BlockedRequest):
+        gh.request("POST", f"/repos/{REPO}/pulls", {"head": branch, "base": "main"})
+    assert gh.opener.calls == []
+
+
+@pytest.mark.parametrize("body", [None, [], "ref", {}, {"ref": "refs/heads/dua-agent/task"},
+    {"ref": "refs/heads/dua-agent/task", "sha": "x", "force": True}])
+def test_branch_requests_cannot_smuggle_fields_or_malformed_payloads(body):
+    gh = client()
+    with pytest.raises(ca.BlockedRequest):
+        gh.request("POST", f"/repos/{REPO}/git/refs", body)
+    assert gh.opener.calls == []
+
+
+@pytest.mark.parametrize("branch", ["dua-agent/a", "dua-agent/1", "dua-agent/add-home-12345", "dua-agent/" + "a" * 80])
+def test_valid_agent_branch_boundaries_still_open_only_new_refs_and_prs_into_main(branch):
+    gh = client()
+    assert gh.open_pull_request([{"path": "safe.kt", "content": "x"}], "t", "d", branch)[0] == 201
+    refs = [body for method, path, body in gh.opener.calls if method == "POST" and path.endswith("/git/refs")]
+    assert refs == [{"ref": "refs/heads/" + branch, "sha": "commit1"}]
+    assert gh.opener.calls[-1][2]["head"] == branch
+    assert gh.opener.calls[-1][2]["base"] == "main"
+
+
+@pytest.mark.parametrize("paths", [
+    ["src", "src/main.kt"], ["src/main.kt", "src"], ["src", "src/deep/main.kt"],
+    ["src/deep/main.kt", "src"], ["a.kt", "a.kt"], [" a.kt ", "a.kt"],
+])
+def test_conflicting_proposals_fail_before_blobs_or_progress_claims(paths):
+    gh, progress = client(), []
+    files = [{"path": path, "content": "x"} for path in paths]
+    with pytest.raises(ca.CodingError):
+        gh.open_pull_request(files, "t", "d", "dua-agent/test")
+    with pytest.raises(ca.CodingError):
+        ca.finish(gh, progress.append, {"title": "t", "files": files}, "task")
+    assert gh.opener.calls == []
+    assert progress == []
+
+
+@pytest.mark.parametrize("paths", [["a", "a/b.kt"], ["a/b.kt", "a"], ["a.kt", "a.kt"]])
+def test_direct_tree_requests_cannot_bypass_conflicting_path_checks(paths):
+    gh = client()
+    entries = [{"path": path, "mode": "100644", "type": "blob", "sha": "x"} for path in paths]
+    with pytest.raises(ca.BlockedRequest):
+        gh.request("POST", f"/repos/{REPO}/git/trees", {"tree": entries})
+    assert gh.opener.calls == []
+
+
+def test_direct_tree_requests_enforce_the_same_changed_file_count_cap():
+    gh = client()
+    entries = [{"path": f"file{i}.kt", "mode": "100644", "type": "blob", "sha": "x"} for i in range(ca.MAX_FILES_CHANGED + 1)]
+    with pytest.raises(ca.BlockedRequest):
+        gh.request("POST", f"/repos/{REPO}/git/trees", {"tree": entries})
+    assert gh.opener.calls == []
+    assert ca.allowed("POST", f"/repos/{REPO}/git/trees", {"tree": entries[:ca.MAX_FILES_CHANGED]}, REPO) is None
+
+
+def test_empty_direct_submission_has_no_github_side_effects():
+    gh = client()
+    with pytest.raises(ca.CodingError, match="No file changes"):
+        gh.open_pull_request([], "t", "d", "dua-agent/test")
+    assert gh.opener.calls == []
+
+
+def test_utf8_change_budgets_include_total_and_preserve_file_order():
+    # Limits are bytes, not Python characters. Exact limits remain permitted.
+    text = "😀" * (ca.MAX_FILE_BYTES // 4)
+    files = [{"path": f"file{i}.kt", "content": text} for i in range(ca.MAX_TOTAL_CHANGE_BYTES // ca.MAX_FILE_BYTES)]
+    assert ca.validate_changes(files) == files
+    gh = client()
+    for oversized in [files + [{"path": "one-more.kt", "content": "x"}], [{"path": "big.kt", "content": text + "x"}]]:
+        with pytest.raises(ca.CodingError, match="too large"):
+            gh.open_pull_request(oversized, "t", "d", "dua-agent/test")
+    assert gh.opener.calls == []
+    small = [{"path": "z.kt", "content": ""}, {"path": "src/z.kt", "content": "z"}, {"path": "src/a.kt", "content": "a"}]
+    assert ca.validate_changes(small) == small
+
+
 @pytest.mark.parametrize("repo", ["owner/.", "owner/..", "owner/repo\n", "owner/repo\t", "owner/repo/extra", None, [REPO]])
 def test_invalid_repository_rejected_at_config_and_client_boundary(monkeypatch, repo):
     opener = Opener()
