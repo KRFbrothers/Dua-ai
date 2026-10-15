@@ -3,6 +3,8 @@ package com.dua.ai.ui.chat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -29,6 +31,11 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.vectorResource
 import com.dua.ai.R
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.semantics.contentDescription
@@ -38,6 +45,8 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.dua.ai.ui.theme.ComposerTextStyle
 import com.dua.ai.ui.theme.HomeModelLabelStyle
+import com.dua.ai.ui.theme.HomeSegmentStyle
+import com.dua.ai.ui.theme.HomeSegmentSelectedStyle
 import com.dua.ai.ui.theme.HomeShapes
 import com.dua.ai.ui.theme.HomeSizes
 import com.dua.ai.ui.theme.HomeTheme
@@ -45,6 +54,34 @@ import com.dua.ai.ui.theme.Sizes
 import com.dua.ai.ui.theme.Spacing
 
 const val AUTO_MODEL = "Auto"
+
+internal enum class HomeMode { Chat, Task }
+
+/** Same track, tab, text and selection colors as the former top-bar pill. */
+@Composable
+internal fun HomeModeSwitcher(mode: HomeMode, onSelect: (HomeMode) -> Unit, enabled: Boolean) {
+    val c = HomeTheme.colors
+    val inset = HomeSizes.segmentTrackInset
+    Row(Modifier.heightIn(min = Sizes.touchTarget).drawBehind {
+        val h = (HomeSizes.segmentTab + inset * 2).toPx()
+        drawRoundRect(c.segmentTrack, Offset(0f, (size.height - h) / 2), Size(size.width, h),
+            CornerRadius(HomeSizes.segmentTab.toPx() / 2 + inset.toPx()))
+    }.padding(horizontal = inset).selectableGroup(), verticalAlignment = Alignment.CenterVertically) {
+        HomeMode.entries.forEach { tab ->
+            val selected = mode == tab
+            Box(Modifier.heightIn(min = Sizes.touchTarget).widthIn(min = Sizes.touchTarget)
+                .selectable(selected = selected, enabled = enabled, role = Role.Tab, onClick = { onSelect(tab) }),
+                contentAlignment = Alignment.Center) {
+                Box(Modifier.heightIn(min = HomeSizes.segmentTab).clip(HomeShapes.segmentTab)
+                    .background(if (selected) c.segmentSelected else Color.Transparent)
+                    .padding(horizontal = HomeSizes.segmentTabPaddingH), contentAlignment = Alignment.Center) {
+                    Text(tab.name, style = if (selected) HomeSegmentSelectedStyle else HomeSegmentStyle,
+                        color = if (selected) c.segmentSelectedText else c.segmentText, maxLines = 1)
+                }
+            }
+        }
+    }
+}
 
 @Composable
 fun Composer(
@@ -70,6 +107,9 @@ fun Composer(
     onTextFieldBounds: ((Rect) -> Unit)? = null,
     currentModel: String = "Auto",
     showModelSelector: Boolean = true,
+    placeholder: String = "Ask Dua AI",
+    sendEnabled: Boolean = true,
+    aboveInput: @Composable () -> Unit = {},
     attachmentPopup: @Composable () -> Unit = {},
     /** Inline dictation (chat). Null = the mic calls [onMic] (opens the Voice page). */
     dictation: ChatDictation? = null,
@@ -83,7 +123,7 @@ fun Composer(
 
     val c = HomeTheme.colors
     fun submit() {
-        if (activeText.isNotBlank()) {
+        if (activeText.isNotBlank() && sendEnabled) {
             onSend(activeText)
             localText = ""
             onValueChange("")
@@ -99,7 +139,7 @@ fun Composer(
             .navigationBarsPadding()
             .imePadding()
     ) {
-        // Not in the reference: the current model, small and right-aligned above the bar, opens the model sheet.
+        // Standalone composers can retain this row; Home opens the model sheet from its header.
         if (showModelSelector) Row(
             Modifier.align(Alignment.End)
                 .heightIn(min = Sizes.touchTarget).widthIn(min = Sizes.touchTarget)
@@ -113,6 +153,7 @@ fun Composer(
             Text(currentModel, style = HomeModelLabelStyle, color = c.modelLabel, maxLines = 1)
             Icon(Icons.Default.KeyboardArrowDown, null, tint = c.modelLabel, modifier = Modifier.size(Sizes.iconTiny))
         }
+        Box(Modifier.align(Alignment.CenterHorizontally)) { aboveInput() }
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -149,7 +190,7 @@ fun Composer(
                 keyboardActions = KeyboardActions(onSend = { submit() }),
                 decorationBox = { innerTextField ->
                     Box(Modifier.heightIn(min = Sizes.touchTarget), contentAlignment = Alignment.CenterStart) {
-                        if (activeText.isEmpty()) Text("Ask Dua AI", style = ComposerTextStyle, color = c.placeholder)
+                        if (activeText.isEmpty()) Text(placeholder, style = ComposerTextStyle, color = c.placeholder)
                         innerTextField()
                     }
                 }
@@ -166,7 +207,7 @@ fun Composer(
             Box(
                 modifier = Modifier
                     .size(Sizes.touchTarget)
-                    .clickable(role = Role.Button, onClick = action)
+                    .clickable(enabled = typing || activeText.isBlank() || sendEnabled, role = Role.Button, onClick = action)
                     .semantics(mergeDescendants = true) { contentDescription = label },
                 contentAlignment = Alignment.Center
             ) {

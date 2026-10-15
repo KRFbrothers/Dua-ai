@@ -154,13 +154,13 @@ class ChatTokensComponentsTest {
     }
 
     @Test fun chatTopBarButtonsLabelled() {
-        var menu = 0; var computer = 0; var search = 0
-        show("dark") { ChatTopBar(onMenu = { menu++ }, onComputer = { computer++ }, onFindInChat = { search++ }) }
-        listOf("Open chat history", "Computer").forEach { compose.onNodeWithContentDescription(it).assertHasClickAction().performClick() }
+        var menu = 0; var profile = 0; var search = 0; var models = 0; var newChat = 0
+        show("dark") { ChatTopBar(onMenu = { menu++ }, onProfile = { profile++ }, onFindInChat = { search++ },
+            onModel = { models++ }, onNewChat = { newChat++ }) }
+        listOf("Open chat history", "Open profile and settings", "Model, Dua", "New chat").forEach { compose.onNodeWithContentDescription(it).assertHasClickAction().performClick() }
         compose.onNodeWithContentDescription("Open chat history").performTouchInput { longClick() }
         compose.onNodeWithContentDescription("Find in chat").assertDoesNotExist()
-        compose.onNodeWithContentDescription("New chat").assertDoesNotExist()
-        compose.runOnIdle { assertEquals(listOf(1, 1, 1), listOf(menu, search, computer)) }
+        compose.runOnIdle { assertEquals(listOf(1, 1, 1, 1, 1), listOf(menu, search, profile, models, newChat)) }
         assert48dp()
     }
 }
