@@ -44,7 +44,7 @@ def model(monkeypatch):
     monkeypatch.setattr(engine, "google_search_tool", lambda: "GOOGLE_SEARCH")
     import agent_tools
     import coding_agent
-    monkeypatch.setattr(agent_tools, "default_tools", lambda github: ["TOOLS"])
+    monkeypatch.setattr(agent_tools, "default_tools", lambda github, issues=False: ["TOOLS"])
     monkeypatch.setattr(coding_agent, "default_tool_response", lambda results: ("tool", results))
     monkeypatch.delenv("GITHUB_TOKEN", raising=False)
     monkeypatch.delenv("DUA_APP_TOKEN", raising=False)

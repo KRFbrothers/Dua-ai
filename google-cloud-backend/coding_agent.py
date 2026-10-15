@@ -75,6 +75,16 @@ def scoped_search(query, repo):
             (scopes[0].start() == 0 or query[scopes[0].start() - 1].isspace()))
 
 
+# Issue tools are locked to this one repository, even if DUA_REPO points elsewhere.
+ISSUES_REPO = "KRFbrothers/Dua-ai"
+ISSUE_FOOTER = "\n\n---\n_Created by Dua Agent_"
+COMMENT_FOOTER = "\n\n---\n_Comment by Dua Agent_"
+MAX_ISSUE_TITLE = 200
+MAX_ISSUE_BODY = 20_000
+MAX_ISSUE_TEXT = 4_000        # per issue/comment body returned to the model
+MAX_ISSUE_COMMENTS = 20
+
+
 class CodingError(Exception):
     """Message is safe to show to the user."""
 
@@ -109,6 +119,11 @@ def allowed(method, path, body, repo):
         "POST": [rf"^{base}/git/blobs$", rf"^{base}/git/trees$", rf"^{base}/git/commits$",
                  rf"^{base}/git/refs$", rf"^{base}/pulls$"],
     }
+    if repo.lower() == ISSUES_REPO.lower():
+        # Issues: read, create and comment only (no PATCH/PUT/DELETE: no close, edit, assign, lock or delete).
+        rules["GET"] += [rf"^{base}/issues$", rf"^{base}/issues/[1-9][0-9]{{0,8}}$",
+                         rf"^{base}/issues/[1-9][0-9]{{0,8}}/comments$", rf"^{base}/labels$", r"^/search/issues$"]
+        rules["POST"] += [rf"^{base}/issues$", rf"^{base}/issues/[1-9][0-9]{{0,8}}/comments$"]
     if method not in rules or not any(re.fullmatch(p, path) for p in rules[method]):
         return f"{method} {path} is not allowed"
     if "/contents/" in path and not valid_path(path.split("/contents/", 1)[1]):
@@ -123,6 +138,12 @@ def allowed(method, path, body, repo):
         ref = str((body or {}).get("ref", ""))
         if not ref.startswith("refs/heads/" + BRANCH_PREFIX) or ".." in ref:
             return "only new dua-agent/ branches may be created"
+    if method == "POST" and re.fullmatch(rf"{base}/issues", path):
+        if not isinstance(body, dict) or set(body) - {"title", "body", "labels"} or not isinstance(body.get("title"), str):
+            return "new issues may only set title, body and labels"
+    if method == "POST" and path.endswith("/comments"):
+        if not isinstance(body, dict) or set(body) != {"body"}:
+            return "comments may only set a body"
     if method == "POST" and path.endswith("/pulls"):
         if (body or {}).get("base") != BASE_BRANCH or not str((body or {}).get("head", "")).startswith(BRANCH_PREFIX):
             return "pull requests must go from a dua-agent/ branch into main"
@@ -140,6 +161,9 @@ class GitHubClient:
         reason = allowed(method, path, body, self.repo)
         if reason:
             raise BlockedRequest(f"Blocked GitHub request: {reason}.")
+        if method == "GET" and path == "/search/issues":
+            if not scoped_search((query or {}).get("q", ""), self.repo):
+                raise BlockedRequest("Blocked GitHub request: issue search must stay inside the repository.")
         if method == "GET" and path == "/search/code":
             q = (query or {}).get("q", "")
             if not scoped_search(q, self.repo):
@@ -155,7 +179,7 @@ class GitHubClient:
         except HTTPError as error:
             status = error.code
             if status in (401, 403):
-                raise CodingError("GitHub refused access. Check that the GitHub token is valid and has Contents and Pull requests (read and write) on the repository.")
+                raise CodingError("GitHub refused access. Check that the GitHub token is valid and has Contents, Pull requests and Issues (read and write) on the repository.")
             if status == 404:
                 raise CodingError("not found")
             raise CodingError(f"GitHub request failed ({status}).")
@@ -186,6 +210,78 @@ class GitHubClient:
                 item["repository"]["full_name"].lower() != self.repo.lower() or not valid_path(item.get("path")) for item in items):
             raise CodingError("GitHub returned search results outside the selected repository or with invalid paths.")
         return [item["path"] for item in items[:20]]
+
+    # --- issues (ISSUES_REPO only) ---
+    def issues_enabled(self):
+        return self.repo.lower() == ISSUES_REPO.lower()
+
+    @staticmethod
+    def _issue(item, full=False):
+        text = str(item.get("body") or "")
+        out = {"number": item.get("number"), "title": str(item.get("title") or "")[:MAX_ISSUE_TITLE],
+               "state": item.get("state"), "url": item.get("html_url"),
+               "labels": [str(l.get("name")) for l in item.get("labels") or [] if isinstance(l, dict)][:20],
+               "comments": item.get("comments", 0), "updated": item.get("updated_at")}
+        if full:
+            out["body"] = text[:MAX_ISSUE_TEXT]
+            out["truncated"] = len(text) > MAX_ISSUE_TEXT
+        return out
+
+    def list_issues(self, state="open"):
+        state = state if state in ("open", "closed", "all") else "open"
+        data = self.request("GET", f"/repos/{self.repo}/issues", query={"state": state, "per_page": "30"})
+        return [self._issue(i) for i in data or [] if isinstance(i, dict) and "pull_request" not in i][:30]
+
+    def read_issue(self, number):
+        number = int(number)
+        if not 1 <= number < 10**9:
+            raise CodingError("Invalid issue number.")
+        item = self.request("GET", f"/repos/{self.repo}/issues/{number}")
+        if not isinstance(item, dict) or "pull_request" in item:
+            raise CodingError("That number is a pull request, not an issue.")
+        comments = self.request("GET", f"/repos/{self.repo}/issues/{number}/comments", query={"per_page": str(MAX_ISSUE_COMMENTS)})
+        result = self._issue(item, full=True)
+        result["comment_list"] = [{"author": (c.get("user") or {}).get("login"), "created": c.get("created_at"),
+                                   "body": str(c.get("body") or "")[:MAX_ISSUE_TEXT]} for c in comments or [] if isinstance(c, dict)][:MAX_ISSUE_COMMENTS]
+        return result
+
+    def search_issues(self, text):
+        text = re.sub(r"\b(?:repo|org|user|is|type):\S*", " ", text, flags=re.I) if isinstance(text, str) else ""
+        text = " ".join(text.split())[:200]
+        q = f"{text} repo:{self.repo} is:issue"
+        if not text or not scoped_search(q, self.repo):
+            raise CodingError("Use plain search terms without quotes, parentheses, backslashes or OR/NOT operators.")
+        data = self.request("GET", "/search/issues", query={"q": q, "per_page": "20"})
+        items = (data or {}).get("items") if isinstance(data, dict) else None
+        return [self._issue(i) for i in items or [] if isinstance(i, dict) and "pull_request" not in i][:20]
+
+    def labels(self):
+        data = self.request("GET", f"/repos/{self.repo}/labels", query={"per_page": "100"})
+        return {str(l.get("name")) for l in data or [] if isinstance(l, dict)}
+
+    def create_issue(self, title, body, labels=None):
+        title = " ".join(str(title or "").split())[:MAX_ISSUE_TITLE]
+        if not title:
+            raise CodingError("The issue needs a title.")
+        payload = {"title": title, "body": str(body or "").strip()[:MAX_ISSUE_BODY] + ISSUE_FOOTER}
+        wanted = [str(l) for l in (labels or []) if isinstance(l, str)][:5]
+        if wanted:
+            existing = self.labels()
+            unknown = [l for l in wanted if l not in existing]
+            if unknown:
+                raise CodingError(f"Unknown label(s): {', '.join(unknown)[:200]}. Only existing labels can be used.")
+            payload["labels"] = wanted
+        item = self.request("POST", f"/repos/{self.repo}/issues", payload)
+        return {"number": item.get("number"), "url": item.get("html_url")}
+
+    def comment_issue(self, number, body):
+        number = int(number)
+        text = str(body or "").strip()[:MAX_ISSUE_BODY]
+        if not 1 <= number < 10**9 or not text:
+            raise CodingError("Give an issue number and a comment.")
+        self.read_issue(number)  # must exist and be an issue, not a pull request
+        item = self.request("POST", f"/repos/{self.repo}/issues/{number}/comments", {"body": text + COMMENT_FOOTER})
+        return {"url": item.get("html_url")}
 
     # --- the only write sequence: new branch + one commit + PR into main ---
     def open_pull_request(self, files, title, description, branch):

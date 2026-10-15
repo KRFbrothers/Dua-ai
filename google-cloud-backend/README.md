@@ -105,7 +105,7 @@ for platform-specific limits and mocked regression tests.
 1. Profile picture → **Settings** → **Developer settings** → **Personal access tokens** → **Fine-grained tokens** → **Generate new token**.
 2. Name: `dua-agent`. Expiration: 90 days (make a new one when it expires).
 3. Repository access: **Only select repositories** → `KRFbrothers/Dua-ai`.
-4. Permissions → Repository permissions: **Contents: Read and write**, **Pull requests: Read and write**
+4. Permissions → Repository permissions: **Contents: Read and write**, **Pull requests: Read and write**, **Issues: Read and write** (Agent issue tools)
    (Metadata: Read-only is added automatically). Nothing else.
 5. **Generate token** and copy it (it starts with `github_pat_`). Do not paste it in chat, code or screenshots.
 
@@ -183,6 +183,7 @@ each one runs on this server, behind the same owner sign-in as `/api/chat`.
 | `generate_image` | Same path as `/api/imagine/image` (owner storage, `IMAGINE_DAILY_IMAGES` cap); needs `DUA_IMAGINE` on | 1 |
 | `remember` / `recall` | Suggests a note to the app's Memory (you confirm it in Settings > Integrations); reads the Memory the app sends | 3 / 3 |
 | `list_files`, `read_file`, `search_code`, `propose_changes` | GitHub tools on `DUA_REPO`, only when `GITHUB_TOKEN` is set; same allowlist (new `dua-agent/` branch + PR, never merges) | coding caps |
+| `list_issues`, `read_issue`, `search_issues`, `create_issue`, `comment_on_issue` | Issues on `KRFbrothers/Dua-ai` only (needs `GITHUB_TOKEN` with Issues: Read and write). Pull requests are skipped; bodies/comments capped at 4,000 characters. New issues end with "Created by Dua Agent", comments with "Comment by Dua Agent"; only existing labels. No close, edit, assign, lock or delete | 5 reads (shared), 1 create, 1 comment |
 
 Loop caps: `AGENT_MAX_STEPS` model calls (default 12), `AGENT_STEP_TOKENS` output tokens per step (16384),
 `AGENT_SUB_TOKENS` per search/code call (3072) and `AGENT_MAX_SECONDS` total (600). Each tool shows a step chip

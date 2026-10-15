@@ -30,7 +30,10 @@ STEP_TOKENS = int(os.environ.get("AGENT_STEP_TOKENS", "16384"))
 SUB_TOKENS = int(os.environ.get("AGENT_SUB_TOKENS", "3072"))
 MAX_SECONDS = int(os.environ.get("AGENT_MAX_SECONDS", "600"))
 LIMITS = {"google_search": 3, "fetch_url": 5, "run_python": 2, "generate_image": 1, "remember": 3,
-          "calculator": 20, "current_time": 5, "recall": 3}
+          "calculator": 20, "current_time": 5, "recall": 3,
+          # Issues: list/read/search share one read budget; one new issue and one comment per request.
+          "issue_reads": 5, "create_issue": 1, "comment_on_issue": 1}
+ISSUE_READ_TOOLS = ("list_issues", "read_issue", "search_issues")
 FETCH_MAX_BYTES = 2 * 1024 * 1024
 FETCH_MAX_CHARS = 20_000
 FETCH_TIMEOUT = 10
@@ -48,6 +51,9 @@ AGENT_PROMPT = (
 )
 GITHUB_HINT = (", and the GitHub tools to read the Dua AI repository {repo} and propose_changes to open a pull "
                "request (read before you change; it never merges)")
+ISSUES_HINT = (". For GitHub issues on {repo}: list_issues/search_issues/read_issue to look, create_issue only when the "
+               "user asks for a new issue (search first to avoid duplicates), comment_on_issue only when asked; you "
+               "cannot close, edit, assign or delete issues")
 
 SEARCH_PROMPT = ("Use Google Search to find current, real information for: {query}\n"
                  "Write compact factual notes (names, dates, numbers). No advice.")
@@ -66,6 +72,11 @@ PROGRESS = {
     "read_file": ("read", "Reading files\u2026"),
     "search_code": ("search_code", "Searching the code\u2026"),
     "propose_changes": ("pr", "Opening PR\u2026"),
+    "list_issues": ("issues", "Reading issues\u2026"),
+    "read_issue": ("issues", "Reading issues\u2026"),
+    "search_issues": ("issues", "Searching issues\u2026"),
+    "create_issue": ("issue_new", "Creating issue\u2026"),
+    "comment_on_issue": ("issue_comment", "Commenting on issue\u2026"),
 }
 
 S, O = "STRING", "OBJECT"
@@ -89,14 +100,31 @@ BASE_TOOLS = [
 ]
 
 
-def declarations(github):
+ISSUE_TOOLS = [
+    {"name": "list_issues", "description": "List recent issues (not pull requests) in the Dua AI repository.",
+     "parameters": {"type": O, "properties": {"state": {"type": S, "enum": ["open", "closed", "all"]}}}},
+    {"name": "read_issue", "description": "Read one issue with its comments.",
+     "parameters": {"type": O, "properties": {"number": {"type": "INTEGER"}}, "required": ["number"]}},
+    {"name": "search_issues", "description": "Search issues in the Dua AI repository by plain words.",
+     "parameters": {"type": O, "properties": {"query": {"type": S}}, "required": ["query"]}},
+    {"name": "create_issue", "description": "Open ONE new issue (only when the user asks). Labels must already exist.",
+     "parameters": {"type": O, "properties": {"title": {"type": S}, "body": {"type": S},
+                                              "labels": {"type": "ARRAY", "items": {"type": S}}},
+                    "required": ["title", "body"]}},
+    {"name": "comment_on_issue", "description": "Add ONE comment to an existing issue (only when the user asks).",
+     "parameters": {"type": O, "properties": {"number": {"type": "INTEGER"}, "body": {"type": S}},
+                    "required": ["number", "body"]}},
+]
+
+
+def declarations(github, issues=False):
     import coding_agent
-    return BASE_TOOLS + (coding_agent.TOOLS if github else [])
+    return BASE_TOOLS + (coding_agent.TOOLS if github else []) + (ISSUE_TOOLS if github and issues else [])
 
 
-def default_tools(github):
+def default_tools(github, issues=False):
     from google.genai import types
-    return [types.Tool(function_declarations=[types.FunctionDeclaration(**tool) for tool in declarations(github)])]
+    return [types.Tool(function_declarations=[types.FunctionDeclaration(**tool) for tool in declarations(github, issues)])]
 
 
 # ---------------------------------------------------------------- calculator
@@ -334,11 +362,12 @@ class AgentRun:
         return ids
 
     def run_tool(self, name, args):
-        limit = LIMITS.get(name)
+        budget = "issue_reads" if name in ISSUE_READ_TOOLS else name
+        limit = LIMITS.get(budget)
         if limit is not None:
-            if self.counts.get(name, 0) >= limit:
+            if self.counts.get(budget, 0) >= limit:
                 return {"error": f"{name} limit reached for this request ({limit}). Answer with what you have."}
-            self.counts[name] = self.counts.get(name, 0) + 1
+            self.counts[budget] = self.counts.get(budget, 0) + 1
         env = self.env
         try:
             if name == "google_search":
@@ -392,6 +421,20 @@ class AgentRun:
             if name == "recall":
                 memory = env.get("memory") or ""
                 return {"facts": memory or "(Memory is empty or turned off in the app.)"}
+            if name in ISSUE_READ_TOOLS + ("create_issue", "comment_on_issue"):
+                github = env.get("github")
+                if github is None or not github.issues_enabled():
+                    return {"error": "Issue tools are not set up for this repository."}
+                if name == "list_issues":
+                    return {"issues": github.list_issues(str(args.get("state", "open")))}
+                if name == "read_issue":
+                    return github.read_issue(args.get("number"))
+                if name == "search_issues":
+                    return {"issues": github.search_issues(str(args.get("query", "")))}
+                if name == "create_issue":
+                    labels = args.get("labels") if isinstance(args.get("labels"), list) else []
+                    return dict(github.create_issue(args.get("title"), args.get("body"), labels), created=True)
+                return dict(github.comment_issue(args.get("number"), args.get("body")), commented=True)
             if name in ("list_files", "read_file", "search_code"):
                 if self.coding is None:
                     return {"error": "GitHub tools are not set up."}
