@@ -67,6 +67,8 @@ for account in dua-api dua-api-build; do
 done
 gcloud projects add-iam-policy-binding "$PROJECT_ID" --member="serviceAccount:${build_account}" \
   --role=roles/cloudbuild.builds.builder --quiet --format=none
+gcloud projects add-iam-policy-binding "$PROJECT_ID" --member="serviceAccount:${build_account}" \
+  --role=roles/logging.logWriter --quiet --format=none
 for name in "${for_settings[@]}"; do
   gcloud secrets add-iam-policy-binding "$name" --project "$PROJECT_ID" \
     --member="serviceAccount:${runtime_account}" --role=roles/secretmanager.secretAccessor --quiet --format=none
@@ -74,6 +76,8 @@ done
 if ! gcloud artifacts repositories describe "$service" --location "$region" --project "$PROJECT_ID" >/dev/null 2>&1; then
   gcloud artifacts repositories create "$service" --repository-format=docker --location "$region" --project "$PROJECT_ID" --quiet
 fi
+gcloud artifacts repositories add-iam-policy-binding "$service" --location "$region" --project "$PROJECT_ID" \
+  --member="serviceAccount:${build_account}" --role=roles/artifactregistry.writer --quiet --format=none
 
 echo "Building the Node-only container (no runtime secrets supplied to the build)..."
 gcloud builds submit "$web_dir" --project "$PROJECT_ID" --region "$region" \
