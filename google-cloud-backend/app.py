@@ -530,7 +530,11 @@ def chunk_text(chunk):
 @app.route("/", methods=["GET"])
 def home():
     # Capabilities: the app shows Agent mode only when this says "agent": true.
-    return jsonify({"status": "Dua AI Engine is running!", "engine": "google-cloud", "agent": True, "titles": True, "model": MODEL_NAME})
+    import openrouter
+    info = {"status": "Dua AI Engine is running!", "engine": "google-cloud", "agent": True, "titles": True, "model": MODEL_NAME}
+    # Free OpenRouter models appear only when OPENROUTER_API_KEY is set (Secret Manager).
+    info["freeModels"] = openrouter.models()
+    return jsonify(info)
 
 
 @app.route("/api/chat", methods=["POST"])
@@ -553,6 +557,13 @@ def api_chat():
         return jsonify({"error": error.message}), error.status
 
     agent = data.get("mode") == "agent"
+    import openrouter
+    free_model = data.get("openrouter")
+    if free_model is not None and (not openrouter.enabled() or not openrouter.allowed(free_model)):
+        return jsonify({"error": "This free model is not available. Choose another model."}), 400
+    # Free models answer plain chat only; Agent, web, code and Build stay on Gemini.
+    use_free = free_model is not None and data.get("stream") is True and not agent and data.get("mode") in (None, "auto", "reasoning") \
+        and not data.get("web") and not data.get("code")
     if agent and data.get("stream") is not True:
         return jsonify({"error": "Agent mode needs streaming. Update the app."}), 400
     if data.get("stream") is not True:
@@ -567,6 +578,9 @@ def api_chat():
         return jsonify({"text": text})
 
     notice = unsupported_notice(data)
+    if use_free:
+        has_files = bool(attachments) or any(isinstance(m, dict) and m.get("attachments") for m in data.get("messages") or [])
+        notice = "Free models read text only; attached images and audio were not sent." if has_files else None
 
     def events():
         chunks = queue.Queue(maxsize=16)
@@ -586,6 +600,9 @@ def api_chat():
             try:
                 if agent:
                     agent_producer(data.get("messages"), attachments, system)(enqueue)
+                    return
+                if use_free:
+                    openrouter.stream(free_model, system, data.get("messages"), enqueue, reasoning=data.get("mode") == "reasoning")
                     return
                 iterator = iter(get_model(system).generate_content(contents, stream=True))
                 for chunk in iterator:
@@ -619,9 +636,15 @@ def api_chat():
                 if kind == "error":
                     yield sse({"type": "error", "message": GENERIC_ERROR, "status": 502})
                     return
+                if kind == "fail":  # friendly, already-safe message (e.g. free model rate limit)
+                    message, status = chunk
+                    yield sse({"type": "error", "message": message, "status": status})
+                    return
                 if kind == "done":
+                    truncated = truncated or chunk is True
                     break
                 if kind == "event":
+                    sent = sent or chunk.get("type") == "text"
                     yield sse(chunk)
                     continue
                 truncated = truncated or is_truncated(chunk)

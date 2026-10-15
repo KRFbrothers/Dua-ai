@@ -23,6 +23,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.heading
 import com.dua.ai.setup.ProviderCapability
 import com.dua.ai.ui.theme.SheetDisabledAlpha
 import com.dua.ai.ui.theme.SheetNoteStyle
@@ -37,7 +38,8 @@ private val MODEL_ORDER = listOf("Dua", "ChatGPT", "Gemini", "Claude", "Grok", "
 /** Model picker. Only providers the backend reports as configured can be chosen. Letter badges only — no provider logos. */
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
-fun ModelPickerSheet(current: String, providers: List<ProviderCapability>, onSelect: (String) -> Unit, onOpenSetup: () -> Unit, onDismiss: () -> Unit) {
+fun ModelPickerSheet(current: String, providers: List<ProviderCapability>, onSelect: (String) -> Unit, onOpenSetup: () -> Unit, onDismiss: () -> Unit,
+    freeModels: List<com.dua.ai.model.FreeModel> = emptyList(), currentFree: String? = null, onSelectFree: (String) -> Unit = {}) {
     val c = SheetTheme.colors
     DuaSheet(onDismiss = onDismiss) {
         Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = SheetSizes.paddingH).padding(bottom = SheetSizes.paddingBottom)
@@ -50,7 +52,7 @@ fun ModelPickerSheet(current: String, providers: List<ProviderCapability>, onSel
                     val capability = providers.firstOrNull { it.name == name }
                     val available = capability?.configured == true
                     val provider = when (name) { "ChatGPT" -> "OpenAI"; "Claude" -> "Anthropic"; "Grok" -> "xAI"; "Kimi" -> "Moonshot"; else -> "Gemini" }
-                    val selected = current == name
+                    val selected = current == name && currentFree == null
                     val alpha = if (available) 1f else SheetDisabledAlpha
                     Row(Modifier.fillMaxWidth().heightIn(min = SheetSizes.rowMin).testTag("model-row-$name")
                         .selectable(selected = selected, enabled = available, role = Role.RadioButton) { onSelect(name) }
@@ -69,6 +71,33 @@ fun ModelPickerSheet(current: String, providers: List<ProviderCapability>, onSel
                         if (selected) Icon(Icons.Filled.Check, contentDescription = "Selected", tint = c.accent, modifier = Modifier.size(SheetSizes.rowIcon))
                     }
                 }
+            }
+            if (freeModels.isNotEmpty()) {
+                Text("Free models", style = SheetRowStyle, color = c.text,
+                    modifier = Modifier.padding(top = SheetSizes.sectionGap, bottom = SheetSizes.rowGap).semantics { heading() })
+                SheetGroup {
+                    freeModels.forEachIndexed { index, model ->
+                        if (index > 0) SheetDivider()
+                        val selected = currentFree == model.id
+                        Row(Modifier.fillMaxWidth().heightIn(min = SheetSizes.rowMin).testTag("free-model-${model.id}")
+                            .selectable(selected = selected, role = Role.RadioButton) { onSelectFree(model.id); onDismiss() }
+                            .semantics { stateDescription = if (selected) "Selected" else "Available" }
+                            .padding(horizontal = SheetSizes.rowPaddingH, vertical = SheetSizes.rowPaddingV), verticalAlignment = Alignment.CenterVertically) {
+                            Surface(color = if (selected) c.accent else c.container, shape = SheetShapes.badge) {
+                                Box(Modifier.size(SheetSizes.badge), contentAlignment = Alignment.Center) {
+                                    Text(model.name.take(1), style = SheetRowStyle, color = if (selected) c.onAccent else c.text)
+                                }
+                            }
+                            Column(Modifier.weight(1f).padding(start = SheetSizes.rowGap)) {
+                                Text(model.name, style = SheetRowStyle, color = c.text)
+                                Text("Free · OpenRouter · chat only", style = SheetSubStyle, color = c.subText)
+                            }
+                            if (selected) Icon(Icons.Filled.Check, contentDescription = "Selected", tint = c.accent, modifier = Modifier.size(SheetSizes.rowIcon))
+                        }
+                    }
+                }
+                Text("Free models have daily limits (about 50 replies a day) and read text only. Agent, web and code use Dua.",
+                    style = SheetNoteStyle, color = c.subText, modifier = Modifier.padding(top = SheetSizes.rowGap))
             }
             Text("Available models follow backend configuration. Provider keys stay on the server.", style = SheetNoteStyle,
                 color = c.subText, modifier = Modifier.padding(top = SheetSizes.sectionGap))

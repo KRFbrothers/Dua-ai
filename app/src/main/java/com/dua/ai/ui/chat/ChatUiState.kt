@@ -39,6 +39,9 @@ data class ChatUiState(
     val xSearch: Boolean = false,
     /** Dua Agent toggle: offered when chat goes to the Google Cloud engine. */
     val agentAvailable: Boolean = false,
+    /** Free OpenRouter models from the Cloud Run engine, and the chosen one (answers plain chat instead of [model]). */
+    val freeModels: List<com.dua.ai.model.FreeModel> = emptyList(),
+    val freeModel: com.dua.ai.model.FreeModel? = null,
     val agent: Boolean = false,
     /** Messages up to this id are summarised for the model (long context); a divider marks the boundary. */
     val summarisedThroughId: String? = null,
@@ -108,7 +111,7 @@ data class ChatUiState(
     }
     val canSend: Boolean get() = (draft.isNotBlank() || attachments.isNotEmpty() || uploads.any { it.ref != null }) && !typing && !readingFiles &&
         uploads.none { it.uploading } && recordingSince == null
-    val modelLabel: String get() = model
+    val modelLabel: String get() = freeModel?.name ?: model
     val auto: Boolean get() = !agent && !reasoning && webMode == null && !xSearch && !imagine && !runCode && buildRepo == null
     /** Imagine has a photo to edit or animate. */
     val imagineSource: Boolean get() = uploads.any { it.ref != null && it.mimeType.startsWith("image/") }
@@ -135,6 +138,7 @@ class ChatActions(
     val onXSearch: (Boolean) -> Unit = {},
     val onAuto: () -> Unit = {},
     val onSelectModel: (String) -> Unit = {},
+    val onSelectFreeModel: (String) -> Unit = {},
     val onNewChat: () -> Unit = {},
     val onExitFeature: () -> Unit = {},
     val onNewFeatureSession: () -> Unit = {},

@@ -68,20 +68,23 @@ class DuaApiClient(
         }.getOrNull()
     }
 
-    suspend fun engineAgentAvailable(): Boolean = withContext(Dispatchers.IO) {
+    suspend fun engineAgentAvailable(): Boolean = engineCapabilities().agent
+
+    /** GET / of the chat engine: Agent mode and free OpenRouter models. Any failure = nothing offered. */
+    suspend fun engineCapabilities(): EngineCapabilities = withContext(Dispatchers.IO) {
         runCatching {
             val base = URL(baseUrl.trimEnd('/') + "/")
-            if (base.protocol != "https") return@runCatching false
+            if (base.protocol != "https") return@runCatching EngineCapabilities()
             val builder = Request.Builder().url(base).get().header("Accept", "application/json")
             if (appToken.isNotBlank()) builder.header("X-Dua-App-Token", appToken)
             client.newCall(builder.build()).execute().use { response ->
-                if (response.code !in 200..299) return@use false
-                val source = response.body?.source() ?: return@use false
+                if (response.code !in 200..299) return@use EngineCapabilities()
+                val source = response.body?.source() ?: return@use EngineCapabilities()
                 source.request(65537)
-                if (source.buffer.size > 65536) return@use false
-                parseAgentCapability(source.readUtf8())
+                if (source.buffer.size > 65536) return@use EngineCapabilities()
+                parseEngine(source.readUtf8())
             }
-        }.getOrDefault(false)
+        }.getOrDefault(EngineCapabilities())
     }
 
     internal fun chatConfiguration(state: com.dua.ai.setup.IntegrationState): com.dua.ai.setup.IntegrationState =
@@ -130,8 +133,8 @@ class DuaApiClient(
     fun streamReply(model: String, history: List<ChatMessage>, attachments: List<ChatAttachment> = emptyList(), memory: String = "",
         token: String? = null, web: String? = null, reasoning: Boolean = false, historyBytes: Int = MAX_HISTORY_BYTES,
         context: com.dua.ai.model.ConversationContext? = null, xSearch: Boolean = false, code: Boolean = false, build: String? = null,
-        persistence: com.dua.ai.account.ReplyPersistence? = null, agent: Boolean = false): Flow<ReplyEvent> = callbackFlow {
-        val request = withContext(Dispatchers.IO) { buildRequest(model, history, attachments, memory, token, web, reasoning, stream = true, historyBytes = historyBytes, context = context, xSearch = xSearch, code = code, build = build, persistence = persistence, agent = agent) }
+        persistence: com.dua.ai.account.ReplyPersistence? = null, agent: Boolean = false, freeModel: String? = null): Flow<ReplyEvent> = callbackFlow {
+        val request = withContext(Dispatchers.IO) { buildRequest(model, history, attachments, memory, token, web, reasoning, stream = true, historyBytes = historyBytes, context = context, xSearch = xSearch, code = code, build = build, persistence = persistence, agent = agent, freeModel = freeModel) }
         val call = client.newCall(request)
         call.enqueue(object : Callback {
             override fun onFailure(call: Call, error: IOException) { close(error) }
@@ -195,7 +198,9 @@ class DuaApiClient(
      */
     internal fun buildRequest(model: String, history: List<ChatMessage>, attachments: List<ChatAttachment>, memory: String, token: String?, web: String?,
         reasoning: Boolean, stream: Boolean, historyBytes: Int = MAX_HISTORY_BYTES, context: com.dua.ai.model.ConversationContext? = null, xSearch: Boolean = false,
-        code: Boolean = false, build: String? = null, persistence: com.dua.ai.account.ReplyPersistence? = null, agent: Boolean = false): Request {
+        code: Boolean = false, build: String? = null, persistence: com.dua.ai.account.ReplyPersistence? = null, agent: Boolean = false,
+        freeModel: String? = null): Request {
+        require(freeModel == null || com.dua.ai.model.FreeModels.validId(freeModel)) { "Invalid free model." }
         require(build == null || com.dua.ai.model.BuildInfos.validRepository(build)) { "Choose a repository for Build mode." }
         require(model in com.dua.ai.setup.IntegrationCapabilities.MODELS) { "Supported model select karein." }
         require(memory.length <= 3000) { "Memory notes are too large." }
@@ -232,6 +237,8 @@ class DuaApiClient(
                 if (stream && xSearch && model == "Grok") put("xSearch", true)
                 // Run code (Phase 5): only sent when the server advertised it, so older servers never see the field.
                 if (stream && code && build == null) put("code", true)
+                // Free OpenRouter model (Cloud Run only): plain chat; Agent, web, code and Build stay on Gemini.
+                if (stream && separateChatEngine && freeModel != null && !agent && build == null && web == null && !code) put("openrouter", freeModel)
                 if (persistence != null) { require(stream && token != null && !separateChatEngine); put("persistence", persistence.json) }
             }
             .toString().toByteArray(Charsets.UTF_8)
@@ -286,6 +293,10 @@ class DuaApiClient(
             title.takeIf { com.dua.ai.history.ChatTitles.valid(it) }
         }.getOrNull()
         /** True only for a JSON object with `"agent": true` (the Cloud Run engine's GET / answer). */
+        internal fun parseEngine(body: String): EngineCapabilities = runCatching {
+            val json = JSONObject(body)
+            EngineCapabilities(agent = json.opt("agent") == true, freeModels = com.dua.ai.model.FreeModels.parse(json))
+        }.getOrDefault(EngineCapabilities())
         internal fun parseAgentCapability(body: String): Boolean =
             runCatching { JSONObject(body).opt("agent") == true }.getOrDefault(false)
         private fun attachmentJson(files: List<ChatAttachment>) = JSONArray().apply { files.forEach { file ->
@@ -363,3 +374,6 @@ class DuaApiClient(
 }
 
 class DuaApiException(message: String, val status: Int = 0) : Exception(message)
+
+/** What the Cloud Run engine offers (GET /). */
+data class EngineCapabilities(val agent: Boolean = false, val freeModels: List<com.dua.ai.model.FreeModel> = emptyList())
