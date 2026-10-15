@@ -89,7 +89,70 @@ class AutomaticSyncCacheTest {
         assertEquals(remote.copy(draft = "Edited server draft", updatedAt = persisted().single().updatedAt), persisted().single())
     }
 
-    @Test fun pendingKeystrokesAreMergedBeforeReplacingTheActiveBuffersAndDoNotRecreateCopies() = runBlocking {
+    @Test fun completedReplyStaysOpenWhenSyncPreservesItUnderARecoveryId() = runBlocking {
+        val owner = "11111111-2222-4333-8444-555555555555"
+        val serverChat = local.copy(draft = "Question", messages = emptyList(), summary = null)
+        val initial = CloudSnapshot(listOf(serverChat), listOf("Phone note"))
+        port.read(); port.commit(initial)
+        var record = AutomationSyncRecord(true, owner, 1, AutomationSyncPolicy.baseline(initial))
+        var cloud = initial
+        var serverRevision = 1L
+        var uploads = 0
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+        val account = object : AutomaticCloudSync.AccountPort {
+            override fun currentAccountId() = owner
+            override suspend fun load() = AutomaticSyncAccount(true, owner)
+            override suspend fun cloud(expectedAccountId: String) = CloudReview(serverRevision, cloud, owner)
+            override suspend fun upload(expectedAccountId: String, revision: Long, snapshot: CloudSnapshot): Long {
+                assertEquals(this@AutomaticSyncCacheTest.local.id, snapshot.chats.first().id)
+                assertEquals(serverChat, snapshot.chats.first())
+                assertEquals(serverRevision, revision)
+                uploads++; cloud = snapshot; return ++serverRevision
+            }
+        }
+        val records = object : AutomaticCloudSync.StorePort {
+            override fun read() = record
+            override fun write(value: AutomationSyncRecord) { record = value }
+        }
+        val sync = AutomaticCloudSync(scope, account, port, records, sleep = { awaitCancellation() })
+        try {
+            sync.setForeground(true); sync.restore()?.join()
+            sync.setBusy(true)
+            val messages = listOf(ChatMessage(id = "prompt", text = "Question", isUser = true),
+                ChatMessage(id = "reply", text = "Completed answer", isUser = false))
+            @Suppress("UNCHECKED_CAST")
+            val visible = ChatViewModel::class.java.getDeclaredField("_messages").apply { isAccessible = true }
+                .get(model) as MutableStateFlow<List<ChatMessage>>
+            visible.value = messages
+            model.updateDraft(""); model.flushHistory()
+            sync.setBusy(false); sync.syncNow()?.join()
+
+            val copy = model.savedChats.value.single { it.id.startsWith("unsynced-") }
+            assertEquals(messages, copy.messages)
+            assertEquals(copy.id, model.activeChatId.value)
+            assertEquals(messages, model.messages.value)
+            assertEquals("", model.draft.value)
+            assertEquals(copy.id, ChatHistoryCodec.decode(application.getSharedPreferences("dua_chat_history", 0)
+                .getString("history", null)!!).first)
+            assertEquals(serverChat, cloud.chats.single { it.id == serverChat.id })
+            assertEquals(1, uploads)
+
+            sync.syncNow()?.join()
+            assertEquals(1, uploads)
+            assertEquals(2, persisted().size)
+            model.updateDraft("Follow-up draft"); model.flushHistory()
+            assertEquals(messages, persisted().single { it.id == copy.id }.messages)
+            assertEquals("Follow-up draft", persisted().single { it.id == copy.id }.draft)
+            assertEquals(serverChat, persisted().single { it.id == serverChat.id })
+            store.clear()
+            model = ChatViewModel(application).also { store.put("chat", it) }
+            assertEquals(copy.id, model.activeChatId.value)
+            assertEquals(messages, model.messages.value)
+            assertEquals("Follow-up draft", model.draft.value)
+        } finally { sync.close(); scope.cancel() }
+    }
+
+    @Test fun pendingKeystrokesStayOpenInTheRecoveryCopyWithoutRecreatingCopies() = runBlocking {
         val owner = "11111111-2222-4333-8444-555555555555"
         val initial = CloudSnapshot(listOf(local), listOf("Phone note"))
         var record = AutomationSyncRecord(true, owner, 1, AutomationSyncPolicy.baseline(initial))
@@ -121,8 +184,9 @@ class AutomaticSyncCacheTest {
             val copy = model.savedChats.value.single { it.id.startsWith("unsynced-") }
             assertEquals("Just typed; not yet debounced", copy.draft)
             assertEquals(local.messages, copy.messages)
-            assertEquals(remote.messages, model.messages.value)
-            assertEquals(remote.draft, model.draft.value)
+            assertEquals(copy.id, model.activeChatId.value)
+            assertEquals(copy.messages, model.messages.value)
+            assertEquals(copy.draft, model.draft.value)
             assertEquals(1, uploads)
             model.flushHistory()
             sync.syncNow()?.join()
@@ -133,7 +197,7 @@ class AutomaticSyncCacheTest {
         } finally { sync.close(); scope.cancel() }
     }
 
-    @Test fun firstEnableKeepsPendingTypingDuringCloudReadWhileRebindingTheServerChat() = runBlocking {
+    @Test fun firstEnableKeepsPendingTypingDuringCloudReadAndKeepsItsRecoveryCopyOpen() = runBlocking {
         val owner = "11111111-2222-4333-8444-555555555555"
         var record = AutomationSyncRecord()
         var cloud = CloudSnapshot(listOf(remote), listOf("Server note"))
@@ -171,8 +235,9 @@ class AutomaticSyncCacheTest {
             assertEquals(local.summary, copy.summary)
             assertEquals(local.buildRepository, copy.buildRepository)
             assertEquals(remote, persisted().single { it.id == remote.id })
-            assertEquals(remote.messages, model.messages.value)
-            assertEquals(remote.draft, model.draft.value)
+            assertEquals(copy.id, model.activeChatId.value)
+            assertEquals(copy.messages, model.messages.value)
+            assertEquals(copy.draft, model.draft.value)
             assertEquals(listOf("Server note"), model.localSettings.value.memory)
             model.flushHistory(); sync.syncNow()?.join()
             assertEquals(1, uploads); assertEquals(2, persisted().size)
@@ -209,6 +274,19 @@ class AutomaticSyncCacheTest {
         assertEquals(local.draft, model.draft.value)
         assertEquals(local.buildRepository, model.buildRepo.value)
         assertTrue(model.localSettings.value.memory.isEmpty())
+    }
+
+    @Test fun recoveryOfAnotherChatDoesNotChangeTheOpenConversation() {
+        val other = local.copy(id = "other")
+        val recovered = other.copy(id = "unsynced-other")
+        port.read()
+        port.commit(AutomationMergePlan(CloudSnapshot(listOf(local, other, recovered), emptyList()), false,
+            mapOf(other.id to recovered.id)))
+        assertEquals(local.id, model.activeChatId.value)
+        assertEquals(local.messages, model.messages.value)
+        assertEquals(local.draft, model.draft.value)
+        assertEquals(local.id, ChatHistoryCodec.decode(application.getSharedPreferences("dua_chat_history", 0)
+            .getString("history", null)!!).first)
     }
 
     @Test fun pullRequestCreationBlocksBothReadAndCommit() {
