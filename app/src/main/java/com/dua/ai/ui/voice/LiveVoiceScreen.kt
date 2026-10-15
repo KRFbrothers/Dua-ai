@@ -58,6 +58,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import com.dua.ai.R
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
@@ -144,7 +146,7 @@ private fun LiveVoiceContentBody(state: LiveState, starting: Boolean, error: Str
                 Button(onClick = onStart, enabled = !starting && !(fallback && error.isNotBlank() && usage?.leftSeconds == 0),
                     modifier = Modifier.fillMaxWidth().widthIn(max = VoiceSizes.contentMaxWidth).height(VoiceSizes.startButtonHeight), shape = VoiceShapes.startButton,
                     colors = ButtonDefaults.buttonColors(containerColor = v.accent, contentColor = v.onAccent)) {
-                    Icon(Icons.Outlined.Mic, null); Text(if (state.phase == LivePhase.IDLE) "Start talking" else "Start again", modifier = Modifier.padding(start = Spacing.sm))
+                    Icon(painterResource(R.drawable.ls_live_wave), null); Text(if (state.phase == LivePhase.IDLE) "Start talking" else "Start again", modifier = Modifier.padding(start = Spacing.sm))
                 }
                 if (fallback || error.isNotBlank()) TextButton(onClick = onHandsFree) { Text("Use hands-free mode instead") }
                 Text("Audio streams to xAI only while a session runs. The conversation is saved to this chat when it ends.",

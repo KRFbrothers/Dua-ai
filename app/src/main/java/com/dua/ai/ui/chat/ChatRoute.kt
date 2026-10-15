@@ -23,6 +23,10 @@ import com.dua.ai.ui.voice.ReplyVoice
 import com.dua.ai.ui.navigation.DuaDestination
 import com.dua.ai.viewmodel.ChatViewModel
 import java.time.LocalTime
+import kotlinx.coroutines.flow.first
+import com.dua.ai.entry.EntryAction
+import com.dua.ai.entry.ExternalEntry
+import com.dua.ai.entry.LocalEntryDispatch
 import com.dua.ai.ui.agent.AgentTask
 import com.dua.ai.ui.agent.GITHUB_AGENT_PROMPT
 import com.dua.ai.ui.agent.briefingPrompt
@@ -51,7 +55,9 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
     val integrations by viewModel.integrations.collectAsState()
     val chatDeletion by viewModel.chatDeletion.collectAsState()
     val attachments by viewModel.attachments.collectAsState()
-    val readingFiles by viewModel.readingFiles.collectAsState()
+    val readingInlineFiles by viewModel.readingFiles.collectAsState()
+    val preparingFiles by viewModel.preparingFiles.collectAsState()
+    val readingFiles = readingInlineFiles || preparingFiles
     val fileError by viewModel.attachmentError.collectAsState()
     val messages by viewModel.messages.collectAsState()
     val typing by viewModel.isTyping.collectAsState()
@@ -71,6 +77,7 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
     val buildPr by viewModel.buildPr.collectAsState()
     val scope = rememberCoroutineScope()
     var attachmentNotice by rememberSaveable { mutableStateOf("") }
+    val dispatch = LocalEntryDispatch.current
     LaunchedEffect(failedPrompt) { failedPrompt?.let { viewModel.consumeFailedPrompt() } }
 
     val context = LocalContext.current
@@ -123,7 +130,7 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
         inlineChatFiles = viewModel.inlineChatFilesAvailable(),
         storedFilesHint = viewModel.storedFilesHint(),
         storedFilesMaxBytes = integrations.filesMaxBytes,
-        attachmentStatus = if (readingFiles) "Reading files…" else fileError.ifBlank { attachmentNotice },
+        attachmentStatus = if (readingFiles) "Reading files…" else fileError.ifBlank { dispatch?.notice.orEmpty().ifBlank { attachmentNotice } },
         savedChats = savedChats,
         serverChatDeletionEnabled = integrations.chatDeletionEnabled && account.user != null,
         chatPinEnabled = integrations.chatPinEnabled,
@@ -165,7 +172,7 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
                 if (viewModel.localSettings.value.haptic) view.performChatHaptic(ChatHaptic.Confirm)
                 voice.stopAll()
                 val current = viewModel.draft.value
-                if ((current.isNotBlank() || viewModel.attachments.value.isNotEmpty() || viewModel.uploads.value.any { it.ref != null }) && !viewModel.isTyping.value && !viewModel.readingFiles.value)
+                if ((current.isNotBlank() || viewModel.attachments.value.isNotEmpty() || viewModel.uploads.value.any { it.ref != null }) && !viewModel.isTyping.value && !viewModel.readingFiles.value && !viewModel.preparingFiles.value)
                     viewModel.sendMessage(current)
             },
             onStop = { pulse(); viewModel.stopReply() },
@@ -287,8 +294,32 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
             ),
         )
     }
+    var entryFocus by rememberSaveable { mutableStateOf<String?>(null) }
+    var entryUiKey by rememberSaveable { mutableStateOf<String?>(null) }
+    val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(dispatch?.entry?.id, dispatch?.ready) {
+        val entry = dispatch?.entry ?: return@LaunchedEffect
+        if (!dispatch.ready) return@LaunchedEffect
+        lifecycle.currentStateFlow.first { it.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED) }
+        if (viewModel.dataBusy.value || viewModel.isTyping.value || viewModel.readingFiles.value || viewModel.preparingFiles.value) return@LaunchedEffect
+        if (entry.action == EntryAction.Share && entry.uris.isNotEmpty() && !viewModel.acceptSharedAttachments(entry.uris)) return@LaunchedEffect
+        dispatch.consumed(entry.id)
+        entryUiKey = entry.id
+        attachmentNotice = entry.notice
+        when (entry.action) {
+            EntryAction.Share -> {
+                viewModel.updateDraft(ExternalEntry.mergedDraft(viewModel.draft.value, entry.text))
+                entryFocus = entry.id
+            }
+            EntryAction.Query -> entryFocus = entry.id
+            EntryAction.Camera -> actions.onPickCamera()
+            EntryAction.Photos -> actions.onPickPhotos()
+            EntryAction.Files -> actions.onPickFiles()
+            else -> Unit
+        }
+    }
     androidx.compose.runtime.CompositionLocalProvider(LocalMediaLoader provides viewModel.mediaCache) {
-        ChatScreen(state, actions, topBar = topBar)
+        ChatScreen(state, actions, topBar = topBar, requestComposerFocus = entryFocus, dismissOverlaysRequest = entryUiKey)
     }
 }
 

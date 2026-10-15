@@ -103,10 +103,13 @@ fun ChatScreen(
     /** Fullscreen media viewer: message id and index (screenshots open it directly). */
     initialViewer: Pair<String, Int>? = null,
     topBar: (@Composable () -> Unit)? = null,
+    requestComposerFocus: String? = null,
+    dismissOverlaysRequest: String? = null,
 ) {
     val drawerState = rememberDrawerState(initialDrawerValue)
     val scope = rememberCoroutineScope()
     var sheet by rememberSaveable { mutableStateOf(initialSheet) }
+    LaunchedEffect(dismissOverlaysRequest) { if (dismissOverlaysRequest != null) sheet = null }
     if (sheet == ChatSheet.Projects) {
         BackHandler { sheet = null }
         ProjectsFeaturePage(state, actions, onBack = { sheet = null })
@@ -190,6 +193,16 @@ fun ChatScreen(
         }
     }
     val inputFocus = remember { FocusRequester() }
+    LaunchedEffect(dismissOverlaysRequest) {
+        if (dismissOverlaysRequest != null) { searchOpen = false; viewer = null; drawerState.close() }
+    }
+    LaunchedEffect(requestComposerFocus) {
+        if (requestComposerFocus != null) {
+            androidx.compose.runtime.withFrameNanos { }
+            inputFocus.requestFocus()
+            keyboard?.show()
+        }
+    }
     LaunchedEffect(state.editingId) { if (state.editingId != null) runCatching { inputFocus.requestFocus() } }
     // Mode toggles (chips and + sheet switches) give a light haptic.
     val tap = { actions.haptic(ChatHaptic.Tap) }

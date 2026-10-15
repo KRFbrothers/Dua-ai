@@ -1,0 +1,19 @@
+<resources>
+    <string name="dua_toolbar_widget_name">Dua AI toolbar</string>
+    <string name="dua_toolbar_widget_description">Ask Dua AI, dictate, open live voice, or attach photos and files.</string>
+    <string name="widget_query">Ask Dua AI</string>
+    <string name="widget_mic">Dictate a message</string>
+    <string name="widget_live">Live voice</string>
+    <string name="widget_camera">Camera</string>
+    <string name="widget_photos">Photos</string>
+    <string name="widget_files">Files</string>
+    <string name="widget_screenshare">Screenshare / Video</string>
+    <string name="remember_this">Remember this</string>
+    <color name="dua_widget_pill">#F7F7F8</color>
+    <color name="dua_widget_circle">#EBEBEF</color>
+    <color name="dua_widget_icon">#0D0D0D</color>
+    <color name="dua_widget_border">#E5E7EB</color>
+    <color name="dua_widget_purple">#8B5CF6</color>
+    <color name="dua_widget_on_purple">#FFFFFF</color>
+    <dimen name="dua_widget_text">16sp</dimen>
+</resources>

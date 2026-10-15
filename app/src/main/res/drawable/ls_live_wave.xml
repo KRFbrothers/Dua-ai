@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="960" android:viewportHeight="960">
+    <path android:fillColor="@color/dua_widget_icon" android:pathData="M458.1,816.17q-8.79-8.82-8.79-21.87V167.69q0-13.04 8.84-21.87t21.9-8.82t21.86,8.82t8.79,21.87V794.31q0,13.04-8.84,21.87T479.96,825t-21.86-8.82ZM224.8,676.14Q216,667.31 216,654.27V306.58q0-13.04 8.84-21.87t21.9-8.82t21.86,8.82t8.79,21.87V654.27q0,13.04-8.84,21.87t-21.9,8.82t-21.86-8.82Zm466.61-91.96q-8.79-8.82-8.79-21.87V399.42q0-13.04 8.84-21.87t21.9-8.82t21.86,8.82T744,399.42V562.31q0,13.04-8.84,21.87T713.27,593t-21.86-8.82Z" />
+</vector>

@@ -41,6 +41,9 @@ fun ChatNotices(state: ChatUiState, actions: ChatActions) {
             if (state.generatedVoiceActive) TextButton(onClick = actions.onStopSpeech, colors = chatTextButtonColors(), modifier = Modifier.heightIn(min = Sizes.touchTarget)) { Text("Stop") }
             TextButton(onClick = actions.onUseDeviceVoice, colors = chatTextButtonColors(), modifier = Modifier.heightIn(min = Sizes.touchTarget)) { Text("Use device voice") }
         }
+        if (state.attachmentStatus.isNotBlank()) Text(state.attachmentStatus, style = MaterialTheme.typography.bodySmall,
+            color = c.mutedText, maxLines = 3, overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite })
         state.error?.let { message ->
             val needsSetup = message.contains("setup", ignoreCase = true)
             Surface(color = c.errorFill, shape = DuaShape.card, modifier = Modifier.fillMaxWidth()) {

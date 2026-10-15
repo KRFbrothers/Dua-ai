@@ -1,0 +1,8 @@
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="250dp" android:minHeight="144dp"
+    android:minResizeWidth="250dp" android:minResizeHeight="144dp"
+    android:targetCellWidth="4" android:targetCellHeight="2"
+    android:resizeMode="horizontal|vertical" android:widgetCategory="home_screen"
+    android:updatePeriodMillis="0" android:initialLayout="@layout/dua_toolbar_widget"
+    android:previewLayout="@layout/dua_toolbar_widget"
+    android:description="@string/dua_toolbar_widget_description" />

@@ -182,6 +182,16 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         } catch (failure: Exception) { integrationNotice(failure.message ?: "Memory could not be saved.") }
     }
     fun dismissMemoryNote(note: String) { _memoryCandidates.value = _memoryCandidates.value.filterNot { it == note } }
+    /** Share target writes only after explicit review, using the existing personal-memory cache/sync protocol. */
+    fun confirmSharedMemory(note: String, expectedOwnerId: String): String? = try {
+        check(account.state.value.user?.id == expectedOwnerId && expectedOwnerId.isNotBlank()) { "Sign in to the account shown before saving memory." }
+        check(!syncBlocked()) { "Finish the current reply or sync action, then save this note." }
+        localPreferences.requireReadable()
+        val settings = localSettings.value
+        val notes = com.dua.ai.setup.AutomationMemoryCandidates.confirm(note, settings.memory)
+        localPreferences.update(settings.copy(memory = notes))
+        null
+    } catch (failure: Exception) { failure.message ?: "Memory could not be saved. Try again." }
     fun integrationNotice(text: String) { _integrations.value = _integrations.value.copy(notice = text) }
     fun loadProviderConfiguration() = viewModelScope.launch {
         refreshEngineCapabilities()
@@ -754,6 +764,17 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val _readingFiles = MutableStateFlow(false)
     val readingFiles: StateFlow<Boolean> = _readingFiles.asStateFlow()
     private var selectionVersion = 0
+    private var preparingSelections = 0
+    private val _preparingFiles = MutableStateFlow(false)
+    val preparingFiles: StateFlow<Boolean> = _preparingFiles.asStateFlow()
+
+    /** Reserve shared-file intake synchronously, before the next queued entry can dispatch. */
+    fun acceptSharedAttachments(uris: List<Uri>): Boolean {
+        if (_isTyping.value || _dataBusy.value || _preparingFiles.value || _readingFiles.value ||
+            _attachments.value.isNotEmpty() || _uploads.value.isNotEmpty()) return false
+        selectAttachments(uris)
+        return true
+    }
 
     fun clearAttachments() {
         selectionVersion++
@@ -996,17 +1017,24 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     fun selectAttachments(uris: List<Uri>) {
         if (_isTyping.value) { _attachmentError.value = "Reply complete hone ke baad files select karein."; return }
+        preparingSelections++
+        _preparingFiles.value = true
         viewModelScope.launch {
-            val picked = try { withContext(Dispatchers.IO) { describe(uris) } } catch (cancelled: CancellationException) { throw cancelled }
-                catch (_: Exception) { _attachmentError.value = "File read nahi hui. Dobara select karein."; return@launch }
-            val inline = if (api.usesInlineChatFiles(_imagine.value)) picked.map { it.uri }
-            else if (storedFilesAvailable()) uploadPicked(picked) else {
-                val blocked = picked.filter { StoredFileTypes.needsStorage(it.name, it.type) || (it.size ?: 0) > AttachmentReader.MAX_BYTES }
-                if (blocked.isNotEmpty()) _attachmentError.value = storedFilesHint()
-                picked.filterNot { it in blocked }.map { it.uri }
-            }
-            if (inline.isNotEmpty()) selectInlineAttachments(inline)
+            try { prepareAttachments(uris) }
+            finally { preparingSelections--; _preparingFiles.value = preparingSelections > 0 }
         }
+    }
+
+    private suspend fun prepareAttachments(uris: List<Uri>) {
+        val picked = try { withContext(Dispatchers.IO) { describe(uris) } } catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { _attachmentError.value = "File read nahi hui. Dobara select karein."; return }
+        val inline = if (api.usesInlineChatFiles(_imagine.value)) picked.map { it.uri }
+        else if (storedFilesAvailable()) uploadPicked(picked) else {
+            val blocked = picked.filter { StoredFileTypes.needsStorage(it.name, it.type) || (it.size ?: 0) > AttachmentReader.MAX_BYTES }
+            if (blocked.isNotEmpty()) _attachmentError.value = storedFilesHint()
+            picked.filterNot { it in blocked }.map { it.uri }
+        }
+        if (inline.isNotEmpty()) selectInlineAttachments(inline)
     }
 
     private fun selectInlineAttachments(uris: List<Uri>) = loadFiles {
@@ -1815,7 +1843,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     fun retryResponse(messageId: String) {
         val requestProjectId = _projectId.value
         projectUnavailable()?.let { _error.value = it; return }
-        if (_isTyping.value || _readingFiles.value || _dataBusy.value) return
+        if (_isTyping.value || _preparingFiles.value || _readingFiles.value || _dataBusy.value) return
         val original = _messages.value.lastOrNull() ?: return
         if (original.id != messageId || original.isUser || original.state !in listOf("complete", "stopped") || original.isImagine) return
         val plan = try { com.dua.ai.model.ReplyRetryPlan.create(_messages.value, messageId) }
@@ -1879,6 +1907,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun sendMessage(userText: String) {
+        if (_preparingFiles.value) return
         val requestProjectId = _projectId.value
         projectUnavailable()?.let { _error.value = it; return }
         if (_imagine.value && _editingId.value != null) { _error.value = "Turn off Imagine to resend an edited message."; return }
