@@ -64,3 +64,15 @@ test('legacy requests keep their protocol; empty cloud has default projects', as
   await resolveProjectContext(request(legacy), legacy, { env: {}, fetcher: mockFetch() }); assert.equal(legacy.memory, 'Private personal note');
   const data = body('personal'); await resolveProjectContext(request(data), data, { env: settings, fetcher: mockFetch(user(), Response.json([])) }); assert.equal(data.memory, '');
 });
+
+test('personality survives authoritative project context without enabling disabled Personal memory', async () => {
+  for (const projectId of ['personal', 'coding']) {
+    const fetcher = reader(snapshot(), Response.json({ candidates: [{ content: { parts: [{ text: 'Answer' }] }, finishReason: 'STOP' }] }));
+    const response = await handleChat(request({ ...body(projectId), memory: '', personality: 'Give concise answers.' }), { env: settings, fetcher });
+    assert.equal(response.status, 200);
+    const upstream = JSON.stringify(fetcher.calls.at(-1).body);
+    assert.match(upstream, /Give concise answers/);
+    assert.doesNotMatch(upstream, /Private personal note/);
+    if (projectId === 'coding') assert.match(upstream, /Use Kotlin and show a diff/);
+  }
+});

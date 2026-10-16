@@ -200,7 +200,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     } catch (failure: Exception) { failure.message ?: "Memory could not be saved. Try again." }
     fun integrationNotice(text: String) { _integrations.value = _integrations.value.copy(notice = text) }
     fun loadProviderConfiguration() = viewModelScope.launch {
-        refreshEngineCapabilities()
+        refreshEngineCapabilities(force = true)
         try {
             val config = setupApi.request("/api/config")
             _integrations.value = api.chatConfiguration(com.dua.ai.setup.IntegrationCapabilities.configuration(config, _integrations.value))
@@ -225,6 +225,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         _integrations.value = api.chatConfiguration(next.copy(busy = true, notice = "Setup status refreshed.",
             webSearchConfigured = current.webSearchConfigured, pageReadingAvailable = current.pageReadingAvailable, projectsEnabled = current.projectsEnabled, projectTasksEnabled = current.projectTasksEnabled, taskDueDatesEnabled = current.taskDueDatesEnabled, projectMemoryEnabled = current.projectMemoryEnabled,
             chatRenameEnabled = current.chatRenameEnabled, chatDeletionEnabled = current.chatDeletionEnabled, chatPinEnabled = current.chatPinEnabled,
+            personalityEnabled = current.personalityEnabled,
             filesEnabled = current.filesEnabled, filesMaxBytes = current.filesMaxBytes, nativeSearch = current.nativeSearch,
             xSearchAvailable = current.xSearchAvailable, longContext = current.longContext, imagine = current.imagine, codeExecution = current.codeExecution, build = current.build,
             voice = current.voice, generatedVoiceConfigured = current.voice?.ttsEnabled ?: next.generatedVoiceConfigured))
@@ -416,8 +417,10 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val localPreferences = com.dua.ai.settings.DevicePreferences(application)
     val localSettings = localPreferences.state
     private val appearanceStore = com.dua.ai.settings.AppearanceStore(application)
-    val appearance = appearanceStore.data.stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, appearanceStore.initial)
+    private var appearanceLoaded = false
+    val appearance = appearanceStore.data.onEach { appearanceLoaded = true }.stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, appearanceStore.initial)
     val appearanceNotice = appearanceStore.notice
+    fun setPersonality(value: com.dua.ai.settings.DuaPersonality) = saveAppearance { appearanceStore.setPersonality(value) }
     fun setAppearance(value: String) = saveAppearance { appearanceStore.setTheme(value) }
     fun setAccent(value: com.dua.ai.settings.AccentPreset?) = saveAppearance { appearanceStore.setAccent(value) }
     private fun saveAppearance(write: suspend () -> Unit) = viewModelScope.launch {
@@ -567,6 +570,11 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     /** Agent mode is offered only when the chat engine advertises `"agent": true` on GET / (unknown or failure = hidden). */
     private val _agentAvailable = MutableStateFlow(false)
     val agentAvailable = _agentAvailable.asStateFlow()
+    private val _enginePersonalityAvailable = MutableStateFlow(false)
+    private fun personalityUnavailable(): String? =
+        if (!appearanceLoaded) "Personalization settings are still loading. Try again shortly."
+        else if (appearance.value.personality != null && !(if (separateChatEngine) _enginePersonalityAvailable.value else _integrations.value.personalityEnabled))
+            "Update the chat backend and refresh Feature setup to use Dua AI Personality." else null
     private var engineCheck: kotlinx.coroutines.Job? = null
     /** Free OpenRouter models the engine offers, and the chosen one (only while still offered). */
     private val _freeModels = MutableStateFlow<List<com.dua.ai.model.FreeModel>>(emptyList())
@@ -580,11 +588,13 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         saveHistory()
     }
     private fun requestFreeModel(): String? = freeModel.value?.id
-    fun refreshEngineCapabilities() {
-        if (_agentAvailable.value || engineCheck?.isActive == true) return
+    fun refreshEngineCapabilities() = refreshEngineCapabilities(force = false)
+    private fun refreshEngineCapabilities(force: Boolean) {
+        if ((!force && _agentAvailable.value) || engineCheck?.isActive == true) return
         engineCheck = viewModelScope.launch {
             val engine = try { api.engineCapabilities() } catch (cancelled: CancellationException) { throw cancelled } catch (_: Exception) { com.dua.ai.network.EngineCapabilities() }
             val available = engine.agent
+            _enginePersonalityAvailable.value = engine.personality
             _freeModels.value = engine.freeModels
             _agentAvailable.value = available
             if (!available) _agent.value = false
@@ -1931,6 +1941,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         if (original.id != messageId || original.isUser || original.state !in listOf("complete", "stopped") || original.isImagine) return
         val plan = try { com.dua.ai.model.ReplyRetryPlan.create(_messages.value, messageId) }
             catch (failure: IllegalArgumentException) { _error.value = failure.message; return }
+        personalityUnavailable()?.let { _error.value = it; return }
+        // Freeze this request's style before file preparation or asynchronous project loading.
+        val requestPersonality = appearance.value.personality?.instruction
         // A restored reply has no saved mode and retries with web off. In this session,
         // retries keep the original request's choice even if the composer has changed.
         val requestWebMode = replyWebModes[messageId]
@@ -1962,7 +1975,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     check(projectContext.ownerId == null || account.state.value.user?.id == projectContext.ownerId) { "Account changed. Retry the project chat." }
                     val attempt = com.dua.ai.network.StreamAccumulator(startedAt).also { accumulator = it }
                     collectReply(messageId, attempt, api.streamReply(plan.model, request.turns, (plan.full.last().inlineAttachments + projectContext.attachments), projectContext.memory, token, requestWebMode.takeIf { requestBuild == null }, requestReasoning && requestBuild == null,
-                        request.historyBytes, request.context, requestXSearch && requestBuild == null, requestCode && requestBuild == null, requestBuild, persistence, agent = requestAgent && requestBuild == null, freeModel = requestFreeModel()), request)
+                        request.historyBytes, request.context, requestXSearch && requestBuild == null, requestCode && requestBuild == null, requestBuild, persistence, agent = requestAgent && requestBuild == null, freeModel = requestFreeModel(), personality = requestPersonality), request)
                 }
                 if (accumulator?.snapshot()?.text.isNullOrBlank()) throw DuaApiException(EMPTY_REPLY)
                 if (generation == currentGeneration) {
@@ -2004,6 +2017,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             _error.value = "Message 8000 characters se chhota rakhein."
             return
         }
+        personalityUnavailable()?.let { _error.value = it; return }
+        // Freeze this request's style before file preparation or asynchronous project loading.
+        val requestPersonality = appearance.value.personality?.instruction
         val requestWebMode = _webMode.value
         val requestAgent = _agent.value && _agentAvailable.value
         val requestReasoning = _reasoning.value && !requestAgent
@@ -2078,7 +2094,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     check(projectContext.ownerId == null || account.state.value.user?.id == projectContext.ownerId) { "Account changed. Retry the project chat." }
                     collectReply(reply.id, attempt, api.streamReply(responseModel, request.turns, prepared,
                         projectContext.memory, token, requestWebMode.takeIf { requestBuild == null }, requestReasoning && requestBuild == null,
-                        request.historyBytes, request.context, requestXSearch && requestBuild == null, requestCode && requestBuild == null, requestBuild, persistence, agent = requestAgent && requestBuild == null, freeModel = requestFreeModel()), request)
+                        request.historyBytes, request.context, requestXSearch && requestBuild == null, requestCode && requestBuild == null, requestBuild, persistence, agent = requestAgent && requestBuild == null, freeModel = requestFreeModel(), personality = requestPersonality), request)
                 }
                 if (accumulator?.snapshot()?.text.isNullOrBlank()) throw DuaApiException(EMPTY_REPLY)
                 if (generation == currentGeneration) {

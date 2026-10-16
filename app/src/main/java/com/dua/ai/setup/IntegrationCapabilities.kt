@@ -45,7 +45,7 @@ data class IntegrationState(val groups: List<IntegrationGroup> = emptyList(), va
     val projectsEnabled: Boolean = false, val projectTasksEnabled: Boolean = false, val taskDueDatesEnabled: Boolean = false, val projectMemoryEnabled: Boolean = false,
     /** Older snapshot validators drop custom titles; wait for an explicit backend capability. */
     val chatRenameEnabled: Boolean = false, val chatDeletionEnabled: Boolean = false, val chatPinEnabled: Boolean = false,
-    val serverRepliesEnabled: Boolean = false) {
+    val serverRepliesEnabled: Boolean = false, val personalityEnabled: Boolean = false) {
     /** Search works for [model] natively or through Brave. */
     fun searchAvailable(model: String): Boolean = webSearchConfigured || model in nativeSearch
 }
@@ -65,6 +65,7 @@ object IntegrationCapabilities {
         val web = json.optJSONObject("web")
         val files = json.optJSONObject("files")
         return current.copy(providers = providers(json),
+            personalityEnabled = json.optJSONObject("personalization")?.opt("personality") == true,
             chatRenameEnabled = json.optJSONObject("history")?.opt("rename") == true,
             chatPinEnabled = json.optJSONObject("history")?.opt("pin") == true,
             chatDeletionEnabled = json.optJSONObject("history")?.opt("delete") == true,

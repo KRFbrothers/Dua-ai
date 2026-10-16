@@ -133,8 +133,8 @@ class DuaApiClient(
     fun streamReply(model: String, history: List<ChatMessage>, attachments: List<ChatAttachment> = emptyList(), memory: String = "",
         token: String? = null, web: String? = null, reasoning: Boolean = false, historyBytes: Int = MAX_HISTORY_BYTES,
         context: com.dua.ai.model.ConversationContext? = null, xSearch: Boolean = false, code: Boolean = false, build: String? = null,
-        persistence: com.dua.ai.account.ReplyPersistence? = null, agent: Boolean = false, freeModel: String? = null): Flow<ReplyEvent> = callbackFlow {
-        val request = withContext(Dispatchers.IO) { buildRequest(model, history, attachments, memory, token, web, reasoning, stream = true, historyBytes = historyBytes, context = context, xSearch = xSearch, code = code, build = build, persistence = persistence, agent = agent, freeModel = freeModel) }
+        persistence: com.dua.ai.account.ReplyPersistence? = null, agent: Boolean = false, freeModel: String? = null, personality: String? = null): Flow<ReplyEvent> = callbackFlow {
+        val request = withContext(Dispatchers.IO) { buildRequest(model, history, attachments, memory, token, web, reasoning, stream = true, historyBytes = historyBytes, context = context, xSearch = xSearch, code = code, build = build, persistence = persistence, agent = agent, freeModel = freeModel, personality = personality) }
         val call = client.newCall(request)
         call.enqueue(object : Callback {
             override fun onFailure(call: Call, error: IOException) { close(error) }
@@ -199,10 +199,11 @@ class DuaApiClient(
     internal fun buildRequest(model: String, history: List<ChatMessage>, attachments: List<ChatAttachment>, memory: String, token: String?, web: String?,
         reasoning: Boolean, stream: Boolean, historyBytes: Int = MAX_HISTORY_BYTES, context: com.dua.ai.model.ConversationContext? = null, xSearch: Boolean = false,
         code: Boolean = false, build: String? = null, persistence: com.dua.ai.account.ReplyPersistence? = null, agent: Boolean = false,
-        freeModel: String? = null): Request {
+        freeModel: String? = null, personality: String? = null): Request {
         require(freeModel == null || com.dua.ai.model.FreeModels.validId(freeModel)) { "Invalid free model." }
         require(build == null || com.dua.ai.model.BuildInfos.validRepository(build)) { "Choose a repository for Build mode." }
         require(model in com.dua.ai.setup.IntegrationCapabilities.MODELS) { "Supported model select karein." }
+        require(personality == null || (personality.isNotBlank() && personality.length <= 1000)) { "Invalid personality instruction." }
         require(memory.length <= 3000) { "Memory notes are too large." }
         require(web == null || web == "search" || web == "page") { "Web mode must be search or page." }
         val base = URL(baseUrl.trimEnd('/') + "/")
@@ -224,6 +225,7 @@ class DuaApiClient(
         } }
         val body = JSONObject().put("model", model).put("messages", messages).put("attachments", files).put("memory", memory)
             .apply {
+                if (personality != null) put("personality", personality)
                 if (web != null) put("web", web)
                 // Older servers reject unknown fields, so these are only sent by the streaming path.
                 // Build mode (Phase 5B, read-only) replaces Auto/Reasoning and names the repository.
@@ -295,7 +297,7 @@ class DuaApiClient(
         /** True only for a JSON object with `"agent": true` (the Cloud Run engine's GET / answer). */
         internal fun parseEngine(body: String): EngineCapabilities = runCatching {
             val json = JSONObject(body)
-            EngineCapabilities(agent = json.opt("agent") == true, freeModels = com.dua.ai.model.FreeModels.parse(json))
+            EngineCapabilities(agent = json.opt("agent") == true, freeModels = com.dua.ai.model.FreeModels.parse(json), personality = json.optJSONObject("personalization")?.opt("personality") == true)
         }.getOrDefault(EngineCapabilities())
         internal fun parseAgentCapability(body: String): Boolean =
             runCatching { JSONObject(body).opt("agent") == true }.getOrDefault(false)
@@ -376,4 +378,4 @@ class DuaApiClient(
 class DuaApiException(message: String, val status: Int = 0) : Exception(message)
 
 /** What the Cloud Run engine offers (GET /). */
-data class EngineCapabilities(val agent: Boolean = false, val freeModels: List<com.dua.ai.model.FreeModel> = emptyList())
+data class EngineCapabilities(val agent: Boolean = false, val freeModels: List<com.dua.ai.model.FreeModel> = emptyList(), val personality: Boolean = false)

@@ -230,3 +230,33 @@ def test_project_system_context_still_has_a_hard_limit(client, fake):
     response = client.post('/api/chat', json={'model': 'Dua', 'messages': HISTORY, 'memory': 'x' * (engine.MAX_MEMORY_CHARS + 1)})
     assert response.status_code == 400
     assert not fake.calls
+
+
+def test_personality_precedes_memory_without_modifying_turns(client, fake):
+    style = "Give short, direct answers."
+    response = client.post('/api/chat', json={'model': 'Dua', 'messages': HISTORY, 'personality': style, 'memory': 'Project instructions: use Kotlin'})
+    assert response.status_code == 200
+    system = fake.systems[-1]
+    assert system.startswith(engine.SYSTEM_PROMPT)
+    assert system.index(style) < system.index('Project instructions: use Kotlin')
+    assert 'never override system instructions' in system
+    assert fake.calls[0][0][-1]['parts'] == [('text', 'My name?')]
+
+
+def test_personality_without_memory_keeps_personal_notes_disabled(client, fake):
+    response = client.post('/api/chat', json={'messages': HISTORY, 'personality': 'Be creative.', 'memory': ''})
+    assert response.status_code == 200
+    assert 'Be creative.' in fake.systems[-1]
+    assert 'Things the user asked you to remember' not in fake.systems[-1]
+
+
+@pytest.mark.parametrize('value', [None, False, 42, {}, [], '', '   ', 'x' * 1001])
+def test_invalid_personality_is_rejected_before_provider_calls(client, fake, value):
+    response = client.post('/api/chat', json={'messages': HISTORY, 'personality': value})
+    assert response.status_code == 400
+    assert response.get_json()['error'] == 'Invalid personality instruction.'
+    assert not fake.calls
+
+
+def test_personality_support_is_advertised(client):
+    assert client.get('/').get_json()['personalization'] == {'personality': True}

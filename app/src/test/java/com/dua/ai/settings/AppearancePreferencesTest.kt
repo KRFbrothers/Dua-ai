@@ -51,4 +51,32 @@ class AppearancePreferencesTest {
         val invalid = preferencesOf(AppearanceStore.THEME to "obsolete", AppearanceStore.ACCENT to "obsolete")
         assertEquals(AppearancePreferences(), AppearanceStore.decode(invalid))
     }
+    @Test fun personalitySurvivesRestartAndAppearanceChangesAndResetClearsIt() = runBlocking {
+        val file = temporary.root.resolve("personality.preferences_pb")
+        var job = SupervisorJob()
+        fun store() = AppearanceStore(PreferenceDataStoreFactory.create(scope = CoroutineScope(job + Dispatchers.IO), produceFile = { file }))
+        var prefs = store()
+        try {
+            assertNull(prefs.data.first().personality)
+            DuaPersonality.entries.forEach { preset ->
+                prefs.setPersonality(preset)
+                assertEquals(preset, prefs.data.first().personality)
+            }
+            prefs.setTheme("dark"); prefs.setAccent(AccentPreset.Blue)
+            job.cancelAndJoin(); job = SupervisorJob(); prefs = store()
+            assertEquals(AppearancePreferences("dark", AccentPreset.Blue, DuaPersonality.CreativeBrainstormer), prefs.data.first())
+            prefs.setAccent(null); prefs.setTheme("light")
+            assertEquals(DuaPersonality.CreativeBrainstormer, prefs.data.first().personality)
+            prefs.reset()
+            assertEquals(AppearancePreferences(), prefs.data.first())
+        } finally { job.cancelAndJoin() }
+    }
+    @Test fun unknownPersonalityDoesNotSelectAnUnrelatedPresetAndMigrationKeepsAValidChoice() = runBlocking {
+        assertNull(AppearanceStore.decode(preferencesOf(AppearanceStore.PERSONALITY to "retired")).personality)
+        val existing = preferencesOf(AppearanceStore.PERSONALITY to DuaPersonality.SeniorArchitect.id)
+        assertEquals(DuaPersonality.SeniorArchitect, AppearanceStore.decode(AppearanceMigration { "{}" }.migrate(existing)).personality)
+        assertEquals(4, DuaPersonality.entries.size)
+        assertEquals(4, DuaPersonality.entries.map { it.id }.toSet().size)
+        DuaPersonality.entries.forEach { assertTrue(it.instruction.isNotBlank() && it.instruction.length <= 1000) }
+    }
 }

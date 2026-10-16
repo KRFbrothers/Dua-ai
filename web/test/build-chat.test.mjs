@@ -117,6 +117,7 @@ test('tool loop: reads files with GET only, echoes model turns verbatim (thought
       assert.deepEqual(body.tools[0].functionDeclarations.map(f => f.name), ['list_files', 'read_file', 'search_code']);
       assert.equal(body.toolConfig.functionCallingConfig.mode, 'AUTO');
       const system = body.systemInstruction.parts.map(p => p.text).join('\n');
+      assert.match(system, /Use production standards/);
       assert.match(system, /read-only/i);
       assert.match(system, /```diff/);
       assert.match(system, /untrusted/);
@@ -126,7 +127,7 @@ test('tool loop: reads files with GET only, echoes model turns verbatim (thought
     },
     body => { second = body; return geminiReply([{ text: DIFF_REPLY }]); }
   ] });
-  const response = await handleChat(authedChat(ask({ memory: 'Prefer short answers.' })), { env: buildEnv, fetcher });
+  const response = await handleChat(authedChat(ask({ memory: 'Prefer short answers.', personality: 'Use production standards.' })), { env: buildEnv, fetcher });
   assert.equal(response.status, 200);
   const reply = await response.json();
   assert.match(reply.text, /```diff\n--- a\/README.md/);
