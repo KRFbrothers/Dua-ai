@@ -86,6 +86,16 @@ class FullBackupArchiveTest {
         }
     }
 
+    @Test fun manifestRejectsDeepNestingAndTrailingJsonBeforeParsingChatData() {
+        for (raw in listOf("{\"extra\":" + "[".repeat(80) + "0" + "]".repeat(80) + "}", "{}{}")) {
+            val zip = temp.newFile()
+            ZipOutputStream(zip.outputStream()).use { out ->
+                out.putNextEntry(ZipEntry("manifest.json")); out.write(raw.toByteArray()); out.closeEntry()
+            }
+            assertThrows(IllegalArgumentException::class.java) { FullBackupArchive.readZip(zip, temp.newFolder()) }
+        }
+    }
+
     @Test fun memoryMergeKeepsCurrentNotesAndRejectsOverflowBeforeRestoringFiles() {
         assertEquals(listOf("Existing", "Imported"), FullBackupArchive.mergeMemory(listOf("Existing"), listOf("Existing", "Imported")))
         assertThrows(IllegalArgumentException::class.java) { FullBackupArchive.mergeMemory((1..10).map { "Note $it" }, listOf("Extra")) }

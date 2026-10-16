@@ -62,9 +62,12 @@ object FullBackupArchive {
                 zip.closeEntry()
                 return out.toByteArray()
             }
-            val header = JSONObject(strictUtf8(read("manifest.json", MANIFEST_BYTES)))
+            val header = parseManifest(read("manifest.json", MANIFEST_BYTES))
             require(header.optString("format") == "dua-full-backup" && header.opt("version") == 1) { "Unsupported full backup version." }
-            val memory = header.getJSONArray("memory").let { array -> (0 until array.length()).map { array.get(it) as? String ?: error("Invalid memory note.") } }
+            val memory = header.getJSONArray("memory").let { array ->
+                require(array.length() <= 10) { "A backup can contain at most 10 Personal notes." }
+                (0 until array.length()).map { array.get(it) as? String ?: error("Invalid memory note.") }
+            }
             val owner = if (header.isNull("ownerId")) null else header.get("ownerId") as? String ?: error("Invalid backup owner.")
             val assets = header.getJSONArray("assets").let { array ->
                 require(array.length() <= MAX_FILES) { "Backup has too many files." }
@@ -142,4 +145,25 @@ object FullBackupArchive {
 
     private fun strictUtf8(bytes: ByteArray): String = Charsets.UTF_8.newDecoder()
         .onMalformedInput(java.nio.charset.CodingErrorAction.REPORT).decode(java.nio.ByteBuffer.wrap(bytes)).toString()
+
+    private fun parseManifest(bytes: ByteArray): JSONObject {
+        val raw = strictUtf8(bytes)
+        var depth = 0
+        var quoted = false
+        var escaped = false
+        for (char in raw) {
+            if (quoted) {
+                if (escaped) escaped = false
+                else if (char == '\\') escaped = true
+                else if (char == '"') quoted = false
+            } else if (char == '"') quoted = true
+            else if (char == '{' || char == '[') {
+                depth++; require(depth <= 64) { "Backup inventory is too deeply nested." }
+            } else if (char == '}' || char == ']') depth--
+        }
+        val parser = org.json.JSONTokener(raw)
+        val result = parser.nextValue() as? JSONObject ?: error("Invalid backup inventory.")
+        require(parser.nextClean() == '\u0000') { "Unexpected trailing backup inventory data." }
+        return result
+    }
 }
