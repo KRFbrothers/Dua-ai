@@ -79,6 +79,8 @@ val VoicePermissionHeadingStyle = VoiceGreetingStyle.copy(fontSize = 22.sp, line
 // Home screen + composer styles, taken from the "Dua AI Dabba" reference shell (Inter, standard chat sizes).
 /** Quick prompt rows on Home ("Create an image…"), Dabba bodyLarge. */
 val HomePromptStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Normal, fontSize = 16.sp)
+/** Brand and short model label share a single baseline in the Home header. */
+val HomeHeaderStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Medium, fontSize = 19.sp, lineHeight = 26.sp)
 /** Composer input and its "Ask Dua AI" placeholder. */
 val ComposerTextStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Normal, fontSize = 16.sp, lineHeight = 22.sp)
 /** Dynamic chat composer, independent of other existing input styles. */
