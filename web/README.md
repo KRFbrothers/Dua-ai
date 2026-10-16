@@ -92,3 +92,5 @@ accounts are reused; this script does not create or migrate application data.
 ### Android feature hubs
 
 The native Library/Images screens use the additive owner-only `GET /api/files/list` route for private cloud inventory. It returns bounded file metadata without signed links; existing `/api/files/url` resolves a selected file on demand. Redeploy this Node service after merging the feature hubs; no new secrets or migration are required. Older deployments keep chat/project references usable and the app shows a cloud-inventory retry/update notice. See [feature hub behavior and validation](../docs/FEATURE_HUBS.md).
+
+Android's password-protected Storage backup additionally uses owner-only `POST /api/files/restore-sign` for insert-only recovery of original paths. Redeploy this service and refresh Feature setup before restoring raw files; `/api/config` advertises `files.restore`. No new secrets or RLS changes are needed. See [Storage backup rollout and recovery rules](../docs/STORAGE_BACKUP.md#backend-rollout).

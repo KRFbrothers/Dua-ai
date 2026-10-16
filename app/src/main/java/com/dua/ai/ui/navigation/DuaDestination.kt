@@ -36,7 +36,6 @@ enum class DuaDestination(val route: String) {
 
     /** Dedicated screens absent from the source inventory; navigation stays honest about availability. */
     val comingSoonTitle: String? get() = when (this) {
-        Storage -> "Storage"
         SettingsSearch -> "Search settings"; AvatarEdit -> "Edit profile photo"
         Privacy -> "Privacy"; Sharing -> "Sharing"; Permissions -> "Permissions"
         Screenshare -> "Screenshare / Video"

@@ -1,5 +1,6 @@
 // /api/files/* — owner-only stored files (Supabase Storage, private bucket).
 //   POST /api/files/sign        {name, mimeType, size}  -> {path, uploadUrl, headers, expiresIn, maxBytes, kind, mimeType}
+//   POST /api/files/restore-sign {path, mimeType, size}  -> insert-only owner-path signed upload
 //   POST /api/files/url         {path}                  -> {url, expiresIn}           (preview / open)
 //   POST /api/files/delete      {paths: [...]}          -> {deleted}
 //   POST /api/files/delete-all  {}                      -> {deleted}
@@ -17,7 +18,7 @@ export const PREVIEW_URL_SECONDS = 600;
 /** Public capability summary for /api/config (no secrets). */
 export function filesConfiguration(env = {}) {
   const config = storageConfig(env);
-  return { enabled: config.enabled && Boolean(String(env.DUA_ALLOWED_EMAIL || '').trim()), maxBytes: config.maxBytes, types: STORED_MIME_TYPES, requiresSignIn: true };
+  return { enabled: config.enabled && Boolean(String(env.DUA_ALLOWED_EMAIL || '').trim()), maxBytes: config.maxBytes, types: STORED_MIME_TYPES, requiresSignIn: true, restore: true };
 }
 
 /** Validates a sign request; returns {mimeType, kind, ext} or throws StorageError. Pure (tested). */
@@ -34,7 +35,7 @@ export function validateUploadRequest(body, maxBytes) {
 export async function handleFiles(request, { env = process.env, fetcher = fetch } = {}) {
   const url = new URL(request.url);
   const action = url.pathname.replace(/^\/api\/files\//, '');
-  if (!['sign', 'url', 'delete', 'delete-all', 'usage', 'list'].includes(action)) return json({ error: 'Not found.' }, 404);
+  if (!['sign', 'restore-sign', 'url', 'delete', 'delete-all', 'usage', 'list'].includes(action)) return json({ error: 'Not found.' }, 404);
   if (['usage', 'list'].includes(action) ? request.method !== 'GET' : request.method !== 'POST') return json({ error: 'Method not allowed.' }, 405);
   const config = storageConfig(env);
   if (!config.enabled) return json({ error: 'Stored files are not configured. Set Supabase settings and apply the dua-files migration.' }, 503);
@@ -45,6 +46,17 @@ export async function handleFiles(request, { env = process.env, fetcher = fetch 
     if (request.method === 'POST') {
       try { body = await readJsonLimited(request, 65536); } catch (error) { return json({ error: error.status === 413 ? 'Request too large.' : 'Invalid request.' }, error.status === 413 ? 413 : 400); }
       if (!body || typeof body !== 'object' || Array.isArray(body)) return json({ error: 'Invalid request.' }, 400);
+    }
+    if (action === 'restore-sign') {
+      // Recovery is insert-only, in the verified owner's UUID folder. Existing objects cannot be overwritten.
+      if (!body || Object.keys(body).sort().join(',') !== 'mimeType,path,size' || !ownsPath(body.path, user.id)) return json({ error: 'Invalid restore file path.' }, 400);
+      const ext = body.path.split('.').at(-1);
+      const mimeType = ext === 'mp4' ? 'video/mp4' : storedType('application/octet-stream', body.path);
+      if (!mimeType || mimeType !== body.mimeType) return json({ error: 'Restore file type does not match its path.' }, 415);
+      if (!Number.isSafeInteger(body.size) || body.size <= 0) return json({ error: 'Invalid restore file size.' }, 400);
+      if (body.size > config.maxBytes) return json({ error: 'File is larger than the storage limit.' }, 413);
+      const signed = await signUpload(config, token, body.path, { fetcher, signal });
+      return json({ path: body.path, uploadUrl: signed.uploadUrl, headers: { 'Content-Type': mimeType, 'x-upsert': 'false', apikey: config.key }, mimeType, maxBytes: config.maxBytes });
     }
     if (action === 'sign') {
       const { mimeType, kind, ext } = validateUploadRequest(body, config.maxBytes);

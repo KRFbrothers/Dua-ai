@@ -8,6 +8,9 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.*
 import com.dua.ai.settings.LocalPreferences
 import com.dua.ai.setup.IntegrationState
+import com.dua.ai.backup.FullBackupState
+import com.dua.ai.files.CacheUsage
+import com.dua.ai.files.StorageUsageStatus
 import com.dua.ai.ui.settings.*
 import com.dua.ai.ui.theme.DuaTheme
 import org.junit.Assert.*
@@ -24,7 +27,7 @@ class SettingsFunctionalNavigationTest(private val theme: String) {
     @get:Rule val compose = createComposeRule()
     private lateinit var nav: NavHostController
 
-    @Test fun allSixFunctionalRoutesReplacePlaceholdersAndBackReturnsToSettings() {
+    @Test fun functionalRoutesReplacePlaceholdersAndBackReturnsToSettings() {
         compose.setContent {
             DuaTheme(LocalPreferences(theme = theme)) {
                 nav = rememberNavController()
@@ -40,12 +43,17 @@ class SettingsFunctionalNavigationTest(private val theme: String) {
                         safety = { SafetyContent(false, back, open, {}) },
                         security = { SecurityLoginContent(null, back, open, {}) },
                     )
+                    composable(DuaDestination.Storage.route) {
+                        StorageContent(0, 0, CacheUsage(0, 0), "", false, false, null, StorageUsageStatus(), false,
+                            false, FullBackupState(), back, open, {}, {}, {}, {})
+                    }
                     comingSoonPages(back)
                 }
             }
         }
         mapOf(DuaDestination.Memory to "Memory", DuaDestination.General to "General", DuaDestination.Notifications to "Notifications",
-            DuaDestination.UsageLimits to "Usage and limits", DuaDestination.Safety to "Safety", DuaDestination.SecurityLogin to "Security and login").forEach { (destination, title) ->
+            DuaDestination.UsageLimits to "Usage and limits", DuaDestination.Safety to "Safety", DuaDestination.SecurityLogin to "Security and login",
+            DuaDestination.Storage to "Storage").forEach { (destination, title) ->
             assertNull(destination.comingSoonTitle)
             compose.runOnIdle { nav.navigate(destination.route) }
             compose.onNode(hasText(title) and SemanticsMatcher.keyIsDefined(SemanticsProperties.Heading)).assertExists()

@@ -64,6 +64,44 @@ test('POST /api/files/sign issues a Supabase signed upload URL in the owner fold
   assert.ok(!data.path.includes('Budget'), 'file names never go into storage paths');
 });
 
+test('restore-sign recovers an original owner path without allowing overwrites or changing ordinary upload types', async () => {
+  const fetcher = router([[SUPA + '/storage/v1/object/upload/sign/dua-files/', url => Response.json({ url: new URL(url).pathname.replace('/storage/v1', '') + '?token=restore-token' })]]);
+  const original = path(undefined, 'pdf');
+  const response = await handleFiles(filesRequest('restore-sign', { path: original, mimeType: 'application/pdf', size: 12 }), { env: filesEnv, fetcher });
+  assert.equal(response.status, 200);
+  const data = await response.json();
+  assert.equal(data.path, original);
+  assert.equal(data.headers['x-upsert'], 'false');
+  assert.equal(data.headers['Content-Type'], 'application/pdf');
+  const sign = fetcher.find(SUPA + '/storage/v1/object/upload/sign/')[0];
+  assert.equal(sign.headers.get('authorization'), 'Bearer user-token');
+  assert.deepEqual(JSON.parse(sign.body), {});
+  const video = await handleFiles(filesRequest('restore-sign', { path: path(undefined, 'mp4'), mimeType: 'video/mp4', size: 100 }), { env: filesEnv, fetcher });
+  assert.equal(video.status, 200);
+  assert.equal((await video.json()).mimeType, 'video/mp4');
+  assert.equal(filesConfiguration(filesEnv).restore, true);
+});
+
+test('restore-sign rejects foreign paths, traversal, mismatched MIME, extra privileges, bad sizes and unsigned callers', async () => {
+  const valid = { path: path(), mimeType: 'application/pdf', size: 10 };
+  const rejected = async (body, status, options = {}) => {
+    const fetcher = router([]);
+    const response = await handleFiles(filesRequest('restore-sign', body, options), { env: filesEnv, fetcher });
+    assert.equal(response.status, status);
+    assert.equal(fetcher.find(SUPA + '/storage/').length, 0);
+  };
+  await rejected({ ...valid, path: path(undefined, 'pdf', OTHER) }, 400);
+  await rejected({ ...valid, path: `${UID}/../${OTHER}/file.pdf` }, 400);
+  await rejected({ ...valid, mimeType: 'image/png' }, 415);
+  await rejected({ ...valid, path: path(undefined, 'exe'), mimeType: 'application/octet-stream' }, 415);
+  await rejected({ ...valid, upsert: true }, 400);
+  await rejected({ ...valid, size: 0 }, 400);
+  await rejected({ ...valid, size: 0.5 }, 400);
+  await rejected({ ...valid, size: 51 * MB }, 413);
+  await rejected(valid, 401, { token: null });
+  await rejected(valid, 405, { method: 'GET' });
+});
+
 test('file endpoints are owner-only and map storage errors to clear messages', async () => {
   const sign = { name: 'a.pdf', mimeType: 'application/pdf', size: 10 };
   const status = async (request, options) => { const response = await handleFiles(request, options); return [response.status, (await response.json()).error]; };

@@ -5,6 +5,12 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class IntegrationCapabilitiesTest {
+    @Test fun fileRestoreRequiresExplicitBackendCapability() {
+        val old = IntegrationState(filesEnabled = true, filesRestoreEnabled = true)
+        assertFalse(IntegrationCapabilities.configuration(JSONObject("""{"files":{"enabled":true}}"""), old).filesRestoreEnabled)
+        assertFalse(IntegrationCapabilities.configuration(JSONObject("""{"files":{"enabled":true,"restore":"true"}}"""), old).filesRestoreEnabled)
+        assertTrue(IntegrationCapabilities.configuration(JSONObject("""{"files":{"enabled":true,"restore":true}}"""), old).filesRestoreEnabled)
+    }
     @Test fun chatPinRequiresExplicitBackendSupport() {
         fun read(raw: String) = IntegrationCapabilities.configuration(JSONObject(raw), IntegrationState(chatPinEnabled = true)).chatPinEnabled
         assertFalse(read("{}")); assertFalse(read("""{"history":{"pin":"true"}}"""))
