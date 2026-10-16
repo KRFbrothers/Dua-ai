@@ -38,6 +38,7 @@ object RealtimeProtocol {
     fun sessionUpdate(session: JSONObject): String = JSONObject().put("type", "session.update").put("session", session).toString()
     fun appendAudio(pcm: ByteArray, length: Int = pcm.size): String =
         JSONObject().put("type", "input_audio_buffer.append").put("audio", Base64.getEncoder().encodeToString(if (length == pcm.size) pcm else pcm.copyOf(length))).toString()
+    fun cancelResponse(): String = JSONObject().put("type", "response.cancel").toString()
     fun clearInput(): String = JSONObject().put("type", "input_audio_buffer.clear").toString()
 
     fun decode(raw: String): RealtimeEvent {

@@ -22,6 +22,8 @@ import com.dua.ai.voice.SpeakableText
 /** Reads replies aloud with the device voice or the optional generated (AI) voice. */
 @Stable
 class ReplyVoice internal constructor(val speaker: NativeReplySpeaker, val generated: GeneratedVoiceSession) {
+    fun stop() = stopAll()
+
     fun stopAll() { speaker.stop(); generated.stop() }
 
     fun toggle(message: ChatMessage, useGenerated: Boolean) {

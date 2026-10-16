@@ -105,6 +105,7 @@ object LiveVoiceController {
         })
     }
 
+    fun interrupt() { session?.let { apply(it.interrupt()) } }
     fun setMuted(muted: Boolean) { session?.let { apply(it.setMuted(muted)) } }
     fun end(reason: String = "Session ended.") { session?.let { apply(it.end(reason)) } }
 

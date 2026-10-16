@@ -111,6 +111,11 @@ class VoiceModeSession(private val actions: Actions, private val silentRetries: 
         }
     }
 
+    /** Ignore late detector callbacks from an older utterance, muted mic, or a paused screen. */
+    fun bargeIn(utteranceToken: Int) {
+        if (!state.closed && !state.muted && state.phase == VoicePhase.Speaking && utteranceToken == token) tapOrb()
+    }
+
     private fun afterInterrupt() { silent = 0; if (state.muted) to(VoicePhase.Idle) else listenNow() }
 
     /** Mic mute: stops listening now; while muted Dua still finishes a reply but doesn't listen afterwards. */

@@ -1,0 +1,4 @@
+<resources>
+    <!-- The existing official 960×960 artwork; one source for widget and voice UI. -->
+    <item type="drawable" name="ls_gemini_live_wght320_vd_theme_28">@drawable/ls_live_wave</item>
+</resources>

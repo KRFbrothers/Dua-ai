@@ -131,4 +131,20 @@ class VoiceModeSessionTest {
         session.start(); session.transcript("x".repeat(VoiceModeSession.MAX_CHARS + 1))
         assertEquals(VoicePhase.Idle, phase); assertTrue(fake.calls.none { it.startsWith("send") })
     }
+
+    @Test fun vadStopsPlaybackBeforeListeningAndRejectsStaleOrMutedCallbacks() {
+        session.start(); session.transcript("Question"); session.reply("Answer", session.token)
+        val token = session.token
+        session.bargeIn(token - 1)
+        assertEquals(VoicePhase.Speaking, phase)
+        session.setMuted(true); session.bargeIn(token)
+        assertEquals(VoicePhase.Speaking, phase)
+        session.setMuted(false); session.bargeIn(token)
+        assertEquals(VoicePhase.Listening, phase)
+        assertEquals(listOf("stopSpeaking", "listen"), fake.calls.takeLast(2))
+        session.spoken(token)
+        session.bargeIn(token)
+        assertEquals(1, fake.calls.count { it == "stopSpeaking" })
+        assertEquals(VoicePhase.Listening, phase)
+    }
 }
