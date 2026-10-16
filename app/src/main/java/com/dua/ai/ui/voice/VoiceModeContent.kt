@@ -37,6 +37,7 @@ import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material.icons.outlined.MicOff
 import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material.icons.outlined.PhotoCamera
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.ThumbDown
 import androidx.compose.material.icons.outlined.ThumbUp
@@ -118,6 +119,8 @@ data class VoiceModeUi(
     val permission: MicPermission = MicPermission.Granted,
     /** 1 = thumbs up, -1 = thumbs down, 0 = none (local only). */
     val feedback: Int = 0,
+    val cameraAttached: Boolean = false,
+    val cameraAttachmentName: String = "",
 )
 
 class VoiceModeCallbacks(
@@ -126,6 +129,7 @@ class VoiceModeCallbacks(
     val onClose: () -> Unit = {},
     val onCaptions: (Boolean) -> Unit = {},
     val onCamera: () -> Unit = {},
+    val onClearCamera: () -> Unit = {},
     val onUpload: () -> Unit = {},
     val onFeedback: (Int) -> Unit = {},
     val onShare: () -> Unit = {},
@@ -214,6 +218,13 @@ fun VoiceModeContent(
                     ui.captions && conversation -> Captions(ui, callbacks, Modifier.fillMaxSize())
                     else -> Greeting(ui, conversation, Modifier.align(BiasAlignment(0f, -.18f)))
                 }
+            }
+            if (ui.cameraAttached) {
+                CameraVisionCard(
+                    name = ui.cameraAttachmentName,
+                    onClear = callbacks.onClearCamera,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.xxl, vertical = Spacing.xs)
+                )
             }
             BottomStatus(ui)
             SnackbarHost(snackbar, Modifier.fillMaxWidth()) { data ->
@@ -354,7 +365,7 @@ private fun Controls(ui: VoiceModeUi, callbacks: VoiceModeCallbacks, energy: Voi
         val circle = min(VoiceSizes.controlMax, width / 6.6f).coerceAtLeast(Sizes.touchTarget)
         val orbWidth = min(circle * 2.5f, width - circle * 4 - VoiceSizes.controlGap * 4)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            ControlCircle(ImageVector.vectorResource(R.drawable.gs_video_camera), "Camera, coming soon", circle, onClick = callbacks.onCamera)
+            ControlCircle(ImageVector.vectorResource(R.drawable.gs_video_camera), if (ui.cameraAttached) "Camera, photo attached" else "Camera, coming soon", circle, selected = ui.cameraAttached, onClick = callbacks.onCamera)
             ControlCircle(ImageVector.vectorResource(R.drawable.gs_screenshare), "Share screen or upload, coming soon", circle, onClick = callbacks.onUpload)
             VoiceOrb(ui.phase, ui.muted, energy, time, Modifier.width(orbWidth).height(circle * 1.2f), callbacks.onOrb)
             ControlCircle(if (ui.muted) Icons.Outlined.MicOff else Icons.Outlined.Mic, "Microphone", circle, selected = ui.muted,
@@ -379,6 +390,45 @@ private fun ControlCircle(icon: ImageVector, description: String, size: Dp, sele
     ) {
         Box(contentAlignment = Alignment.Center) { // Decorative: the circle itself carries the label, role and state for TalkBack.
         Icon(icon, contentDescription = null, modifier = Modifier.size(Sizes.icon)) }
+    }
+}
+
+/** Floating card indicating that camera vision is active for the current voice interaction. */
+@Composable
+private fun CameraVisionCard(name: String, onClear: () -> Unit, modifier: Modifier = Modifier) {
+    val colors = DuaTheme.colors
+    val v = VoiceTheme.colors
+    Surface(
+        shape = VoiceShapes.snackbar,
+        color = colors.voice.statusSurface,
+        border = BorderStroke(1.dp, colors.sparkle.copy(alpha = .45f)),
+        modifier = modifier
+    ) {
+        Row(
+            Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
+        ) {
+            Box(
+                Modifier.size(Sizes.icon).clip(CircleShape).background(colors.sparkle.copy(alpha = .18f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Outlined.PhotoCamera, null, tint = colors.sparkle, modifier = Modifier.size(Sizes.iconSmall))
+            }
+            Column(Modifier.weight(1f)) {
+                Text("Vision Active", style = MaterialTheme.typography.labelMedium, color = colors.sparkle)
+                Text(
+                    name.ifBlank { "Camera photo ready" },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = v.subText,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            IconButton(onClick = onClear, modifier = Modifier.size(Sizes.touchTarget)) {
+                Icon(Icons.Outlined.Close, contentDescription = "Remove photo", tint = v.subText, modifier = Modifier.size(Sizes.iconSmall))
+            }
+        }
     }
 }
 

@@ -11,6 +11,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.provider.Settings
 import android.speech.SpeechRecognizer
+import android.content.ActivityNotFoundException
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.SnackbarHostState
@@ -24,11 +25,14 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
+import com.dua.ai.attachments.CameraCaptureStore
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -137,7 +141,8 @@ internal class VoiceModeController(
             !viewModel.online.value -> "You're offline. Reconnect, then tap the orb."
             viewModel.imagine.value -> "Imagine is on. Turn it off in the chat to talk with Dua."
             viewModel.isTyping.value || viewModel.readingFiles.value -> "Dua is still answering in the chat. Wait a moment, then tap the orb."
-            viewModel.attachments.value.isNotEmpty() || viewModel.uploads.value.isNotEmpty() -> "Send or remove the attachments in the chat first."
+            viewModel.uploads.value.isNotEmpty() -> "Send or remove the uploads in the chat first."
+            viewModel.attachments.value.any { !it.mimeType.startsWith("image/") } -> "Non-image files cannot be analyzed in voice mode. Open chat to send them."
             else -> null
         }
         if (blocked != null) { scope.launch { session.replyFailed(blocked, token) }; return }
@@ -272,12 +277,33 @@ fun VoiceModeScreen(viewModel: ChatViewModel, voice: ReplyVoice, onClose: () -> 
     LaunchedEffect(controller.state.closed) { if (controller.state.closed) { if (toChat) onOpenChat() else onClose() } }
 
     val state = controller.state
+    val attachments by viewModel.attachments.collectAsState()
+    val cameraPhoto = attachments.firstOrNull { it.mimeType.startsWith("image/") }
+
+    val captures = remember(context) { CameraCaptureStore(context.cacheDir) }
+    var pendingCapture by rememberSaveable { mutableStateOf("") }
+    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { captured ->
+        val name = pendingCapture
+        pendingCapture = ""
+        if (name.isNotEmpty()) {
+            val file = captures.find(name)
+            if (captured && file.exists() && file.length() > 0) {
+                viewModel.selectCameraFile(file)
+                say("Photo captured. Ask Dua anything about it!")
+            } else {
+                captures.discard(name)
+            }
+        }
+    }
+
     val ui = VoiceModeUi(
         phase = state.phase, muted = state.muted, captions = captions,
         firstName = firstNameOf(account.user?.displayName),
         heard = if (state.phase == VoicePhase.Listening) input.partial else "",
         userText = controller.userText, replyText = controller.replyText, notice = state.notice,
         permission = permission, feedback = controller.feedback,
+        cameraAttached = cameraPhoto != null,
+        cameraAttachmentName = cameraPhoto?.name.orEmpty(),
     )
     VoiceModeContent(
         ui = ui,
@@ -293,7 +319,26 @@ fun VoiceModeScreen(viewModel: ChatViewModel, voice: ReplyVoice, onClose: () -> 
             onMute = { haptic(ChatHaptic.Tap); controller.session.setMuted(!controller.state.muted) },
             onClose = { controller.session.close() },
             onCaptions = { captions = it; prefs.edit().putBoolean("captions", it).apply() },
-            onCamera = { say("Camera in voice mode is coming soon.") },
+            onCamera = {
+                haptic(ChatHaptic.Tap)
+                try {
+                    val file = captures.create()
+                    pendingCapture = file.name
+                    val uri = FileProvider.getUriForFile(context, "${context.packageName}.camera", file)
+                    cameraLauncher.launch(uri)
+                } catch (_: ActivityNotFoundException) {
+                    say("No camera app available.")
+                } catch (_: SecurityException) {
+                    say("Camera access is unavailable.")
+                } catch (_: Exception) {
+                    say("Could not launch camera.")
+                }
+            },
+            onClearCamera = {
+                haptic(ChatHaptic.Tap)
+                viewModel.clearAttachments()
+                say("Photo removed.")
+            },
             onUpload = { say("Sharing your screen or a file is coming soon.") },
             onFeedback = {
                 controller.feedback = it

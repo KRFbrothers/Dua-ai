@@ -46,7 +46,10 @@ PLAN_PROMPT = (
 MERGE_PROMPT = (
     "You are the Dua Agent. Helpers worked on parts of the user's request in parallel. Write ONE final answer in "
     "simple, Hinglish-friendly English. Keep citations like [2] exactly as given and keep pull request links. Say "
-    "honestly if a part failed or is missing. Do not invent results.\n\nUser request:\n{request}\n\nHelper results:\n{results}"
+    "honestly if a part failed or is missing. Do not invent results.\n"
+    "When providing code, HTML, SVG, React, or Mermaid diagrams, format them as clean standalone code blocks with "
+    "explicit language identifiers (```html, ```svg, ```mermaid, etc.) for interactive preview in Artifacts Canvas.\n\n"
+    "User request:\n{request}\n\nHelper results:\n{results}"
 )
 
 
@@ -56,18 +59,43 @@ def enabled():
 
 def load_adk():
     """Real ADK as a small namespace (replaced by a fake in tests)."""
+    import importlib
     from types import SimpleNamespace
-    from google.adk.agents import LlmAgent, ParallelAgent, SequentialAgent
-    from google.adk.agents.run_config import RunConfig
-    from google.adk.runners import InMemoryRunner
-    from google.genai import types
-    return SimpleNamespace(LlmAgent=LlmAgent, ParallelAgent=ParallelAgent, SequentialAgent=SequentialAgent,
-                           RunConfig=RunConfig, InMemoryRunner=InMemoryRunner, types=types)
+    try:
+        agents = importlib.import_module("google.adk.agents")
+        run_config = importlib.import_module("google.adk.agents.run_config")
+        runners = importlib.import_module("google.adk.runners")
+        genai = importlib.import_module("google.genai")
+    except (ImportError, ModuleNotFoundError) as err:
+        raise ImportError(f"google-adk or google-genai is not available: {err}") from err
+    return SimpleNamespace(
+        LlmAgent=agents.LlmAgent,
+        ParallelAgent=agents.ParallelAgent,
+        SequentialAgent=agents.SequentialAgent,
+        RunConfig=run_config.RunConfig,
+        InMemoryRunner=runners.InMemoryRunner,
+        types=genai.types,
+    )
 
 
 def parse_plan(text, allowed):
+    """Parse JSON plan safely, stripping any markdown codeblocks or preamble text from the LLM."""
+    if not text:
+        return []
+    cleaned = text.strip()
+    if cleaned.startswith("```"):
+        lines = cleaned.splitlines()
+        if lines and lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].strip() == "```":
+            lines = lines[:-1]
+        cleaned = "\n".join(lines).strip()
+    start = cleaned.find("{")
+    end = cleaned.rfind("}")
+    if start != -1 and end != -1 and end >= start:
+        cleaned = cleaned[start:end + 1]
     try:
-        data = json.loads(text or "{}")
+        data = json.loads(cleaned or "{}")
     except (ValueError, TypeError):
         return []
     if not isinstance(data, dict) or not data.get("split"):
@@ -76,33 +104,52 @@ def parse_plan(text, allowed):
     for item in data.get("subtasks") or []:
         if not isinstance(item, dict):
             continue
-        kind, task = item.get("kind"), " ".join(str(item.get("task", "")).split())[:2000]
+        kind = item.get("kind")
+        raw_task = item.get("task", "")
+        task = " ".join(str(raw_task).split())[:2000]
         if kind in allowed and kind not in seen and task:
             seen.add(kind)
             subtasks.append({"kind": kind, "task": task, "title": SPECIALISTS[kind][0]})
     return subtasks[:3] if len(subtasks) >= 2 else []
 
 
-def final_text(events, author):
-    """Last final-response text written by [author]."""
+def final_text(events, author, on_thought=None):
+    """Last final-response text written by [author]. Optionally streams thought deltas to on_thought."""
     text = ""
     for event in events:
         if getattr(event, "author", None) != author:
             continue
         content = getattr(event, "content", None)
         parts = getattr(content, "parts", None) or []
-        chunk = "".join(getattr(p, "text", None) or "" for p in parts if not getattr(p, "thought", False))
-        if chunk.strip():
-            text = chunk
+        for p in parts:
+            if getattr(p, "thought", False):
+                thought_str = getattr(p, "text", None) or ""
+                if thought_str.strip() and on_thought:
+                    on_thought(thought_str)
+            else:
+                chunk = getattr(p, "text", None) or ""
+                if chunk.strip():
+                    text = chunk
     return text.strip()
 
 
-def run_agent(adk, agent, message, max_calls):
+def run_agent(adk, agent, message, max_calls, on_thought=None):
+    """Run an ADK agent in an in-memory session, capturing response events and thought chunks."""
     runner = adk.InMemoryRunner(agent=agent, app_name="dua-agent")
     session = runner.session_service.create_session_sync(app_name="dua-agent", user_id="owner")
     content = adk.types.Content(role="user", parts=[adk.types.Part(text=message)])
-    return list(runner.run(user_id="owner", session_id=session.id, new_message=content,
-                           run_config=adk.RunConfig(max_llm_calls=max_calls)))
+    events = list(runner.run(user_id="owner", session_id=session.id, new_message=content,
+                             run_config=adk.RunConfig(max_llm_calls=max_calls)))
+    if on_thought:
+        for event in events:
+            content_obj = getattr(event, "content", None)
+            parts = getattr(content_obj, "parts", None) or []
+            for p in parts:
+                if getattr(p, "thought", False):
+                    t = getattr(p, "text", "") or ""
+                    if t.strip():
+                        on_thought(t)
+    return events
 
 
 def make_tools(names, call):
@@ -214,7 +261,9 @@ def run(env, request_text, flash_model, agent_model, config_for, adk=None, log=p
                                instruction=lambda ctx: PLAN_PROMPT.format(
                                    code_note="" if "code" in allowed else "; NOT available now",
                                    notes_note="" if "notes" in allowed else "; NOT available now"))
-        subtasks = parse_plan(final_text(run_agent(adk, planner, request_text, 2), "controller"), allowed)
+        subtasks = parse_plan(final_text(run_agent(adk, planner, request_text, 2,
+                                                    on_thought=lambda t: thinking(f"[Plan] {t}")),
+                                         "controller"), allowed)
         if not subtasks:
             return None
         log(f"[dua-agent] adk plan: {', '.join(s['kind'] for s in subtasks)}")
@@ -242,7 +291,8 @@ def run(env, request_text, flash_model, agent_model, config_for, adk=None, log=p
                               instruction=merge_instruction)
         root = adk.SequentialAgent(name="dua_root", sub_agents=[
             adk.ParallelAgent(name="helpers", sub_agents=helpers), merger])
-        events = run_agent(adk, root, request_text, SUB_STEPS * len(helpers) + 2)
+        events = run_agent(adk, root, request_text, SUB_STEPS * len(helpers) + 2,
+                           on_thought=lambda t: thinking(f"[Merge] {t}"))
         return final_text(events, "merger")
 
     try:

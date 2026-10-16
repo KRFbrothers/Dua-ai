@@ -220,13 +220,14 @@ Each Agent model step has a hard deadline, `AGENT_STEP_SECONDS` (default 150; al
 
 ## Parallel multi-agent mode on Google ADK (optional, `AGENT_ENGINE=adk`)
 
-[`agent_adk.py`](agent_adk.py) uses `google-adk==2.12.0`, imported only when the flag is on.
-1. **Plan:** an ADK controller agent on `AGENT_MODEL` decides whether the request has 2–3 independent parts (research / code / notes).
+[`agent_adk.py`](agent_adk.py) uses Google Agent Development Kit 2.0 (`google-adk==2.12.0`, upstream / fork: [KRFbrothers/adk-python](https://github.com/KRFbrothers/adk-python)), imported only when the flag is on.
+1. **Plan:** an ADK controller agent on `AGENT_MODEL` decides whether the request has 2–3 independent parts (research / code / notes). Uses robust JSON plan parsing that handles both raw JSON and markdown codeblock responses.
 2. **Parallel helpers:** an ADK `SequentialAgent[ParallelAgent(helpers on VERTEX_MODEL), merger on AGENT_MODEL]` runs them.
    - Helpers call the existing tools through one shared `AgentRun`, so the same per-tool caps, #214 timeouts and global source numbers apply.
    - At most one pull request is opened per request.
    - `AGENT_SUB_STEPS` (default 5 per helper) caps model calls, and `AGENT_ADK_SECONDS` (default 300) caps total time.
-3. **Progress:** goes out as the existing chips (`sub_a`/`sub_b`/`sub_c`, `merge`) and thinking lines, so the app needs no change.
+3. **Progress & Chain-of-Thought (CoT):** goes out as the existing chips (`sub_a`/`sub_b`/`sub_c`, `merge`) and live thinking events (`part.thought` extraction) streamed directly to Dua AI's Android `ThinkingBlock` UI.
+4. **Artifacts Canvas formatting:** The merger formats diagrams, SVG, React, and code snippets with explicit language identifiers for interactive preview in Dua AI's Claude-style Artifacts Canvas.
 
 **Fallback:** if the request doesn't split, or ADK fails before any tool ran, the normal loop answers. Coding-mode requests always use the normal loop. Notes learning runs after the reply as before.
 

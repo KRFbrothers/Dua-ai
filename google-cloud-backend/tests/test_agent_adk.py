@@ -232,3 +232,33 @@ def test_real_adk_parallel_pipeline_offline():
     assert result.sources and result.sources[0]["url"] == "https://blog.test/gemini"
     assert ("sub_a", "Research: Searching the web\u2026", "active") in events
     assert ("sub_b", "Notes: Checking notes\u2026", "active") in events
+
+
+def test_parse_plan_markdown_wrapped_json():
+    wrapped = "Here is the plan:\n```json\n" + json.dumps(PLAN) + "\n```\nLet me know if this works."
+    subs = agent_adk.parse_plan(wrapped, ["research", "notes"])
+    assert [s["kind"] for s in subs] == ["research", "notes"]
+
+
+def test_final_text_extracts_thoughts_to_callback():
+    thoughts = []
+    events = [
+        SimpleNamespace(
+            author="controller",
+            content=SimpleNamespace(
+                parts=[
+                    SimpleNamespace(thought=True, text="Analyzing user request structure..."),
+                    SimpleNamespace(thought=False, text="Final text output")
+                ]
+            )
+        )
+    ]
+    text = agent_adk.final_text(events, "controller", on_thought=thoughts.append)
+    assert text == "Final text output"
+    assert thoughts == ["Analyzing user request structure..."]
+
+
+def test_merge_prompt_includes_artifact_guidance():
+    assert "Artifacts Canvas" in agent_adk.MERGE_PROMPT
+    assert "```html" in agent_adk.MERGE_PROMPT
+

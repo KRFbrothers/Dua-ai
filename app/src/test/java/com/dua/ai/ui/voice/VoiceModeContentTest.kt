@@ -88,4 +88,24 @@ class VoiceModeContentTest {
         assertEquals(com.dua.ai.voice.RecognizerError.Permission, recognizerErrorOf(android.speech.SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS))
         assertEquals(com.dua.ai.voice.RecognizerError.Unavailable, recognizerErrorOf(android.speech.SpeechRecognizer.ERROR_CLIENT))
     }
+
+    @Test fun cameraVisionCardRendersWhenPhotoAttachedAndCanBeCleared() {
+        var cleared = 0
+        val cb = VoiceModeCallbacks(onClearCamera = { cleared++ })
+        compose.setContent {
+            DuaTheme(LocalPreferences(theme = "dark")) {
+                VoiceModeContent(
+                    VoiceModeUi(phase = VoicePhase.Listening, cameraAttached = true, cameraAttachmentName = "Test photo.jpg"),
+                    cb,
+                    level = { .4f },
+                    motion = false
+                )
+            }
+        }
+        compose.onNodeWithText("Vision Active").assertExists()
+        compose.onNodeWithText("Test photo.jpg").assertExists()
+        compose.onNodeWithContentDescription("Remove photo").performClick()
+        assertEquals(1, cleared)
+        compose.onNodeWithContentDescription("Camera, photo attached").assertExists()
+    }
 }
