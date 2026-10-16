@@ -14,6 +14,16 @@ object Spacing {
     val huge = 48.dp
 }
 
+/** Dynamic composer visuals; controls still occupy Sizes.touchTarget slots. */
+object ComposerSizes {
+    val actionButton = 44.dp
+    val attachment = 60.dp
+    val fileChipMaxWidth = 220.dp
+    val tabShape = androidx.compose.foundation.shape.RoundedCornerShape(18.dp)
+    val expandedShape = androidx.compose.foundation.shape.RoundedCornerShape(26.dp)
+    val attachmentShape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp)
+}
+
 /** Component sizes shared across screens. */
 object Sizes {
     /** Minimum touch target (Material and Android accessibility guidance). */

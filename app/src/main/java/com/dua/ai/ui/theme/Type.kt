@@ -81,6 +81,9 @@ val VoicePermissionHeadingStyle = VoiceGreetingStyle.copy(fontSize = 22.sp, line
 val HomePromptStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Normal, fontSize = 16.sp)
 /** Composer input and its "Ask Dua AI" placeholder. */
 val ComposerTextStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Normal, fontSize = 16.sp, lineHeight = 22.sp)
+/** Dynamic chat composer, independent of other existing input styles. */
+val ComposerInputStyle = ComposerTextStyle.copy(fontSize = 18.sp, lineHeight = 26.sp)
+val ComposerModeStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Medium, fontSize = 14.sp)
 /** Small pill labels. */
 val PillLabelStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
 /** Labels on the three Home action buttons. */

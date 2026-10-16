@@ -65,7 +65,7 @@ class CompactChatUiTest(private val dark: Boolean, private val small: Boolean) {
         }
         compose.onNode(hasText("Chat") and isSelectable()).assertIsDisplayed().assertIsSelected().assertHeightIsAtLeast(48.dp)
         compose.onNode(hasText("Task") and isSelectable()).assertIsDisplayed().assertIsNotSelected()
-        compose.onNodeWithText("Ask Dua AI").assertIsDisplayed()
+        compose.onNodeWithText("Ask Dua AI...").assertIsDisplayed()
         // README-only elements are gone.
         compose.onAllNodesWithContentDescription("Computer, coming soon").assertCountEquals(0)
         compose.onAllNodesWithText("Dua always with you ✨").assertCountEquals(0)

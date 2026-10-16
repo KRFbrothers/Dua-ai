@@ -808,6 +808,12 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         return true
     }
 
+    /** Remove only the selected inline draft file; keep every other attachment intact. */
+    fun removeAttachment(index: Int) {
+        if (_isTyping.value) return
+        _attachments.update { files -> files.filterIndexed { i, _ -> i != index } }
+    }
+
     fun clearAttachments() {
         selectionVersion++
         _attachments.value = emptyList()
