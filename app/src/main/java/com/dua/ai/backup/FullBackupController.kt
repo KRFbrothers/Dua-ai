@@ -156,11 +156,15 @@ class FullBackupController(private val scope: CoroutineScope, private val resolv
                 mutable.value = mutable.value.copy(status = if (!validatePassword) "$detail Existing phone data was kept. Recovered cloud files were kept; retry to continue." else detail)
             } finally {
                 password.fill('\u0000')
-                if (!retainReview || reviewed?.directory != workspace) withContext(NonCancellable + Dispatchers.IO) { workspace.deleteRecursively() }
-                if (closed) withContext(NonCancellable + Dispatchers.IO) { reviewed?.directory?.deleteRecursively(); reviewed = null }
-                port.end()
-                job = null
-                mutable.value = mutable.value.copy(busy = false)
+                // Keep the entire finalizer uncancellable: returning from an IO dispatcher into
+                // a cancelled job must not skip releasing the host's operation guard.
+                withContext(NonCancellable) {
+                    if (!retainReview || reviewed?.directory != workspace) withContext(Dispatchers.IO) { workspace.deleteRecursively() }
+                    if (closed) withContext(Dispatchers.IO) { reviewed?.directory?.deleteRecursively(); reviewed = null }
+                    port.end()
+                    job = null
+                    mutable.value = mutable.value.copy(busy = false)
+                }
             }
         }
     }

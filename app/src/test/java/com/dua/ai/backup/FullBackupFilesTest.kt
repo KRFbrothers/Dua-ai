@@ -47,6 +47,7 @@ class FullBackupFilesTest {
     private var currentOwner: String? = owner
     private var imported: ChatBackup? = null
     private var preflights = 0
+    private var hostBusy = false
     private lateinit var controller: FullBackupController
     private lateinit var scope: CoroutineScope
     private val password get() = "a unique backup password".toCharArray()
@@ -99,8 +100,8 @@ class FullBackupFilesTest {
         val snapshot = FullBackupSnapshot(ChatBackup(listOf(SavedChat("chat", "Dua", "draft", listOf(message), 123)), ProjectCodec.defaults), listOf("Personal note"), owner, true)
         scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
         controller = FullBackupController(scope, RuntimeEnvironment.getApplication().contentResolver, temp.newFolder(), BackupFileTransfer(account, client), object : FullBackupPort {
-            override fun begin() = snapshot
-            override fun end() = Unit
+            override fun begin(): FullBackupSnapshot { check(!hostBusy); hostBusy = true; return snapshot }
+            override fun end() { hostBusy = false }
             override fun owner() = currentOwner
             override fun restoreFilesAvailable() = true
             override fun preflight(data: FullBackupData) { preflights++ }
@@ -198,6 +199,7 @@ class FullBackupFilesTest {
             controller.cancel()
         } finally { releaseDownload!!.countDown() }
         waitForOperation()
+        assertFalse(hostBusy)
         assertTrue(key.all { it == '\u0000' }); assertEquals("previous backup", destination.readText())
         assertNull(imported); assertNull(controller.state.value.preview)
     }
