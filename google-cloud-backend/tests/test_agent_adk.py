@@ -193,6 +193,7 @@ def test_tool_loop_falls_back_to_old_loop(monkeypatch):
     monkeypatch.setattr(engine, "get_agent_model", lambda system: "ARGON")
     monkeypatch.setattr(agent_adk, "run", lambda *a: None)
     monkeypatch.setattr(agent_tools, "default_tools", lambda *a, **k: [])
+    monkeypatch.setattr(engine, "build_contents", lambda m, a: [])
     monkeypatch.setattr(agent_tools, "run", lambda *a, **k: ("old loop answer", agent_tools.AgentRun({})))
     events = []
     engine.tool_loop([{"role": "user", "text": "x"}], [], "sys", lambda kind, ev=None: events.append((kind, ev)) or True, {})
