@@ -40,8 +40,8 @@ internal fun ChatContent(task: Boolean, onTask: (String) -> Unit) {
             Box(Modifier.fillMaxWidth().heightIn(min = heroHeight), contentAlignment = Alignment.Center) {
                 Column(Modifier.fillMaxWidth().padding(vertical = Spacing.lg), horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(Spacing.lg)) {
-                    DuaCalligraphyLogo(modifier = Modifier.width(156.dp))
-                    Text(if (task) "I Know Everything" else "Dua always with you",
+                    if (!task) DuaCalligraphyLogo(modifier = Modifier.width(156.dp))
+                    Text(if (task) "What can I take off\nyour plate?" else "Dua always with you",
                         style = MaterialTheme.typography.headlineMedium, color = ChatTheme.colors.text, textAlign = TextAlign.Center)
                 }
             }

@@ -1,32 +1,34 @@
 package com.dua.ai.ui.chat
 
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.DragHandle
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Density
 import com.dua.ai.ui.components.AccountAvatar
 import com.dua.ai.ui.components.ReferenceIcons
 import com.dua.ai.ui.theme.ChatTheme
-import com.dua.ai.ui.theme.HomeShapes
+import com.dua.ai.ui.theme.HomeHeaderStyle
 import com.dua.ai.ui.theme.HomeSizes
 import com.dua.ai.ui.theme.HomeTheme
 import com.dua.ai.ui.theme.Sizes
@@ -48,44 +50,52 @@ fun ChatTopBar(
     newChatEnabled: Boolean = true,
     onFindInChat: (() -> Unit)? = null,
 ) {
-    Row(Modifier.fillMaxWidth().statusBarsPadding()
-        .padding(horizontal = HomeSizes.topBarPaddingH, vertical = HomeSizes.topBarPaddingV),
-        verticalAlignment = Alignment.CenterVertically) {
-        RoundButton(Icons.Outlined.DragHandle, "Open chat history", onMenu, onLongPress = onFindInChat)
-        BoxWithConstraints(Modifier.weight(1f).padding(horizontal = Spacing.xs)) {
-            val brand: @Composable () -> Unit = {
-                Text("Dua AI", style = MaterialTheme.typography.titleLarge, color = ChatTheme.colors.text,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+    val shortName = shortModelLabel(modelName)
+    val measurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    val brandWidth = with(density) { measurer.measure(AnnotatedString("Dua AI"), HomeHeaderStyle).size.width.toDp() }
+    val modelWidth = with(density) { measurer.measure(AnnotatedString(shortName), HomeHeaderStyle).size.width.toDp() }
+    val pairWidth = brandWidth + Spacing.xs + maxOf(Sizes.touchTarget, modelWidth + Sizes.iconTiny + Spacing.xs * 2)
+    BoxWithConstraints(Modifier.fillMaxWidth().statusBarsPadding()
+        .padding(horizontal = HomeSizes.topBarPaddingH, vertical = HomeSizes.topBarPaddingV)) {
+        val inline = pairWidth + Spacing.xs * 2 <= maxWidth - Sizes.touchTarget * if (task) 2 else 3
+        Column {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                HeaderButton(Icons.Outlined.DragHandle, "Open chat history", onMenu, onLongPress = onFindInChat)
+                if (inline) HeaderLabels(shortName, onModel, Modifier.weight(1f).padding(horizontal = Spacing.xs))
+                else Spacer(Modifier.weight(1f))
+                if (!task) HeaderButton(ReferenceIcons.TemporaryChat, "New chat", onNewChat, enabled = newChatEnabled, iconSize = 22.dp)
+                IconButton(onClick = onProfile, modifier = Modifier.size(Sizes.touchTarget)
+                    .semantics { contentDescription = "Open profile and settings" }) {
+                    // Keep avatar artwork fixed; surrounding labels still respect font scaling.
+                    CompositionLocalProvider(LocalDensity provides Density(density.density, 1f)) {
+                        AccountAvatar(email = null, displayName = profileName, avatarUrl = profilePhotoUrl, size = 34.dp)
+                    }
+                }
             }
-            if (maxWidth < 160.dp || LocalDensity.current.fontScale > 1.3f) {
-                Column { brand(); ModelSelector(modelName, onModel) }
-            } else Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-                brand()
-                ModelSelector(modelName, onModel, Modifier.weight(1f))
-            }
+            // Reflow the pair together when large text cannot fit between the 48 dp controls.
+            if (!inline) HeaderLabels(shortName, onModel, Modifier.fillMaxWidth().padding(horizontal = Spacing.xs))
         }
-        if (!task) RoundButton(ReferenceIcons.NewChat, "New chat", onNewChat, enabled = newChatEnabled)
-        IconButton(onClick = onProfile, modifier = Modifier.size(Sizes.touchTarget)
-            .semantics { contentDescription = "Open profile and settings" }) {
-            // An avatar initial is artwork inside a fixed 34 dp circle; its 48 dp labelled
-            // button stays accessible while large-font settings scale the surrounding text.
-            val density = LocalDensity.current
-            CompositionLocalProvider(LocalDensity provides Density(density.density, 1f)) {
-                AccountAvatar(email = null, displayName = profileName, avatarUrl = profilePhotoUrl, size = 34.dp)
-            }
-        }
+    }
+}
+
+@Composable
+private fun HeaderLabels(name: String, onModel: () -> Unit, modifier: Modifier = Modifier) {
+    Row(modifier.horizontalScroll(rememberScrollState()).testTag("home-header-labels"),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+        Text("Dua AI", style = HomeHeaderStyle, color = ChatTheme.colors.text,
+            maxLines = 1, modifier = Modifier.width(IntrinsicSize.Max).alignByBaseline())
+        ModelSelector(name, onModel, Modifier.alignByBaseline(), textStyle = HomeHeaderStyle)
     }
 }
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun RoundButton(icon: ImageVector, description: String, onClick: () -> Unit, enabled: Boolean = true,
-    onLongPress: (() -> Unit)? = null) {
+private fun HeaderButton(icon: ImageVector, description: String, onClick: () -> Unit, enabled: Boolean = true,
+    onLongPress: (() -> Unit)? = null, iconSize: Dp = Sizes.icon) {
     val c = HomeTheme.colors
     val body: @Composable () -> Unit = {
-        Box(Modifier.size(HomeSizes.roundButton).clip(HomeShapes.round).background(c.roundButton), contentAlignment = Alignment.Center) {
-            Icon(icon, contentDescription = null, tint = c.roundButtonIcon)
-        }
+        Icon(icon, contentDescription = null, tint = c.roundButtonIcon, modifier = Modifier.size(iconSize))
     }
     if (onLongPress == null) IconButton(onClick = onClick, enabled = enabled,
         modifier = Modifier.size(Sizes.touchTarget).semantics { contentDescription = description }) { body() }

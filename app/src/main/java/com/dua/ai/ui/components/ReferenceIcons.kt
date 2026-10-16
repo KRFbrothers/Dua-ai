@@ -1,5 +1,7 @@
 package com.dua.ai.ui.components
 
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.PathFillType
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -61,6 +63,20 @@ internal object ReferenceIcons {
         referenceIcon("ds_square_and_pencil_regular_24",
             PathFillType.NonZero to "M10 2.99998C10.5523 2.99998 11 3.44769 11 3.99998C10.9999 4.5522 10.5522 4.99998 10 4.99998H7C5.89543 4.99998 5 5.89541 5 6.99998V17C5.00007 18.1045 5.89547 19 7 19H17C18.1045 19 18.9999 18.1045 19 17V14C19 13.4477 19.4477 13 20 13C20.5523 13 21 13.4477 21 14V17C20.9999 19.2091 19.2091 21 17 21H7C4.7909 21 3.00007 19.2091 3 17V6.99998C3 4.79084 4.79086 2.99998 7 2.99998H10Z",
             PathFillType.EvenOdd to "M15.874 3.74607C17.0849 2.55338 19.0316 2.56095 20.2334 3.76267C21.438 4.96766 21.4413 6.91935 20.2412 8.12888L14.1699 14.249C13.6555 14.7673 13.0022 15.1262 12.2891 15.2832L9.42578 15.9131C8.60548 16.0935 7.8746 15.3622 8.05566 14.542L8.68652 11.6855C8.84479 10.9687 9.20751 10.3131 9.73047 9.79783L15.874 3.74607ZM18.8193 5.17673C18.3944 4.75189 17.7055 4.74918 17.2773 5.17088L11.1338 11.2226C10.8863 11.4666 10.7146 11.7769 10.6396 12.1162L10.2959 13.6748L11.8594 13.3301C12.1972 13.2557 12.5063 13.0853 12.75 12.8398L18.8223 6.72068C19.2464 6.29307 19.245 5.60279 18.8193 5.17673Z")
+    }
+    /** Dashed circle with a diagonal fountain-pen nib; Home only. */
+    val TemporaryChat by lazy {
+        ImageVector.Builder(name = "dua_circle_dashed_pen_nib", defaultWidth = 24.dp, defaultHeight = 24.dp,
+            viewportWidth = 24f, viewportHeight = 24f).apply {
+            addPath(pathData = PathParser().parsePathString(
+                "M9.5 2.7C10.7 2.5 11.8 2.5 13 2.8M16.3 4.1C17.3 4.8 18.1 5.7 18.7 6.8" +
+                "M6.1 4C5.1 4.7 4.2 5.6 3.6 6.7M2.5 10C2.4 11.2 2.5 12.4 2.8 13.5" +
+                "M4.3 16.6C5.1 17.6 6 18.4 7.1 18.9M10.3 19.7L10.9 19.7" +
+                "M13.8 12.8L18.6 10.5L22 13.9L19.7 18.7L12.1 21.5L13.8 12.8Z" +
+                "M18.6 10.5L22 13.9M12.1 21.5L16 17.6M16.8 15.8A.8 .8 0 1 0 16.8 17.4A.8 .8 0 1 0 16.8 15.8"
+            ).toNodes(), fill = null, stroke = SolidColor(DuaVectorStroke), strokeLineWidth = 1.7f,
+                strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round)
+        }.build()
     }
     val NewChat by lazy {
         referenceIcon("ds_chat_bubble_dashed_regular_24",
