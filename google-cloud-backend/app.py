@@ -467,6 +467,7 @@ def imagine_for_agent(owner):
     return lambda body: imagine.handle(body, owner["token"], owner["id"], get_client())
 
 
+VERIFY_SYSTEM = "You are a careful fact-checker for an AI assistant's answers."
 NOTES_SYSTEM = "You extract short, durable, non-sensitive lessons for an AI agent's private notes. Reply with JSON only."
 
 
@@ -537,6 +538,11 @@ def tool_loop(messages, attachments, system, enqueue, owner, coding=False):
         except coding_agent.CodingError as error:
             text, run = f"Stopped: {str(error)[:300]} No pull request was opened.", None
     sources = run.sources if run else []
+    import agent_verify
+    if agent_verify.enabled() and not coding and run is not None:
+        text = agent_verify.check(last, text, getattr(run, "evidence", None) or getattr(run, "steps", []), sources,
+                                  get_model(VERIFY_SYSTEM), model, chunk_text,
+                                  lambda step, label, state="active": enqueue("event", progress_event(step, label, state)))
     if sources and not enqueue("event", {"type": "sources", "sources": sources}):
         return
     if not enqueue("event", progress_event("answer", "Writing the answer\u2026")):

@@ -229,3 +229,21 @@ Each Agent model step has a hard deadline, `AGENT_STEP_SECONDS` (default 150; al
 3. **Progress:** goes out as the existing chips (`sub_a`/`sub_b`/`sub_c`, `merge`) and thinking lines, so the app needs no change.
 
 **Fallback:** if the request doesn't split, or ADK fails before any tool ran, the normal loop answers. Coding-mode requests always use the normal loop. Notes learning runs after the reply as before.
+
+## Self-check (`AGENT_VERIFY=1`)
+
+[`agent_verify.py`](agent_verify.py) runs after both the old loop and the ADK path. Casual replies and coding mode skip it.
+- **Critic:** one Flash call (low thinking, 1024 tokens, 45 s limit) compares the draft with the request, the sources and short tool results.
+- **Revision:** only if the critic finds issues, one revision by the Agent model (90 s limit).
+- **Safety:** any failure keeps the draft, and a revision that drops a PR link is rejected.
+- **Progress and logs:** the chip shows `verify` ("Checking answer…"), and the log shows `[dua-agent] verify: ok` or `N issue(s)`.
+
+## Tested pull requests (`AGENT_TEST_CODE=1`)
+
+[`pr_flow.py`](pr_flow.py) handles `propose_changes` in both paths:
+1. **Pre-check:** Python files are byte-compiled in a temp dir (20 s timeout) and JSON files are parsed. A failure goes back to the model; after 2 failures, no PR is opened.
+2. **CI wait:** after the PR opens, the engine polls GitHub CI (check runs, falling back to Actions runs; the Vercel check is ignored). The total wait per request is `AGENT_CI_SECONDS` (default 420).
+3. **One fix:** if CI fails, the model gets one fix attempt. The fix is a fast-forward commit on the same `dua-agent/` branch (never force, never main, never merge), and CI is polled again.
+4. **`check_pr_ci` tool:** reads the status of the agent's own PR.
+
+**Token:** reading CI needs 'Actions: Read-only' (or 'Checks') on the fine-grained token; without it the answer says so.

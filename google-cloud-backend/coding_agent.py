@@ -135,7 +135,9 @@ def allowed(method, path, body, repo):
     base = f"/repos/{r}"
     rules = {
         "GET": [rf"^{base}$", rf"^{base}/git/trees/[A-Za-z0-9._\-/]+$", rf"^{base}/contents/[^?]*$",
-                rf"^{base}/git/ref/heads/[A-Za-z0-9._\-/]+$", r"^/search/code$"],
+                rf"^{base}/git/ref/heads/[A-Za-z0-9._\-/]+$", r"^/search/code$",
+                # CI results for the agent's own PRs (read-only).
+                rf"^{base}/commits/[0-9a-f]{{40}}/check-runs$", rf"^{base}/actions/runs$"],
         "POST": [rf"^{base}/git/blobs$", rf"^{base}/git/trees$", rf"^{base}/git/commits$",
                  rf"^{base}/git/refs$", rf"^{base}/pulls$"],
     }
@@ -144,6 +146,8 @@ def allowed(method, path, body, repo):
         rules["GET"] += [rf"^{base}/issues$", rf"^{base}/issues/[1-9][0-9]{{0,8}}$",
                          rf"^{base}/issues/[1-9][0-9]{{0,8}}/comments$", rf"^{base}/labels$", r"^/search/issues$"]
         rules["POST"] += [rf"^{base}/issues$", rf"^{base}/issues/[1-9][0-9]{{0,8}}/comments$"]
+    # One fix commit may move an existing dua-agent/ branch forward (never force, never main).
+    rules["PATCH"] = [rf"^{base}/git/refs/heads/{re.escape(BRANCH_PREFIX)}[a-z0-9-]+$"]
     if method not in rules or not any(re.fullmatch(p, path) for p in rules[method]):
         return f"{method} {path} is not allowed"
     if "/contents/" in path and not valid_path(path.split("/contents/", 1)[1]):
@@ -162,6 +166,10 @@ def allowed(method, path, body, repo):
         ref = body.get("ref")
         if not isinstance(ref, str) or not ref.startswith("refs/heads/") or not valid_agent_branch(ref[len("refs/heads/"):]):
             return "only valid new dua-agent/ branches may be created"
+    if method == "PATCH":
+        if (not valid_agent_branch(path.split("/git/refs/heads/", 1)[1]) or not isinstance(body, dict) or
+                set(body) != {"sha", "force"} or body.get("force") is not False):
+            return "branch updates must be fast-forward commits on a dua-agent/ branch"
     if method == "POST" and re.fullmatch(rf"{base}/issues", path):
         if not isinstance(body, dict) or set(body) - {"title", "body", "labels"} or not isinstance(body.get("title"), str):
             return "new issues may only set title, body and labels"
@@ -324,7 +332,35 @@ class GitHubClient:
         commit = self.request("POST", f"/repos/{self.repo}/git/commits", {"message": title, "tree": tree["sha"], "parents": [base_sha]})
         self.request("POST", f"/repos/{self.repo}/git/refs", {"ref": "refs/heads/" + branch, "sha": commit["sha"]})
         pr = self.request("POST", f"/repos/{self.repo}/pulls", {"title": title, "head": branch, "base": BASE_BRANCH, "body": description})
+        self.last_commit = commit["sha"]
         return pr.get("number"), pr.get("html_url")
+
+    def push_fix(self, files, message, branch):
+        """New commit on top of an existing dua-agent/ branch (fast-forward only). Returns the new commit sha."""
+        if not valid_agent_branch(branch):
+            raise BlockedRequest("Fixes may only go to a dua-agent/ branch.")
+        files = validate_changes(files)
+        if not files:
+            raise CodingError("No file changes to push.")
+        head = self.request("GET", f"/repos/{self.repo}/git/ref/heads/{branch}")["object"]["sha"]
+        base_tree = self.request("GET", f"/repos/{self.repo}/git/trees/{head}")
+        entries = []
+        for item in files:
+            blob = self.request("POST", f"/repos/{self.repo}/git/blobs", {"content": item["content"], "encoding": "utf-8"})
+            entries.append({"path": item["path"], "mode": "100644", "type": "blob", "sha": blob["sha"]})
+        tree = self.request("POST", f"/repos/{self.repo}/git/trees", {"base_tree": base_tree["sha"], "tree": entries})
+        commit = self.request("POST", f"/repos/{self.repo}/git/commits", {"message": message, "tree": tree["sha"], "parents": [head]})
+        self.request("PATCH", f"/repos/{self.repo}/git/refs/heads/{branch}", {"sha": commit["sha"], "force": False})
+        return commit["sha"]
+
+    def check_runs(self, sha):
+        data = self.request("GET", f"/repos/{self.repo}/commits/{sha}/check-runs", query={"per_page": "50"})
+        return [r for r in (data or {}).get("check_runs", []) if isinstance(r, dict)]
+
+    def action_runs(self, sha):
+        data = self.request("GET", f"/repos/{self.repo}/actions/runs", query={"head_sha": sha, "per_page": "20"})
+        return [{"name": r.get("name"), "status": r.get("status"), "conclusion": r.get("conclusion"), "output": {}}
+                for r in (data or {}).get("workflow_runs", []) if isinstance(r, dict)]
 
 
 def validate_changes(files):
@@ -415,7 +451,7 @@ class CodingSession:
             return {"error": str(error)[:300]}
 
 
-def finish(github, emit, args, request_text):
+def finish(github, emit, args, request_text, flow=None):
     files = validate_changes(args.get("files") or [])
     title = " ".join(str(args.get("title") or "Dua Agent change").split())[:120]
     description = str(args.get("description") or "").strip()[:6000]
@@ -426,6 +462,13 @@ def finish(github, emit, args, request_text):
     body = (f"{description}\n\n---\nOpened by the Dua Agent for: \u201c{request_text[:500]}\u201d\n"
             "Review the changes and CI before merging. The agent never merges.")
     number, url = github.open_pull_request(files, f"Dua Agent: {title}", body, branch)
+    if flow is not None:
+        flow.pr = {"number": number, "url": url, "branch": branch, "title": title,
+                   "sha": getattr(github, "last_commit", None)}
     changed = "\n".join(f"- `{item['path']}`" for item in files)
     return (f"Pull request ready: **#{number}** \u2014 {url}\n\n**{title}**\n\n{description}\n\nChanged files:\n{changed}\n\n"
             "Please review it and wait for CI before merging. I never merge or push to main.")
+
+
+CHECK_CI_TOOL = {"name": "check_pr_ci", "description": "Check the GitHub CI status of the pull request you opened in "
+                 "this request (success, failure with failed check names, or pending)."}
