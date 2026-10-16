@@ -78,7 +78,7 @@ internal fun replySpeakDescription(speaking: Boolean, generatedVoice: Boolean): 
 internal class TextMessageActions(val copied: Boolean, val shareError: String?, val copy: () -> Unit, val share: () -> Boolean)
 
 @Composable
-private fun rememberTextMessageActions(copyText: String, assistant: Boolean = true): TextMessageActions {
+internal fun rememberTextMessageActions(copyText: String, assistant: Boolean = true, shareTitle: String? = null): TextMessageActions {
     val clipboard = LocalClipboardManager.current
     val context = LocalContext.current
     val haptic = LocalChatHaptic.current
@@ -90,11 +90,11 @@ private fun rememberTextMessageActions(copyText: String, assistant: Boolean = tr
             context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
                 type = "text/plain"
                 putExtra(Intent.EXTRA_TEXT, copyText)
-            }, if (assistant) "Share reply" else "Share message"))
+            }, shareTitle ?: if (assistant) "Share reply" else "Share message"))
             shareError = null
             true
         } catch (_: ActivityNotFoundException) {
-            shareError = if (assistant) "No app is available to share this reply." else "No app is available to share this message."
+            shareError = if (shareTitle != null) "No app is available to share this code." else if (assistant) "No app is available to share this reply." else "No app is available to share this message."
             false
         }
     })

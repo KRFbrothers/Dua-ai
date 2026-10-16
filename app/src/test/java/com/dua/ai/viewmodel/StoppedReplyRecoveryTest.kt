@@ -58,6 +58,33 @@ class StoppedReplyRecoveryTest {
     }
     private fun blankReply() = ChatMessage(id = "reply", text = "", isUser = false, model = "Gemini", state = ChatMessage.STREAMING)
 
+    @Test fun snippetRunCannotUseBaseProviderGateToPretendSeparateEngineExecutionWorks() {
+        setField("api", com.dua.ai.network.DuaApiClient("https://chat.example", apiBaseUrl = "https://base.example"))
+        state<String>("_selectedModel").value = "Gemini"
+        state<Boolean>("_online").value = true
+        state<com.dua.ai.setup.IntegrationState>("_integrations").value = com.dua.ai.setup.IntegrationState(
+            codeExecution = com.dua.ai.setup.CodeExecutionConfig(true, providers = setOf("Gemini")))
+        state<List<ChatMessage>>("_messages").value = listOf(prompt)
+        assertTrue(model.codeSnippetUnavailableReason()!!.contains("active Cloud Run chat engine"))
+        assertFalse(model.runCodeSnippet("print(42)"))
+        assertEquals(listOf(prompt), model.messages.value)
+        assertFalse(model.isTyping.value)
+        assertFalse(model.runCode.value)
+    }
+
+    @Test fun snippetRunDoesNotOverwriteAnExistingDraft() {
+        setField("api", com.dua.ai.network.DuaApiClient("https://api.example"))
+        state<String>("_selectedModel").value = "Gemini"
+        state<Boolean>("_online").value = true
+        state<com.dua.ai.setup.IntegrationState>("_integrations").value = com.dua.ai.setup.IntegrationState(
+            codeExecution = com.dua.ai.setup.CodeExecutionConfig(true, providers = setOf("Gemini")))
+        state<String>("_draft").value = "My unsent message"
+        assertFalse(model.runCodeSnippet("print(42)"))
+        assertEquals("My unsent message", model.draft.value)
+        assertFalse(model.isTyping.value)
+        assertFalse(model.runCode.value)
+    }
+
     @Test fun stopBeforeFirstTokenKeepsARetryableTurnAndPersistsIt() {
         val reply = blankReply()
         val job = streaming(reply)

@@ -605,6 +605,26 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     val runCode = _runCode.asStateFlow()
     private val replyCode = mutableMapOf<String, Boolean>()
     private fun codeUsable(model: String = _selectedModel.value) = _integrations.value.codeExecution?.available(model) == true
+    /** Only advertise the existing provider sandbox on the engine that actually supports it. */
+    fun codeSnippetUnavailableReason(): String? = when {
+        api.separateChatEngine -> "Run code is not supported by the active Cloud Run chat engine. Local artifact previews are available."
+        !codeUsable() -> _integrations.value.codeExecution?.reason?.takeIf { it.isNotBlank() }
+            ?: "The selected model has no configured code sandbox. Check Plugins or choose a supported model."
+        !_online.value -> "Reconnect before running code."
+        _isTyping.value || _readingFiles.value || _preparingFiles.value -> "Wait for the current reply or file preparation to finish."
+        _draft.value.isNotBlank() || _attachments.value.isNotEmpty() || _uploads.value.isNotEmpty() || _editingId.value != null -> "Send or clear the current draft and attachments before running a snippet."
+        else -> null
+    }
+
+    fun runCodeSnippet(code: String): Boolean {
+        codeSnippetUnavailableReason()?.let { _error.value = it; return false }
+        val prompt = com.dua.ai.model.CodeSnippet.prompt(code)
+        if (code.isBlank() || prompt.length > 8000) { _error.value = "Use a non-empty Python snippet shorter than 7,800 characters."; return false }
+        selectAuto()
+        setRunCode(true)
+        sendMessage(prompt)
+        return _isTyping.value
+    }
     fun setRunCode(enabled: Boolean) {
         if (_isTyping.value) return
         if (enabled) _agent.value = false

@@ -1,18 +1,15 @@
 package com.dua.ai.ui.chat
 
 import androidx.compose.ui.semantics.semantics
-
 import androidx.compose.ui.semantics.liveRegion
-
 import androidx.compose.ui.semantics.LiveRegionMode
-
 import androidx.compose.foundation.layout.heightIn
-
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -20,6 +17,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material.icons.outlined.PlayArrow
+import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material3.Icon
 import androidx.compose.material3.TextButton
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -27,14 +27,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -42,6 +41,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.dua.ai.ui.theme.CodeTextStyle
+import com.dua.ai.ui.theme.KrfBrothersCodeFont
 import com.dua.ai.ui.theme.DuaShape
 import com.dua.ai.ui.theme.DuaTheme
 import com.dua.ai.ui.theme.DuaColors
@@ -52,7 +52,6 @@ import dev.snipme.highlights.Highlights
 import dev.snipme.highlights.model.BoldHighlight
 import dev.snipme.highlights.model.ColorHighlight
 import dev.snipme.highlights.model.SyntaxLanguage
-import kotlinx.coroutines.delay
 
 private const val MAX_HIGHLIGHT_CHARS = 20_000
 
@@ -100,32 +99,58 @@ internal fun highlightDiff(code: String, colors: DuaColors): AnnotatedString {
     }
 }
 
-/** Fenced code: language label, copy button, monospace text that scrolls sideways instead of wrapping. */
+/** Fenced code with provider execution or an opt-in local artifact preview. */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun CodeBlock(code: String, language: String?, modifier: Modifier = Modifier) {
     val colors = DuaTheme.colors
-    val clipboard = LocalClipboardManager.current
-    val haptic = LocalChatHaptic.current
-    var copied by remember(code) { mutableStateOf(false) }
-    LaunchedEffect(copied) { if (copied) { delay(2000); copied = false } }
+    val actions = rememberTextMessageActions(code, shareTitle = "Share code")
+    val execution = LocalCodeExecutionUi.current
+    val preview = remember(language) { codePreviewKind(language) }
+    var showPreview by rememberSaveable(code, language) { mutableStateOf(false) }
+    var runNotice by remember(code, language) { mutableStateOf<String?>(null) }
     val text = rememberHighlightedCode(code.trimEnd('\n'), language, colors)
     Surface(shape = DuaShape.codeBlock, color = colors.codeBackground, border = BorderStroke(1.dp, colors.codeBorder),
         modifier = modifier.fillMaxWidth().padding(vertical = Spacing.xs)) {
         Column {
-            Row(Modifier.fillMaxWidth().background(colors.codeHeader).padding(start = Spacing.md), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.fillMaxWidth().background(colors.codeHeader).padding(horizontal = Spacing.sm)) {
                 Text(language?.trim()?.takeIf { it.isNotEmpty() } ?: "code", style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                TextButton(onClick = { clipboard.setText(AnnotatedString(code)); haptic(ChatHaptic.Tap); copied = true },
-                    modifier = Modifier.heightIn(min = Sizes.touchTarget).semantics { liveRegion = LiveRegionMode.Polite }) {
-                    Icon(if (copied) Icons.Outlined.Check else Icons.Outlined.ContentCopy, if (copied) "Code copied" else "Copy code",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(Sizes.iconTiny + 2.dp))
-                    Text(if (copied) "Copied" else "Copy", modifier = Modifier.padding(start = Spacing.xs), style = MaterialTheme.typography.labelMedium)
+                    color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(start = Spacing.xs, top = Spacing.sm))
+                FlowRow(Modifier.fillMaxWidth()) {
+                    TextButton(onClick = actions.copy,
+                        modifier = Modifier.heightIn(min = Sizes.touchTarget).semantics { liveRegion = LiveRegionMode.Polite }) {
+                        Icon(if (actions.copied) Icons.Outlined.Check else Icons.Outlined.ContentCopy, if (actions.copied) "Code copied" else "Copy code",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(Sizes.iconTiny + 2.dp))
+                        Text(if (actions.copied) "Copied" else "Copy", modifier = Modifier.padding(start = Spacing.xs), style = MaterialTheme.typography.labelMedium)
+                    }
+                    TextButton(onClick = { actions.share() }, modifier = Modifier.heightIn(min = Sizes.touchTarget)) {
+                        Icon(Icons.Outlined.Share, "Share code", Modifier.size(Sizes.iconSmall))
+                        Text("Share", style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(start = Spacing.xs))
+                    }
+                    TextButton(onClick = {
+                        if (preview != null) showPreview = !showPreview
+                        else {
+                            val unavailable = codeRunUnavailableReason(language, code, execution)
+                            if (unavailable == null) runNotice = if (execution.run(code)) "Code run requested. Any actual output will appear in the next reply's code results."
+                                else "Could not start a code run. Check the chat status and try again."
+                            else runNotice = unavailable
+                        }
+                    }, modifier = Modifier.heightIn(min = Sizes.touchTarget)) {
+                        Icon(if (preview != null) Icons.Outlined.Visibility else Icons.Outlined.PlayArrow,
+                            if (preview != null) "Preview code" else "Run code", Modifier.size(Sizes.iconSmall))
+                        Text(if (preview != null) { if (showPreview) "Hide preview" else "Preview" } else "Run",
+                            style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(start = Spacing.xs))
+                    }
                 }
             }
             SelectionContainer {
-                Text(text, style = CodeTextStyle, color = colors.onCode, softWrap = false,
+                Text(text, style = CodeTextStyle.copy(fontFamily = KrfBrothersCodeFont), color = colors.onCode, softWrap = false,
                     modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(Spacing.md))
             }
+            (actions.shareError ?: runNotice)?.let { Text(it, style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(Spacing.md).semantics { liveRegion = LiveRegionMode.Polite }) }
+            AnimatedVisibility(showPreview && preview != null) { preview?.let { CodePreview(code, it) } }
         }
     }
 }
