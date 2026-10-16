@@ -12,7 +12,8 @@ Endpoints
 Configuration comes only from environment variables; no secrets in code.
   GOOGLE_CLOUD_PROJECT (required), VERTEX_LOCATION (default global),
   VERTEX_MODEL (default gemini-3.8-flash), AGENT_MODEL (Agent tool loop only, default VERTEX_MODEL),
-  AGENT_THINKING_LEVEL (low|medium|high; default medium when AGENT_MODEL differs), VERTEX_THINKING_LEVEL (Gemini 3: low|medium|high, default low),
+  AGENT_THINKING_LEVEL (low|medium|high; default medium when AGENT_MODEL differs), AGENT_NOTES (0 turns off
+  the Agent's private Supabase notes; see agent_notes.py), VERTEX_THINKING_LEVEL (Gemini 3: low|medium|high, default low),
   SUPABASE_URL, SUPABASE_ANON_KEY (or SUPABASE_PUBLISHABLE_KEY), DUA_ALLOWED_EMAIL (required owner authentication).
   DUA_APP_TOKEN is an optional additional gate, never a replacement for owner login.
 """
@@ -450,7 +451,11 @@ def imagine_for_agent(owner):
     return lambda body: imagine.handle(body, owner["token"], owner["id"], get_client())
 
 
+NOTES_SYSTEM = "You extract short, durable, non-sensitive lessons for an AI agent's private notes. Reply with JSON only."
+
+
 def tool_loop(messages, attachments, system, enqueue, owner, coding=False):
+    import agent_notes
     import agent_tools
     import coding_agent
     token = os.environ.get("GITHUB_TOKEN", "").strip()
@@ -470,20 +475,24 @@ def tool_loop(messages, attachments, system, enqueue, owner, coding=False):
     prompt = agent_tools.AGENT_PROMPT.format(github=hint)
     if coding and github:
         prompt += "\n\n" + coding_agent.CODING_PROMPT.format(repo=repo, max_files=coding_agent.MAX_FILES_CHANGED)
+    last = last_user_text(messages)
+    notes = agent_notes.for_owner(owner)
+    if notes is not None:
+        prompt += agent_tools.NOTES_HINT + agent_notes.load_prompt(notes, last)
     model = get_agent_model(system + "\n\n" + prompt)
     if not enqueue("event", progress_event("plan", "Planning\u2026")):
         return
-    last = last_user_text(messages)
     env = {
         "model": model, "enqueue": enqueue, "chunk_text": chunk_text, "grounding_sources": grounding_sources,
         "search_tool": google_search_tool, "code_tool": agent_tools.code_tool, "fetch": agent_tools.fetch_page,
         "contents_for": lambda text: [make_content("user", [make_part(text=text)])],
-        "imagine": imagine_for_agent(owner), "memory": owner.get("memory", ""), "github": github, "request_text": last,
+        "imagine": imagine_for_agent(owner), "memory": owner.get("memory", ""), "github": github, "request_text": last, "notes": notes,
         "progress": lambda step, label, state="active": enqueue("event", progress_event(step, label, state)),
         "thinking": lambda delta: enqueue("event", {"type": "thinking", "delta": delta}),
     }
     try:
-        text, run = agent_tools.run(env, build_contents(messages, attachments), agent_tools.default_tools(github is not None, issues),
+        text, run = agent_tools.run(env, build_contents(messages, attachments), (agent_tools.default_tools(github is not None, issues, True) if notes is not None
+                                     else agent_tools.default_tools(github is not None, issues)),
                                     coding_agent.default_tool_response)
     except coding_agent.CodingError as error:
         text, run = f"Stopped: {str(error)[:300]} No pull request was opened.", None
@@ -498,6 +507,8 @@ def tool_loop(messages, attachments, system, enqueue, owner, coding=False):
     if footer and not enqueue("event", {"type": "text", "delta": footer}):
         return
     enqueue("done")
+    if notes is not None and run is not None:  # after the reply: one cheap Flash call on VERTEX_MODEL
+        agent_notes.learn(notes, get_model(NOTES_SYSTEM), last, "".join(run.steps), text)
 
 
 def agent_producer(messages, attachments, system, owner=None):

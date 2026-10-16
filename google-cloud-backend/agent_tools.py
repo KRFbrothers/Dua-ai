@@ -34,7 +34,13 @@ MAX_SECONDS = int(os.environ.get("AGENT_MAX_SECONDS", "600"))
 LIMITS = {"google_search": 3, "fetch_url": 5, "run_python": 2, "generate_image": 1, "remember": 3,
           "calculator": 20, "current_time": 5, "recall": 3,
           # Issues: list/read/search share one read budget; one new issue and one comment per request.
-          "issue_reads": 5, "create_issue": 1, "comment_on_issue": 1}
+          "issue_reads": 5, "create_issue": 1, "comment_on_issue": 1,
+          # Agent notes (agent_notes.py): the agent's own private lessons, separate from the app's Memory.
+          "save_note": 3, "search_notes": 3, "delete_note": 3}
+NOTE_TOOLS = ("save_note", "search_notes", "delete_note")
+NOTES_HINT = (". Your private notes from earlier tasks may appear below; save_note a durable lesson (preference, what "
+              "worked or failed, repo fact) when you learn one, search_notes to look one up, delete_note to remove a "
+              "wrong one. Never put secrets or emails in notes")
 ISSUE_READ_TOOLS = ("list_issues", "read_issue", "search_issues")
 FETCH_MAX_BYTES = 2 * 1024 * 1024
 FETCH_MAX_CHARS = 20_000
@@ -79,6 +85,9 @@ PROGRESS = {
     "search_issues": ("issues", "Searching issues\u2026"),
     "create_issue": ("issue_new", "Creating issue\u2026"),
     "comment_on_issue": ("issue_comment", "Commenting on issue\u2026"),
+    "save_note": ("notes", "Saving a note\u2026"),
+    "search_notes": ("notes", "Checking notes\u2026"),
+    "delete_note": ("notes", "Updating notes\u2026"),
 }
 
 S, O = "STRING", "OBJECT"
@@ -119,14 +128,17 @@ ISSUE_TOOLS = [
 ]
 
 
-def declarations(github, issues=False):
+def declarations(github, issues=False, notes=False):
+    import agent_notes
     import coding_agent
-    return BASE_TOOLS + (coding_agent.TOOLS if github else []) + (ISSUE_TOOLS if github and issues else [])
+    return (BASE_TOOLS + (coding_agent.TOOLS if github else []) + (ISSUE_TOOLS if github and issues else []) +
+            (agent_notes.TOOLS if notes else []))
 
 
-def default_tools(github, issues=False):
+def default_tools(github, issues=False, notes=False):
     from google.genai import types
-    return [types.Tool(function_declarations=[types.FunctionDeclaration(**tool) for tool in declarations(github, issues)])]
+    return [types.Tool(function_declarations=[types.FunctionDeclaration(**tool)
+                                              for tool in declarations(github, issues, notes)])]
 
 
 # ---------------------------------------------------------------- calculator
@@ -347,6 +359,7 @@ class AgentRun:
         self.media = []
         self.facts = []
         self.coding = None
+        self.steps = []
 
     def emit(self, event):
         return self.env["enqueue"]("event", event)
@@ -420,6 +433,9 @@ class AgentRun:
                 self.facts.append(fact)
                 self.emit({"type": "memory", "fact": fact})
                 return {"suggested": True, "note": "Suggested to the user's Memory; they confirm it in the app before it is saved."}
+            if name in NOTE_TOOLS:
+                import agent_notes
+                return agent_notes.run_tool(env.get("notes"), name, args)
             if name == "recall":
                 memory = env.get("memory") or ""
                 return {"facts": memory or "(Memory is empty or turned off in the app.)"}
@@ -478,7 +494,9 @@ def run(env, history, tools, tool_response, clock=time.monotonic):
             if name in PROGRESS:
                 progress(*PROGRESS[name])
             shown = {k: (v if not isinstance(v, str) else v[:100]) for k, v in args.items() if k not in ("content", "files")}
-            env["thinking"](f"- Step {step}: {name} {json.dumps(shown, ensure_ascii=False)[:160]}\n")
+            line = f"- Step {step}: {name} {json.dumps(shown, ensure_ascii=False)[:160]}\n"
+            agent.steps.append(line)
+            env["thinking"](line)
             if name == "propose_changes":
                 if env.get("github") is None:
                     results.append((name, {"error": "GitHub tools are not set up."}))
