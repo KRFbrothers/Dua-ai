@@ -372,7 +372,8 @@ AGENT_ROUTER_TURNS = 6
 AGENT_ROUTER_PROMPT = (
     "You are a router for the Dua Agent. Decide if the user's LAST message needs web research. "
     "Answer \"agent\" for real tasks: research, latest news, new AI models/tools, trends, comparisons, "
-    "feature or upgrade ideas, plans, reviews, anything that needs current web facts. Answer \"code\" when the user "
+    "feature or upgrade ideas, plans, reviews, anything that needs current web facts, and anything about notes, memory, "
+    "remembering/saving something or the user's preferences. Answer \"code\" when the user "
     "wants the Dua AI app's code changed (fix a bug, add or change a feature in the app, write code, open a PR). Answer \"chat\" for "
     "greetings, thanks, small talk, short follow-ups or simple questions you can answer without searching. "
     "Reply only with JSON like {\"route\": \"chat\"}."
@@ -384,6 +385,12 @@ _GREETING = re.compile(
 _TASK_WORDS = re.compile(
     r"\b(research|news|latest|trend\w*|compare|comparison|vs|ideas?|features?|upgrades?|roadmap|tools?|"
     r"search|find|look\s+up|launch\w*|release\w*|what'?s\s+new|kya\s+naya|suggest\w*)\b", re.IGNORECASE)
+
+
+# Notes / memory / preference requests need the tool loop (save_note/search_notes/remember), never the casual path.
+_NOTE_WORDS = re.compile(
+    r"\b(notes?|remember|recall|yaad\w*|pasand|preferences?|prefer|memory|save\s+(this|it|that|karo|kar\s*do)|"
+    r"bhool\w*|forget)\b", re.IGNORECASE)
 
 
 _CODING_WORDS = re.compile(
@@ -409,7 +416,7 @@ def route_agent(messages, attachments, system):
         return "chat"
     if _CODING_WORDS.search(text):
         return "code"
-    if _TASK_WORDS.search(text):
+    if _TASK_WORDS.search(text) or _NOTE_WORDS.search(text):
         return "agent"
     fallback = "agent" if len(text.split()) > 12 else "chat"
     try:
@@ -516,13 +523,24 @@ def agent_producer(messages, attachments, system, owner=None):
     def produce(enqueue):
         model = get_model(system)
         route = route_agent(messages, attachments, system)
+        app.logger.info("agent route: %s", route)
         if route == "chat":
-            # Casual message: one normal streamed reply with full history, no Search, no plan or sources.
-            for chunk in model.generate_content(build_contents(messages, attachments),
-                                                generation_config={"max_output_tokens": AGENT_ANSWER_TOKENS}, stream=True):
+            # Casual message: one streamed reply with full history, no Search/tools. The owner's notes (cheap, capped)
+            # are still loaded, and lessons are learned after the reply.
+            import agent_notes
+            notes = agent_notes.for_owner(owner or {})
+            last = last_user_text(messages)
+            block = agent_notes.load_prompt(notes, last)
+            casual = get_model(system + block) if block else model
+            parts = []
+            for chunk in casual.generate_content(build_contents(messages, attachments),
+                                                 generation_config={"max_output_tokens": AGENT_ANSWER_TOKENS}, stream=True):
+                parts.append(chunk_text(chunk))
                 if not enqueue("chunk", chunk):
                     return
             enqueue("done")
+            if notes is not None:
+                agent_notes.learn(notes, get_model(NOTES_SYSTEM), last, "", "".join(parts))
             return
         tool_loop(messages, attachments, system, enqueue, owner or {}, coding=route == "code")
     return produce
@@ -556,6 +574,20 @@ def home():
     # Free OpenRouter models appear only when OPENROUTER_API_KEY is set (Secret Manager).
     info["freeModels"] = openrouter.models()
     return jsonify(info)
+
+
+@app.route("/api/agent/notes/status", methods=["GET"])
+def agent_notes_status():
+    """Owner-only: whether the Agent's notes table is reachable. Never returns note data or counts."""
+    denied = owner_access_error()
+    if denied:
+        return denied
+    import agent_notes
+    store = agent_notes.for_owner({"id": getattr(g, "owner_id", None), "token": getattr(g, "owner_token", "")})
+    ready, reason = agent_notes.probe(store)
+    response = jsonify({"enabled": store is not None, "ready": ready, "reason": reason})
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 @app.route("/api/chat", methods=["POST"])
