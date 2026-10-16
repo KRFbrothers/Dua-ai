@@ -226,7 +226,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             webSearchConfigured = current.webSearchConfigured, pageReadingAvailable = current.pageReadingAvailable, projectsEnabled = current.projectsEnabled, projectTasksEnabled = current.projectTasksEnabled, taskDueDatesEnabled = current.taskDueDatesEnabled, projectMemoryEnabled = current.projectMemoryEnabled,
             chatRenameEnabled = current.chatRenameEnabled, chatDeletionEnabled = current.chatDeletionEnabled, chatPinEnabled = current.chatPinEnabled,
             personalityEnabled = current.personalityEnabled,
-            filesEnabled = current.filesEnabled, filesMaxBytes = current.filesMaxBytes, nativeSearch = current.nativeSearch,
+            filesEnabled = current.filesEnabled, filesRestoreEnabled = current.filesRestoreEnabled, filesMaxBytes = current.filesMaxBytes, nativeSearch = current.nativeSearch,
             xSearchAvailable = current.xSearchAvailable, longContext = current.longContext, imagine = current.imagine, codeExecution = current.codeExecution, build = current.build,
             voice = current.voice, generatedVoiceConfigured = current.voice?.ttsEnabled ?: next.generatedVoiceConfigured))
     }
@@ -864,6 +864,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     val recordingSince: StateFlow<Long?> = _recordingSince.asStateFlow()
     private val _storageUsage = MutableStateFlow<StorageUsage?>(null)
     val storageUsage: StateFlow<StorageUsage?> = _storageUsage.asStateFlow()
+    private val _storageUsageStatus = MutableStateFlow(com.dua.ai.files.StorageUsageStatus())
+    val storageUsageStatus = _storageUsageStatus.asStateFlow()
+    private var storageUsageGeneration = 0L
     private val _cloudLibrary = MutableStateFlow(com.dua.ai.library.CloudLibraryState())
     val cloudLibrary = _cloudLibrary.asStateFlow()
     private var libraryJob: Job? = null
@@ -1042,13 +1045,27 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     fun cancelRecording() { recorder.cancel(); _recordingSince.value = null }
 
     fun loadStorageUsage() {
-        if (account.state.value.user == null) { _storageUsage.value = null; return }
+        val owner = account.state.value.user?.id
+        val generation = ++storageUsageGeneration
+        _storageUsage.value = null
+        _storageUsageStatus.value = com.dua.ai.files.StorageUsageStatus(ownerId = owner, loading = owner != null)
+        if (owner == null) return
+        fun current() = generation == storageUsageGeneration && account.state.value.user?.id == owner
         viewModelScope.launch {
             try {
                 val json = account.request("/api/files/usage", authenticated = true)
-                _storageUsage.value = StorageUsage(json.optInt("files"), json.optLong("bytes"), json.optLong("maxBytes"))
+                val usage = com.dua.ai.files.StorageOverview.usage(json)
+                if (current()) _storageUsage.value = usage
             } catch (cancelled: CancellationException) { throw cancelled }
-            catch (failure: Exception) { _storageUsage.value = null; _dataStatus.value = failure.message ?: "Storage usage could not be loaded." }
+            catch (failure: Exception) {
+                if (current()) {
+                    val message = failure.message ?: "Storage usage could not be loaded. Refresh to retry."
+                    _storageUsageStatus.value = com.dua.ai.files.StorageUsageStatus(owner, error = message)
+                    if (!_dataBusy.value) _dataStatus.value = message
+                }
+            } finally {
+                if (current()) _storageUsageStatus.value = _storageUsageStatus.value.copy(loading = false)
+            }
         }
     }
 
@@ -1056,6 +1073,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     fun deleteAllUploadedFiles() {
         if (_dataBusy.value || _isTyping.value) return
         val user = account.state.value.user ?: run { _dataStatus.value = "Sign in to delete uploaded files."; return }
+        ++storageUsageGeneration
+        _storageUsageStatus.value = com.dua.ai.files.StorageUsageStatus(user.id)
         _dataBusy.value = true; refreshSyncBusy()
         _dataStatus.value = "Deleting uploaded files…"
         viewModelScope.launch {
@@ -1162,6 +1181,47 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     val dataStatus: StateFlow<String> = _dataStatus.asStateFlow()
     fun dataControlNotice(text: String) { _dataStatus.value = text }
 
+    private val fullBackupDelegate = lazy {
+        com.dua.ai.backup.FullBackupController(viewModelScope, getApplication<Application>().contentResolver,
+            File(getApplication<Application>().cacheDir, "full-backups"), com.dua.ai.backup.BackupFileTransfer(account),
+            object : com.dua.ai.backup.FullBackupPort {
+                override fun begin(): com.dua.ai.backup.FullBackupSnapshot {
+                    check(!syncBlocked() && !_readingFiles.value && !_preparingFiles.value && _uploads.value.isEmpty() && _attachments.value.isEmpty() && _recordingSince.value == null) {
+                        "Finish the current reply or data action, and send or remove pending files before making a backup."
+                    }
+                    check(historyReadable) { "Saved chats could not be read. Recover the cache before making a full backup." }
+                    localPreferences.requireReadable()
+                    draftSaver.runNow()
+                    val settings = localSettings.value
+                    val snapshot = com.dua.ai.backup.FullBackupSnapshot(com.dua.ai.history.ChatBackup(_savedChats.value.toList(), settings.projects.toList()),
+                        settings.memory.toList(), account.state.value.user?.id, _integrations.value.filesEnabled)
+                    _dataBusy.value = true; refreshSyncBusy()
+                    return snapshot
+                }
+                override fun end() { _dataBusy.value = false; refreshSyncBusy() }
+                override fun owner() = account.state.value.user?.id
+                override fun restoreFilesAvailable() = _integrations.value.filesEnabled && _integrations.value.filesRestoreEnabled
+                override fun preflight(data: com.dua.ai.backup.FullBackupData) {
+                    com.dua.ai.backup.FullBackupArchive.mergeMemory(localSettings.value.memory, data.memory)
+                    val adjusted = com.dua.ai.projects.ProjectImports.prepare(localSettings.value.projects, data.backup)
+                    ChatHistoryCodec.importCopies(_savedChats.value, adjusted.chats, projects = adjusted.projects)
+                }
+                override suspend fun importData(backup: com.dua.ai.history.ChatBackup, memory: List<String>): Boolean = kotlinx.coroutines.suspendCancellableCoroutine { continuation ->
+                    // Same Main turn: no user action or automatic sync can interleave between these flags.
+                    _dataBusy.value = false
+                    importProjects = backup.projects
+                    _importPreview.value = backup.chats
+                    val operation = commitReviewedImport(memory) { success ->
+                        _importPreview.value = null
+                        if (continuation.isActive) continuation.resumeWith(Result.success(success))
+                    }
+                    if (operation == null && continuation.isActive) { _importPreview.value = null; continuation.resumeWith(Result.success(false)) }
+                    continuation.invokeOnCancellation { operation?.cancel() }
+                }
+            })
+    }
+    val fullBackup by fullBackupDelegate
+
     private val _importPreview = MutableStateFlow<List<SavedChat>?>(null)
     private var importProjects = com.dua.ai.projects.ProjectCodec.defaults
     val importPreview: StateFlow<List<SavedChat>?> = _importPreview.asStateFlow()
@@ -1188,11 +1248,13 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun confirmImport() {
-        if (_dataBusy.value) return
-        if (liveProjectBusy()) { _dataStatus.value = "End live voice before importing chats."; return }
-        val imported = _importPreview.value ?: return
-        if (_buildPr.value.values.any { it.creating }) { _dataStatus.value = "Wait for the pull request to finish before importing."; return }
+    fun confirmImport() { commitReviewedImport() }
+
+    private fun commitReviewedImport(importedMemory: List<String>? = null, completion: (Boolean) -> Unit = {}): Job? {
+        if (_dataBusy.value) return null
+        if (liveProjectBusy()) { _dataStatus.value = "End live voice before importing chats."; return null }
+        val imported = _importPreview.value ?: return null
+        if (_buildPr.value.values.any { it.creating }) { _dataStatus.value = "Wait for the pull request to finish before importing."; return null }
         _dataBusy.value = true; refreshSyncBusy()
         _dataStatus.value = "Saving imported chats…"
         cancelReply()
@@ -1200,21 +1262,26 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         // Use the latest local records at confirmation, keeping the active draft/selection.
         val original = _savedChats.value.toList()
         val originalProjects = localSettings.value.projects.toList()
+        val originalMemory = localSettings.value.memory.toList()
         val importedProjects = importProjects.toList()
         val selectedId = activeId
-        viewModelScope.launch {
+        return viewModelScope.launch {
             var projectsWritten = false
+            var mergedMemory = originalMemory
+            var success = false
             try {
+                if (importedMemory != null) mergedMemory = com.dua.ai.backup.FullBackupArchive.mergeMemory(originalMemory, importedMemory)
                 val (merged, encoded, mergedProjects) = withContext(Dispatchers.Default) {
                     val adjusted = com.dua.ai.projects.ProjectImports.prepare(originalProjects, com.dua.ai.history.ChatBackup(imported, importedProjects))
                     val chats = ChatHistoryCodec.importCopies(original, adjusted.chats, projects = adjusted.projects)
                     Triple(chats, ChatHistoryCodec.encode(chats, selectedId), adjusted.projects)
                 }
                 fun cacheUnchanged() = activeId == selectedId && _savedChats.value == original && !draftSaver.pending &&
+                    (importedMemory == null || localSettings.value.memory == if (projectsWritten) mergedMemory else originalMemory) &&
                     localSettings.value.projects == (if (projectsWritten) mergedProjects else originalProjects) && !_isTyping.value && _buildPr.value.values.none { it.creating }
                 val changed = "The phone cache changed while preparing the import. Review and retry. No chats were imported."
                 check(cacheUnchanged()) { changed }
-                localPreferences.update(localSettings.value.copy(projects = mergedProjects))
+                localPreferences.update(localSettings.value.copy(projects = mergedProjects, memory = if (importedMemory == null) localSettings.value.memory else mergedMemory))
                 projectsWritten = true
                 val committed = withContext(Dispatchers.IO) { historyWriter.writeDirectly {
                     val previous = preferences.getString("history", null)
@@ -1234,12 +1301,15 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     projectsWritten = false
                     _importPreview.value = null
                     _dataStatus.value = "${imported.size} chats imported into the phone cache. Sign in and sync to make them server-backed. Existing chats and drafts were kept."
+                    success = true
                 } else _dataStatus.value = "Import could not be saved. No chats were changed. Try again."
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (failure: Exception) { _dataStatus.value = failure.message ?: "Import could not be saved. No chats were changed. Try again." }
             finally {
-                if (projectsWritten) runCatching { localPreferences.update(localSettings.value.copy(projects = originalProjects)) }
+                if (projectsWritten) runCatching { localPreferences.update(localSettings.value.copy(projects = originalProjects,
+                    memory = if (importedMemory != null && localSettings.value.memory == mergedMemory) originalMemory else localSettings.value.memory)) }
                 _dataBusy.value = false
+                completion(success)
             }
         }
     }
@@ -1694,6 +1764,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     override fun onCleared() {
+        if (fullBackupDelegate.isInitialized()) fullBackup.close()
         flushHistory()
         recorder.cancel()
         pollJobs.values.forEach { it.cancel() }

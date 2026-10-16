@@ -173,6 +173,8 @@ tasks.withType<Test>().configureEach {
 }
 
 dependencies {
+    // Streaming authenticated encryption for password-protected, bounded-memory data backups.
+    implementation("com.google.crypto.tink:tink-android:1.23.0")
     implementation(platform("com.google.firebase:firebase-bom:34.7.0"))
     implementation("com.google.firebase:firebase-crashlytics")
     testImplementation("junit:junit:4.13.2")

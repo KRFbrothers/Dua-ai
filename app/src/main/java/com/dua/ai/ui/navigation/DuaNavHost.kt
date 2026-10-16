@@ -42,6 +42,7 @@ import com.dua.ai.ui.screens.DataControlsScreen
 import com.dua.ai.ui.screens.IntegrationSetupScreen
 import com.dua.ai.ui.screens.ProfileScreen
 import com.dua.ai.ui.settings.SettingsScreen
+import com.dua.ai.ui.settings.StorageScreen
 import com.dua.ai.ui.settings.GeneralScreen
 import com.dua.ai.ui.settings.MemoryScreen
 import com.dua.ai.ui.settings.NotificationsScreen
@@ -324,6 +325,10 @@ fun DuaNavHost(viewModel: ChatViewModel, voice: ReplyVoice, notificationRoute: P
                 BusyBackGuard(viewModel)
                 com.dua.ai.ui.settings.AppearanceScreen(viewModel, onBack = navigator::back, accentPage = destination == DuaDestination.Accent)
             }
+        }
+        composable(DuaDestination.Storage.route) {
+            BusyBackGuard(viewModel)
+            StorageScreen(viewModel, navigator::back, navigator::open)
         }
         settingsFeaturePages(
             memory = { BusyBackGuard(viewModel); MemoryScreen(viewModel, navigator::back, navigator::open) },
