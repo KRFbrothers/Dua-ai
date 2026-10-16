@@ -36,6 +36,8 @@ import com.dua.ai.ui.chat.ChatHaptic
 import com.dua.ai.ui.chat.constant
 import com.dua.ai.ui.theme.rememberMotionAllowed
 import com.dua.ai.viewmodel.ChatViewModel
+import com.dua.ai.voice.BargeInMonitor
+import com.dua.ai.voice.NativeBargeInMonitor
 import com.dua.ai.voice.GeneratedVoiceState
 import com.dua.ai.voice.NativeVoiceInput
 import com.dua.ai.voice.ReadAloudState
@@ -69,6 +71,7 @@ internal class VoiceModeController(
     private val viewModel: ChatViewModel,
     private val voice: ReplyVoice,
     val input: NativeVoiceInput,
+    private val bargeIn: BargeInMonitor? = null,
 ) : VoiceModeSession.Actions {
     var state by mutableStateOf(VoiceModeState()); private set
     var userText by mutableStateOf(""); private set
@@ -93,7 +96,18 @@ internal class VoiceModeController(
         scope.launch { voice.generated.state.collect(::onGenerated) }
     }
 
-    override fun render(state: VoiceModeState) { this.state = state }
+    private var monitoredToken: Int? = null
+    override fun render(state: VoiceModeState) {
+        this.state = state
+        if (state.phase == VoicePhase.Speaking && !state.muted) {
+            if (monitoredToken != session.token) {
+                val token = session.token
+                monitoredToken = token
+                if (bargeIn?.start { session.bargeIn(token) } == false && state.notice.isBlank())
+                    this.state = state.copy(notice = "Tap the waveform to interrupt on this device.")
+            }
+        } else { monitoredToken = null; bargeIn?.stop() }
+    }
 
     override fun listen() {
         listening = true; heardBusy = false
@@ -173,7 +187,7 @@ internal class VoiceModeController(
         }
     }
 
-    override fun stopSpeaking() { speakId = null; voice.stopAll() }
+    override fun stopSpeaking() { speakId = null; voice.stop(); bargeIn?.stop(); monitoredToken = null }
 
     private fun onSpeaker(value: ReadAloudState) {
         val id = speakId ?: return
@@ -192,7 +206,7 @@ internal class VoiceModeController(
         if (value.status.isNotBlank()) speakDevice(session.token) // AI voice failed: read it with the phone's voice instead
     }
 
-    fun close() { session.close(); input.close() }
+    fun close() { session.close(); bargeIn?.stop(); input.close() }
 }
 
 private fun Context.findActivity(): Activity? {
@@ -212,10 +226,11 @@ fun VoiceModeScreen(viewModel: ChatViewModel, voice: ReplyVoice, onClose: () -> 
     val scope = rememberCoroutineScope()
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val snackbar = remember { SnackbarHostState() }
-    val controller = remember { VoiceModeController(scope, viewModel, voice, NativeVoiceInput(context.applicationContext)) }
+    val controller = remember { VoiceModeController(scope, viewModel, voice, NativeVoiceInput(context.applicationContext), NativeBargeInMonitor(context.applicationContext)) }
     val prefs = remember { context.getSharedPreferences("dua_voice_mode", Context.MODE_PRIVATE) }
     var captions by remember { mutableStateOf(prefs.getBoolean("captions", true)) }
     val account by viewModel.account.state.collectAsState()
+    val preferences by viewModel.localSettings.collectAsState()
     val input by controller.input.state.collectAsState()
     val motion = rememberMotionAllowed()
 
@@ -266,6 +281,7 @@ fun VoiceModeScreen(viewModel: ChatViewModel, voice: ReplyVoice, onClose: () -> 
     )
     VoiceModeContent(
         ui = ui,
+        hapticEnabled = preferences.haptic,
         level = { controller.input.level.value },
         motion = motion,
         snackbar = snackbar,

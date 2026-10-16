@@ -96,4 +96,25 @@ class LiveSessionTest {
         assertEquals(LivePhase.FAILED, session.state.phase)
         assertEquals(listOf("Hello"), session.transcript().map { it.text })
     }
+
+    @Test fun tapInterruptFlushesCancelsAndRejectsOldAudio() {
+        val session = listening()
+        session.server(RealtimeEvent.ResponseCreated("r1"))
+        session.server(RealtimeEvent.OutputAudio("r1", byteArrayOf(1, 2)))
+        val effects = session.interrupt()
+        assertTrue(effects.first() is LiveEffect.FlushPlayback)
+        assertEquals(listOf("response.cancel"), sent(effects))
+        assertEquals(LivePhase.LISTENING, session.state.phase)
+        assertTrue(played(session.server(RealtimeEvent.OutputAudio("r1", byteArrayOf(3, 4)))).isEmpty())
+        assertTrue(session.interrupt().isEmpty())
+    }
+    @Test fun tapAfterServerCompletionStillDropsBufferedPlaybackAndLateAudio() {
+        val session = listening()
+        session.server(RealtimeEvent.ResponseCreated("r1"))
+        session.server(RealtimeEvent.OutputAudio("r1", byteArrayOf(1, 2)))
+        session.server(RealtimeEvent.ResponseDone("r1", "completed"))
+        assertEquals(listOf(LiveEffect.FlushPlayback), session.interrupt())
+        assertTrue(played(session.server(RealtimeEvent.OutputAudio("r1", byteArrayOf(3, 4)))).isEmpty())
+        assertEquals(LivePhase.LISTENING, session.state.phase)
+    }
 }

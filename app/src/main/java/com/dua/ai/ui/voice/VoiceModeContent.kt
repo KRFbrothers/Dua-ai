@@ -67,11 +67,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.res.painterResource
@@ -90,7 +86,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.min
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.repeatOnLifecycle
-import com.dua.ai.ui.theme.DuaColors
 import com.dua.ai.ui.theme.DuaVoiceColors
 import com.dua.ai.ui.theme.DuaTheme
 import com.dua.ai.ui.theme.VoiceGreetingStyle
@@ -103,7 +98,6 @@ import com.dua.ai.ui.theme.VoiceShapes
 import com.dua.ai.ui.theme.VoiceSizes
 import com.dua.ai.ui.theme.VoiceTheme
 import com.dua.ai.voice.VoicePhase
-import kotlin.math.PI
 import kotlin.math.sin
 
 enum class MicPermission { Granted, Rationale, Blocked }
@@ -168,10 +162,11 @@ private fun phaseLabel(phase: VoicePhase, muted: Boolean) = when {
 fun VoiceModeContent(
     ui: VoiceModeUi,
     callbacks: VoiceModeCallbacks,
-    level: () -> Float,
+    level: VoiceLevel,
     motion: Boolean,
     snackbar: SnackbarHostState = remember { SnackbarHostState() },
     staticTime: Float = 1.25f,
+    hapticEnabled: Boolean = true,
 ) {
     val time = remember { mutableFloatStateOf(staticTime) }
     val smooth = remember { mutableFloatStateOf(0f) }
@@ -180,23 +175,23 @@ fun VoiceModeContent(
         LaunchedEffect(owner) {
             owner.repeatOnLifecycle(Lifecycle.State.RESUMED) {
                 var last = 0L
-                while (true) {
-                    androidx.compose.runtime.withFrameNanos { now ->
+                val advance: (Long) -> Unit = { now ->
                         val dt = if (last == 0L) 0f else ((now - last) / 1e9f).coerceAtMost(.05f)
                         last = now
                         time.floatValue += dt
-                        smooth.floatValue += (level().coerceIn(0f, 1f) - smooth.floatValue) * (dt * 9f).coerceAtMost(1f)
-                    }
+                        smooth.floatValue += (level.read().coerceIn(0f, 1f) - smooth.floatValue) * (dt * 9f).coerceAtMost(1f)
                 }
+                while (true) androidx.compose.animation.core.withInfiniteAnimationFrameNanos(advance)
             }
         }
     }
+    VoiceSpeakingFeedback(ui.phase == VoicePhase.Speaking, hapticEnabled)
     val phase = ui.phase
     // Energy 0..1 that drives glow and orb: mic level while listening, a synthetic voice envelope while speaking.
-    val energy: () -> Float = {
+    val energy = VoiceLevel {
         val t = time.floatValue
         when (phase) {
-            VoicePhase.Listening -> if (motion) smooth.floatValue else level().coerceIn(0f, 1f)
+            VoicePhase.Listening -> if (motion) smooth.floatValue else level.read().coerceIn(0f, 1f)
             VoicePhase.Speaking -> (.55f + .3f * sin(t * 6.1f) * sin(t * 2.3f + 1f) + .1f * sin(t * 13f)).coerceIn(.2f, 1f)
             VoicePhase.Thinking -> .32f + .08f * sin(t * 2.4f)
             VoicePhase.Idle -> if (ui.muted) .05f else .14f + .04f * sin(t * 1.2f)
@@ -207,9 +202,9 @@ fun VoiceModeContent(
     Box(
         Modifier
             .fillMaxSize()
-            .background(colors.voice.background)
-            .drawBehind { drawGlow(colors, energy(), ui.muted) },
+            .background(colors.voice.background),
     ) {
+        VoiceFrequencyWaveform(energy, phase == VoicePhase.Speaking, ui.muted, Modifier.matchParentSize(), frame = time, motion = motion, glowOnly = true)
         Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
             TopRow(ui, callbacks)
             Box(Modifier.weight(1f).fillMaxWidth().padding(horizontal = Spacing.xxl)) {
@@ -228,26 +223,6 @@ fun VoiceModeContent(
             Controls(ui, callbacks, energy, time, Modifier.padding(start = Spacing.md, end = Spacing.md, top = Spacing.sm, bottom = Spacing.xl))
         }
     }
-}
-
-private fun DrawScope.drawGlow(colors: DuaColors, energy: Float, muted: Boolean) {
-    val e = if (muted) energy * .4f else energy
-    val gold = colors.sparkle
-    val silver = colors.voice.glowSilver
-    val center = Offset(size.width / 2f, size.height * 1.02f)
-    val radius = size.width * (1.05f + .35f * e)
-    val strength = if (colors.isDark) 1f else .65f
-    drawRect(Brush.radialGradient(
-        0f to colors.voice.highlight.copy(alpha = (.16f + .18f * e) * strength),
-        .22f to gold.copy(alpha = (.26f + .24f * e) * strength),
-        .5f to silver.copy(alpha = (.08f + .08f * e) * strength),
-        1f to Color.Transparent,
-        center = center, radius = radius,
-    ))
-    // A low, wide wash so the glow reads as light rising from the bottom edge, not a spot.
-    drawRect(Brush.verticalGradient(
-        0f to Color.Transparent, .72f to Color.Transparent,
-        1f to gold.copy(alpha = (.10f + .10f * e) * strength)))
 }
 
 @Composable
@@ -283,7 +258,9 @@ private fun StatusPill(phase: VoicePhase, muted: Boolean, granted: Boolean) {
             .semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite; contentDescription = "Voice mode: $label" },
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(Modifier.size(VoiceSizes.statusDot).clip(CircleShape).background(dot))
+        if (phase == VoicePhase.Speaking) VoiceSpeakingIndicator()
+        else Icon(painterResource(R.drawable.ls_gemini_live_wght320_vd_theme_28), null,
+            tint = dot, modifier = Modifier.size(Sizes.iconSmall))
         Spacer(Modifier.width(Spacing.sm))
         Text(label, style = MaterialTheme.typography.labelLarge, color = VoiceTheme.colors.subText)
     }
@@ -371,7 +348,7 @@ private fun BottomStatus(ui: VoiceModeUi) {
 }
 
 @Composable
-private fun Controls(ui: VoiceModeUi, callbacks: VoiceModeCallbacks, energy: () -> Float, time: androidx.compose.runtime.FloatState, modifier: Modifier) {
+private fun Controls(ui: VoiceModeUi, callbacks: VoiceModeCallbacks, energy: VoiceLevel, time: androidx.compose.runtime.FloatState, modifier: Modifier) {
     BoxWithConstraints(modifier.fillMaxWidth()) {
         val width = maxWidth
         val circle = min(VoiceSizes.controlMax, width / 6.6f).coerceAtLeast(Sizes.touchTarget)
@@ -410,7 +387,7 @@ private fun ControlCircle(icon: ImageVector, description: String, size: Dp, sele
  * Listening breathes with the mic, Thinking adds a moving shimmer, Speaking rolls a stronger wave; dim when muted.
  */
 @Composable
-fun VoiceOrb(phase: VoicePhase, muted: Boolean, energy: () -> Float, time: androidx.compose.runtime.FloatState, modifier: Modifier, onClick: () -> Unit) {
+fun VoiceOrb(phase: VoicePhase, muted: Boolean, energy: VoiceLevel, time: androidx.compose.runtime.FloatState, modifier: Modifier, onClick: () -> Unit) {
     val description = when (phase) {
         VoicePhase.Idle -> "Talk to Dua"
         VoicePhase.Listening -> "Listening. Tap to pause"
@@ -423,53 +400,10 @@ fun VoiceOrb(phase: VoicePhase, muted: Boolean, energy: () -> Float, time: andro
             .clip(CircleShape)
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = ripple(color = colors.highlight), role = Role.Button, onClick = onClick)
             .semantics { contentDescription = description }
-            .drawBehind { drawOrb(phase, muted, energy(), time.floatValue, colors) },
-    )
-}
-
-private fun DrawScope.drawOrb(phase: VoicePhase, muted: Boolean, energy: Float, t: Float, colors: DuaVoiceColors) {
-    val w = size.width; val h = size.height
-    drawRect(Brush.verticalGradient(listOf(colors.orbSurfaceTop, colors.orbSurfaceBottom)))
-    val fill = when (phase) {
-        VoicePhase.Idle -> .34f
-        VoicePhase.Listening -> .36f + .28f * energy
-        VoicePhase.Thinking -> .42f
-        VoicePhase.Speaking -> .40f + .30f * energy
+            .background(colors.orbSurfaceBottom),
+    ) {
+        VoiceFrequencyWaveform(energy, phase == VoicePhase.Speaking, muted, Modifier.matchParentSize(), frame = time, waveColor = colors.highlight)
     }
-    val amp = h * when (phase) {
-        VoicePhase.Idle -> .035f
-        VoicePhase.Listening -> .04f + .10f * energy
-        VoicePhase.Thinking -> .05f
-        VoicePhase.Speaking -> .07f + .13f * energy
-    }
-    val speed = when (phase) { VoicePhase.Speaking -> 3.2f; VoicePhase.Listening -> 2.2f; else -> 1.2f }
-    val alpha = if (muted) .45f else 1f
-    fun wave(shift: Float, scale: Float, level: Float): Path = Path().apply {
-        moveTo(0f, h)
-        val steps = 32
-        for (i in 0..steps) {
-            val x = w * i / steps
-            val p = x / w
-            val y = h * (1f - level) + amp * scale * (sin(2f * PI.toFloat() * (p * 1.15f) + t * speed + shift) * .7f + sin(2f * PI.toFloat() * (p * 2.3f) - t * speed * .8f + shift * 2f) * .3f)
-            lineTo(x, y)
-        }
-        lineTo(w, h); close()
-    }
-    drawPath(wave(2.1f, .8f, fill + .07f), Brush.verticalGradient(
-        listOf(colors.orbSilverLow.copy(alpha = .35f * alpha), colors.orbSilverHigh.copy(alpha = .55f * alpha)), startY = h * (1f - fill - .1f), endY = h))
-    drawPath(wave(0f, 1f, fill), Brush.verticalGradient(
-        0f to colors.orbGold.copy(alpha = .95f * alpha),
-        .45f to colors.orbCream.copy(alpha = alpha),
-        1f to colors.highlight.copy(alpha = alpha),
-        startY = h * (1f - fill - .08f), endY = h))
-    if (phase == VoicePhase.Thinking && !muted) {
-        val p = (t * .55f) % 1f
-        val cx = -w * .4f + p * w * 1.8f
-        drawRect(Brush.horizontalGradient(listOf(Color.Transparent, colors.highlight.copy(alpha = .38f), Color.Transparent), startX = cx - w * .22f, endX = cx + w * .22f))
-    }
-    // Soft inner rim so the capsule reads on both themes.
-    drawRoundRect(color = colors.orbRim,
-        cornerRadius = androidx.compose.ui.geometry.CornerRadius(h / 2f), style = Stroke(width = VoiceSizes.border.toPx()))
 }
 
 @Composable

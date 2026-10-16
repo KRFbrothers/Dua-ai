@@ -6,14 +6,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -53,13 +46,10 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import com.dua.ai.R
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
@@ -76,7 +66,6 @@ import com.dua.ai.voice.live.LivePhase
 import com.dua.ai.voice.live.LiveState
 import com.dua.ai.voice.live.LiveUsage
 import com.dua.ai.voice.live.LiveVoiceController
-import kotlin.math.sin
 
 /** Full-screen live voice conversation with Grok (xAI realtime). Falls back to hands-free mode when unavailable. */
 @Composable
@@ -97,20 +86,21 @@ fun LiveVoiceScreen(viewModel: ChatViewModel, onClose: () -> Unit, onHandsFree: 
         else permission.launch(Manifest.permission.RECORD_AUDIO)
     }
     LiveVoiceContent(state = state, starting = start.busy, error = start.error, fallback = start.fallback, usage = usage, voiceName = voiceName,
-        onStart = ::begin, onMute = { LiveVoiceController.setMuted(!state.muted) }, onEnd = { LiveVoiceController.end() },
+        onStart = ::begin, onMute = { LiveVoiceController.setMuted(!state.muted) }, onEnd = { LiveVoiceController.end() }, onInterrupt = { LiveVoiceController.interrupt() }, hapticEnabled = settings.haptic,
         onClose = { if (state.active) LiveVoiceController.end(); onClose() }, onHandsFree = onHandsFree)
 }
 
 @Composable
 fun LiveVoiceContent(state: LiveState, starting: Boolean, error: String, fallback: Boolean, usage: LiveUsage?, voiceName: String,
-    onStart: () -> Unit, onMute: () -> Unit, onEnd: () -> Unit, onClose: () -> Unit, onHandsFree: () -> Unit) = com.dua.ai.ui.theme.DuaPageTheme {
-    LiveVoiceContentBody(state = state, starting = starting, error = error, fallback = fallback, usage = usage, voiceName = voiceName, onStart = onStart, onMute = onMute, onEnd = onEnd, onClose = onClose, onHandsFree = onHandsFree)
+    onStart: () -> Unit, onMute: () -> Unit, onEnd: () -> Unit, onClose: () -> Unit, onHandsFree: () -> Unit, onInterrupt: () -> Unit = {}, hapticEnabled: Boolean = true) = com.dua.ai.ui.theme.DuaPageTheme {
+    LiveVoiceContentBody(state = state, starting = starting, error = error, fallback = fallback, usage = usage, voiceName = voiceName, onStart = onStart, onMute = onMute, onEnd = onEnd, onClose = onClose, onHandsFree = onHandsFree, onInterrupt = onInterrupt, hapticEnabled = hapticEnabled)
 }
 
 @Composable
 private fun LiveVoiceContentBody(state: LiveState, starting: Boolean, error: String, fallback: Boolean, usage: LiveUsage?, voiceName: String,
-    onStart: () -> Unit, onMute: () -> Unit, onEnd: () -> Unit, onClose: () -> Unit, onHandsFree: () -> Unit) {
+    onStart: () -> Unit, onMute: () -> Unit, onEnd: () -> Unit, onClose: () -> Unit, onHandsFree: () -> Unit, onInterrupt: () -> Unit, hapticEnabled: Boolean) {
     val v = VoiceTheme.colors
+    VoiceSpeakingFeedback(state.phase == LivePhase.SPEAKING, hapticEnabled)
     // No Surface here, so set the content colour for icons and titles (dark theme).
     androidx.compose.runtime.CompositionLocalProvider(androidx.compose.material3.LocalContentColor provides v.text) {
     Box(Modifier.fillMaxSize().background(v.background).safeDrawingPadding()) {
@@ -127,7 +117,12 @@ private fun LiveVoiceContentBody(state: LiveState, starting: Boolean, error: Str
                 }
             }
             Spacer(Modifier.height(Spacing.xl))
-            VoiceOrb(state.phase, state.level, state.muted, Modifier.size(VoiceSizes.liveOrb))
+            Box(Modifier.size(VoiceSizes.liveOrb).clickable(enabled = state.phase == LivePhase.SPEAKING, onClick = onInterrupt)
+                .semantics { contentDescription = if (state.phase == LivePhase.SPEAKING) "Speaking. Tap to interrupt" else "Live voice waveform" }) {
+                VoiceOrb(state.phase, state.level, state.muted, Modifier.fillMaxSize())
+                if (state.phase == LivePhase.SPEAKING) Icon(painterResource(R.drawable.ls_gemini_live_wght320_vd_theme_28), "Dua is speaking",
+                    tint = v.text, modifier = Modifier.align(Alignment.Center).size(Spacing.xxl))
+            }
             Spacer(Modifier.height(Spacing.lg))
             Text(statusLabel(state, starting, error), style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center,
                 color = if (error.isNotBlank() || state.phase == LivePhase.FAILED) v.error else v.text,
@@ -146,7 +141,7 @@ private fun LiveVoiceContentBody(state: LiveState, starting: Boolean, error: Str
                 Button(onClick = onStart, enabled = !starting && !(fallback && error.isNotBlank() && usage?.leftSeconds == 0),
                     modifier = Modifier.fillMaxWidth().widthIn(max = VoiceSizes.contentMaxWidth).height(VoiceSizes.startButtonHeight), shape = VoiceShapes.startButton,
                     colors = ButtonDefaults.buttonColors(containerColor = v.accent, contentColor = v.onAccent)) {
-                    Icon(painterResource(R.drawable.ls_live_wave), null); Text(if (state.phase == LivePhase.IDLE) "Start talking" else "Start again", modifier = Modifier.padding(start = Spacing.sm))
+                    Icon(painterResource(R.drawable.ls_gemini_live_wght320_vd_theme_28), null); Text(if (state.phase == LivePhase.IDLE) "Start talking" else "Start again", modifier = Modifier.padding(start = Spacing.sm))
                 }
                 if (fallback || error.isNotBlank()) TextButton(onClick = onHandsFree) { Text("Use hands-free mode instead") }
                 Text("Audio streams to xAI only while a session runs. The conversation is saved to this chat when it ends.",
@@ -192,26 +187,6 @@ private fun Captions(captions: List<LiveCaption>, modifier: Modifier) {
 /** Animated orb: breathes while listening, swells with the voice level and ripples while Dua speaks. */
 @Composable
 fun VoiceOrb(phase: LivePhase, level: Float, muted: Boolean, modifier: Modifier = Modifier) {
-    val transition = rememberInfiniteTransition(label = "orb")
-    val time by transition.animateFloat(0f, 1f, infiniteRepeatable(tween(3200, easing = LinearEasing), RepeatMode.Restart), label = "time")
-    val smoothed by animateFloatAsState(if (muted) 0f else level, tween(120), label = "level")
-    val accent = VoiceTheme.colors.accent
     val speaking = phase == LivePhase.SPEAKING
-    val idle = phase == LivePhase.IDLE || phase == LivePhase.ENDED || phase == LivePhase.FAILED
-    val core = if (muted || idle) VoiceTheme.colors.idle else accent
-    val voiceColors = DuaTheme.colors.voice
-    val glow = if (speaking) voiceColors.speakingGlow else accent
-    Canvas(modifier) {
-        val radius = size.minDimension / 2
-        val center = Offset(size.width / 2, size.height / 2)
-        val breathe = if (idle) 0f else (sin(time * 2 * Math.PI).toFloat() + 1f) / 2f
-        val scale = 0.62f + 0.06f * breathe + 0.22f * smoothed
-        drawCircle(Brush.radialGradient(listOf(glow.copy(alpha = if (idle) 0.12f else 0.35f), Color.Transparent), center, radius), radius, center)
-        if (speaking || phase == LivePhase.USER_SPEAKING) for (ring in 0..2) {
-            val progress = (time + ring / 3f) % 1f
-            drawCircle(glow.copy(alpha = (1f - progress) * 0.35f), radius * (scale + 0.35f * progress), center, style = Stroke(width = 3f))
-        }
-        drawCircle(Brush.radialGradient(listOf(core.copy(alpha = 0.95f), glow.copy(alpha = 0.75f)), center, radius * scale), radius * scale, center)
-        drawCircle(voiceColors.highlight.copy(alpha = 0.18f), radius * scale * 0.45f, Offset(center.x - radius * scale * 0.25f, center.y - radius * scale * 0.3f))
-    }
+    VoiceFrequencyWaveform(level = { level }, speaking = speaking, muted = muted, modifier = modifier)
 }

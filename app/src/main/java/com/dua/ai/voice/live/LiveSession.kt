@@ -37,6 +37,7 @@ class LiveSession(private val maxSeconds: Int, voice: String = "") {
     var state = LiveState(maxSeconds = maxSeconds, voice = voice)
         private set
     private var speakingResponse: String? = null
+    private var lastResponse: String? = null
     /** Responses the user talked over; their late audio and text are ignored. */
     private val interrupted = mutableSetOf<String>()
     private var warned = false
@@ -62,6 +63,18 @@ class LiveSession(private val maxSeconds: Int, voice: String = "") {
         state = state.copy(muted = muted, level = 0f, status = if (muted) "Muted. Tap the mic to talk again." else listeningStatus())
         // Drop half-sent speech so a muted cough is not answered.
         return if (muted) listOf(LiveEffect.Send(RealtimeProtocol.clearInput())) else emptyList()
+    }
+
+    /** Explicit local interruption; server speech_started already handles VAD barge-in. */
+    fun interrupt(): List<LiveEffect> {
+        if (state.phase != LivePhase.SPEAKING) return emptyList()
+        val responding = speakingResponse != null
+        val response = speakingResponse ?: lastResponse
+        response?.let(interrupted::add)
+        speakingResponse = null
+        state = state.copy(phase = LivePhase.LISTENING, level = 0f, status = listeningStatus(),
+            captions = state.captions.map { if (!it.user && (it.id == response?.let(::replyId) || !it.final)) it.copy(final = true, interrupted = true) else it })
+        return if (responding) listOf(LiveEffect.FlushPlayback, LiveEffect.Send(RealtimeProtocol.cancelResponse())) else listOf(LiveEffect.FlushPlayback)
     }
 
     /** Called once a second with the time since the session connected. */
@@ -163,7 +176,9 @@ class LiveSession(private val maxSeconds: Int, voice: String = "") {
     private fun accept(responseId: String): Boolean {
         if (responseId in interrupted || state.phase == LivePhase.USER_SPEAKING) return false
         if (speakingResponse == null) speakingResponse = responseId
-        return responseId.isEmpty() || responseId == speakingResponse
+        val accepted = responseId.isEmpty() || responseId == speakingResponse
+        if (accepted) lastResponse = responseId
+        return accepted
     }
     private fun listeningStatus() = if (state.muted) "Muted. Tap the mic to talk again." else "Listening… just start talking."
     private fun userId(itemId: String) = "user:" + itemId.ifBlank { "turn-" + state.captions.size }
