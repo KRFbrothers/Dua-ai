@@ -140,6 +140,10 @@ def make_tools(names, call):
         return await call("propose_changes", {"title": title, "description": description,
                                               "files": [{"path": p, "content": c} for p, c in zip(paths, contents)]})
 
+    async def check_pr_ci() -> dict:
+        """Check the GitHub CI status of the pull request you opened in this request."""
+        return await call("check_pr_ci", {})
+
     async def search_notes(query: str) -> dict:
         """Search your private notes from earlier tasks."""
         return await call("search_notes", {"query": query})
@@ -149,7 +153,10 @@ def make_tools(names, call):
         return await call("save_note", {"note": note, "kind": kind})
 
     table = {f.__name__: f for f in (google_search, fetch_url, calculator, current_time, list_files, read_file,
-                                     search_code, propose_changes, search_notes, save_note)}
+                                     search_code, propose_changes, check_pr_ci, search_notes, save_note)}
+    import pr_flow
+    if "propose_changes" in names and pr_flow.enabled():
+        names = tuple(names) + ("check_pr_ci",)
     return [table[n] for n in names]
 
 
@@ -159,6 +166,7 @@ class Result:
     def __init__(self, agent):
         self.sources = agent.sources
         self.steps = agent.steps
+        self.evidence = agent.evidence
 
 
 def run(env, request_text, flash_model, agent_model, config_for, adk=None, log=print):
@@ -190,7 +198,11 @@ def run(env, request_text, flash_model, agent_model, config_for, adk=None, log=p
             if name == "propose_changes":
                 if pr_text:
                     return {"error": "A pull request was already opened for this request."}
-                text = await asyncio.to_thread(coding_agent.finish, env["github"], thinking, args, request_text)
+                flow_env = dict(env, request_text=request_text,
+                                progress=lambda step, label, state="active": progress(CHIPS[index], f"{title}: {label}"))
+                done, result, text = await asyncio.to_thread(shared.pr_flow_for(flow_env).propose, args)
+                if not done:
+                    return result
                 pr_text.append(text)
                 return {"result": text[:2000], "note": "Done. Do not call propose_changes again."}
             return await asyncio.to_thread(shared.run_tool_timed, name, args)
@@ -234,12 +246,15 @@ def run(env, request_text, flash_model, agent_model, config_for, adk=None, log=p
         return final_text(events, "merger")
 
     try:
-        answer = agent_tools.call_with_deadline(pipeline, TOTAL_SECONDS)
+        import pr_flow
+        answer = agent_tools.call_with_deadline(pipeline, TOTAL_SECONDS + (pr_flow.CI_SECONDS if pr_flow.enabled() else 0))
     except agent_tools.DeadlineExceeded:
         log(f"[dua-agent] adk deadline {TOTAL_SECONDS}s reached")
         answer = "Agent stopped: the parallel helpers took longer than the time limit. Please try a smaller request."
         if pr_text:
             answer += "\n\n" + pr_text[0]
+        elif shared.prflow is not None and shared.prflow.pr:
+            answer += f"\n\nA pull request was opened: {shared.prflow.pr['url']}"
         return answer, Result(shared)
     except Exception as error:  # any ADK problem: the old loop answers instead
         if shared.steps or pr_text:  # tools already ran: do not repeat side effects in the old loop

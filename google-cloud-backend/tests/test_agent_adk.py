@@ -148,7 +148,7 @@ def test_total_deadline_stops_run(monkeypatch):
 def test_code_helper_opens_one_pr_and_link_is_kept(monkeypatch):
     import coding_agent
     calls = []
-    monkeypatch.setattr(coding_agent, "finish", lambda gh, emit, args, req: calls.append(args) or
+    monkeypatch.setattr(coding_agent, "finish", lambda gh, emit, args, req, **kw: calls.append(args) or
                         "Pull request ready: **#9** \u2014 https://github.com/o/r/pull/9")
     monkeypatch.setattr(coding_agent, "CodingSession", lambda *a: None)
     plan = {"split": True, "subtasks": [{"kind": "research", "task": "r"}, {"kind": "code", "task": "c"}]}

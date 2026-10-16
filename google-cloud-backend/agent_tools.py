@@ -90,6 +90,7 @@ PROGRESS = {
     "search_issues": ("issues", "Searching issues\u2026"),
     "create_issue": ("issue_new", "Creating issue\u2026"),
     "comment_on_issue": ("issue_comment", "Commenting on issue\u2026"),
+    "check_pr_ci": ("ci", "Checking CI\u2026"),
     "save_note": ("notes", "Saving a note\u2026"),
     "search_notes": ("notes", "Checking notes\u2026"),
     "delete_note": ("notes", "Updating notes\u2026"),
@@ -136,7 +137,9 @@ ISSUE_TOOLS = [
 def declarations(github, issues=False, notes=False):
     import agent_notes
     import coding_agent
-    return (BASE_TOOLS + (coding_agent.TOOLS if github else []) + (ISSUE_TOOLS if github and issues else []) +
+    import pr_flow
+    ci = [coding_agent.CHECK_CI_TOOL] if github and pr_flow.enabled() else []
+    return (BASE_TOOLS + (coding_agent.TOOLS if github else []) + ci + (ISSUE_TOOLS if github and issues else []) +
             (agent_notes.TOOLS if notes else []))
 
 
@@ -365,6 +368,8 @@ class AgentRun:
         self.facts = []
         self.coding = None
         self.steps = []
+        self.prflow = None
+        self.evidence = []  # short tool results, for the optional self-check (agent_verify)
 
     def emit(self, event):
         return self.env["enqueue"]("event", event)
@@ -381,6 +386,12 @@ class AgentRun:
             ids.append({"id": existing["id"], "title": existing["title"], "url": existing["url"]})
         return ids
 
+    def pr_flow_for(self, env):
+        import pr_flow
+        if self.prflow is None:
+            self.prflow = pr_flow.PrFlow(env["github"], env["thinking"], env["progress"], env["request_text"])
+        return self.prflow
+
     def run_tool_timed(self, name, args):
         """run_tool with a hard deadline; a slow tool returns an error to the model instead of hanging."""
         seconds = SLOW_TOOL_SECONDS.get(name, TOOL_SECONDS)
@@ -389,6 +400,11 @@ class AgentRun:
             result = call_with_deadline(lambda: self.run_tool(name, args), seconds)
         except DeadlineExceeded:
             result = {"error": f"{name} timed out after {seconds}s. Continue without it."}
+        if sum(len(e) for e in self.evidence) < 12000:
+            try:
+                self.evidence.append(f"{name}: {json.dumps(result, ensure_ascii=False, default=str)[:1500]}")
+            except (TypeError, ValueError):
+                pass
         log(f"tool {name}: {time.monotonic() - started:.1f}s{' (error)' if isinstance(result, dict) and 'error' in result else ''}")
         return result
 
@@ -449,6 +465,10 @@ class AgentRun:
                 self.facts.append(fact)
                 self.emit({"type": "memory", "fact": fact})
                 return {"suggested": True, "note": "Suggested to the user's Memory; they confirm it in the app before it is saved."}
+            if name == "check_pr_ci":
+                if self.prflow is None:
+                    return {"error": "No pull request was opened in this request yet."}
+                return self.prflow.ci_status()
             if name in NOTE_TOOLS:
                 import agent_notes
                 return agent_notes.run_tool(env.get("notes"), name, args)
@@ -568,7 +588,11 @@ def run(env, history, tools, tool_response, clock=time.monotonic):
                 if env.get("github") is None:
                     results.append((name, {"error": "GitHub tools are not set up."}))
                     continue
-                return coding_agent.finish(env["github"], env["thinking"], args, env["request_text"]), agent
+                done, result, text = agent.pr_flow_for(env).propose(args)
+                if done:
+                    return text, agent
+                results.append((name, result))
+                continue
             results.append((name, agent.run_tool_timed(name, args)))
             if name in PROGRESS:
                 progress(PROGRESS[name][0], PROGRESS[name][1].rstrip("\u2026"), "done")
