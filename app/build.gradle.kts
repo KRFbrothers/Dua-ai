@@ -175,9 +175,12 @@ tasks.withType<Test>().configureEach {
 dependencies {
     // Streaming authenticated encryption for password-protected, bounded-memory data backups.
     implementation("com.google.crypto.tink:tink-android:1.23.0")
+    implementation("com.google.android.gms:play-services-auth:21.6.0")
+    implementation("androidx.work:work-runtime-ktx:2.10.1")
     implementation(platform("com.google.firebase:firebase-bom:34.7.0"))
     implementation("com.google.firebase:firebase-crashlytics")
     testImplementation("junit:junit:4.13.2")
+    testImplementation("androidx.work:work-testing:2.10.1")
     testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
     testImplementation("com.squareup.okhttp3:okhttp-tls:4.12.0")
     testImplementation("org.json:json:20240303")

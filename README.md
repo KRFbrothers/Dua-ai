@@ -170,7 +170,7 @@ After installation, the separate Imagine smoke check is `node scripts/imagine-sm
 
 The Android cache is stored in app-private preferences; Android backup/device transfer exclude cached chat history, account sessions and automatic-sync consent. Other preferences, including cached memory and project instructions, can be backed up according to device settings. Signed-in server data remains authoritative and is not replaced by a restored cache. A dua-api deployment updates the backend only; Android code changes require building and installing a new APK.
 
-**Settings → Storage** provides real cache/cloud usage and manual password-protected full data backups through Android's file picker (including Google Drive). These archives include Personal notes and available raw Dua AI files; restore verifies files, preserves existing data and asks for confirmation. See [backup contents, limits, Drive steps and backend rollout](docs/STORAGE_BACKUP.md). Legacy JSON export/import remains available in Data controls.
+**Settings → Storage** provides real cache/cloud usage, manual password-protected full backups through Android's file picker, and optional daily Google Drive backups on unmetered networks. Automatic mode requests separate private app-folder permission, protects the saved archive password with Android Keystore, shows last-success/progress/retry and keeps the latest three verified backups. Archives include Personal notes and available raw Dua AI files; restore verifies files, preserves existing data and asks for confirmation. See [contents, limits, Google Cloud setup and recovery steps](docs/STORAGE_BACKUP.md). Legacy JSON export/import remains available in Data controls.
 
 ### Projects and custom instructions
 

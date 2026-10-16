@@ -5,11 +5,13 @@
         <exclude domain="sharedpref" path="dua_auto_sync.xml" />
         <exclude domain="sharedpref" path="dua_task_reminders.xml" />
         <exclude domain="sharedpref" path="dua_chat_history.xml" />
+        <exclude domain="sharedpref" path="dua_drive_backup.xml" />
     </cloud-backup>
     <device-transfer>
         <exclude domain="sharedpref" path="dua_account_session.xml" />
         <exclude domain="sharedpref" path="dua_auto_sync.xml" />
         <exclude domain="sharedpref" path="dua_task_reminders.xml" />
         <exclude domain="sharedpref" path="dua_chat_history.xml" />
+        <exclude domain="sharedpref" path="dua_drive_backup.xml" />
     </device-transfer>
 </data-extraction-rules>
