@@ -202,4 +202,5 @@ The Dua Agent keeps its own private notes in Supabase table `agent_notes` (migra
 - After the reply, one cheap `VERTEX_MODEL` call (low thinking, 1024-token cap) extracts 0–3 durable lessons, drops duplicates and anything that looks like a secret, token, key or email, and saves them (`source = auto`).
 - Tools: `save_note`, `search_notes`, `delete_note` (3 each per request; delete works only on the owner's rows).
 - At most 200 notes per owner; a table trigger prunes the oldest.
-- `AGENT_NOTES=0` turns it all off. Without the migration, loading fails quietly and the Agent works as before.
+- `AGENT_NOTES=0` turns it all off. Notes, memory, "yaad", "pasand" and preference requests always use the tool loop; casual replies also get notes and learn afterwards.
+- If the table is missing (migration not applied) or unreachable, the log shows `[dua-agent-notes] could not load notes: missing_table` and the Agent says notes are unavailable. `GET /api/agent/notes/status` (owner-only) returns `{"enabled", "ready", "reason"}` with no note data.

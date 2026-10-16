@@ -108,6 +108,7 @@ class NotesStore:
         self.token = token
         self.opener = opener or auth_opener
         self._cache = None
+        self.unavailable = None
 
     def _request(self, path, method="GET", body=None, prefer=None):
         headers = {"apikey": self.key, "Authorization": "Bearer " + self.token, "Accept": "application/json"}
@@ -163,19 +164,59 @@ def for_owner(owner, opener=None):
     return NotesStore(owner["token"], opener)
 
 
-def load_prompt(store, query):
-    """Notes block for the system prompt; never fails the task."""
+UNAVAILABLE_NOTE = ("\n\nYour private notes are UNAVAILABLE right now ({reason}). If the user asks about notes or "
+                    "their preferences, say honestly that your notes could not be loaded right now (it may need setup); "
+                    "never claim that you do not keep notes.")
+OFF_NOTE = ("\n\nYour private notes are turned off on this server (AGENT_NOTES=0). If asked, say notes are turned off; "
+            "the app's own Memory still works.")
+
+
+def failure_reason(error):
+    """Plain reason without data: missing_table (migration not applied), auth, or unreachable."""
+    code = getattr(error, "code", None)
+    body = ""
+    try:
+        body = error.read(2048).decode("utf-8", "replace") if isinstance(error, HTTPError) else ""
+    except Exception:
+        pass
+    if code == 404 or "PGRST205" in body or "42P01" in body or "does not exist" in body:
+        return "missing_table"
+    if code in (401, 403) or "42501" in body:
+        return "not_permitted"
+    return "unreachable"
+
+
+def probe(store, log=print):
+    """(ready, reason). Reads at most one id; never returns note data."""
     if store is None:
-        return ""
+        return False, "off" if os.environ.get("AGENT_NOTES", "1").strip() == "0" else "not_configured"
+    try:
+        store._request("?select=id&limit=1")
+        return True, "ok"
+    except Exception as error:
+        reason = failure_reason(error)
+        log(f"[dua-agent-notes] notes unavailable: {reason}")
+        return False, reason
+
+
+def load_prompt(store, query, log=print):
+    """Notes block for the system prompt; never fails the task. Unavailable notes give an honest notice + log."""
+    if store is None:
+        return OFF_NOTE if os.environ.get("AGENT_NOTES", "1").strip() == "0" else ""
     try:
         return prompt_block(relevant(store.list(), query))
-    except (HTTPError, OSError, ValueError, TypeError):
-        return ""
+    except Exception as error:
+        reason = failure_reason(error)
+        log(f"[dua-agent-notes] could not load notes: {reason}"
+            + (" (apply supabase/migrations/202610160001_dua_agent_notes.sql)" if reason == "missing_table" else ""))
+        store.unavailable = reason
+        return UNAVAILABLE_NOTE.format(reason="the notes table is not set up yet" if reason == "missing_table"
+                                       else "notes storage could not be reached")
 
 
 def learn(store, model, request_text, steps, answer, log=print):
     """After a task: one cheap Flash call -> 0-3 lessons -> filtered, deduped, saved. Returns saved count."""
-    if store is None or not (request_text or "").strip():
+    if store is None or store_unavailable(store) or not (request_text or "").strip():
         return 0
     try:
         existing = "\n".join("- " + n["note"] for n in store.list()[:40]) or "(none)"
@@ -196,6 +237,10 @@ def learn(store, model, request_text, steps, answer, log=print):
         return 0
 
 
+def store_unavailable(store):
+    return bool(getattr(store, "unavailable", None))
+
+
 TOOLS = [
     {"name": "save_note", "description": "Save one short durable lesson for future tasks (your private notes, not the "
      "user's Memory): a preference, what worked/failed, or a repo fact. Never secrets or emails. Max 300 characters.",
@@ -212,6 +257,8 @@ TOOLS = [
 def run_tool(store, name, args):
     if store is None:
         return {"error": "Agent notes are turned off."}
+    if store_unavailable(store):
+        return {"error": "Notes are unavailable right now (storage not set up or not reachable). Tell the user honestly."}
     if name == "save_note":
         return store.add(args.get("note"), args.get("kind", "fact"), "agent")
     if name == "search_notes":

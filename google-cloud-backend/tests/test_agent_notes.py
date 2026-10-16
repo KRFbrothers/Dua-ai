@@ -110,7 +110,11 @@ def test_load_prompt_never_fails(monkeypatch):
     class Broken:
         def list(self):
             raise OSError("down")
-    assert agent_notes.load_prompt(Broken(), "q") == ""
+    logs = []
+    broken = Broken()
+    assert "UNAVAILABLE" in agent_notes.load_prompt(broken, "q", log=logs.append)
+    assert logs and broken.unavailable == "unreachable"
+    monkeypatch.setenv("AGENT_NOTES", "1")
     assert agent_notes.load_prompt(None, "q") == ""
 
 
@@ -182,3 +186,78 @@ def test_tool_loop_loads_notes_and_learns_after_done(monkeypatch):
                      lambda kind, ev=None: events.append(kind) or True, {"id": "u1", "token": "t"})
     assert "User wants answers in Hinglish" in seen["system"] and seen["tools"] == ["NOTES"]
     assert events[-1] == "done" and learned and learned[0][2] == "plan a trip" and learned[0][4] == "answer"
+
+
+def _http(code, body=b""):
+    from urllib.error import HTTPError
+    return HTTPError("https://x", code, "err", {}, io.BytesIO(body))
+
+
+class MissingTable(FakeSupabase):
+    def open(self, request, timeout=None):
+        raise _http(404, b'{"code":"PGRST205","message":"Could not find the table public.agent_notes"}')
+
+
+def test_missing_table_is_logged_honest_and_skips_tools_and_learning(monkeypatch):
+    setup_env(monkeypatch)
+    s = agent_notes.for_owner({"id": "u1", "token": "t"}, MissingTable())
+    logs = []
+    block = agent_notes.load_prompt(s, "pasand", log=logs.append)
+    assert "not set up yet" in block and "never claim that you do not keep notes" in block
+    assert "missing_table" in logs[0] and "202610160001" in logs[0]
+    assert "unavailable" in agent_notes.run_tool(s, "search_notes", {"query": "x"})["error"]
+    assert agent_notes.learn(s, Flash('{"lessons":[{"note":"x y z"}]}'), "q", "", "a") == 0
+
+
+def test_probe_reasons(monkeypatch):
+    setup_env(monkeypatch)
+    assert agent_notes.probe(agent_notes.for_owner({"id": "u", "token": "t"}, FakeSupabase()), log=lambda m: 0) == (True, "ok")
+    assert agent_notes.probe(agent_notes.for_owner({"id": "u", "token": "t"}, MissingTable()), log=lambda m: 0) == (False, "missing_table")
+    monkeypatch.setenv("AGENT_NOTES", "0")
+    assert agent_notes.probe(None) == (False, "off")
+    assert "turned off" in agent_notes.load_prompt(None, "q")
+
+
+def test_router_sends_notes_and_memory_requests_to_agent(monkeypatch):
+    import app as engine
+    monkeypatch.setattr(engine, "get_model", lambda system=None: (_ for _ in ()).throw(AssertionError("no LLM router")))
+    for text in ["Apne notes mein dekho, mujhe kaisa jawab pasand hai?", "Note save karo: short answers",
+                 "yaad rakhna main Hinglish pasand karta hoon", "remember I like tables", "What is my preference?"]:
+        assert engine.route_agent([{"role": "user", "text": text}], [], "sys") == "agent", text
+
+
+def test_casual_reply_gets_notes_and_learns(monkeypatch):
+    import app as engine
+    s, fake = store(monkeypatch, [{"id": str(uuid.uuid4()), "note": "User likes short answers", "kind": "preference"}])
+    monkeypatch.setattr(agent_notes, "for_owner", lambda owner, opener=None: s)
+    monkeypatch.setattr(engine, "route_agent", lambda *a: "chat")
+    systems, learned = [], []
+
+    class M:
+        def __init__(self, system):
+            self.system = system
+
+        def generate_content(self, contents, **kw):
+            return iter([type("C", (), {"text": "hi there", "candidates": []})()])
+    monkeypatch.setattr(engine, "get_model", lambda system=engine.SYSTEM_PROMPT: systems.append(system) or M(system))
+    monkeypatch.setattr(engine, "build_contents", lambda m, a: [])
+    monkeypatch.setattr(agent_notes, "learn", lambda *a: learned.append(a))
+    events = []
+    engine.agent_producer([{"role": "user", "text": "hello dost"}], [], "sys", {"id": "u1", "token": "t"})(
+        lambda kind, ev=None: events.append(kind) or True)
+    assert any("User likes short answers" in x for x in systems)
+    assert events[-1] == "done" and learned and learned[0][2] == "hello dost" and learned[0][4] == "hi there"
+
+
+def test_notes_status_is_owner_only(monkeypatch):
+    import app as engine
+    r = engine.app.test_client().get("/api/agent/notes/status")
+    assert r.status_code in (401, 503)
+    monkeypatch.setattr(engine, "owner_access_error", lambda: None)
+    setup_env(monkeypatch)
+    monkeypatch.setattr(agent_notes, "probe", lambda store: (False, "missing_table"))
+    with engine.app.test_request_context():
+        pass
+    r = engine.app.test_client().get("/api/agent/notes/status")
+    assert r.get_json() == {"enabled": False, "ready": False, "reason": "missing_table"}
+    assert r.headers["Cache-Control"] == "no-store"
