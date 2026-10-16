@@ -11,7 +11,8 @@ Endpoints
 
 Configuration comes only from environment variables; no secrets in code.
   GOOGLE_CLOUD_PROJECT (required), VERTEX_LOCATION (default global),
-  VERTEX_MODEL (default gemini-3.8-flash), VERTEX_THINKING_LEVEL (Gemini 3: low|medium|high, default low),
+  VERTEX_MODEL (default gemini-3.8-flash), AGENT_MODEL (Agent tool loop only, default VERTEX_MODEL),
+  AGENT_THINKING_LEVEL (low|medium|high; default medium when AGENT_MODEL differs), VERTEX_THINKING_LEVEL (Gemini 3: low|medium|high, default low),
   SUPABASE_URL, SUPABASE_ANON_KEY (or SUPABASE_PUBLISHABLE_KEY), DUA_ALLOWED_EMAIL (required owner authentication).
   DUA_APP_TOKEN is an optional additional gate, never a replacement for owner login.
 """
@@ -37,6 +38,12 @@ MODEL_NAME = os.environ.get("VERTEX_MODEL", "gemini-3.8-flash")
 THINKING_LEVEL = os.environ.get("VERTEX_THINKING_LEVEL", "low").strip().lower()
 if THINKING_LEVEL not in ("low", "medium", "high"):
     THINKING_LEVEL = "low"
+# Dua Agent tool loop only (router, casual replies, titles and normal chat stay on VERTEX_MODEL).
+# Gemini 4 Argon example: AGENT_MODEL=gemini-4-argon (location global/us/eu; LOW|MEDIUM|HIGH, no MINIMAL).
+AGENT_MODEL = os.environ.get("AGENT_MODEL", "").strip() or MODEL_NAME
+AGENT_THINKING_LEVEL = os.environ.get("AGENT_THINKING_LEVEL", "").strip().lower()
+if AGENT_THINKING_LEVEL not in ("low", "medium", "high"):
+    AGENT_THINKING_LEVEL = "medium" if AGENT_MODEL != MODEL_NAME else THINKING_LEVEL
 MAX_MESSAGE_CHARS = 8000
 MAX_TURNS = 400
 MAX_TURN_CHARS = 100_000
@@ -85,19 +92,31 @@ def get_client():
     return _client
 
 
-def thinking_config(model_name=None):
-    """Gemini 3 models take thinking_level; older models keep their default thinking."""
-    if not (model_name or MODEL_NAME).startswith("gemini-3"):
+def thinking_config(model_name=None, level=None):
+    """Gemini 3/4 models take thinking_level; older models keep their default thinking."""
+    if not (model_name or MODEL_NAME).startswith(("gemini-3", "gemini-4")):
         return None
     from google.genai import types
-    return types.ThinkingConfig(thinking_level=THINKING_LEVEL.upper())
+    return types.ThinkingConfig(thinking_level=(level or THINKING_LEVEL).upper())
+
+
+def unavailable_model_error(error):
+    """True for 404 not-found / 403 permission errors (model missing in this project or location)."""
+    code = getattr(error, "code", None) or getattr(error, "status_code", None)
+    if code in (403, 404):
+        return True
+    text = str(error).upper()
+    return "NOT_FOUND" in text or "PERMISSION_DENIED" in text
 
 
 class GenaiModel:
     """Small adapter with the generate_content(contents, stream, generation_config, tools) shape used here."""
 
-    def __init__(self, system):
+    def __init__(self, system, model_name=None, thinking_level=None, fallback=None):
         self.system = system
+        self.model_name = model_name or MODEL_NAME
+        self.thinking_level = thinking_level
+        self.fallback = fallback if fallback and fallback != self.model_name else None
 
     def config(self, generation_config=None, tools=None):
         from google.genai import types
@@ -105,7 +124,7 @@ class GenaiModel:
         level = options.pop("thinking_level", None)
         if tools:
             options["tools"] = tools
-        thinking = thinking_config()
+        thinking = thinking_config(self.model_name, self.thinking_level)
         if thinking is not None and level:
             thinking = types.ThinkingConfig(thinking_level=str(level).upper())
         if thinking is not None:
@@ -115,9 +134,23 @@ class GenaiModel:
     def generate_content(self, contents, stream=False, generation_config=None, tools=None):
         models = get_client().models
         config = self.config(generation_config, tools)
-        if stream:
-            return models.generate_content_stream(model=MODEL_NAME, contents=contents, config=config)
-        return models.generate_content(model=MODEL_NAME, contents=contents, config=config)
+        call = models.generate_content_stream if stream else models.generate_content
+        try:
+            return call(model=self.model_name, contents=contents, config=config)
+        except Exception as error:
+            if not self.fallback or not unavailable_model_error(error):
+                raise
+            print(f"[dua-agent] {self.model_name} unavailable ({type(error).__name__}); falling back to {self.fallback}",
+                  flush=True)
+            self.model_name, self.fallback, self.thinking_level = self.fallback, None, None
+            return call(model=self.model_name, contents=contents, config=self.config(generation_config, tools))
+
+
+def get_agent_model(system_text):
+    """Agent tool-loop model: AGENT_MODEL with one fallback to VERTEX_MODEL if it is missing or not permitted."""
+    if AGENT_MODEL == MODEL_NAME and AGENT_THINKING_LEVEL == THINKING_LEVEL:
+        return get_model(system_text)
+    return GenaiModel(system_text, AGENT_MODEL, AGENT_THINKING_LEVEL, fallback=MODEL_NAME)
 
 
 def get_model(system_text=SYSTEM_PROMPT):
@@ -437,7 +470,7 @@ def tool_loop(messages, attachments, system, enqueue, owner, coding=False):
     prompt = agent_tools.AGENT_PROMPT.format(github=hint)
     if coding and github:
         prompt += "\n\n" + coding_agent.CODING_PROMPT.format(repo=repo, max_files=coding_agent.MAX_FILES_CHANGED)
-    model = get_model(system + "\n\n" + prompt)
+    model = get_agent_model(system + "\n\n" + prompt)
     if not enqueue("event", progress_event("plan", "Planning\u2026")):
         return
     last = last_user_text(messages)
@@ -507,7 +540,8 @@ def chunk_text(chunk):
 def home():
     # Capabilities: the app shows Agent mode only when this says "agent": true.
     import openrouter
-    info = {"status": "Dua AI Engine is running!", "engine": "google-cloud", "agent": True, "titles": True, "model": MODEL_NAME}
+    info = {"status": "Dua AI Engine is running!", "engine": "google-cloud", "agent": True, "titles": True, "model": MODEL_NAME,
+            "agentModel": AGENT_MODEL}
     # Free OpenRouter models appear only when OPENROUTER_API_KEY is set (Secret Manager).
     info["freeModels"] = openrouter.models()
     return jsonify(info)
