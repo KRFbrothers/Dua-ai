@@ -14,6 +14,9 @@ object Spacing {
     val huge = 48.dp
 }
 
+/** Bounded inline HTML/SVG/diagram canvas inside a chat code block. */
+object CodePreviewSizes { val height = 320.dp }
+
 /** Dynamic composer visuals; controls still occupy Sizes.touchTarget slots. */
 object ComposerSizes {
     val actionButton = 44.dp

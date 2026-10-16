@@ -328,8 +328,11 @@ fun ChatScreen(
                                 onTask = { prompt -> actions.onDraftChange(prompt); inputFocus.requestFocus(); keyboard?.show() })
                         } else {
                             key(conversationKey) {
-                                MessageList(state = visibleState, actions = actions, listState = listState, imagineActions = mediaActions,
-                                    searchMessageId = selectedMatch?.messageId)
+                                androidx.compose.runtime.CompositionLocalProvider(LocalCodeExecutionUi provides CodeExecutionUi(
+                                    state.codeSnippetUnavailableReason, actions.onRunCodeSnippet)) {
+                                    MessageList(state = visibleState, actions = actions, listState = listState, imagineActions = mediaActions,
+                                        searchMessageId = selectedMatch?.messageId)
+                                }
                             }
                             if (!searchOpen && !followTail && listState.canScrollForward) FilledTonalButton(
                                 onClick = { scope.launch { followTail = true; goToLatest() } },

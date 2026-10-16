@@ -91,7 +91,7 @@ class DictationTest {
         } }
         compose.mainClock.advanceTimeBy(500)
         compose.onNodeWithText("- look up news", substring = true).assertDoesNotExist()
-        compose.onNodeWithContentDescription("Thinking…", substring = true).performClick()
+        compose.onNodeWithContentDescription("Thinking for", substring = true).performClick()
         compose.mainClock.advanceTimeBy(800)
         compose.onNodeWithText("look up news", substring = true).assertExists()
     }

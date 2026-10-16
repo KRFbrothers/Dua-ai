@@ -86,6 +86,7 @@ data class ChatUiState(
     /** Run code for the next reply and the server's Run code capability (null hides the chip on older backends). */
     val runCode: Boolean = false,
     val codeConfig: com.dua.ai.setup.CodeExecutionConfig? = null,
+    val codeSnippetUnavailableReason: String? = "Code execution is unavailable in this view.",
     /** "Ran code" blocks shown expanded on first render (previews and screenshots). */
     val expandedCode: Set<String> = emptySet(),
     /** Build mode (Phase 5B, read-only): the repository this chat is tied to (null = off), the server capability
@@ -187,6 +188,7 @@ class ChatActions(
     val onImagineOptions: (com.dua.ai.imagine.ImagineOptions) -> Unit = {},
     val imagine: ImagineActions = ImagineActions(),
     val onRunCode: (Boolean) -> Unit = {},
+    val onRunCodeSnippet: (String) -> Boolean = { false },
     /** Build sheet opened: load the repository list. */
     val onOpenBuild: () -> Unit = {},
     /** Tie the chat to a repository (owner/name), or null to leave Build mode. */
