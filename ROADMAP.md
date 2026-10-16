@@ -20,7 +20,7 @@ The codebase already has strong safety ideas: repository validation, path valida
 - Expand the main `README.md` with a clearer architecture overview.
 - Add a "How the pieces fit together" section for:
   - Android app
-  - Vercel backend in `web/`
+  - Node API backend in `web/` (Cloud Run `dua-api`)
   - Google Cloud Run engine
   - GitHub connector / build flows
 - Add a simple local setup guide.

@@ -424,7 +424,7 @@ export async function handleBuildPr(request, { env = {}, fetcher = fetch } = {})
   let pr;
   try {
     let body;
-    // JSON escaping can roughly double code; Vercel caps request bodies at 4.5 MB.
+    // JSON escaping can roughly double code; request bodies are capped at 4.5 MB.
     try { body = await readJsonLimited(request, Math.min(4 * 1024 * 1024, limits.totalMaxBytes * 2 + 256 * 1024)); }
     catch (error) { throw new BuildPrError(error?.status === 413 ? 'The proposal is too large to send.' : 'Invalid request.', error?.status === 413 ? 413 : 400); }
     const approved = validatePrRequest(body, limits);

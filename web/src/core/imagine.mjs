@@ -7,7 +7,7 @@
 //        -> {status:"pending", progress} | {status:"done", video:{path, mimeType, size, url, expiresIn, duration}} | {status:"failed"|"expired", error}
 //   GET  /api/imagine/usage   -> {images:{used, limit}, videoSeconds:{used, limit}, resetAt}
 // Results are copied into the private dua-files bucket under the owner's folder with the owner's own
-// token (provider URLs are temporary, and base64 would not fit Vercel's 4.5 MB response limit).
+// token (provider URLs are temporary, and base64 would bloat the 4.5 MB response budget).
 // Video never runs inside one function call: submit returns a signed job token and the app polls.
 import { randomUUID } from 'node:crypto';
 import { readJsonLimited } from './limited-json.mjs';

@@ -108,7 +108,7 @@ Users are responsible for reviewing the privacy and retention policies of select
 - Anthropic: https://www.anthropic.com/privacy-policy
 - Kimi/Moonshot: https://www.moonshot.cn/privacy
 
-API keys are stored server-side (Vercel Functions or Supabase) and are never exposed to the frontend.
+API keys are stored server-side (Google Cloud Run / Secret Manager or Supabase) and are never exposed to the frontend.
 
 ---
 
@@ -208,7 +208,7 @@ API keys are stored server-side (Vercel Functions or Supabase) and are never exp
 
 Dua AI integrates with:
 - **Supabase** (auth, cloud storage): https://supabase.com/privacy
-- **Vercel** (backend API hosting): https://vercel.com/legal/privacy-policy
+- **Google Cloud** (backend API hosting, Cloud Run): https://cloud.google.com/terms/cloud-privacy-notice
 - **Firebase Crashlytics** (error reporting, Android only): https://firebase.google.com/support/privacy
 - Crashlytics collection is disabled by default for debug builds and enabled for Android release builds by the checked-in Gradle configuration. Review the Firebase privacy terms and the deployed app's crash-reporting behavior.
 - **AI Providers** (OpenAI, Google, Anthropic, etc.): See provider privacy policies above.

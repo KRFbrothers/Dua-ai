@@ -10,7 +10,7 @@ import java.util.concurrent.TimeUnit
 
 /**
  * Imagine on the Google Cloud engine (Vertex AI Gemini image model). Offered only when the engine's GET / says
- * `"imagine": {"image": true}`; otherwise the app keeps using the Vercel backend. One image per request, no photo edits.
+ * `"imagine": {"image": true}`; otherwise the app keeps using the Node API (dua-api). One image per request, no photo edits.
  */
 data class CloudImagine(val model: String, val dailyLimit: Int, val aspects: List<String>) {
     companion object {
@@ -27,8 +27,8 @@ data class CloudImagine(val model: String, val dailyLimit: Int, val aspects: Lis
         }.getOrNull()
 
         /**
-         * Imagine settings with Google Cloud added as the default image provider (Vercel's providers stay for photo edits
-         * and video). Without a Vercel Imagine config, Cloud Run alone enables text-to-image.
+         * Imagine settings with Google Cloud added as the default image provider (the Node API's providers stay for photo edits
+         * and video). Without a Node API Imagine config, Cloud Run alone enables text-to-image.
          */
         fun merge(base: ImagineConfig?, cloud: CloudImagine?): ImagineConfig? {
             if (cloud == null) return base
@@ -38,7 +38,7 @@ data class CloudImagine(val model: String, val dailyLimit: Int, val aspects: Lis
                 dailyImages = if (config.imageEnabled) config.dailyImages else cloud.dailyLimit)
         }
 
-        /** Google Cloud makes new images only; edits (source photos) and other chosen providers go to Vercel. */
+        /** Google Cloud makes new images only; edits (source photos) and other chosen providers go to the Node API. */
         fun routes(cloud: CloudImagine?, options: ImagineOptions, sources: Int): Boolean =
             cloud != null && options.kind == ImagineInfo.IMAGE && sources == 0 && (options.provider == null || options.provider == PROVIDER)
 

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createVercelHandler } from '../src/server/vercel-handler.mjs';
+import { handleService } from '../src/server/service-handler.mjs';
 import { messagesHash } from '../src/core/reply-persistence.mjs';
 import { chatRequest, readEvents, sseResponse, sse, env } from './helpers.mjs';
 
@@ -24,10 +24,10 @@ function fixture(email = settings.DUA_ALLOWED_EMAIL) {
     assert.match(url, /:streamGenerateContent\?alt=sse$/);
     return sseResponse([sse({ candidates: [{ content: { parts: [{ text: 'Five useful tips.' }] }, finishReason: 'STOP' }] })]);
   };
-  return { calls, handler: createVercelHandler({ env: settings, fetcher, guard: () => 0 }), stored: () => payload };
+  return { calls, handler: { fetch: request => handleService(request, { env: settings, fetcher }) }, stored: () => payload };
 }
 const req = data => chatRequest(data, { headers: { 'x-dua-native': '1', authorization: 'Bearer fake-access' } });
-test('native owner chat streams through the actual Vercel handler and saves before completion without cloud sync', async () => {
+test('native owner chat streams through the actual service handler and saves before completion without cloud sync', async () => {
   const state = fixture(); const response = await state.handler.fetch(req(prompt()));
   const events = await readEvents(response);
   assert.deepEqual(events.map(event => event.type), ['text', 'saved', 'done']);

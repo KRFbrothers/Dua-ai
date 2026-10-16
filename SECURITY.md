@@ -53,8 +53,7 @@ We will acknowledge reports within 48 hours and aim to provide an update within 
 - A private `dua-files` bucket, RLS policies, signed-link expiry, and account deletion cleanup require live staging verification; repository tests cannot prove deployed project settings.
 
 #### Request Burst Limits
-- The Vercel handler groups `/api/account/*`, `/api/files/*`, `/api/cloud` and `/api/cloud/chat` into the same limit of 20 requests per IP per 60-second window. This includes confirmed server chat deletion.
-- Requests exceeding that window return HTTP 429 with `Retry-After` before authentication or storage calls. The guard is per server instance; cold starts and separate instances have independent windows, so this is not a distributed abuse-prevention guarantee.
+- The former Vercel per-IP burst guard was removed with Vercel. On Cloud Run, every data route still requires the verified owner session (`DUA_ALLOWED_EMAIL`), and Imagine, voice and request quotas are enforced by the Supabase daily counters. Cloud Run's maximum-instances setting bounds concurrency.
 
 #### Device Cache
 - Android cache data remains in app-private storage for offline viewing and fast startup; it is not the authoritative copy.

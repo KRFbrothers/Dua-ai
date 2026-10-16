@@ -1,6 +1,6 @@
 """Imagine (image generation) on Google Cloud: Gemini image model on Vertex AI, stored in the owner's Supabase bucket.
 
-Same request/response shape as the Vercel backend's POST /api/imagine/image, so the app's Imagine UI is unchanged:
+Same request/response shape as the Node API's POST /api/imagine/image, so the app's Imagine UI is unchanged:
   request  {"prompt": "...", "n": 1, "aspectRatio": "1:1"}
   response {"images": [{"path", "mimeType", "size", "url", "expiresIn"}], "provider": "gemini", "model", "edit": false,
             "usage": {"images": {"used", "limit"}, "resetAt"}}
@@ -78,7 +78,7 @@ def _call(request, limit=65536):
 
 
 def consume(token, amount=1):
-    """Daily cap through the same Supabase RPC as the Vercel backend (dua_consume_imagine)."""
+    """Daily cap through the same Supabase RPC as the Node API (dua_consume_imagine)."""
     url, key, _ = _supabase()
     limit = daily_limit()
     request = Request(url + "/rest/v1/rpc/dua_consume_imagine", method="POST",

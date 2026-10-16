@@ -5,7 +5,6 @@ import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { fileURLToPath } from 'node:url';
 import { makeServer, listenOptions } from '../src/server/server.mjs';
-import { createVercelHandler } from '../src/server/vercel-handler.mjs';
 import { mockFetch, sseResponse, sse, env, chatRequest, readEvents } from './helpers.mjs';
 
 const geminiChunks = words => words.map((word, index) => sse({ candidates: [{ content: { parts: [{ text: word }] }, ...(index === words.length - 1 ? { finishReason: 'STOP' } : {}) }] }));
@@ -78,11 +77,3 @@ test('local server streams chunks to the client as they are produced', async () 
   } finally { server.close(); }
 });
 
-test('Vercel handler passes streams through and keeps the burst guard', async () => {
-  const handler = createVercelHandler({ env, fetcher: mockFetch(sseResponse(geminiChunks(['Hi']))), guard: () => 0 });
-  const response = await handler.fetch(chatRequest({ model: 'Dua', messages: [{ role: 'user', text: 'Hi' }], stream: true }));
-  assert.deepEqual((await readEvents(response)).map(e => e.type), ['text', 'done']);
-  const limited = createVercelHandler({ env, fetcher: mockFetch(), guard: () => 7 });
-  const blocked = await limited.fetch(chatRequest({ model: 'Dua', messages: [{ role: 'user', text: 'Hi' }], stream: true }));
-  assert.equal(blocked.status, 429);
-});
