@@ -20,7 +20,7 @@ PROMPT_NOTES = 20
 PROMPT_CHARS = 8000  # about 2k tokens
 MAX_LESSONS = 3
 EXTRACT_TOKENS = 1024
-TIMEOUT = 10
+TIMEOUT = 5  # hard timeout for every Supabase notes call
 KINDS = ("preference", "worked", "failed", "repo", "fact")
 NOTE_TOOLS_LIMIT = {"save_note": 3, "search_notes": 3, "delete_note": 3}
 

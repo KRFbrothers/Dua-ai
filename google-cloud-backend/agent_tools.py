@@ -31,6 +31,11 @@ STEP_TOKENS = int(os.environ.get("AGENT_STEP_TOKENS") or
                   ("32768" if os.environ.get("AGENT_MODEL", "").startswith("gemini-4") else "16384"))
 SUB_TOKENS = int(os.environ.get("AGENT_SUB_TOKENS", "3072"))
 MAX_SECONDS = int(os.environ.get("AGENT_MAX_SECONDS", "600"))
+# Hard per-call deadlines so one slow model step or tool can never freeze the reply.
+STEP_SECONDS = int(os.environ.get("AGENT_STEP_SECONDS", "150"))
+TOOL_SECONDS = int(os.environ.get("AGENT_TOOL_SECONDS", "45"))
+SLOW_TOOL_SECONDS = {"google_search": 90, "run_python": 90, "generate_image": 120}
+TICK_SECONDS = 15
 LIMITS = {"google_search": 3, "fetch_url": 5, "run_python": 2, "generate_image": 1, "remember": 3,
           "calculator": 20, "current_time": 5, "recall": 3,
           # Issues: list/read/search share one read budget; one new issue and one comment per request.
@@ -376,6 +381,17 @@ class AgentRun:
             ids.append({"id": existing["id"], "title": existing["title"], "url": existing["url"]})
         return ids
 
+    def run_tool_timed(self, name, args):
+        """run_tool with a hard deadline; a slow tool returns an error to the model instead of hanging."""
+        seconds = SLOW_TOOL_SECONDS.get(name, TOOL_SECONDS)
+        started = time.monotonic()
+        try:
+            result = call_with_deadline(lambda: self.run_tool(name, args), seconds)
+        except DeadlineExceeded:
+            result = {"error": f"{name} timed out after {seconds}s. Continue without it."}
+        log(f"tool {name}: {time.monotonic() - started:.1f}s{' (error)' if isinstance(result, dict) and 'error' in result else ''}")
+        return result
+
     def run_tool(self, name, args):
         budget = "issue_reads" if name in ISSUE_READ_TOOLS else name
         limit = LIMITS.get(budget)
@@ -471,6 +487,43 @@ def function_calls(response):
     return [(call.name, dict(call.args or {})) for call in calls]
 
 
+class DeadlineExceeded(Exception):
+    pass
+
+
+def call_with_deadline(fn, seconds, tick=None, every=TICK_SECONDS):
+    """Runs fn() in a daemon thread; raises DeadlineExceeded after [seconds]. tick(elapsed) every [every] s.
+
+    A timed-out call keeps running in the background until its own HTTP timeout ends it, but the loop moves on."""
+    import threading
+    box, done = {}, threading.Event()
+
+    def work():
+        try:
+            box["value"] = fn()
+        except BaseException as error:  # handed back to the caller
+            box["error"] = error
+        finally:
+            done.set()
+    threading.Thread(target=work, name="dua-agent-call", daemon=True).start()
+    started = time.monotonic()
+    while True:
+        left = seconds - (time.monotonic() - started)
+        if left <= 0:
+            raise DeadlineExceeded()
+        if done.wait(min(every, left)):
+            break
+        if tick is not None:
+            tick(int(time.monotonic() - started))
+    if "error" in box:
+        raise box["error"]
+    return box.get("value")
+
+
+def log(message):
+    print(f"[dua-agent] {message}", flush=True)
+
+
 def run(env, history, tools, tool_response, clock=time.monotonic):
     """Tool loop. Returns (final_text, run). The caller streams the text and the sources footer."""
     import coding_agent
@@ -483,8 +536,22 @@ def run(env, history, tools, tool_response, clock=time.monotonic):
     for step in range(1, MAX_STEPS + 1):
         if clock() - started > MAX_SECONDS:
             return "Agent stopped: time limit reached. Here is what I could not finish; try a smaller request.", agent
-        response = env["model"].generate_content(history, generation_config={"max_output_tokens": STEP_TOKENS, "temperature": 0.3},
-                                                 tools=tools)
+        # Slow steps only: a spinning "Still thinking" chip (own id per step, since the app never un-finishes a chip);
+        # the next chip finishes it. Fast steps add no chips.
+        think_id = "think_" + chr(ord("a") + step - 1)
+        snapshot = list(history)
+        step_started = time.monotonic()
+        try:
+            response = call_with_deadline(
+                lambda: env["model"].generate_content(snapshot, generation_config={
+                    "max_output_tokens": STEP_TOKENS, "temperature": 0.3, "timeout_seconds": STEP_SECONDS}, tools=tools),
+                STEP_SECONDS, tick=lambda s: progress(think_id, f"Still thinking (step {step}, {s}s)\u2026"))
+        except DeadlineExceeded:
+            log(f"step {step}: model timed out after {STEP_SECONDS}s")
+            progress(think_id, "Model took too long", "done")
+            return (f"Agent stopped: the model took longer than {STEP_SECONDS}s on step {step}. Please try again, "
+                    "or ask a simpler question."), agent
+        log(f"step {step}: model {time.monotonic() - step_started:.1f}s")
         calls = function_calls(response)
         if not calls:
             return env["chunk_text"](response).strip() or "I could not finish this request.", agent
@@ -502,6 +569,8 @@ def run(env, history, tools, tool_response, clock=time.monotonic):
                     results.append((name, {"error": "GitHub tools are not set up."}))
                     continue
                 return coding_agent.finish(env["github"], env["thinking"], args, env["request_text"]), agent
-            results.append((name, agent.run_tool(name, args)))
+            results.append((name, agent.run_tool_timed(name, args)))
+            if name in PROGRESS:
+                progress(PROGRESS[name][0], PROGRESS[name][1].rstrip("\u2026"), "done")
         history.append(tool_response(results))
     return f"Agent stopped after {MAX_STEPS} steps. Try a smaller, more specific request.", agent

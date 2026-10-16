@@ -204,3 +204,7 @@ The Dua Agent keeps its own private notes in Supabase table `agent_notes` (migra
 - At most 200 notes per owner; a table trigger prunes the oldest.
 - `AGENT_NOTES=0` turns it all off. Notes, memory, "yaad", "pasand" and preference requests always use the tool loop; casual replies also get notes and learn afterwards.
 - If the table is missing (migration not applied) or unreachable, the log shows `[dua-agent-notes] could not load notes: missing_table` and the Agent says notes are unavailable. `GET /api/agent/notes/status` (owner-only) returns `{"enabled", "ready", "reason"}` with no note data.
+
+## Agent timeouts
+
+Each Agent model step has a hard deadline, `AGENT_STEP_SECONDS` (default 150; also sent as the HTTP timeout). Tools get `AGENT_TOOL_SECONDS` (default 45); `google_search` and `run_python` get 90 and `generate_image` 120. A slow tool returns an error to the model, and a slow step stops the reply with a clear message. Supabase notes calls time out after 5 s. Slow steps show a "Still thinking (step N, 30s)…" chip every 15 s, and Cloud Run logs show `[dua-agent] step N: model 12.3s` / `tool name: 0.2s`. Since this change, `AGENT_THINKING_LEVEL` defaults to `low` when `AGENT_MODEL` differs from `VERTEX_MODEL`.

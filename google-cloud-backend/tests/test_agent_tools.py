@@ -42,7 +42,7 @@ def env(model, **extra):
         "chunk_text": lambda r: getattr(r, "text", "") or "", "grounding_sources": lambda r: getattr(r, "sources", []),
         "search_tool": lambda: "SEARCH", "code_tool": lambda: "CODE", "fetch": lambda url: {"url": url, "title": "T", "text": "page", "truncated": False},
         "contents_for": lambda text: [text], "imagine": None, "memory": "", "github": None, "request_text": "x",
-        "progress": lambda step, label, state="active": progress.append((step, label)),
+        "progress": lambda step, label, state="active": (progress.append((step, label)) if state == "active" and step != "think" else None),
         "thinking": thinking.append,
     }
     base.update(extra)
@@ -346,3 +346,67 @@ def test_real_genai_declarations():
     names = [f.name for f in at.default_tools(True)[0].function_declarations]
     assert names[:3] == ["google_search", "fetch_url", "run_python"] and "propose_changes" in names
     assert at.code_tool().code_execution is not None and at.search_tool().google_search is not None
+
+
+def test_hanging_model_step_times_out_with_ticks(monkeypatch):
+    import threading
+    monkeypatch.setattr(at, "STEP_SECONDS", 0.6)
+    monkeypatch.setattr(at, "TICK_SECONDS", 0.2)
+    release = threading.Event()
+
+    class Hang:
+        calls = []
+
+        def generate_content(self, *a, **kw):
+            self.calls.append(kw)
+            release.wait(5)
+    seen = []
+    e, events, progress = env(Hang())
+    e["progress"] = lambda step, label, state="active": seen.append((step, label, state))
+    started = datetime.datetime.now()
+    text, agent = at.run(e, [], ["TOOLS"], lambda r: ("tool", r))
+    release.set()
+    assert (datetime.datetime.now() - started).total_seconds() < 3
+    assert "took longer" in text
+    assert any(s[0] == "think_a" and "Still thinking" in s[1] for s in seen)
+    assert seen[-1] == ("think_a", "Model took too long", "done")
+    assert Hang.calls[0]["generation_config"]["timeout_seconds"] == 0.6
+
+
+def test_hanging_tool_returns_error_quickly(monkeypatch):
+    import threading
+    monkeypatch.setattr(at, "TOOL_SECONDS", 0.3)
+    release = threading.Event()
+
+    def hang(url, **kw):
+        release.wait(5)
+    model = Script([call("fetch_url", {"url": "https://site.test/a"}), final("ok")])
+    started = datetime.datetime.now()
+    text, *_ = run(model, fetch=hang)
+    release.set()
+    assert (datetime.datetime.now() - started).total_seconds() < 3 and text == "ok"
+    assert "timed out" in tool_results(model)[0][0][1]["error"]
+
+
+def test_hanging_notes_http_uses_short_timeout(monkeypatch):
+    import agent_notes
+    monkeypatch.setenv("SUPABASE_URL", "https://p.supabase.co")
+    monkeypatch.setenv("SUPABASE_ANON_KEY", "anon")
+    monkeypatch.setenv("AGENT_NOTES", "1")
+    seen = []
+
+    class Opener:
+        def open(self, request, timeout=None):
+            seen.append(timeout)
+            raise socket.timeout("timed out")
+    store = agent_notes.for_owner({"id": "u", "token": "t"}, Opener())
+    assert "UNAVAILABLE" in agent_notes.load_prompt(store, "q", log=lambda m: None)
+    assert seen == [5]
+    assert "unavailable" in agent_notes.run_tool(store, "search_notes", {"query": "x"})["error"]
+
+
+def test_genai_config_sets_http_timeout():
+    import app as engine
+    pytest.importorskip("google.genai")
+    config = engine.GenaiModel("sys").config({"max_output_tokens": 5, "timeout_seconds": 150})
+    assert config.http_options.timeout == 150000
