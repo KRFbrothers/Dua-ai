@@ -1,9 +1,12 @@
 package com.dua.ai.ui.chat
 
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -20,12 +23,12 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
@@ -91,6 +94,7 @@ private val KrfChatActionCards = listOf(
 internal fun ChatContent(task: Boolean, onTask: (String) -> Unit) {
     val c = HomeTheme.colors
     val isDark = DuaTheme.colors.isDark
+    val haptic = LocalChatHaptic.current
     val currentHour = remember { java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY) }
     val greeting = remember(currentHour) {
         when (currentHour) {
@@ -101,8 +105,39 @@ internal fun ChatContent(task: Boolean, onTask: (String) -> Unit) {
         }
     }
 
+    // Dynamic breathing ambient aura animation
+    val infiniteTransition = rememberInfiniteTransition(label = "AuraBreathing")
+    val auraAlpha by infiniteTransition.animateFloat(
+        initialValue = if (isDark) 0.16f else 0.10f,
+        targetValue = if (isDark) 0.28f else 0.18f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 2600, easing = EaseInOutSine),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "AuraAlpha",
+    )
+    val auraScale by infiniteTransition.animateFloat(
+        initialValue = 0.95f,
+        targetValue = 1.05f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 2600, easing = EaseInOutSine),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "AuraScale",
+    )
+
+    // Smooth entrance scale
+    var entered by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { entered = true }
+    val heroScale by animateFloatAsState(
+        targetValue = if (entered) 1f else 0.94f,
+        animationSpec = spring(dampingRatio = 0.75f, stiffness = Spring.StiffnessMediumLow),
+        label = "HeroScale",
+    )
+
     BoxWithConstraints(Modifier.fillMaxSize().padding(horizontal = Spacing.md)) {
         val contentHeight = maxHeight
+
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -110,7 +145,7 @@ internal fun ChatContent(task: Boolean, onTask: (String) -> Unit) {
                 .heightIn(min = contentHeight),
             verticalArrangement = Arrangement.SpaceBetween,
         ) {
-            // Hero section: Ambient Radial Glow + Dua Logo + Headlines
+            // Hero section: Living Ambient Aura + Dua Logo + Headlines
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -119,20 +154,30 @@ internal fun ChatContent(task: Boolean, onTask: (String) -> Unit) {
                 verticalArrangement = Arrangement.spacedBy(Spacing.md),
             ) {
                 if (!task) {
-                    Box(contentAlignment = Alignment.Center) {
-                        // Ambient radial glow behind the emblem
+                    Box(
+                        modifier = Modifier.graphicsLayer {
+                            scaleX = heroScale
+                            scaleY = heroScale
+                        },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        // Ambient radial glow behind the emblem with breathing pulse
                         Box(
                             modifier = Modifier
                                 .size(180.dp)
+                                .graphicsLayer {
+                                    scaleX = auraScale
+                                    scaleY = auraScale
+                                }
                                 .background(
                                     brush = Brush.radialGradient(
                                         colors = if (isDark) listOf(
-                                            Color(0xFF8B5CF6).copy(alpha = 0.22f),
-                                            Color(0xFF3B82F6).copy(alpha = 0.08f),
+                                            Color(0xFF8B5CF6).copy(alpha = auraAlpha),
+                                            Color(0xFF3B82F6).copy(alpha = auraAlpha * 0.45f),
                                             Color.Transparent,
                                         ) else listOf(
-                                            Color(0xFF8B5CF6).copy(alpha = 0.14f),
-                                            Color(0xFF60A5FA).copy(alpha = 0.06f),
+                                            Color(0xFF8B5CF6).copy(alpha = auraAlpha),
+                                            Color(0xFF60A5FA).copy(alpha = auraAlpha * 0.45f),
                                             Color.Transparent,
                                         ),
                                     ),
@@ -166,7 +211,7 @@ internal fun ChatContent(task: Boolean, onTask: (String) -> Unit) {
 
             // Interactive Bottom Prompts
             if (task) {
-                // Task Mode prompts
+                // Task Mode prompts with haptic feedback
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -179,7 +224,10 @@ internal fun ChatContent(task: Boolean, onTask: (String) -> Unit) {
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .heightIn(min = Sizes.touchTarget)
-                                .clickable(role = Role.Button) { onTask(prompt) },
+                                .clickable(role = Role.Button) {
+                                    haptic(ChatHaptic.Tap)
+                                    onTask(prompt)
+                                },
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(HomeSizes.promptGap),
                         ) {
@@ -196,25 +244,37 @@ internal fun ChatContent(task: Boolean, onTask: (String) -> Unit) {
                         .padding(bottom = Spacing.sm),
                     verticalArrangement = Arrangement.spacedBy(Spacing.sm),
                 ) {
-                    // 2x2 Grid of Cards
+                    // 2x2 Grid of Cards with Micro-Interactions & Haptics
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                     ) {
-                        KrfActionCardView(KrfChatActionCards[0], Modifier.weight(1f)) { onTask(KrfChatActionCards[0].prompt) }
-                        KrfActionCardView(KrfChatActionCards[1], Modifier.weight(1f)) { onTask(KrfChatActionCards[1].prompt) }
+                        KrfActionCardView(KrfChatActionCards[0], Modifier.weight(1f)) {
+                            haptic(ChatHaptic.Tap)
+                            onTask(KrfChatActionCards[0].prompt)
+                        }
+                        KrfActionCardView(KrfChatActionCards[1], Modifier.weight(1f)) {
+                            haptic(ChatHaptic.Tap)
+                            onTask(KrfChatActionCards[1].prompt)
+                        }
                     }
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                     ) {
-                        KrfActionCardView(KrfChatActionCards[2], Modifier.weight(1f)) { onTask(KrfChatActionCards[2].prompt) }
-                        KrfActionCardView(KrfChatActionCards[3], Modifier.weight(1f)) { onTask(KrfChatActionCards[3].prompt) }
+                        KrfActionCardView(KrfChatActionCards[2], Modifier.weight(1f)) {
+                            haptic(ChatHaptic.Tap)
+                            onTask(KrfChatActionCards[2].prompt)
+                        }
+                        KrfActionCardView(KrfChatActionCards[3], Modifier.weight(1f)) {
+                            haptic(ChatHaptic.Tap)
+                            onTask(KrfChatActionCards[3].prompt)
+                        }
                     }
 
                     Spacer(Modifier.height(2.dp))
 
-                    // Starter Chips Carousel
+                    // Starter Chips Carousel with Haptic Feedback
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -223,7 +283,10 @@ internal fun ChatContent(task: Boolean, onTask: (String) -> Unit) {
                         horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                     ) {
                         StarterChips.forEach { (icon, label, fill) ->
-                            StarterChip(icon, label) { onTask(fill) }
+                            StarterChip(icon, label) {
+                                haptic(ChatHaptic.Tap)
+                                onTask(fill)
+                            }
                         }
                     }
                 }
@@ -242,12 +305,25 @@ private fun KrfActionCardView(
     val cardBg = if (isDark) Color(0xFF141822) else Color(0xFFF9FAFB)
     val cardBorder = if (isDark) Color(0xFF263042).copy(alpha = 0.7f) else Color(0xFFE5E7EB)
 
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val cardScale by animateFloatAsState(
+        targetValue = if (isPressed) 0.97f else 1f,
+        animationSpec = spring(stiffness = Spring.StiffnessMedium),
+        label = "CardPressScale",
+    )
+
     Surface(
         onClick = onClick,
+        interactionSource = interactionSource,
         shape = RoundedCornerShape(16.dp),
         color = cardBg,
         border = BorderStroke(1.dp, cardBorder),
         modifier = modifier
+            .graphicsLayer {
+                scaleX = cardScale
+                scaleY = cardScale
+            }
             .semantics {
                 contentDescription = "${card.title}: ${card.subtitle}"
                 role = Role.Button
