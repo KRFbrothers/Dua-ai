@@ -524,7 +524,7 @@ def log(message):
     print(f"[dua-agent] {message}", flush=True)
 
 
-def run(env, history, tools, tool_response, clock=time.monotonic):
+def run(env, history, tools, tool_response, clock=time.monotonic, max_steps=None):
     """Tool loop. Returns (final_text, run). The caller streams the text and the sources footer."""
     import coding_agent
     agent = AgentRun(env)
@@ -533,7 +533,8 @@ def run(env, history, tools, tool_response, clock=time.monotonic):
     progress = env["progress"]
     started = clock()
     history = list(history)
-    for step in range(1, MAX_STEPS + 1):
+    steps = max_steps or MAX_STEPS
+    for step in range(1, steps + 1):
         if clock() - started > MAX_SECONDS:
             return "Agent stopped: time limit reached. Here is what I could not finish; try a smaller request.", agent
         # Slow steps only: a spinning "Still thinking" chip (own id per step, since the app never un-finishes a chip);
@@ -573,4 +574,4 @@ def run(env, history, tools, tool_response, clock=time.monotonic):
             if name in PROGRESS:
                 progress(PROGRESS[name][0], PROGRESS[name][1].rstrip("\u2026"), "done")
         history.append(tool_response(results))
-    return f"Agent stopped after {MAX_STEPS} steps. Try a smaller, more specific request.", agent
+    return f"Agent stopped after {steps} steps. Try a smaller, more specific request.", agent

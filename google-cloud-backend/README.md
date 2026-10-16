@@ -217,3 +217,12 @@ Each Agent model step has a hard deadline, `AGENT_STEP_SECONDS` (default 150; al
 - **Secrets:** needs `SUPABASE_SERVICE_ROLE_KEY` in Secret Manager, because a scheduled job has no user login. It is used only by this job, never by the chat engine.
 - **Restore:** download a `.json.gz` file from the bucket; each one holds `{"table", "date", "rows"}`.
 - **Logs:** each run writes `[dua-backup] OK {...}` or `[dua-backup] FAILED: ...`, and a non-zero exit marks the run as failed.
+
+## Parallel Agent (optional, `AGENT_PARALLEL=1`)
+
+[`agent_parallel.py`](agent_parallel.py) works in three stages:
+1. **Plan:** the Agent model (`AGENT_MODEL`) decides whether a request has 2–3 independent parts.
+2. **Sub-agents:** each part runs as a sub-agent in parallel threads on the cheap `VERTEX_MODEL`, using the existing tool loop with all its limits and timeouts. Each sub-agent gets at most `AGENT_SUB_STEPS` steps (default 5), and only one may use GitHub/`propose_changes`.
+3. **Merge:** the Agent model merges the results, with source numbers renumbered globally.
+
+Progress uses the existing chip events (`sub_a`/`sub_b`/`sub_c`, `merge`), so the app needs no change. The overall deadline is `AGENT_PARALLEL_SECONDS` (default 300). If the planner says "no split" or fails, the normal single loop runs. Coding-mode requests always use the single loop. Off by default.

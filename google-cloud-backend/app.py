@@ -506,12 +506,28 @@ def tool_loop(messages, attachments, system, enqueue, owner, coding=False):
         "progress": lambda step, label, state="active": enqueue("event", progress_event(step, label, state)),
         "thinking": lambda delta: enqueue("event", {"type": "thinking", "delta": delta}),
     }
-    try:
-        text, run = agent_tools.run(env, build_contents(messages, attachments), (agent_tools.default_tools(github is not None, issues, True) if notes is not None
-                                     else agent_tools.default_tools(github is not None, issues)),
-                                    coding_agent.default_tool_response)
-    except coding_agent.CodingError as error:
-        text, run = f"Stopped: {str(error)[:300]} No pull request was opened.", None
+    import agent_parallel
+    parallel = None
+    if agent_parallel.enabled() and not coding:
+        tools_for = lambda use_github: (agent_tools.default_tools(use_github, issues and use_github, True) if notes is not None
+                                        else agent_tools.default_tools(use_github, issues and use_github))
+        sub_system = system + "\n\n" + prompt
+        try:
+            parallel = agent_parallel.run(
+                env, lambda sub: get_model(sub_system), get_agent_model(system + "\n\n" + prompt),
+                lambda sub: [make_content("user", [make_part(text=sub["task"])])], tools_for,
+                coding_agent.default_tool_response)
+        except coding_agent.CodingError as error:
+            parallel = (f"Stopped: {str(error)[:300]} No pull request was opened.", None)
+    if parallel is not None:
+        text, run = parallel
+    else:
+        try:
+            text, run = agent_tools.run(env, build_contents(messages, attachments), (agent_tools.default_tools(github is not None, issues, True) if notes is not None
+                                         else agent_tools.default_tools(github is not None, issues)),
+                                        coding_agent.default_tool_response)
+        except coding_agent.CodingError as error:
+            text, run = f"Stopped: {str(error)[:300]} No pull request was opened.", None
     sources = run.sources if run else []
     if sources and not enqueue("event", {"type": "sources", "sources": sources}):
         return
