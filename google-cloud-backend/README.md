@@ -217,3 +217,15 @@ Each Agent model step has a hard deadline, `AGENT_STEP_SECONDS` (default 150; al
 - **Secrets:** needs `SUPABASE_SERVICE_ROLE_KEY` in Secret Manager, because a scheduled job has no user login. It is used only by this job, never by the chat engine.
 - **Restore:** download a `.json.gz` file from the bucket; each one holds `{"table", "date", "rows"}`.
 - **Logs:** each run writes `[dua-backup] OK {...}` or `[dua-backup] FAILED: ...`, and a non-zero exit marks the run as failed.
+
+## Parallel multi-agent mode on Google ADK (optional, `AGENT_ENGINE=adk`)
+
+[`agent_adk.py`](agent_adk.py) uses `google-adk==2.12.0`, imported only when the flag is on.
+1. **Plan:** an ADK controller agent on `AGENT_MODEL` decides whether the request has 2–3 independent parts (research / code / notes).
+2. **Parallel helpers:** an ADK `SequentialAgent[ParallelAgent(helpers on VERTEX_MODEL), merger on AGENT_MODEL]` runs them.
+   - Helpers call the existing tools through one shared `AgentRun`, so the same per-tool caps, #214 timeouts and global source numbers apply.
+   - At most one pull request is opened per request.
+   - `AGENT_SUB_STEPS` (default 5 per helper) caps model calls, and `AGENT_ADK_SECONDS` (default 300) caps total time.
+3. **Progress:** goes out as the existing chips (`sub_a`/`sub_b`/`sub_c`, `merge`) and thinking lines, so the app needs no change.
+
+**Fallback:** if the request doesn't split, or ADK fails before any tool ran, the normal loop answers. Coding-mode requests always use the normal loop. Notes learning runs after the reply as before.

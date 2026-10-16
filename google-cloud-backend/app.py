@@ -470,6 +470,20 @@ def imagine_for_agent(owner):
 NOTES_SYSTEM = "You extract short, durable, non-sensitive lessons for an AI agent's private notes. Reply with JSON only."
 
 
+def adk_config(model_name, max_tokens, json_out=False):
+    """GenerateContentConfig for ADK agents: same thinking levels and #214 per-call HTTP timeout as the old loop."""
+    import agent_tools
+    from google.genai import types
+    level = AGENT_THINKING_LEVEL if model_name == AGENT_MODEL and AGENT_MODEL != MODEL_NAME else THINKING_LEVEL
+    options = {"max_output_tokens": max_tokens, "http_options": types.HttpOptions(timeout=agent_tools.STEP_SECONDS * 1000)}
+    thinking = thinking_config(model_name, level)
+    if thinking is not None:
+        options["thinking_config"] = thinking
+    if json_out:
+        options["response_mime_type"] = "application/json"
+    return types.GenerateContentConfig(**options)
+
+
 def tool_loop(messages, attachments, system, enqueue, owner, coding=False):
     import agent_notes
     import agent_tools
@@ -506,12 +520,22 @@ def tool_loop(messages, attachments, system, enqueue, owner, coding=False):
         "progress": lambda step, label, state="active": enqueue("event", progress_event(step, label, state)),
         "thinking": lambda delta: enqueue("event", {"type": "thinking", "delta": delta}),
     }
-    try:
-        text, run = agent_tools.run(env, build_contents(messages, attachments), (agent_tools.default_tools(github is not None, issues, True) if notes is not None
-                                     else agent_tools.default_tools(github is not None, issues)),
-                                    coding_agent.default_tool_response)
-    except coding_agent.CodingError as error:
-        text, run = f"Stopped: {str(error)[:300]} No pull request was opened.", None
+    adk_result = None
+    import agent_adk
+    if agent_adk.enabled() and not coding:
+        os.environ.setdefault("GOOGLE_GENAI_USE_VERTEXAI", "TRUE")
+        os.environ.setdefault("GOOGLE_GENAI_USE_ENTERPRISE", "TRUE")
+        os.environ.setdefault("GOOGLE_CLOUD_LOCATION", LOCATION)
+        adk_result = agent_adk.run(env, last, MODEL_NAME, AGENT_MODEL, adk_config)
+    if adk_result is not None:
+        text, run = adk_result
+    else:
+        try:
+            text, run = agent_tools.run(env, build_contents(messages, attachments), (agent_tools.default_tools(github is not None, issues, True) if notes is not None
+                                         else agent_tools.default_tools(github is not None, issues)),
+                                        coding_agent.default_tool_response)
+        except coding_agent.CodingError as error:
+            text, run = f"Stopped: {str(error)[:300]} No pull request was opened.", None
     sources = run.sources if run else []
     if sources and not enqueue("event", {"type": "sources", "sources": sources}):
         return
