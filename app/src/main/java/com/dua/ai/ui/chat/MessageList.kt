@@ -36,6 +36,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -61,6 +62,10 @@ fun MessageList(state: ChatUiState, actions: ChatActions, listState: LazyListSta
     val lastId = state.messages.lastOrNull()?.id
     val lastAssistantId = state.messages.lastOrNull { !it.isUser }?.id
     var actionsId by rememberSaveable(state.chatId) { mutableStateOf<String?>(null) }
+    var canvas by remember(state.chatId) { mutableStateOf<ArtifactCanvasSession?>(null) }
+    LaunchedEffect(canvas?.messageId, state.messages) {
+        if (canvas?.messageId?.let { id -> state.messages.none { it.id == id } } == true) canvas = null
+    }
     val selectedMessage = state.messages.firstOrNull { it.id == actionsId }
     LaunchedEffect(actionsId, selectedMessage?.id) { if (actionsId != null && selectedMessage == null) actionsId = null }
     LazyColumn(
@@ -76,7 +81,7 @@ fun MessageList(state: ChatUiState, actions: ChatActions, listState: LazyListSta
                 .testTag("message-${message.id}")
                 .then(if (selected) Modifier.border(ChatSizes.searchSelectionBorder, ChatTheme.colors.accent, ChatShapes.searchSelection) else Modifier)
                 .semantics { if (selected) stateDescription = "Selected search result" }) {
-                val openActions = { actionsId = message.id }
+                val openActions = { canvas = null; actionsId = message.id }
                 val longPressHaptic = { actions.haptic(ChatHaptic.LongPress) }
                 if (message.isUser) UserMessage(message.text, files = message.files, onOpenFile = actions.onOpenFile,
                     onLongPress = openActions, longPressHaptic = longPressHaptic)
@@ -86,6 +91,7 @@ fun MessageList(state: ChatUiState, actions: ChatActions, listState: LazyListSta
                     else AssistantMessage(
                         message = message,
                         onOpenMedia = { imagineActions.onOpen(message.id, it) },
+                        onOpenCanvas = { artifacts -> actionsId = null; canvas = ArtifactCanvasSession(message.id, artifacts) },
                         isLast = message.id == lastId,
                         typing = state.typing,
                         speaking = state.speakingId == message.id,
@@ -114,6 +120,7 @@ fun MessageList(state: ChatUiState, actions: ChatActions, listState: LazyListSta
         }
     }
     if (selectedMessage != null) MessageActionsSheet(selectedMessage, state, actions, imagineActions, onDismiss = { actionsId = null })
+    canvas?.let { session -> ArtifactCanvasSheet(session.artifacts, onDismiss = { canvas = null }) }
 }
 
 /** Reference assistant turn: no avatar, transparent box with 16/10 dp padding, left aligned. */

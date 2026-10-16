@@ -39,6 +39,7 @@ fun AssistantMessage(
     onCreatePr: (String) -> Unit = {},
     showActions: Boolean = isLast,
     onOpenMedia: (Int) -> Unit = {},
+    onOpenCanvas: ((List<com.dua.ai.model.ChatArtifact>) -> Unit)? = null,
 ) {
     val parts = remember(message.text) { ReplySources.split(message.text) }
     val streaming = message.streaming
@@ -70,6 +71,7 @@ fun AssistantMessage(
             if (streaming) FadeInOnce { MarkdownMessage(parts.body) } else MarkdownMessage(parts.body)
         }
         if (streaming && parts.body.isNotEmpty()) StreamingCursor()
+        MessageArtifactCanvas(message, onOpenCanvas)
         if (parts.sources.isNotEmpty() && !streaming) SourceChips(parts.sources, Modifier.padding(top = Spacing.md))
         // Build mode (Phase 5C): the proposed pull request, for review. Only its confirmed Create PR button writes to GitHub.
         if (!streaming) message.proposal?.let {

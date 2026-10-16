@@ -74,18 +74,6 @@ object LibraryIndex {
 
     /** Fenced snippets from real assistant messages; closing fence must match the opening character/length. */
     internal fun codeBlocks(text: String): List<Pair<String, String>> {
-        val result = mutableListOf<Pair<String, String>>()
-        var marker = ""; var language = ""; val body = StringBuilder()
-        text.lineSequence().forEach { line ->
-            val trimmed = line.trimStart()
-            if (marker.isEmpty()) {
-                val fence = trimmed.takeWhile { it == '`' || it == '~' }
-                if (fence.length >= 3 && fence.all { it == fence[0] }) { marker = fence; language = trimmed.drop(fence.length).trim(); body.clear() }
-            } else if (trimmed.takeWhile { it == marker[0] }.length >= marker.length && trimmed.trimEnd().all { it == marker[0] }) {
-                result += language to body.toString().trimEnd('\n'); marker = ""
-            } else body.append(line).append('\n')
-        }
-        if (marker.isNotEmpty() && body.isNotEmpty()) result += language to body.toString().trimEnd('\n')
-        return result
+        return com.dua.ai.model.CodeFences.parse(text)
     }
 }
