@@ -208,3 +208,12 @@ The Dua Agent keeps its own private notes in Supabase table `agent_notes` (migra
 ## Agent timeouts
 
 Each Agent model step has a hard deadline, `AGENT_STEP_SECONDS` (default 150; also sent as the HTTP timeout). Tools get `AGENT_TOOL_SECONDS` (default 45); `google_search` and `run_python` get 90 and `generate_image` 120. A slow tool returns an error to the model, and a slow step stops the reply with a clear message. Supabase notes calls time out after 5 s. Slow steps show a "Still thinking (step N, 30s)…" chip every 15 s, and Cloud Run logs show `[dua-agent] step N: model 12.3s` / `tool name: 0.2s`. Since this change, `AGENT_THINKING_LEVEL` defaults to `low` when `AGENT_MODEL` differs from `VERTEX_MODEL`.
+
+## Daily backup (Cloud Run job `dua-backup`)
+
+[`backup.py`](backup.py) runs as a Cloud Run job every day at 03:00 IST (Cloud Scheduler). It needs no extra packages.
+- **Database:** exports the Supabase tables (`dua_cloud_snapshots` with chats/memory, `agent_notes`, usage tables) to `gs://dua-backups/db/YYYY-MM-DD/<table>.json.gz`. A bucket lifecycle rule deletes these after 30 days.
+- **Files:** mirrors the Supabase Storage bucket `dua-files` to `gs://dua-backups/files/<path>`. Only new or changed files are copied, and files deleted in the app stay in the backup.
+- **Secrets:** needs `SUPABASE_SERVICE_ROLE_KEY` in Secret Manager, because a scheduled job has no user login. It is used only by this job, never by the chat engine.
+- **Restore:** download a `.json.gz` file from the bucket; each one holds `{"table", "date", "rows"}`.
+- **Logs:** each run writes `[dua-backup] OK {...}` or `[dua-backup] FAILED: ...`, and a non-zero exit marks the run as failed.
