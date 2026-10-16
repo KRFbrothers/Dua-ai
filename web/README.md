@@ -1,7 +1,7 @@
 # Node API on Cloud Run (migration step 1)
 
 This runs the existing `web/` Node API as a separate **dua-api** service in
-**us-central1**. Vercel and the Python `dua-ai-engine` stay in place. It does not
+**us-central1**, next to the Python `dua-ai-engine`. It does not
 switch Android URLs or move Python/Vertex features into Node.
 
 ## Build and run
@@ -77,10 +77,9 @@ the port. Both Docker and Cloud Build contexts allow only runtime inputs, keepin
 Cloud Run uses a **900-second** request timeout and **zero minimum instances**
 (scale to zero; cold starts are expected). The script sets
 `DUA_CHAT_DEADLINE_SECONDS=780`, within the existing 10–790 range and above the
-local/Vercel default of 280. To choose another value, prefix the deploy command with
+local default of 280. To choose another value, prefix the deploy command with
 `DUA_CHAT_DEADLINE_SECONDS=600`. `PORT`, `DUA_REQUIRE_LOGIN` and the deadline are
 deployment controls, not Secret Manager imports; login is always required here.
-The Vercel timeout/configuration is unchanged.
 
 Re-run the script after code or secret changes. Secret versions are pinned per
 deployment; creating a new version alone does not update an existing revision.

@@ -2,7 +2,7 @@
 
 Dua is a single-user app for its owner. This checklist covers deploying the backend for the owner and installing the app on the owner's own Android device(s). There is no Google Play release, store listing or public distribution.
 
-It describes checks to run; it is not evidence that production, staging, or a physical device has passed them. The repository checkout cannot read Vercel/Supabase dashboard settings. Do not put credentials, tokens, passwords, or signing material in this repository, issues, screenshots, or chat.
+It describes checks to run; it is not evidence that production, staging, or a physical device has passed them. The repository checkout cannot read Google Cloud/Supabase dashboard settings. Do not put credentials, tokens, passwords, or signing material in this repository, issues, screenshots, or chat.
 
 ## Completed reply saving (Phase 5)
 
@@ -26,30 +26,30 @@ Source/mock tests do not establish live RPC deployment or physical-device behavi
 
 ## Owner-only lock and spend controls
 
-The owner-only lock is the permanent access model: it keeps the server-side keys and provider spend limited to the owner. Before enabling online AI in Vercel Production:
+The owner-only lock is the permanent access model: it keeps the server-side keys and provider spend limited to the owner. Before enabling online AI on dua-api (Cloud Run):
 
-- [ ] In Vercel project settings, verify `DUA_REQUIRE_LOGIN=1`.
+- [ ] On the `dua-api` Cloud Run service, verify `DUA_REQUIRE_LOGIN=1` (set by `web/deploy-cloudrun.sh`).
 - [ ] Set `DUA_ALLOWED_EMAIL` to the owner's account. Login-required alone permits any account accepted by Supabase; it does not restrict access to the owner.
 - [ ] As a daily backstop, apply `supabase/migrations/202610040002_dua_usage.sql`, set `DUA_DAILY_REQUEST_LIMIT` and the server-only `SUPABASE_SERVICE_ROLE_KEY`, then redeploy. Keep the admin key out of client/public variables.
 - [ ] Check `GET https://YOUR-PRODUCTION-DOMAIN/api/setup`. Confirm `account.requireLogin` and `account.ownerRestricted` are `true`; confirm `account.dailyRequestLimit` is the intended positive limit when using the durable quota. This endpoint reports configuration, not proof that the quota's database RPC works.
 - [ ] In a separate staging deployment, verify an anonymous request is denied, the owner can use online AI, a different (disposable) signed-in account is denied, and the daily quota returns `429` after the configured number of attempts. Failed upstream attempts consume quota. Avoid quota-exhaustion or provider-billing tests against production.
-- [ ] In each enabled AI, search, and generated-audio provider dashboard, set usage/spending alerts or hard limits where available. The app's daily quota counts requests, not tokens or currency; one chat can trigger both search and a model call. Vercel's IP burst guard is per instance and is not a spending limit.
+- [ ] In each enabled AI, search, and generated-audio provider dashboard, set usage/spending alerts or hard limits where available. The app's daily quota counts requests, not tokens or currency; one chat can trigger both search and a model call. There is no IP burst guard on Cloud Run, and the daily quota is not a spending limit.
 - [ ] Keep Google enabled. If using owner email authentication, enable Email with Confirm email on, verify SMTP delivery, and keep new sign-ups off after the owner account exists. Set `DUA_ALLOWED_EMAIL` to that account's email. Keep server-only credentials in production configuration and preview credentials separate.
 - [ ] For email authentication, verify existing Google account → Set email password → logout → email sign-in retains the same account ID and server history. On a fresh owner installation, verify signup stays signed out until email confirmation and subsequent sign-in. Reject a non-owner email and disabled email-confirmation settings; test Back/cancellation and an uncertain password-update response without claiming completion.
 - [ ] Review the tracked Firebase client configuration and restrict its API key in Google Cloud to the required APIs and Android application where supported. A client Firebase key is not a server secret, but it should not be left unrestricted.
 
-**Production status:** Not verified from this repository session. The status endpoint could not be reached from the audit environment; check these values directly in Vercel and validate behavior in staging before marking the roadmap configured/verified.
+**Production status:** Not verified from this repository session. The status endpoint could not be reached from the audit environment; check these values directly on the Cloud Run services and validate behavior in staging before marking the roadmap configured/verified.
 
 ## API and deployment runbook
 
 1. Review the change and ensure both `Project checks` jobs (Android and Backend tests) pass. Run `bash ./gradlew :app:testDebugUnitTest --no-daemon --max-workers=2` from the repository root and `npm ci && npm test` from `web/`. CI retains Android test reports and a backend JUnit report; backend tests use fake provider responses and require no real provider keys.
-2. Deploy the backend API (`web/`) from the intended branch with Vercel Root Directory `web`, Node.js 24, and the production-only secrets configured in Vercel. Never copy secret values into Android resources or client configuration.
+2. Deploy the backend API (`web/`) to Cloud Run with `bash web/deploy-cloudrun.sh` (see [web/README.md](web/README.md)); production secrets live in Secret Manager. Never copy secret values into Android resources or client configuration.
 3. Apply reviewed Supabase migrations before enabling their dependent features. Verify RLS, grants, and function permissions in the Supabase SQL editor; do not grant clients direct snapshot writes or access to daily usage rows.
 4. After deployment, smoke-check `/api/config`, `/api/setup`, and `/api/account/session`. (There is no web client; `/` is not served.) Confirm that responses contain no API keys, service-role key, or owner email. `/api/setup` may expose feature availability and access-policy booleans.
 5. In staging, check the owner lock with the owner account and one disposable non-owner account: sign-in, refresh, logout, cloud ownership/conflicts, and quota enforcement. Test account deletion only with the disposable account.
 6. In staging, with two separate accounts, verify that `/api/files/sign`, `/api/files/url`, `/api/files/delete`, `/api/files/delete-all`, `/api/files/usage`, `/api/cloud`, `/api/imagine/*`, and `/api/voice/*` cannot read or mutate the other account's data. Verify a signed file URL expires and cannot be reused after expiry.
 7. With the disposable account, create a cloud snapshot and upload a file, then run account deletion. Confirm the snapshot row, Storage objects, and account are gone; repeat the owner check afterward to ensure the configured owner still works.
-8. For a failed backend deployment, redeploy the last known-good Vercel deployment. Treat database migrations separately: do not assume rolling back the backend deployment reverses schema changes.
+8. For a failed backend deployment, route traffic back to the last known-good `dua-api` revision (Cloud Run → Revisions → Manage traffic). Treat database migrations separately: do not assume rolling back the backend deployment reverses schema changes.
 9. Mark a feature configured only after checking deployed environment values, and verified only after successful live/staging behavior. Keep those labels separate from repository unit/mock test results.
 
 ## Staging provider checks
@@ -135,7 +135,7 @@ No private signing keys are supplied by this repository. The manual `Build perso
 - [x] Core Android JVM tests for `history`, `network`, `account`, `setup`, and `model` completed successfully (164 tests across 25 test classes, zero failures/errors in the saved JUnit XML). The previously reported 31 was the Gradle task count, not the test count.
 - [ ] The full Android JVM suite is not green in this environment: 40 Roborazzi/Compose interaction tests fail before assertions in `MavenDependencyResolver` with `FileNotFoundException`. Re-run with a writable, fully populated Maven/Gradle cache before treating this as an app regression.
 - [ ] Backend tests could not be completed because `npm ci` was blocked fetching the locked SheetJS tarball from `cdn.sheetjs.com` (HTTP 403). The prior import error for `xlsx` is therefore an environment/dependency-install issue, not a verified production failure.
-- [ ] Physical-device, staging-provider, Supabase, owner-lock, and live Vercel checks remain required; this validation was repository/build-only.
+- [ ] Physical-device, staging-provider, Supabase, owner-lock, and live Cloud Run checks remain required; this validation was repository/build-only.
 
 ## Later validation with permanent signing (2026-10-10)
 

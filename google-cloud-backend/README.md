@@ -2,7 +2,7 @@
 
 Flask service that answers chats with Gemini on Vertex AI. The Android app sends its chat
 messages here by default (`DUA_CHAT_BASE_URL`); everything else (sign-in, cloud history, files,
-Imagine, voice, setup/config) still uses the Vercel `web/` backend.
+Imagine, voice, setup/config) uses the Node API `web/` (Cloud Run `dua-api`).
 
 Both chat endpoints require the owner's existing Supabase access token in `Authorization: Bearer <token>`.
 The engine verifies it with the configured Supabase project's `GET /auth/v1/user`, then matches the
@@ -14,7 +14,7 @@ with `DUA_REQUIRE_LOGIN=0`; `DUA_APP_TOKEN`, if retained, is an additional gate 
 
 ## Endpoints
 - `GET /` – health check.
-- `POST /api/chat` – same format the app uses with Vercel:
+- `POST /api/chat` – same format as the Node API's chat:
   `{"model","messages":[{"role":"user|model","text","attachmentText?"}],"attachments":[{"name","mimeType","data(base64)"}],"memory","stream":true,"mode","context?"}`.
   With `"stream": true` it replies with Server-Sent Events (`event: text` / `data: {"type":"text","delta":"..."}`,
   then `done`, or `error`), exactly like `web/src/core/sse.mjs`. Without it: `{"text": "..."}`.
@@ -41,9 +41,9 @@ with `DUA_REQUIRE_LOGIN=0`; `DUA_APP_TOKEN`, if retained, is an additional gate 
 | `VERTEX_LOCATION` | Vertex AI location, default `global` (needed for Gemini 3.x; endpoint `aiplatform.googleapis.com`). Not the Cloud Run region. |
 | `VERTEX_MODEL` | default `gemini-3.8-flash` |
 | `VERTEX_THINKING_LEVEL` | Gemini 3 only: `low` (default), `medium` or `high` (`minimal` is not supported by 3.8 Flash) |
-| `SUPABASE_URL` | required; the same Supabase Auth project URL used by Vercel, HTTPS only |
+| `SUPABASE_URL` | required; the same Supabase Auth project URL used by dua-api, HTTPS only |
 | `SUPABASE_PUBLISHABLE_KEY` / `SUPABASE_ANON_KEY` | required; publishable key preferred, existing anon key supported. Used only by the engine to verify the account; no service-role key is needed |
-| `DUA_ALLOWED_EMAIL` | required; the same owner email used by Vercel, compared case-insensitively against the Auth-verified account |
+| `DUA_ALLOWED_EMAIL` | required; the same owner email used by dua-api, compared case-insensitively against the Auth-verified account |
 | `DUA_APP_TOKEN` | optional **additional** password. When set, requests must also send `X-Dua-App-Token`. Build the app with `-PduaAppToken=...` (or env `DUA_APP_TOKEN`). It never replaces the owner session; APK-embedded values are extractable |
 
 ### Local environment file
@@ -163,10 +163,10 @@ Inline media bytes stay with their original turns for follow-ups/retry during th
 `POST /api/imagine/image` makes **one image per request** with the Gemini image model on Vertex AI
 (`IMAGINE_MODEL`, default `gemini-3.1-flash-lite-image`, "Nano Banana 2 Lite", global endpoint; list price
 $30 per 1M image-output tokens = about **$0.034 per 1K image**, plus a tiny text-input cost). It takes the same request and returns the same
-response as the Vercel backend, and stores the image in your private Supabase `dua-files` bucket using your own
-sign-in (no service-role key). The daily cap uses the same Supabase counter as Vercel (`IMAGINE_DAILY_IMAGES`,
+response as the Node API, and stores the image in your private Supabase `dua-files` bucket using your own
+sign-in (no service-role key). The daily cap uses the same Supabase counter as the Node API (`IMAGINE_DAILY_IMAGES`,
 default 20). Owner sign-in is required. The app uses Google Cloud for new images when `GET /` shows
-`"imagine": {"image": true}`; photo edits and video stay on Vercel. Turn it off with `DUA_IMAGINE=0`.
+`"imagine": {"image": true}`; photo edits and video stay on the Node API (dua-api). Turn it off with `DUA_IMAGINE=0`.
 Needs the existing `SUPABASE_URL` / `SUPABASE_ANON_KEY` settings and the Supabase Imagine migration. No new secret is needed.
 
 ## Dua Agent tools (general tool loop)

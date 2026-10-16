@@ -75,7 +75,7 @@ With those permissions the token cannot change Actions workflows (GitHub blocks 
 
 ## Server variables
 
-Add variables to Vercel's server environment or a local ignored `.env` file. API keys must never be added to Android resources, public client configuration or GitHub commits.
+Add variables to Secret Manager (same name as the variable) and re-run `web/deploy-cloudrun.sh`, or to a local ignored `.env` file. API keys must never be added to Android resources, public client configuration or GitHub commits.
 
 | Choice | API key | Model ID |
 | --- | --- | --- |
@@ -105,11 +105,11 @@ Redeploy after setting server variables. `/api/config` exposes provider availabi
 | Claude | No visible thinking yet; the reply says so | — | `ANTHROPIC_MAX_OUTPUT_TOKENS` (8192) |
 | Kimi | Shows `reasoning_content` when the model returns it | — | `KIMI_MAX_OUTPUT_TOKENS` (8192) |
 
-Output caps accept 256–1,000,000; output tokens include thinking tokens. A reply that hits the cap ends with `done.truncated` and the app shows a note. `DUA_CHAT_DEADLINE_SECONDS` (10–790) must stay below the Vercel function duration: `web/vercel.json` sets `maxDuration: 300` for `api/**/*.js` (Hobby with Fluid compute allows 300 s; Pro allows up to 800 s). The Android app allows 75 s between bytes and 330 s per call.
+Output caps accept 256–1,000,000; output tokens include thinking tokens. A reply that hits the cap ends with `done.truncated` and the app shows a note. `DUA_CHAT_DEADLINE_SECONDS` (10–790) must stay below the Cloud Run request timeout: `web/deploy-cloudrun.sh` sets the Cloud Run timeout.js` (Hobby with Fluid compute allows 300 s; Pro allows up to 800 s). The Android app allows 75 s between bytes and 330 s per call.
 
 For streaming Auto/Reasoning chat, the backend opens SSE after access, input, project and provider-setup checks, before web/file preparation, context summarization or waiting for provider response headers. An initial comment and 15-second heartbeat comments keep the Android read timeout from expiring during these waits. Stop cancels the preparation/provider work; the whole-request deadline still applies. Failures after SSE opens use a terminal `error` event carrying `message`, `status` and optional `retryAfterSeconds` (HTTP remains 200); access/setup failures before it opens remain JSON with an HTTP error status. Non-streaming JSON replies keep their existing HTTP error behavior. Build mode uses its existing separate stream path.
 
-Provider HTTP failures also include `upstreamStatus` in Auto/Reasoning error events when available. Gemini HTTP 500/502/503/504 messages identify the actual upstream status; the backend still maps these failures to status 502 for the existing client contract. Vercel runtime logs record only `[dua-gemini] Upstream request failed (HTTP N).`, without provider bodies, credentials or prompts. If chat fails, use that status and a same-project/model test in Google AI Studio to distinguish provider availability from configuration problems. No automatic paid retry or model switch is performed.
+Provider HTTP failures also include `upstreamStatus` in Auto/Reasoning error events when available. Gemini HTTP 500/502/503/504 messages identify the actual upstream status; the backend still maps these failures to status 502 for the existing client contract. Cloud Run logs record only `[dua-gemini] Upstream request failed (HTTP N).`, without provider bodies, credentials or prompts. If chat fails, use that status and a same-project/model test in Google AI Studio to distinguish provider availability from configuration problems. No automatic paid retry or model switch is performed.
 
 ## Server reply saving (Phase 5)
 
@@ -117,7 +117,7 @@ Completed streaming replies can opt into server persistence with owner-bound `pe
 
 ## Run code: hosted code execution (Phase 5)
 
-The Run code chip asks the provider to run Python in **its own sandbox**; Dua never executes code on the phone or in the Vercel function. Request field: `"code": true` (streaming path; older servers never receive it). `/api/config.code` reports `{enabled, reason?, providers, language, maxRuns, maxChars}`.
+The Run code chip asks the provider to run Python in **its own sandbox**; Dua never executes code on the phone or on the dua-api server. Request field: `"code": true` (streaming path; older servers never receive it). `/api/config.code` reports `{enabled, reason?, providers, language, maxRuns, maxChars}`.
 
 | Choice | Tool sent | Default | Cost and limits (provider docs, Oct 2026) |
 | --- | --- | --- | --- |
@@ -168,7 +168,7 @@ Gemini's Files API keeps uploads for 48 hours; large files are uploaded again on
 
 ## Imagine: images and video (Phase 3)
 
-The composer's **Imagine** chip creates images and short videos. It needs the signed-in owner (`DUA_ALLOWED_EMAIL`), stored files (SUPABASE.md §1b) and the Imagine migration (SUPABASE.md §1c). Keys stay on the server. Results are saved to the owner's folder in the private `dua-files` bucket with the owner's own token, so the app never handles provider URLs or base64 through Vercel. `/api/config.imagine` tells new apps what is on; older apps ignore it, and new apps on an older backend hide the chip.
+The composer's **Imagine** chip creates images and short videos. It needs the signed-in owner (`DUA_ALLOWED_EMAIL`), stored files (SUPABASE.md §1b) and the Imagine migration (SUPABASE.md §1c). Keys stay on the server. Results are saved to the owner's folder in the private `dua-files` bucket with the owner's own token, so the app never handles provider URLs or base64 through the Node API. `/api/config.imagine` tells new apps what is on; older apps ignore it, and new apps on an older backend hide the chip.
 
 | Feature | Provider and endpoint | Default model (env to change) | Price (provider docs, October 2026) |
 | --- | --- | --- | --- |

@@ -18,7 +18,7 @@ import { readJsonLimited } from './limited-json.mjs';
 export const XAI_TTS_URL = 'https://api.x.ai/v1/tts';
 export const GEMINI_INTERACTIONS = 'https://generativelanguage.googleapis.com/v1beta/interactions';
 export const DEFAULT_GEMINI_TTS_MODEL = 'gemini-3.8-flash-tts';
-export const MAX_AUDIO_BYTES = 4 * 1024 * 1024; // stays under Vercel's 4.5 MB response limit
+export const MAX_AUDIO_BYTES = 4 * 1024 * 1024; // stays under the 4.5 MB response budget
 
 const voice = (id, name, description) => Object.freeze({ id, name, description });
 /** xAI built-in voices with the tone descriptions from docs.x.ai (eve is the default). */

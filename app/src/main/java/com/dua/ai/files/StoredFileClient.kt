@@ -34,7 +34,7 @@ data class SignedUpload(val path: String, val uploadUrl: String, val headers: Ma
 }
 
 /**
- * Streams a file straight to Supabase Storage with the signed upload URL (no Vercel body limit),
+ * Streams a file straight to Supabase Storage with the signed upload URL (no API body limit),
  * reporting progress. Cancelling the coroutine cancels the HTTP call.
  */
 class StoredFileClient(private val client: OkHttpClient = uploadClient) {

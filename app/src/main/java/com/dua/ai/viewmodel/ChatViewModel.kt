@@ -393,7 +393,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     // ---- Imagine (Phase 3): image and video generation through /api/imagine ----
     private val imagineApi = com.dua.ai.imagine.ImagineApi()
-    /** Google Cloud Imagine (Vertex AI), used for new images when the engine advertises it; Vercel stays for edits and video. */
+    /** Google Cloud Imagine (Vertex AI), used for new images when the engine advertises it; the Node API stays for edits and video. */
     private val cloudImagineApi = com.dua.ai.imagine.ImagineApi(com.dua.ai.BuildConfig.DUA_CHAT_BASE_URL, appToken = com.dua.ai.BuildConfig.DUA_APP_TOKEN)
     private val _cloudImagine = MutableStateFlow<com.dua.ai.imagine.CloudImagine?>(null)
     private var cloudImagineCheck: kotlinx.coroutines.Job? = null
@@ -2234,7 +2234,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 } else {
                     val cloud = com.dua.ai.imagine.CloudImagine.routes(_cloudImagine.value, options, sources.size)
-                    // Google Cloud: always one image. Vercel providers never receive the Google Cloud provider id.
+                    // Google Cloud: always one image. Node API providers never receive the Google Cloud provider id.
                     val sent = if (cloud) options.copy(count = 1, provider = null)
                         else options.copy(provider = options.provider?.takeIf { it != com.dua.ai.imagine.CloudImagine.PROVIDER })
                     val result = account.withToken { token ->

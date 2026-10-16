@@ -1,6 +1,6 @@
 # GitHub connector and Build recovery
 
-This guide covers the Vercel backend's read-only connector and owner-confirmed Build PR flow. The [Cloud Run coding agent](../google-cloud-backend/README.md#coding-agent-setup-phase-2-optional) has a separate token, configuration and implementation. See [architecture boundaries](ARCHITECTURE.md#github-permission-boundaries) before changing either flow.
+This guide covers the Node API's (dua-api) read-only connector and owner-confirmed Build PR flow. The [Cloud Run coding agent](../google-cloud-backend/README.md#coding-agent-setup-phase-2-optional) has a separate token, configuration and implementation. See [architecture boundaries](ARCHITECTURE.md#github-permission-boundaries) before changing either flow.
 
 ## Common failures
 

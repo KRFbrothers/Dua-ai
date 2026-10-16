@@ -1,4 +1,4 @@
-// Pure repository/path policy for the Vercel connector, Build flows and saved metadata.
+// Pure repository/path policy for the Node API connector, Build flows and saved metadata.
 // No credentials, HTTP, error messages or filesystem access belong in this module.
 export const REPOSITORY_NAME_PATTERN = '[A-Za-z0-9_-]{1,100}/[A-Za-z0-9_.-]{1,100}';
 export const GITHUB_REPOSITORY_API_PATTERN = '/repos/' + REPOSITORY_NAME_PATTERN;

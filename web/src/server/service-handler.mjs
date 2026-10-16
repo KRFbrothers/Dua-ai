@@ -21,8 +21,8 @@ export async function handleService(request, options = {}) {
 async function routeService(request,{env=process.env,fetcher=fetch}={}) {
  const url=new URL(request.url),path=url.pathname;
  const deadlineAt=path==='/api/chat'?Date.now()+chatDeadlineMs(env):undefined;
- // Include authentication/quota work in the chat deadline. Keep it below the function maxDuration
- // (web/vercel.json: 300 s, the Hobby maximum with Fluid compute) so the reply can end cleanly.
+ // Include authentication/quota work in the chat deadline. Keep it below the Cloud Run request
+ // timeout (900 s; deploy-cloudrun.sh sets 780 s) so the reply can end cleanly.
  if(path==='/api/chat')request=new Request(request,{signal:AbortSignal.any([request.signal,AbortSignal.timeout(chatDeadlineMs(env))])});
  if(request.headers.get('origin')&&request.headers.get('origin')!==url.origin)return Response.json({error:'Request origin is not allowed.'},{status:403,headers:{'Cache-Control':'no-store'}});
  if(path==='/api/setup')return handleSetup(request,{env});

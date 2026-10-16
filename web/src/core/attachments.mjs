@@ -1,4 +1,4 @@
-/** Whole /api/chat body. Vercel Functions accept up to 4.5 MB. */
+/** Whole /api/chat body. Kept at 4.5 MB (the original hosted body limit) to bound memory. */
 export const MAX_REQUEST_BYTES = 4 * 1024 * 1024;
 const MAX_FILE_BYTES = 2 * 1024 * 1024;
 /** Per text/code file limit (UTF-8 bytes). Older APKs still enforce 64 KB on the device. */

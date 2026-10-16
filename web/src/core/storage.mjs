@@ -79,7 +79,7 @@ export function storageFailure(status, data) {
   return new StorageError('File storage is temporarily unavailable. Retry.', 502);
 }
 
-/** Signed upload URL (valid 2 hours per Supabase). The phone PUTs bytes straight to Storage, bypassing Vercel's 4.5 MB body limit. */
+/** Signed upload URL (valid 2 hours per Supabase). The phone PUTs bytes straight to Storage, bypassing the API's 4.5 MB body limit. */
 export async function signUpload(config, token, path, { fetcher, signal } = {}) {
   const data = await call(config, token, `/object/upload/sign/${encodeURIComponent(config.bucket)}/${encodePath(path)}`, { body: {}, fetcher, signal });
   const relative = typeof data?.url === 'string' ? data.url : '';

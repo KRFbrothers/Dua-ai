@@ -660,7 +660,7 @@ def add_imagine_capability(response):
 
 @app.route("/api/imagine/image", methods=["POST"])
 def api_imagine_image():
-    """Imagine on Vertex AI (one image per request, owner only). Same response shape as the Vercel endpoint."""
+    """Imagine on Vertex AI (one image per request, owner only). Same response shape as the Node API endpoint."""
     import imagine
     if not app_token_matches():
         return unauthorized()

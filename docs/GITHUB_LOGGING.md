@@ -1,6 +1,6 @@
 # GitHub request and stage logs
 
-This implements the Node-backend portion of [roadmap section 2.4](../ROADMAP.md#24-add-structured-logging). It applies to the shared Node router on Cloud Run, local development and Vercel; it does not instrument the separate Python engine.
+This implements the Node-backend portion of [roadmap section 2.4](../ROADMAP.md#24-add-structured-logging). It applies to the shared Node router on Cloud Run and local development; it does not instrument the separate Python engine.
 
 ## Find a request
 
@@ -12,7 +12,7 @@ resource.labels.service_name="dua-api"
 jsonPayload.source="dua-github"
 ```
 
-Add `jsonPayload.requestId="ID_FROM_A_LOG_ENTRY"` to follow that request. Vercel function logs and local `npm start` stdout contain the same JSON records. There is no new credential, environment setting or external logging dependency.
+Add `jsonPayload.requestId="ID_FROM_A_LOG_ENTRY"` to follow that request. Local `npm start` stdout contain the same JSON records. There is no new credential, environment setting or external logging dependency.
 
 Each `/api/chat`, `/api/connectors/github` and `/api/build/pr` request reaching [handleService](../web/src/server/service-handler.mjs) receives a fresh server-generated UUID. Incoming request-ID headers are ignored; concurrent async operations retain their own context through Node's `AsyncLocalStorage`. Account/file/voice/setup and unrelated routes are not part of this logger. Hosting/burst rejections before the shared router are outside its scope.
 

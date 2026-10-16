@@ -1,6 +1,6 @@
 # Supabase account and cloud sync setup
 
-Supabase provides Google-backed accounts, device logout, the authoritative server snapshot for chats and memory, reviewed transfers and optional foreground cache refresh for the Android app. The app supports native Google sign-in and owner-only email login/signup; signed-in Google accounts can set an email password without creating another account. Production uses the Vercel backend at `https://dua-cyan.vercel.app`; deployed settings must be verified in the hosting dashboard. Credentials remain in server configuration. Native Google sign-in, deletion and account protection are described below.
+Supabase provides Google-backed accounts, device logout, the authoritative server snapshot for chats and memory, reviewed transfers and optional foreground cache refresh for the Android app. The app supports native Google sign-in and owner-only email login/signup; signed-in Google accounts can set an email password without creating another account. Production uses the dua-api Cloud Run backend at `https://dua-api-228305912525.us-central1.run.app`; deployed settings must be verified in the hosting dashboard. Credentials remain in server configuration. Native Google sign-in, deletion and account protection are described below.
 
 ## 1. Create and configure the project
 
@@ -33,13 +33,13 @@ Run `supabase/migrations/202610080001_dua_files_storage.sql` once (SQL editor �
 - creates a **private** bucket `dua-files` with a 50 MB per-file limit (52,428,800 bytes) and an allowed MIME list (images, PDF, XLSX/XLS/ODS/CSV, TXT/MD/JSON, common audio types);
 - adds RLS policies on `storage.objects` so a signed-in user can only **select, insert and delete** objects whose first folder is their own `auth.uid()`. There is no update policy: files are immutable and uploads use `x-upsert: false`.
 
-**Plan limits:** 50 MB is the Supabase Free plan's maximum file size. The bucket limit cannot exceed the project's global limit (Storage → Settings). On Pro and above you can raise both, then set `DUA_FILES_MAX_MB` on Vercel to match. Free projects also have a total storage quota; Settings → History and data → Data controls in the app shows how much you use.
+**Plan limits:** 50 MB is the Supabase Free plan's maximum file size. The bucket limit cannot exceed the project's global limit (Storage → Settings). On Pro and above you can raise both, then set `DUA_FILES_MAX_MB` on dua-api (Secret Manager) to match. Free projects also have a total storage quota; Settings → History and data → Data controls in the app shows how much you use.
 
-The backend talks to Storage with **your own access token** plus the public anon key, so RLS decides every access. No service-role key is used for files. The app uploads straight to Storage with a signed upload URL (valid 2 hours), which avoids Vercel's 4.5 MB request body limit.
+The backend talks to Storage with **your own access token** plus the public anon key, so RLS decides every access. No service-role key is used for files. The app uploads straight to Storage with a signed upload URL (valid 2 hours), which avoids the Node API's 4.5 MB request body limit.
 
 Because only your account should use this personal app, turn off new sign-ups after creating your account (Authentication → Providers → Google, and Email if enabled → "Allow new users to sign up" off). The backend refuses Google sign-in, session refresh, cloud snapshots, account deletion, chat and file routes for anyone except `DUA_ALLOWED_EMAIL`, but someone else who signed up could still upload to their own folder directly through Storage with the public key.
 
-Stored-file variables (Vercel):
+Stored-file variables (dua-api, Secret Manager):
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
@@ -88,14 +88,14 @@ Without this migration `/api/voice/session` refuses with a setup message and liv
 
 ## 2. Configure the shared backend
 
-Add these environment variables to Vercel Production and redeploy:
+Add these as Secret Manager secrets (same names) and re-run `web/deploy-cloudrun.sh`:
 
 - `SUPABASE_URL`: project URL, such as `https://PROJECT.supabase.co`.
 - `SUPABASE_ANON_KEY`: the project's public publishable key or legacy anon key.
 
 `SUPABASE_ANON_KEY` accepts only the project's public publishable/anon credential; service-role/secret credentials are rejected in that field. Optional deletion and durable request quotas use a separate server-only `SUPABASE_SERVICE_ROLE_KEY`. Keep existing model configuration. Supabase credentials are read by the backend and are not embedded in the Android app. Local development uses an ignored `web/.env`; run `npm start` from `web` with Node 24 or newer.
 
-Android defaults to the same HTTPS Vercel backend through `DUA_API_BASE_URL`. Native source changes reach installed apps through a later release; routine compilation/JVM tests do not package an APK. The backend serves `/api/account/*`, `/api/cloud` and `/api/cloud/chat`. No separate Supabase key belongs in Android.
+Android defaults to the dua-api Cloud Run backend through `DUA_API_BASE_URL`. Native source changes reach installed apps through a later release; routine compilation/JVM tests do not package an APK. The backend serves `/api/account/*`, `/api/cloud` and `/api/cloud/chat`. No separate Supabase key belongs in Android.
 
 ### Delete one conversation
 
@@ -114,7 +114,7 @@ Google is the app's only sign-in method. Android uses native Google Sign-In (Cre
 - In the existing Google Cloud Android OAuth client, register package `com.dua.ai` and the permanent signing certificate's SHA-1 from `app/signing-certificate.properties`. Use the saved key for every update; see [SIGNING.md](SIGNING.md). A different build machine's debug certificate will not match this client.
 - The **Sign in with Google** button appears on the first-launch welcome screen and in Settings → Profile. Without a web client ID the button reports that sign-in is not configured for the build. **Skip for now** on the welcome screen goes straight to local chat and is remembered on the device.
 
-`SUPABASE_AUTH_REDIRECT_URL` was only used by the removed web OAuth redirect flow and is no longer read; it can be deleted from Vercel.
+`SUPABASE_AUTH_REDIRECT_URL` was only used by the removed web OAuth redirect flow and is no longer read; do not recreate it on Cloud Run.
 
 ## 3. Verify after deployment
 
@@ -162,7 +162,7 @@ Mocked tests cover authentication, refresh, ownership, redacted errors, limits, 
 
 ## Hosting migration
 
-The current Vercel deployment retains the existing Supabase project, schema and SMTP. Environment values do not transfer automatically between hosts.
+The Node API moved from Vercel to Cloud Run (`dua-api`) and kept the existing Supabase project, schema and SMTP. Environment values do not transfer automatically between hosts; each one is a Secret Manager secret.
 
 ## Chat pins (optional snapshot metadata)
 
@@ -180,7 +180,7 @@ Deploy the matching backend before installing this APK. The owner lock (`DUA_ALL
 4. Verify actual mail delivery. Supabase’s default SMTP has recipient restrictions and low rate limits; configure SMTP in Supabase if required for the owner’s address. New Free projects using default SMTP cannot customize templates (June 2026 change). The app uses the existing confirmation link and does not depend on a custom OTP template. Keep Site URL/redirects on an HTTPS page you control. This backend has no confirmation web page, and the APK does not import URL tokens; after confirmation, return manually and sign in.
 5. In the APK, Account should show the email button after setup refresh. Welcome also offers **Continue with email** when backend support is known. Verify login, logout, restart/session refresh and an attempted non-owner email. Auth CAPTCHA/MFA challenges and password reset/recovery need separate integration and are not claimed as supported by this flow.
 
-Native-only routes: `POST /api/account/email-login`, `POST /api/account/email-signup`, `PUT /api/account/password`. Signup/login reject other emails before contacting Supabase. Password setup requires the authenticated owner and matching `expectedAccountId`. Verified owner sessions use the same encrypted Android token store and auth-generation guards as Google; late responses cannot undo logout or cancellation. The routes retain the existing Vercel account burst guard and Supabase rate limits. No service-role key is used.
+Native-only routes: `POST /api/account/email-login`, `POST /api/account/email-signup`, `PUT /api/account/password`. Signup/login reject other emails before contacting Supabase. Password setup requires the authenticated owner and matching `expectedAccountId`. Verified owner sessions use the same encrypted Android token store and auth-generation guards as Google; late responses cannot undo logout or cancellation. The routes rely on owner-only access and Supabase rate limits. No service-role key is used.
 
 Automated tests use local TLS/mocked Auth responses and native UI renders. They do not verify live provider settings, SMTP delivery, link confirmation, CAPTCHA/MFA policy or physical-device behavior. Signup never automatically uploads chats or enables sync consent. Passwords are cleared rather than restored through Android saved state, and remain absent from chat backups and local session serialization.
 

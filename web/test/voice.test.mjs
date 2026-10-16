@@ -4,7 +4,6 @@ import { ttsConfiguration, voiceConfiguration, legacyAudioProvider, validateAudi
 import { xaiTtsRequest, geminiTtsRequest, XAI_VOICES, GEMINI_VOICES, XAI_LANGUAGES, ttsFailure } from '../src/core/voice-tts.mjs';
 import { advancedConfiguration } from '../src/core/advanced-integrations.mjs';
 import { handleService } from '../src/server/service-handler.mjs';
-import { createVercelHandler } from '../src/server/vercel-handler.mjs';
 import { voiceEnv, voiceWorld, voiceRequest, MP3, WAV } from './voice-helpers.mjs';
 
 const eleven = { ENABLE_GENERATED_VOICE: '1', ELEVENLABS_API_KEY: 'el-key', ELEVENLABS_VOICE_ID: 'voice_123' };
@@ -138,15 +137,11 @@ test('provider failures map to safe messages; bad audio is rejected', async () =
   assert.equal(limited.status, 429);
 });
 
-test('/api/config advertises voice for new apps; voice routes get their own burst window', async () => {
+test('/api/config advertises voice for new apps', async () => {
   const data = await (await handleService(new Request('https://dua.test/api/config'), { env: withGemini, fetcher: voiceWorld() })).json();
   assert.equal(data.voice.version, 1);
   assert.deepEqual(data.voice.tts.providers.map(p => p.id), ['xai', 'gemini']);
   assert.ok(data.imagine && data.files, 'existing fields unchanged');
   const setup = await (await handleService(new Request('https://dua.test/api/setup'), { env: withGemini })).json();
   assert.match(setup.groups.find(g => g.id === 'voice').limitations[0], /Grok \(28 voices\), Gemini \(30 voices\)/);
-  const groups = [];
-  const handler = createVercelHandler({ env: voiceEnv, fetcher: voiceWorld(), guard: (request, group, limit) => { groups.push([group, limit]); return 0; } });
-  await handler.fetch(voiceRequest('audio', { text: 'Hi', provider: 'xai' }));
-  assert.deepEqual(groups, [['voice', 40]]);
 });

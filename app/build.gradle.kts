@@ -13,7 +13,7 @@ plugins {
 }
 
 // Account, cloud sync, files, Imagine, voice, setup and connectors: the Node API (web/) on Cloud Run (dua-api).
-// To use Vercel again, build with -PduaApiBaseUrl=https://dua-cyan.vercel.app (or DUA_API_BASE_URL).
+// Override with -PduaApiBaseUrl=https://... (or DUA_API_BASE_URL) for a different Node API deployment.
 val duaBuildNumber = providers.environmentVariable("GITHUB_RUN_NUMBER").orNull?.toIntOrNull()?.takeIf { it in 1..1_000_000 }
 val duaVersionCode = 11 + (duaBuildNumber ?: 0)
 val duaVersionName = "1.0.10" + (duaBuildNumber?.let { " (build $it)" } ?: "")
