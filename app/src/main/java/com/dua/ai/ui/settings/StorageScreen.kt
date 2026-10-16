@@ -4,6 +4,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.activity.result.IntentSenderRequest
+import android.app.Activity
+import com.dua.ai.backup.drive.DriveAccess
+import com.dua.ai.backup.drive.DriveFailure
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import android.content.ActivityNotFoundException
@@ -37,6 +44,30 @@ internal fun StorageScreen(viewModel: ChatViewModel, onBack: () -> Unit, onOpen:
     val usageStatus by viewModel.storageUsageStatus.collectAsState()
     val busy by viewModel.dataBusy.collectAsState()
     val backupState by viewModel.fullBackup.state.collectAsState()
+    val driveRestoreBusy by viewModel.driveRestoreBusy.collectAsState()
+    val drive = viewModel.driveBackups
+    val driveRecord by drive.store.state.collectAsState()
+    val driveList by drive.listState.collectAsState()
+    val scope = rememberCoroutineScope()
+    var showDriveBackups by rememberSaveable { mutableStateOf(false) }
+    var selectedDriveId by rememberSaveable { mutableStateOf<String?>(null) }
+    var authOwner by rememberSaveable { mutableStateOf("") }
+    var authEmail by rememberSaveable { mutableStateOf("") }
+    var authBusy by remember { mutableStateOf(false) }
+    val authorization = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
+        authBusy = false
+        if (result.resultCode != Activity.RESULT_OK) viewModel.fullBackup.notice("Drive permission was cancelled. Existing backups were kept.")
+        else scope.launch {
+            authBusy = true
+            try {
+                val access = drive.authorization.result(result.data)
+                check(access is DriveAccess.Token) { "Drive permission was not completed. Reconnect and try again." }
+                drive.connect(access.value, authOwner, authEmail)
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (failure: Exception) { viewModel.fullBackup.notice(if (failure is DriveFailure) failure.message.orEmpty() else "Drive could not be connected. Check account and Google Cloud setup, then retry.") }
+            finally { authBusy = false }
+        }
+    }
     var cache by remember { mutableStateOf<CacheUsage?>(null) }
     var cacheError by remember { mutableStateOf("") }
     var refresh by remember { mutableIntStateOf(0) }
@@ -69,17 +100,51 @@ internal fun StorageScreen(viewModel: ChatViewModel, onBack: () -> Unit, onOpen:
         signedIn = owner != null, filesEnabled = integrations.filesEnabled,
         usage = usage.takeIf { owner != null && usageStatus.ownerId == owner },
         usageStatus = usageStatus.takeIf { it.ownerId == owner } ?: StorageUsageStatus(),
-        busy = busy || backupState.busy, hasBackupContent = chats.isNotEmpty() || settings.memory.isNotEmpty() || settings.projects != ProjectCodec.defaults || account.user != null,
-        backupState = backupState, onBack = onBack, onOpen = onOpen, onRefresh = { refresh++ },
+        busy = busy || backupState.busy || authBusy, hasBackupContent = chats.isNotEmpty() || settings.memory.isNotEmpty() || settings.projects != ProjectCodec.defaults || account.user != null,
+        backupState = if (driveRestoreBusy) backupState.copy(busy = true, status = "Downloading encrypted Drive backup…") else backupState,
+        onBack = onBack, onOpen = onOpen, onRefresh = { refresh++ },
         onSave = { selectedUri = null; passwordAction = "save" }, onRestore = {
             try { restore.launch(arrayOf("*/*")) }
             catch (_: ActivityNotFoundException) { viewModel.fullBackup.notice("File picker unavailable on this device.") }
             catch (_: SecurityException) { viewModel.fullBackup.notice("File access unavailable. Try another location.") }
-        }, onCancel = viewModel.fullBackup::cancel)
+        }, onCancel = viewModel::cancelBackupOperation, automaticBackup = {
+            AutomaticDriveBackupSection(driveRecord, account.user != null, busy || backupState.busy || authBusy || driveList.busy,
+                onConnect = {
+                    val user = account.user
+                    if (user == null) onOpen(DuaDestination.Account)
+                    else scope.launch {
+                        authBusy = true; authOwner = user.id; authEmail = user.email
+                        try {
+                            when (val access = drive.authorization.request(user.email)) {
+                                is DriveAccess.Token -> { drive.connect(access.value, user.id, user.email); authBusy = false }
+                                is DriveAccess.Consent -> authorization.launch(IntentSenderRequest.Builder(access.intent).build())
+                            }
+                        } catch (cancelled: CancellationException) { authBusy = false; throw cancelled }
+                        catch (failure: Exception) { authBusy = false; viewModel.fullBackup.notice(if (failure is DriveFailure) failure.message.orEmpty() else "Drive permission could not open. Check Google Play services and retry.") }
+                    }
+                }, onEnable = { passwordAction = "enable-automatic" },
+                onDisable = { scope.launch {
+                    try { withContext(Dispatchers.IO) { drive.disable() } }
+                    catch (cancelled: CancellationException) { throw cancelled }
+                    catch (_: Exception) { viewModel.fullBackup.notice("Could not save the automatic-backup Off setting. Scheduled work was stopped; retry turning it off.") }
+                } },
+                onBackup = { runCatching { drive.backupNow() }.onFailure { viewModel.fullBackup.notice("Backup could not be scheduled. Reconnect Drive and retry.") } },
+                onBrowse = { showDriveBackups = true; scope.launch { drive.loadBackups() } })
+        })
     passwordAction?.let { action ->
-        BackupPasswordDialog(saving = action != "restore", onDismiss = { passwordAction = null; selectedUri = null }, onSubmit = { password ->
+        BackupPasswordDialog(saving = action != "restore" && action != "restore-drive", onDismiss = { passwordAction = null; selectedUri = null; selectedDriveId = null }, onSubmit = { password ->
             passwordAction = null
-            if (action == "save") {
+            if (action == "enable-automatic") scope.launch {
+                try { drive.enable(password) }
+                catch (cancelled: CancellationException) { throw cancelled }
+                catch (_: Exception) { viewModel.fullBackup.notice("Automatic backup could not be enabled. Connect Drive and choose the password again.") }
+            }
+            else if (action == "restore-drive") {
+                val id = selectedDriveId; selectedDriveId = null
+                if (id == null) { password.fill('\u0000'); viewModel.fullBackup.notice("Select the Drive backup again.") }
+                else viewModel.reviewDriveBackup(id, password)
+            }
+            else if (action == "save") {
                 heldPassword = password
                 try { save.launch("dua-full-${java.time.LocalDate.now()}.duabackup") }
                 catch (_: ActivityNotFoundException) { heldPassword?.fill('\u0000'); heldPassword = null; viewModel.fullBackup.notice("File picker unavailable on this device.") }
@@ -91,7 +156,12 @@ internal fun StorageScreen(viewModel: ChatViewModel, onBack: () -> Unit, onOpen:
                 else if (action == "restore") viewModel.fullBackup.review(uri, password)
                 else viewModel.fullBackup.save(uri, password)
             }
-        })
+        }, title = if (action == "enable-automatic") "Enable daily Drive backup?" else null,
+            submitLabel = if (action == "enable-automatic") "Enable daily backup" else null,
+            description = if (action == "enable-automatic") "Encrypt all backup data with this password and store it protected by Android Keystore on this phone. Upload daily on an unmetered network; keep 3 completed backups and remove older ones after success. Save a separate copy of your password." else null)
+    }
+    if (showDriveBackups) DriveBackupListDialog(driveList, { showDriveBackups = false }, { scope.launch { drive.loadBackups() } }) { file ->
+        selectedDriveId = file.id; showDriveBackups = false; passwordAction = "restore-drive"
     }
     backupState.preview?.takeIf { !backupState.busy }?.let { preview ->
         FullBackupReviewDialog(preview, busy, account.user != null && integrations.filesEnabled && integrations.filesRestoreEnabled,
@@ -103,7 +173,7 @@ internal fun StorageScreen(viewModel: ChatViewModel, onBack: () -> Unit, onOpen:
 internal fun StorageContent(chatCount: Int, projectCount: Int, cache: CacheUsage?, cacheError: String,
     signedIn: Boolean, filesEnabled: Boolean, usage: StorageUsage?, usageStatus: StorageUsageStatus,
     busy: Boolean, hasBackupContent: Boolean, backupState: FullBackupState, onBack: () -> Unit, onOpen: (DuaDestination) -> Unit,
-    onRefresh: () -> Unit, onSave: () -> Unit, onRestore: () -> Unit, onCancel: () -> Unit) {
+    onRefresh: () -> Unit, onSave: () -> Unit, onRestore: () -> Unit, onCancel: () -> Unit, automaticBackup: @Composable () -> Unit = {}) {
     DuaPageScaffold("Storage", onBack, backEnabled = !busy) {
         SettingsGroup("On this phone") {
             SettingsValueRow("Cached chats", chatCount.toString())
@@ -147,6 +217,7 @@ internal fun StorageContent(chatCount: Int, projectCount: Int, cache: CacheUsage
                 enabled = !busy, onClick = onRestore)
         }
         PageNote("Drive must be available in the phone's file picker. Saving a copy is manual; Google sign-in alone does not connect automatic Drive backup.")
+        automaticBackup()
         PageNote("One encrypted file includes cached chats, drafts, projects, Personal memory, available in-chat attachments and private cloud file bytes. Login tokens and API keys are excluded. Up to 1 GB per archive and 256 MB per raw file. Temporary phone space is needed to prepare and verify the backup.")
         PageNote("Use account sync first to bring server-only chats and notes onto this phone. Raw cloud files restore to the original signed-in account. Traditional JSON exports are still available in Data controls.")
         SettingsGroup(null) {

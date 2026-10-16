@@ -28,6 +28,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.delay
@@ -49,7 +50,8 @@ import com.dua.ai.files.StoredFileTypes
 import kotlinx.coroutines.flow.update
 
 class ChatViewModel(application: Application) : AndroidViewModel(application) {
-    val account = com.dua.ai.account.AccountRepository(application)
+    val driveBackups = com.dua.ai.backup.drive.AutomaticDriveBackups.get(application)
+    val account = driveBackups.account
     private val setupApi = com.dua.ai.account.AccountApi()
     private val generatedAudioApi = com.dua.ai.voice.GeneratedAudioApi()
     private val _online = MutableStateFlow(false)
@@ -324,7 +326,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         try { account.setPhoneNumber(value, expectedAccountId) }
         finally { account.busy(false); refreshSyncBusy() }
     }
-    fun logOut() { automaticSync.disable(); accountAction { _cloudPreview.value = null; account.logout() } }
+    fun logOut() { driveBackups.accountChanged(null); automaticSync.disable(); accountAction { _cloudPreview.value = null; account.logout() } }
     fun cancelCloudReview() { _cloudPreview.value = null; account.notice("Cancelled. Data was not changed.") }
     fun reviewCloud(kind: String) = accountAction {
         val remote = account.cloud()
@@ -1181,10 +1183,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     val dataStatus: StateFlow<String> = _dataStatus.asStateFlow()
     fun dataControlNotice(text: String) { _dataStatus.value = text }
 
-    private val fullBackupDelegate = lazy {
-        com.dua.ai.backup.FullBackupController(viewModelScope, getApplication<Application>().contentResolver,
-            File(getApplication<Application>().cacheDir, "full-backups"), com.dua.ai.backup.BackupFileTransfer(account),
-            object : com.dua.ai.backup.FullBackupPort {
+    private val fullBackupPort = object : com.dua.ai.backup.FullBackupPort {
                 override fun begin(): com.dua.ai.backup.FullBackupSnapshot {
                     check(!syncBlocked() && !_readingFiles.value && !_preparingFiles.value && _uploads.value.isEmpty() && _attachments.value.isEmpty() && _recordingSince.value == null) {
                         "Finish the current reply or data action, and send or remove pending files before making a backup."
@@ -1194,7 +1193,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     draftSaver.runNow()
                     val settings = localSettings.value
                     val snapshot = com.dua.ai.backup.FullBackupSnapshot(com.dua.ai.history.ChatBackup(_savedChats.value.toList(), settings.projects.toList()),
-                        settings.memory.toList(), account.state.value.user?.id, _integrations.value.filesEnabled)
+                        settings.memory.toList(), account.state.value.user?.id, _integrations.value.filesEnabled, currentDeletionIds())
                     _dataBusy.value = true; refreshSyncBusy()
                     return snapshot
                 }
@@ -1218,9 +1217,48 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     if (operation == null && continuation.isActive) { _importPreview.value = null; continuation.resumeWith(Result.success(false)) }
                     continuation.invokeOnCancellation { operation?.cancel() }
                 }
-            })
+    }
+    private val fullBackupDelegate = lazy {
+        com.dua.ai.backup.FullBackupController(viewModelScope, getApplication<Application>().contentResolver,
+            File(getApplication<Application>().cacheDir, "full-backups"), com.dua.ai.backup.BackupFileTransfer(account), fullBackupPort)
     }
     val fullBackup by fullBackupDelegate
+    private var driveRestoreJob: Job? = null
+    private val _driveRestoreBusy = MutableStateFlow(false)
+    val driveRestoreBusy = _driveRestoreBusy.asStateFlow()
+    fun cancelBackupOperation() { driveRestoreJob?.cancel(); fullBackup.cancel() }
+
+    fun reviewDriveBackup(id: String, password: CharArray) {
+        if (syncBlocked()) { password.fill('\u0000'); fullBackup.notice("Finish the current app action before restoring a Drive backup."); return }
+        _dataBusy.value = true; refreshSyncBusy()
+        _driveRestoreBusy.value = true
+        driveRestoreJob = viewModelScope.launch {
+            var file: File? = null
+            var handedOff = false
+            try {
+                fullBackup.notice("Downloading encrypted Drive backup…")
+                file = driveBackups.downloadBackup(id)
+                _dataBusy.value = false
+                _driveRestoreBusy.value = false
+                fullBackup.review(Uri.fromFile(file), password)
+                handedOff = true
+                fullBackup.state.first { !it.busy }
+            } catch (cancelled: CancellationException) {
+                if (!handedOff) fullBackup.notice("Drive restore cancelled. Nothing was imported.")
+                throw cancelled
+            }
+            catch (failure: Exception) { fullBackup.notice(if (failure is com.dua.ai.backup.drive.DriveFailure) failure.message.orEmpty() else "Drive restore could not be prepared. Nothing was imported; reconnect Drive and retry.") }
+            finally {
+                if (!handedOff) password.fill('\u0000')
+                withContext(kotlinx.coroutines.NonCancellable) {
+                    withContext(Dispatchers.IO) { file?.delete() }
+                    _driveRestoreBusy.value = false
+                    _dataBusy.value = false; refreshSyncBusy()
+                    driveRestoreJob = null
+                }
+            }
+        }
+    }
 
     private val _importPreview = MutableStateFlow<List<SavedChat>?>(null)
     private var importProjects = com.dua.ai.projects.ProjectCodec.defaults
@@ -1718,6 +1756,11 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     init {
+        driveBackups.bind(this) {
+            val snapshot = try { fullBackupPort.begin() }
+            catch (failure: IllegalStateException) { throw com.dua.ai.backup.drive.DriveFailure(failure.message ?: "Finish the current app action before backing up.", retryable = true) }
+            try { snapshot } finally { fullBackupPort.end() }
+        }
         preferences.getString("history", null)?.let { raw ->
             try {
                 val (id, records) = com.dua.ai.history.ChatHistoryPreload.take(raw)
@@ -1748,7 +1791,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 state.busy || dataBusy || typing || cloud != null || imported != null
             }.distinctUntilChanged().collect { refreshSyncBusy() }
         }
-        viewModelScope.launch { account.state.map { it.user?.id }.distinctUntilChanged().collect { automaticSync.accountChanged(); resumeImagineJobs() } }
+        viewModelScope.launch { account.state.map { it.user?.id }.distinctUntilChanged().collect { driveBackups.accountChanged(it); automaticSync.accountChanged(); resumeImagineJobs() } }
         viewModelScope.launch {
             _buildPr.map { states -> states.values.any { it.creating } }.distinctUntilChanged().collect { refreshSyncBusy() }
         }
@@ -1764,6 +1807,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     override fun onCleared() {
+        driveBackups.unbind(this)
         if (fullBackupDelegate.isInitialized()) fullBackup.close()
         flushHistory()
         recorder.cancel()
