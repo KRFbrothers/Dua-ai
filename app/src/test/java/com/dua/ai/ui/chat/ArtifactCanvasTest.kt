@@ -72,6 +72,30 @@ class ArtifactCanvasTest(private val dark: Boolean) {
         }
     }
     private fun open() = compose.onNodeWithTag("open-canvas").performScrollTo().performClick()
+
+    @Test fun aCompletedFenceAppearsOnlyAfterStreamingAndTheCanvasUsesItsFinalSource() {
+        val partial = "```html\n<h1>Draft"
+        val final = "<h1>Final output</h1>\n"
+        state.value = state.value.copy(messages = listOf(message.copy(text = partial, state = ChatMessage.STREAMING)))
+        compose.mainClock.autoAdvance = false
+        show(); compose.mainClock.advanceTimeBy(300)
+        compose.onNodeWithTag("open-canvas").assertDoesNotExist()
+        // A complete message can still contain an unfinished code fence: do not offer a preview.
+        compose.runOnIdle { state.value = state.value.copy(messages = listOf(message.copy(text = partial))) }
+        compose.mainClock.advanceTimeBy(300)
+        compose.onNodeWithTag("open-canvas").assertDoesNotExist()
+        compose.runOnIdle { state.value = state.value.copy(messages = listOf(message.copy(text = "```html\n${final}```"))) }
+        compose.mainClock.advanceTimeBy(300)
+        compose.mainClock.autoAdvance = true
+        open()
+        compose.onNodeWithTag("canvas-code-tab").performClick()
+        compose.onNodeWithTag("canvas-source").assert(hasText(final))
+        compose.onNodeWithContentDescription("Copy artifact source").performClick()
+        compose.runOnIdle { assertEquals(final, clipboard.getText()?.text) }
+        compose.onNodeWithContentDescription("Close canvas").performClick()
+        compose.runOnIdle { state.value = state.value.copy(messages = listOf(message.copy(text = "Plain replacement"))) }
+        compose.onNodeWithTag("open-canvas").assertDoesNotExist()
+    }
     private fun webViews(): List<WebView> {
         fun find(view: View): List<WebView> = if (view is WebView) listOf(view)
             else if (view is ViewGroup) (0 until view.childCount).flatMap { find(view.getChildAt(it)) } else emptyList()

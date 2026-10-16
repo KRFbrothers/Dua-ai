@@ -121,6 +121,21 @@ class RichSourceCardsTest(private val dark: Boolean) {
         compose.onNodeWithText("[4]", useUnmergedTree = true).assertExists()
     }
 
+    @Test fun replacingCitationsUpdatesTheDomainInitialAndAccessibleLinkTarget() {
+        val sources = mutableStateOf(listOf(first))
+        val replacement = ReplySource(1, "New release", "https://news.example.org/release?version=2")
+        show { SourceChips(sources.value) }
+        compose.onNodeWithText("K", useUnmergedTree = true).assertExists()
+        compose.runOnIdle { sources.value = listOf(replacement) }
+        compose.onNodeWithContentDescription(label(first)).assertDoesNotExist()
+        compose.onNodeWithText("K", useUnmergedTree = true).assertDoesNotExist()
+        compose.onNodeWithText("N", useUnmergedTree = true).assertExists()
+        compose.onNodeWithContentDescription(label(replacement)).performTouchInput { click() }
+        compose.runOnIdle {
+            assertEquals(replacement.url, Shadows.shadowOf(activity()).nextStartedActivity.dataString)
+        }
+    }
+
     @Test fun largeTextKeepsTwoLineTitlesAndAnUnclippedIndexOnASmallPhone() {
         show(large = true) { SourceChips(listOf(first, second)) }
         val card = compose.onNodeWithContentDescription(label(first)).assertIsDisplayed().fetchSemanticsNode().boundsInRoot
