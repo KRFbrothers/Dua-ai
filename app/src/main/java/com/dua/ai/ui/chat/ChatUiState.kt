@@ -161,6 +161,7 @@ class ChatActions(
     val onPickPhotos: () -> Unit = {},
     val onPickFiles: () -> Unit = {},
     val onClearAttachments: () -> Unit = {},
+    val onRemoveAttachment: (Int) -> Unit = {},
     val onCancelUpload: (String) -> Unit = {},
     val onPickAudio: () -> Unit = {},
     val onStartRecording: () -> Unit = {},

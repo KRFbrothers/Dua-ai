@@ -392,14 +392,18 @@ fun ChatScreen(
                                 onCancelUpload = rememberUpdatedState(state.uploads).let { uploads -> remember(actions) { { uploads.value.filter { it.uploading }.forEach { actions.onCancelUpload(it.id) } } } },
                                 onImagineOptions = { sheet = ChatSheet.Imagine },
                                 showModelSelector = false,
-                                placeholder = if (feature == null && taskHome) "Describe..." else "Ask Dua AI",
-                                sendEnabled = taskReady,
-                                aboveInput = {
-                                    if (feature == null) HomeModeSwitcher(if (taskHome) HomeMode.Task else HomeMode.Chat,
+                                placeholder = if (feature == null && taskHome) "Describe..." else "Ask Dua AI...",
+                                sendEnabled = taskReady && state.canSend,
+                                attachments = state.attachments,
+                                uploads = state.uploads,
+                                onRemoveAttachment = actions.onRemoveAttachment,
+                                onRemoveUpload = actions.onCancelUpload,
+                                aboveInput = if (feature != null) null else { {
+                                    HomeModeSwitcher(if (taskHome) HomeMode.Task else HomeMode.Chat,
                                         onSelect = { mode ->
                                             if (!state.typing) { tap(); taskHome = mode == HomeMode.Task; actions.onAgent(taskHome) }
                                         }, enabled = !state.typing)
-                                },
+                                } },
                                 attachmentPopup = {
                                     if (feature == ChatFeature.Projects) com.dua.ai.ui.projects.ProjectAttachmentMenu(sheet == ChatSheet.Attach, { sheet = null },
                                         { actions.onPickCamera() }, { actions.onPickPhotos() }, { actions.onPickFiles() }, { actions.onOpenDestination(DuaDestination.Plugins) })

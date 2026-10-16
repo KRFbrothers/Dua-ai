@@ -253,6 +253,7 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
                 }
             },
             onClearAttachments = { viewModel.clearAttachments(); attachmentNotice = "" },
+            onRemoveAttachment = viewModel::removeAttachment,
             onOpenSettings = onOpenSettings,
             // Drawer and Home use the same destination dispatch, including the existing Computer screen.
             onOpenDestination = { destination ->
