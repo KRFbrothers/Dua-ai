@@ -23,8 +23,8 @@ class SettingsSubPageNavigationTest {
     @get:Rule val compose = createComposeRule()
     private lateinit var nav: NavHostController
 
-    private val pages = listOf(DuaDestination.Memory to "Memory", DuaDestination.Privacy to "Privacy",
-        DuaDestination.Sharing to "Sharing", DuaDestination.Permissions to "Permissions", DuaDestination.Notifications to "Notifications")
+    private val pages = listOf(DuaDestination.Privacy to "Privacy",
+        DuaDestination.Sharing to "Sharing", DuaDestination.Permissions to "Permissions")
 
     private fun show(theme: String) = compose.setContent {
         DuaTheme(LocalPreferences(theme = theme)) {

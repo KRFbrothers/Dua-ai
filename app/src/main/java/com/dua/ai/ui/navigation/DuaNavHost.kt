@@ -42,6 +42,13 @@ import com.dua.ai.ui.screens.DataControlsScreen
 import com.dua.ai.ui.screens.IntegrationSetupScreen
 import com.dua.ai.ui.screens.ProfileScreen
 import com.dua.ai.ui.settings.SettingsScreen
+import com.dua.ai.ui.settings.GeneralScreen
+import com.dua.ai.ui.settings.MemoryScreen
+import com.dua.ai.ui.settings.NotificationsScreen
+import com.dua.ai.ui.settings.SafetyContent
+import com.dua.ai.ui.settings.SecurityLoginContent
+import com.dua.ai.ui.settings.UsageLimitsContent
+import com.dua.ai.ui.settings.openAndroidSettings
 import com.dua.ai.ui.voice.ReplyVoice
 import com.dua.ai.ui.voice.VoiceScreen
 import com.dua.ai.viewmodel.ChatViewModel
@@ -318,6 +325,31 @@ fun DuaNavHost(viewModel: ChatViewModel, voice: ReplyVoice, notificationRoute: P
                 com.dua.ai.ui.settings.AppearanceScreen(viewModel, onBack = navigator::back, accentPage = destination == DuaDestination.Accent)
             }
         }
+        settingsFeaturePages(
+            memory = { BusyBackGuard(viewModel); MemoryScreen(viewModel, navigator::back, navigator::open) },
+            general = { BusyBackGuard(viewModel); GeneralScreen(viewModel, navigator::back, navigator::open) },
+            notifications = { BusyBackGuard(viewModel); NotificationsScreen(viewModel, navigator::back) },
+            usage = {
+                BusyBackGuard(viewModel)
+                val integrations by viewModel.integrations.collectAsState()
+                val owner by viewModel.account.state.collectAsState()
+                UsageLimitsContent(integrations, owner.user != null, navigator::back, navigator::open)
+            },
+            safety = {
+                BusyBackGuard(viewModel)
+                val settings by viewModel.localSettings.collectAsState()
+                val status by viewModel.settingsStatus.collectAsState()
+                SafetyContent(settings.memoryEnabled, navigator::back, navigator::open,
+                    onPermissions = { if (!openAndroidSettings(context)) viewModel.settingsNotice("Android app settings are unavailable on this device.") }, status = status)
+            },
+            security = {
+                BusyBackGuard(viewModel)
+                val owner by viewModel.account.state.collectAsState()
+                val status by viewModel.settingsStatus.collectAsState()
+                SecurityLoginContent(owner.user?.email, navigator::back, navigator::open,
+                    onPermissions = { if (!openAndroidSettings(context)) viewModel.settingsNotice("Android app settings are unavailable on this device.") }, status = status)
+            },
+        )
         comingSoonPages(onBack = navigator::back, onFeatureBack = exitFeature) { BusyBackGuard(viewModel) }
         composable(DuaDestination.CloudSync.route) {
             BusyBackGuard(viewModel)
