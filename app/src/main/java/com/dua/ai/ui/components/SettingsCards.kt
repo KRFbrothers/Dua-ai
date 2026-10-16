@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -30,7 +31,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
 import com.dua.ai.ui.chat.sheetSwitchColors
 import com.dua.ai.ui.theme.SettingsRowStyle
 import com.dua.ai.ui.theme.SettingsSectionStyle
@@ -62,14 +65,28 @@ fun SettingsRowDivider() {
 }
 
 @Composable
-private fun RowScope.Label(icon: ImageVector?, title: String, subtitle: String?, titleColor: Color, enabled: Boolean) {
+private fun RowScope.Label(icon: ImageVector?, title: String, subtitle: String?, titleColor: Color, enabled: Boolean, stackedValue: String? = null) {
     val c = SettingsTheme.colors
     if (icon != null) Icon(icon, null, tint = if (!enabled) c.chevron else if (titleColor == Color.Unspecified) c.rowIcon else titleColor,
         modifier = Modifier.size(SettingsSizes.rowIcon))
     Column(Modifier.weight(1f)) {
         Text(title, style = SettingsRowStyle, color = if (!enabled) c.value else if (titleColor == Color.Unspecified) c.rowText else titleColor)
         if (!subtitle.isNullOrBlank()) Text(subtitle, style = SettingsValueStyle, color = c.value)
+        if (!stackedValue.isNullOrBlank()) Text(stackedValue, style = SettingsValueStyle, color = c.value)
     }
+}
+
+/** Measure with the actual font scale: long values flow below the label instead of truncating it. */
+@Composable
+internal fun settingsValueFitsInline(width: Dp, title: String, value: String?, icon: Boolean, chevron: Boolean): Boolean {
+    if (value.isNullOrBlank()) return true
+    val measurer = rememberTextMeasurer()
+    val reserved = SettingsSizes.rowPadding * 2 + SettingsSizes.rowGap +
+        (if (icon) SettingsSizes.rowIcon + SettingsSizes.rowGap else Dp(0f)) +
+        (if (chevron) SettingsSizes.chevron + SettingsSizes.rowGap else Dp(0f))
+    val available = with(LocalDensity.current) { (width - reserved).toPx() }
+    return measurer.measure(title, SettingsRowStyle, softWrap = false, maxLines = 1).size.width +
+        measurer.measure(value, SettingsValueStyle, softWrap = false, maxLines = 1).size.width <= available
 }
 
 /** Navigation row: icon, title, optional subtitle, right-hand value and chevron. */
@@ -77,11 +94,14 @@ private fun RowScope.Label(icon: ImageVector?, title: String, subtitle: String?,
 fun SettingsNavRow(icon: ImageVector?, title: String, subtitle: String? = null, value: String? = null, titleColor: Color = Color.Unspecified,
     showChevron: Boolean = true, enabled: Boolean = true, onClick: () -> Unit) {
     val c = SettingsTheme.colors
-    Row(Modifier.fillMaxWidth().heightIn(min = SettingsSizes.touch).clickable(enabled = enabled, role = Role.Button, onClick = onClick)
-        .padding(SettingsSizes.rowPadding), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(SettingsSizes.rowGap)) {
-        Label(icon, title, subtitle, titleColor, enabled)
-        if (!value.isNullOrBlank()) Text(value, Modifier.weight(1f, fill = false), style = SettingsValueStyle, color = c.value, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        if (showChevron) Icon(Icons.Filled.ChevronRight, null, tint = c.chevron, modifier = Modifier.size(SettingsSizes.chevron))
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val inline = settingsValueFitsInline(maxWidth, title, value, icon != null, showChevron)
+        Row(Modifier.fillMaxWidth().heightIn(min = SettingsSizes.touch).clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .padding(SettingsSizes.rowPadding), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(SettingsSizes.rowGap)) {
+            Label(icon, title, subtitle, titleColor, enabled, stackedValue = value.takeUnless { inline })
+            if (inline && !value.isNullOrBlank()) Text(value, style = SettingsValueStyle, color = c.value, maxLines = 1)
+            if (showChevron) Icon(Icons.Filled.ChevronRight, null, tint = c.chevron, modifier = Modifier.size(SettingsSizes.chevron))
+        }
     }
 }
 

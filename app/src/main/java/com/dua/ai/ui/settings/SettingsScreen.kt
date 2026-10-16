@@ -40,9 +40,9 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.style.TextOverflow
 import com.dua.ai.ui.components.AccountAvatar
 import com.dua.ai.ui.components.ReferenceIcons
+import com.dua.ai.ui.components.settingsValueFitsInline
 import com.dua.ai.BuildConfig
 import com.dua.ai.ui.navigation.DuaDestination
 import com.dua.ai.ui.theme.*
@@ -71,6 +71,7 @@ data class SettingsUiState(
     val avatarUrl: String = "",
     val workspace: String = "Personal",
     val personality: String? = null,
+    val notificationStatus: String? = null,
 )
 
 internal fun themeLabel(theme: String) = when (theme) { "light" -> "Light"; "system" -> "Match system"; else -> "Dark" }
@@ -84,10 +85,12 @@ fun SettingsScreen(viewModel: ChatViewModel, onBack: () -> Unit, onOpen: (DuaDes
     val account by viewModel.account.state.collectAsState()
     val sync by viewModel.automaticSyncState.collectAsState()
     val integrations by viewModel.integrations.collectAsState()
+    val notifications = rememberDeviceNotifications()
     val state = SettingsUiState(
         displayName = account.user?.displayName.orEmpty(), accent = appearance.resolvedAccent(DuaTheme.colors.isDark).label, accountBusy = account.busy, accountNotice = account.notice,
         avatarUrl = account.user?.avatarUrl.orEmpty(), email = account.user?.email, theme = appearance.theme, font = preferences.font, haptic = preferences.haptic,
         memoryEnabled = preferences.memoryEnabled, notifications = preferences.notifications, personality = appearance.personality?.label,
+        notificationStatus = notificationSummary(preferences.notifications, notifications),
         sync = if (sync.enabled) "On" else "Off",
         voice = integrations.voice?.let { config ->
             val options = if (preferences.generatedVoice && account.user != null) com.dua.ai.voice.VoiceCodec.ttsOptions(config, preferences.voiceProvider,
@@ -149,17 +152,17 @@ fun SettingsContent(state: SettingsUiState, onBack: () -> Unit, onOpen: (DuaDest
             SettingsItemRow(Icons.AutoMirrored.Outlined.MenuBook, "Memory", if (state.memoryEnabled) "On" else "Off") { onOpen(DuaDestination.Memory) }
             SettingsItemRow(Icons.Outlined.Extension, "Plugins") { onOpen(DuaDestination.Plugins) }
             if (state.imagine != null) SettingsItemRow(Icons.Outlined.Brush, "Imagine", state.imagine) { onOpen(DuaDestination.Imagine) }
-            Row(Modifier.fillMaxWidth().heightIn(min = SettingsSizes.touch)
-                .clickable(role = Role.Button, onClickLabel = "Change accent color") { onOpen(DuaDestination.Accent) }
-                .padding(SettingsSizes.rowPadding), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(SettingsSizes.rowGap), verticalAlignment = Alignment.CenterVertically) {
+            BoxWithConstraints(Modifier.fillMaxWidth()) {
+                val inline = settingsValueFitsInline(maxWidth - SettingsSizes.accentDot - SettingsSizes.accentGap, "Accent color", state.accent, icon = true, chevron = true)
+                Row(Modifier.fillMaxWidth().heightIn(min = SettingsSizes.touch)
+                    .clickable(role = Role.Button, onClickLabel = "Change accent color") { onOpen(DuaDestination.Accent) }
+                    .padding(SettingsSizes.rowPadding), horizontalArrangement = Arrangement.spacedBy(SettingsSizes.rowGap), verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Outlined.Palette, null, tint = c.rowIcon, modifier = Modifier.size(SettingsSizes.rowIcon))
-                    Text("Accent color", style = SettingsRowStyle, color = c.rowText)
-                }
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(SettingsSizes.accentGap)) {
-                    Box(Modifier.size(SettingsSizes.accentDot).clip(SettingsShapes.circle).background(LocalDuaAccent.current.color))
-                    Text(state.accent, style = SettingsValueStyle, color = c.accentValue)
-                    Icon(Icons.Filled.KeyboardArrowDown, null, tint = c.arrow, modifier = Modifier.size(SettingsSizes.arrow))
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+                        Text("Accent color", style = SettingsRowStyle, color = c.rowText)
+                        if (!inline) AccentValue(state.accent)
+                    }
+                    if (inline) AccentValue(state.accent)
                 }
             }
         }
@@ -170,7 +173,7 @@ fun SettingsContent(state: SettingsUiState, onBack: () -> Unit, onOpen: (DuaDest
             SettingsItemRow(Icons.Outlined.Settings, "General") { onOpen(DuaDestination.General) }
             SettingsItemRow(Icons.Outlined.Tune, "Feature setup", "Providers & connectors") { onOpen(DuaDestination.FeatureSetup) }
             SettingsItemRow(Icons.AutoMirrored.Outlined.TrendingUp, "Usage and limits") { onOpen(DuaDestination.UsageLimits) }
-            SettingsItemRow(Icons.Outlined.Notifications, "Notifications", if (state.notifications) "On" else "Off") { onOpen(DuaDestination.Notifications) }
+            SettingsItemRow(Icons.Outlined.Notifications, "Notifications", state.notificationStatus ?: if (state.notifications) "On" else "Off") { onOpen(DuaDestination.Notifications) }
             SettingsItemRow(Icons.Outlined.GraphicEq, "Voice", state.voice) { onOpen(DuaDestination.VoiceSettings) }
             SettingsItemRow(Icons.Outlined.Shield, "Safety") { onOpen(DuaDestination.Safety) }
             SettingsItemRow(Icons.Outlined.Lock, "Security and login") { onOpen(DuaDestination.SecurityLogin) }
@@ -182,6 +185,16 @@ fun SettingsContent(state: SettingsUiState, onBack: () -> Unit, onOpen: (DuaDest
     if (about) DuaDialog(onDismissRequest = { about = false }, title = "About Dua AI",
         text = { Text(style = SheetBodyStyle, text = "Version ${state.version} · personal assistant") },
         confirmButton = { SheetTextButton("Close", onClick = { about = false }) })
+}
+
+@Composable
+private fun AccentValue(accent: String) {
+    val c = SettingsTheme.colors
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(SettingsSizes.accentGap)) {
+        Box(Modifier.size(SettingsSizes.accentDot).clip(SettingsShapes.circle).background(LocalDuaAccent.current.color))
+        Text(accent, style = SettingsValueStyle, color = c.accentValue)
+        Icon(Icons.Filled.KeyboardArrowDown, null, tint = c.arrow, modifier = Modifier.size(SettingsSizes.arrow))
+    }
 }
 
 @Composable
@@ -208,18 +221,20 @@ fun SettingsItemRow(icon: ImageVector, label: String, value: String? = null, sho
     val c = SettingsTheme.colors
     val color = if (tint == Color.Unspecified) c.rowText else tint
     BoxWithConstraints {
-        val valueMaxWidth = maxWidth / 2
+        val inline = settingsValueFitsInline(maxWidth, label, value, icon = true, chevron = chevron)
         Column {
             Row(Modifier.fillMaxWidth().heightIn(min = SettingsSizes.touch).clickable(enabled = enabled, role = Role.Button, onClickLabel = onClickLabel, onClick = onClick)
                 .padding(SettingsSizes.rowPadding), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(SettingsSizes.rowGap), verticalAlignment = Alignment.CenterVertically) {
                     Icon(icon, null, tint = if (tint == Color.Unspecified) c.rowIcon else tint, modifier = Modifier.size(SettingsSizes.rowIcon))
-                    Text(label, style = SettingsRowStyle, color = color)
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+                        Text(label, style = SettingsRowStyle, color = color)
+                        if (!inline && !value.isNullOrBlank()) Text(value, style = SettingsValueStyle, color = c.value)
+                    }
                 }
-                if (!value.isNullOrBlank() || chevron) Row(Modifier.widthIn(max = valueMaxWidth).padding(start = SettingsSizes.rowGap), verticalAlignment = Alignment.CenterVertically,
+                if ((inline && !value.isNullOrBlank()) || chevron) Row(Modifier.padding(start = SettingsSizes.rowGap), verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(SettingsSizes.valueGap)) {
-                    if (!value.isNullOrBlank()) Text(value, Modifier.weight(1f, fill = false), style = SettingsValueStyle, color = c.value,
-                        maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    if (inline && !value.isNullOrBlank()) Text(value, style = SettingsValueStyle, color = c.value, maxLines = 1)
                     if (chevron) Icon(Icons.Filled.ChevronRight, null, tint = c.chevron, modifier = Modifier.size(SettingsSizes.chevron))
                 }
             }

@@ -5,12 +5,20 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.core.content.ContextCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.dua.ai.MainActivity
 
 object LocalReplyNotifications {
-    fun available(context: Context): Boolean = NotificationManagerCompat.from(context).areNotificationsEnabled()
+    fun available(context: Context): Boolean {
+        if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return false
+        val channel = context.getSystemService(NotificationManager::class.java).getNotificationChannel("dua-replies")
+        return NotificationManagerCompat.from(context).areNotificationsEnabled() && channel?.importance != NotificationManager.IMPORTANCE_NONE
+    }
     fun show(context: Context, chatId: String) {
         if (!available(context)) return
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
