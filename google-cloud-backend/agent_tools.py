@@ -26,7 +26,9 @@ import time
 from urllib.parse import urljoin, urlsplit
 
 MAX_STEPS = int(os.environ.get("AGENT_MAX_STEPS", "12"))
-STEP_TOKENS = int(os.environ.get("AGENT_STEP_TOKENS", "16384"))
+# Argon thinks longer (output cap includes thinking), so it gets 32768 per step unless AGENT_STEP_TOKENS is set.
+STEP_TOKENS = int(os.environ.get("AGENT_STEP_TOKENS") or
+                  ("32768" if os.environ.get("AGENT_MODEL", "").startswith("gemini-4") else "16384"))
 SUB_TOKENS = int(os.environ.get("AGENT_SUB_TOKENS", "3072"))
 MAX_SECONDS = int(os.environ.get("AGENT_MAX_SECONDS", "600"))
 LIMITS = {"google_search": 3, "fetch_url": 5, "run_python": 2, "generate_image": 1, "remember": 3,

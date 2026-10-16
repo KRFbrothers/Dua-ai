@@ -190,3 +190,7 @@ each one runs on this server, behind the same owner sign-in as `/api/chat`.
 Loop caps: `AGENT_MAX_STEPS` model calls (default 12), `AGENT_STEP_TOKENS` output tokens per step (16384),
 `AGENT_SUB_TOKENS` per search/code call (3072) and `AGENT_MAX_SECONDS` total (600). Each tool shows a step chip
 in the app ("Searching the web…", "Opening page…", "Running code…", "Creating image…").
+
+## Agent model (optional)
+
+`AGENT_MODEL` sets the model for the Dua Agent tool loop only (its search/code sub-calls included); the router, casual replies, titles and normal chat stay on `VERTEX_MODEL`. Default: same as `VERTEX_MODEL`. Example: `AGENT_MODEL=gemini-4-argon` (Vertex locations `global`, `us`, `eu`). `AGENT_THINKING_LEVEL` is `low`, `medium` or `high` (default `medium` when `AGENT_MODEL` differs). With a `gemini-4*` agent model the per-step output cap (thinking included) defaults to 32768; `AGENT_STEP_TOKENS` overrides it. Step, time and tool caps are unchanged. If the agent model returns 404/403 (not found or no permission), the request falls back once to `VERTEX_MODEL` and logs `[dua-agent] ... falling back`.

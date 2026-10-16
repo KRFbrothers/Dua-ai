@@ -267,3 +267,57 @@ def test_casual_agent_message_has_no_progress(model):
     body = dict(BODY, messages=[{"role": "user", "text": "hi"}])
     evs = events(engine.app.test_client().post("/api/chat", json=body))
     assert not any(e["type"] == "progress" for e in evs)
+
+
+class _Err(Exception):
+    def __init__(self, code):
+        super().__init__(f"{code} error")
+        self.code = code
+
+
+class _Models:
+    def __init__(self, fail_code=None):
+        self.calls, self.fail_code = [], fail_code
+
+    def generate_content(self, model, contents, config):
+        self.calls.append((model, config.thinking_config.thinking_level if config.thinking_config else None))
+        if model == "gemini-4-argon" and self.fail_code:
+            raise _Err(self.fail_code)
+        return "ok"
+
+
+def _argon(monkeypatch, models):
+    import pytest
+    pytest.importorskip("google.genai")
+    monkeypatch.setattr(engine, "AGENT_MODEL", "gemini-4-argon")
+    monkeypatch.setattr(engine, "AGENT_THINKING_LEVEL", "medium")
+    monkeypatch.setattr(engine, "get_client", lambda: type("C", (), {"models": models})())
+    return engine.get_agent_model("sys")
+
+
+def test_agent_model_uses_argon_with_medium_thinking(monkeypatch):
+    models = _Models()
+    assert _argon(monkeypatch, models).generate_content(["hi"]) == "ok"
+    assert models.calls == [("gemini-4-argon", "MEDIUM")]
+
+
+def test_agent_model_falls_back_once_on_not_found(monkeypatch, capsys):
+    models = _Models(fail_code=404)
+    model = _argon(monkeypatch, models)
+    assert model.generate_content(["hi"]) == "ok"
+    assert model.generate_content(["again"]) == "ok"
+    assert models.calls == [("gemini-4-argon", "MEDIUM"), (engine.MODEL_NAME, engine.THINKING_LEVEL.upper()),
+                            (engine.MODEL_NAME, engine.THINKING_LEVEL.upper())]
+    assert "falling back" in capsys.readouterr().out
+
+
+def test_agent_model_does_not_fall_back_on_other_errors(monkeypatch):
+    import pytest
+    with pytest.raises(_Err):
+        _argon(monkeypatch, _Models(fail_code=429)).generate_content(["hi"])
+
+
+def test_default_agent_model_is_the_chat_model(monkeypatch):
+    monkeypatch.setattr(engine, "get_model", lambda system=engine.SYSTEM_PROMPT: "shared")
+    assert engine.AGENT_MODEL == engine.MODEL_NAME
+    assert engine.get_agent_model("sys") == "shared"
