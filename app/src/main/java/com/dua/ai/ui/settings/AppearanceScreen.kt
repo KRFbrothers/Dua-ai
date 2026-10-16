@@ -17,6 +17,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import com.dua.ai.settings.AccentPreset
 import com.dua.ai.settings.AppearancePreferences
+import com.dua.ai.settings.DuaPersonality
 import com.dua.ai.settings.LocalPreferences
 import com.dua.ai.ui.components.*
 import com.dua.ai.ui.theme.SettingsSizes
@@ -36,12 +37,13 @@ fun AppearanceScreen(viewModel: ChatViewModel, onBack: () -> Unit, accentPage: B
         { enabled ->
             viewModel.updateSettings(viewModel.localSettings.value.copy(haptic = enabled))
             if (enabled) haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-        }, notice.ifBlank { readNotice })
+        }, notice.ifBlank { readNotice }, onPersonality = viewModel::setPersonality)
 }
 
 @Composable
 fun AppearanceContent(appearance: AppearancePreferences, settings: LocalPreferences, onBack: () -> Unit,
-    onTheme: (String) -> Unit, onFont: (String) -> Unit, onHaptic: (Boolean) -> Unit, notice: String = "") {
+    onTheme: (String) -> Unit, onFont: (String) -> Unit, onHaptic: (Boolean) -> Unit, notice: String = "",
+    onPersonality: (DuaPersonality) -> Unit = {}) {
     DuaPageScaffold("Appearance", onBack) {
         Text("Choose your appearance", style = MaterialTheme.typography.titleLarge)
         Text("Accent color is a separate preference.", color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -60,6 +62,14 @@ fun AppearanceContent(appearance: AppearancePreferences, settings: LocalPreferen
         }
         SettingsGroup(null) { SettingsToggleRow(Icons.Outlined.Vibration, "Haptic feedback", checked = settings.haptic, onCheckedChange = onHaptic) }
         Text("Text size follows your phone's font size setting.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        SettingsGroup("Dua AI Personality", Modifier.selectableGroup()) {
+            DuaPersonality.entries.forEachIndexed { i, personality ->
+                if (i > 0) SettingsRowDivider()
+                SettingsChoiceRow(personality.label, appearance.personality == personality,
+                    subtitle = personality.description, onClick = { onPersonality(personality) })
+            }
+        }
+        Text("Choose how Dua AI responds. Saved on this device.", color = MaterialTheme.colorScheme.onSurfaceVariant)
         if (notice.isNotBlank()) Text(notice)
     }
 }

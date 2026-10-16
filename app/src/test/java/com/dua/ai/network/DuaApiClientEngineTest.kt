@@ -28,6 +28,39 @@ class DuaApiClientEngineTest {
     private fun engine() = DuaApiClient("https://engine.example.run.app", apiBaseUrl = "https://base.example.app")
     private fun json(request: okhttp3.Request): JSONObject = JSONObject(Buffer().also { request.body!!.writeTo(it) }.readUtf8())
 
+    @Test fun personalitiesUseASeparateSystemPreferenceFieldForBothChatBackendsAndRetry() {
+        for (api in listOf(engine(), DuaApiClient("https://base.example.app"))) {
+            val context = com.dua.ai.model.ConversationContext("chat-id-1234", null, projectId = "coding")
+            val turns = history + ChatMessage(text = "Hello", isUser = false) + ChatMessage(text = "Review my code", isUser = true)
+            for (preset in com.dua.ai.settings.DuaPersonality.entries) {
+                val body = json(api.buildRequest("Dua", turns, emptyList(), "", "session.token", null,
+                    false, true, context = context, personality = preset.instruction))
+                assertEquals(preset.instruction, body.getString("personality"))
+                assertEquals("", body.getString("memory")) // A style never enables Personal notes.
+                assertEquals("coding", body.getString("projectId"))
+                assertEquals("Review my code", body.getJSONArray("messages").getJSONObject(2).getString("text"))
+            }
+            assertFalse(json(api.buildRequest("Dua", history, emptyList(), "", null, null, false, true)).has("personality"))
+            for (mode in listOf("auto", "agent", "build")) {
+                val request = api.buildRequest("Dua", history, emptyList(), "Keep project context", null, null, false, true,
+                    agent = mode == "agent", build = "KRFbrothers/Dua-ai".takeIf { mode == "build" },
+                    personality = com.dua.ai.settings.DuaPersonality.SeniorArchitect.instruction)
+                assertEquals(mode, json(request).getString("mode"))
+                assertEquals("Keep project context", json(request).getString("memory"))
+            }
+        }
+    }
+
+    @Test fun personalityCapabilityRequiresAnExplicitTrueFromTheActualBackend() {
+        for (value in listOf("true", "false", "\"true\"", "null")) {
+            val raw = """{"personalization":{"personality":$value}}"""
+            assertEquals(value == "true", DuaApiClient.parseEngine(raw).personality)
+            assertEquals(value == "true", IntegrationCapabilities.configuration(JSONObject(raw), IntegrationState()).personalityEnabled)
+        }
+        assertFalse(DuaApiClient.parseEngine("{}").personality)
+        assertFalse(IntegrationCapabilities.configuration(JSONObject("{}"), IntegrationState(personalityEnabled = true)).personalityEnabled)
+    }
+
     @Test fun separateEngineGetsOwnerTokenAndOptionalAppToken() {
         val api = DuaApiClient("https://engine.example.run.app", appToken = "abc", apiBaseUrl = "https://base.example.app")
         val request = api.buildRequest("Dua", history, emptyList(), "", "session.token", null, reasoning = false, stream = true)

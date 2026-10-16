@@ -70,6 +70,7 @@ data class SettingsUiState(
     val accountNotice: String = "",
     val avatarUrl: String = "",
     val workspace: String = "Personal",
+    val personality: String? = null,
 )
 
 internal fun themeLabel(theme: String) = when (theme) { "light" -> "Light"; "system" -> "Match system"; else -> "Dark" }
@@ -86,7 +87,7 @@ fun SettingsScreen(viewModel: ChatViewModel, onBack: () -> Unit, onOpen: (DuaDes
     val state = SettingsUiState(
         displayName = account.user?.displayName.orEmpty(), accent = appearance.resolvedAccent(DuaTheme.colors.isDark).label, accountBusy = account.busy, accountNotice = account.notice,
         avatarUrl = account.user?.avatarUrl.orEmpty(), email = account.user?.email, theme = appearance.theme, font = preferences.font, haptic = preferences.haptic,
-        memoryEnabled = preferences.memoryEnabled, notifications = preferences.notifications,
+        memoryEnabled = preferences.memoryEnabled, notifications = preferences.notifications, personality = appearance.personality?.label,
         sync = if (sync.enabled) "On" else "Off",
         voice = integrations.voice?.let { config ->
             val options = if (preferences.generatedVoice && account.user != null) com.dua.ai.voice.VoiceCodec.ttsOptions(config, preferences.voiceProvider,
@@ -144,7 +145,7 @@ fun SettingsContent(state: SettingsUiState, onBack: () -> Unit, onOpen: (DuaDest
 
         // CARD 2: Personalization
         SettingsCardBox {
-            SettingsItemRow(Icons.Outlined.SentimentSatisfied, "Personalization", "${themeLabel(state.theme)} · ${fontLabel(state.font)}") { onOpen(DuaDestination.Appearance) }
+            SettingsItemRow(Icons.Outlined.SentimentSatisfied, "Personalization", listOfNotNull("${themeLabel(state.theme)} · ${fontLabel(state.font)}", state.personality).joinToString(" · ")) { onOpen(DuaDestination.Appearance) }
             SettingsItemRow(Icons.AutoMirrored.Outlined.MenuBook, "Memory", if (state.memoryEnabled) "On" else "Off") { onOpen(DuaDestination.Memory) }
             SettingsItemRow(Icons.Outlined.Extension, "Plugins") { onOpen(DuaDestination.Plugins) }
             if (state.imagine != null) SettingsItemRow(Icons.Outlined.Brush, "Imagine", state.imagine) { onOpen(DuaDestination.Imagine) }
