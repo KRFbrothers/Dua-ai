@@ -79,7 +79,7 @@ fun EmptyState(
 }
 
 @Composable
-private fun StarterChip(icon: ImageVector, label: String, onClick: () -> Unit) {
+internal fun StarterChip(icon: ImageVector, label: String, onClick: () -> Unit) {
     val c = ChatTheme.colors
     Surface(onClick = onClick, shape = DuaShape.chip, color = c.chipFill, border = BorderStroke(ChatSizes.border, c.chipBorder),
         modifier = Modifier.heightIn(min = Sizes.touchTarget).semantics { contentDescription = "Start with: $label"; role = Role.Button }) {

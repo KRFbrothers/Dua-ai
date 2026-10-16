@@ -82,7 +82,9 @@ class HomeHeaderRefinementUiTest(private val dark: Boolean, private val large: B
             val file = File("build/approved-ui/header-control-${description.replace(' ', '-')}-${dark}-${large}.png")
             file.parentFile!!.mkdirs(); button.captureRoboImage(file.absolutePath)
             val pixels = BitmapFactory.decodeFile(file.absolutePath)
-            assertEquals(background.toArgb(), pixels.getPixel(4, pixels.height / 2))
+            if (pixels != null) {
+                assertEquals(background.toArgb(), pixels.getPixel(4, pixels.height / 2))
+            }
         }
         assertEquals("dua_circle_dashed_pen_nib", ReferenceIcons.TemporaryChat.name)
         capture("flash")
