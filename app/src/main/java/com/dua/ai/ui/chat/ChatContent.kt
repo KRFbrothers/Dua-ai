@@ -48,7 +48,7 @@ import com.dua.ai.ui.theme.Spacing
 
 internal val HomeTaskPrompts = listOf("Nudge me to backup my photos", "Learn React by building an app", "Compare views on a topic I follow")
 
-private data class HomeActionCard(
+private data class KrfActionCard(
     val title: String,
     val subtitle: String,
     val prompt: String,
@@ -56,29 +56,29 @@ private data class HomeActionCard(
     val gradient: List<Color>,
 )
 
-private val ChatActionCards = listOf(
-    HomeActionCard(
+private val KrfChatActionCards = listOf(
+    KrfActionCard(
         title = "Deep Research",
         subtitle = "Search web & sources",
         prompt = "Deep research with live web sources: ",
         icon = Icons.Outlined.TravelExplore,
         gradient = listOf(Color(0xFF2563EB), Color(0xFF1D4ED8)),
     ),
-    HomeActionCard(
+    KrfActionCard(
         title = "Code & Build",
         subtitle = "Write, debug & build",
         prompt = "Code likho: ",
         icon = Icons.Outlined.Code,
         gradient = listOf(Color(0xFF8B5CF6), Color(0xFF6D28D9)),
     ),
-    HomeActionCard(
+    KrfActionCard(
         title = "Image Studio",
         subtitle = "Create visuals & art",
         prompt = "Create an image of ",
         icon = Icons.Outlined.Image,
         gradient = listOf(Color(0xFFF59E0B), Color(0xFFEA580C)),
     ),
-    HomeActionCard(
+    KrfActionCard(
         title = "Brainstorm",
         subtitle = "Ideas & strategies",
         prompt = "Mujhe ideas do for ",
@@ -201,15 +201,15 @@ internal fun ChatContent(task: Boolean, onTask: (String) -> Unit) {
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                     ) {
-                        HomeActionCardView(ChatActionCards[0], Modifier.weight(1f)) { onTask(ChatActionCards[0].prompt) }
-                        HomeActionCardView(ChatActionCards[1], Modifier.weight(1f)) { onTask(ChatActionCards[1].prompt) }
+                        KrfActionCardView(KrfChatActionCards[0], Modifier.weight(1f)) { onTask(KrfChatActionCards[0].prompt) }
+                        KrfActionCardView(KrfChatActionCards[1], Modifier.weight(1f)) { onTask(KrfChatActionCards[1].prompt) }
                     }
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                     ) {
-                        HomeActionCardView(ChatActionCards[2], Modifier.weight(1f)) { onTask(ChatActionCards[2].prompt) }
-                        HomeActionCardView(ChatActionCards[3], Modifier.weight(1f)) { onTask(ChatActionCards[3].prompt) }
+                        KrfActionCardView(KrfChatActionCards[2], Modifier.weight(1f)) { onTask(KrfChatActionCards[2].prompt) }
+                        KrfActionCardView(KrfChatActionCards[3], Modifier.weight(1f)) { onTask(KrfChatActionCards[3].prompt) }
                     }
 
                     Spacer(Modifier.height(2.dp))
@@ -233,8 +233,8 @@ internal fun ChatContent(task: Boolean, onTask: (String) -> Unit) {
 }
 
 @Composable
-private fun HomeActionCardView(
-    card: HomeActionCard,
+private fun KrfActionCardView(
+    card: KrfActionCard,
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
