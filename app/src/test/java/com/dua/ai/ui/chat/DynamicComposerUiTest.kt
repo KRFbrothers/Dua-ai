@@ -159,4 +159,14 @@ class DynamicComposerUiTest(private val dark: Boolean, private val largeFont: Bo
         assertTrue(field.bottom <= send.top)
         capture("short-window")
     }
+
+    @Test fun stopRemainsAvailableWhenDictatingDuringStreaming() {
+        val dictation = ChatDictation(mutableStateOf(true), mutableFloatStateOf(0f), {}, {}, {})
+        var stopped = 0
+        show { Composer(controlled = true, typing = true, dictation = dictation, onStop = { stopped++ }) }
+        control("Cancel dictation")
+        control("Done, use dictation")
+        control("Stop response").performClick()
+        assertEquals(1, stopped)
+    }
 }

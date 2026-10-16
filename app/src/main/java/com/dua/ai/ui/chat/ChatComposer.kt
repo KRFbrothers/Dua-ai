@@ -168,6 +168,7 @@ fun Composer(
             if (dictation?.listening == true) {
                 Row(Modifier.fillMaxWidth().heightIn(min = Sizes.touchTarget), verticalAlignment = Alignment.CenterVertically) {
                     DictationBar(dictation.level, dictation.cancel, dictation.confirm)
+                    if (typing) ComposerAction(Icons.Rounded.Stop, "Stop response", onClick = onStop)
                 }
             } else ComposerFields(expanded = expanded,
                 input = {
@@ -213,16 +214,20 @@ fun Composer(
                             uploading -> Triple(Icons.Default.Close, "Cancel upload", { onCancelUpload() })
                             else -> Triple(ImageVector.vectorResource(R.drawable.ls_live_wave), "Voice mode", { onVoiceMode() })
                         }
-                        Box(Modifier.size(Sizes.touchTarget)
-                            .clickable(enabled = typing || !hasContent || canSubmit,
-                                role = Role.Button, onClick = action)
-                            .semantics(mergeDescendants = true) { contentDescription = label }, contentAlignment = Alignment.Center) {
-                            Box(Modifier.size(ComposerSizes.actionButton).clip(HomeShapes.round).background(c.voice), contentAlignment = Alignment.Center) {
-                                Icon(icon, null, tint = c.onVoice, modifier = Modifier.size(HomeSizes.voiceIcon))
-                            }
-                        }
+                        ComposerAction(icon, label, enabled = typing || !hasContent || canSubmit, onClick = action)
                     }
                 })
+        }
+    }
+}
+
+@Composable
+private fun ComposerAction(icon: ImageVector, label: String, enabled: Boolean = true, onClick: () -> Unit) {
+    val c = HomeTheme.colors
+    Box(Modifier.size(Sizes.touchTarget).clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+        .semantics(mergeDescendants = true) { contentDescription = label }, contentAlignment = Alignment.Center) {
+        Box(Modifier.size(ComposerSizes.actionButton).clip(HomeShapes.round).background(c.voice), contentAlignment = Alignment.Center) {
+            Icon(icon, null, tint = c.onVoice, modifier = Modifier.size(HomeSizes.voiceIcon))
         }
     }
 }
