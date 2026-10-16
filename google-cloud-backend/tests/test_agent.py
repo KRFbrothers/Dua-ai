@@ -287,6 +287,8 @@ class _Models:
 
 
 def _argon(monkeypatch, models):
+    import pytest
+    pytest.importorskip("google.genai")
     monkeypatch.setattr(engine, "AGENT_MODEL", "gemini-4-argon")
     monkeypatch.setattr(engine, "AGENT_THINKING_LEVEL", "medium")
     monkeypatch.setattr(engine, "get_client", lambda: type("C", (), {"models": models})())
