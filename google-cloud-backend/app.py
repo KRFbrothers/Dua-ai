@@ -12,7 +12,7 @@ Endpoints
 Configuration comes only from environment variables; no secrets in code.
   GOOGLE_CLOUD_PROJECT (required), VERTEX_LOCATION (default global),
   VERTEX_MODEL (default gemini-3.8-flash), AGENT_MODEL (Agent tool loop only, default VERTEX_MODEL),
-  AGENT_THINKING_LEVEL (low|medium|high; default medium when AGENT_MODEL differs), AGENT_NOTES (0 turns off
+  AGENT_THINKING_LEVEL (low|medium|high; default low when AGENT_MODEL differs), AGENT_STEP_SECONDS, AGENT_TOOL_SECONDS, AGENT_NOTES (0 turns off
   the Agent's private Supabase notes; see agent_notes.py), VERTEX_THINKING_LEVEL (Gemini 3: low|medium|high, default low),
   SUPABASE_URL, SUPABASE_ANON_KEY (or SUPABASE_PUBLISHABLE_KEY), DUA_ALLOWED_EMAIL (required owner authentication).
   DUA_APP_TOKEN is an optional additional gate, never a replacement for owner login.
@@ -44,7 +44,8 @@ if THINKING_LEVEL not in ("low", "medium", "high"):
 AGENT_MODEL = os.environ.get("AGENT_MODEL", "").strip() or MODEL_NAME
 AGENT_THINKING_LEVEL = os.environ.get("AGENT_THINKING_LEVEL", "").strip().lower()
 if AGENT_THINKING_LEVEL not in ("low", "medium", "high"):
-    AGENT_THINKING_LEVEL = "medium" if AGENT_MODEL != MODEL_NAME else THINKING_LEVEL
+    # Argon at medium can spend minutes per tool step; low keeps the Agent responsive (set the env var to change).
+    AGENT_THINKING_LEVEL = "low" if AGENT_MODEL != MODEL_NAME else THINKING_LEVEL
 MAX_MESSAGE_CHARS = 8000
 MAX_TURNS = 400
 MAX_TURN_CHARS = 100_000
@@ -123,6 +124,9 @@ class GenaiModel:
         from google.genai import types
         options = {"system_instruction": self.system, **(generation_config or {})}
         level = options.pop("thinking_level", None)
+        timeout = options.pop("timeout_seconds", None)
+        if timeout:
+            options["http_options"] = types.HttpOptions(timeout=int(timeout * 1000))
         if tools:
             options["tools"] = tools
         thinking = thinking_config(self.model_name, self.thinking_level)

@@ -79,7 +79,7 @@ class Script:
 def run(steps, github):
     model, progress = Script(steps), []
     env = {"model": model, "enqueue": lambda *a: True, "chunk_text": lambda r: r.text or "", "github": github,
-           "progress": lambda step, label, state="active": progress.append(label), "thinking": lambda d: None,
+           "progress": lambda step, label, state="active": (progress.append(label) if state == "active" and step != "think" else None), "thinking": lambda d: None,
            "request_text": "x", "memory": "", "imagine": None}
     text, _ = at.run(env, ["u"], ["TOOLS"], lambda results: ("tool", results), clock=lambda: 0)
     results = [c[-1][1][0][1] for c in model.calls if c and isinstance(c[-1], tuple)]

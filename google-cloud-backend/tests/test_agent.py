@@ -254,7 +254,10 @@ def test_clean_title_limits():
 
 def test_agent_emits_structured_progress_in_order(model):
     evs = events(engine.app.test_client().post("/api/chat", json=BODY))
-    steps = [(e["step"], e["label"], e["state"]) for e in evs if e["type"] == "progress"]
+    allp = [(e["step"], e["label"], e["state"]) for e in evs if e["type"] == "progress"]
+    # Tool chips are marked done when the tool returns; "think" reports each model step.
+    assert ("search", "Searching the web", "done") in allp
+    steps = [p for p in allp if p[2] == "active"]
     assert [s[0] for s in steps] == ["plan", "search", "answer"]
     assert steps[0][1] == "Planning\u2026" and steps[1][1] == "Searching the web\u2026"
     assert steps[2][1] == "Writing the answer\u2026" and all(s[2] == "active" for s in steps)
