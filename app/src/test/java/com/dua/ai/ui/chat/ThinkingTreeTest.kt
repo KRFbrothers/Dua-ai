@@ -59,4 +59,39 @@ class ThinkingTreeTest {
         compose.mainClock.advanceTimeBy(700)
         compose.onNodeWithText("Final detail").assertExists()
     }
+
+    @Test fun streamedStepsUpdateInPlaceAndCollapseWhenTheAnswerStarts() {
+        compose.mainClock.autoAdvance = false
+        val summary = mutableStateOf("1. Analyze\nFirst detail")
+        val answering = mutableStateOf(false)
+        compose.setContent { DuaTheme(LocalPreferences()) {
+            ThinkingBlock("streamed", summary.value, 4, true, answering.value, 0)
+        } }
+        compose.mainClock.advanceTimeBy(500)
+        compose.onNodeWithText("First detail").assertExists()
+        compose.runOnIdle { summary.value += "\n2. Compare sources\nOnly the received source detail" }
+        compose.mainClock.advanceTimeBy(500)
+        compose.onNodeWithText("Compare sources").assertExists()
+        compose.onNodeWithText("Only the received source detail").assertExists()
+        compose.onNodeWithText("Searching live web").assertDoesNotExist()
+        compose.runOnIdle { answering.value = true }
+        compose.mainClock.advanceTimeBy(700)
+        compose.onNodeWithTag("reasoning-step-tree").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Thought for 4s").performClick()
+        compose.mainClock.advanceTimeBy(700)
+        compose.onNodeWithText("First detail").assertExists()
+        compose.onNodeWithText("Only the received source detail").assertExists()
+    }
+
+    @Test fun agentSummaryStaysCollapsedUntilExplicitlyOpened() {
+        compose.mainClock.autoAdvance = false
+        compose.setContent { DuaTheme(LocalPreferences()) {
+            ThinkingBlock("agent", "1. Review\nProvider summary", 2, true, false, 0, followStream = false)
+        } }
+        compose.mainClock.advanceTimeBy(500)
+        compose.onNodeWithTag("reasoning-step-tree").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Thinking for 2s").performClick()
+        compose.mainClock.advanceTimeBy(700)
+        compose.onNodeWithText("Provider summary").assertExists()
+    }
 }
