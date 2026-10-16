@@ -1,6 +1,7 @@
 package com.dua.ai.ui.chat
 
 import android.annotation.SuppressLint
+import android.view.ViewGroup
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
@@ -9,6 +10,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -71,30 +75,46 @@ internal fun configureCodePreview(view: WebView, mermaid: Boolean) {
     }
 }
 
+/** End pending loads/scripts and release all renderer callbacks on tab switch or dismissal. */
+internal fun releaseCodePreview(view: WebView) {
+    view.stopLoading()
+    view.settings.javaScriptEnabled = false
+    view.loadUrl("about:blank")
+    view.clearHistory()
+    view.removeAllViews()
+    (view.parent as? ViewGroup)?.removeView(view)
+    view.webViewClient = WebViewClient()
+    view.webChromeClient = null
+    view.destroy()
+}
+
 /** Inline artifact canvas; no app credentials, network, file access, or JavaScript bridge. */
 @Composable
-internal fun CodePreview(code: String, kind: CodePreviewKind) {
+internal fun CodePreview(code: String, kind: CodePreviewKind, modifier: Modifier = Modifier, fillViewport: Boolean = false) {
     val scheme = MaterialTheme.colorScheme
     val colors = DuaTheme.colors
-    Column(Modifier.fillMaxWidth().testTag("code-preview")) {
+    Column(modifier.fillMaxWidth().testTag("code-preview")) {
         Text("Preview · local only", style = MaterialTheme.typography.labelMedium,
             color = scheme.onSurfaceVariant, modifier = Modifier.padding(Spacing.md))
         if (code.length > MAX_PREVIEW_CHARS) {
             Text("This preview is too large. Copy or share the source instead.", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(Spacing.md))
         } else if (kind == CodePreviewKind.Markdown) {
             // Reuse the native Markdown renderer and its safe-link policy.
-            MarkdownMessage(code, Modifier.padding(Spacing.md))
+            Box(if (fillViewport) Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()) else Modifier.fillMaxWidth()) {
+                MarkdownMessage(code, Modifier.padding(Spacing.md))
+            }
         } else {
             val document = remember(code, kind, colors.isDark, scheme.onSurface, scheme.surface) {
                 codePreviewDocument(code, kind, colors.isDark, scheme.onSurface.toArgb(), scheme.surface.toArgb())
             }
             key(kind) {
                 AndroidView(factory = { context -> WebView(context).also { configureCodePreview(it, kind == CodePreviewKind.Mermaid) } },
-                    modifier = Modifier.fillMaxWidth().height(CodePreviewSizes.height).testTag("artifact-web-preview"),
+                    modifier = (if (fillViewport) Modifier.weight(1f).fillMaxWidth() else Modifier.fillMaxWidth().height(CodePreviewSizes.height))
+                        .testTag("artifact-web-preview"),
                     update = { view ->
                         if (view.tag != document) { view.tag = document; view.setBackgroundColor(scheme.surface.toArgb()); view.loadDataWithBaseURL(PREVIEW_ORIGIN, document, "text/html", "UTF-8", null) }
                     },
-                    onRelease = { view -> view.stopLoading(); view.destroy() })
+                    onRelease = ::releaseCodePreview)
             }
         }
     }
