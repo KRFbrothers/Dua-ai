@@ -5,7 +5,7 @@ This first Projects version organizes Fareed’s one owner account into Personal
 ## How to use
 
 1. Open **Projects** on Home or above the conversation.
-2. Select a project. Switching saves the current draft and starts a new chat in the selected project. Open its existing chats from the history menu; search shows only that project’s history, scans full message/draft text and saved code/output, and clears its query when the project changes. See [HISTORY-SEARCH.md](HISTORY-SEARCH.md).
+2. Select a project. Switching saves the current draft and starts a new chat in the selected project. Open its existing chats from the history menu; search shows only that project’s history, scans full message/draft text and saved code/output, and clears its query when the project changes. See [HISTORY-SEARCH.md](HISTORY_SEARCH.md).
 3. Tap **Edit**, enter a name and custom instructions, then **Save project**. Use instructions for preferred language, coding conventions or business context.
 4. Enable automatic foreground Cloud Sync, or use **Cloud sync → Review upload → Confirm**. New project definitions and instructions must reach the server before they apply to replies. The editor shows a reminder to sync.
 5. Archive a finished project to keep its chats while blocking new replies; Edit can restore it. At least one project must remain active.
@@ -31,7 +31,7 @@ The phone keeps a disposable cache. Projects and instructions are part of the au
 
 ## What this version covers
 
-Text chat, chat search/history, summaries, retries, Build chat, hands-free Voice mode, cloud snapshots and JSON backup carry project context. Global enabled memory and reviewed memory suggestions are Personal-only. Other projects use their instructions and enabled notes for context; editable notes and their on/off switch are available through Projects → Memory for Coding, Business and custom projects. The server resolves only the selected project’s notes. Personal keeps its existing Settings → Memory editor and phone-controlled switch. See [MEMORY.md](MEMORY.md).
+Text chat, chat search/history, summaries, retries, Build chat, hands-free Voice mode, cloud snapshots and JSON backup carry project context. Global enabled memory and reviewed memory suggestions are Personal-only. Other projects use their instructions and enabled notes for context; editable notes and their on/off switch are available through Projects → Memory for Coding, Business and custom projects. The server resolves only the selected project’s notes. Personal keeps its existing Settings → Memory editor and phone-controlled switch. See [MEMORY.md](PROJECT_MEMORY.md).
 
 Files currently belong to the chats where they were attached. The model is not automatically given another project’s history or files. Project tasks, due dates/device reminders and a deadline-based daily planner are implemented in follow-up source changes; see [TASKS.md](TASKS.md), [REMINDERS.md](REMINDERS.md) and [PLANNER.md](PLANNER.md). A dedicated project file library, per-project connected-tool configuration, recurring tasks, calendar/email integration and recurring business workflows remain pending. Existing GitHub writes still require the owner’s diff review and explicit confirmation.
 

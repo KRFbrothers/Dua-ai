@@ -73,7 +73,7 @@ Generated files live next to your uploads under `<your user id>/`. Deleting or c
 
 Without this migration the backend refuses Imagine requests with a setup message instead of generating without caps; video storage fails with a "run the Phase 3 migration" message.
 
-**Deploy order:** run the migration, set `GROK_API_KEY` (and optionally `GEMINI_API_KEY`) plus any `DUA_IMAGINE_*` variables (PROVIDERS.md), deploy the backend, then install the new APK.
+**Deploy order:** run the migration, set `GROK_API_KEY` (and optionally `GEMINI_API_KEY`) plus any `DUA_IMAGINE_*` variables ([docs/PROVIDERS.md](docs/PROVIDERS.md)), deploy the backend, then install the new APK.
 
 ## 1d. Live voice minutes (Phase 4: realtime voice)
 
@@ -84,7 +84,7 @@ Run `supabase/migrations/202610100001_dua_voice.sql` once (SQL editor → New qu
 
 Without this migration `/api/voice/session` refuses with a setup message and live voice never starts (hands-free mode still works).
 
-**Deploy order:** run the migration, set the `DUA_VOICE_*` variables if you want non-defaults (PROVIDERS.md › Live voice), deploy the backend, then install the new APK.
+**Deploy order:** run the migration, set the `DUA_VOICE_*` variables if you want non-defaults ([docs/PROVIDERS.md](docs/PROVIDERS.md#live-voice-phase-4b) › Live voice), deploy the backend, then install the new APK.
 
 ## 2. Configure the shared backend
 
@@ -107,7 +107,7 @@ No additional SQL migration is required. Deploy this backend before installing t
 
 ### Native Google sign-in
 
-Google is the app's only sign-in method. Android uses native Google Sign-In (Credential Manager) and sends the ID token plus the raw nonce to `POST /api/account/google-token`, which exchanges them with Supabase. To enable it:
+Google is the main sign-in method; owner-only email login also exists (Android Account screen and the same-origin website, see [docs/WEBSITE.md](docs/WEBSITE.md)). Android uses native Google Sign-In (Credential Manager) and sends the ID token plus the raw nonce to `POST /api/account/google-token`, which exchanges them with Supabase. To enable it:
 
 - In Supabase Authentication → Providers, enable Google with the OAuth web client ID.
 - Build the app with that web client ID via the `duaGoogleWebClientId` Gradle property or the `GOOGLE_CLIENT_ID` environment variable.
@@ -168,7 +168,7 @@ The Node API moved from Vercel to Cloud Run (`dua-api`) and kept the existing Su
 
 Version 1 chat records now accept optional `pinned: true/false`. Missing fields decode as unpinned; invalid non-Booleans are rejected. New Android uploads send both states explicitly. On an existing account-bound, revision-checked `/api/cloud` PUT, the updated backend preserves the server’s pin for a matching chat when a legacy APK omits `pinned`. Explicit false unpins. Server deletion removes the chat and its pin together; a pin cannot bypass deleted-ID protection.
 
-Deploy this backend before installing the pin-enabled APK and refresh setup (`history.pin: true`). No SQL/RLS migration or new API route is required. Automatic sync stores pin IDs separately from content hashes, preserving old content baselines and avoiding pin-only recovery copies. Owner lock, account checks and the existing RPC conflict checks remain in force. Source tests use mocked Auth/REST/RPC responses; no live database write or physical-device sync is verified by them. See [HISTORY-SEARCH.md](HISTORY-SEARCH.md) for pending edits and reviewed-download behavior.
+Deploy this backend before installing the pin-enabled APK and refresh setup (`history.pin: true`). No SQL/RLS migration or new API route is required. Automatic sync stores pin IDs separately from content hashes, preserving old content baselines and avoiding pin-only recovery copies. Owner lock, account checks and the existing RPC conflict checks remain in force. Source tests use mocked Auth/REST/RPC responses; no live database write or physical-device sync is verified by them. See [HISTORY-SEARCH.md](docs/features/HISTORY_SEARCH.md) for pending edits and reviewed-download behavior.
 
 ## Owner email login and signup
 

@@ -42,7 +42,7 @@ These bounds serve different protocols and units; they must not be silently repl
 | Stored snapshots | JSON-compatible metadata caps include up to 512 × 1024 code units per saved proposal file; total snapshot payload is bounded to 4 MiB. A restorable snapshot is not permission to submit an oversized PR: [cloud-snapshot.mjs](../web/src/core/cloud-snapshot.mjs), [snapshot migration](../supabase/migrations/202610040001_dua_cloud.sql). |
 | Stored uploads | Separate private Storage path, normally 50 MiB per file, further limited by the bucket/plan. Not the inline chat limit: [SUPABASE.md](../SUPABASE.md#1b-stored-files-bucket-phase-2-uploads-pdfs-spreadsheets-audio). |
 
-Provider-specific and Cloud Run limits remain documented in [PROVIDERS.md](../PROVIDERS.md) and the [engine README](../google-cloud-backend/README.md). Raising one limit does not raise another layer's bound.
+Provider-specific and Cloud Run limits remain documented in [PROVIDERS.md](PROVIDERS.md) and the [engine README](../google-cloud-backend/README.md). Raising one limit does not raise another layer's bound.
 
 ## Verification
 

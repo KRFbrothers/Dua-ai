@@ -4,7 +4,7 @@ Dua and Gemini retain the existing Gemini setup and attachment support. ChatGPT,
 
 ## Build mode: read-only repository chat (Phase 5B)
 
-For repository/path examples, missing setup, GitHub credentials, rate limits and safe PR retry steps, see [GitHub connector and Build recovery](docs/GITHUB_TROUBLESHOOTING.md).
+For repository/path examples, missing setup, GitHub credentials, rate limits and safe PR retry steps, see [GitHub connector and Build recovery](GITHUB_TROUBLESHOOTING.md).
 
 Build mode ties a chat to one of the owner's GitHub repositories. Dua/Gemini answers questions about the code and proposes changes as unified diffs (```diff blocks). It is **strictly read-only**: the server only sends `GET` requests to five allowlisted GitHub paths (repository list, repository info, `git/trees/HEAD?recursive=1`, `contents/{path}`, `search/code` inside the chosen repository). The model has no branch, commit, pull request or command tool. Pull requests (Phase 5C, below) are a separate, opt-in step that only the owner's confirmed tap can trigger.
 
@@ -71,7 +71,7 @@ With those permissions the token cannot change Actions workflows (GitHub blocks 
 | `DUA_BUILD_PR_FILE_MAX_KB` | 200 | optional | Per-file size in KB (1–1000) |
 | `DUA_BUILD_PR_MAX_KB` | 1024 | optional | Total size of new contents in KB (1–3000) |
 
-`DUA_BUILD=0` turns off the whole of Build mode, including proposals and pull requests. Running commands is still not implemented; see ROADMAP.md.
+`DUA_BUILD=0` turns off the whole of Build mode, including proposals and pull requests. Running commands is still not implemented; see [ROADMAP.md](ROADMAP.md).
 
 ## Server variables
 
@@ -113,7 +113,7 @@ Provider HTTP failures also include `upstreamStatus` in Auto/Reasoning error eve
 
 ## Server reply saving (Phase 5)
 
-Completed streaming replies can opt into server persistence with owner-bound `persistence` metadata when `/api/config.history.persistReplies` is `true`. The backend stores the completed user/reply pair in the existing Supabase snapshot before sending a `saved` event followed by `done`; client sync consent is not needed for this reply write. Preparation/generation failures and cancelled incomplete streams are not stored as completed replies. Post-generation save failures end with an error event while retaining received text; commit-time auth failure does not request an automatic whole-generation retry. See [SUPABASE.md](SUPABASE.md#completed-reply-saving) for prerequisites, compatibility, conflict recovery and limits.
+Completed streaming replies can opt into server persistence with owner-bound `persistence` metadata when `/api/config.history.persistReplies` is `true`. The backend stores the completed user/reply pair in the existing Supabase snapshot before sending a `saved` event followed by `done`; client sync consent is not needed for this reply write. Preparation/generation failures and cancelled incomplete streams are not stored as completed replies. Post-generation save failures end with an error event while retaining received text; commit-time auth failure does not request an automatic whole-generation retry. See [SUPABASE.md](../SUPABASE.md#completed-reply-saving) for prerequisites, compatibility, conflict recovery and limits.
 
 ## Run code: hosted code execution (Phase 5)
 
