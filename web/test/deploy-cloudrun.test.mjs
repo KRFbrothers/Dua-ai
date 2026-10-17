@@ -35,10 +35,10 @@ if (args[0] === 'run' && args[1] === 'services') console.log('https://dua-api.ex
     // .mjs isn't required: the temporary directory opts into ESM for the gcloud stub.
     writeFileSync(join(dir, 'package.json'), '{"type":"module"}');
     const result = spawnSync('bash', [join(dir, 'deploy-cloudrun.sh')], {
-      env: { PATH: dir + ':' + process.env.PATH, PROJECT_ID: 'dua-test-project', GCLOUD_CALLS: log,
+      env: { PROJECT_ID: 'dua-test-project', GCLOUD_CALLS: log,
         MOCK_SECRET_NAMES: JSON.stringify(secrets), MOCK_SECRET_VERSION: version,
         MOCK_LIST_FAILURE: listFailure ? '1' : '0', MOCK_BUILD_FAILURE: buildFailure ? '1' : '0',
-        MOCK_RESOURCES_EXIST: resourcesExist ? '1' : '0', ...settings }, encoding: 'utf8', timeout: 15000
+        MOCK_RESOURCES_EXIST: resourcesExist ? '1' : '0', ...settings, PATH: dir + ':' + (settings.PATH || process.env.PATH) }, encoding: 'utf8', timeout: 15000
     });
     assert.ifError(result.error);
     return { ...result, calls: existsSync(log) ? readFileSync(log, 'utf8').trim().split('\n').map(JSON.parse) : [], leaked: existsSync(log + '.leaked') };
@@ -137,4 +137,32 @@ test('a failed container build cannot deploy a stale image', () => {
   assert.equal(result.status, 17);
   assert.ok(result.calls.some(args => args[0] === 'builds'));
   assert.ok(!result.calls.some(args => args[0] === 'run'));
+});
+
+test('deployment builds the website into web/site before the container build, and fails closed if it breaks', () => {
+  const site = mkdtempSync(join(tmpdir(), 'dua-website-'));
+  try {
+    // Fake npm: `npm run build -- --outDir X` writes X/index.html unless MOCK_SITE_FAIL=1.
+    writeFileSync(join(site, 'npm'), `#!/usr/bin/env node
+import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs';
+const args = process.argv.slice(2);
+appendFileSync(process.env.GCLOUD_CALLS, JSON.stringify(['npm', ...args]) + '\\n');
+const out = args.indexOf('--outDir');
+if (out > 0 && process.env.MOCK_SITE_FAIL !== '1') { mkdirSync(args[out + 1], { recursive: true }); writeFileSync(args[out + 1] + '/index.html', 'ok'); }
+`, { mode: 0o755 });
+    const env = { DUA_WEBSITE_DIR: site, PATH: site + ':' + process.env.PATH };
+    // The npm stub is ESM; mark the folder as a module package.
+    writeFileSync(join(site, 'package.json'), '{"type":"module"}');
+    const ok = deployment({ settings: env });
+    assert.equal(ok.status, 0, ok.stderr);
+    const npmAt = ok.calls.findIndex(args => args[0] === 'npm' && args.includes('build'));
+    const buildAt = ok.calls.findIndex(args => args[0] === 'builds');
+    assert.ok(ok.calls.some(args => args[0] === 'npm' && args[1] === 'ci'));
+    assert.ok(npmAt >= 0 && npmAt < buildAt, 'website builds before the container');
+    assert.match(ok.calls[npmAt].join(' '), /--outDir \S+\/site --emptyOutDir/);
+    const broken = deployment({ settings: { ...env, MOCK_SITE_FAIL: '1' } });
+    assert.notEqual(broken.status, 0);
+    assert.match(broken.stderr, /did not produce web\/site\/index.html/);
+    assert.ok(!broken.calls.some(args => ['iam', 'builds', 'run'].includes(args[0])));
+  } finally { rmSync(site, { recursive: true, force: true }); }
 });

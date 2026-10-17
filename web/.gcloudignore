@@ -8,3 +8,5 @@
 !.npmrc
 !src/
 !src/**
+!site/
+!site/**
