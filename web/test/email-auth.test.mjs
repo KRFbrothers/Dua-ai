@@ -91,3 +91,41 @@ test('password setup rejects sign-out, account mismatch and foreign response wit
  const response=await handleAccount(req('password',{password:credentials.password,expectedAccountId:id},'PUT',{authorization:'Bearer current-access'}),env(foreign));
  assert.equal(response.status,502);assert.equal((await response.json()).passwordUpdated,undefined);
 });
+
+test('the same-origin website can sign in with email and receives HttpOnly cookies, never tokens',async()=>{
+ const web={'x-dua-native':'','origin':'https://dua.test','sec-fetch-site':'same-origin'};
+ const fetcher=mockFetch(settings(),Response.json(session()));
+ const response=await handleAccount(req('email-login',credentials,'POST',web),env(fetcher));
+ assert.equal(response.status,200);
+ const body=await response.json();
+ assert.equal(body.session,undefined,'tokens are never exposed to page scripts');
+ assert.equal(body.user.email,email);
+ const cookies=response.headers.getSetCookie();
+ assert.equal(cookies.length,2);
+ for(const cookie of cookies)assert.match(cookie,/HttpOnly; Secure; SameSite=Strict/);
+ assert.match(fetcher.calls[1].url,/grant_type=password$/);
+});
+test('website email login keeps the owner lock, same-origin rule and Android-only signup/password',async()=>{
+ const web={'x-dua-native':'','origin':'https://dua.test'};
+ for(const [action,body,headers,status,method] of [
+  ['email-login',{...credentials,email:'other@example.com'},web,403],
+  ['email-login',credentials,{...web,origin:'https://evil.test'},403],
+  ['email-login',credentials,{...web,origin:'http://dua.test'},403],
+  ['email-login',credentials,{...web,'sec-fetch-site':'cross-site'},400],
+  ['email-login',credentials,{'x-dua-native':''},400],
+  ['email-signup',credentials,web,400],
+  ['password',{password:credentials.password},web,400,'PUT']
+ ]){
+  const fetcher=mockFetch();
+  assert.equal((await handleAccount(req(action,body,method||'POST',headers),env(fetcher))).status,status,action+' '+JSON.stringify(headers));
+  assert.equal(fetcher.calls.length,0);
+ }
+ const fetcher=mockFetch(settings(),Response.json(session({user:user({email:'other@example.com'})})),new Response(null,{status:204}));
+ const response=await handleAccount(req('email-login',credentials,'POST',web),env(fetcher));
+ assert.equal(response.status,403);assert.equal(response.headers.getSetCookie().length,0);
+});
+test('website email login passes Supabase rate limits through as 429 without cookies',async()=>{
+ const fetcher=mockFetch(settings(),Response.json({message:'rate limited'},{status:429}));
+ const response=await handleAccount(req('email-login',credentials,'POST',{'x-dua-native':'','origin':'https://dua.test'}),env(fetcher));
+ assert.equal(response.status,429);assert.equal(response.headers.getSetCookie().length,0);
+});
