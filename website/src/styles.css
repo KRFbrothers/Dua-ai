@@ -1,0 +1,79 @@
+/* Dua AI dark theme tokens (own palette; violet accent from the DUA logo). */
+:root {
+  --bg: #141418; --side: #0e0e11; --panel: #1e1e24; --line: #2a2a32;
+  --text: #ececf1; --muted: #9a9aa6; --accent: #8b6cf0; --danger: #f08080;
+  --radius: 14px; --touch: 48px;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; margin: 0; }
+body { background: var(--bg); color: var(--text); font: 15px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+button:disabled { cursor: default; opacity: .55; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.muted { color: var(--muted); } .small { font-size: 13px; } .pad { padding: 0 10px; }
+.center { height: 100%; display: grid; place-items: center; }
+.pulse { width: 64px; height: 64px; border-radius: 16px; animation: pulse 1.4s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .45; } }
+
+/* Login */
+.login { min-height: 100%; display: grid; place-items: center; padding: 24px; }
+.login-card { width: min(400px, 100%); background: var(--panel); border: 1px solid var(--line); border-radius: 20px; padding: 28px; display: flex; flex-direction: column; gap: 14px; }
+.login-logo { width: 56px; height: 56px; border-radius: 14px; align-self: center; }
+.login-card h1 { margin: 0; font-size: 22px; text-align: center; }
+.login-card p { margin: 0; text-align: center; }
+.login-card label { display: flex; flex-direction: column; gap: 6px; font-size: 14px; color: var(--muted); }
+.login-card input { min-height: var(--touch); background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 0 14px; color: var(--text); }
+.primary-btn { min-height: var(--touch); border: 0; border-radius: 999px; background: var(--accent); color: #fff; font-weight: 600; }
+.banner { background: rgba(240,128,128,.12); border: 1px solid rgba(240,128,128,.4); color: var(--text); border-radius: 12px; padding: 10px 12px; font-size: 14px; }
+
+/* Layout */
+.app { height: 100%; display: flex; }
+.sidebar { width: 260px; flex: none; background: var(--side); border-right: 1px solid var(--line); display: flex; flex-direction: column; padding: 12px 10px; }
+.brand { display: flex; align-items: center; gap: 10px; padding: 6px 8px 14px; font-weight: 700; }
+.brand img { width: 28px; height: 28px; border-radius: 7px; object-fit: cover; }
+.nav { display: flex; flex-direction: column; gap: 2px; }
+.nav-item { display: flex; gap: 10px; align-items: center; min-height: var(--touch); padding: 0 10px; border-radius: 10px; background: none; border: 0; text-align: left; }
+.nav-item:hover:not(:disabled), .nav-item.primary { background: var(--panel); }
+.section { color: var(--muted); font-size: 12px; padding: 14px 10px 4px; }
+.foot { margin-top: auto; border-top: 1px solid var(--line); padding: 10px 4px 0; display: flex; gap: 10px; align-items: center; font-size: 14px; }
+.who { flex: 1; min-width: 0; } .who small { color: var(--muted); font-size: 12px; }
+.avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--accent); display: grid; place-items: center; font-weight: 700; color: #fff; }
+.icon-btn { width: var(--touch); height: var(--touch); flex: none; display: grid; place-items: center; border-radius: 50%; color: var(--muted); border: 1px solid var(--line); background: none; }
+.main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.top { height: 60px; display: flex; align-items: center; gap: 8px; padding: 0 12px; }
+.top .menu { display: none; }
+.spacer { flex: 1; }
+.picker select { min-height: var(--touch); background: transparent; border: 0; border-radius: 10px; padding: 0 10px; font-weight: 700; font-size: 17px; }
+.picker select:hover { background: var(--panel); }
+.picker option { background: var(--panel); }
+.thread { flex: 1; overflow: auto; padding: 12px 20px; }
+.col { max-width: 760px; margin: 0 auto; }
+.empty { min-height: 50vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; }
+.empty img { width: 56px; height: 56px; border-radius: 14px; }
+.empty h2 { margin: 0; font-size: 24px; font-weight: 600; text-align: center; }
+.msg-user { display: flex; justify-content: flex-end; margin: 10px 0 22px; }
+.msg-user div { background: var(--panel); padding: 10px 16px; border-radius: 18px; max-width: 75%; white-space: pre-wrap; overflow-wrap: anywhere; }
+.msg-ai { display: flex; gap: 12px; margin-bottom: 22px; }
+.msg-ai img { width: 28px; height: 28px; border-radius: 7px; flex: none; }
+.msg-ai .body { min-width: 0; flex: 1; white-space: pre-wrap; overflow-wrap: anywhere; }
+.composer { padding: 8px 20px 12px; }
+.box { max-width: 760px; margin: 0 auto; background: var(--panel); border: 1px solid var(--line); border-radius: 24px; padding: 10px 12px; }
+.box textarea { width: 100%; resize: none; background: none; border: 0; outline: none; padding: 6px; min-height: 40px; max-height: 200px; }
+.row { display: flex; gap: 8px; align-items: center; }
+.pill { min-height: var(--touch); min-width: var(--touch); padding: 0 14px; border: 1px solid var(--line); border-radius: 999px; background: none; color: var(--muted); font-size: 13px; }
+.send { margin-left: auto; width: var(--touch); height: var(--touch); border-radius: 50%; border: 0; background: var(--text); color: #111; font-weight: 700; }
+.note { text-align: center; color: var(--muted); font-size: 12px; margin: 8px 0 0; }
+.scrim { display: none; }
+
+@media (max-width: 700px) {
+  .sidebar { position: fixed; inset: 0 auto 0 0; z-index: 20; transform: translateX(-100%); transition: transform .2s; }
+  .sidebar.open { transform: none; }
+  .scrim { display: block; position: fixed; inset: 0; z-index: 10; background: rgba(0,0,0,.5); }
+  .top .menu { display: grid; }
+  .thread { padding: 8px 14px; } .composer { padding: 6px 10px 10px; }
+  .msg-user div { max-width: 88%; }
+}
+@media (prefers-reduced-motion: reduce) { .sidebar { transition: none; } .pulse { animation: none; } }
