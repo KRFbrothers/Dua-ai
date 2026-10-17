@@ -2,6 +2,7 @@ package com.dua.ai.ui.settings
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -74,6 +75,33 @@ class AutomaticDriveBackupUiTest(private val dark: Boolean, private val large: B
         compose.onNodeWithText("Back up now").performScrollTo().assertIsNotEnabled()
         compose.onNodeWithText("Daily automatic backup").performScrollTo().assertIsEnabled().performClick()
         compose.runOnIdle { assertEquals(1, off) }
+    }
+    @Test fun connectionFailureIsVisibleBesideConnectWithoutScrollingToTheEndOfStorage() {
+        val failure = "Enable Google Drive API in the project containing the existing Android OAuth client, then reconnect."
+        show { DuaPageScaffold("Storage", {}) {
+            AutomaticDriveBackupSection(DriveBackupRecord(), true, false, {}, {}, {}, {}, {}, connectionStatus = failure)
+        } }
+        compose.onNodeWithText("Connect Google Drive").assertIsDisplayed()
+        compose.onNodeWithText(failure).assertIsDisplayed()
+        compose.onNodeWithText("Automatic backup is off.").assertDoesNotExist()
+    }
+    @Test fun retryAndVerifiedConnectionReplaceTheOldFailureWithCurrentStatus() {
+        val record = mutableStateOf(DriveBackupRecord())
+        val status = mutableStateOf("Old access denied error")
+        val connecting = mutableStateOf(false)
+        show { DuaPageScaffold("Storage", {}) {
+            AutomaticDriveBackupSection(record.value, true, connecting.value, {}, {}, {}, {}, {},
+                connectionStatus = status.value, connecting = connecting.value)
+        } }
+        compose.onNodeWithText("Old access denied error").assertIsDisplayed()
+        compose.runOnIdle { status.value = ""; connecting.value = true }
+        compose.onNodeWithText("Connecting Google Drive…").assertIsDisplayed()
+        compose.onNodeWithText("Old access denied error").assertDoesNotExist()
+        compose.runOnIdle { record.value = connected; connecting.value = false }
+        compose.onNodeWithText("Encrypted Drive backup verified.").assertIsDisplayed()
+        compose.onNodeWithText("Connecting Google Drive…").assertDoesNotExist()
+        compose.onNodeWithText("Old access denied error").assertDoesNotExist()
+        compose.onNodeWithText("Daily automatic backup").performScrollTo().assertIsEnabled().assertIsOn()
     }
     @Test fun enableRequiresExplicitPasswordConfirmationAndDocumentsRetentionConsent() {
         var submitted: CharArray? = null

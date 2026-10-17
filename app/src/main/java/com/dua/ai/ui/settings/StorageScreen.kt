@@ -54,17 +54,19 @@ internal fun StorageScreen(viewModel: ChatViewModel, onBack: () -> Unit, onOpen:
     var authOwner by rememberSaveable { mutableStateOf("") }
     var authEmail by rememberSaveable { mutableStateOf("") }
     var authBusy by remember { mutableStateOf(false) }
+    var driveConnectionStatus by rememberSaveable(account.user?.id) { mutableStateOf("") }
     val authorization = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
         authBusy = false
-        if (result.resultCode != Activity.RESULT_OK) viewModel.fullBackup.notice("Drive permission was cancelled. Existing backups were kept.")
+        if (result.resultCode != Activity.RESULT_OK) driveConnectionStatus = "Drive permission was cancelled. Existing backups were kept."
         else scope.launch {
             authBusy = true
             try {
                 val access = drive.authorization.result(result.data)
                 check(access is DriveAccess.Token) { "Drive permission was not completed. Reconnect and try again." }
                 drive.connect(access.value, authOwner, authEmail)
+                driveConnectionStatus = ""
             } catch (cancelled: CancellationException) { throw cancelled }
-            catch (failure: Exception) { viewModel.fullBackup.notice(if (failure is DriveFailure) failure.message.orEmpty() else "Drive could not be connected. Check account and Google Cloud setup, then retry.") }
+            catch (failure: Exception) { driveConnectionStatus = if (failure is DriveFailure) failure.message.orEmpty() else "Drive could not be connected. Check account and Google Cloud setup, then retry." }
             finally { authBusy = false }
         }
     }
@@ -113,14 +115,14 @@ internal fun StorageScreen(viewModel: ChatViewModel, onBack: () -> Unit, onOpen:
                     val user = account.user
                     if (user == null) onOpen(DuaDestination.Account)
                     else scope.launch {
-                        authBusy = true; authOwner = user.id; authEmail = user.email
+                        authBusy = true; driveConnectionStatus = ""; authOwner = user.id; authEmail = user.email
                         try {
                             when (val access = drive.authorization.request(user.email)) {
-                                is DriveAccess.Token -> { drive.connect(access.value, user.id, user.email); authBusy = false }
+                                is DriveAccess.Token -> { drive.connect(access.value, user.id, user.email); driveConnectionStatus = ""; authBusy = false }
                                 is DriveAccess.Consent -> authorization.launch(IntentSenderRequest.Builder(access.intent).build())
                             }
                         } catch (cancelled: CancellationException) { authBusy = false; throw cancelled }
-                        catch (failure: Exception) { authBusy = false; viewModel.fullBackup.notice(if (failure is DriveFailure) failure.message.orEmpty() else "Drive permission could not open. Check Google Play services and retry.") }
+                        catch (failure: Exception) { authBusy = false; driveConnectionStatus = if (failure is DriveFailure) failure.message.orEmpty() else "Drive permission could not open. Check Google Play services and retry." }
                     }
                 }, onEnable = { passwordAction = "enable-automatic" },
                 onDisable = { scope.launch {
@@ -129,7 +131,8 @@ internal fun StorageScreen(viewModel: ChatViewModel, onBack: () -> Unit, onOpen:
                     catch (_: Exception) { viewModel.fullBackup.notice("Could not save the automatic-backup Off setting. Scheduled work was stopped; retry turning it off.") }
                 } },
                 onBackup = { runCatching { drive.backupNow() }.onFailure { viewModel.fullBackup.notice("Backup could not be scheduled. Reconnect Drive and retry.") } },
-                onBrowse = { showDriveBackups = true; scope.launch { drive.loadBackups() } })
+                onBrowse = { showDriveBackups = true; scope.launch { drive.loadBackups() } },
+                connectionStatus = driveConnectionStatus, connecting = authBusy)
         })
     passwordAction?.let { action ->
         BackupPasswordDialog(saving = action != "restore" && action != "restore-drive", onDismiss = { passwordAction = null; selectedUri = null; selectedDriveId = null }, onSubmit = { password ->

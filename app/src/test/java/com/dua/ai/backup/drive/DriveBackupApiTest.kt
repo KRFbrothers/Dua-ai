@@ -137,6 +137,32 @@ class DriveBackupApiTest {
         assertEquals(3, server.requestCount)
     }
 
+    @Test fun forbiddenReasonsGiveSpecificSetupHintsWithoutDisplayingRawGoogleErrors() = runBlocking {
+        val fixtures = listOf(
+            "errors" to ("accessNotConfigured" to "existing Android OAuth client"),
+            "details" to ("SERVICE_DISABLED" to "may differ from your Cloud Run project"),
+            "details" to ("ACCESS_TOKEN_SCOPE_INSUFFICIENT" to "drive.appdata"),
+            "errors" to ("storageQuotaExceeded" to "storage is full"),
+            "errors" to ("unknown-provider-reason" to "HTTP 403")
+        )
+        for ((field, fixture) in fixtures) {
+            val body = JSONObject().put("error", JSONObject().put("message", "private-provider-message")
+                .put(field, JSONArray().put(JSONObject().put("reason", fixture.first).put("metadata", "google-access-token"))))
+            server.enqueue(response(body).setResponseCode(403))
+            try { api.email(); fail("Forbidden response must not establish a Drive connection") }
+            catch (failure: DriveSetupRequired) {
+                assertTrue(failure.message!!.contains(fixture.second))
+                assertFalse(failure.message!!.contains("private-provider-message"))
+                assertFalse(failure.message!!.contains("google-access-token"))
+            }
+        }
+        server.enqueue(MockResponse().setResponseCode(403).setBody("not JSON: private-provider-message"))
+        try { api.email(); fail() }
+        catch (failure: DriveSetupRequired) { assertTrue(failure.message!!.contains("HTTP 403")); assertFalse(failure.message!!.contains("private-provider-message")) }
+        assertEquals(0, invalidations)
+        assertEquals(fixtures.size + 1, server.requestCount)
+    }
+
     @Test fun downloadVerifiesEncryptedBytesAndFailureDeletesOnlyTheTemporaryCopy() = runBlocking {
         val bytes = "encrypted file bytes".toByteArray()
         val source = temp.newFile().apply { writeBytes(bytes) }
