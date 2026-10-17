@@ -57,7 +57,11 @@ export async function handleAccount(req,env={}){
   let body;try{body=JSON.parse(raw||'{}');}catch{return json({error:'Invalid request.'},400);}if(!body||typeof body!=='object'||Array.isArray(body))return json({error:'Invalid request.'},400);
   const emailAction=['/api/account/email-login','/api/account/email-signup','/api/account/password'].includes(url.pathname);
   if(emailAction){
-   if(!native)return json({error:'Email authentication is only available from the Android app.'},400);
+   // The Dua AI website (served by dua-api itself) may sign in with email + password: only a
+   // same-origin browser request (Origin equals this server's https origin; other origins were
+   // rejected above). Sign-up and password changes stay Android-only.
+   const sameOriginWeb=!native&&req.headers.get('origin')===url.origin&&['','same-origin'].includes(req.headers.get('sec-fetch-site')||'');
+   if(!native&&!(sameOriginWeb&&url.pathname==='/api/account/email-login'))return json({error:'Email authentication is only available from the Android app.'},400);
    if(!owner)return json({error:'Configure the owner email before using email authentication.'},503);
    if(req.method!==(url.pathname==='/api/account/password'?'PUT':'POST'))return json({error:'Method not allowed.'},405);
   }
