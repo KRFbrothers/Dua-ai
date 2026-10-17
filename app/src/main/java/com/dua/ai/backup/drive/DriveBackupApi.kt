@@ -215,8 +215,25 @@ class DriveBackupApi(private val token: String, private val owner: String, priva
     private fun accepted(result: HttpResult) {
         if (result.code in 200..299) return
         if (result.code == 401) { onUnauthorized(); throw DriveSetupRequired() }
-        if (result.code == 403) throw DriveSetupRequired("Drive refused backup access. Check Drive permission, free storage and Google Drive API setup, then reconnect.")
+        if (result.code == 403) throw DriveSetupRequired(forbiddenMessage(result.text))
         throw DriveFailure("Drive request failed (HTTP ${result.code}). Existing backups were kept.", result.code == 408 || result.code == 429 || result.code >= 500)
+    }
+    /** Only translate known reason codes. Never display Google's raw body, URLs or token metadata. */
+    private fun forbiddenMessage(body: String): String {
+        val error = runCatching { JSONObject(body).optJSONObject("error") }.getOrNull()
+        val reasons = listOf("errors", "details").flatMap { key ->
+            val entries = error?.optJSONArray(key)
+            (0 until (entries?.length() ?: 0)).mapNotNull { entries?.optJSONObject(it)?.optString("reason") }
+        }.toSet()
+        return when {
+            reasons.any { it in setOf("accessNotConfigured", "SERVICE_DISABLED", "API_DISABLED") } ->
+                "Enable Google Drive API in the Google Cloud project containing Dua AI's existing Android OAuth client, then reconnect. This may differ from your Cloud Run project."
+            reasons.any { it in setOf("insufficientPermissions", "ACCESS_TOKEN_SCOPE_INSUFFICIENT") } ->
+                "Drive backup permission is missing. Add drive.appdata under Google Auth Platform → Data Access in the Android OAuth project's settings, then reconnect Google Drive and allow backup access."
+            "storageQuotaExceeded" in reasons ->
+                "Google Drive storage is full. Free space in this Google account, then retry the backup. Existing backups were kept."
+            else -> "Drive refused backup access (HTTP 403). Check Drive permission and Google Drive API setup in the project containing the Android OAuth client, then reconnect."
+        }
     }
     private class FileChunk(private val file: File, private val offset: Long, private val count: Long, private val guard: () -> Unit) : RequestBody() {
         override fun contentType() = OCTETS
