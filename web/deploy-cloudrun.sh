@@ -69,6 +69,23 @@ for flag in "${feature_flags[@]}"; do
   fi
 done
 
+# Build the Dua AI website (website/) into web/site so dua-api serves it at /. The folder is
+# always recreated, so the image never carries a stale site; without website/ the API deploys alone.
+site_src="${DUA_WEBSITE_DIR:-$web_dir/../website}"
+rm -rf "$web_dir/site"
+mkdir -p "$web_dir/site"
+if [[ -f "$site_src/package.json" ]]; then
+  command -v npm >/dev/null || { echo "Install Node.js (npm) or run this script in Cloud Shell to build the website." >&2; exit 1; }
+  echo "Building the Dua AI website..."
+  (cd "$site_src" && npm ci --no-audit --no-fund && npm run build -- --outDir "$web_dir/site" --emptyOutDir)
+  if [[ ! -f "$web_dir/site/index.html" ]]; then
+    echo "Website build did not produce web/site/index.html." >&2
+    exit 1
+  fi
+else
+  echo "website/ not found; deploying the API without the website."
+fi
+
 echo "Preparing separate build and runtime service accounts..."
 for account in dua-api dua-api-build; do
   if ! gcloud iam service-accounts describe "${account}@${PROJECT_ID}.iam.gserviceaccount.com" --project "$PROJECT_ID" >/dev/null 2>&1; then

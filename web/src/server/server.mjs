@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { MAX_REQUEST_BYTES } from '../core/attachments.mjs';
 import { handleService } from './service-handler.mjs';
+import { requestOrigin, serveSite } from './static-site.mjs';
 
 function json(res, code, data) {
   res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
@@ -33,7 +34,7 @@ export function makeServer({ key = process.env.GEMINI_API_KEY, model = process.e
           chunks.push(chunk);
         }
         const body = Buffer.concat(chunks).toString('utf8');
-        const request = new Request('http://' + (req.headers.host || 'localhost') + req.url, {
+        const request = new Request(requestOrigin(req.headers) + req.url, {
           method: req.method,
           headers: req.headers,
           signal: controller.signal,
@@ -57,7 +58,8 @@ export function makeServer({ key = process.env.GEMINI_API_KEY, model = process.e
         } finally { controller.signal.removeEventListener('abort', stop); }
         return res.end();
       }
-      // Local development server for the backend API only; the web client was removed.
+      // The Dua AI website (built into web/site) is served from the same origin as /api/*.
+      if (await serveSite(req, res)) return;
       return json(res, 404, { error: 'Not found.' });
     } catch (error) {
       if (res.destroyed) return;
