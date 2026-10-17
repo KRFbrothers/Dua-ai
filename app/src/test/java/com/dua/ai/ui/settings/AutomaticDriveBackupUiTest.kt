@@ -11,7 +11,6 @@ import com.dua.ai.backup.drive.DriveBackupFile
 import com.dua.ai.backup.drive.DriveBackupListState
 import com.dua.ai.backup.drive.DriveBackupRecord
 import com.dua.ai.settings.LocalPreferences
-import com.dua.ai.ui.components.DuaPageScaffold
 import com.dua.ai.ui.theme.DuaTheme
 import com.github.takahirom.roborazzi.captureRoboImage
 import java.io.File
@@ -32,7 +31,7 @@ class AutomaticDriveBackupUiTest(private val dark: Boolean, private val large: B
     }
     @get:Rule val compose = createComposeRule()
     private val connected = DriveBackupRecord("11111111-2222-4333-8444-555555555555", "owner@example.test", connected = true,
-        enabled = true, generation = "test", phase = "success", message = "Encrypted Drive backup verified.", lastSuccess = 1792150000000)
+        enabled = true, generation = "test", phase = "success", message = "Encrypted Drive backup verified.", lastSuccess = 1792150000000, lastSize = 113664)
     private fun show(content: @Composable () -> Unit) = compose.setContent {
         val density = LocalDensity.current
         CompositionLocalProvider(LocalDensity provides Density(density.density, if (large) 1.8f else 1f)) {
@@ -41,67 +40,67 @@ class AutomaticDriveBackupUiTest(private val dark: Boolean, private val large: B
     }
     @Test fun signedOutPageDoesNotClaimConnectionOrEnableAutomaticBackup() {
         var connect = 0
-        show { DuaPageScaffold("Storage", {}) {
+        show { BackupPageScaffold({}, true) {
             AutomaticDriveBackupSection(DriveBackupRecord(), false, false, { connect++ }, {}, {}, {}, {})
         } }
-        compose.onNodeWithText("Connect Google Drive").performScrollTo().performClick()
+        compose.onNodeWithText("Google Account").performScrollTo().performClick()
         compose.runOnIdle { assertEquals(1, connect) }
-        compose.onNodeWithText("Daily automatic backup").performScrollTo().assertIsNotEnabled()
-        compose.onNodeWithText("Back up now").performScrollTo().assertIsNotEnabled()
+        compose.onNodeWithText("Automatic backups").performScrollTo().assertIsNotEnabled()
+        compose.onNodeWithText("Back up").performScrollTo().assertIsNotEnabled()
         compose.onNodeWithText("Browse Drive backups").performScrollTo().assertIsNotEnabled()
         compose.onNodeWithText("Automatic backup is off.", useUnmergedTree = true).assertExists()
     }
     @Test fun connectedPageShowsLastSuccessAndExposesBackupRestoreAndOffActions() {
         var backup = 0; var browse = 0; var off = 0
-        show { DuaPageScaffold("Storage", {}) {
+        show { BackupPageScaffold({}, true) {
             AutomaticDriveBackupSection(connected, true, false, {}, {}, { off++ }, { backup++ }, { browse++ })
         } }
-        compose.onNodeWithText("Last successful backup").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("Back up now").performScrollTo().performClick()
+        compose.onNodeWithText("Last backup:", substring = true).performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Back up").performScrollTo().performClick()
         compose.onNodeWithText("Browse Drive backups").performScrollTo().performClick()
-        compose.onNodeWithText("Daily automatic backup").performScrollTo().assertIsOn().performClick()
+        compose.onNodeWithText("Automatic backups").performScrollTo().assertIsOn().performClick()
         compose.runOnIdle { assertEquals(1, backup); assertEquals(1, browse); assertEquals(1, off) }
         if (System.getProperty("roborazzi.test.record") == "true") {
-            compose.onNodeWithText("Reconnect Google Drive").performScrollTo()
+            compose.onNodeWithText("Backup settings").performScrollTo()
             val output = File("build/approved-ui/automatic-drive-$dark-$large.png")
             output.parentFile!!.mkdirs(); compose.onRoot().captureRoboImage(output.absolutePath)
         }
     }
     @Test fun activeUploadDisablesDuplicateRunButUserCanStillTurnItOff() {
         var off = 0
-        show { DuaPageScaffold("Storage", {}) {
+        show { BackupPageScaffold({}, true) {
             AutomaticDriveBackupSection(connected.copy(phase = "running", progress = 40, message = "Uploading encrypted backup…"), true, false, {}, {}, { off++ }, {}, {})
         } }
-        compose.onNodeWithText("Back up now").performScrollTo().assertIsNotEnabled()
-        compose.onNodeWithText("Daily automatic backup").performScrollTo().assertIsEnabled().performClick()
+        compose.onNodeWithText("Back up").performScrollTo().assertIsNotEnabled()
+        compose.onNodeWithText("Automatic backups").performScrollTo().assertIsEnabled().performClick()
         compose.runOnIdle { assertEquals(1, off) }
     }
-    @Test fun connectionFailureIsVisibleBesideConnectWithoutScrollingToTheEndOfStorage() {
+    @Test fun connectionFailureIsInTheBackupSummaryInsteadOfTheEndOfStorage() {
         val failure = "Enable Google Drive API in the project containing the existing Android OAuth client, then reconnect."
-        show { DuaPageScaffold("Storage", {}) {
+        show { BackupPageScaffold({}, true) {
             AutomaticDriveBackupSection(DriveBackupRecord(), true, false, {}, {}, {}, {}, {}, connectionStatus = failure)
         } }
-        compose.onNodeWithText("Connect Google Drive").assertIsDisplayed()
-        compose.onNodeWithText(failure).assertIsDisplayed()
+        compose.onNodeWithText("Google Account").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText(failure).performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Automatic backup is off.").assertDoesNotExist()
     }
     @Test fun retryAndVerifiedConnectionReplaceTheOldFailureWithCurrentStatus() {
         val record = mutableStateOf(DriveBackupRecord())
         val status = mutableStateOf("Old access denied error")
         val connecting = mutableStateOf(false)
-        show { DuaPageScaffold("Storage", {}) {
+        show { BackupPageScaffold({}, true) {
             AutomaticDriveBackupSection(record.value, true, connecting.value, {}, {}, {}, {}, {},
                 connectionStatus = status.value, connecting = connecting.value)
         } }
-        compose.onNodeWithText("Old access denied error").assertIsDisplayed()
+        compose.onNodeWithText("Old access denied error").performScrollTo().assertIsDisplayed()
         compose.runOnIdle { status.value = ""; connecting.value = true }
-        compose.onNodeWithText("Connecting Google Drive…").assertIsDisplayed()
+        compose.onNodeWithText("Connecting Google Drive…").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Old access denied error").assertDoesNotExist()
         compose.runOnIdle { record.value = connected; connecting.value = false }
-        compose.onNodeWithText("Encrypted Drive backup verified.").assertIsDisplayed()
+        compose.onNodeWithText("Encrypted Drive backup verified.").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Connecting Google Drive…").assertDoesNotExist()
         compose.onNodeWithText("Old access denied error").assertDoesNotExist()
-        compose.onNodeWithText("Daily automatic backup").performScrollTo().assertIsEnabled().assertIsOn()
+        compose.onNodeWithText("Automatic backups").performScrollTo().assertIsEnabled().assertIsOn()
     }
     @Test fun enableRequiresExplicitPasswordConfirmationAndDocumentsRetentionConsent() {
         var submitted: CharArray? = null

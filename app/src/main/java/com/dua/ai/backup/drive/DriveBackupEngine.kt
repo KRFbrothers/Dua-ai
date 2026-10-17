@@ -38,7 +38,7 @@ class DriveBackupEngine(private val store: DriveBackupStore, private val root: F
             if (!api.email().equals(expected.email, true)) throw DriveSetupRequired("Choose the same Google account as the signed-in Dua account before enabling backup.")
             api.recoverInterruptedUploads().maxByOrNull { it.createdAt }?.let { recovered ->
                 guard()
-                if (recovered.createdAt > store.state.value.lastSuccess) store.success(expected, recovered.id, recovered.createdAt)
+                if (recovered.createdAt > store.state.value.lastSuccess) store.success(expected, recovered.id, recovered.createdAt, recovered.size)
             }
             guard()
             val snapshot = capture(expected)
@@ -55,7 +55,7 @@ class DriveBackupEngine(private val store: DriveBackupStore, private val root: F
             password.fill('\u0000'); password = null
             guard(); progress("Uploading encrypted backup to Drive…", 0)
             val file = api.upload(encrypted) { progress("Uploading encrypted backup to Drive…", it) }
-            guard(); store.success(expected, file.id, clock()); uploaded = true
+            guard(); store.success(expected, file.id, clock(), file.size); uploaded = true
             try { api.retainThree(file) }
             catch (cancelled: CancellationException) { throw cancelled }
             catch (_: Exception) { store.report(expected, "warning", "Backup saved and verified. Older-version cleanup could not finish; it will retry after the next successful backup.") }

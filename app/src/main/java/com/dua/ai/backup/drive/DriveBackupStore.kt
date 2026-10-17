@@ -18,7 +18,7 @@ import javax.crypto.spec.GCMParameterSpec
 
 data class DriveBackupRecord(val owner: String = "", val email: String = "", val connected: Boolean = false,
     val enabled: Boolean = false, val generation: String = "", val phase: String = "off", val message: String = "Automatic backup is off.",
-    val lastSuccess: Long = 0, val lastFileId: String = "", val progress: Int? = null)
+    val lastSuccess: Long = 0, val lastFileId: String = "", val progress: Int? = null, val lastSize: Long? = null)
 
 /** Only the backup password is sealed here. Google Play services owns Google tokens; we never persist them. */
 interface BackupPasswordProtector {
@@ -68,7 +68,7 @@ class DriveBackupStore(context: Context, private val protector: BackupPasswordPr
             require(json.getString("backend") == BuildConfig.DUA_API_BASE_URL)
             DriveBackupRecord(json.getString("owner"), json.getString("email"), json.getBoolean("connected"), json.getBoolean("enabled"),
                 json.getString("generation"), json.getString("phase"), json.getString("message"), json.getLong("lastSuccess"), json.getString("lastFileId"),
-                json.optInt("progress", -1).takeIf { it in 0..100 }).also { validate(it) }
+                json.optInt("progress", -1).takeIf { it in 0..100 }, json.optLong("lastSize", -1).takeIf { it > 0 }).also { validate(it) }
         }
     } catch (_: Exception) { DriveBackupRecord(phase = "setup", message = "Backup settings could not be read. Connect Drive and choose the password again.") }
 
@@ -118,9 +118,9 @@ class DriveBackupStore(context: Context, private val protector: BackupPasswordPr
         if (mutable.value.generation != expected.generation || mutable.value.owner != expected.owner) return
         update(mutable.value.copy(phase = phase, message = message, progress = progress))
     }
-    @Synchronized fun success(expected: DriveBackupRecord, fileId: String, time: Long) {
+    @Synchronized fun success(expected: DriveBackupRecord, fileId: String, time: Long, size: Long? = null) {
         requireCurrent(expected)
-        update(mutable.value.copy(lastSuccess = time, lastFileId = fileId, phase = "success", progress = null,
+        update(mutable.value.copy(lastSuccess = time, lastFileId = fileId, lastSize = size, phase = "success", progress = null,
             message = "Encrypted Drive backup verified. Keeping the latest 3 completed backups."))
     }
 
@@ -129,6 +129,7 @@ class DriveBackupStore(context: Context, private val protector: BackupPasswordPr
         val json = JSONObject().put("backend", BuildConfig.DUA_API_BASE_URL).put("owner", next.owner).put("email", next.email)
             .put("connected", next.connected).put("enabled", next.enabled).put("generation", next.generation).put("phase", next.phase)
             .put("message", next.message).put("lastSuccess", next.lastSuccess).put("lastFileId", next.lastFileId).put("progress", next.progress ?: -1)
+            .put("lastSize", next.lastSize ?: -1)
         val previousRecord = storage.getString("record", null)
         val previousPassword = storage.getString("password", null)
         val editor = storage.edit().putString("record", json.toString())
@@ -146,6 +147,7 @@ class DriveBackupStore(context: Context, private val protector: BackupPasswordPr
         require(value.email.length <= 320 && (!value.connected || value.owner.isNotEmpty() && value.email.contains('@')))
         require(!value.enabled || value.connected)
         require(value.generation.length <= 50 && value.lastSuccess >= 0 && value.message.length <= 1000 && value.lastFileId.length <= 200)
+        require(value.lastSize == null || value.lastSize in 1..DriveBackupApi.MAX_ENCRYPTED_BYTES)
         require(value.phase in setOf("off", "ready", "queued", "running", "success", "error", "setup", "warning"))
     }
     companion object { const val PREFS = "dua_drive_backup" }

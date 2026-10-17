@@ -94,6 +94,26 @@ class DriveBackupStoreTest {
         assertNotEquals(record.generation, store.state.value.generation)
         assertArrayEquals("another backup password".toCharArray(), store.password(store.state.value))
     }
+    @Test fun verifiedArchiveSizePersistsWithoutChangingThePasswordAndOlderRecordsRemainUsable() {
+        store.connect(owner, email); val record = store.enable(owner, password)
+        store.success(record, "verified-file", 1234, 113664)
+        val reloaded = DriveBackupStore(app, protector)
+        assertEquals(113664L, reloaded.state.value.lastSize)
+        assertArrayEquals(password, reloaded.password(reloaded.state.value))
+
+        val prefs = app.getSharedPreferences(DriveBackupStore.PREFS, 0)
+        val legacy = JSONObject(prefs.getString("record", null)!!).apply { remove("lastSize") }
+        prefs.edit().putString("record", legacy.toString()).commit()
+        val older = DriveBackupStore(app, protector)
+        assertNull(older.state.value.lastSize)
+        assertTrue(older.state.value.connected); assertTrue(older.state.value.enabled)
+        assertEquals(1234L, older.state.value.lastSuccess)
+        assertArrayEquals(password, older.password(older.state.value))
+        store.disable()
+        assertEquals(113664L, store.state.value.lastSize)
+        store.accountChanged(null)
+        assertNull(store.state.value.lastSize)
+    }
     @Test fun encryptedPasswordAndConsentAreExcludedFromBothSystemBackupAndDeviceTransfer() {
         val entries = mutableListOf<String>()
         for (resource in listOf(com.dua.ai.R.xml.account_backup_rules, com.dua.ai.R.xml.account_data_extraction_rules)) {

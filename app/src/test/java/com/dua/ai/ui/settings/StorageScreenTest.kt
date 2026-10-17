@@ -47,7 +47,9 @@ class StorageScreenTest(private val dark: Boolean, private val large: Boolean) {
     @Test fun storageUsesRealCountsAndBackupControlsWithExistingThemeAndRoutes() {
         var save = 0; var restore = 0; var opened: DuaDestination? = null
         page(onSave = { save++ }, onRestore = { restore++ }, onOpen = { opened = it })
-        for (label in listOf("Storage", "Cached chats", "Saved projects", "App cache", "Downloaded media", "Storage used", "Per-file limit"))
+        compose.onNodeWithText("Cached chats").assertDoesNotExist()
+        compose.onNodeWithText("Storage details").performScrollTo().performClick()
+        for (label in listOf("Chat backup", "Cached chats", "Saved projects", "App cache", "Downloaded media", "Storage used", "Per-file limit"))
             compose.onNodeWithText(label, substring = false, useUnmergedTree = true).assertExists()
         compose.onNodeWithText("Save full backup").performScrollTo().performClick()
         compose.onNodeWithText("Restore full backup").performScrollTo().performClick()
@@ -67,6 +69,7 @@ class StorageScreenTest(private val dark: Boolean, private val large: Boolean) {
 
     @Test fun signedOutAndUnconfiguredStatesDoNotPretendDriveOrCloudStorageIsConnected() {
         page(signedIn = false)
+        compose.onNodeWithText("Storage details").performScrollTo().performClick()
         compose.onNodeWithText("Sign in to view cloud files").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Storage used", substring = false).assertDoesNotExist()
         compose.onNodeWithText("Connected", substring = false).assertDoesNotExist()

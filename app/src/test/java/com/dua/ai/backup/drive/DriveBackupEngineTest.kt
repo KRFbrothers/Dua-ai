@@ -74,15 +74,17 @@ class DriveBackupEngineTest {
         assertEquals(DriveRunResult.Success, engine.execute())
         assertEquals(1, writes); assertEquals(1, uploads); assertEquals(1, prunes)
         assertEquals(1234L, store.state.value.lastSuccess); assertEquals("success", store.state.value.phase)
+        assertEquals("encrypted payload".toByteArray().size.toLong(), store.state.value.lastSize)
         assertTrue(openedPassword!!.all { it == '\u0000' }); assertTrue(root.listFiles()!!.isEmpty())
     }
     @Test fun failedWriteOrUploadNeverPrunesAndKeepsPreviousSuccess() = runBlocking {
-        val record = store.state.value; store.success(record, "previous", 100)
+        val record = store.state.value; store.success(record, "previous", 100, 123)
         failWrite = true
         assertEquals(DriveRunResult.Retry, engine.execute()); assertEquals(0, uploads); assertEquals(0, prunes)
         failWrite = false; failUpload = true
         assertEquals(DriveRunResult.Retry, engine.execute()); assertEquals(0, prunes)
         assertEquals(100L, store.state.value.lastSuccess); assertEquals("previous", store.state.value.lastFileId)
+        assertEquals(123L, store.state.value.lastSize)
         assertTrue(openedPassword!!.all { it == '\u0000' })
     }
     @Test fun revokedPermissionOrDifferentGoogleAccountNeverWritesOrUploadsData() = runBlocking {
