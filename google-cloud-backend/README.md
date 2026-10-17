@@ -213,7 +213,7 @@ Each Agent model step has a hard deadline, `AGENT_STEP_SECONDS` (default 150; al
 
 [`backup.py`](backup.py) runs as a Cloud Run job every day at 03:00 IST (Cloud Scheduler). It needs no extra packages.
 - **Database:** exports the Supabase tables (`dua_cloud_snapshots` with chats/memory, `agent_notes`, usage tables) to `gs://dua-backups/db/YYYY-MM-DD/<table>.json.gz`. A bucket lifecycle rule deletes these after 30 days.
-- **Files:** mirrors the Supabase Storage bucket `dua-files` to `gs://dua-backups/files/<path>`. Only new or changed files are copied, and files deleted in the app stay in the backup.
+- **Files:** mirrors the Supabase Storage bucket `dua-files` to `gs://dua-backups-m6shk/files/<path>`. Only new or changed files are copied, and files deleted in the app stay in the backup.
 - **Secrets:** needs `SUPABASE_SERVICE_ROLE_KEY` in Secret Manager, because a scheduled job has no user login. It is used only by this job, never by the chat engine.
 - **Restore:** download a `.json.gz` file from the bucket; each one holds `{"table", "date", "rows"}`.
 - **Logs:** each run writes `[dua-backup] OK {...}` or `[dua-backup] FAILED: ...`, and a non-zero exit marks the run as failed.

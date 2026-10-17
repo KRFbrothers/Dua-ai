@@ -5,7 +5,7 @@ The Settings hub keeps its existing theme, account card, destinations and touch 
 | Entry | What it opens |
 | --- | --- |
 | Personalization | Existing appearance, font, haptics and persisted personality presets |
-| Memory | Personal memory switch plus add, edit and confirmed delete; up to 10 notes of 200 characters |
+| Memory | Personal memory switch plus add, edit and confirmed delete; up to 10 notes of 200 characters (phone Personal Memory; the server-side Agent notes are separate, see [AGENT.md](AGENT.md#agent-notes-vs-phone-memory)) |
 | Plugins | Existing capability manager and connector setup |
 | Imagine | Existing image/video defaults and authenticated daily usage |
 | Accent color | Existing independent accent picker and reset |

@@ -1,4 +1,4 @@
-# Typography and voice pillars (0–1)
+# Voice reliability and typography
 
 ## Implemented
 
@@ -29,6 +29,6 @@ On a physical 60Hz Android device, install the reviewed signed APK and test both
    adb shell dumpsys meminfo com.dua.ai
    ```
 
-   Check `TOTAL PSS` stays comfortably below 180MB (about 175,781kB for a decimal 180MB limit), without turn-over-turn growth. No physical-device frame-rate, allocation or PSS result is claimed by this PR.
+   Check `TOTAL PSS` stays comfortably below 180MB (about 175,781kB for a decimal 180MB limit), without turn-over-turn growth. Automated tests do not provide physical-device frame-rate, allocation or PSS results; record them from a device.
 
-Only supplied pillars 0 and 1 are covered here; no unspecified flagship features are added.
+This page covers typography tokens and voice interruption reliability only.
