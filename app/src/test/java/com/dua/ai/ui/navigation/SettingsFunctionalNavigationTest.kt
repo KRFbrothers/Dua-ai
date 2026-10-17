@@ -53,7 +53,7 @@ class SettingsFunctionalNavigationTest(private val theme: String) {
         }
         mapOf(DuaDestination.Memory to "Memory", DuaDestination.General to "General", DuaDestination.Notifications to "Notifications",
             DuaDestination.UsageLimits to "Usage and limits", DuaDestination.Safety to "Safety", DuaDestination.SecurityLogin to "Security and login",
-            DuaDestination.Storage to "Storage").forEach { (destination, title) ->
+            DuaDestination.Storage to "Chat backup").forEach { (destination, title) ->
             assertNull(destination.comingSoonTitle)
             compose.runOnIdle { nav.navigate(destination.route) }
             compose.onNode(hasText(title) and SemanticsMatcher.keyIsDefined(SemanticsProperties.Heading)).assertExists()
