@@ -1,6 +1,6 @@
 # Dua AI documentation index
 
-Start with [ARCHITECTURE.md](ARCHITECTURE.md) for how the pieces fit, and [OPERATIONS.md](OPERATIONS.md) for deploying and running them. Root guides ([README](../README.md), [SUPABASE](../SUPABASE.md), [PROVIDERS](../PROVIDERS.md), [MEMORY](../MEMORY.md), [SIGNING](../SIGNING.md), [SECURITY](../SECURITY.md)) cover setup; the [engine README](../google-cloud-backend/README.md), [web/README](../web/README.md) and [website/README](../website/README.md) cover each service.
+Start with [ARCHITECTURE.md](ARCHITECTURE.md) for how the pieces fit, and [OPERATIONS.md](OPERATIONS.md) for deploying and running them. Root guides ([README](../README.md), [SUPABASE](../SUPABASE.md), [SIGNING](../SIGNING.md), [SECURITY](../SECURITY.md)) cover setup and stay at the repository root because app/backend messages or the build point to them; the [engine README](../google-cloud-backend/README.md), [web/README](../web/README.md) and [website/README](../website/README.md) cover each service.
 
 ## Docs in this folder
 
@@ -11,6 +11,10 @@ Start with [ARCHITECTURE.md](ARCHITECTURE.md) for how the pieces fit, and [OPERA
 | [AGENT.md](AGENT.md) | Agent tool loop vs ADK, Agent flags, Agent notes vs phone Memory, GitHub token permissions |
 | [WEBSITE.md](WEBSITE.md) | Website served by dua-api, email sign-in, browser access to the engine, roadmap |
 | [TESTING.md](TESTING.md) | CI jobs, test commands, flagship feature tests |
+| [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md) | Owner-only lock, spending limits, staging/device checks, installing the APK |
+| [PROVIDERS.md](PROVIDERS.md) | Node API AI provider keys, models, reasoning, Run code, attachments, web search, voice, Imagine |
+| [PRIVACY.md](PRIVACY.md) | What data goes where and to which providers |
+| [ROADMAP.md](ROADMAP.md) | Dua AI improvement roadmap and phases |
 | [REPLIES_CODE_CANVAS.md](REPLIES_CODE_CANVAS.md) | Thinking summaries, code blocks, previews, Run code, Artifacts Canvas |
 | [ANDROID_ENTRY_POINTS.md](ANDROID_ENTRY_POINTS.md) | Home widget and share targets |
 | [FEATURE_HUBS.md](FEATURE_HUBS.md) | Images, Library and Plugins pages |
@@ -22,7 +26,20 @@ Start with [ARCHITECTURE.md](ARCHITECTURE.md) for how the pieces fit, and [OPERA
 | [GITHUB_VALIDATION.md](GITHUB_VALIDATION.md) | GitHub repository/path policy and size limits |
 | [GITHUB_TROUBLESHOOTING.md](GITHUB_TROUBLESHOOTING.md) | GitHub connector and Build recovery |
 | [GITHUB_LOGGING.md](GITHUB_LOGGING.md) | dua-api GitHub request/stage logs |
+| [ui/ANDROID_UI.md](ui/ANDROID_UI.md) | Android UI guide: screens/MVVM map, sample-conversation preview, approved navigation, Coming soon list |
 | [ui/design-system-tokens.md](ui/design-system-tokens.md) | Android colour and typography tokens |
+
+## Feature guides ([features/](features/))
+
+| Doc | What it covers |
+| --- | --- |
+| [features/FEATURES.md](features/FEATURES.md) | Feature overview table and status |
+| [features/PROJECTS.md](features/PROJECTS.md) | Projects and custom instructions |
+| [features/PROJECT_MEMORY.md](features/PROJECT_MEMORY.md) | Project memory notes |
+| [features/TASKS.md](features/TASKS.md) | Project tasks |
+| [features/REMINDERS.md](features/REMINDERS.md) | Task due dates and device reminders |
+| [features/PLANNER.md](features/PLANNER.md) | Projects daily planner |
+| [features/HISTORY_SEARCH.md](features/HISTORY_SEARCH.md) | History search, rename, pin, find in chat, delete |
 
 ## Environment variables (names and purpose only)
 

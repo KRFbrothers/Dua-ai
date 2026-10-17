@@ -1,6 +1,6 @@
 # Dua AI architecture and contributor map
 
-This describes the current implementation, not a proposed redesign. Start with the runtime map, follow one chat request, then use the change/test map below. [README](../README.md#local-setup) covers installation and configuration; [ROADMAP](../ROADMAP.md) tracks future improvements.
+This describes the current implementation, not a proposed redesign. Start with the runtime map, follow one chat request, then use the change/test map below. [README](../README.md#local-setup) covers installation and configuration; [ROADMAP](ROADMAP.md) tracks future improvements.
 
 ## Runtime map
 
@@ -113,7 +113,7 @@ The shared Node router also emits privacy-aware request/stage logs for GitHub re
 | Node API Build PR | Separate `GITHUB_BUILD_WRITE_TOKEN`, `DUA_BUILD_PR=1`, owner authentication, optional repository restriction and the app's Create PR confirmation. [`build-pr.mjs`](../web/src/core/build-pr.mjs) revalidates proposals and stale file state; [`github-write.mjs`](../web/src/core/github-write.mjs) is the narrow GET/POST client. | New `dua/*` branch, commit and PR against the repository's default branch. No merge, force-push or branch deletion. |
 | Cloud Run coding agent | Separate `GITHUB_TOKEN` plus the single `DUA_REPO` target. [`coding_agent.py`](../google-cloud-backend/coding_agent.py) owns `repo_name`, `allowed`, `validate_changes`, file/tool budgets and branch rules. | Coding tasks can create/update text files on a new `dua-agent/*` branch and open a PR into `main`. This flow does not use the Node API's Create PR confirmation endpoint. It cannot merge, move the main ref or delete branches. |
 
-The Node API's `pathProblem`/`checkChanges` reject unsafe paths and protected workflow/`.git` changes; Cloud Run uses its own `PATH_OK`/`validate_changes` and rejects `.github/` changes. These implementations differ; inspect both before changing a shared rule. Keep tokens server-side, scoped to selected repositories and separate by capability. Provider-hosted Run code is also separate from repository command execution. Details: [Node API Build setup](../PROVIDERS.md#build-mode-read-only-repository-chat-phase-5b), [Cloud Run coding setup](../google-cloud-backend/README.md#coding-agent-setup-phase-2-optional).
+The Node API's `pathProblem`/`checkChanges` reject unsafe paths and protected workflow/`.git` changes; Cloud Run uses its own `PATH_OK`/`validate_changes` and rejects `.github/` changes. These implementations differ; inspect both before changing a shared rule. Keep tokens server-side, scoped to selected repositories and separate by capability. Provider-hosted Run code is also separate from repository command execution. Details: [Node API Build setup](PROVIDERS.md#build-mode-read-only-repository-chat-phase-5b), [Cloud Run coding setup](../google-cloud-backend/README.md#coding-agent-setup-phase-2-optional).
 
 ## Where to make a change and verify it
 
@@ -128,4 +128,4 @@ The Node API's `pathProblem`/`checkChanges` reject unsafe paths and protected wo
 
 For commands, report locations and screenshot opt-ins, use [routine checks](../README.md#android-and-routine-checks). [`checks.yml`](../.github/workflows/checks.yml) runs four separate jobs: Android build and tests, Backend (Node) tests, mocked Google Cloud engine tests and Website build. See [TESTING.md](TESTING.md). Tests use mocked integrations; passing them does not verify deployed Auth, provider billing, live RLS or physical-device permissions. The [personal APK workflow](../.github/workflows/personal-apk.yml) is a separate signing/build path, documented in [SIGNING.md](../SIGNING.md).
 
-Current feature-specific behavior lives in [SUPABASE.md](../SUPABASE.md), [PROVIDERS.md](../PROVIDERS.md), [Projects flow](PROJECTS_REFERENCE_FLOW.md), [MEMORY.md](../MEMORY.md) and [Android entry points](ANDROID_ENTRY_POINTS.md). Update the matching guide when changing a contract; preserve compatibility with saved snapshots and older app requests where the existing code supports it.
+Current feature-specific behavior lives in [SUPABASE.md](../SUPABASE.md), [PROVIDERS.md](PROVIDERS.md), [Projects flow](PROJECTS_REFERENCE_FLOW.md), [MEMORY.md](features/PROJECT_MEMORY.md) and [Android entry points](ANDROID_ENTRY_POINTS.md). Update the matching guide when changing a contract; preserve compatibility with saved snapshots and older app requests where the existing code supports it.

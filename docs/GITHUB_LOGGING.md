@@ -1,6 +1,6 @@
 # GitHub request and stage logs
 
-This implements the Node-backend portion of [roadmap section 2.4](../ROADMAP.md#24-add-structured-logging). It applies to the shared Node router on Cloud Run and local development; it does not instrument the separate Python engine.
+This implements the Node-backend portion of [roadmap section 2.4](ROADMAP.md#24-add-structured-logging). It applies to the shared Node router on Cloud Run and local development; it does not instrument the separate Python engine.
 
 ## Find a request
 

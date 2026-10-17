@@ -22,7 +22,7 @@ Source/mock tests do not establish live RPC deployment or physical-device behavi
 - [ ] Turn project memory off, sync and verify a new chat excludes notes while the editor retains them. Archive the project and confirm notes become read-only.
 - [ ] Edit/delete a note, restart and review a cloud download. Confirm server notes and their switch restore without losing tasks/instructions. If both copies changed the project, review the conflict before proceeding.
 - [ ] Export/import project-only JSON, verify project notes/switches are included and differing imported definitions become separate projects. Keep the export private; global Personal notes remain excluded.
-- [ ] Check real-phone editor taps, scrolling, keyboard, rotation and returning to Projects. Automated tests do not establish physical-device/live-provider behavior. See [MEMORY.md](MEMORY.md).
+- [ ] Check real-phone editor taps, scrolling, keyboard, rotation and returning to Projects. Automated tests do not establish physical-device/live-provider behavior. See [MEMORY.md](features/PROJECT_MEMORY.md).
 
 ## Owner-only lock and spend controls
 
@@ -43,9 +43,9 @@ The owner-only lock is the permanent access model: it keeps the server-side keys
 ## API and deployment runbook
 
 1. Review the change and ensure both `Project checks` jobs (Android and Backend tests) pass. Run `bash ./gradlew :app:testDebugUnitTest --no-daemon --max-workers=2` from the repository root and `npm ci && npm test` from `web/`. CI retains Android test reports and a backend JUnit report; backend tests use fake provider responses and require no real provider keys.
-2. Deploy the backend API (`web/`) to Cloud Run with `bash web/deploy-cloudrun.sh` (see [web/README.md](web/README.md)); production secrets live in Secret Manager. Never copy secret values into Android resources or client configuration.
+2. Deploy the backend API (`web/`) to Cloud Run with `bash web/deploy-cloudrun.sh` (see [web/README.md](../web/README.md)); production secrets live in Secret Manager. Never copy secret values into Android resources or client configuration.
 3. Apply reviewed Supabase migrations before enabling their dependent features. Verify RLS, grants, and function permissions in the Supabase SQL editor; do not grant clients direct snapshot writes or access to daily usage rows.
-4. After deployment, smoke-check `/api/config`, `/api/setup`, and `/api/account/session`. (There is no web client; `/` is not served.) Confirm that responses contain no API keys, service-role key, or owner email. `/api/setup` may expose feature availability and access-policy booleans.
+4. After deployment, smoke-check `/api/config`, `/api/setup`, and `/api/account/session`. (`/` serves the website from `web/site` when it was built at deploy; see [WEBSITE.md](WEBSITE.md).) Confirm that responses contain no API keys, service-role key, or owner email. `/api/setup` may expose feature availability and access-policy booleans.
 5. In staging, check the owner lock with the owner account and one disposable non-owner account: sign-in, refresh, logout, cloud ownership/conflicts, and quota enforcement. Test account deletion only with the disposable account.
 6. In staging, with two separate accounts, verify that `/api/files/sign`, `/api/files/url`, `/api/files/delete`, `/api/files/delete-all`, `/api/files/usage`, `/api/cloud`, `/api/imagine/*`, and `/api/voice/*` cannot read or mutate the other account's data. Verify a signed file URL expires and cannot be reused after expiry.
 7. With the disposable account, create a cloud snapshot and upload a file, then run account deletion. Confirm the snapshot row, Storage objects, and account are gone; repeat the owner check afterward to ensure the configured owner still works.
@@ -109,7 +109,7 @@ The app is installed directly on the owner's device(s); there is no store upload
 - [ ] Install with `adb install -r app/build/outputs/apk/debug/app-debug.apk`, or copy the APK to the phone and allow installing from that source.
 - [ ] Confirm the app reaches the intended backend (default `https://dua-api-228305912525.us-central1.run.app` (dua-api on Cloud Run); chat uses `https://dua-ai-engine-228305912525.us-central1.run.app`; override with `duaApiBaseUrl` / `DUA_API_BASE_URL` at build time) and that signing in with the owner account works.
 
-**Release APK (personal install).** [SIGNING.md](SIGNING.md) describes permanent key storage and GitHub builds. `bash ./gradlew :app:assembleRelease --no-daemon` builds a shrunk APK (R8 code shrinking and optimization plus resource shrinking; class names are kept with `-dontobfuscate`, so Crashlytics traces stay readable and no mapping file is uploaded). Output: `app/build/outputs/apk/release/app-release.apk`. Crashlytics collection is enabled in release builds.
+**Release APK (personal install).** [SIGNING.md](../SIGNING.md) describes permanent key storage and GitHub builds. `bash ./gradlew :app:assembleRelease --no-daemon` builds a shrunk APK (R8 code shrinking and optimization plus resource shrinking; class names are kept with `-dontobfuscate`, so Crashlytics traces stay readable and no mapping file is uploaded). Output: `app/build/outputs/apk/release/app-release.apk`. Crashlytics collection is enabled in release builds.
 
 - Every release requires the permanent personal keystore. Missing credentials, incorrect alias/password, and a SHA-256 certificate different from `app/signing-certificate.properties` fail the build before packaging. There is no debug-key fallback.
 - Set all four values below; a partial set fails the build.
@@ -184,7 +184,7 @@ No private signing keys are supplied by this repository. The manual `Build perso
 - Clear the query and confirm all current-project chats return. Try mixed case, code symbols and an unmatched phrase; no-results should suggest refreshing history by sync.
 - Type quickly and edit/restore the snapshot while a search is pending. Old query/snapshot results must disappear, and the final query must show current matches.
 - Switch projects with an active query: it must clear, and another project's matches must stay hidden. Verify no extra network/provider request or persistent search index.
-- On the phone, check typing responsiveness, emoji/long-line snippets, restart/rotation and sync-refresh results. These device/live checks remain pending; see [HISTORY-SEARCH.md](HISTORY-SEARCH.md).
+- On the phone, check typing responsiveness, emoji/long-line snippets, restart/rotation and sync-refresh results. These device/live checks remain pending; see [HISTORY-SEARCH.md](features/HISTORY_SEARCH.md).
 
 ## Daily planner update
 
@@ -194,4 +194,4 @@ No private signing keys are supplied by this repository. The manual `Build perso
 - Open a project task list from the planner, edit a deadline, and return with Back to planner. The selected day/filter must remain and the new deadline group must update. An empty selected project must offer Manage tasks.
 - Verify resume/midnight/phone-zone changes refresh Today and overdue labels within one minute; a browsed date stays fixed. Confirm the same absolute due timestamp remains after a time-zone change, including clock-change days.
 - Sync completion/date edits, restart and review/download on another device. Verify the planner reflects the current server snapshot and creates no separate task store or provider request. Completed sections describe due dates, not completion history.
-- See [PLANNER.md](PLANNER.md). Physical-device and authenticated production checks remain pending; recurrence and separate planned dates are not implemented.
+- See [PLANNER.md](features/PLANNER.md). Physical-device and authenticated production checks remain pending; recurrence and separate planned dates are not implemented.
