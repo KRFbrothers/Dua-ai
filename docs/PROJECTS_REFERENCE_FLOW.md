@@ -25,4 +25,4 @@ Notion/Drive cards are decorative empty-state artwork, not connected integration
 
 Native Compose checks cover empty real-data lists, presets, both detail tabs, project-only chats, menus, expanded input, light/dark themes, 320dp phones and 2× font scale. Project codecs and server validators cover metadata, sources, deletion retention, ownership and context isolation. Existing project/task/memory/history tests remain part of the full suite.
 
-The seven reference screenshots and missing `ds_*` SVG paths were not attached to this task. Layout dimensions, typography and copy follow the written specification. Existing exact reference search/folder/new-chat/plugin vectors are reused; other controls use native app glyphs. Exact glyph/pixel matching and physical-device/permission checks still need the reference assets and a device. Preview conversations exist only in test fixtures, never production data.
+Existing search/folder/new-chat/plugin vectors are reused; other controls use native app glyphs. Pixel-level matching and physical-device/permission checks still need a device. Preview conversations exist only in test fixtures, never production data.

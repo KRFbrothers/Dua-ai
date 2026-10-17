@@ -1,5 +1,7 @@
 # Storage and password-protected Drive backups
 
+This page covers the phone app's encrypted Drive backups. The separate server-side daily backup of Supabase tables and files (Cloud Run job `dua-backup`) is described in [OPERATIONS.md](OPERATIONS.md#daily-backup-job-dua-backup).
+
 Open **Settings → Storage** for the flat **Chat backup** page: backup settings, last successful Drive backup date/size, **Back up**, Google Account, automatic backups, network requirements and password protection. **Google Account** connects/reconnects Drive with the same signed-in owner; **Manage Google storage** opens Google's storage page in the device browser, without requesting broader Drive permissions or pretending to know the account's quota.
 
 The displayed size is the encrypted archive size recorded only after a verified Drive upload (or verified interrupted-upload recovery). Older installations with a saved date but no size show **Not recorded** until the next successful backup; they are not reset or silently assigned a sample size. Manual picker backups have their own completion status and do not replace the automatic Drive summary.
@@ -73,7 +75,7 @@ File recovery precedes the local metadata transaction. If a restore fails/cancel
 
 ## Backend rollout
 
-The full-backup restore feature needs the existing **Node `web/` service** with `/api/files/restore-sign` deployed (for Cloud Run, use the existing `web/deploy-cloudrun.sh` with your configured project). Install the new APK too. Automatic scheduling adds no backend changes, new secrets, tables or RLS policy changes; it does require the Google Drive setup above. Keep the existing private file bucket, `DUA_FILES=1`, owner authentication and Supabase Storage migration configured. Stored video recovery also requires the existing Imagine migration's `video/mp4` bucket allowance.
+The full-backup restore feature needs the existing **Node `web/` service** with `/api/files/restore-sign` deployed (redeploy dua-api with the standard command in [OPERATIONS.md](OPERATIONS.md#dua-api)). Install the new APK too. Automatic scheduling adds no backend changes, new secrets, tables or RLS policy changes; it does require the Google Drive setup above. Keep the existing private file bucket, `DUA_FILES=1`, owner authentication and Supabase Storage migration configured. Stored video recovery also requires the existing Imagine migration's `video/mp4` bucket allowance.
 
 The additive owner-only `POST /api/files/restore-sign` accepts exactly `{path, mimeType, size}`. It signs an insert into the verified user's UUID folder using that user's Supabase JWT, never the service-role key, and never enables upsert. `/api/config` advertises `files.restore: true`. Older servers can still provide backup file downloads, but raw-file restore stays unavailable until this capability is present. The Python chat engine is unchanged.
 
