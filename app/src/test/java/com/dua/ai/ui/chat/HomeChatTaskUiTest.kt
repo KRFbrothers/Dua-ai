@@ -16,6 +16,7 @@ import com.dua.ai.settings.LocalPreferences
 import com.dua.ai.setup.ProviderCapability
 import com.dua.ai.ui.theme.ChatTheme
 import com.dua.ai.ui.theme.DuaTheme
+import com.dua.ai.ui.theme.HomeSizes
 import com.dua.ai.ui.theme.HomeTheme
 import com.dua.ai.ui.theme.HomeDarkColors
 import com.dua.ai.ui.theme.HomeLightColors
@@ -63,7 +64,7 @@ class HomeChatTaskUiTest(private val dark: Boolean, private val compact: Boolean
         var profile = 0; var newChat = 0
         show { ChatScreen(state.value, ChatActions(onOpenSettings = { profile++ }, onNewChat = { newChat++ })) }
         compose.onNodeWithText("Dua always with you").assertExists()
-        compose.onNodeWithContentDescription("Dua AI").assertWidthIsEqualTo(156.dp)
+        compose.onNodeWithContentDescription("Dua AI").assertWidthIsEqualTo(HomeSizes.heroLogo)
         compose.onNodeWithContentDescription("Model, Flash").assertIsDisplayed().performClick()
         compose.onNodeWithTag("model-picker-sheet").assertExists()
         compose.onNodeWithText("Done").performClick()

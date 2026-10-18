@@ -22,6 +22,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -37,9 +38,11 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.unit.Dp
 import com.dua.ai.attachments.ChatAttachment
 import com.dua.ai.files.PendingUpload
 import com.dua.ai.ui.theme.ComposerInputStyle
+import com.dua.ai.ui.theme.HomeComposerInputStyle
 import com.dua.ai.ui.theme.ComposerModeStyle
 import com.dua.ai.ui.theme.ComposerSizes
 import androidx.compose.ui.layout.Layout
@@ -116,12 +119,15 @@ fun Composer(
     controlled: Boolean = state != null,
     typing: Boolean = (state as? ChatUiState)?.typing == true,
     uploading: Boolean = uploads.any { it.uploading },
+    /** Spacious reference layout is limited to Home, preserving feature and project composers. */
+    homeLayout: Boolean = false,
 ) {
     var localText by remember { mutableStateOf(value) }
     val activeText = if (controlled) value else if (value.isNotEmpty()) value else localText
 
     val c = HomeTheme.colors
     val hasAttachments = attachments.isNotEmpty() || uploads.isNotEmpty()
+    val inputStyle = if (homeLayout) HomeComposerInputStyle else ComposerInputStyle
     val hasContent = activeText.isNotBlank() || hasAttachments
     val expanded = hasContent || '\n' in activeText
     val canSubmit = hasContent && sendEnabled && !typing && !uploading
@@ -134,100 +140,107 @@ fun Composer(
         }
     }
 
-    // Reference shell's bottom pill bar: + | Ask Dua AI | mic | purple voice/send. 16/8 dp outer margin as in its Column.
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = Spacing.lg, vertical = Spacing.sm)
-            .navigationBarsPadding()
-            .imePadding()
-    ) {
-        // Standalone composers can retain this row; Home opens the model sheet from its header.
-        if (showModelSelector) Row(
-            Modifier.align(Alignment.End)
-                .heightIn(min = Sizes.touchTarget).widthIn(min = Sizes.touchTarget)
-                .clip(HomeShapes.segmentTab)
-                .clickable(role = Role.Button, onClick = onModelClick)
-                .semantics(mergeDescendants = true) { contentDescription = "Model, $currentModel" }
-                .padding(horizontal = Spacing.sm),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center,
+    // Keep the input spacious on regular phones and leave room for controls on narrow windows.
+    BoxWithConstraints(modifier.fillMaxWidth()) {
+        val margin = if (homeLayout) HomeSizes.composerHorizontalMargin(maxWidth) else HomeSizes.composerCompactMarginH
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = margin, vertical = Spacing.sm)
+                .navigationBarsPadding()
+                .imePadding()
         ) {
-            Text(currentModel, style = HomeModelLabelStyle, color = c.modelLabel, maxLines = 1)
-            Icon(Icons.Default.KeyboardArrowDown, null, tint = c.modelLabel, modifier = Modifier.size(Sizes.iconTiny))
-        }
-        if (aboveInput != null) {
-            Box(Modifier.align(Alignment.CenterHorizontally)) { aboveInput() }
-            Spacer(Modifier.height(Spacing.md))
-        }
-        val shape = if (expanded) ComposerSizes.expandedShape else HomeShapes.bar
-        Column(Modifier.fillMaxWidth().animateContentSize().testTag("composer-container")
-            .clip(shape).background(c.bar).border(HomeSizes.barBorder, c.barBorder, shape)
-            .padding(horizontal = HomeSizes.barPaddingH, vertical = Spacing.sm)) {
-            if (hasAttachments) AttachmentBar(attachments, uploads, !typing, onRemoveAttachment, onRemoveUpload)
-            if (dictation?.listening == true) {
-                Row(Modifier.fillMaxWidth().heightIn(min = Sizes.touchTarget), verticalAlignment = Alignment.CenterVertically) {
-                    DictationBar(dictation.level, dictation.cancel, dictation.confirm)
-                    if (typing) ComposerAction(Icons.Rounded.Stop, "Stop response", onClick = onStop)
-                }
-            } else ComposerFields(expanded = expanded,
-                input = {
-                    BasicTextField(
-                        value = activeText,
-                        onValueChange = { localText = it; onValueChange(it); onDraftChange(it) },
-                        modifier = Modifier.fillMaxWidth().heightIn(min = Sizes.touchTarget).padding(horizontal = Spacing.sm)
-                            .let { if (focusRequester != null) it.focusRequester(focusRequester) else it }
-                            .onFocusChanged { onTextFieldFocus?.invoke(it.isFocused) }
-                            .onGloballyPositioned { onTextFieldBounds?.invoke(it.boundsInRoot()) }
-                            .semantics { contentDescription = "Message" },
-                        textStyle = ComposerInputStyle.copy(color = c.input),
-                        cursorBrush = SolidColor(c.input),
-                        singleLine = !expanded,
-                        maxLines = 6,
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                        keyboardActions = KeyboardActions(onSend = { submit() }),
-                        decorationBox = { innerTextField ->
-                            Box(Modifier.heightIn(min = Sizes.touchTarget), contentAlignment = Alignment.CenterStart) {
-                                if (activeText.isEmpty()) Text(placeholder, style = ComposerInputStyle, color = c.placeholder,
-                                    maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                innerTextField()
+            // Standalone composers can retain this row; Home opens the model sheet from its header.
+            if (showModelSelector) Row(
+                Modifier.align(Alignment.End)
+                    .heightIn(min = Sizes.touchTarget).widthIn(min = Sizes.touchTarget)
+                    .clip(HomeShapes.segmentTab)
+                    .clickable(role = Role.Button, onClick = onModelClick)
+                    .semantics(mergeDescendants = true) { contentDescription = "Model, $currentModel" }
+                    .padding(horizontal = Spacing.sm),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center,
+            ) {
+                Text(currentModel, style = HomeModelLabelStyle, color = c.modelLabel, maxLines = 1)
+                Icon(Icons.Default.KeyboardArrowDown, null, tint = c.modelLabel, modifier = Modifier.size(Sizes.iconTiny))
+            }
+            if (aboveInput != null) {
+                Box(Modifier.align(Alignment.CenterHorizontally)) { aboveInput() }
+                Spacer(Modifier.height(Spacing.md))
+            }
+            val shape = if (expanded) ComposerSizes.expandedShape else if (homeLayout) HomeShapes.homeBar else HomeShapes.bar
+            Column(Modifier.fillMaxWidth().animateContentSize().testTag("composer-container")
+                .shadow(if (homeLayout) HomeSizes.composerElevation else HomeSizes.noElevation, shape)
+                .clip(shape).background(c.bar).border(HomeSizes.barBorder, c.barBorder, shape)
+                .padding(horizontal = HomeSizes.barPaddingH, vertical = if (homeLayout && !expanded) HomeSizes.composerIdlePaddingV else Spacing.sm)) {
+                if (hasAttachments) AttachmentBar(attachments, uploads, !typing, onRemoveAttachment, onRemoveUpload)
+                if (dictation?.listening == true) {
+                    Row(Modifier.fillMaxWidth().heightIn(min = Sizes.touchTarget), verticalAlignment = Alignment.CenterVertically) {
+                        DictationBar(dictation.level, dictation.cancel, dictation.confirm)
+                        if (typing) ComposerAction(Icons.Rounded.Stop, "Stop response", onClick = onStop)
+                    }
+                } else ComposerFields(expanded = expanded,
+                    input = {
+                        BasicTextField(
+                            value = activeText,
+                            onValueChange = { localText = it; onValueChange(it); onDraftChange(it) },
+                            modifier = Modifier.fillMaxWidth().heightIn(min = Sizes.touchTarget).padding(horizontal = Spacing.sm)
+                                .let { if (focusRequester != null) it.focusRequester(focusRequester) else it }
+                                .onFocusChanged { onTextFieldFocus?.invoke(it.isFocused) }
+                                .onGloballyPositioned { onTextFieldBounds?.invoke(it.boundsInRoot()) }
+                                .semantics { contentDescription = "Message" },
+                            textStyle = inputStyle.copy(color = c.input),
+                            cursorBrush = SolidColor(c.input),
+                            singleLine = !expanded,
+                            maxLines = 6,
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                            keyboardActions = KeyboardActions(onSend = { submit() }),
+                            decorationBox = { innerTextField ->
+                                Box(Modifier.heightIn(min = Sizes.touchTarget), contentAlignment = Alignment.CenterStart) {
+                                    if (activeText.isEmpty()) Text(placeholder, style = inputStyle, color = c.placeholder,
+                                        maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    innerTextField()
+                                }
                             }
+                        )
+                    },
+                    attach = {
+                        Box {
+                            IconButton(onClick = onAttach, modifier = Modifier.size(Sizes.touchTarget)) {
+                                Icon(Icons.Default.Add, "Add photos and files", tint = c.barIcon,
+                                    modifier = Modifier.size(if (homeLayout) HomeSizes.referenceIcon else HomeSizes.plusIcon))
+                            }
+                            attachmentPopup()
                         }
-                    )
-                },
-                attach = {
-                    Box {
-                        IconButton(onClick = onAttach, modifier = Modifier.size(Sizes.touchTarget)) {
-                            Icon(Icons.Default.Add, "Add photos and files", tint = c.barIcon, modifier = Modifier.size(HomeSizes.plusIcon))
+                    },
+                    controls = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            IconButton(onClick = { dictation?.start?.invoke() ?: onMic() }, modifier = Modifier.size(Sizes.touchTarget)) {
+                                Icon(if (homeLayout) ImageVector.vectorResource(R.drawable.ls_microphone_outline) else Icons.Outlined.MicNone,
+                                    "Dictate", tint = c.barIcon, modifier = Modifier.size(if (homeLayout) HomeSizes.referenceIcon else HomeSizes.micIcon))
+                            }
+                            val (icon, label, action) = when {
+                                typing -> Triple(Icons.Rounded.Stop, "Stop response", { onStop() })
+                                hasContent -> Triple(Icons.Default.ArrowUpward, "Send message", { submit() })
+                                uploading -> Triple(Icons.Default.Close, "Cancel upload", { onCancelUpload() })
+                                else -> Triple(ImageVector.vectorResource(R.drawable.ls_live_wave), "Voice mode", { onVoiceMode() })
+                            }
+                            ComposerAction(icon, label, enabled = typing || !hasContent || canSubmit, onClick = action,
+                                iconSize = if (homeLayout && !typing && !hasContent) HomeSizes.referenceIcon else HomeSizes.voiceIcon)
                         }
-                        attachmentPopup()
-                    }
-                },
-                controls = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(onClick = { dictation?.start?.invoke() ?: onMic() }, modifier = Modifier.size(Sizes.touchTarget)) {
-                            Icon(Icons.Outlined.MicNone, "Dictate", tint = c.barIcon, modifier = Modifier.size(HomeSizes.micIcon))
-                        }
-                        val (icon, label, action) = when {
-                            typing -> Triple(Icons.Rounded.Stop, "Stop response", { onStop() })
-                            hasContent -> Triple(Icons.Default.ArrowUpward, "Send message", { submit() })
-                            uploading -> Triple(Icons.Default.Close, "Cancel upload", { onCancelUpload() })
-                            else -> Triple(ImageVector.vectorResource(R.drawable.ls_live_wave), "Voice mode", { onVoiceMode() })
-                        }
-                        ComposerAction(icon, label, enabled = typing || !hasContent || canSubmit, onClick = action)
-                    }
-                })
+                    })
+            }
         }
     }
 }
 
 @Composable
-private fun ComposerAction(icon: ImageVector, label: String, enabled: Boolean = true, onClick: () -> Unit) {
+private fun ComposerAction(icon: ImageVector, label: String, enabled: Boolean = true, onClick: () -> Unit, iconSize: Dp = HomeSizes.voiceIcon) {
     val c = HomeTheme.colors
     Box(Modifier.size(Sizes.touchTarget).clickable(enabled = enabled, role = Role.Button, onClick = onClick)
         .semantics(mergeDescendants = true) { contentDescription = label }, contentAlignment = Alignment.Center) {
         Box(Modifier.size(ComposerSizes.actionButton).clip(HomeShapes.round).background(c.voice), contentAlignment = Alignment.Center) {
-            Icon(icon, null, tint = c.onVoice, modifier = Modifier.size(HomeSizes.voiceIcon))
+            Icon(icon, null, tint = c.onVoice, modifier = Modifier.size(iconSize))
         }
     }
 }

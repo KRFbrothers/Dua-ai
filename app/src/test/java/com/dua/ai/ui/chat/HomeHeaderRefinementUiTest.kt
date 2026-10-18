@@ -114,7 +114,7 @@ class HomeHeaderRefinementUiTest(private val dark: Boolean, private val large: B
         val task = mutableStateOf(false)
         var chosen = ""
         show { ChatContent(task.value, onTask = { chosen = it }) }
-        compose.onNodeWithContentDescription("Dua AI").assertWidthIsEqualTo(156.dp)
+        compose.onNodeWithContentDescription("Dua AI").assertWidthIsEqualTo(HomeSizes.heroLogo)
         compose.onNodeWithText("Dua always with you").assertIsDisplayed()
         compose.onNodeWithText("What can I take off\nyour plate?").assertDoesNotExist()
         capture("chat-hero")

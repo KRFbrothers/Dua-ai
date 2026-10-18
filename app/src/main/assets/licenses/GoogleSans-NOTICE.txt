@@ -1,0 +1,20 @@
+Google Sans font provenance
+
+These files were supplied by the project owner in a Google App APKM for personal experimentation.
+Google App package: com.google.android.googlequicksearchbox
+Version: 17.64.24.sa.arm64 (301817511)
+google_sans_regular.ttf: base.apk/res/Yfl.ttf (font/google_sans_local)
+google_sans_medium.ttf: base.apk/res/PSY.ttf (font/google_sans_medium_local)
+
+Google Sans is proprietary and is not covered by this repository's MIT license.
+The font files are unchanged and retain their original metadata. No open-source license or permission grant is implied.
+
+Original embedded notices:
+
+Yfl.ttf
+Copyright 2015 Google LLC. All Rights Reserved.
+Google offers many fonts on open source terms. Google Sans is not one of them. Please see google.com/fonts for alternatives.
+
+PSY.ttf
+Copyright 2017 Google Inc. All Rights Reserved.
+Google offers many fonts on open source terms. Google Sans is not one of them. Please see google.com/fonts for alternatives.

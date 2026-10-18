@@ -278,7 +278,7 @@ fun ChatScreen(
             // Keep the entire right-hand Home touch target in the scrim, including on narrow windows.
             val endInset = WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal).asPaddingValues()
                 .calculateEndPadding(LocalLayoutDirection.current)
-            val controlInset = maxOf(HomeSizes.topBarPaddingH, Spacing.lg + HomeSizes.barPaddingH)
+            val controlInset = maxOf(HomeSizes.topBarPaddingH, HomeSizes.composerHorizontalMargin(maxWidth) + HomeSizes.barPaddingH)
             val drawerWidth = minOf(DrawerSizes.width, (maxWidth - endInset - controlInset - Sizes.touchTarget).coerceAtLeast(0.dp))
             ModalNavigationDrawer(
                 drawerState = drawerState,
@@ -362,7 +362,7 @@ fun ChatScreen(
                     }
                     if (feature != null || state.homeTab != HomeTab.Work) Column(Modifier.fillMaxWidth()
                         .let { if (feature != null) it.imePadding().navigationBarsPadding() else it }, horizontalAlignment = Alignment.CenterHorizontally) {
-                        Column(Modifier.widthIn(max = Sizes.contentMaxWidth).fillMaxWidth()
+                        Column(Modifier.widthIn(max = if (feature == null) HomeSizes.composerMaxWidth else Sizes.contentMaxWidth).fillMaxWidth()
                             .onGloballyPositioned { bottomCoordinates = it }
                             .swipeUpToOpen(enabled = sheet == null && !state.typing,
                                 isExcluded = { local -> inputFocused && bottomCoordinates?.let { inputBounds.contains(it.localToRoot(local)) } == true },
@@ -386,6 +386,7 @@ fun ChatScreen(
                             val dictation = if (actions.inlineDictation) rememberChatDictation(actions.dictationLanguage, actions.dictationAutoSend,
                                 draft = rememberUpdatedState(state.draft).let { d -> remember { { d.value } } }, onDraft = actions.onDraftChange, onSend = sendFromComposer, onNotice = actions.onDictationNotice) else null
                             Composer(
+                                homeLayout = feature == null,
                                 dictation = dictation,
                                 // Only what the composer needs, so streamed tokens do not recompose it.
                                 controlled = true,

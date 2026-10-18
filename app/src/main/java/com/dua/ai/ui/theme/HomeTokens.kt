@@ -9,6 +9,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.sp
 
 /**
@@ -47,6 +48,20 @@ object HomeTheme {
 
 /** Reference sizes. Visuals keep the reference sizes; each control sits in a 48 dp touch slot. */
 object HomeSizes {
+    /** Compact original Dua lockup, scaled down as a single asset. */
+    val heroLogo = 48.dp
+    val heroCompactHeight = 320.dp
+    /** assistant_robin_chat_input_max_width from the supplied Google App resource table. */
+    val composerMaxWidth = 696.dp
+    val referenceIcon = 28.dp
+    val composerMarginH = 32.dp
+    val composerCompactMarginH = 16.dp
+    val composerRoomyWidth = 360.dp
+    val composerIdlePaddingV = 16.dp
+    val composerElevation = 2.dp
+    val noElevation = 0.dp
+    fun composerHorizontalMargin(availableWidth: Dp): Dp =
+        if (availableWidth >= composerRoomyWidth) composerMarginH else composerCompactMarginH
     val roundButton = 44.dp
     val segmentTab = 36.dp
     val segmentTrackInset = 3.dp
@@ -73,6 +88,7 @@ object HomeShapes {
     val segmentTrack = RoundedCornerShape(24.dp)
     val segmentTab = RoundedCornerShape(20.dp)
     val bar = RoundedCornerShape(32.dp)
+    val homeBar = RoundedCornerShape(40.dp)
     val round = CircleShape
 }
 
