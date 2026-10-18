@@ -70,6 +70,7 @@ internal fun HomeModeSwitcher(mode: HomeMode, onSelect: (HomeMode) -> Unit, enab
         HomeMode.entries.forEach { tab ->
             val selected = mode == tab
             Box(Modifier.heightIn(min = Sizes.touchTarget).widthIn(min = Sizes.touchTarget)
+                .clip(ComposerSizes.tabShape)
                 .selectable(selected = selected, enabled = enabled, role = Role.Tab, onClick = { onSelect(tab) }),
                 contentAlignment = Alignment.Center) {
                 Box(Modifier.heightIn(min = HomeSizes.segmentTab).clip(ComposerSizes.tabShape)
@@ -157,8 +158,8 @@ fun Composer(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = margin, vertical = Spacing.sm)
-                .navigationBarsPadding()
-                .imePadding()
+                // Home owns the union of IME/navigation insets around the whole surface.
+                .then(if (homeLayout) Modifier else Modifier.navigationBarsPadding().imePadding())
         ) {
             // Standalone composers can retain this row; Home opens the model sheet from its header.
             if (showModelSelector) Row(
@@ -249,7 +250,7 @@ fun Composer(
 @Composable
 private fun ComposerAction(icon: ImageVector, label: String, enabled: Boolean = true, onClick: () -> Unit, iconSize: Dp = HomeSizes.voiceIcon) {
     val c = HomeTheme.colors
-    Box(Modifier.size(Sizes.touchTarget).clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+    Box(Modifier.size(Sizes.touchTarget).clip(HomeShapes.round).clickable(enabled = enabled, role = Role.Button, onClick = onClick)
         .semantics(mergeDescendants = true) { contentDescription = label }, contentAlignment = Alignment.Center) {
         Box(Modifier.size(ComposerSizes.actionButton).clip(HomeShapes.round).background(c.voice), contentAlignment = Alignment.Center) {
             Icon(icon, null, tint = c.onVoice, modifier = Modifier.size(iconSize))
