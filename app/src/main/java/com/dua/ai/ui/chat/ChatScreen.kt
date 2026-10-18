@@ -307,6 +307,8 @@ fun ChatScreen(
                 },
             ) {
                 Column(Modifier.fillMaxSize().background(com.dua.ai.ui.theme.ChatTheme.colors.background)
+                    .let { if (feature == null) it.imePadding() else it }
+                    .then(if (home && feature == null && state.homeTab != HomeTab.Work) Modifier.homeBackdrop(taskHome) else Modifier)
                     .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))) {
                     if (topBar != null) topBar()
                     else if (feature != null) FeatureTopBar(feature.title, actions.onExitFeature, actions.onNewFeatureSession,
