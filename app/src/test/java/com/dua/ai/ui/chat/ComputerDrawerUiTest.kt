@@ -58,7 +58,7 @@ class ComputerDrawerUiTest(private val dark: Boolean, private val small: Boolean
         val profile = compose.onNodeWithContentDescription("Open profile and settings").fetchSemanticsNode().boundsInRoot
         val voice = compose.onNodeWithContentDescription("Voice mode").fetchSemanticsNode().boundsInRoot
         val root = compose.onRoot().fetchSemanticsNode().boundsInRoot
-        assertEquals(if (small) 253f else 286f, drawer.width, .5f)
+        assertEquals(if (small) 253f else 277f, drawer.width, .5f)
         for (control in listOf(profile, voice)) {
             assertTrue("Drawer overlaps Home control: $drawer / $control", drawer.right <= control.left + .5f)
             assertTrue(control.right <= root.right + .5f)

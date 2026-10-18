@@ -16,6 +16,12 @@ val InterFont: FontFamily = FontFamily(
     Font(R.font.krfbrothers_regular, FontWeight.Bold)
 )
 
+/** Unmodified fonts from the owner's Google App bundle; see licenses/GoogleSans-NOTICE.txt. */
+val HomeFontFamily = FontFamily(
+    Font(R.font.google_sans_regular, FontWeight.Normal),
+    Font(R.font.google_sans_medium, FontWeight.Medium),
+)
+
 /** Existing code style keeps its bundled Menlo artwork. */
 private val LegacyCodeFont = FontFamily(
     Font(R.font.krfbrothers_code, FontWeight.Normal),
@@ -86,12 +92,18 @@ val VoicePermissionHeadingStyle = VoiceGreetingStyle.copy(fontSize = 22.sp, line
 /** Quick prompt rows on Home ("Create an image…"), Dabba bodyLarge. */
 val HomePromptStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Normal, fontSize = 16.sp)
 /** Brand and short model label share a single baseline in the Home header. */
-val HomeHeaderStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Medium, fontSize = 19.sp, lineHeight = 26.sp)
+val HomeHeaderStyle = TextStyle(fontFamily = HomeFontFamily, fontWeight = FontWeight.Medium, fontSize = 19.sp, lineHeight = 26.sp)
+/** Home uses the extracted Google Sans; other screens retain their existing font preference. */
+val HomeHeroStyle = TextStyle(fontFamily = HomeFontFamily, fontWeight = FontWeight.Normal, fontSize = 32.sp, lineHeight = 40.sp)
+val HomeHeroCompactStyle = HomeHeroStyle.copy(fontSize = 28.sp, lineHeight = 36.sp)
+val HomeTaskPromptStyle = HomePromptStyle.copy(fontFamily = HomeFontFamily)
 /** Composer input and its "Ask Dua AI" placeholder. */
 val ComposerTextStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Normal, fontSize = 16.sp, lineHeight = 22.sp)
 /** Dynamic chat composer, independent of other existing input styles. */
 val ComposerInputStyle = ComposerTextStyle.copy(fontSize = 18.sp, lineHeight = 26.sp)
-val ComposerModeStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Medium, fontSize = 14.sp)
+/** assistant_robin_input_oneline explicitly declares an 18 sp input. */
+val HomeComposerInputStyle = ComposerInputStyle.copy(fontFamily = HomeFontFamily)
+val ComposerModeStyle = TextStyle(fontFamily = HomeFontFamily, fontWeight = FontWeight.Medium, fontSize = 14.sp)
 /** Small pill labels. */
 val PillLabelStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
 /** Labels on the three Home action buttons. */
