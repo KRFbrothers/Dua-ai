@@ -9,6 +9,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.dp
 import androidx.core.graphics.Insets
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
@@ -48,11 +49,12 @@ class HomeGradientUiTest(private val dark: Boolean, private val large: Boolean) 
         dispatchKeyboard(0)
     }
 
-    private fun dispatchKeyboard(height: Int) {
+    private fun dispatchKeyboard(height: Int, navigationBar: Int = 0) {
         compose.runOnUiThread {
             val content = compose.activity.findViewById<ViewGroup>(android.R.id.content)
             ViewCompat.dispatchApplyWindowInsets(content.getChildAt(0), WindowInsetsCompat.Builder()
                 .setInsets(WindowInsetsCompat.Type.systemBars(), Insets.NONE)
+                .setInsets(WindowInsetsCompat.Type.navigationBars(), Insets.of(0, 0, 0, navigationBar))
                 .setInsets(WindowInsetsCompat.Type.ime(), Insets.of(0, 0, 0, height))
                 .setVisible(WindowInsetsCompat.Type.ime(), height > 0).build())
         }
@@ -104,6 +106,7 @@ class HomeGradientUiTest(private val dark: Boolean, private val large: Boolean) 
         dispatchKeyboard(0)
         val closedSurface = compose.onNodeWithTag("home-gradient").fetchSemanticsNode().boundsInRoot
         val closedBar = compose.onNodeWithTag("composer-container").fetchSemanticsNode().boundsInRoot
+        compose.onNodeWithContentDescription("Dua AI").assertWidthIsEqualTo(48.dp)
         compose.onNodeWithContentDescription("Message").performClick().assertIsFocused()
         dispatchKeyboard(280)
         val surface = compose.onNodeWithTag("home-gradient").fetchSemanticsNode().boundsInRoot
@@ -111,6 +114,7 @@ class HomeGradientUiTest(private val dark: Boolean, private val large: Boolean) 
         assertEquals("The gradient must end at the keyboard", closedSurface.bottom - 280f, surface.bottom, 2f)
         assertEquals("IME inset must be applied once", closedBar.bottom - 280f, bar.bottom, 2f)
         assertTrue(bar.bottom <= surface.bottom)
+        compose.onNodeWithContentDescription("Dua AI").assertWidthIsEqualTo(36.dp)
         val tabs = compose.onNode(hasText("Chat") and isSelectable()).assertIsDisplayed().fetchSemanticsNode().boundsInRoot
         assertTrue(tabs.bottom <= bar.top)
         compose.onNodeWithContentDescription("Voice mode").assertIsDisplayed()
@@ -118,10 +122,30 @@ class HomeGradientUiTest(private val dark: Boolean, private val large: Boolean) 
         compose.onNodeWithContentDescription("Message").performTextInput("Keep my draft")
         dispatchKeyboard(0)
         compose.onNodeWithContentDescription("Message").assertIsFocused().assertTextContains("Keep my draft")
+        compose.onNodeWithContentDescription("Dua AI").assertWidthIsEqualTo(48.dp)
         compose.onNode(hasText("Task") and isSelectable()).performClick()
         compose.onNodeWithText("What can I take off\nyour plate?").assertExists()
         compose.onNodeWithText(HomeTaskPrompts.last()).performScrollTo().assertIsDisplayed()
         assertEquals("Keep my draft", state.value.draft)
+        compose.onNodeWithContentDescription("Message").assertIsFocused().assertTextContains("Keep my draft")
         capture("task")
+        compose.onNode(hasText("Chat") and isSelectable()).performClick()
+        compose.onNodeWithText("Ask away, Fareed!").assertExists()
+        compose.onNodeWithContentDescription("Message").assertIsFocused().assertTextContains("Keep my draft")
+    }
+
+    @Test fun navigationAndKeyboardInsetsUseTheirUnionAndDoNotAccumulateAcrossToggles() {
+        show(mutableStateOf(ChatUiState()))
+        dispatchKeyboard(0, navigationBar = 24)
+        val closed = compose.onNodeWithTag("composer-container").fetchSemanticsNode().boundsInRoot
+        repeat(2) {
+            dispatchKeyboard(280, navigationBar = 24)
+            val open = compose.onNodeWithTag("composer-container").fetchSemanticsNode().boundsInRoot
+            assertEquals("Use max(IME, navigation), not their sum", closed.bottom - 256f, open.bottom, 2f)
+            compose.onNode(hasText("Chat") and isSelectable()).assertIsDisplayed()
+            compose.onNodeWithContentDescription("Voice mode").assertIsDisplayed()
+            dispatchKeyboard(0, navigationBar = 24)
+            assertEquals(closed.bottom, compose.onNodeWithTag("composer-container").fetchSemanticsNode().boundsInRoot.bottom, 2f)
+        }
     }
 }

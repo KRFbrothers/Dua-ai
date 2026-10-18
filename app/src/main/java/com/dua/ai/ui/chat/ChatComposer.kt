@@ -158,9 +158,8 @@ fun Composer(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = margin, vertical = Spacing.sm)
-                .navigationBarsPadding()
-                // Home owns IME insets around its whole surface, including the mode tabs.
-                .then(if (homeLayout) Modifier else Modifier.imePadding())
+                // Home owns the union of IME/navigation insets around the whole surface.
+                .then(if (homeLayout) Modifier else Modifier.navigationBarsPadding().imePadding())
         ) {
             // Standalone composers can retain this row; Home opens the model sheet from its header.
             if (showModelSelector) Row(
