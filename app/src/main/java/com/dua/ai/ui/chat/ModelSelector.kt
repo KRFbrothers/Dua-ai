@@ -8,8 +8,6 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -20,6 +18,9 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.dua.ai.R
 import com.dua.ai.ui.theme.DuaMotion
 import com.dua.ai.ui.theme.HomeModelLabelStyle
 import com.dua.ai.ui.theme.HomeShapes
@@ -71,6 +72,6 @@ internal fun ModelSelector(name: String, onClick: () -> Unit, modifier: Modifier
         } else {
             Text(name, style = textStyle, color = c.modelLabel, maxLines = 1, modifier = Modifier.width(IntrinsicSize.Max))
         }
-        Icon(Icons.Default.KeyboardArrowDown, contentDescription = null, tint = c.modelLabel, modifier = Modifier.size(Sizes.iconTiny))
+        Icon(ImageVector.vectorResource(R.drawable.home_expand_more), contentDescription = null, tint = c.modelLabel, modifier = Modifier.size(Sizes.iconTiny))
     }
 }

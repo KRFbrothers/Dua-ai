@@ -2,8 +2,10 @@ package com.dua.ai.ui.theme
 
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import com.dua.ai.R
@@ -16,10 +18,13 @@ val InterFont: FontFamily = FontFamily(
     Font(R.font.krfbrothers_regular, FontWeight.Bold)
 )
 
-/** Unmodified fonts from the owner's Google App bundle; see licenses/GoogleSans-NOTICE.txt. */
+/** Current, offline Google Fonts original. Home only; see licenses/GoogleSans-NOTICE.txt. */
+@OptIn(ExperimentalTextApi::class)
 val HomeFontFamily = FontFamily(
-    Font(R.font.google_sans_regular, FontWeight.Normal),
-    Font(R.font.google_sans_medium, FontWeight.Medium),
+    Font(R.font.home_google_sans_variable, FontWeight.Normal,
+        variationSettings = FontVariation.Settings(FontVariation.weight(400))),
+    Font(R.font.home_google_sans_variable, FontWeight.Medium,
+        variationSettings = FontVariation.Settings(FontVariation.weight(500))),
 )
 
 /** Existing code style keeps its bundled Menlo artwork. */
@@ -93,7 +98,7 @@ val VoicePermissionHeadingStyle = VoiceGreetingStyle.copy(fontSize = 22.sp, line
 val HomePromptStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Normal, fontSize = 16.sp)
 /** Brand and short model label share a single baseline in the Home header. */
 val HomeHeaderStyle = TextStyle(fontFamily = HomeFontFamily, fontWeight = FontWeight.Medium, fontSize = 19.sp, lineHeight = 26.sp)
-/** Home uses the extracted Google Sans; other screens retain their existing font preference. */
+/** Home uses Google Sans; other screens retain their existing font preference. */
 val HomeHeroStyle = TextStyle(fontFamily = HomeFontFamily, fontWeight = FontWeight.Normal, fontSize = 32.sp, lineHeight = 40.sp)
 val HomeHeroCompactStyle = HomeHeroStyle.copy(fontSize = 28.sp, lineHeight = 36.sp)
 val HomeTaskPromptStyle = HomePromptStyle.copy(fontFamily = HomeFontFamily)

@@ -47,6 +47,9 @@ import com.dua.ai.ui.theme.ComposerModeStyle
 import com.dua.ai.ui.theme.ComposerSizes
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 import com.dua.ai.ui.theme.HomeModelLabelStyle
 import com.dua.ai.ui.theme.HomeShapes
@@ -128,6 +131,7 @@ fun Composer(
     val c = HomeTheme.colors
     val hasAttachments = attachments.isNotEmpty() || uploads.isNotEmpty()
     val inputStyle = if (homeLayout) HomeComposerInputStyle else ComposerInputStyle
+    val textMeasurer = rememberTextMeasurer()
     val hasContent = activeText.isNotBlank() || hasAttachments
     val expanded = hasContent || '\n' in activeText
     val canSubmit = hasContent && sendEnabled && !typing && !uploading
@@ -143,6 +147,12 @@ fun Composer(
     // Keep the input spacious on regular phones and leave room for controls on narrow windows.
     BoxWithConstraints(modifier.fillMaxWidth()) {
         val margin = if (homeLayout) HomeSizes.composerHorizontalMargin(maxWidth) else HomeSizes.composerCompactMarginH
+        // Large text gets its own input row before the placeholder loses space to the controls.
+        // Keep the field in the same Layout slot so resizing never discards focus or the draft.
+        val inlineTextWidth = maxWidth - margin * 2 - HomeSizes.barPaddingH * 2 - Sizes.touchTarget * 3 - Spacing.sm * 2
+        val stacked = expanded || (homeLayout && textMeasurer.measure(
+            AnnotatedString(placeholder), style = inputStyle, softWrap = false, maxLines = 1,
+        ).size.width > with(LocalDensity.current) { inlineTextWidth.roundToPx() })
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -168,18 +178,18 @@ fun Composer(
                 Box(Modifier.align(Alignment.CenterHorizontally)) { aboveInput() }
                 Spacer(Modifier.height(Spacing.md))
             }
-            val shape = if (expanded) ComposerSizes.expandedShape else if (homeLayout) HomeShapes.homeBar else HomeShapes.bar
+            val shape = if (stacked) ComposerSizes.expandedShape else if (homeLayout) HomeShapes.homeBar else HomeShapes.bar
             Column(Modifier.fillMaxWidth().animateContentSize().testTag("composer-container")
                 .shadow(if (homeLayout) HomeSizes.composerElevation else HomeSizes.noElevation, shape)
                 .clip(shape).background(c.bar).border(HomeSizes.barBorder, c.barBorder, shape)
-                .padding(horizontal = HomeSizes.barPaddingH, vertical = if (homeLayout && !expanded) HomeSizes.composerIdlePaddingV else Spacing.sm)) {
+                .padding(horizontal = HomeSizes.barPaddingH, vertical = if (homeLayout && !stacked) HomeSizes.composerIdlePaddingV else Spacing.sm)) {
                 if (hasAttachments) AttachmentBar(attachments, uploads, !typing, onRemoveAttachment, onRemoveUpload)
                 if (dictation?.listening == true) {
                     Row(Modifier.fillMaxWidth().heightIn(min = Sizes.touchTarget), verticalAlignment = Alignment.CenterVertically) {
                         DictationBar(dictation.level, dictation.cancel, dictation.confirm)
                         if (typing) ComposerAction(Icons.Rounded.Stop, "Stop response", onClick = onStop)
                     }
-                } else ComposerFields(expanded = expanded,
+                } else ComposerFields(expanded = stacked,
                     input = {
                         BasicTextField(
                             value = activeText,
@@ -198,6 +208,7 @@ fun Composer(
                             decorationBox = { innerTextField ->
                                 Box(Modifier.heightIn(min = Sizes.touchTarget), contentAlignment = Alignment.CenterStart) {
                                     if (activeText.isEmpty()) Text(placeholder, style = inputStyle, color = c.placeholder,
+                                        modifier = if (homeLayout) Modifier.fillMaxWidth() else Modifier,
                                         maxLines = 1, overflow = TextOverflow.Ellipsis)
                                     innerTextField()
                                 }
@@ -207,7 +218,8 @@ fun Composer(
                     attach = {
                         Box {
                             IconButton(onClick = onAttach, modifier = Modifier.size(Sizes.touchTarget)) {
-                                Icon(Icons.Default.Add, "Add photos and files", tint = c.barIcon,
+                                Icon(if (homeLayout) ImageVector.vectorResource(R.drawable.home_add) else Icons.Default.Add,
+                                    "Add photos and files", tint = c.barIcon,
                                     modifier = Modifier.size(if (homeLayout) HomeSizes.referenceIcon else HomeSizes.plusIcon))
                             }
                             attachmentPopup()
