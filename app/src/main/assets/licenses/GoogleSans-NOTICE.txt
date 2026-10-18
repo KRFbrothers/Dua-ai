@@ -1,20 +1,15 @@
-Google Sans font provenance
+Google Sans for Home typography
 
-These files were supplied by the project owner in a Google App APKM for personal experimentation.
-Google App package: com.google.android.googlequicksearchbox
-Version: 17.64.24.sa.arm64 (301817511)
-google_sans_regular.ttf: base.apk/res/Yfl.ttf (font/google_sans_local)
-google_sans_medium.ttf: base.apk/res/PSY.ttf (font/google_sans_medium_local)
+Original file: ofl/googlesans/GoogleSans[GRAD,opsz,wght].ttf
+Source: https://github.com/google/fonts/tree/47d54ca1ebb14fd864695f1d39dc734f39017c33/ofl/googlesans
+Bundled unchanged as res/font/home_google_sans_variable.ttf for offline use.
+The normal and medium faces select the original variable font's wght 400/500 axes.
 
-Google Sans is proprietary and is not covered by this repository's MIT license.
-The font files are unchanged and retain their original metadata. No open-source license or permission grant is implied.
+Copyright 2025 The Google Sans Project Authors (https://github.com/googlefonts/googlesans)
+Licensed under the SIL Open Font License, Version 1.1.
+The original license and trademark notice are included as GoogleSans-OFL.txt and GoogleSans-TRADEMARKS.md.
 
-Original embedded notices:
-
-Yfl.ttf
-Copyright 2015 Google LLC. All Rights Reserved.
-Google offers many fonts on open source terms. Google Sans is not one of them. Please see google.com/fonts for alternatives.
-
-PSY.ttf
-Copyright 2017 Google Inc. All Rights Reserved.
-Google offers many fonts on open source terms. Google Sans is not one of them. Please see google.com/fonts for alternatives.
+Home's five Material Symbols retain their original Google vector paths and viewports.
+Their XML theme tint is supplied by DuaTheme at the call site instead of an Android theme attribute.
+Source: https://github.com/google/material-design-icons/tree/49d4db35df873165d6bd6ba09b063c7dafbac2f4/symbols/android
+See MaterialSymbols-LICENSE.txt for the original Apache 2.0 license.

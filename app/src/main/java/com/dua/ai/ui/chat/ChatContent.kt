@@ -4,10 +4,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.AttachFile
-import androidx.compose.material.icons.outlined.Code
-import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -17,6 +13,9 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import com.dua.ai.R
 import com.dua.ai.ui.components.DuaCalligraphyLogo
 import com.dua.ai.ui.theme.ChatTheme
 import com.dua.ai.ui.theme.HomeHeroStyle
@@ -74,13 +73,13 @@ private fun TaskStarters(onTask: (String) -> Unit, modifier: Modifier = Modifier
     val haptic = LocalChatHaptic.current
     Column(modifier.fillMaxWidth().padding(bottom = Spacing.sm),
         verticalArrangement = Arrangement.spacedBy(HomeSizes.promptSpacing)) {
-        val icons = listOf(Icons.Outlined.AttachFile, Icons.Outlined.Code, Icons.Outlined.Public)
+        val icons = listOf(R.drawable.home_task_attach_file, R.drawable.home_task_code, R.drawable.home_task_public)
         HomeTaskPrompts.forEachIndexed { i, prompt ->
             Row(Modifier.fillMaxWidth().heightIn(min = Sizes.touchTarget)
                 .clickable(role = Role.Button) { haptic(ChatHaptic.Tap); onTask(prompt) },
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(HomeSizes.promptGap)) {
-                Icon(icons[i], null, tint = c.promptIcon, modifier = Modifier.size(HomeSizes.promptIcon))
+                Icon(ImageVector.vectorResource(icons[i]), null, tint = c.promptIcon, modifier = Modifier.size(HomeSizes.promptIcon))
                 Text(prompt, style = HomeTaskPromptStyle, color = c.promptText, modifier = Modifier.weight(1f))
             }
         }
