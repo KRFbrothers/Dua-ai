@@ -209,10 +209,6 @@ dependencies {
     // Imagine: inline and fullscreen playback of generated videos.
     implementation(libs.androidx.media3.exoplayer)
     implementation(libs.androidx.media3.ui)
-    // Motion & Visual Polish: Core Performance, Vector Lottie & Interactive Rive
-    implementation(libs.androidx.core.performance)
-    implementation(libs.lottie.compose)
-    implementation(libs.rive.android)
 
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
