@@ -23,9 +23,10 @@ import com.dua.ai.ui.theme.SettingsSizes
 /** The actual account photo uses the drawer's bounded, sampled cache; no invented profile image. */
 @Composable
 internal fun AccountAvatar(email: String?, displayName: String, avatarUrl: String, size: Dp,
-    modifier: Modifier = Modifier, photo: ImageBitmap? = rememberProfilePhoto(if (displayName.isBlank() && email.isNullOrBlank()) "" else avatarUrl)) {
+    modifier: Modifier = Modifier, photo: ImageBitmap? = rememberProfilePhoto(if (displayName.isBlank() && email.isNullOrBlank()) "" else avatarUrl),
+    tag: String = "account-avatar") {
     val colors = SettingsTheme.colors
-    Box(modifier.size(size).clip(SettingsShapes.circle).background(colors.avatar).testTag("account-avatar"),
+    Box(modifier.size(size).clip(SettingsShapes.circle).background(colors.avatar).testTag(tag),
         contentAlignment = Alignment.Center) {
         val initial = (displayName.ifBlank { email.orEmpty() }).firstOrNull { it.isLetterOrDigit() }?.uppercaseChar()?.toString()
         if (displayName.isBlank() && email.isNullOrBlank()) Icon(ReferenceIcons.Account, "Anonymous profile",

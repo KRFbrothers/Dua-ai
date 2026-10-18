@@ -99,7 +99,7 @@ class ComputerDrawerUiTest(private val dark: Boolean, private val small: Boolean
         compose.onNodeWithContentDescription("Find in chat").assertDoesNotExist()
         compose.onNodeWithContentDescription("New chat").assertIsDisplayed()
         compose.onNodeWithContentDescription("Open chat history").performClick()
-        compose.onNode(hasText("Chat") and hasAnyAncestor(hasTestTag("history-drawer"))).assertIsDisplayed().performClick()
+        compose.onNodeWithTag("drawer-new-chat").assertIsDisplayed().performClick()
         compose.runOnIdle { assertEquals(1, newChats) }
     }
 
