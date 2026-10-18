@@ -2,9 +2,11 @@ package com.dua.ai.ui.navigation
 
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.core.tween
+import com.dua.ai.ui.theme.DuaMotion
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -169,10 +171,18 @@ fun DuaNavHost(viewModel: ChatViewModel, voice: ReplyVoice, notificationRoute: P
     NavHost(
         navController = nav,
         startDestination = startDestination.route,
-        enterTransition = { fadeIn(tween(180)) },
-        exitTransition = { fadeOut(tween(120)) },
-        popEnterTransition = { fadeIn(tween(180)) },
-        popExitTransition = { fadeOut(tween(120)) },
+        enterTransition = {
+            slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Start, animationSpec = DuaMotion.gentle()) + fadeIn(tween(180))
+        },
+        exitTransition = {
+            slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Start, animationSpec = DuaMotion.gentle()) + fadeOut(tween(120))
+        },
+        popEnterTransition = {
+            slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.End, animationSpec = DuaMotion.gentle()) + fadeIn(tween(180))
+        },
+        popExitTransition = {
+            slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.End, animationSpec = DuaMotion.gentle()) + fadeOut(tween(120))
+        },
     ) {
         composable(DuaDestination.Onboarding.route) {
             OnboardingScreen(viewModel, onDone = navigator::toChat, onEmail = { navigator.open(DuaDestination.EmailAccount) })

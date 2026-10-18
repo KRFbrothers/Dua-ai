@@ -89,6 +89,8 @@ import com.dua.ai.ui.agent.AgentContent
 import com.dua.ai.ui.agent.AgentModePill
 import com.dua.ai.ui.screens.ProjectsFeaturePage
 
+import com.dua.ai.ui.theme.rememberDuaHapticManager
+
 private data class ConversationResults(val messages: List<ChatMessage>, val query: String, val matches: List<ConversationMatch>)
 
 /**
@@ -108,6 +110,14 @@ fun ChatScreen(
     dismissOverlaysRequest: String? = null,
 ) {
     val drawerState = rememberDrawerState(initialDrawerValue)
+    val hapticManager = rememberDuaHapticManager()
+    var lastDrawerValue by remember { mutableStateOf(drawerState.currentValue) }
+    LaunchedEffect(drawerState.currentValue) {
+        if (drawerState.currentValue != lastDrawerValue) {
+            lastDrawerValue = drawerState.currentValue
+            hapticManager.onStateChange()
+        }
+    }
     val scope = rememberCoroutineScope()
     var sheet by rememberSaveable { mutableStateOf(initialSheet) }
     LaunchedEffect(dismissOverlaysRequest) { if (dismissOverlaysRequest != null) sheet = null }
@@ -250,6 +260,9 @@ fun ChatScreen(
     var previousUserId by remember(conversationKey) { mutableStateOf(lastUserId) }
     val streamingSize = state.messages.lastOrNull()?.takeIf { it.streaming }?.let { it.text.length + (it.thinking?.length ?: 0) } ?: -1
     val lastMessageId = state.messages.lastOrNull()?.id
+    LaunchedEffect(streamingSize) {
+        if (streamingSize > 0) hapticManager.onTokenTick()
+    }
     LaunchedEffect(conversationKey, lastUserId, lastMessageId, streamingSize) {
         val newPrompt = lastUserId != previousUserId
         if (newPrompt) {
@@ -324,7 +337,7 @@ fun ChatScreen(
                             Text(if (feature == ChatFeature.Projects) state.projects.firstOrNull { it.id == state.projectId }?.name ?: "Projects" else "Create an image with Dua",
                                 Modifier.align(Alignment.Center).padding(Spacing.lg), style = MaterialTheme.typography.titleLarge)
                         } else if (home) {
-                            ChatContent(task = taskHome,
+                            ChatContent(task = taskHome, profileName = state.profileName,
                                 onTask = { prompt -> actions.onDraftChange(prompt); inputFocus.requestFocus(); keyboard?.show() })
                         } else {
                             key(conversationKey) {

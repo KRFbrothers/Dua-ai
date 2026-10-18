@@ -53,6 +53,7 @@ import com.dua.ai.R
 import com.dua.ai.ui.theme.ChatShapes
 import com.dua.ai.ui.theme.ChatSizes
 import com.dua.ai.ui.theme.ChatTheme
+import com.dua.ai.ui.theme.DuaMotion
 import com.dua.ai.ui.theme.Sizes
 import com.dua.ai.ui.theme.Spacing
 
@@ -78,6 +79,10 @@ fun MessageList(state: ChatUiState, actions: ChatActions, listState: LazyListSta
         itemsIndexed(state.messages, key = { _, message -> message.id }, contentType = { _, message -> if (message.isUser) "user" else "assistant" }) { index, message ->
             val selected = message.id == searchMessageId
             Column(Modifier.widthIn(max = Sizes.contentMaxWidth).fillMaxWidth()
+                .animateItem(
+                    fadeInSpec = DuaMotion.gentle(),
+                    placementSpec = DuaMotion.bouncy(),
+                )
                 .testTag("message-${message.id}")
                 .then(if (selected) Modifier.border(ChatSizes.searchSelectionBorder, ChatTheme.colors.accent, ChatShapes.searchSelection) else Modifier)
                 .semantics { if (selected) stateDescription = "Selected search result" }) {

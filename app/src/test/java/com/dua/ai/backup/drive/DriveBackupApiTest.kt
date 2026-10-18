@@ -27,7 +27,7 @@ class DriveBackupApiTest {
     private var allowed = true
     private var invalidations = 0
     @Before fun setup() {
-        val certificate = HeldCertificate.Builder().addSubjectAlternativeName("localhost").build()
+        val certificate = HeldCertificate.Builder().addSubjectAlternativeName("localhost").addSubjectAlternativeName("127.0.0.1").build()
         val serverTls = HandshakeCertificates.Builder().heldCertificate(certificate).build()
         val trust = HandshakeCertificates.Builder().addTrustedCertificate(certificate.certificate).build()
         server = MockWebServer().apply { useHttps(serverTls.sslSocketFactory(), false); start() }

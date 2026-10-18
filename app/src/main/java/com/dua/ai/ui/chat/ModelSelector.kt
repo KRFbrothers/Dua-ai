@@ -1,5 +1,11 @@
 package com.dua.ai.ui.chat
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
@@ -14,11 +20,13 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
+import com.dua.ai.ui.theme.DuaMotion
 import com.dua.ai.ui.theme.HomeModelLabelStyle
 import com.dua.ai.ui.theme.HomeShapes
 import com.dua.ai.ui.theme.HomeTheme
 import com.dua.ai.ui.theme.Sizes
 import com.dua.ai.ui.theme.Spacing
+import com.dua.ai.ui.theme.rememberMotionAllowed
 
 /** Uses the selected provider's live config, never a fixed model version. */
 internal fun homeModelName(state: ChatUiState): String {
@@ -40,11 +48,29 @@ internal fun shortModelLabel(name: String): String {
 @Composable
 internal fun ModelSelector(name: String, onClick: () -> Unit, modifier: Modifier = Modifier, textStyle: TextStyle = HomeModelLabelStyle) {
     val c = HomeTheme.colors
+    val motionAllowed = rememberMotionAllowed()
+    val haptic = LocalChatHaptic.current
     Row(modifier.heightIn(min = Sizes.touchTarget).widthIn(min = Sizes.touchTarget)
-        .clip(HomeShapes.segmentTab).clickable(role = Role.Button, onClick = onClick)
+        .clip(HomeShapes.segmentTab).clickable(role = Role.Button, onClick = {
+            haptic(ChatHaptic.Tap)
+            onClick()
+        })
         .semantics(mergeDescendants = true) { contentDescription = "Model, $name" }
         .padding(horizontal = Spacing.xs), verticalAlignment = Alignment.CenterVertically) {
-        Text(name, style = textStyle, color = c.modelLabel, maxLines = 1, modifier = Modifier.width(IntrinsicSize.Max))
+        if (motionAllowed) {
+            AnimatedContent(
+                targetState = name,
+                transitionSpec = {
+                    (fadeIn(DuaMotion.gentle()) + slideInVertically(DuaMotion.gentle()) { it / 3 })
+                        .togetherWith(fadeOut(DuaMotion.gentle()) + slideOutVertically(DuaMotion.gentle()) { -it / 3 })
+                },
+                label = "ModelMorph",
+            ) { targetName ->
+                Text(targetName, style = textStyle, color = c.modelLabel, maxLines = 1, modifier = Modifier.width(IntrinsicSize.Max))
+            }
+        } else {
+            Text(name, style = textStyle, color = c.modelLabel, maxLines = 1, modifier = Modifier.width(IntrinsicSize.Max))
+        }
         Icon(Icons.Default.KeyboardArrowDown, contentDescription = null, tint = c.modelLabel, modifier = Modifier.size(Sizes.iconTiny))
     }
 }

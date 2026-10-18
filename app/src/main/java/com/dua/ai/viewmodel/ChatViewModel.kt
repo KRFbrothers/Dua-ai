@@ -2531,7 +2531,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private companion object {
-        const val STREAM_FRAME_MS = 33L
+        const val STREAM_FRAME_MS = 24L
         const val EMPTY_REPLY = "Model ne text reply nahi diya. Dobara try karein."
         const val MAX_UPLOADS = 10
         /** Draft typing is saved this long after the last keystroke (and at once on stop or send). */

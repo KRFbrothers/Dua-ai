@@ -17,7 +17,7 @@ class AccountApiTest {
     private val user = JSONObject().put("id", "11111111-1111-4111-8111-111111111111").put("email", "person@example.com").put("displayName", "Dua")
     private fun json(value: JSONObject) = MockResponse().setHeader("Content-Type", "application/json").setBody(value.toString())
     @Before fun setup() {
-        val certificate = HeldCertificate.Builder().addSubjectAlternativeName("localhost").build()
+        val certificate = HeldCertificate.Builder().addSubjectAlternativeName("localhost").addSubjectAlternativeName("127.0.0.1").build()
         server = MockWebServer(); server.useHttps(HandshakeCertificates.Builder().heldCertificate(certificate).build().sslSocketFactory(), false); server.start()
         val trusted = HandshakeCertificates.Builder().addTrustedCertificate(certificate.certificate).build()
         client = OkHttpClient.Builder().sslSocketFactory(trusted.sslSocketFactory(), trusted.trustManager).followRedirects(false).build()

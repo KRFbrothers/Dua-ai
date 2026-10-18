@@ -22,7 +22,7 @@ class ImagineApiTest {
     private fun json(value: String, code: Int = 200) = MockResponse().setResponseCode(code).setHeader("Content-Type", "application/json").setBody(value)
 
     @Before fun setup() {
-        val certificate = HeldCertificate.Builder().addSubjectAlternativeName("localhost").build()
+        val certificate = HeldCertificate.Builder().addSubjectAlternativeName("localhost").addSubjectAlternativeName("127.0.0.1").build()
         server = MockWebServer(); server.useHttps(HandshakeCertificates.Builder().heldCertificate(certificate).build().sslSocketFactory(), false); server.start()
         val trusted = HandshakeCertificates.Builder().addTrustedCertificate(certificate.certificate).build()
         client = OkHttpClient.Builder().sslSocketFactory(trusted.sslSocketFactory(), trusted.trustManager).followRedirects(false).build()

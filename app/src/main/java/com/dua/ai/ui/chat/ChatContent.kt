@@ -51,51 +51,19 @@ import com.dua.ai.ui.theme.Spacing
 
 internal val HomeTaskPrompts = listOf("Nudge me to backup my photos", "Learn React by building an app", "Compare views on a topic I follow")
 
-private data class KrfActionCard(
-    val title: String,
-    val subtitle: String,
-    val prompt: String,
-    val icon: ImageVector,
-    val gradient: List<Color>,
-)
-
-private val KrfChatActionCards = listOf(
-    KrfActionCard(
-        title = "Deep Research",
-        subtitle = "Search web & sources",
-        prompt = "Deep research with live web sources: ",
-        icon = Icons.Outlined.TravelExplore,
-        gradient = listOf(Color(0xFF2563EB), Color(0xFF1D4ED8)),
-    ),
-    KrfActionCard(
-        title = "Code & Build",
-        subtitle = "Write, debug & build",
-        prompt = "Code likho: ",
-        icon = Icons.Outlined.Code,
-        gradient = listOf(Color(0xFF8B5CF6), Color(0xFF6D28D9)),
-    ),
-    KrfActionCard(
-        title = "Image Studio",
-        subtitle = "Create visuals & art",
-        prompt = "Create an image of ",
-        icon = Icons.Outlined.Image,
-        gradient = listOf(Color(0xFFF59E0B), Color(0xFFEA580C)),
-    ),
-    KrfActionCard(
-        title = "Brainstorm",
-        subtitle = "Ideas & strategies",
-        prompt = "Mujhe ideas do for ",
-        icon = Icons.Outlined.Lightbulb,
-        gradient = listOf(Color(0xFF10B981), Color(0xFF047857)),
-    ),
-)
-
 @Composable
-internal fun ChatContent(task: Boolean, onTask: (String) -> Unit) {
+internal fun ChatContent(
+    task: Boolean,
+    profileName: String = "",
+    onTask: (String) -> Unit,
+) {
     val c = HomeTheme.colors
     val isDark = DuaTheme.colors.isDark
     val haptic = LocalChatHaptic.current
     val currentHour = remember { java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY) }
+    val firstName = remember(profileName) {
+        profileName.trim().split(Regex("\\s+")).firstOrNull()?.replaceFirstChar { it.uppercase() }?.takeIf { it.isNotBlank() }
+    }
     val greeting = remember(currentHour) {
         when (currentHour) {
             in 5..11 -> "Good morning"
@@ -199,8 +167,9 @@ internal fun ChatContent(task: Boolean, onTask: (String) -> Unit) {
                         textAlign = TextAlign.Center,
                     )
                     if (!task) {
+                        val greetingPrefix = if (firstName != null) "Hello, $firstName" else greeting
                         Text(
-                            text = "$greeting • What should we explore?",
+                            text = "$greetingPrefix • How can I help you today?",
                             style = MaterialTheme.typography.bodyMedium,
                             color = ChatTheme.colors.mutedText,
                             textAlign = TextAlign.Center,
@@ -237,43 +206,13 @@ internal fun ChatContent(task: Boolean, onTask: (String) -> Unit) {
                     }
                 }
             } else {
-                // Chat Mode: 2x2 Glassmorphic Action Cards + Quick Starter Chips
+                // Gemini Android Chat Mode: Spacious clean canvas + sleek horizontal starter pills
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(bottom = Spacing.sm),
                     verticalArrangement = Arrangement.spacedBy(Spacing.sm),
                 ) {
-                    // 2x2 Grid of Cards with Micro-Interactions & Haptics
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
-                    ) {
-                        KrfActionCardView(KrfChatActionCards[0], Modifier.weight(1f)) {
-                            haptic(ChatHaptic.Tap)
-                            onTask(KrfChatActionCards[0].prompt)
-                        }
-                        KrfActionCardView(KrfChatActionCards[1], Modifier.weight(1f)) {
-                            haptic(ChatHaptic.Tap)
-                            onTask(KrfChatActionCards[1].prompt)
-                        }
-                    }
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
-                    ) {
-                        KrfActionCardView(KrfChatActionCards[2], Modifier.weight(1f)) {
-                            haptic(ChatHaptic.Tap)
-                            onTask(KrfChatActionCards[2].prompt)
-                        }
-                        KrfActionCardView(KrfChatActionCards[3], Modifier.weight(1f)) {
-                            haptic(ChatHaptic.Tap)
-                            onTask(KrfChatActionCards[3].prompt)
-                        }
-                    }
-
-                    Spacer(Modifier.height(2.dp))
-
                     // Starter Chips Carousel with Haptic Feedback
                     Row(
                         modifier = Modifier
@@ -291,78 +230,6 @@ internal fun ChatContent(task: Boolean, onTask: (String) -> Unit) {
                     }
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun KrfActionCardView(
-    card: KrfActionCard,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit,
-) {
-    val isDark = DuaTheme.colors.isDark
-    val cardBg = if (isDark) Color(0xFF141822) else Color(0xFFF9FAFB)
-    val cardBorder = if (isDark) Color(0xFF263042).copy(alpha = 0.7f) else Color(0xFFE5E7EB)
-
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val cardScale by animateFloatAsState(
-        targetValue = if (isPressed) 0.97f else 1f,
-        animationSpec = spring(stiffness = Spring.StiffnessMedium),
-        label = "CardPressScale",
-    )
-
-    Surface(
-        onClick = onClick,
-        interactionSource = interactionSource,
-        shape = RoundedCornerShape(16.dp),
-        color = cardBg,
-        border = BorderStroke(1.dp, cardBorder),
-        modifier = modifier
-            .graphicsLayer {
-                scaleX = cardScale
-                scaleY = cardScale
-            }
-            .semantics {
-                contentDescription = "${card.title}: ${card.subtitle}"
-                role = Role.Button
-            },
-    ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(28.dp)
-                    .background(
-                        brush = Brush.linearGradient(card.gradient),
-                        shape = RoundedCornerShape(8.dp),
-                    ),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    card.icon,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(16.dp),
-                )
-            }
-            Text(
-                text = card.title,
-                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold, fontSize = 13.sp),
-                color = ChatTheme.colors.text,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = card.subtitle,
-                style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
-                color = ChatTheme.colors.mutedText,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
         }
     }
 }

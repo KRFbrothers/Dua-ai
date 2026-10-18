@@ -101,7 +101,7 @@ class StoredFilesTest {
     }
 
     @Test fun uploadStreamsBytesWithHeadersAndReportsProgress() = runBlocking {
-        val certificate = HeldCertificate.Builder().addSubjectAlternativeName("localhost").build()
+        val certificate = HeldCertificate.Builder().addSubjectAlternativeName("localhost").addSubjectAlternativeName("127.0.0.1").build()
         val server = MockWebServer().apply { useHttps(HandshakeCertificates.Builder().heldCertificate(certificate).build().sslSocketFactory(), false); start() }
         val tls = HandshakeCertificates.Builder().addTrustedCertificate(certificate.certificate).build()
         val client = OkHttpClient.Builder().sslSocketFactory(tls.sslSocketFactory(), tls.trustManager).build()

@@ -35,7 +35,7 @@ class AutoTitlesTest {
     }
 
     @Test fun titleRequestUsesOwnerSessionAndFailureIsNull() = runBlocking {
-        val certificate = HeldCertificate.Builder().addSubjectAlternativeName("localhost").build()
+        val certificate = HeldCertificate.Builder().addSubjectAlternativeName("localhost").addSubjectAlternativeName("127.0.0.1").build()
         val serverTls = HandshakeCertificates.Builder().heldCertificate(certificate).build()
         val clientTls = HandshakeCertificates.Builder().addTrustedCertificate(certificate.certificate).build()
         val server = MockWebServer().apply { useHttps(serverTls.sslSocketFactory(), false); start() }

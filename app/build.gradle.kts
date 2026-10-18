@@ -15,8 +15,8 @@ plugins {
 // Account, cloud sync, files, Imagine, voice, setup and connectors: the Node API (web/) on Cloud Run (dua-api).
 // Override with -PduaApiBaseUrl=https://... (or DUA_API_BASE_URL) for a different Node API deployment.
 val duaBuildNumber = providers.environmentVariable("GITHUB_RUN_NUMBER").orNull?.toIntOrNull()?.takeIf { it in 1..1_000_000 }
-val duaVersionCode = 11 + (duaBuildNumber ?: 0)
-val duaVersionName = "1.0.10" + (duaBuildNumber?.let { " (build $it)" } ?: "")
+val duaVersionCode = 12 + (duaBuildNumber ?: 0)
+val duaVersionName = "1.0.11" + (duaBuildNumber?.let { " (build $it)" } ?: "")
 
 val duaApiBaseUrl = providers.gradleProperty("duaApiBaseUrl")
     .orElse(providers.environmentVariable("DUA_API_BASE_URL"))
@@ -209,6 +209,10 @@ dependencies {
     // Imagine: inline and fullscreen playback of generated videos.
     implementation(libs.androidx.media3.exoplayer)
     implementation(libs.androidx.media3.ui)
+    // Motion & Visual Polish: Core Performance, Vector Lottie & Interactive Rive
+    implementation(libs.androidx.core.performance)
+    implementation(libs.lottie.compose)
+    implementation(libs.rive.android)
 
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)

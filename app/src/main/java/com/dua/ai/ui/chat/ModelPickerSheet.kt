@@ -41,6 +41,7 @@ private val MODEL_ORDER = listOf("Dua", "ChatGPT", "Gemini", "Claude", "Grok", "
 fun ModelPickerSheet(current: String, providers: List<ProviderCapability>, onSelect: (String) -> Unit, onOpenSetup: () -> Unit, onDismiss: () -> Unit,
     freeModels: List<com.dua.ai.model.FreeModel> = emptyList(), currentFree: String? = null, onSelectFree: (String) -> Unit = {}) {
     val c = SheetTheme.colors
+    val haptic = LocalChatHaptic.current
     DuaSheet(onDismiss = onDismiss) {
         Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = SheetSizes.paddingH).padding(bottom = SheetSizes.paddingBottom)
             .testTag("model-picker-sheet")) {
@@ -55,7 +56,10 @@ fun ModelPickerSheet(current: String, providers: List<ProviderCapability>, onSel
                     val selected = current == name && currentFree == null
                     val alpha = if (available) 1f else SheetDisabledAlpha
                     Row(Modifier.fillMaxWidth().heightIn(min = SheetSizes.rowMin).testTag("model-row-$name")
-                        .selectable(selected = selected, enabled = available, role = Role.RadioButton) { onSelect(name) }
+                        .selectable(selected = selected, enabled = available, role = Role.RadioButton) {
+                            haptic(ChatHaptic.Tap)
+                            onSelect(name)
+                        }
                         .semantics { stateDescription = if (selected) "Selected" else if (available) "Available" else "Setup required" }
                         .padding(horizontal = SheetSizes.rowPaddingH, vertical = SheetSizes.rowPaddingV), verticalAlignment = Alignment.CenterVertically) {
                         Surface(color = if (selected) c.accent else c.container, shape = SheetShapes.badge) {
@@ -80,7 +84,11 @@ fun ModelPickerSheet(current: String, providers: List<ProviderCapability>, onSel
                         if (index > 0) SheetDivider()
                         val selected = currentFree == model.id
                         Row(Modifier.fillMaxWidth().heightIn(min = SheetSizes.rowMin).testTag("free-model-${model.id}")
-                            .selectable(selected = selected, role = Role.RadioButton) { onSelectFree(model.id); onDismiss() }
+                            .selectable(selected = selected, role = Role.RadioButton) {
+                                haptic(ChatHaptic.Tap)
+                                onSelectFree(model.id)
+                                onDismiss()
+                            }
                             .semantics { stateDescription = if (selected) "Selected" else "Available" }
                             .padding(horizontal = SheetSizes.rowPaddingH, vertical = SheetSizes.rowPaddingV), verticalAlignment = Alignment.CenterVertically) {
                             Surface(color = if (selected) c.accent else c.container, shape = SheetShapes.badge) {

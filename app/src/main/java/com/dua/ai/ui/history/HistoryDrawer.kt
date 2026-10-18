@@ -130,7 +130,11 @@ fun HistoryDrawer(
                         }
                     }
                 }
-                AnimatedVisibility(searching) {
+                AnimatedVisibility(
+                    searching,
+                    enter = expandVertically(animationSpec = DuaMotion.gentle()) + fadeIn(animationSpec = DuaMotion.gentle()),
+                    exit = shrinkVertically(animationSpec = DuaMotion.gentle()) + fadeOut(animationSpec = DuaMotion.gentle())
+                ) {
                     SearchField(query, { query = it }, Modifier.padding(bottom = DrawerSizes.menuPaddingV))
                 }
 
@@ -154,7 +158,11 @@ fun HistoryDrawer(
                     Icon(if (auraExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown, null,
                         tint = colors.chevron, modifier = Modifier.size(DrawerSizes.chevron))
                 }
-                AnimatedVisibility(auraExpanded, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+                AnimatedVisibility(
+                    auraExpanded,
+                    enter = expandVertically(animationSpec = DuaMotion.gentle()) + fadeIn(animationSpec = DuaMotion.gentle()),
+                    exit = shrinkVertically(animationSpec = DuaMotion.gentle()) + fadeOut(animationSpec = DuaMotion.gentle())
+                ) {
                     Column(Modifier.fillMaxWidth().padding(start = DrawerSizes.subIndent)) {
                         DrawerSubRow(ReferenceIcons.Plugins, "Plugins") { onDestination(DuaDestination.Plugins) }
                         DrawerSubRow(ReferenceIcons.Work, "Work") { onDestination(DuaDestination.Work) }

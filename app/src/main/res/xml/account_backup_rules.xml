@@ -5,4 +5,6 @@
     <exclude domain="sharedpref" path="dua_task_reminders.xml" />
     <exclude domain="sharedpref" path="dua_chat_history.xml" />
     <exclude domain="sharedpref" path="dua_drive_backup.xml" />
+    <exclude domain="sharedpref" path="dua_files.xml" />
+    <exclude domain="sharedpref" path="dua_voice_mode.xml" />
 </full-backup-content>
