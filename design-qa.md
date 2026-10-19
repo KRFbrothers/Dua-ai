@@ -10,6 +10,8 @@ Home owns the union of IME and navigation-bar padding around the header/content/
 
 The supplied Gemini-generated Compose reference informs motion and inset handling: mode content fades over 180–240 ms, the ambient wash changes over 500 ms, and hero spacing/logo width compact over 250 ms while the keyboard is open. Brushes are cached; animated opacity is read only while drawing. The logo returns from 36 dp to its existing 48 dp width on dismissal. The screenshot layout keeps the switcher above the composer, all three Task starters, and the current theme/identity. Existing app state and callbacks power all actions.
 
+The subsequent recording adds draft-driven hero/suggestion fades, hides the empty Task heading while the keyboard is open, dismisses input from blank Home space/drawer/account entry, and opens a real account menu over Home. See [recording interaction QA](docs/qa/home-recording-interactions.md) for the current behavior and coverage.
+
 ## Verification
 
 All 1,338 default Android unit/Compose UI tests passed across 177 classes, with zero failures, errors or skips. `:app:assembleDebug` and `git diff --check` passed. The Gradle run used `-Pdua.ui-record --offline --no-daemon --max-workers=2` with local SDK/test-cache paths. This includes the 14 new greeting/gradient/IME cases and every existing default test; optional dedicated screenshot-package tests are outside this default suite. The focused Home/composer run also passed all 90 cases.

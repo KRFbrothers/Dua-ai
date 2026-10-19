@@ -134,7 +134,7 @@ fun Composer(
     val inputStyle = if (homeLayout) HomeComposerInputStyle else ComposerInputStyle
     val textMeasurer = rememberTextMeasurer()
     val hasContent = activeText.isNotBlank() || hasAttachments
-    val expanded = hasContent || '\n' in activeText
+    val expanded = (!homeLayout && hasContent) || hasAttachments || '\n' in activeText
     val canSubmit = hasContent && sendEnabled && !typing && !uploading
     fun submit() {
         if (canSubmit) {
@@ -151,9 +151,10 @@ fun Composer(
         // Large text gets its own input row before the placeholder loses space to the controls.
         // Keep the field in the same Layout slot so resizing never discards focus or the draft.
         val inlineTextWidth = maxWidth - margin * 2 - HomeSizes.barPaddingH * 2 - Sizes.touchTarget * 3 - Spacing.sm * 2
-        val stacked = expanded || (homeLayout && textMeasurer.measure(
-            AnnotatedString(placeholder), style = inputStyle, softWrap = false, maxLines = 1,
-        ).size.width > with(LocalDensity.current) { inlineTextWidth.roundToPx() })
+        val stacked = expanded || (homeLayout && maxOf(
+            textMeasurer.measure(AnnotatedString(placeholder), style = inputStyle, softWrap = false, maxLines = 1).size.width,
+            textMeasurer.measure(AnnotatedString(activeText), style = inputStyle, softWrap = false, maxLines = 1).size.width,
+        ) > with(LocalDensity.current) { inlineTextWidth.roundToPx() })
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -202,7 +203,7 @@ fun Composer(
                                 .semantics { contentDescription = "Message" },
                             textStyle = inputStyle.copy(color = c.input),
                             cursorBrush = SolidColor(c.input),
-                            singleLine = !expanded,
+                            singleLine = !stacked,
                             maxLines = 6,
                             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                             keyboardActions = KeyboardActions(onSend = { submit() }),

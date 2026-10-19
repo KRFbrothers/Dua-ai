@@ -9,6 +9,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.foundation.gestures.scrollBy
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.heightIn
@@ -72,6 +73,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -157,6 +159,10 @@ fun ChatScreen(
     var lastSearchJump by remember(conversationKey) { mutableStateOf<Triple<String, String, Int>?>(null) }
     val focusManager = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
+    fun dismissInput() { focusManager.clearFocus(); keyboard?.hide() }
+    LaunchedEffect(sheet) {
+        if (sheet != null) dismissInput()
+    }
     val needle = searchQuery.trim()
     // Incoming tokens must not restart the query's debounce timer.
     LaunchedEffect(searchOpen, needle) {
@@ -318,10 +324,10 @@ fun ChatScreen(
                     else if (feature != null) FeatureTopBar(feature.title, actions.onExitFeature, actions.onNewFeatureSession,
                         newSessionEnabled = !state.typing && (feature != ChatFeature.Agent || state.agentAvailable))
                     else ChatTopBar(
-                        onMenu = { scope.launch { drawerState.open() } },
+                        onMenu = { dismissInput(); scope.launch { drawerState.open() } },
                         task = taskHome, modelName = homeModelName(state),
                         profileName = state.profileName, profilePhotoUrl = state.profilePhotoUrl,
-                        onModel = { sheet = ChatSheet.Model }, onProfile = actions.onOpenSettings,
+                        onModel = { sheet = ChatSheet.Model }, onProfile = { sheet = ChatSheet.Profile },
                         onNewChat = actions.onNewChat, newChatEnabled = !state.typing,
                         onFindInChat = if (state.messages.isEmpty() || state.homeTab == HomeTab.Work) null else ({ followTail = false; searchOpen = true }),
                     )
@@ -332,7 +338,9 @@ fun ChatScreen(
                         onPrevious = { if (matches.isNotEmpty()) selectedSearchId = matches[(matchIndex - 1 + matches.size) % matches.size].messageId },
                         onNext = { if (matches.isNotEmpty()) selectedSearchId = matches[(matchIndex + 1) % matches.size].messageId },
                         onClose = { closeSearch() })
-                    Box(Modifier.weight(1f).fillMaxWidth()) {
+                    Box(Modifier.weight(1f).fillMaxWidth().let { canvas ->
+                        if (home && feature == null) canvas.pointerInput(Unit) { detectTapGestures { dismissInput() } } else canvas
+                    }) {
                         if (feature == null && state.homeTab == HomeTab.Work) {
                             Text("Coming soon", Modifier.align(Alignment.Center), style = MaterialTheme.typography.bodyLarge)
                         } else if (home && feature == ChatFeature.Agent) {
@@ -344,6 +352,7 @@ fun ChatScreen(
                                 Modifier.align(Alignment.Center).padding(Spacing.lg), style = MaterialTheme.typography.titleLarge)
                         } else if (home) {
                             ChatContent(task = taskHome, profileName = state.profileName,
+                                composing = state.draft.isNotBlank() || state.attachments.isNotEmpty() || state.uploads.isNotEmpty(),
                                 onTask = { prompt -> actions.onDraftChange(prompt); inputFocus.requestFocus(); keyboard?.show() })
                         } else {
                             key(conversationKey) {
@@ -439,6 +448,10 @@ fun ChatScreen(
         }
     }
     when (sheet) {
+        ChatSheet.Profile -> HomeProfileDialog(state,
+            onDismiss = { sheet = null },
+            onSettings = { sheet = null; actions.onOpenSettings() },
+            onDestination = { destination -> sheet = null; actions.onOpenDestination(destination) })
         ChatSheet.Projects -> ProjectsSheet(state.projects, state.projectId, state.projectNotice, !state.typing,
             actions.onSelectProject, actions.onSaveProject, onDismiss = { sheet = null }, tasksEnabled = state.projectTasksEnabled,
             onSaveTask = actions.onSaveTask, onToggleTask = actions.onToggleTask, onDeleteTask = actions.onDeleteTask, dueDatesEnabled = state.taskDueDatesEnabled,

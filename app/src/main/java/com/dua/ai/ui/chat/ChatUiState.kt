@@ -19,6 +19,7 @@ data class ChatUiState(
     val chatId: String = "",
     val profileName: String = "",
     val profilePhotoUrl: String = "",
+    val profileEmail: String? = null,
     val messages: List<ChatMessage> = emptyList(),
     val draft: String = "",
     val typing: Boolean = false,
@@ -199,4 +200,4 @@ class ChatActions(
 )
 
 /** Bottom sheets the chat screen can show. */
-enum class ChatSheet { Model, Attach, Audio, Imagine, Build, Projects }
+enum class ChatSheet { Model, Attach, Audio, Imagine, Build, Projects, Profile }

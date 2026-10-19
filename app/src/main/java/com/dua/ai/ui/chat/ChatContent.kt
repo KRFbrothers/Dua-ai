@@ -1,10 +1,13 @@
 package com.dua.ai.ui.chat
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -53,27 +56,37 @@ internal fun homeGreeting(profileName: String): String {
 internal fun ChatContent(
     task: Boolean,
     profileName: String = "",
+    composing: Boolean = false,
     onTask: (String) -> Unit,
 ) {
     BoxWithConstraints(Modifier.fillMaxSize().padding(horizontal = Spacing.lg).testTag("home-empty-content")) {
         val keyboardOpen = WindowInsets.ime.getBottom(LocalDensity.current) > 0
         val compact = maxHeight < HomeSizes.heroCompactHeight
         val headingStyle = if (compact) HomeHeroCompactStyle else HomeHeroStyle
-        // Animate decorative content only; the composer/focus and Agent callbacks stay outside.
-        AnimatedContent(targetState = task, modifier = Modifier.fillMaxSize(),
-            transitionSpec = { fadeIn(tween(240)) togetherWith fadeOut(tween(180)) }, label = "Home mode content") { selectedTask ->
-            if (selectedTask && compact) {
-                // All three real starter handlers remain reachable in a short keyboard viewport.
-                Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).heightIn(min = maxHeight)) {
-                    HomeHero(true, headingStyle, profileName, keyboardOpen)
-                    TaskStarters(onTask)
-                }
-            } else {
-                val promptMaxHeight = maxHeight * 0.55f
-                Column(Modifier.fillMaxSize()) {
-                    Box(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
-                        contentAlignment = Alignment.Center) { HomeHero(selectedTask, headingStyle, profileName, keyboardOpen) }
-                    if (selectedTask) TaskStarters(onTask, Modifier.heightIn(max = promptMaxHeight).verticalScroll(rememberScrollState()))
+        // Keep the empty canvas and bottom controls stationary while the draft hides decoration.
+        AnimatedVisibility(visible = !composing, modifier = Modifier.fillMaxSize(),
+            enter = fadeIn(tween(240)), exit = fadeOut(tween(180))) {
+            // Animate decorative content only; the composer/focus and Agent callbacks stay outside.
+            AnimatedContent(targetState = task, modifier = Modifier.fillMaxSize(),
+                transitionSpec = { fadeIn(tween(240)) togetherWith fadeOut(tween(180)) }, label = "Home mode content") { selectedTask ->
+                if (selectedTask && (compact || keyboardOpen)) {
+                    // All three real starter handlers remain reachable in a short keyboard viewport.
+                    Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).heightIn(min = maxHeight),
+                        verticalArrangement = Arrangement.Bottom) {
+                        AnimatedVisibility(visible = !keyboardOpen,
+                            enter = fadeIn(tween(240)) + expandVertically(tween(250)),
+                            exit = fadeOut(tween(180)) + shrinkVertically(tween(250))) {
+                            HomeHero(true, headingStyle, profileName, keyboardOpen)
+                        }
+                        TaskStarters(onTask)
+                    }
+                } else {
+                    val promptMaxHeight = maxHeight * 0.55f
+                    Column(Modifier.fillMaxSize()) {
+                        Box(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
+                            contentAlignment = Alignment.Center) { HomeHero(selectedTask, headingStyle, profileName, keyboardOpen) }
+                        if (selectedTask) TaskStarters(onTask, Modifier.heightIn(max = promptMaxHeight).verticalScroll(rememberScrollState()))
+                    }
                 }
             }
         }
