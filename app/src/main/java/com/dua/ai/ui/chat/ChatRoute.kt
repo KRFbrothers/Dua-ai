@@ -362,16 +362,23 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
         if (!dispatch.ready) return@LaunchedEffect
         lifecycle.currentStateFlow.first { it.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED) }
         if (viewModel.dataBusy.value || viewModel.isTyping.value || viewModel.readingFiles.value || viewModel.preparingFiles.value) return@LaunchedEffect
+        // Direct Share to a chat: open that chat first (before attachments are accepted, since switching clears them).
+        val sharedChat = entry.chatId?.takeIf { entry.action == EntryAction.Share }
+        val missingChat = sharedChat != null && viewModel.savedChats.value.none { it.id == sharedChat }
+        if (sharedChat != null && !missingChat && viewModel.activeChatId.value != sharedChat) viewModel.openChat(sharedChat)
         if (entry.action == EntryAction.Share && entry.uris.isNotEmpty() && !viewModel.acceptSharedAttachments(entry.uris)) return@LaunchedEffect
         dispatch.consumed(entry.id)
         entryUiKey = entry.id
-        attachmentNotice = entry.notice
+        attachmentNotice = listOf(entry.notice, if (missingChat) "That chat is no longer on this phone, so the shared item was added here." else "")
+            .filter { it.isNotBlank() }.joinToString(" ")
         when (entry.action) {
             EntryAction.Share -> {
                 viewModel.updateDraft(ExternalEntry.mergedDraft(viewModel.draft.value, entry.text))
                 entryFocus = entry.id
             }
             EntryAction.Query -> entryFocus = entry.id
+            EntryAction.NewChat -> { voice.stopAll(); viewModel.startNewChat(); entryFocus = entry.id }
+            EntryAction.Imagine -> { voice.stopAll(); viewModel.startNewChat(); viewModel.setImagine(true); entryFocus = entry.id }
             EntryAction.Camera -> actions.onPickCamera()
             EntryAction.Photos -> actions.onPickPhotos()
             EntryAction.Files -> actions.onPickFiles()

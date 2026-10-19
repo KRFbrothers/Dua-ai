@@ -7,6 +7,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dua.ai.ui.navigation.DuaNavHost
 import com.dua.ai.ui.theme.DuaTheme
@@ -34,6 +35,14 @@ fun DuaApp(viewModel: ChatViewModel = viewModel(), notificationRoute: Pair<Strin
         }
         lifecycle.addObserver(observer)
         onDispose { lifecycle.removeObserver(observer) }
+    }
+    // Recent chats in Android's share sheet (Direct Share) and launcher long-press actions; deleted chats drop out.
+    val chats by viewModel.savedChats.collectAsState()
+    val shortcutTargets = remember(chats) { com.dua.ai.entry.ChatShortcuts.recent(chats) }
+    LaunchedEffect(shortcutTargets) {
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            runCatching { com.dua.ai.entry.ChatShortcuts.publish(context, shortcutTargets) }
+        }
     }
     DuaTheme(preferences.copy(theme = appearance.theme), accent = appearance.accent) {
         val voice = rememberReplyVoice(viewModel)

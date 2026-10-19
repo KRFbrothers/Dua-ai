@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Adapted from SociaLite's res/xml/sharing_shortcuts.xml (https://github.com/android/socialite),
+  Copyright (C) 2023 The Android Open Source Project, licensed under the Apache License, Version 2.0.
+  See THIRD_PARTY_NOTICES.md. Changes: Dua's activity and share category; launcher shortcuts are dynamic (ChatShortcuts.kt).
+-->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Direct Share: recent Dua chats published by ChatShortcuts with this category. -->
+    <share-target android:targetClass="com.dua.ai.MainActivity">
+        <data android:mimeType="text/plain" />
+        <category android:name="com.dua.ai.category.CHAT_SHARE_TARGET" />
+    </share-target>
+    <share-target android:targetClass="com.dua.ai.MainActivity">
+        <data android:mimeType="image/*" />
+        <category android:name="com.dua.ai.category.CHAT_SHARE_TARGET" />
+    </share-target>
+</shortcuts>
