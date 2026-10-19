@@ -8,7 +8,7 @@ Dua is a personal, single-user app: it is built for its owner only and installed
 
 ## Current features
 
-- Server-backed conversations, drafts and memory with an app-private cache for offline viewing, full-message/draft search, in-conversation search with previous/next message navigation, pinned conversations, export/import, sharing and data controls. Node API chat supports saving completed replies before acknowledging completion; the separate Cloud Run engine relies on the existing cloud-sync flow instead. Search is project-scoped with match snippets; see [HISTORY-SEARCH.md](docs/features/HISTORY_SEARCH.md).
+- Server-backed conversations, drafts and memory with an app-private cache for offline viewing, full-message/draft search, in-conversation search with previous/next message navigation, pinned conversations, export/import, sharing and data controls. Node API chat supports saving completed replies before acknowledging completion; the separate Cloud Run engine relies on the existing cloud-sync flow instead. Search is project-scoped with match snippets; see [HISTORY_SEARCH.md](docs/features/HISTORY_SEARCH.md).
 - Gemini plus configurable ChatGPT, Claude, Grok and Kimi adapters with streaming replies and a Reasoning mode (collapsible Thinking block on Gemini, Grok and reasoning ChatGPT models). Text and code files (TXT, CSV, MD, JSON, source code) work on all providers; images/PDF depend on the selected provider and configured model. See [PROVIDERS.md](docs/PROVIDERS.md).
 - Chat Web: Off/Search/Read link modes and clickable source footers. Search requires Brave configuration; public page reading uses the existing chat provider. Web mode starts Off.
 - Copy, retry and speaker reply icons; device speech recognition/TTS and explicit foreground hands-free turns. Optional generated reply audio uses an authenticated, owner-restricted server integration.
@@ -57,7 +57,7 @@ All guides are indexed in [docs/README.md](docs/README.md). Main entry points:
 ## Project roadmap
 
 See [ROADMAP.md](docs/ROADMAP.md) for the Dua AI Improvement Roadmap. Phase 1's architecture/local setup, environment examples, contributor project map and actionable GitHub/Build errors are implemented. Phase 2 now includes shared GitHub validation, protected-path regression coverage and [Node request/stage logging](docs/GITHUB_LOGGING.md); the remaining roadmap sections are not implied complete.
-Use [RELEASE-CHECKLIST.md](docs/RELEASE_CHECKLIST.md) to verify the owner-only lock, provider spending limits, device/staging checks, and installing the APK on your own phone. The production configuration cannot be verified from this source checkout alone.
+Use [RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md) to verify the owner-only lock, provider spending limits, device/staging checks, and installing the APK on your own phone. The production configuration cannot be verified from this source checkout alone.
 Use [SIGNING.md](SIGNING.md) to store the permanent personal signing key and run the manual [Build personal APK](.github/workflows/personal-apk.yml) workflow. Release builds require the pinned certificate; they cannot fall back to another machine's debug key.
 
 ## Local setup
@@ -139,7 +139,7 @@ Replace the example with your actual endpoint. Build-time URL changes require re
 
 ## Android and routine checks
 
-See [ANDROID_UI_GUIDE.md](docs/ui/ANDROID_UI.md) for the compact mobile UI, screen/MVVM map, debug-only sample-conversation preview, setup and implemented/pending features.
+See [ANDROID_UI.md](docs/ui/ANDROID_UI.md) for the compact mobile UI, screen/MVVM map, debug-only sample-conversation preview, setup and implemented/pending features.
 
 The launcher is `com.dua.ai.MainActivity`; [app/build.gradle.kts](app/build.gradle.kts) defines the SDK, endpoint overrides and signing inputs described above.
 
@@ -159,7 +159,7 @@ bash ./gradlew :app:recordRoborazziDebug -Pdua.screenshots --no-daemon --max-wor
 
 Those renders go to `app/build/outputs/roborazzi/`. Recording images is not a pixel-baseline comparison or a physical-device check. The two opt-in flags have different purposes: `dua.ui-record` records current UI fixtures; `dua.screenshots` includes the historical screenshot classes. This behavior is configured in [app/build.gradle.kts](app/build.gradle.kts); the fixture capture paths are in [ApprovedNavigationUiTest.kt](app/src/test/java/com/dua/ai/ui/ApprovedNavigationUiTest.kt), [CompactChatUiTest.kt](app/src/test/java/com/dua/ai/ui/chat/CompactChatUiTest.kt) and [HomeScreenshotTest.kt](app/src/test/java/com/dua/ai/screenshots/HomeScreenshotTest.kt).
 
-First-run Android checks need dependency access and writable Gradle/Maven caches: Robolectric may download an instrumented Android runtime. A dependency-download failure before test assertions is not evidence of an app assertion failure; inspect the test report. The older local blockers in [RELEASE-CHECKLIST.md](docs/RELEASE_CHECKLIST.md) remain historical validation records.
+First-run Android checks need dependency access and writable Gradle/Maven caches: Robolectric may download an instrumented Android runtime. A dependency-download failure before test assertions is not evidence of an app assertion failure; inspect the test report. The older local blockers in [RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md) remain historical validation records.
 
 [Project checks](.github/workflows/checks.yml) runs three separate jobs on PRs, pushes to main and manual runs: Android JVM/Compose tests with recorded UI fixtures, the backend's full `node:test` suite, and the Cloud Run engine's mocked pytest suite. It uploads `android-unit-test-reports` (HTML/JUnit plus `approved-ui` renders), `backend-unit-test-report` and `google-cloud-engine-test-report` (`google-cloud-backend/pytest-results.xml`). It does not assemble or sign an APK. The backend job uses Node 24 and locked dependencies; the engine job installs only Flask/pytest in an isolated environment. These checks require no provider keys, live Supabase/Vertex credentials or signing secrets.
 
@@ -183,7 +183,7 @@ The Android cache is stored in app-private preferences; Android backup/device tr
 
 ### Projects and custom instructions
 
-The dedicated **Projects** screen shows real user-created projects and chats, without seeding demo projects. Personal remains the internal Home workspace; untouched legacy Coding/Business starters are hidden. See [Projects flow](docs/PROJECTS_REFERENCE_FLOW.md) for current screens, sources, and legacy-data handling. Each chat keeps its project, and history search is project-scoped. Save instructions and project memory, then sync them before chatting; replies use the owner’s server definition. [PROJECTS.md](docs/features/PROJECTS.md) describes the original persistence/conflict contract, and [MEMORY.md](docs/features/PROJECT_MEMORY.md) covers project notes. Tasks, memory, planner and archive settings are available from **Edit project → Tasks, memory & planner**. To-do edit/complete/reopen and confirmed delete are described in [TASKS.md](docs/features/TASKS.md); due dates and opt-in device reminders in [REMINDERS.md](docs/features/REMINDERS.md); deadline/undated task planning in [PLANNER.md](docs/features/PLANNER.md). Physical-device/live sync verification remains separate from source-level tests.
+The dedicated **Projects** screen shows real user-created projects and chats, without seeding demo projects. Personal remains the internal Home workspace; untouched legacy Coding/Business starters are hidden. See [Projects flow](docs/PROJECTS_REFERENCE_FLOW.md) for current screens, sources, and legacy-data handling. Each chat keeps its project, and history search is project-scoped. Save instructions and project memory, then sync them before chatting; replies use the owner’s server definition. [PROJECTS.md](docs/features/PROJECTS.md) describes the original persistence/conflict contract, and [PROJECT_MEMORY.md](docs/features/PROJECT_MEMORY.md) covers project notes. Tasks, memory, planner and archive settings are available from **Edit project → Tasks, memory & planner**. To-do edit/complete/reopen and confirmed delete are described in [TASKS.md](docs/features/TASKS.md); due dates and opt-in device reminders in [REMINDERS.md](docs/features/REMINDERS.md); deadline/undated task planning in [PLANNER.md](docs/features/PLANNER.md). Physical-device/live sync verification remains separate from source-level tests.
 
 ## License and third-party code
 

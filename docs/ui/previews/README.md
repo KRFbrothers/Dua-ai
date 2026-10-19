@@ -20,7 +20,5 @@ conversations use the subdued backdrop. The broader app-wide theme is still a
 reference; it has not been applied across features or the website.
 
 The originals' claims about matching Kotlin filenames, performance budgets or
-prior builds are not verification of the native implementation. See
-[native ambient QA](../../qa/home-ambient-motion.md) for actual scope, checks and
-device limitations. The attachment-sheet layout and account/actions retain
+prior builds are not verification of the native implementation. The attachment-sheet layout and account/actions retain
 their existing ownership.
