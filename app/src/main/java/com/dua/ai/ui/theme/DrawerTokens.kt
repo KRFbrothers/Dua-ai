@@ -12,8 +12,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 /**
- * Sidebar tokens copied from the code of Fareed's "Dua AI Dabba" reference shell (DuaApp.kt DrawerContent).
- * Light values are the reference's exact colours; dark values are the matching Tailwind-gray steps inverted.
+ * Existing sidebar color contract, retained while layout/typography follow the selected drawer reference.
+ * Legacy dock/search fields remain available to existing consumers; shared palette values are unchanged.
  */
 @Immutable
 data class DrawerColors(
@@ -43,16 +43,19 @@ object DrawerTheme {
         @Composable @ReadOnlyComposable get() = if (DuaTheme.colors.isDark) DrawerDarkColors else DrawerLightColors
 }
 
-/** Reference sizes. Visuals keep the reference sizes; each control sits in a 48 dp touch slot. */
+/** Existing modal width and 48 dp targets, with spacing for the selected drawer reference. */
 object DrawerSizes {
     val width = 286.dp
-    val paddingH = 22.dp
+    val paddingH = 16.dp
     val paddingV = 16.dp
     val headerTop = 4.dp
     val headerBottom = 20.dp
     val searchCircle = 46.dp
     val searchIcon = 24.dp
-    val menuIcon = 24.dp
+    val brandIcon = 32.dp
+    val menuIcon = 26.dp
+    val actionPaddingH = 12.dp
+    val footerPaddingV = 8.dp
     val menuGap = 14.dp
     val menuPaddingV = 12.dp
     val subIcon = menuIcon
@@ -62,7 +65,7 @@ object DrawerSizes {
     val dividerThickness = 1.dp
     val dividerPaddingV = 16.dp
     val chatPaddingV = 12.dp
-    val pinIcon = 14.dp
+    val pinIcon = 20.dp
     val dockTop = 12.dp
     val newChatPaddingH = 24.dp
     val newChatPaddingV = 13.dp
@@ -89,9 +92,10 @@ object DrawerShapes {
     val row = RoundedCornerShape(12.dp)
 }
 
-val DrawerTitleStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.SemiBold, fontSize = 24.sp)
-val DrawerMenuStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Bold, fontSize = 17.sp)
+val DrawerTitleStyle = TextStyle(fontFamily = HomeFontFamily, fontWeight = FontWeight.Medium, fontSize = 22.sp)
+val DrawerMenuStyle = TextStyle(fontFamily = HomeFontFamily, fontWeight = FontWeight.Normal, fontSize = 17.sp)
 val DrawerSubStyle = DrawerMenuStyle
-val DrawerChatStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Normal, fontSize = 16.sp)
-val DrawerNewChatStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.SemiBold, fontSize = 17.sp)
+val DrawerChatStyle = TextStyle(fontFamily = HomeFontFamily, fontWeight = FontWeight.Normal, fontSize = 16.sp)
+val DrawerNewChatStyle = DrawerMenuStyle
+val DrawerProfileStyle = DrawerMenuStyle.copy(fontWeight = FontWeight.Medium)
 val DrawerAvatarStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Bold, fontSize = 16.sp)

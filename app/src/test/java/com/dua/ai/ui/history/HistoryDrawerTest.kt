@@ -27,7 +27,7 @@ class HistoryDrawerTest {
 
     @Test fun showsReferenceStructureWithRealChatsAndNoSamples() {
         compose.setContent { DuaTheme(LocalPreferences()) { HistoryDrawer(chats = chats) } }
-        for (t in listOf("Dua AI", "Images", "Library", "Projects", "Computer", "AI Agent", "Aura", "Chat", "Alpha roadmap", "Beta plugin", "Pinned note"))
+        for (t in listOf("Dua AI", "Images", "Library", "Projects", "Computer", "AI Agent", "Aura", "New chat", "Alpha roadmap", "Beta plugin", "Pinned note"))
             compose.onNodeWithText(t).assertExists()
         compose.onNodeWithText("Replace Dua").assertDoesNotExist()
         val titles = compose.onNodeWithTag("drawer-recent-chats").onChildren().fetchSemanticsNodes()
@@ -40,7 +40,8 @@ class HistoryDrawerTest {
     @Test fun everyDestinationIsReachableAndAuraExpands() {
         val opened = mutableListOf<DuaDestination>(); var projects = 0
         compose.setContent { DuaTheme(LocalPreferences(theme = "dark")) { HistoryDrawer(onDestination = { opened += it }, onProjects = { projects++ }) } }
-        compose.onNodeWithText("Plugins").assertDoesNotExist()
+        compose.onNodeWithText("Plugins").assertExists() // Direct destination in the reference drawer.
+        compose.onNodeWithText("Work").assertDoesNotExist()
         compose.onNodeWithText("Aura").performClick()
         for (t in listOf("Images", "Library", "Computer", "AI Agent", "Plugins", "Work")) compose.onNodeWithText(t).performScrollTo().performClick()
         compose.onNodeWithText("Projects").performClick()
@@ -49,7 +50,8 @@ class HistoryDrawerTest {
             assertEquals(1, projects)
         }
         compose.onNodeWithText("Aura").performClick()
-        compose.onNodeWithText("Plugins").assertDoesNotExist()
+        compose.onNodeWithText("Plugins").assertExists()
+        compose.onNodeWithText("Work").assertDoesNotExist()
     }
 
     @Test fun selectNewChatProfileAndSearchWithoutVoiceCircle() {
