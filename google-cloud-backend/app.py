@@ -7,6 +7,8 @@ Endpoints
                     with the same wire format as web/src/core/sse.mjs, or one JSON reply `{"text": ...}`.
                     `"mode": "agent"` runs the Dua Agent: router (casual -> direct reply), otherwise the
                     tool-calling loop in agent_tools.py (search, pages, code, images, memory, GitHub).
+- POST /api/agent/action  {"id", "decision": "approve"|"reject"}: runs (or drops) ONE write action the Agent asked
+                    for (agent_safety.py). Owner only, single use, expires after 15 minutes, args stored server-side.
 - POST /chat        old single-turn endpoint: {"message"} -> {"reply"} (kept for backward compat).
 
 Configuration comes only from environment variables; no secrets in code.
@@ -485,8 +487,9 @@ def adk_config(model_name, max_tokens, json_out=False):
     return types.GenerateContentConfig(**options)
 
 
-def tool_loop(messages, attachments, system, enqueue, owner, coding=False):
+def tool_loop(messages, attachments, system, enqueue, owner, coding=False, cancelled=None):
     import agent_notes
+    import agent_safety
     import agent_tools
     import coding_agent
     token = os.environ.get("GITHUB_TOKEN", "").strip()
@@ -510,6 +513,7 @@ def tool_loop(messages, attachments, system, enqueue, owner, coding=False):
     notes = agent_notes.for_owner(owner)
     if notes is not None:
         prompt += agent_tools.NOTES_HINT + agent_notes.load_prompt(notes, last)
+    prompt += agent_safety.SAFETY_PROMPT
     model = get_agent_model(system + "\n\n" + prompt)
     if not enqueue("event", progress_event("plan", "Planning\u2026")):
         return
@@ -520,6 +524,8 @@ def tool_loop(messages, attachments, system, enqueue, owner, coding=False):
         "imagine": imagine_for_agent(owner), "memory": owner.get("memory", ""), "github": github, "request_text": last, "notes": notes,
         "progress": lambda step, label, state="active": enqueue("event", progress_event(step, label, state)),
         "thinking": lambda delta: enqueue("event", {"type": "thinking", "delta": delta}),
+        # Write tools wait for the owner's approval (agent_safety); a disconnect stops the loop.
+        "owner_id": owner.get("id"), "approvals": agent_safety.STORE, "cancelled": cancelled,
     }
     adk_result = None
     import agent_adk
@@ -537,9 +543,13 @@ def tool_loop(messages, attachments, system, enqueue, owner, coding=False):
                                         coding_agent.default_tool_response)
         except coding_agent.CodingError as error:
             text, run = f"Stopped: {str(error)[:300]} No pull request was opened.", None
+    if getattr(run, "cancelled", False) or (cancelled is not None and cancelled()):
+        # The app is gone: no self-check, no notes learning, nothing more to stream.
+        app.logger.info("agent stopped: client disconnected")
+        return
     sources = run.sources if run else []
     import agent_verify
-    if agent_verify.enabled() and not coding and run is not None:
+    if agent_verify.enabled() and not coding and run is not None and not getattr(run, "pending", None):
         text = agent_verify.check(last, text, getattr(run, "evidence", None) or getattr(run, "steps", []), sources,
                                   get_model(VERIFY_SYSTEM), model, chunk_text,
                                   lambda step, label, state="active": enqueue("event", progress_event(step, label, state)))
@@ -557,8 +567,9 @@ def tool_loop(messages, attachments, system, enqueue, owner, coding=False):
         agent_notes.learn(notes, get_model(NOTES_SYSTEM), last, "".join(run.steps), text)
 
 
-def agent_producer(messages, attachments, system, owner=None):
-    """Dua Agent: route -> (direct reply) or one general tool-calling loop (agent_tools)."""
+def agent_producer(messages, attachments, system, owner=None, cancelled=None):
+    """Dua Agent: route -> (direct reply) or one general tool-calling loop (agent_tools).
+    [cancelled]() turns true when the app disconnected; the loop then stops calling the model and tools."""
     def produce(enqueue):
         model = get_model(system)
         route = route_agent(messages, attachments, system)
@@ -581,7 +592,9 @@ def agent_producer(messages, attachments, system, owner=None):
             if notes is not None:
                 agent_notes.learn(notes, get_model(NOTES_SYSTEM), last, "", "".join(parts))
             return
-        tool_loop(messages, attachments, system, enqueue, owner or {}, coding=route == "code")
+        if cancelled is not None and cancelled():
+            return
+        tool_loop(messages, attachments, system, enqueue, owner or {}, coding=route == "code", cancelled=cancelled)
     return produce
 
 
@@ -609,7 +622,7 @@ def home():
     # Capabilities: the app shows Agent mode only when this says "agent": true.
     import openrouter
     info = {"status": "Dua AI Engine is running!", "engine": "google-cloud", "agent": True, "titles": True, "model": MODEL_NAME,
-            "agentModel": AGENT_MODEL, "personalization": {"personality": True}}
+            "agentModel": AGENT_MODEL, "personalization": {"personality": True}, "agentApprovals": True}
     # Free OpenRouter models appear only when OPENROUTER_API_KEY is set (Secret Manager).
     info["freeModels"] = openrouter.models()
     return jsonify(info)
@@ -694,7 +707,7 @@ def api_chat():
             iterator = None
             try:
                 if agent:
-                    agent_producer(data.get("messages"), attachments, system, owner)(enqueue)
+                    agent_producer(data.get("messages"), attachments, system, owner, cancelled=stopped.is_set)(enqueue)
                     return
                 if use_free:
                     openrouter.stream(free_model, system, data.get("messages"), enqueue, reasoning=data.get("mode") == "reasoning")
@@ -755,11 +768,64 @@ def api_chat():
                 return
             yield sse({"type": "done", "truncated": truncated})
         finally:
-            # On client disconnect, stop enqueuing and close the iterator on its owning worker.
+            # On client disconnect (GeneratorExit at a yield) or normal end: stop enqueuing, close the iterator on its
+            # owning worker, and tell the Agent loop to stop calling the model and tools (stopped.is_set).
             stopped.set()
 
     return Response(stream_with_context(events()), headers=SSE_HEADERS,
                     content_type="text/event-stream; charset=utf-8")
+
+
+APPROVAL_ID = re.compile(r"[A-Za-z0-9_-]{16,64}")
+
+
+def no_store(response, status=200):
+    response.headers["Cache-Control"] = "no-store"
+    return response, status
+
+
+def approval_env(owner_id, owner_token):
+    """GitHub client and notes store for running one approved action (same setup as tool_loop)."""
+    import agent_notes
+    import coding_agent
+    github = None
+    token = os.environ.get("GITHUB_TOKEN", "").strip()
+    if token:
+        try:
+            github = coding_agent.GitHubClient(token, coding_agent.repo_name())
+        except coding_agent.CodingError:
+            github = None
+    return {"github": github, "notes": agent_notes.for_owner({"id": owner_id, "token": owner_token}),
+            "memory": "", "imagine": None, "request_text": ""}
+
+
+@app.route("/api/agent/action", methods=["POST"])
+def agent_action():
+    """Owner approves or rejects ONE pending Agent write action by id. Only the stored args are used."""
+    import agent_safety
+    denied = owner_access_error()
+    if denied is not None:
+        return denied
+    data = request.get_json(silent=True)
+    action_id = data.get("id") if isinstance(data, dict) else None
+    decision = data.get("decision") if isinstance(data, dict) else None
+    if not isinstance(action_id, str) or not APPROVAL_ID.fullmatch(action_id) or decision not in ("approve", "reject"):
+        return no_store(jsonify({"error": "Invalid request."}), 400)
+    try:
+        action = agent_safety.STORE.take(action_id, getattr(g, "owner_id", None))
+    except agent_safety.ApprovalError as error:
+        return no_store(jsonify({"error": error.message}), error.status)
+    if decision == "reject":
+        app.logger.info("agent action rejected: %s", action["tool"])
+        return no_store(jsonify({"status": "rejected", "tool": action["tool"],
+                                 "text": f"You declined: {action['title']}. Nothing was changed."}))
+    try:
+        ok, text = agent_safety.execute(action, approval_env(getattr(g, "owner_id", None), getattr(g, "owner_token", "")))
+    except Exception:
+        app.logger.exception("agent action failed")
+        ok, text = False, f"{action['title']} failed. Nothing more will be retried; ask the agent again if needed."
+    app.logger.info("agent action approved: %s (%s)", action["tool"], "done" if ok else "failed")
+    return no_store(jsonify({"status": "done" if ok else "failed", "tool": action["tool"], "text": text}))
 
 
 @app.after_request

@@ -135,7 +135,7 @@ class DuaApiClient(
         context: com.dua.ai.model.ConversationContext? = null, xSearch: Boolean = false, code: Boolean = false, build: String? = null,
         persistence: com.dua.ai.account.ReplyPersistence? = null, agent: Boolean = false, freeModel: String? = null, personality: String? = null): Flow<ReplyEvent> = callbackFlow {
         val request = withContext(Dispatchers.IO) { buildRequest(model, history, attachments, memory, token, web, reasoning, stream = true, historyBytes = historyBytes, context = context, xSearch = xSearch, code = code, build = build, persistence = persistence, agent = agent, freeModel = freeModel, personality = personality) }
-        val call = client.newCall(request)
+        val call = clientFor(agent).newCall(request)
         call.enqueue(object : Callback {
             override fun onFailure(call: Call, error: IOException) { close(error) }
 
@@ -147,6 +147,37 @@ class DuaApiClient(
             }
         })
         awaitClose { call.cancel() }
+    }
+
+    /** Agent replies may run up to the engine's limits, so they get a longer total call timeout (see AGENT_CALL_TIMEOUT_SECONDS). */
+    internal fun clientFor(agent: Boolean): OkHttpClient = if (agent) agentClient else client
+    private val agentClient: OkHttpClient by lazy { client.newBuilder().callTimeout(AGENT_CALL_TIMEOUT_SECONDS, TimeUnit.SECONDS).build() }
+
+    /**
+     * Approve or reject one pending Agent action (POST /api/agent/action, owner session required). Only the id is sent;
+     * the server runs exactly the action it stored. Returns the outcome and the server's short text.
+     */
+    suspend fun agentAction(id: String, approve: Boolean, token: String?): Pair<com.dua.ai.model.AgentApproval.Status, String> = withContext(Dispatchers.IO) {
+        val base = URL(baseUrl.trimEnd('/') + "/")
+        require(base.protocol == "https") { "Dua backend ke liye HTTPS URL set karein." }
+        val body = com.dua.ai.model.AgentApprovals.decisionBody(id, approve).toString().toRequestBody("application/json; charset=utf-8".toMediaType())
+        val builder = Request.Builder().url(URL(base, "api/agent/action")).post(body).header("Accept", "application/json").header("x-dua-native", "1")
+        if (appToken.isNotBlank()) builder.header("X-Dua-App-Token", appToken)
+        if (token != null) {
+            require(token.length <= 10000 && token.matches(Regex("[A-Za-z0-9._-]+"))) { "Invalid account session." }
+            builder.header("Authorization", "Bearer $token")
+        }
+        // Opening a pull request can take a while (several GitHub calls), so use the Agent timeout here too.
+        clientFor(agent = true).newCall(builder.build()).execute().use { response ->
+            val source = response.body?.source() ?: throw DuaApiException("Dua server se valid response nahi mila.", response.code)
+            source.request(65537)
+            if (source.buffer.size > 65536) throw DuaApiException("Dua response bahut bada hai.", response.code)
+            val json = runCatching { JSONObject(source.readUtf8()) }.getOrNull()
+                ?: throw DuaApiException("Dua server se valid response nahi mila.", response.code)
+            if (response.code !in 200..299) throw DuaApiException(json.optString("error").takeIf { it.isNotBlank() }?.take(300)
+                ?: "Action nahi ho saka. Dobara try karein.", response.code)
+            com.dua.ai.model.AgentApprovals.outcome(json)
+        }
     }
 
     private fun readStream(response: Response, persistence: com.dua.ai.account.ReplyPersistence?, emit: (ReplyEvent) -> Unit) {
@@ -362,9 +393,18 @@ class DuaApiClient(
                 if (message.isUser && message.files.isNotEmpty()) put("files", com.dua.ai.files.FileRefCodec.array(message.files))
             }.toString().toByteArray(Charsets.UTF_8).size
 
+        /**
+         * Total time allowed for one Agent reply. The engine's agent loop stops itself at AGENT_MAX_SECONDS (600 s, plus
+         * at most one slow step/tool) and Cloud Run ends every request at --timeout 900, so the phone waits a bit longer
+         * than that (960 s) and always gets the server's own "stopped" message instead of a silent phone timeout.
+         * Heartbeats every 15 s keep the 75 s read timeout from firing during long agent steps.
+         */
+        const val AGENT_CALL_TIMEOUT_SECONDS = 960L
+
         // readTimeout is the longest gap between bytes: the server sends a heartbeat every 15 s while
         // a reply streams, so a stalled connection fails in ~75 s while long replies can run for the
-        // server's whole deadline (DUA_CHAT_DEADLINE_SECONDS, default 280 s). callTimeout is a backstop.
+        // server's whole deadline (DUA_CHAT_DEADLINE_SECONDS, default 280 s). callTimeout is a backstop
+        // for normal chat; Agent replies use AGENT_CALL_TIMEOUT_SECONDS (clientFor).
         val sharedClient: OkHttpClient = OkHttpClient.Builder()
             .followRedirects(false)
             .followSslRedirects(false)

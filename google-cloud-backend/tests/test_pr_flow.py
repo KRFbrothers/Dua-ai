@@ -126,28 +126,32 @@ def test_allowlist_permits_only_safe_ci_and_branch_updates():
     assert ca.allowed("PUT", f"{base}/pulls/7/merge", {}, REPO)
 
 
-def test_old_loop_hands_ci_failure_back_and_finishes_after_fix(monkeypatch):
+def test_old_loop_prechecks_then_waits_for_approval_without_opening_a_pr(monkeypatch):
+    """Since the approval guard, the loop never opens the PR itself: a failing pre-check goes back to the model, a
+    passing change becomes ONE pending action, and GitHub is untouched until the owner approves."""
+    import agent_safety
     monkeypatch.setenv("AGENT_TEST_CODE", "1")
-    monkeypatch.setattr(pr_flow, "CI_POLL_SECONDS", 0)
-    gh = FakeGitHub(ci=[FAIL])
+    gh = FakeGitHub(ci=[OK])
+    bad = {"title": "t", "description": "d", "files": [{"path": "a.py", "content": "def broken(:\n"}]}
 
     class Script:
         def __init__(self):
-            self.n = 0
+            self.n, self.seen = 0, []
 
         def generate_content(self, history, **kw):
-            self.n += 1
             from types import SimpleNamespace
-            call = SimpleNamespace(name="propose_changes", args=GOOD)
-            if self.n == 2:
-                gh.ci = [OK]
+            self.n += 1
+            self.seen.append(list(history))
+            call = SimpleNamespace(name="propose_changes", args=bad if self.n == 1 else GOOD)
             return SimpleNamespace(function_calls=[call], candidates=[SimpleNamespace(content="c")])
-    env = {"model": Script(), "progress": lambda *a: None, "thinking": lambda d: None, "github": gh,
-           "request_text": "req", "enqueue": lambda *a: True, "chunk_text": lambda r: ""}
+    store = agent_safety.PendingStore()
+    model = Script()
+    env = {"model": model, "progress": lambda *a: None, "thinking": lambda d: None, "github": gh, "approvals": store,
+           "owner_id": "me", "request_text": "req", "enqueue": lambda *a: True, "chunk_text": lambda r: ""}
     monkeypatch.setattr(ca, "CodingSession", lambda *a: None)
     text, agent = agent_tools.run(env, [], ["TOOLS"], lambda results: ("tool", results))
-    assert "one fix pushed" in text and len(gh.opened) == 1 and len(gh.fixes) == 1
-    assert agent.run_tool("check_pr_ci", {})["state"] == "success"
+    assert model.n == 2 and "Pre-check failed" in model.seen[1][-1][1][0][1]["error"]
+    assert "Approval needed" in text and len(agent.pending) == 1 and gh.opened == [] and gh.fixes == []
 
 
 def test_ci_budget_is_shared_across_both_waits(monkeypatch):

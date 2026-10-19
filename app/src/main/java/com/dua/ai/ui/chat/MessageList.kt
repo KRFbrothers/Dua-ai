@@ -113,6 +113,7 @@ fun MessageList(state: ChatUiState, actions: ChatActions, listState: LazyListSta
                         buildPrDraft = state.buildConfig?.pr?.draft ?: true,
                         confirmPr = state.confirmPr == message.id,
                         onCreatePr = { title -> actions.onCreatePr(message.id, title) },
+                        onApproval = { approvalId, approve -> actions.onAgentApproval(message.id, approvalId, approve) },
                         showActions = message.id == lastAssistantId,
                     )
                 }

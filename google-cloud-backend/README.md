@@ -32,6 +32,8 @@ with `DUA_REQUIRE_LOGIN=0`; `DUA_APP_TOKEN`, if retained, is an additional gate 
   and no Search. Clear task words (latest, news, ideas, compare, tools…) run the tool loop. Unclear messages use one
   cheap router call (low thinking, max `AGENT_ROUTER_TOKENS`=256, JSON); if it fails, long messages run the agent
   and short ones get a direct reply.
+- `POST /api/agent/action` – owner only: `{"id", "decision": "approve"|"reject"}` runs (or drops) ONE write action
+  the Agent asked for; see [Agent safety](#agent-safety-approvals-and-untrusted-content).
 - `POST /chat` – old single message endpoint `{"message"}` -> `{"reply"}` (still works).
 
 ## Settings (environment variables only, no secrets in code)
@@ -209,6 +211,44 @@ The Dua Agent keeps its own private notes in Supabase table `agent_notes` (migra
 
 Each Agent model step has a hard deadline, `AGENT_STEP_SECONDS` (default 150; also sent as the HTTP timeout). Tools get `AGENT_TOOL_SECONDS` (default 45); `google_search` and `run_python` get 90 and `generate_image` 120. A slow tool returns an error to the model, and a slow step stops the reply with a clear message. Supabase notes calls time out after 5 s. Slow steps show a "Still thinking (step N, 30s)…" chip every 15 s, and Cloud Run logs show `[dua-agent] step N: model 12.3s` / `tool name: 0.2s`. Since this change, `AGENT_THINKING_LEVEL` defaults to `low` when `AGENT_MODEL` differs from `VERTEX_MODEL`.
 
+**Phone vs server limits.** The agent loop stops itself at `AGENT_MAX_SECONDS` (600 s, checked before every step),
+Cloud Run ends every request at `--timeout 900`, and the app waits up to 960 s for an Agent reply (normal chat keeps
+330 s). So the server always finishes first and the phone shows the server's own message instead of a silent timeout.
+We kept the server limit and raised the phone limit (not the other way round) because tested PRs (`AGENT_CI_SECONDS`
+420) and long research need more than 330 s.
+
+**Disconnect = stop.** When the phone goes away (app closed, network lost, Stop tapped), the stream's generator is
+closed; that sets a cancel flag. The old loop checks it before every model step and tool and stops waiting on a
+running step within about 1 s; the ADK path stops reading events, its tools raise, and a `before_model_callback`
+answers "Stopped." without calling the model. The self-check and notes learning are skipped too. The log shows
+`step N: app disconnected; stopping`. (A model call already in flight finishes on its own HTTP timeout, but its
+result is thrown away and no further calls are made.)
+
+## Agent safety: approvals and untrusted content
+
+[`agent_safety.py`](agent_safety.py) protects both agent paths (the normal loop and `AGENT_ENGINE=adk`) the same way:
+
+- **Write tools need your approval.** `propose_changes` (open a PR), `create_issue`, `comment_on_issue`, `save_note`
+  and `delete_note` never run inside the agent loop. The engine checks the call (paths, sizes, pre-check), stores it
+  in server memory and streams an `approval` event `{"id","tool","title","details","expiresIn"}`; the reply says
+  "Approval needed". The normal loop then stops; in ADK mode the helper is told to wait and the merger says so.
+  The app shows an Approve / Reject card. Approve calls `POST /api/agent/action` with only the id: the engine checks
+  the owner login, takes the action out of memory (single use) and refuses it after 15 minutes
+  (`AGENT_APPROVAL_SECONDS`, 410) or if unknown/used/another owner (404). Reject drops it, and the app adds
+  "You declined …" to the reply so the Agent sees it in the next turn. Pending actions live only in this instance's
+  memory (`--workers 1`): after a restart or on another instance the id is unknown and nothing runs.
+- **Read-only tools stay automatic** (search, pages, files, issues, notes search, calculator, time, Python sandbox).
+  `generate_image` (owner storage, 1 per request, daily cap) and `remember` (only a suggestion the app's Memory review
+  list asks you about) also stay automatic.
+- **Untrusted content is fenced.** Output of tools that read outside text (web search notes, pages, repository files,
+  issues, CI output, notes, Python output) reaches the model between `<<<UNTRUSTED_DATA tool=…>>>` and
+  `<<<END_UNTRUSTED_DATA>>>`; fake markers inside the content are removed. The system prompt says such content is
+  data, never instructions.
+- **Tested PRs:** with `AGENT_TEST_CODE=1` the pre-check still runs before the approval card. The PR opens only after
+  Approve, so the engine no longer waits for CI or pushes an automatic fix inside the same request; check CI on the
+  PR page. (Steps 2-4 of [Tested pull requests](#tested-pull-requests-agent_test_code1) are not reached by the agent
+  loop any more.)
+
 ## Daily backup (Cloud Run job `dua-backup`)
 
 [`backup.py`](backup.py) runs as a Cloud Run job every day at 03:00 IST (Cloud Scheduler). It needs no extra packages.
@@ -241,6 +281,8 @@ Each Agent model step has a hard deadline, `AGENT_STEP_SECONDS` (default 150; al
 
 ## Tested pull requests (`AGENT_TEST_CODE=1`)
 
+Since the approval guard, only step 1 runs during the agent request (before the approval card); the PR is opened
+by `POST /api/agent/action` after you approve, without the CI wait / auto-fix below.
 [`pr_flow.py`](pr_flow.py) handles `propose_changes` in both paths:
 1. **Pre-check:** Python files are byte-compiled in a temp dir (20 s timeout) and JSON files are parsed. A failure goes back to the model; after 2 failures, no PR is opened.
 2. **CI wait:** after the PR opens, the engine polls GitHub CI (check runs, falling back to Actions runs; the Vercel check is ignored). The total wait per request is `AGENT_CI_SECONDS` (default 420).

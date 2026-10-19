@@ -8,6 +8,10 @@ The model decides which tools to call; every tool runs here on the server with i
 - Images: the existing Imagine path (owner storage, daily cap), one image per request.
 - Memory: `remember` sends the fact back to the app as a suggestion; the user reviews it in the existing Memory
   review list before it is saved (nothing is stored on the server). `recall` reads the Memory the app sent.
+- Write tools (agent_safety.WRITE_TOOLS: propose_changes, create_issue, comment_on_issue, save_note, delete_note)
+  never run inside the loop: the call is stored server-side and the user approves or rejects it in the app.
+- Untrusted tool output goes back to the model inside UNTRUSTED_DATA markers (agent_safety.fence).
+- env["cancelled"] (the app disconnected): the loop stops before the next model call or tool.
 Caps per request: AGENT_MAX_STEPS model calls (default 12), per-tool limits below and a total time limit.
 """
 import ast
@@ -40,6 +44,8 @@ LIMITS = {"google_search": 3, "fetch_url": 5, "run_python": 2, "generate_image":
           "calculator": 20, "current_time": 5, "recall": 3,
           # Issues: list/read/search share one read budget; one new issue and one comment per request.
           "issue_reads": 5, "create_issue": 1, "comment_on_issue": 1,
+          # One pull request per request (counted when it is queued for the user's approval).
+          "propose_changes": 1,
           # Agent notes (agent_notes.py): the agent's own private lessons, separate from the app's Memory.
           "save_note": 3, "search_notes": 3, "delete_note": 3}
 NOTE_TOOLS = ("save_note", "search_notes", "delete_note")
@@ -370,6 +376,53 @@ class AgentRun:
         self.steps = []
         self.prflow = None
         self.evidence = []  # short tool results, for the optional self-check (agent_verify)
+        self.pending = []  # write actions waiting for the user's approval (agent_safety)
+        self.cancelled = False
+
+    def stop_requested(self):
+        cancelled = self.env.get("cancelled")
+        if cancelled is not None and cancelled():
+            self.cancelled = True
+        return self.cancelled
+
+    def use_budget(self, name):
+        """Counts one use of [name]; returns an error dict when its per-request limit is reached."""
+        budget = "issue_reads" if name in ISSUE_READ_TOOLS else name
+        limit = LIMITS.get(budget)
+        if limit is not None:
+            if self.counts.get(budget, 0) >= limit:
+                return {"error": f"{name} limit reached for this request ({limit}). Answer with what you have."}
+            self.counts[budget] = self.counts.get(budget, 0) + 1
+        return None
+
+    def request_approval(self, name, args):
+        """A write tool call: checked and stored for the user's approval, never executed here."""
+        import agent_safety
+        env = self.env
+        if name == "propose_changes" and env.get("github") is None:
+            return {"error": "GitHub tools are not set up."}
+        if name in ("create_issue", "comment_on_issue") and (env.get("github") is None or not env["github"].issues_enabled()):
+            return {"error": "Issue tools are not set up for this repository."}
+        if name in NOTE_TOOLS and env.get("notes") is None:
+            return {"error": "Agent notes are turned off."}
+        if len(self.pending) >= agent_safety.MAX_PENDING_PER_REQUEST:
+            return {"error": "Enough actions are already waiting for the user's approval. Finish your answer now."}
+        try:
+            stored = agent_safety.prepare(name, args)
+        except ValueError as error:
+            return {"error": str(error)[:600]}
+        except Exception:
+            return {"error": "The tool failed."}
+        over = self.use_budget(name)
+        if over is not None:
+            return over
+        store = env.get("approvals")
+        action = (agent_safety.STORE if store is None else store).create(env.get("owner_id"), name, stored,
+                                                                         env.get("request_text", ""))
+        self.pending.append(action)
+        self.emit(agent_safety.event(action))
+        log(f"approval requested: {name}")
+        return dict(agent_safety.PENDING_RESULT)
 
     def emit(self, event):
         return self.env["enqueue"]("event", event)
@@ -397,7 +450,10 @@ class AgentRun:
         seconds = SLOW_TOOL_SECONDS.get(name, TOOL_SECONDS)
         started = time.monotonic()
         try:
-            result = call_with_deadline(lambda: self.run_tool(name, args), seconds)
+            result = call_with_deadline(lambda: self.run_tool(name, args), seconds, cancel=self.env.get("cancelled"))
+        except Cancelled:
+            self.cancelled = True
+            result = {"error": "Stopped: the app disconnected."}
         except DeadlineExceeded:
             result = {"error": f"{name} timed out after {seconds}s. Continue without it."}
         if sum(len(e) for e in self.evidence) < 12000:
@@ -409,12 +465,9 @@ class AgentRun:
         return result
 
     def run_tool(self, name, args):
-        budget = "issue_reads" if name in ISSUE_READ_TOOLS else name
-        limit = LIMITS.get(budget)
-        if limit is not None:
-            if self.counts.get(budget, 0) >= limit:
-                return {"error": f"{name} limit reached for this request ({limit}). Answer with what you have."}
-            self.counts[budget] = self.counts.get(budget, 0) + 1
+        over = self.use_budget(name)
+        if over is not None:
+            return over
         env = self.env
         try:
             if name == "google_search":
@@ -511,8 +564,16 @@ class DeadlineExceeded(Exception):
     pass
 
 
-def call_with_deadline(fn, seconds, tick=None, every=TICK_SECONDS):
+class Cancelled(Exception):
+    """The app disconnected (env["cancelled"]() is true): stop spending on this request."""
+
+
+CANCEL_POLL_SECONDS = 1.0
+
+
+def call_with_deadline(fn, seconds, tick=None, every=TICK_SECONDS, cancel=None):
     """Runs fn() in a daemon thread; raises DeadlineExceeded after [seconds]. tick(elapsed) every [every] s.
+    With [cancel], checks it about once a second and raises Cancelled as soon as it returns true.
 
     A timed-out call keeps running in the background until its own HTTP timeout ends it, but the loop moves on."""
     import threading
@@ -525,15 +586,26 @@ def call_with_deadline(fn, seconds, tick=None, every=TICK_SECONDS):
             box["error"] = error
         finally:
             done.set()
+    if cancel is not None and cancel():
+        raise Cancelled()
     threading.Thread(target=work, name="dua-agent-call", daemon=True).start()
     started = time.monotonic()
+    next_tick = every
     while True:
-        left = seconds - (time.monotonic() - started)
+        elapsed = time.monotonic() - started
+        left = seconds - elapsed
         if left <= 0:
             raise DeadlineExceeded()
-        if done.wait(min(every, left)):
+        wait = min(next_tick - elapsed, left)
+        if cancel is not None:
+            wait = min(wait, CANCEL_POLL_SECONDS)
+        if done.wait(max(wait, 0)):
             break
-        if tick is not None:
+        if cancel is not None and cancel():
+            raise Cancelled()
+        # Same ticks as before: after each full [every] wait, and once more when the deadline arrives.
+        if tick is not None and time.monotonic() - started >= min(next_tick, seconds):
+            next_tick += every
             tick(int(time.monotonic() - started))
     if "error" in box:
         raise box["error"]
@@ -544,8 +616,12 @@ def log(message):
     print(f"[dua-agent] {message}", flush=True)
 
 
+STOPPED_TEXT = "Agent stopped: the app disconnected."
+
+
 def run(env, history, tools, tool_response, clock=time.monotonic):
     """Tool loop. Returns (final_text, run). The caller streams the text and the sources footer."""
+    import agent_safety
     import coding_agent
     agent = AgentRun(env)
     if env.get("github") is not None:
@@ -554,6 +630,9 @@ def run(env, history, tools, tool_response, clock=time.monotonic):
     started = clock()
     history = list(history)
     for step in range(1, MAX_STEPS + 1):
+        if agent.stop_requested():
+            log(f"step {step}: app disconnected; stopping")
+            return STOPPED_TEXT, agent
         if clock() - started > MAX_SECONDS:
             return "Agent stopped: time limit reached. Here is what I could not finish; try a smaller request.", agent
         # Slow steps only: a spinning "Still thinking" chip (own id per step, since the app never un-finishes a chip);
@@ -565,7 +644,12 @@ def run(env, history, tools, tool_response, clock=time.monotonic):
             response = call_with_deadline(
                 lambda: env["model"].generate_content(snapshot, generation_config={
                     "max_output_tokens": STEP_TOKENS, "temperature": 0.3, "timeout_seconds": STEP_SECONDS}, tools=tools),
-                STEP_SECONDS, tick=lambda s: progress(think_id, f"Still thinking (step {step}, {s}s)\u2026"))
+                STEP_SECONDS, tick=lambda s: progress(think_id, f"Still thinking (step {step}, {s}s)\u2026"),
+                cancel=env.get("cancelled"))
+        except Cancelled:
+            agent.cancelled = True
+            log(f"step {step}: app disconnected during the model call; stopping")
+            return STOPPED_TEXT, agent
         except DeadlineExceeded:
             log(f"step {step}: model timed out after {STEP_SECONDS}s")
             progress(think_id, "Model took too long", "done")
@@ -578,23 +662,30 @@ def run(env, history, tools, tool_response, clock=time.monotonic):
         history.append(response.candidates[0].content)
         results = []
         for name, args in calls:
-            if name in PROGRESS:
+            if agent.stop_requested():
+                return STOPPED_TEXT, agent
+            if name in PROGRESS and name not in agent_safety.WRITE_TOOLS:
                 progress(*PROGRESS[name])
             shown = {k: (v if not isinstance(v, str) else v[:100]) for k, v in args.items() if k not in ("content", "files")}
             line = f"- Step {step}: {name} {json.dumps(shown, ensure_ascii=False)[:160]}\n"
             agent.steps.append(line)
             env["thinking"](line)
-            if name == "propose_changes":
-                if env.get("github") is None:
-                    results.append((name, {"error": "GitHub tools are not set up."}))
-                    continue
-                done, result, text = agent.pr_flow_for(env).propose(args)
-                if done:
-                    return text, agent
-                results.append((name, result))
+            if clock() - started > MAX_SECONDS:
+                # Keeps the whole request inside Cloud Run's 900 s: tools that would start after 600 s are skipped.
+                results.append((name, {"error": "Time limit reached; answer with what you have."}))
                 continue
-            results.append((name, agent.run_tool_timed(name, args)))
+            if name in agent_safety.WRITE_TOOLS:
+                # Never executed here: stored for the user's approval (POST /api/agent/action runs it).
+                results.append((name, agent.request_approval(name, args)))
+                continue
+            results.append((name, agent_safety.fence(name, agent.run_tool_timed(name, args))))
             if name in PROGRESS:
                 progress(PROGRESS[name][0], PROGRESS[name][1].rstrip("\u2026"), "done")
+        if agent.pending:
+            # Stop here: the next step depends on the user's decision (they approve or reject in the app).
+            progress("approval", "Waiting for your approval", "done")
+            return agent_safety.pending_text(agent.pending).lstrip(), agent
+        if agent.cancelled:
+            return STOPPED_TEXT, agent
         history.append(tool_response(results))
     return f"Agent stopped after {MAX_STEPS} steps. Try a smaller, more specific request.", agent

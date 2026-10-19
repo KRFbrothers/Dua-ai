@@ -197,6 +197,8 @@ class ChatActions(
     val onRetryBuildRepositories: () -> Unit = {},
     /** Owner confirmed Create PR for the proposal on message id, with the (possibly edited) title. */
     val onCreatePr: (String, String) -> Unit = { _, _ -> },
+    /** Owner tapped Approve (true) or Reject (false) on an Agent approval card: (message id, approval id, approve). */
+    val onAgentApproval: (String, String, Boolean) -> Unit = { _, _, _ -> },
 )
 
 /** Bottom sheets the chat screen can show. */

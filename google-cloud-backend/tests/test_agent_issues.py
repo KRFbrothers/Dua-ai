@@ -76,13 +76,20 @@ class Script:
         return self.steps.pop(0) if self.steps else SimpleNamespace(function_calls=[], candidates=[], text="done")
 
 
-def run(steps, github):
-    model, progress = Script(steps), []
+def run(steps, github, approve=True):
+    """Runs the loop. Write tools only create pending actions; with [approve] each one is then approved (once) and its
+    result is appended to [results] in the place of the pending tool result."""
+    import agent_safety
+    model, progress, store = Script(steps), [], agent_safety.PendingStore()
     env = {"model": model, "enqueue": lambda *a: True, "chunk_text": lambda r: r.text or "", "github": github,
            "progress": lambda step, label, state="active": (progress.append(label) if state == "active" and step != "think" else None), "thinking": lambda d: None,
-           "request_text": "x", "memory": "", "imagine": None}
-    text, _ = at.run(env, ["u"], ["TOOLS"], lambda results: ("tool", results), clock=lambda: 0)
-    results = [c[-1][1][0][1] for c in model.calls if c and isinstance(c[-1], tuple)]
+           "request_text": "x", "memory": "", "imagine": None, "approvals": store, "owner_id": "me"}
+    text, agent = at.run(env, ["u"], ["TOOLS"], lambda results: ("tool", results), clock=lambda: 0)
+    results = [agent_safety.unfence(c[-1][1][0][0], c[-1][1][0][1]) for c in model.calls if c and isinstance(c[-1], tuple)]
+    for action in agent.pending:
+        assert github.opener.calls == [] or not any(m == "POST" for m, *_ in github.opener.calls)  # nothing written before approval
+        if approve:
+            results.append(agent_safety.execute(store.take(action["id"], "me"), {"github": github}))
     return text, results, progress
 
 
@@ -109,34 +116,39 @@ def test_issue_reads_share_a_cap_of_five():
 
 def test_create_issue_adds_footer_validates_labels_and_caps_one():
     g = gh()
-    _, results, progress = run([call("create_issue", {"title": "  Dark  mode bug ", "body": "Steps...", "labels": ["bug"]}),
-                                call("create_issue", {"title": "again", "body": "b"})], g)
-    assert results[0] == {"number": 9, "url": f"https://github.com/{REPO}/issues/9", "created": True}
+    # Both calls come in one model turn: the first waits for approval, the second hits the one-issue limit.
+    both = SimpleNamespace(function_calls=[SimpleNamespace(name="create_issue", args={"title": "  Dark  mode bug ", "body": "Steps...", "labels": ["bug"]}),
+                                           SimpleNamespace(name="create_issue", args={"title": "again", "body": "b"})],
+                           candidates=[SimpleNamespace(content="t")], text=None)
+    text, results, progress = run([both], g)
+    assert "Approval needed" in text and results == [(True, f"Issue created: #9 \u2014 https://github.com/{REPO}/issues/9")]
     posted = [b for m, p, b, q in g.opener.calls if m == "POST"]
     assert posted == [{"title": "Dark mode bug", "body": "Steps..." + ca.ISSUE_FOOTER, "labels": ["bug"]}]
     assert "Created by Dua Agent" in ca.ISSUE_FOOTER
-    assert "limit reached" in results[1]["error"] and "Creating issue\u2026" in progress
+    assert "Creating issue\u2026" not in progress  # no "doing it" chip before approval
 
 
 def test_create_issue_refuses_unknown_labels():
     g = gh()
     _, results, _ = run([call("create_issue", {"title": "t", "body": "b", "labels": ["urgent"]})], g)
-    assert "Unknown label" in results[0]["error"] and not any(m == "POST" for m, *_ in g.opener.calls)
+    assert results[0][0] is False and "Unknown label" in results[0][1] and not any(m == "POST" for m, *_ in g.opener.calls)
 
 
 def test_comment_on_issue_once_with_footer():
     g = gh()
-    _, results, progress = run([call("comment_on_issue", {"number": 1, "body": "Fixed in #200"}),
-                                call("comment_on_issue", {"number": 1, "body": "again"})], g)
-    assert results[0]["commented"] and "limit reached" in results[1]["error"]
+    both = SimpleNamespace(function_calls=[SimpleNamespace(name="comment_on_issue", args={"number": 1, "body": "Fixed in #200"}),
+                                           SimpleNamespace(name="comment_on_issue", args={"number": 1, "body": "again"})],
+                           candidates=[SimpleNamespace(content="t")], text=None)
+    _, results, progress = run([both], g)
+    assert results == [(True, f"Comment added: https://github.com/{REPO}/issues/1#issuecomment-5")]
     posted = [b for m, p, b, q in g.opener.calls if m == "POST"]
-    assert posted == [{"body": "Fixed in #200" + ca.COMMENT_FOOTER}] and "Commenting on issue\u2026" in progress
+    assert posted == [{"body": "Fixed in #200" + ca.COMMENT_FOOTER}] and "Commenting on issue\u2026" not in progress
 
 
 def test_comment_refuses_pull_request_numbers():
     g = gh()
     _, results, _ = run([call("comment_on_issue", {"number": 2, "body": "x"})], g)
-    assert "error" in results[0] and not any(m == "POST" for m, *_ in g.opener.calls)
+    assert results[0][0] is False and not any(m == "POST" for m, *_ in g.opener.calls)
 
 
 @pytest.mark.parametrize("method,path,body", [
