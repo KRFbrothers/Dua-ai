@@ -84,8 +84,6 @@ object PageSizes {
     val touch = 48.dp
 }
 
-/** Large page heading (Onboarding welcome, Computer). */
-val PageHeadlineStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Bold, fontSize = 26.sp, lineHeight = 32.sp)
 /** Card heading on full pages. */
 val PageCardTitleStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, lineHeight = 22.sp)
 /** Body copy on full pages. */

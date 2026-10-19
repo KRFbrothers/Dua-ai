@@ -50,8 +50,6 @@ val BackupHeadingStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeig
 val BackupRowTitleStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Normal, fontSize = 18.sp, lineHeight = 26.sp)
 val BackupBodyStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Normal, fontSize = 16.sp, lineHeight = 23.sp)
 
-val MontserratFontFamily = KrfBrothersFont
-
 val AgentTitleStyle = TextStyle(fontWeight = FontWeight.SemiBold, fontSize = 18.sp, lineHeight = 24.sp)
 val AgentHeroStyle = TextStyle(fontWeight = FontWeight.Bold, fontSize = 24.sp, lineHeight = 32.sp)
 
@@ -109,8 +107,6 @@ val ComposerInputStyle = ComposerTextStyle.copy(fontSize = 18.sp, lineHeight = 2
 /** assistant_robin_input_oneline explicitly declares an 18 sp input. */
 val HomeComposerInputStyle = ComposerInputStyle.copy(fontFamily = HomeFontFamily)
 val ComposerModeStyle = TextStyle(fontFamily = HomeFontFamily, fontWeight = FontWeight.Medium, fontSize = 14.sp)
-/** Small pill labels. */
-val PillLabelStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
 /** Labels on the three Home action buttons. */
 val HomeActionLabelStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Medium, fontSize = 14.sp)
 
@@ -118,7 +114,6 @@ val HomeActionLabelStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWe
 val SettingsAvatarStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Bold, fontSize = 24.sp)
 val SettingsNameStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
 val SettingsRowStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Normal, fontSize = 17.sp)
-val SettingsUpgradeStyle = SettingsRowStyle
 val SettingsValueStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Normal, fontSize = 17.sp)
 /** Group heading above a card on the inner settings pages. */
 val SettingsSectionStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
