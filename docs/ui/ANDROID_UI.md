@@ -32,6 +32,8 @@ Actual Compose renders: [Dark preview](compact-preview-dark.png) · [Light previ
 - `Spacing.kt` supplies the 4dp spacing scale. Rounded surfaces use `Shape.kt`. Controls retain 48dp touch targets; menu/footer stay fixed while history scrolls. Code/Think/Search use accessible icon-only controls when their labels cannot fit.
 - The header and project actions are neutral. Accent is used selectively for selection and settings; the logo is never tinted.
 - Existing reduced-motion handling, keyboard insets, Android back navigation and conversation scroll-follow behavior remain in place.
+- Shared motion helpers in `ui/components/`: `PressScale.kt` (`Modifier.pressScale`, a 4% press shrink added next to the normal ripple; used by Home action chips and source cards) and `Shimmer.kt` (`rememberShimmerAlpha` and `ShimmerBox`, the one loading pulse for the thinking badge, Agent step label and media placeholders). Both stay still when the system removes animations or the app is in the background.
+- Drag and drop (`ui/chat/ChatDropTarget.kt`, `attachments/DroppedFiles.kt`): photos and files dragged from another app (split screen, tablet, foldable, desktop mode) are copied into private cache (`cache/dropped-files/`, cleared after a day) and go through the normal attachment path; dropped text is added to the draft. Up to 3 files per drop; Dua's own provider URIs are rejected, as for Share. The + attachment sheet is unchanged.
 - Diff, voice, danger and media colors now use the extended `LocalDuaColors` roles in both appearances. Screens have no literal Compose palette colors or text sizes; custom branding/code sizes live in `Type.kt`. See the [complete value-to-token mapping](design-system-tokens.md) and contrast checks.
 
 ## Run the real app

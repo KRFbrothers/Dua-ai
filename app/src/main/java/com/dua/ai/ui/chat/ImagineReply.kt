@@ -1,5 +1,7 @@
 package com.dua.ai.ui.chat
 
+import com.dua.ai.ui.components.ShimmerBox
+
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.foundation.BorderStroke
 import com.dua.ai.ui.theme.ChatSizes

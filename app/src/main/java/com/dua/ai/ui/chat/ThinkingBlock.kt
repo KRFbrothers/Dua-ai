@@ -8,11 +8,6 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.snap
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.background
@@ -138,9 +133,7 @@ fun ThinkingBlock(
         animationSpec = if (motion) DuaMotion.gentle() else snap(), label = "chevron")
     val body = remember(thinking) { thinking?.let(::plainThinking).orEmpty() }
     val steps = remember(thinking) { reasoningSteps(thinking.orEmpty()) }
-    val animate = ticking && motion
-    val pulse = if (animate) rememberInfiniteTransition(label = "thinking-badge").animateFloat(
-        .55f, 1f, infiniteRepeatable(tween(900), RepeatMode.Reverse), label = "thinking-shimmer") else null
+    val pulse = com.dua.ai.ui.components.rememberShimmerAlpha(enabled = ticking)
     Column(modifier.fillMaxWidth()) {
         Surface(
             onClick = { if (body.isNotEmpty()) expanded = !expanded },
@@ -158,7 +151,7 @@ fun ThinkingBlock(
             Row(Modifier.padding(end = Spacing.sm), verticalAlignment = Alignment.CenterVertically) {
                 // Animate only the decorative glyph so the timer text retains its theme contrast.
                 Icon(Icons.Outlined.Psychology, contentDescription = null,
-                    modifier = Modifier.size(Sizes.iconTiny).graphicsLayer { alpha = pulse?.value ?: 1f })
+                    modifier = Modifier.size(Sizes.iconTiny).graphicsLayer { alpha = pulse() })
                 Text(label, style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(start = Spacing.sm))
                 if (body.isNotEmpty()) Icon(Icons.Filled.KeyboardArrowDown, contentDescription = null,
                     modifier = Modifier.padding(start = Spacing.xs).size(Sizes.iconSmall).rotate(rotation))

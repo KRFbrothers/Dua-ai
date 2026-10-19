@@ -233,6 +233,14 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
                 }
             },
             onPickPhotos = { pick { files.launch(arrayOf("image/jpeg", "image/png", "image/webp")) } },
+            onDrop = { drop ->
+                attachmentNotice = drop.notice
+                if (drop.text.isNotEmpty()) {
+                    val current = viewModel.draft.value
+                    viewModel.updateDraft(if (current.isBlank()) drop.text else current.trimEnd() + "\n" + drop.text)
+                }
+                if (drop.uris.isNotEmpty()) viewModel.selectAttachments(drop.uris)
+            },
             onPickFiles = { pick { files.launch(
                 if (viewModel.inlineChatFilesAvailable()) AttachmentReader.types + com.dua.ai.files.StoredFileTypes.AUDIO_PICKER
                 else if (viewModel.storedFilesAvailable()) AttachmentReader.types + com.dua.ai.files.StoredFileTypes.PICKER_EXTRA else AttachmentReader.types) } },

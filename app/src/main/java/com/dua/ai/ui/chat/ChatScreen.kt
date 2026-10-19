@@ -280,8 +280,11 @@ fun ChatScreen(
     }
     fun closeDrawerThen(action: () -> Unit) { scope.launch { drawerState.close() }; action() }
 
+    var dropHover by remember { mutableStateOf(false) }
+    val dropMotion = com.dua.ai.ui.theme.rememberMotionAllowed()
     key(conversationKey) {
-        BoxWithConstraints(Modifier.fillMaxSize()) {
+        BoxWithConstraints(Modifier.fillMaxSize().chatDropTarget(enabled = sheet == null && viewer == null,
+            maxBytes = state.storedFilesMaxBytes, onHover = { dropHover = it }, onDrop = actions.onDrop)) {
             // Keep the entire right-hand Home touch target in the scrim, including on narrow windows.
             val endInset = WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal).asPaddingValues()
                 .calculateEndPadding(LocalLayoutDirection.current)
@@ -443,6 +446,7 @@ fun ChatScreen(
                     }
                 }
             }
+            ChatDropOverlay(dropHover, dropMotion)
         }
     }
     when (sheet) {

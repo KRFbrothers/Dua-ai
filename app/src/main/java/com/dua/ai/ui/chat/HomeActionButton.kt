@@ -2,7 +2,9 @@ package com.dua.ai.ui.chat
 
 import com.dua.ai.ui.theme.ChatSizes
 import com.dua.ai.ui.theme.ChatTheme
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
@@ -13,6 +15,8 @@ import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import com.dua.ai.ui.components.pressScale
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -34,13 +38,15 @@ internal fun HomeActionButton(toggle: ModeToggle, modifier: Modifier = Modifier)
     val c = ChatTheme.colors
     val bg = if (toggle.on) c.accentSoft else c.chipFill
     val fg = if (toggle.on) c.onAccentSoft else c.text
+    val interactions = remember { MutableInteractionSource() }
     Row(
         modifier
+            .pressScale(interactions)
             .heightIn(min = Sizes.touchTarget)
             .clip(DuaShape.homeAction)
             .background(bg)
             .border(ChatSizes.border, if (toggle.on) c.accentSoft else c.chipBorder, DuaShape.homeAction)
-            .toggleable(value = toggle.on, role = Role.Switch, onValueChange = toggle.onChange)
+            .toggleable(value = toggle.on, interactionSource = interactions, indication = LocalIndication.current, role = Role.Switch, onValueChange = toggle.onChange)
             .semantics(mergeDescendants = true) { contentDescription = toggle.detail }
             .padding(horizontal = Spacing.md),
         verticalAlignment = Alignment.CenterVertically,

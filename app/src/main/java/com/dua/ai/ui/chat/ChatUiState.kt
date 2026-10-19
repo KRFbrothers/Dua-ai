@@ -162,6 +162,8 @@ class ChatActions(
     val onPickCamera: () -> Unit = {},
     val onPickPhotos: () -> Unit = {},
     val onPickFiles: () -> Unit = {},
+    /** Photos/files/text dragged onto the chat from another app (already copied into Dua's cache). */
+    val onDrop: (ChatDrop) -> Unit = {},
     val onClearAttachments: () -> Unit = {},
     val onRemoveAttachment: (Int) -> Unit = {},
     val onCancelUpload: (String) -> Unit = {},

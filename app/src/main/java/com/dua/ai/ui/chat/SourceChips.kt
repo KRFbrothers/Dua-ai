@@ -1,5 +1,7 @@
 package com.dua.ai.ui.chat
 
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import com.dua.ai.ui.components.pressScale
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.horizontalScroll
@@ -50,8 +52,10 @@ fun SourceChips(sources: List<ReplySource>, modifier: Modifier = Modifier) {
     Row(modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
         sources.forEach { source ->
             val title = source.pageTitle
+            val interactions = remember { MutableInteractionSource() }
             Surface(onClick = { opener.openUri(source.url) }, shape = DuaShape.card, color = c.chipFill, border = BorderStroke(ChatSizes.border, c.chipBorder),
-                modifier = Modifier.width(ChatSizes.sourceCardWidth).heightIn(min = Sizes.touchTarget).clearAndSetSemantics {
+                interactionSource = interactions,
+                modifier = Modifier.pressScale(interactions).width(ChatSizes.sourceCardWidth).heightIn(min = Sizes.touchTarget).clearAndSetSemantics {
                     contentDescription = "Source ${source.number}: ${title ?: source.domain}, ${source.domain}. Opens in browser"; role = Role.Button
                     onClick(label = "Open source") { opener.openUri(source.url); true }
                 }) {
