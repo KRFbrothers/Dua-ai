@@ -82,6 +82,8 @@
                 <data android:mimeType="application/vnd.openxmlformats-officedocument.wordprocessingml.document" />
                 <data android:mimeType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />
             </intent-filter>
+            <!-- Direct Share targets for recent chats (launcher actions are published at runtime). -->
+            <meta-data android:name="android.app.shortcuts" android:resource="@xml/sharing_shortcuts" />
         </activity>
         <activity-alias android:name=".RememberThisShareTargetActivity" android:targetActivity=".MainActivity"
             android:exported="true" android:label="@string/remember_this" android:icon="@drawable/gs_bookmark_add">

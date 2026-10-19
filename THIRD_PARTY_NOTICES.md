@@ -66,6 +66,17 @@ other Google brand assets.
 | --- | --- | --- |
 | `app/src/main/java/com/dua/ai/ui/components/PredictiveBack.kt` | `compose/snippets/.../predictiveback/PredictiveBackSnippets.kt` (`PredictiveBackHandler` example) | Reusable progress state and a small scale/fade, no motion when animations are off |
 
+## SociaLite
+
+- Source: <https://github.com/android/socialite> (fork <https://github.com/KRFbrothers/socialite>, commit `d7385bbe`)
+- Copyright 2023 The Android Open Source Project
+- License: Apache License, Version 2.0 (same text as above)
+
+| Dua file | Adapted from | What changed |
+| --- | --- | --- |
+| `app/src/main/java/com/dua/ai/entry/ChatShortcuts.kt` | `app/.../repository/NotificationHelper.kt` (`Contact.toShortcut`, `pushShortcut`) | Dua chats instead of contacts, no Person/LocusId/bubbles/notifications, Dua icon, max four chats, launcher actions, deleted chats removed |
+| `app/src/main/res/xml/sharing_shortcuts.xml` | `app/src/main/res/xml/sharing_shortcuts.xml` | Dua activity and share category |
+
 ## Google ML Kit and Google Play services libraries
 
 The Android app depends on `com.google.mlkit:genai-prompt` and
