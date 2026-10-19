@@ -10,6 +10,7 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.core.snap
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -17,6 +18,8 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
@@ -27,6 +30,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
@@ -35,10 +41,13 @@ import kotlinx.coroutines.withContext
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.input.ImeAction
 import com.dua.ai.history.SavedChat
 import com.dua.ai.ui.navigation.DuaDestination
 import com.dua.ai.ui.components.ReferenceIcons
@@ -50,13 +59,31 @@ import java.io.InputStream
 
 /** Search box for chat history. */
 @Composable
-fun SearchField(query: String = "", onQueryChange: (String) -> Unit = {}, modifier: Modifier = Modifier) {
+fun SearchField(query: String = "", onQueryChange: (String) -> Unit = {}, modifier: Modifier = Modifier,
+    requestFocus: Boolean = true) {
+    val focusRequester = remember { FocusRequester() }
+    val focusManager = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
+    var fieldFocused by remember { mutableStateOf(false) }
+    LaunchedEffect(requestFocus) {
+        if (requestFocus) focusRequester.requestFocus()
+        else if (fieldFocused) { focusManager.clearFocus(); keyboard?.hide() }
+    }
     OutlinedTextField(
         value = query, onValueChange = onQueryChange, singleLine = true,
         placeholder = { Text("Search chats") },
         leadingIcon = { Icon(ReferenceIcons.Search, contentDescription = null) },
+        trailingIcon = if (query.isNotEmpty()) ({
+            IconButton(onClick = { onQueryChange(""); focusRequester.requestFocus(); keyboard?.show() }) {
+                Icon(Icons.Outlined.Close, "Clear chat search")
+            }
+        }) else null,
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+        keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus(); keyboard?.hide() }),
         shape = DrawerShapes.newChat, colors = com.dua.ai.ui.components.pageTextFieldColors(),
-        modifier = modifier.fillMaxWidth().testTag("drawer-search-field"),
+        modifier = modifier.fillMaxWidth().focusRequester(focusRequester).testTag("drawer-search-field")
+            .onFocusChanged { fieldFocused = it.isFocused }
+            .semantics { contentDescription = "Search chat history" },
     )
 }
 
@@ -87,6 +114,9 @@ fun HistoryDrawer(
     drawerState: DrawerState = rememberDrawerState(DrawerValue.Closed),
 ) {
     val colors = DrawerTheme.colors
+    val motionAllowed = rememberMotionAllowed()
+    val focusManager = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
     var auraExpanded by rememberSaveable { mutableStateOf(false) }
     var searching by rememberSaveable { mutableStateOf(false) }
     var query by rememberSaveable { mutableStateOf("") }
@@ -94,6 +124,9 @@ fun HistoryDrawer(
     var filterMenu by remember { mutableStateOf(false) }
     var renaming by remember { mutableStateOf<SavedChat?>(null) }
     var notice by remember { mutableStateOf<String?>(null) }
+    val browseScroll = rememberScrollState()
+    val searchScroll = rememberScrollState()
+    LaunchedEffect(query, pinnedOnly) { searchScroll.scrollTo(0) }
     val visible = remember(chats, query, pinnedOnly) {
         HistoryGrouping.filter(HistoryGrouping.recent(chats), query).filter { !pinnedOnly || it.pinned }.sortedWith(compareByDescending<SavedChat> { it.pinned }.thenByDescending { it.updatedAt })
     }
@@ -108,46 +141,53 @@ fun HistoryDrawer(
                 DrawerBrandMark(Modifier.size(DrawerSizes.brandIcon))
                 Text("Dua AI", style = DrawerTitleStyle, color = colors.title,
                     modifier = Modifier.weight(1f).padding(start = DrawerSizes.menuGap).semantics { heading() })
-                IconButton(onClick = { searching = !searching; if (!searching) query = ""; onSearch() },
+                IconButton(onClick = {
+                    searching = !searching
+                    if (!searching) { query = ""; focusManager.clearFocus(); keyboard?.hide() }
+                    onSearch()
+                },
                     modifier = Modifier.size(DrawerSizes.touch)) {
                     Icon(if (searching) Icons.Outlined.Close else ReferenceIcons.Search,
                         contentDescription = if (searching) "Close chat search" else "Search chats", tint = colors.searchIcon)
                 }
             }
             AnimatedVisibility(searching,
-                enter = expandVertically(animationSpec = DuaMotion.gentle()) + fadeIn(animationSpec = DuaMotion.gentle()),
-                exit = shrinkVertically(animationSpec = DuaMotion.gentle()) + fadeOut(animationSpec = DuaMotion.gentle())) {
-                SearchField(query, { query = it }, Modifier.padding(bottom = DrawerSizes.menuPaddingV))
+                enter = expandVertically(animationSpec = if (motionAllowed) DuaMotion.gentle() else snap()) + fadeIn(animationSpec = if (motionAllowed) DuaMotion.gentle() else snap()),
+                exit = shrinkVertically(animationSpec = if (motionAllowed) DuaMotion.gentle() else snap()) + fadeOut(animationSpec = if (motionAllowed) DuaMotion.gentle() else snap())) {
+                SearchField(query, { query = it.take(HistorySearch.MAX_QUERY_CHARS) }, Modifier.padding(bottom = DrawerSizes.menuPaddingV),
+                    requestFocus = searching && drawerState.isOpen)
             }
             // The body scrolls clear of the measured footer even at 2x text or with the IME open.
-            Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).testTag("drawer-body")) {
-                Spacer(Modifier.height(DrawerSizes.menuPaddingV))
-                DrawerMenuRow(Icons.Outlined.GridView, "Library") { onDestination(DuaDestination.Library) }
-                DrawerMenuRow(Icons.Outlined.DesktopWindows, "Computer") { onDestination(DuaDestination.Computer) }
-                DrawerMenuRow(ReferenceIcons.Plugins, "Plugins") { onDestination(DuaDestination.Plugins) }
-                DrawerMenuRow(Icons.Outlined.SmartToy, "AI Agent") { onDestination(DuaDestination.Agent) }
-                DrawerMenuRow(ReferenceIcons.Images, "Images") { onDestination(DuaDestination.Images) }
-                DrawerMenuRow(ReferenceIcons.Projects, "Projects", onProjects)
-                Row(Modifier.fillMaxWidth().heightIn(min = DrawerSizes.touch).clip(DrawerShapes.row)
-                    .clickable(role = Role.Button, onClickLabel = if (auraExpanded) "Collapse Aura" else "Expand Aura") { auraExpanded = !auraExpanded }
-                    .semantics { stateDescription = if (auraExpanded) "Expanded" else "Collapsed" }
-                    .padding(horizontal = DrawerSizes.actionPaddingH, vertical = DrawerSizes.menuPaddingV),
-                    verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Outlined.PhotoCamera, null, tint = colors.menuText, modifier = Modifier.size(DrawerSizes.menuIcon))
-                    Spacer(Modifier.width(DrawerSizes.menuGap))
-                    Text("Aura", style = DrawerMenuStyle, color = colors.menuText, modifier = Modifier.weight(1f))
-                    Icon(if (auraExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown, null,
-                        tint = colors.chevron, modifier = Modifier.size(DrawerSizes.chevron))
-                }
-                AnimatedVisibility(auraExpanded,
-                    enter = expandVertically(animationSpec = DuaMotion.gentle()) + fadeIn(animationSpec = DuaMotion.gentle()),
-                    exit = shrinkVertically(animationSpec = DuaMotion.gentle()) + fadeOut(animationSpec = DuaMotion.gentle())) {
-                    Column(Modifier.fillMaxWidth().padding(start = DrawerSizes.subIndent)) {
-                        DrawerSubRow(ReferenceIcons.Work, "Work") { onDestination(DuaDestination.Work) }
+            Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(if (searching) searchScroll else browseScroll).testTag("drawer-body")) {
+                if (!searching) {
+                    Spacer(Modifier.height(DrawerSizes.menuPaddingV))
+                    DrawerMenuRow(Icons.Outlined.GridView, "Library") { onDestination(DuaDestination.Library) }
+                    DrawerMenuRow(Icons.Outlined.DesktopWindows, "Computer") { onDestination(DuaDestination.Computer) }
+                    DrawerMenuRow(ReferenceIcons.Plugins, "Plugins") { onDestination(DuaDestination.Plugins) }
+                    DrawerMenuRow(Icons.Outlined.SmartToy, "AI Agent") { onDestination(DuaDestination.Agent) }
+                    DrawerMenuRow(ReferenceIcons.Images, "Images") { onDestination(DuaDestination.Images) }
+                    DrawerMenuRow(ReferenceIcons.Projects, "Projects", onProjects)
+                    Row(Modifier.fillMaxWidth().heightIn(min = DrawerSizes.touch).clip(DrawerShapes.row)
+                        .clickable(role = Role.Button, onClickLabel = if (auraExpanded) "Collapse Aura" else "Expand Aura") { auraExpanded = !auraExpanded }
+                        .semantics { stateDescription = if (auraExpanded) "Expanded" else "Collapsed" }
+                        .padding(horizontal = DrawerSizes.actionPaddingH, vertical = DrawerSizes.menuPaddingV),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Outlined.PhotoCamera, null, tint = colors.menuText, modifier = Modifier.size(DrawerSizes.menuIcon))
+                        Spacer(Modifier.width(DrawerSizes.menuGap))
+                        Text("Aura", style = DrawerMenuStyle, color = colors.menuText, modifier = Modifier.weight(1f))
+                        Icon(if (auraExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown, null,
+                            tint = colors.chevron, modifier = Modifier.size(DrawerSizes.chevron))
                     }
+                    AnimatedVisibility(auraExpanded,
+                        enter = expandVertically(animationSpec = if (motionAllowed) DuaMotion.gentle() else snap()) + fadeIn(animationSpec = if (motionAllowed) DuaMotion.gentle() else snap()),
+                        exit = shrinkVertically(animationSpec = if (motionAllowed) DuaMotion.gentle() else snap()) + fadeOut(animationSpec = if (motionAllowed) DuaMotion.gentle() else snap())) {
+                        Column(Modifier.fillMaxWidth().padding(start = DrawerSizes.subIndent)) {
+                            DrawerSubRow(ReferenceIcons.Work, "Work") { onDestination(DuaDestination.Work) }
+                        }
+                    }
+                    HorizontalDivider(color = colors.divider, thickness = DrawerSizes.dividerThickness,
+                        modifier = Modifier.padding(vertical = DrawerSizes.dividerPaddingV))
                 }
-                HorizontalDivider(color = colors.divider, thickness = DrawerSizes.dividerThickness,
-                    modifier = Modifier.padding(vertical = DrawerSizes.dividerPaddingV))
                 Row(Modifier.fillMaxWidth().heightIn(min = DrawerSizes.touch).padding(start = DrawerSizes.actionPaddingH),
                     verticalAlignment = Alignment.CenterVertically) {
                     Text(if (pinnedOnly) "Pinned" else "All", style = DrawerChatStyle, color = colors.subText, modifier = Modifier.weight(1f))
@@ -171,7 +211,7 @@ fun HistoryDrawer(
                         modifier = Modifier.padding(horizontal = DrawerSizes.actionPaddingH, vertical = DrawerSizes.chatPaddingV))
                     visible.forEach { chat ->
                         key(chat.id) {
-                            ChatRow(chat, chat.id == currentChatId, serverDeletionEnabled, pinEnabled,
+                            ChatRow(chat, chat.id == currentChatId, serverDeletionEnabled, pinEnabled, motionAllowed,
                                 onSelect = { onSelectChat(chat.id) }, onRename = { renaming = chat },
                                 onPin = { onPinChat(chat.id, !chat.pinned)?.let { notice = it } },
                                 onDelete = { if (serverDeletionEnabled) onDeleteServerChat(chat.id) else onDeleteChat(chat.id) })
@@ -224,7 +264,7 @@ fun HistoryDrawer(
 
 @Composable
 @OptIn(ExperimentalFoundationApi::class)
-private fun ChatRow(chat: SavedChat, current: Boolean, serverDeletion: Boolean, pinEnabled: Boolean,
+private fun ChatRow(chat: SavedChat, current: Boolean, serverDeletion: Boolean, pinEnabled: Boolean, motionAllowed: Boolean,
     onSelect: () -> Unit, onRename: () -> Unit, onPin: () -> Unit, onDelete: () -> Unit) {
     val colors = DrawerTheme.colors
     var menu by remember(chat.id) { mutableStateOf(false) }
@@ -238,7 +278,8 @@ private fun ChatRow(chat: SavedChat, current: Boolean, serverDeletion: Boolean, 
             verticalAlignment = Alignment.CenterVertically,
         ) {
             // Auto titles arrive after the first reply; cross-fade instead of jumping.
-            androidx.compose.animation.Crossfade(chat.title.ifBlank { "New chat" }, Modifier.weight(1f), label = "chat-title") { shown ->
+            androidx.compose.animation.Crossfade(chat.title.ifBlank { "New chat" }, Modifier.weight(1f),
+                animationSpec = if (motionAllowed) DuaMotion.gentle() else snap(), label = "chat-title") { shown ->
                 Text(shown, style = DrawerChatStyle, color = colors.chatText, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             if (pinEnabled) IconButton(onClick = onPin, modifier = Modifier.size(DrawerSizes.touch)) {

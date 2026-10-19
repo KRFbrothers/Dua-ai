@@ -14,6 +14,35 @@ Native captures in `app/build/approved-ui/drawer-reference-*.png` cover light/da
 
 Physical-device gestures and keyboard animation are outside Robolectric validation.
 
+## Search and keyboard polish
+
+Search temporarily replaces the destination rows with the existing All/Pinned
+controls and matching chat titles. Results start immediately below the field,
+so the navigation menu cannot push them behind the keyboard. Browsing and search
+have separate scroll positions: changing a query/filter starts results at the
+top, and closing search restores the browse position and any expanded Aura.
+
+Opening search in an open drawer focuses the field. Clear chat search empties
+the query and returns focus to the input; the keyboard Search action dismisses
+input focus while retaining results. Closing search clears the query and hides
+the keyboard. Input uses the existing 200 UTF-16-unit query limit. Search/Aura
+transitions and changing chat titles respect the live Remove animations setting.
+The normal drawer layout and fixed New chat/profile footer retain their existing
+placement, colors, real account state and handlers.
+
+`DrawerSearchUiTest` covers immediate selected-chat results above an injected
+IME, clear/no-match/Search-key actions, restored browse position with 30 chats,
+query changes from the end of a list, Aura access and reduced motion. It runs
+in light/dark themes at normal and 2× text. Native captures use
+`app/build/approved-ui/drawer-search-*.png`; the injected IME area is blank,
+not a rendered keyboard. Real-device IME timing and TalkBack still need a phone.
+
+Validated search polish on 2026-10-19: `:app:testDebugUnitTest :app:assembleDebug
+-Pdua.ui-record --offline` passed 1,393 tests across 183 classes with zero
+failures/errors/skips. Native light/dark, normal/2× text search captures were
+reviewed. `git diff --check` passed. No attachment-sheet, Home/composer, backend,
+account-storage or signing files changed.
+
 Validated on 2026-10-19: all 1,371 default Android unit/Compose UI tests passed across 181 classes, with zero failures/errors/skips. Debug APK assembly passed. The run used `-Pdua.ui-record --offline`; current light/dark and 2× text captures were reviewed. Header/account access, new-chat callbacks, search/pins and predictive Back coverage remain passing.
 
 After syncing main’s three Windows-compatibility test fixes, 55 affected Home/drawer/storage/preferences tests passed across 5 classes with zero failures/errors/skips; debug APK assembly passed again. `git diff --check` passed.
