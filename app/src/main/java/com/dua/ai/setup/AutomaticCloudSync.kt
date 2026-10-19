@@ -182,6 +182,7 @@ class AutomaticCloudSync(
                 }
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (failure: Exception) {
+                com.dua.ai.diagnostics.DuaLog.soft(com.dua.ai.diagnostics.SoftErrorArea.CloudSync, failure)
                 if (ticket == generation) {
                     if (failure is AutomaticSyncLocalException) review("Local data needs manual cloud review. Local data is kept.")
                     else if (record.enabled) recordFailure() else publish("disabled", "Account check failed. Local data is kept; retry when ready.")
@@ -287,6 +288,7 @@ class AutomaticCloudSync(
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (failure: Exception) {
             if (!ready(ticket)) return
+            if (!(failure is AccountException && failure.status == 409)) com.dua.ai.diagnostics.DuaLog.soft(com.dua.ai.diagnostics.SoftErrorArea.CloudSync, failure)
             if (attemptedRevision != null) {
                 var conflict = failure is AccountException && failure.status == 409
                 try {

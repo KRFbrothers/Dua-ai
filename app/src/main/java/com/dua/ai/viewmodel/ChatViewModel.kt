@@ -2159,6 +2159,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 }
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (failure: Exception) {
+                com.dua.ai.diagnostics.DuaLog.soft(com.dua.ai.diagnostics.SoftErrorArea.ChatRetry, failure)
                 if (generation == currentGeneration) {
                     val partial = accumulator?.snapshot(ended = true)
                     retryOriginal = null
@@ -2281,6 +2282,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (failure: Exception) {
+                com.dua.ai.diagnostics.DuaLog.soft(com.dua.ai.diagnostics.SoftErrorArea.ChatReply, failure)
                 if (generation == currentGeneration) {
                     val partial = accumulator?.snapshot(ended = true)
                     if (partial != null && partial.text.isNotBlank()) {

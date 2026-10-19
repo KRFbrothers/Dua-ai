@@ -184,3 +184,7 @@ The Android cache is stored in app-private preferences; Android backup/device tr
 ### Projects and custom instructions
 
 The dedicated **Projects** screen shows real user-created projects and chats, without seeding demo projects. Personal remains the internal Home workspace; untouched legacy Coding/Business starters are hidden. See [Projects flow](docs/PROJECTS_REFERENCE_FLOW.md) for current screens, sources, and legacy-data handling. Each chat keeps its project, and history search is project-scoped. Save instructions and project memory, then sync them before chatting; replies use the owner’s server definition. [PROJECTS.md](docs/features/PROJECTS.md) describes the original persistence/conflict contract, and [MEMORY.md](docs/features/PROJECT_MEMORY.md) covers project notes. Tasks, memory, planner and archive settings are available from **Edit project → Tasks, memory & planner**. To-do edit/complete/reopen and confirmed delete are described in [TASKS.md](docs/features/TASKS.md); due dates and opt-in device reminders in [REMINDERS.md](docs/features/REMINDERS.md); deadline/undated task planning in [PLANNER.md](docs/features/PLANNER.md). Physical-device/live sync verification remains separate from source-level tests.
+
+## License and third-party code
+
+Dua AI is MIT-licensed ([LICENSE](LICENSE)). A few Android files adapt Apache-2.0 code from Androidify by The Android Open Source Project; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

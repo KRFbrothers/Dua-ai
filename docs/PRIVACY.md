@@ -211,6 +211,7 @@ Dua AI integrates with:
 - **Google Cloud** (backend API hosting, Cloud Run): https://cloud.google.com/terms/cloud-privacy-notice
 - **Firebase Crashlytics** (error reporting, Android only): https://firebase.google.com/support/privacy
 - Crashlytics collection is disabled by default for debug builds and enabled for Android release builds by the checked-in Gradle configuration. Review the Firebase privacy terms and the deployed app's crash-reporting behavior.
+- Release builds also send a few handled ("soft") errors through `app/src/main/java/com/dua/ai/diagnostics/DuaLog.kt`: chat reply/retry failures, automatic cloud sync failures and background Drive backup failures. Each report has only a fixed area name, exception class names, an HTTP status for Dua API errors, and code stack frames. Exception messages are dropped, so no tokens, emails, server replies or chat text are sent. "No internet" errors are skipped, and each kind is sent at most 3 times per app run.
 - **AI Providers** (OpenAI, Google, Anthropic, etc.): See provider privacy policies above.
 
 ---

@@ -2,11 +2,6 @@ package com.dua.ai.ui.chat
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.fadeIn
@@ -79,14 +74,13 @@ fun AgentProgressView(steps: List<AgentStep>, modifier: Modifier = Modifier) {
                 fadeOut(tween(if (motion) DuaMotion.DurationNormal else 0))
         }, label = "agent-step") { step ->
             if (step != null) {
-                val pulse = if (motion) rememberInfiniteTransition(label = "step-pulse").animateFloat(0.55f, 1f,
-                    infiniteRepeatable(tween(ChatSizes.placeholderPulseMs, easing = LinearEasing), RepeatMode.Reverse), label = "step-alpha") else null
+                val pulse = com.dua.ai.ui.components.rememberShimmerAlpha(enabled = motion)
                 Row(Modifier.heightIn(min = Sizes.touchTarget).semantics { contentDescription = step.label; liveRegion = LiveRegionMode.Polite },
                     verticalAlignment = Alignment.CenterVertically) {
                     if (motion) CircularProgressIndicator(Modifier.size(AgentSizes.stepIcon).clearAndSetSemantics { }, color = c.chipIcon, strokeWidth = AgentSizes.stepStroke)
                     else Icon(Icons.Outlined.Schedule, null, tint = c.chipIcon, modifier = Modifier.size(AgentSizes.stepIcon))
                     Text(step.label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(start = Spacing.sm).graphicsLayer { alpha = pulse?.value ?: 1f }.clearAndSetSemantics { })
+                        modifier = Modifier.padding(start = Spacing.sm).graphicsLayer { alpha = pulse() }.clearAndSetSemantics { })
                 }
             }
         }

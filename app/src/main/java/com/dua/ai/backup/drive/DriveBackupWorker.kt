@@ -55,7 +55,8 @@ class DriveBackupWorker(context: Context, parameters: WorkerParameters) : Corout
                 DriveRunResult.Retry -> if (runAttemptCount < 3) Result.retry() else Result.failure()
             }
         } catch (cancelled: CancellationException) { throw cancelled }
-        catch (_: Exception) {
+        catch (failure: Exception) {
+            com.dua.ai.diagnostics.DuaLog.soft(com.dua.ai.diagnostics.SoftErrorArea.DriveBackup, failure)
             backups.store.report(expected, "error", "Android could not run the background backup. Open Storage and retry; existing backups were kept.")
             return if (runAttemptCount < 3) Result.retry() else Result.failure()
         }

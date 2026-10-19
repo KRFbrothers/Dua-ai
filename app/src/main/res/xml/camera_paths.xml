@@ -3,4 +3,6 @@
     <cache-path name="camera_photos" path="camera-captures/" />
     <!-- Imagine results cached for sharing (images and videos from the private bucket). -->
     <cache-path name="generated_media" path="generated-media/" />
+    <!-- Drag-and-drop copies (dropped read access ends with the drop). Not shared with other apps. -->
+    <cache-path name="dropped_files" path="dropped-files/" />
 </paths>
