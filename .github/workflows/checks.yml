@@ -26,12 +26,22 @@ jobs:
           /tmp/dua-gcb-tests/bin/python -m pip install Flask==3.0.3 pytest==8.3.5
       - name: Run mocked Vertex engine tests
         run: /tmp/dua-gcb-tests/bin/python -m pytest -q google-cloud-backend/tests --junitxml=google-cloud-backend/pytest-results.xml
+      - name: Install production SDK test dependencies
+        run: |
+          python3 -m venv /tmp/dua-gcb-adk-tests
+          /tmp/dua-gcb-adk-tests/bin/python -m pip install -r google-cloud-backend/requirements.txt pytest==8.3.5
+      - name: Run engine tests with the real ADK SDK and offline models
+        run: |
+          /tmp/dua-gcb-adk-tests/bin/python -c "import google.adk, google.genai"
+          /tmp/dua-gcb-adk-tests/bin/python -m pytest -q google-cloud-backend/tests --junitxml=google-cloud-backend/pytest-sdk-results.xml
       - name: Preserve engine test report
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: google-cloud-engine-test-report
-          path: google-cloud-backend/pytest-results.xml
+          path: |
+            google-cloud-backend/pytest-results.xml
+            google-cloud-backend/pytest-sdk-results.xml
           if-no-files-found: ignore
 
   backend:

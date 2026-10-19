@@ -121,13 +121,19 @@ def parse_plan(text, allowed):
 
 
 def final_text(events, author, on_thought=None):
-    """Last final-response text written by [author]. Optionally streams thought deltas to on_thought."""
+    """Last textual response by [author], preserving every visible text part.
+
+    ADK/GenAI can split a single response into multiple Parts. Join within each
+    event (including whitespace-only separators), but replace earlier responses
+    rather than concatenating intermediate answers or other agents' output.
+    """
     text = ""
     for event in events:
         if getattr(event, "author", None) != author:
             continue
         content = getattr(event, "content", None)
         parts = getattr(content, "parts", None) or []
+        visible = []
         for p in parts:
             if getattr(p, "thought", False):
                 thought_str = getattr(p, "text", None) or ""
@@ -135,8 +141,10 @@ def final_text(events, author, on_thought=None):
                     on_thought(thought_str)
             else:
                 chunk = getattr(p, "text", None) or ""
-                if chunk.strip():
-                    text = chunk
+                visible.append(chunk)
+        response = "".join(visible)
+        if response.strip():
+            text = response
     return text.strip()
 
 

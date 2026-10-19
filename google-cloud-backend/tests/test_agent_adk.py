@@ -1,4 +1,4 @@
-"""ADK parallel mode. Fake-ADK tests always run (CI has no ADK); a real-ADK test runs when google-adk is installed,
+"""ADK parallel mode. Fake-ADK tests always run; real-SDK tests also run in CI with production dependencies,
 driving the real ParallelAgent/SequentialAgent with a scripted offline model (no network)."""
 import asyncio
 import json
@@ -278,7 +278,9 @@ def test_real_adk_parallel_pipeline_offline():
                 part = types.Part(function_call=types.FunctionCall(name="search_notes", args={"query": "pref"}))
             elif "Helper results" in system:
                 assert "Gemini 4 launched" in system or "found" in system
-                part = types.Part(text="FINAL [1]")
+                yield LlmResponse(content=types.Content(role="model", parts=[
+                    types.Part(text="FINAL "), types.Part(text="[1]")]))
+                return
             else:
                 part = types.Part(text="found [1]")
             yield LlmResponse(content=types.Content(role="model", parts=[part]))
@@ -377,3 +379,27 @@ def test_real_adk_write_tool_waits_for_approval_and_disconnect_skips_model_calls
     planner = Plan(model="scripted")
     text2, result2 = agent_adk.run(env2, "news and my preference", planner, planner, config, log=lambda m: None)
     assert result2.cancelled and text2 == agent_tools.STOPPED_TEXT and model_calls == [1]
+
+
+@pytest.mark.parametrize("parts,expected", [
+    (["First paragraph.\n\n", "Second paragraph [1]."], "First paragraph.\n\nSecond paragraph [1]."),
+    (["Use", " ", "this code:\n```python\n", "print(1)\n```"], "Use this code:\n```python\nprint(1)\n```"),
+    (['{"split":true,', '"subtasks":[]}'], '{"split":true,"subtasks":[]}'),
+])
+def test_final_text_keeps_all_text_parts_in_the_last_author_response(parts, expected):
+    def event(author, pieces):
+        return SimpleNamespace(author=author, content=SimpleNamespace(parts=pieces))
+
+    thoughts = []
+    events = [
+        event("merger", [SimpleNamespace(text="Earlier answer")]),
+        event("research_agent", [SimpleNamespace(text="Helper answer")]),
+        event("merger", [
+            SimpleNamespace(text="private reasoning", thought=True),
+            *[SimpleNamespace(text=text) for text in parts],
+            SimpleNamespace(function_call={"name": "calculator"}),
+        ]),
+        event("merger", [SimpleNamespace(text="", thought=False)]),
+    ]
+    assert agent_adk.final_text(events, "merger", on_thought=thoughts.append) == expected
+    assert thoughts == ["private reasoning"]

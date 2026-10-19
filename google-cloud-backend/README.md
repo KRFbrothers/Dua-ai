@@ -154,7 +154,7 @@ then run the `--update-secrets` line again. To switch free models off: `gcloud r
 pip install -r requirements.txt pytest && python -m pytest -q tests
 ```
 
-For mocked unit tests only, Vertex credentials/SDK are unnecessary: install `Flask==3.0.3 pytest==8.3.5` and run `python -m pytest -q tests`. GitHub's Google Cloud engine check uses this isolated setup.
+For mocked unit tests only, Vertex credentials/SDK are unnecessary: install `Flask==3.0.3 pytest==8.3.5` and run `python -m pytest -q tests`. GitHub's Google Cloud engine check runs this minimal setup first, then reruns with the production SDK dependencies and scripted offline models (see [ADK SDK checks](../docs/TESTING.md#agent--adk-sdk-checks)).
 
 Separate-engine Android builds treat Dua/Gemini chat as configured independently of the base backend's provider keys. Chat file selection uses the existing bounded inline path (up to 3 files / 2 MB total; oversized photos are resized). Audio can also be sent inline. Use CSV/UTF-8 text for spreadsheets; XLSX/ODS and documents over the inline limit are rejected rather than uploaded as inaccessible storage references. Imagine retains the base-backend storage path.
 
@@ -260,7 +260,7 @@ result is thrown away and no further calls are made.)
 
 ## Parallel multi-agent mode on Google ADK (optional, `AGENT_ENGINE=adk`)
 
-[`agent_adk.py`](agent_adk.py) uses Google Agent Development Kit 2.0 (`google-adk==2.12.0`, upstream / fork: [KRFbrothers/adk-python](https://github.com/KRFbrothers/adk-python)), imported only when the flag is on.
+[`agent_adk.py`](agent_adk.py) uses Google Agent Development Kit (`google-adk==2.12.0`, official source: [google/adk-python](https://github.com/google/adk-python/tree/v2.12.0); owner fork: [KRFbrothers/adk-python](https://github.com/KRFbrothers/adk-python)), imported only when the flag is on.
 1. **Plan:** an ADK controller agent on `AGENT_MODEL` decides whether the request has 2–3 independent parts (research / code / notes). Uses robust JSON plan parsing that handles both raw JSON and markdown codeblock responses.
 2. **Parallel helpers:** an ADK `SequentialAgent[ParallelAgent(helpers on VERTEX_MODEL), merger on AGENT_MODEL]` runs them.
    - Helpers call the existing tools through one shared `AgentRun`, so the same per-tool caps, #214 timeouts and global source numbers apply.

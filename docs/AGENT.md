@@ -9,6 +9,13 @@ The Agent is the tool-using mode of the Cloud Run engine (`google-cloud-backend/
 | Tool loop (default) | `AGENT_ENGINE` unset | [`agent_tools.py`](../google-cloud-backend/agent_tools.py): one model (`AGENT_MODEL`) calls tools step by step (search, code, notes, image, GitHub proposals) within step/time/tool caps. |
 | ADK parallel mode | `AGENT_ENGINE=adk` | [`agent_adk.py`](../google-cloud-backend/agent_adk.py) (Google ADK, imported only when on): a controller plans 2–3 independent parts, helpers on `VERTEX_MODEL` run in parallel through the same tools, a merger on `AGENT_MODEL` writes the answer. |
 
+The Python SDK is already included in the engine requirements (`google-adk==2.12.0`),
+from the official [Google ADK source](https://github.com/google/adk-python/tree/v2.12.0).
+[CI verifies the real SDK offline](TESTING.md#agent--adk-sdk-checks), including
+parallel helpers, multipart answers, approvals and disconnect handling. This is
+integration verification; it does not establish which path a deployed revision
+currently enables or how well its live model answers.
+
 **Rollback to the loop:** if the request does not split, or ADK fails before any tool ran, the normal tool loop answers. Coding-mode requests always use the loop. To turn ADK off, remove the flag:
 
 ```bash

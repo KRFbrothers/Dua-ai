@@ -8,12 +8,35 @@ Every pull request and push to `main` runs four jobs:
 
 | Job | What runs | Local command |
 | --- | --- | --- |
-| Google Cloud engine tests | Mocked Python tests in `google-cloud-backend/tests` (Flask + pytest only; no Vertex, Supabase or GitHub calls) | `python -m pytest -q google-cloud-backend/tests` (repo root) |
+| Google Cloud engine tests | Python tests in `google-cloud-backend/tests` run twice: minimal Flask + pytest, then production ADK/GenAI dependencies with scripted offline models; no live provider, Supabase or GitHub calls | `python -m pytest -q google-cloud-backend/tests` (repo root) |
 | Backend tests | Node tests in `web/test` (`npm run test:ci`, needs Node 24) | `cd web && npm ci && npm test` |
 | Website build | `website/`: `npm ci`, type-check and Vite build into `web/site`, then checks `index.html` and the logo exist | `cd website && npm ci && npm run build` |
 | Android build and tests | `./gradlew :app:testDebugUnitTest -Pdua.ui-record` (JVM, Compose and Robolectric tests) | see below |
 
 The [personal APK workflow](../.github/workflows/personal-apk.yml) is a separate, manually started signing/build path ([SIGNING.md](../SIGNING.md)). Tests use mocked integrations; passing them does not verify deployed Auth, provider billing, live RLS or physical-device behavior.
+
+## Agent / ADK SDK checks
+
+The engine CI job keeps the minimal dependency run to verify lazy imports and the
+normal-loop fallback. It then installs `google-cloud-backend/requirements.txt`
+into a separate environment and reruns the suite with the **real pinned ADK**.
+An explicit SDK import fails the job if installation/import is broken, rather
+than silently skipping the real-SDK tests. Both JUnit reports are retained.
+
+To run that second pass locally, in a dedicated virtual environment:
+
+```sh
+python -m pip install -r google-cloud-backend/requirements.txt pytest==8.3.5
+python -c "import google.adk, google.genai"
+python -m pytest -q google-cloud-backend/tests
+```
+
+`test_agent_adk.py` drives the real `ParallelAgent` / `SequentialAgent` with a
+scripted `BaseLlm`: tools use fake search/notes, writes remain pending approval,
+and disconnect prevents subsequent model calls. The final-answer case returns
+multiple GenAI text Parts so losing paragraphs/citations fails the SDK test too.
+These tests do not measure a deployed model's quality, latency or billing, and do
+not enable `AGENT_ENGINE=adk` in production.
 
 ## Android test commands
 
