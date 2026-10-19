@@ -28,6 +28,7 @@ Start with [ARCHITECTURE.md](ARCHITECTURE.md) for how the pieces fit, and [OPERA
 | [GITHUB_LOGGING.md](GITHUB_LOGGING.md) | dua-api GitHub request/stage logs |
 | [ui/ANDROID_UI.md](ui/ANDROID_UI.md) | Android UI guide: screens/MVVM map, sample-conversation preview, approved navigation, Coming soon list |
 | [ui/design-system-tokens.md](ui/design-system-tokens.md) | Android colour and typography tokens |
+| [ui/previews/README.md](ui/previews/README.md) | Fareed's standalone chat animation and app-wide theme HTML previews |
 
 ## Feature guides ([features/](features/))
 
