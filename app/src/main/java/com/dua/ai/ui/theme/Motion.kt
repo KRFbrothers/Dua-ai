@@ -1,12 +1,21 @@
 package com.dua.ai.ui.theme
 
 import android.provider.Settings
-import androidx.compose.animation.core.AnimationSpec
+import android.database.ContentObserver
+import android.os.Handler
+import android.os.Looper
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.dua.ai.motion.DuaHapticManager
 import com.dua.ai.motion.DuaMotionConfig
 
@@ -36,7 +45,26 @@ object DuaMotion {
 @Composable
 fun rememberMotionAllowed(): Boolean {
     val resolver = LocalContext.current.contentResolver
-    return remember(resolver) { Settings.Global.getFloat(resolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) > 0f }
+    val owner = LocalLifecycleOwner.current
+    fun read() = runCatching { Settings.Global.getFloat(resolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) > 0f }.getOrDefault(true)
+    var allowed by remember(resolver) { mutableStateOf(read()) }
+    DisposableEffect(resolver, owner) {
+        val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
+            override fun onChange(selfChange: Boolean) { allowed = read() }
+        }
+        val registered = runCatching {
+            resolver.registerContentObserver(Settings.Global.getUriFor(Settings.Global.ANIMATOR_DURATION_SCALE), false, observer)
+            true
+        }.getOrDefault(false)
+        val lifecycleObserver = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_RESUME) allowed = read() }
+        owner.lifecycle.addObserver(lifecycleObserver)
+        allowed = read()
+        onDispose {
+            if (registered) resolver.unregisterContentObserver(observer)
+            owner.lifecycle.removeObserver(lifecycleObserver)
+        }
+    }
+    return allowed
 }
 
 /** Remember the device tier and motion capabilities configuration. */

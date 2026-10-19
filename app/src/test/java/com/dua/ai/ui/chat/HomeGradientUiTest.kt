@@ -183,4 +183,26 @@ class HomeGradientUiTest(private val dark: Boolean, private val large: Boolean) 
         compose.onNodeWithContentDescription("Message").assertTextContains("Keep this draft").assertIsNotFocused()
         assertEquals("Keep this draft", state.value.draft)
     }
+
+    @Test fun predictiveBackCanCancelOrCloseTheDrawerWithOneHapticPerStateChange() {
+        val haptics = mutableListOf<ChatHaptic>()
+        compose.setContent { DuaTheme(LocalPreferences(theme = if (dark) "dark" else "light")) {
+            ChatScreen(ChatUiState(), ChatActions(haptic = { haptics += it }))
+        } }
+        compose.onNodeWithContentDescription("Open chat history").performClick()
+        compose.onNodeWithTag("history-drawer").assertIsDisplayed()
+        assertEquals(listOf(ChatHaptic.Tap), haptics)
+        val dispatcher = compose.activity.onBackPressedDispatcher
+        compose.runOnUiThread {
+            dispatcher.dispatchOnBackStarted(androidx.activity.BackEventCompat(0f, 200f, 0f, androidx.activity.BackEventCompat.EDGE_LEFT))
+            dispatcher.dispatchOnBackProgressed(androidx.activity.BackEventCompat(80f, 200f, 0.5f, androidx.activity.BackEventCompat.EDGE_LEFT))
+        }
+        compose.onNodeWithTag("history-drawer").assertIsDisplayed()
+        compose.runOnUiThread { dispatcher.dispatchOnBackCancelled() }
+        compose.onNodeWithTag("history-drawer").assertIsDisplayed()
+        assertEquals(1, haptics.size)
+        compose.runOnUiThread { dispatcher.onBackPressed() }
+        compose.onNodeWithTag("history-drawer").assertIsNotDisplayed()
+        assertEquals(listOf(ChatHaptic.Tap, ChatHaptic.Tap), haptics)
+    }
 }

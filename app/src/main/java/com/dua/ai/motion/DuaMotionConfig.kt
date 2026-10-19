@@ -21,8 +21,8 @@ class DuaMotionConfig(private val context: Context) {
         get() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
 
     /**
-     * Determines whether the device belongs to a high-performance tier
-     * capable of continuous 120fps particle/shader rendering without thermal throttling.
+     * Conservative eligibility for optional shader effects: API support and a non-low-RAM device.
+     * This does not measure refresh rate, GPU throughput or thermal headroom.
      */
     val isHighPerformanceTier: Boolean
         get() {

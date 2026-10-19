@@ -503,7 +503,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
-     * Streams into message [id], rendering at most ~30 times a second (latest state wins).
+     * Streams into message [id], emitting at most one UI snapshot per 24 ms plus processing time (latest state wins).
+     * This batches text updates independently of the display's frame rate.
      * Events are applied to [accumulator] as they arrive, so a failure keeps everything received.
      */
     private suspend fun collectReply(id: String, accumulator: com.dua.ai.network.StreamAccumulator, events: kotlinx.coroutines.flow.Flow<com.dua.ai.network.ReplyEvent>,
