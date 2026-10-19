@@ -133,6 +133,8 @@ fun Composer(
     onRemoveAttachment: (Int) -> Unit = {},
     /** On-device "Remove background" for image attachments; null hides it. */
     onRemoveAttachmentBackground: ((Int) -> Unit)? = null,
+    /** "Summarize" / "Rewrite" in the message box's text menu (long-press); null hides them. A null task = choose a rewrite style. */
+    writingTools: ((com.dua.ai.ondevice.WritingTask?) -> Unit)? = null,
     onRemoveUpload: (String) -> Unit = {},
     attachmentPopup: @Composable () -> Unit = {},
     /** Inline dictation (chat). Null = the mic calls [onMic] (opens the Voice page). */
@@ -226,6 +228,20 @@ fun Composer(
                     }
                 } else ComposerFields(expanded = stacked,
                     input = {
+                        val view = androidx.compose.ui.platform.LocalView.current
+                        val currentText by rememberUpdatedState(activeText)
+                        val currentTools by rememberUpdatedState(writingTools)
+                        val platformToolbar = androidx.compose.ui.platform.LocalTextToolbar.current
+                        val toolbar = remember(view) {
+                            DuaTextToolbar(view) {
+                                val tools = currentTools
+                                if (tools == null || currentText.isBlank()) emptyList()
+                                else listOf(TextToolbarExtra("Summarize") { tools(com.dua.ai.ondevice.WritingTask.Summarize) },
+                                    TextToolbarExtra("Rewrite") { tools(null) })
+                            }
+                        }
+                        androidx.compose.runtime.CompositionLocalProvider(androidx.compose.ui.platform.LocalTextToolbar provides
+                            if (writingTools != null) toolbar else platformToolbar) {
                         BasicTextField(
                             value = activeText,
                             onValueChange = { localText = it; onValueChange(it); onDraftChange(it) },
@@ -249,6 +265,7 @@ fun Composer(
                                 }
                             }
                         )
+                        }
                     },
                     attach = {
                         Box {

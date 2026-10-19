@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.unit.dp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Compress
 import androidx.compose.material3.Icon
@@ -67,12 +68,11 @@ fun MessageList(state: ChatUiState, actions: ChatActions, listState: LazyListSta
         state = listState,
         modifier = modifier.fillMaxSize().testTag("chat-messages"),
         contentPadding = PaddingValues(start = ChatSizes.listPaddingH, end = ChatSizes.listPaddingH, top = ChatSizes.listPaddingTop, bottom = ChatSizes.listPaddingBottom),
-        verticalArrangement = Arrangement.spacedBy(ChatSizes.messageSpacing),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         itemsIndexed(state.messages, key = { _, message -> message.id }, contentType = { _, message -> if (message.isUser) "user" else "assistant" }) { index, message ->
             val selected = message.id == searchMessageId
-            Column(Modifier.widthIn(max = Sizes.contentMaxWidth).fillMaxWidth()
+            Column(Modifier.padding(top = MessageGrouping.gapBefore(state.messages, index)).widthIn(max = Sizes.contentMaxWidth).fillMaxWidth()
                 .then(if (motion) Modifier.animateItem(
                     fadeInSpec = DuaMotion.gentle(),
                     placementSpec = DuaMotion.bouncy(),
@@ -116,7 +116,7 @@ fun MessageList(state: ChatUiState, actions: ChatActions, listState: LazyListSta
         }
         // Streaming replies render their own progress; the orb covers non-streaming waits.
         if (state.typing && state.messages.none { it.streaming }) item(key = "typing") {
-            AssistantTurn(modifier = Modifier.widthIn(max = Sizes.contentMaxWidth)) { TypingIndicator(Modifier.heightIn(min = Sizes.touchTarget)) }
+            AssistantTurn(modifier = Modifier.padding(top = if (state.messages.isEmpty()) 0.dp else ChatSizes.messageSpacing).widthIn(max = Sizes.contentMaxWidth)) { TypingIndicator(Modifier.heightIn(min = Sizes.touchTarget)) }
         }
     }
     if (selectedMessage != null) MessageActionsSheet(selectedMessage, state, actions, imagineActions, onDismiss = { actionsId = null })

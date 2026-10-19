@@ -26,6 +26,26 @@ copyright and the license. Only code was reused: no logos, brand art, images, vi
 The adapted portions stay under the Apache License 2.0; the rest of Dua stays under MIT. "Android" is a trademark of Google LLC; Dua does not use the Android robot or
 other Google brand assets.
 
+## Android AI samples
+
+- Source: <https://github.com/android/ai-samples> (fork <https://github.com/KRFbrothers/ai-samples>)
+- Copyright 2025 The Android Open Source Project
+- License: Apache License, Version 2.0 (per-file headers; same Apache-2.0 text as [third_party/androidify/LICENSE](third_party/androidify/LICENSE))
+
+| Dua file | Adapted from | What changed |
+| --- | --- | --- |
+| `app/src/main/java/com/dua/ai/ondevice/WritingTools.kt` | `samples/genai-summarization/.../GenAISummarizationViewModel.kt`, `samples/genai-writing-assistance/.../GenAIWritingAssistanceViewModel.kt` | Same check → download → run → result/error flow, but on Dua's existing ML Kit GenAI Prompt client (no extra Summarization/Rewriting libraries), Dua prompts, output clean-up, visible server fallback |
+
+## Jetchat (Compose samples)
+
+- Source: <https://github.com/android/compose-samples> (fork <https://github.com/KRFbrothers/compose-samples>), `Jetchat/`
+- Copyright 2020 The Android Open Source Project
+- License: Apache License, Version 2.0 (same text as above)
+
+| Dua file | Adapted from | What changed |
+| --- | --- | --- |
+| `app/src/main/java/com/dua/ai/ui/chat/JumpToLatest.kt` | `conversation/JumpToBottom.kt`, `conversation/Conversation.kt` (same-author grouping) | Dua colours, 48 dp target, new-replies count with a dot, no slide when animations are off, no backdrop magnifier |
+
 ## Google ML Kit and Google Play services libraries
 
 The Android app depends on `com.google.mlkit:genai-prompt` and

@@ -443,6 +443,44 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             } finally { _polishing.value = false }
         }
     }
+    private val _writing = MutableStateFlow<com.dua.ai.ondevice.WritingSession?>(null)
+    /** The open on-device Summarize / Rewrite sheet, if any. */
+    val writing = _writing.asStateFlow()
+    private var writingJob: Job? = null
+    /** Opens Summarize / Rewrite for [text]. A null [task] means "Rewrite" and the user picks a style first. */
+    fun openWriting(text: String, fromDraft: Boolean, task: com.dua.ai.ondevice.WritingTask?) {
+        if (text.isBlank()) return
+        writingJob?.cancel()
+        _writing.value = com.dua.ai.ondevice.WritingSession(text, fromDraft, task)
+        if (task != null) runWriting(task)
+    }
+    fun runWriting(task: com.dua.ai.ondevice.WritingTask) {
+        val session = _writing.value ?: return
+        writingJob?.cancel()
+        if (!onDeviceAiEnabled()) { _writing.value = session.copy(task = task, phase = com.dua.ai.ondevice.WritingSession.Phase.Unavailable); return }
+        _writing.value = session.copy(task = task, phase = com.dua.ai.ondevice.WritingSession.Phase.Working, result = "")
+        writingJob = viewModelScope.launch {
+            val result = onDeviceAi.write(task, session.text)
+            _writing.value = _writing.value?.takeIf { it.text == session.text && it.task == task }?.let {
+                if (result == null) it.copy(phase = com.dua.ai.ondevice.WritingSession.Phase.Failed)
+                else it.copy(phase = com.dua.ai.ondevice.WritingSession.Phase.Result, result = result)
+            }
+        }
+    }
+    /** Puts the on-device result in the message box (nothing is sent). */
+    fun useWritingResult() {
+        val session = _writing.value ?: return
+        if (session.phase == com.dua.ai.ondevice.WritingSession.Phase.Result) updateDraft(session.result)
+        closeWriting()
+    }
+    /** Server path: puts a "Summarize / Rewrite this" request in the message box for the normal Dua chat. Nothing is sent. */
+    fun askServerForWriting() {
+        val session = _writing.value ?: return
+        val task = session.task ?: return
+        updateDraft(com.dua.ai.ondevice.WritingPrompts.server(task, session.text))
+        closeWriting()
+    }
+    fun closeWriting() { writingJob?.cancel(); writingJob = null; _writing.value = null }
     private val backgroundRemover by lazy { com.dua.ai.ondevice.OnDeviceServices.backgroundRemover(application) }
     /** Google Play services is present, so the on-device background tool can run (or be downloaded once). */
     val backgroundRemovalAvailable: Boolean by lazy { backgroundRemover.available() }

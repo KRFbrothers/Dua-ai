@@ -37,6 +37,18 @@ class OnDeviceAi(private val model: OnDeviceTextModel, private val scope: Corout
         return result
     }
 
+    /** Summarize or rewrite on the phone (user-initiated, so it may ask the system to download the model). */
+    suspend fun write(task: WritingTask, text: String): String? {
+        if (!supported || text.isBlank()) return null
+        val result = withTimeoutOrNull(POLISH_TIMEOUT_MS) {
+            if (!model.prepare()) null
+            else WritingPrompts.clean(model.generate(WritingPrompts.onDevice(task, text), maxOutputTokens = 256,
+                temperature = if (task is WritingTask.Summarize) 0.2f else 0.5f), text)
+        }
+        _status.value = model.status()
+        return result
+    }
+
     companion object {
         const val TITLE_TIMEOUT_MS = 10_000L
         /** Includes a first-time model download by the system. */

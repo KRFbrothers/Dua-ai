@@ -12,6 +12,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.height
+import androidx.compose.material.icons.automirrored.outlined.ShortText
+import androidx.compose.material.icons.outlined.EditNote
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -155,6 +158,19 @@ internal fun MessageActionsSheet(message: ChatMessage, state: ChatUiState, actio
                 if (speaking) Icons.Outlined.StopCircle else Icons.AutoMirrored.Outlined.VolumeUp, speakEnabled) {
                 onDismiss(); actions.onSpeak(message)
             }
+            }
+            if (assistant && !message.isImagine && !message.streaming && message.text.isNotBlank()) {
+                Spacer(Modifier.height(SheetSizes.sectionGap))
+                SheetGroup {
+                    SheetMessageAction("summarize", "Summarize", "Summarize this reply, on this phone when possible", Icons.AutoMirrored.Outlined.ShortText, true) {
+                        onDismiss(); actions.onWriting(message.text, false, com.dua.ai.ondevice.WritingTask.Summarize)
+                    }
+                    SheetDivider()
+                    SheetMessageAction("rewrite", "Rewrite", "Rewrite this reply, on this phone when possible", Icons.Outlined.EditNote, true) {
+                        onDismiss(); actions.onWriting(message.text, false, null)
+                    }
+                }
+                Text("On-device when supported", style = SheetNoteStyle, color = SheetTheme.colors.subText, modifier = Modifier.padding(top = Spacing.xs))
             }
             textActions.shareError?.let { Text(it, style = SheetNoteStyle, color = SheetTheme.colors.destructive, modifier = Modifier.padding(top = SheetSizes.sectionGap)) }
         }

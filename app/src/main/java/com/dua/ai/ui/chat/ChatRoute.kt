@@ -77,6 +77,7 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
     val onDeviceStatus by viewModel.onDeviceAi.status.collectAsState()
     val polishing by viewModel.polishing.collectAsState()
     val polishNotice by viewModel.polishNotice.collectAsState()
+    val writing by viewModel.writing.collectAsState()
     val runCode by viewModel.runCode.collectAsState()
     val buildRepo by viewModel.buildRepo.collectAsState()
     val buildRepositories by viewModel.buildRepositories.collectAsState()
@@ -151,6 +152,7 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
         imagine = imagine, imagineOptions = imagineOptions, imagineConfig = imagineSettings, imagineUsage = imagineUsage,
         promptPolish = if (onDeviceStatus != null && viewModel.onDeviceAiEnabled() && preferences.onDeviceAi) PromptPolishState(polishing, polishNotice) else null,
         removeBackground = viewModel.backgroundRemovalAvailable,
+        writing = writing,
         runCode = runCode, codeConfig = integrations.codeExecution,
         codeSnippetUnavailableReason = viewModel.codeSnippetUnavailableReason(),
         buildRepo = buildRepo, buildConfig = integrations.build, buildRepositories = buildRepositories,
@@ -293,6 +295,9 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
             onRemoveAttachment = viewModel::removeAttachment,
             onRemoveAttachmentBackground = { index -> viewModel.attachmentImageBytes(index)?.let { bytes -> removeBackground { bytes } } },
             onPolishPrompt = viewModel::polishImaginePrompt,
+            onWriting = viewModel::openWriting,
+            writing = WritingActions(onStyle = { style -> viewModel.runWriting(com.dua.ai.ondevice.WritingTask.Rewrite(style)) },
+                onUse = viewModel::useWritingResult, onAskServer = viewModel::askServerForWriting, onDismiss = viewModel::closeWriting),
             onOpenSettings = onOpenSettings,
             // Drawer and Home use the same destination dispatch, including the existing Computer screen.
             onOpenDestination = { destination ->
