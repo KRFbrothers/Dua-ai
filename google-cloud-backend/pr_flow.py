@@ -21,7 +21,6 @@ PRECHECK_SECONDS = 20
 CI_SECONDS = int(os.environ.get("AGENT_CI_SECONDS", "420"))
 CI_POLL_SECONDS = 20
 MAX_PRECHECKS = 2
-IGNORED_CHECKS = ("vercel",)
 FAILED = ("failure", "timed_out", "cancelled", "action_required", "startup_failure")
 PERMISSION_HINT = ("The GitHub token cannot read CI results. Add 'Actions: Read-only' (and 'Checks: Read-only' if "
                    "offered) to the fine-grained token for this repository.")
@@ -64,7 +63,6 @@ def precheck(files):
 
 def summarize(runs):
     """check-run like dicts -> (state, failed list). state: success|failure|pending|none."""
-    runs = [r for r in runs if not str(r.get("name", "")).lower().startswith(IGNORED_CHECKS)]
     if not runs:
         return "none", []
     failed = [r for r in runs if r.get("conclusion") in FAILED]

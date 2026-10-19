@@ -42,7 +42,7 @@ class FreeModelsTest {
 
     @Test fun requestSendsFreeModelOnlyForPlainChatOnCloudRun() {
         val history = listOf(ChatMessage(text = "hi", isUser = true))
-        val cloud = DuaApiClient("https://engine.example/", apiBaseUrl = "https://vercel.example/")
+        val cloud = DuaApiClient("https://engine.example/", apiBaseUrl = "https://api.example/")
         fun body(api: DuaApiClient, web: String? = null, agent: Boolean = false, stream: Boolean = true) = JSONObject(Buffer().also {
             api.buildRequest("Dua", history, emptyList(), "", null, web, false, stream, agent = agent, freeModel = gemma.id).body!!.writeTo(it) }.readUtf8())
         assertEquals(gemma.id, body(cloud).getString("openrouter"))
@@ -50,7 +50,7 @@ class FreeModelsTest {
         assertFalse(body(cloud, agent = true).has("openrouter"))
         assertFalse(body(cloud, web = "search").has("openrouter"))
         assertFalse(body(cloud, stream = false).has("openrouter"))
-        assertFalse(body(DuaApiClient("https://vercel.example/")).has("openrouter"))
+        assertFalse(body(DuaApiClient("https://api.example/")).has("openrouter"))
     }
 
     @Test fun choiceIsSavedAndLabelled() {
