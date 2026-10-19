@@ -35,6 +35,10 @@ python -m pytest -q google-cloud-backend/tests
 scripted `BaseLlm`: tools use fake search/notes, writes remain pending approval,
 and disconnect prevents subsequent model calls. The final-answer case returns
 multiple GenAI text Parts so losing paragraphs/citations fails the SDK test too.
+Runner tests also cover thought delivery before generation finishes, cleanup on
+session/model/callback failures, disconnect while the real SDK awaits a model
+response, and deadline cleanup before the merger can run. Cleanup probes use the
+SDK's `App` plugin configuration, and all model responses are scripted locally.
 These tests do not measure a deployed model's quality, latency or billing, and do
 not enable `AGENT_ENGINE=adk` in production.
 

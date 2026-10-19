@@ -269,6 +269,13 @@ result is thrown away and no further calls are made.)
 3. **Progress & Chain-of-Thought (CoT):** goes out as the existing chips (`sub_a`/`sub_b`/`sub_c`, `merge`) and live thinking events (`part.thought` extraction) streamed directly to Dua AI's Android `ThinkingBlock` UI.
 4. **Artifacts Canvas formatting:** The merger formats diagrams, SVG, React, and code snippets with explicit language identifiers for interactive preview in Dua AI's Claude-style Artifacts Canvas.
 
+**Runner lifecycle:** the request thread uses ADK's production `run_async`
+interface with async session creation. Thought updates are forwarded during the
+run. The stream and runner close on the same event loop on success, failure or
+cancellation; the total deadline also signals background ADK work to stop.
+Already-started synchronous tool calls retain their existing HTTP timeouts.
+See [ADK SDK checks](../docs/TESTING.md#agent--adk-sdk-checks) for offline regression coverage.
+
 **Fallback:** if the request doesn't split, or ADK fails before any tool ran, the normal loop answers. Coding-mode requests always use the normal loop. Notes learning runs after the reply as before.
 
 ## Self-check (`AGENT_VERIFY=1`)

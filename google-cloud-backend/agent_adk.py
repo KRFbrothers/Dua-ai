@@ -8,7 +8,8 @@ Flow per request:
    #214 deadlines (run_tool_timed) and globally numbered web sources apply. Tools are async (asyncio.to_thread),
    so the specialists really run at the same time.
 3. Progress goes out as the app's existing "progress" chips (sub_a/sub_b/sub_c, merge) and "thinking" lines.
-Any ADK error -> None (caller falls back to the old loop). A total deadline (AGENT_ADK_SECONDS) stops the run.
+Errors before tools fall back to the old loop; errors after tools stop without replaying their work.
+A total deadline (AGENT_ADK_SECONDS) stops the request and signals the ADK worker to close.
 Safety (same as the old loop, agent_safety.py): write tools (propose_changes, save_note, ...) are only stored for the
 user's approval, never executed here; untrusted tool output is fenced; when the app disconnects (env["cancelled"]),
 tools raise Cancelled and a before_model_callback skips every further model call.
@@ -149,34 +150,63 @@ def final_text(events, author, on_thought=None):
 
 
 def run_agent(adk, agent, message, max_calls, on_thought=None, cancelled=None):
-    """Run an ADK agent in an in-memory session, capturing response events and thought chunks.
-    Stops reading events (and closes the run) as soon as [cancelled]() is true."""
+    """Bridge the request thread to ADK's production async API.
+
+    Consume events and emit thought updates as they arrive. Poll cancellation
+    while waiting for the next event, then close the async stream and runner on
+    the same task/event loop on every exit (including session/model failures).
+    """
     import agent_tools
-    runner = adk.InMemoryRunner(agent=agent, app_name="dua-agent")
-    session = runner.session_service.create_session_sync(app_name="dua-agent", user_id="owner")
-    content = adk.types.Content(role="user", parts=[adk.types.Part(text=message)])
-    stream = runner.run(user_id="owner", session_id=session.id, new_message=content,
-                        run_config=adk.RunConfig(max_llm_calls=max_calls))
-    events = []
-    try:
-        for event in stream:
-            events.append(event)
+
+    async def collect():
+        runner = adk.InMemoryRunner(agent=agent, app_name="dua-agent")
+        stream = None
+        try:
             if cancelled is not None and cancelled():
                 raise agent_tools.Cancelled()
-    finally:
-        close = getattr(stream, "close", None)
-        if close is not None:
-            close()
-    if on_thought:
-        for event in events:
-            content_obj = getattr(event, "content", None)
-            parts = getattr(content_obj, "parts", None) or []
-            for p in parts:
-                if getattr(p, "thought", False):
-                    t = getattr(p, "text", "") or ""
-                    if t.strip():
-                        on_thought(t)
-    return events
+            session = await runner.session_service.create_session(app_name="dua-agent", user_id="owner")
+            content = adk.types.Content(role="user", parts=[adk.types.Part(text=message)])
+            stream = runner.run_async(user_id="owner", session_id=session.id, new_message=content,
+                                      run_config=adk.RunConfig(max_llm_calls=max_calls))
+            events = []
+            async for event in stream:
+                if cancelled is not None and cancelled():
+                    raise agent_tools.Cancelled()
+                events.append(event)
+                if on_thought is not None:
+                    parts = getattr(getattr(event, "content", None), "parts", None) or []
+                    for part in parts:
+                        text = getattr(part, "text", None) or ""
+                        if getattr(part, "thought", False) and text.strip():
+                            on_thought(text)
+            return events
+        finally:
+            try:
+                if stream is not None:
+                    await stream.aclose()
+            finally:
+                await runner.close()
+
+    async def invoke():
+        # The resource owner also closes them, in the same asyncio task. The
+        # parent only watches cancellation, including when no event arrives.
+        task = asyncio.create_task(collect())
+        try:
+            while True:
+                done, _ = await asyncio.wait({task}, timeout=agent_tools.CANCEL_POLL_SECONDS)
+                if cancelled is not None and cancelled():
+                    raise agent_tools.Cancelled()
+                if done:
+                    try:
+                        return await task
+                    except asyncio.CancelledError as error:
+                        raise RuntimeError("ADK invocation was cancelled") from error
+        finally:
+            if not task.done():
+                task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+
+    return asyncio.run(invoke())
 
 
 def make_tools(names, call):
@@ -280,13 +310,19 @@ def run(env, request_text, flash_model, agent_model, config_for, adk=None, log=p
               (["notes"] if env.get("notes") is not None else [])
     started = time.monotonic()
     pr_text = []  # kept for old in-run PR results; write tools now only ask for approval
-    cancelled = env.get("cancelled")
+    import threading
+    finished = threading.Event()
+    app_cancelled = env.get("cancelled")
+
+    def cancelled():
+        return finished.is_set() or (app_cancelled is not None and app_cancelled())
+
     stop_cb = stop_model_callback(adk, cancelled)
     extra = {"before_model_callback": stop_cb} if stop_cb is not None else {}
 
     def specialist_call(index, title, letter):
         async def call(name, args):
-            if shared.stop_requested():
+            if cancelled() or shared.stop_requested():
                 raise agent_tools.Cancelled()
             label = agent_tools.PROGRESS.get(name, ("", name))[1].rstrip("\u2026")
             if name in agent_safety.WRITE_TOOLS:
@@ -369,6 +405,8 @@ def run(env, request_text, flash_model, agent_model, config_for, adk=None, log=p
             return with_pending(answer + ("\n\n" + pr_text[0] if pr_text else ""), shared), Result(shared)
         log(f"[dua-agent] adk failed ({type(error).__name__}); using the normal loop")
         return None
+    finally:
+        finished.set()
     if answer is None:
         return None
     log(f"[dua-agent] adk total {time.monotonic() - started:.1f}s")

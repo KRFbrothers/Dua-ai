@@ -16,6 +16,15 @@ parallel helpers, multipart answers, approvals and disconnect handling. This is
 integration verification; it does not establish which path a deployed revision
 currently enables or how well its live model answers.
 
+ADK runs through the official production `run_async` API. Each planning/helper
+run owns an ephemeral in-memory session, closes its event stream, and awaits
+`Runner.close()` in the same asyncio task/event loop, including failure paths. Thought events
+reach the existing progress stream as they arrive. Cancellation is checked while
+waiting for an event (about once per second), and a deadline also signals the
+worker to stop before further model/tool calls. An HTTP call already executing
+inside a synchronous tool thread still depends on its existing bounded timeout;
+this does not promise that a remote provider stopped processing or billing it.
+
 **Rollback to the loop:** if the request does not split, or ADK fails before any tool ran, the normal tool loop answers. Coding-mode requests always use the loop. To turn ADK off, remove the flag:
 
 ```bash

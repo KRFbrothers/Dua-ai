@@ -52,15 +52,22 @@ def fake_adk(plan_text, scripts, merge_text="MERGED [1]", fail=None, slow=None):
     class Runner:
         def __init__(self, agent, app_name):
             self.agent = agent
-            self.session_service = SimpleNamespace(create_session_sync=lambda **k: SimpleNamespace(id="s"))
+            self.session_service = SimpleNamespace(create_session=self.create_session)
 
-        def run(self, user_id, session_id, new_message, run_config):
+        async def create_session(self, **kwargs):
+            return SimpleNamespace(id="s")
+
+        async def close(self):
+            pass
+
+        async def run_async(self, user_id, session_id, new_message, run_config):
             if fail:
                 raise fail
             agent = self.agent
             if agent.name == "controller":
                 assert "controller" in agent.instruction(None)
-                return [SimpleNamespace(author="controller", content=SimpleNamespace(parts=[SimpleNamespace(text=plan_text)]))]
+                yield SimpleNamespace(author="controller", content=SimpleNamespace(parts=[SimpleNamespace(text=plan_text)]))
+                return
             parallel, merger = agent.sub_agents
             state = {}
 
@@ -73,12 +80,10 @@ def fake_adk(plan_text, scripts, merge_text="MERGED [1]", fail=None, slow=None):
                     await asyncio.sleep(5)
                 state[sub.output_key] = scripts[kind][-1]
 
-            async def all_helpers():
-                await asyncio.gather(*(helper(s) for s in parallel.sub_agents))
-            asyncio.run(all_helpers())
+            await asyncio.gather(*(helper(s) for s in parallel.sub_agents))
             prompt = merger.instruction(SimpleNamespace(state=state))
             Runner.merge_prompt = prompt
-            return [SimpleNamespace(author="merger", content=SimpleNamespace(parts=[SimpleNamespace(text=merge_text)]))]
+            yield SimpleNamespace(author="merger", content=SimpleNamespace(parts=[SimpleNamespace(text=merge_text)]))
 
     return SimpleNamespace(LlmAgent=FakeAgent, ParallelAgent=FakeAgent, SequentialAgent=FakeAgent,
                            RunConfig=lambda **k: k, InMemoryRunner=Runner,
@@ -403,3 +408,196 @@ def test_final_text_keeps_all_text_parts_in_the_last_author_response(parts, expe
     ]
     assert agent_adk.final_text(events, "merger", on_thought=thoughts.append) == expected
     assert thoughts == ["private reasoning"]
+
+
+def test_run_agent_delivers_thoughts_before_requesting_the_next_event():
+    delivered, cleanup = [], []
+
+    class Runner:
+        def __init__(self, **kwargs):
+            self.session_service = SimpleNamespace(create_session=self.session)
+
+        async def session(self, **kwargs):
+            return SimpleNamespace(id="ephemeral")
+
+        async def run_async(self, **kwargs):
+            try:
+                yield SimpleNamespace(author="controller", content=SimpleNamespace(parts=[
+                    SimpleNamespace(thought=True, text="Planning now")]))
+                assert delivered == ["Planning now"]  # must arrive while generation is still active
+                yield SimpleNamespace(author="controller", content=SimpleNamespace(parts=[
+                    SimpleNamespace(text="complete")]))
+            finally:
+                cleanup.append("stream")
+
+        async def close(self):
+            cleanup.append("runner")
+
+    adk = SimpleNamespace(InMemoryRunner=Runner, RunConfig=lambda **kwargs: kwargs,
+                          types=SimpleNamespace(Content=lambda **kwargs: kwargs, Part=lambda **kwargs: kwargs))
+    events = agent_adk.run_agent(adk, "agent", "hello", 2, on_thought=delivered.append)
+    assert agent_adk.final_text(events, "controller") == "complete"
+    assert cleanup == ["stream", "runner"]
+
+
+@pytest.mark.parametrize("failure", ["session", "model", "callback", "cancelled", "sdk_cancel"])
+def test_run_agent_closes_resources_on_failure(failure):
+    closed, gone = [], {"v": failure == "cancelled"}
+
+    class Runner:
+        def __init__(self, **kwargs):
+            self.session_service = SimpleNamespace(create_session=self.session)
+
+        async def session(self, **kwargs):
+            if failure == "session":
+                raise ValueError("session failed")
+            return SimpleNamespace(id="ephemeral")
+
+        async def run_async(self, **kwargs):
+            try:
+                if failure == "model":
+                    raise ValueError("model failed")
+                if failure == "sdk_cancel":
+                    raise asyncio.CancelledError()
+                yield SimpleNamespace(author="controller", content=SimpleNamespace(parts=[
+                    SimpleNamespace(thought=True, text="thought")]))
+            finally:
+                closed.append("stream")
+
+        async def close(self):
+            closed.append("runner")
+
+    def on_thought(text):
+        raise ValueError("callback failed")
+
+    adk = SimpleNamespace(InMemoryRunner=Runner, RunConfig=lambda **kwargs: kwargs,
+                          types=SimpleNamespace(Content=lambda **kwargs: kwargs, Part=lambda **kwargs: kwargs))
+    error = (agent_tools.Cancelled if failure == "cancelled" else
+             RuntimeError if failure == "sdk_cancel" else ValueError)
+    with pytest.raises(error):
+        agent_adk.run_agent(adk, "agent", "hello", 2, on_thought=on_thought, cancelled=lambda: gone["v"])
+    assert closed == (["runner"] if failure in ("session", "cancelled") else ["stream", "runner"])
+
+
+def test_total_deadline_closes_worker_before_merger_can_run(monkeypatch):
+    monkeypatch.setattr(agent_adk, 'TOTAL_SECONDS', 0.05)
+    monkeypatch.setattr(agent_tools, 'CANCEL_POLL_SECONDS', 0.01)
+    adk, original = fake_adk(json.dumps(PLAN), {'research': ['r'], 'notes': ['n']}, slow='notes')
+    closed = threading.Event()
+
+    class Runner(original):
+        async def close(self):
+            await super().close()
+            if self.agent.name == 'dua_root':
+                closed.set()
+
+    adk.InMemoryRunner = Runner
+    text, result = agent_adk.run(make_env([]), 'news and notes', 'f', 'a', cfg, adk=adk, log=lambda m: None)
+    assert 'time limit' in text and not result.cancelled
+    assert closed.wait(2), 'The timed-out ADK worker must close, not continue in the background'
+    assert not hasattr(original, 'merge_prompt'), 'Do not start a merger after the deadline'
+
+
+@pytest.mark.parametrize('failure', [None, 'model', 'callback'])
+def test_real_adk_runner_emits_live_thoughts_and_closes_on_success_or_error(failure):
+    pytest.importorskip('google.adk')
+    from google.adk.models import BaseLlm, LlmResponse
+    from google.adk.plugins.base_plugin import BasePlugin
+    from google.adk.apps import App
+    from google.genai import types
+
+    thoughts, order, loops = [], [], []
+
+    class Cleanup(BasePlugin):
+        async def close(self):
+            order.append('runner closed')
+            loops.append((asyncio.get_running_loop(), asyncio.current_task()))
+
+    class Scripted(BaseLlm):
+        async def generate_content_async(self, llm_request, stream=False):
+            try:
+                yield LlmResponse(content=types.Content(role='model', parts=[types.Part(text='Planning', thought=True)]))
+                assert thoughts == ['Planning'], 'Thoughts must arrive before the model continues'
+                if failure == 'model':
+                    raise ValueError('scripted model failed')
+                yield LlmResponse(content=types.Content(role='model', parts=[types.Part(text='Done')]))
+            finally:
+                order.append('model closed')
+
+    adk = agent_adk.load_adk()
+    original = adk.InMemoryRunner
+    def runner_with_cleanup(agent, app_name):
+        loops.append((asyncio.get_running_loop(), asyncio.current_task()))
+        return original(app=App(name=app_name, root_agent=agent, plugins=[Cleanup(name='cleanup_probe')]))
+
+    adk.InMemoryRunner = runner_with_cleanup
+    agent = adk.LlmAgent(name='probe', model=Scripted(model='offline'), instruction='Respond with the scripted answer')
+    def on_thought(text):
+        thoughts.append(text)
+        if failure == 'callback':
+            raise ValueError('callback failed')
+
+    if failure:
+        with pytest.raises(ValueError, match='scripted model failed' if failure == 'model' else 'callback failed'):
+            agent_adk.run_agent(adk, agent, 'hello', 2, on_thought=on_thought)
+    else:
+        events = agent_adk.run_agent(adk, agent, 'hello', 2, on_thought=on_thought)
+        assert agent_adk.final_text(events, 'probe') == 'Done'
+    assert order == ['model closed', 'runner closed']
+    assert len(loops) == 2 and loops[0] == loops[1]
+
+
+def test_real_adk_disconnect_cancels_waiting_model_and_closes_runner(monkeypatch):
+    pytest.importorskip('google.adk')
+    from google.adk.models import BaseLlm, LlmResponse
+    from google.adk.plugins.base_plugin import BasePlugin
+    from google.adk.apps import App
+    from google.genai import types
+    monkeypatch.setattr(agent_tools, 'CANCEL_POLL_SECONDS', 0.01)
+    started, gone, release, finished = (threading.Event() for _ in range(4))
+    closed, outcome = [], {}
+
+    class Cleanup(BasePlugin):
+        async def close(self):
+            closed.append('runner')
+
+    class Waiting(BaseLlm):
+        async def generate_content_async(self, llm_request, stream=False):
+            started.set()
+            try:
+                # No response events yet. The user can still stop this call.
+                while not release.is_set():
+                    await asyncio.sleep(0.01)
+                yield LlmResponse(content=types.Content(role='model', parts=[types.Part(text='too late')]))
+            finally:
+                closed.append('model')
+
+    adk = agent_adk.load_adk()
+    original = adk.InMemoryRunner
+    def runner_with_cleanup(agent, app_name):
+        return original(app=App(name=app_name, root_agent=agent, plugins=[Cleanup(name='cleanup_probe')]))
+
+    adk.InMemoryRunner = runner_with_cleanup
+    agent = adk.LlmAgent(name='probe', model=Waiting(model='offline'), instruction='Wait for the scripted answer')
+
+    def invoke():
+        try:
+            outcome['events'] = agent_adk.run_agent(adk, agent, 'hello', 2, cancelled=gone.is_set)
+        except BaseException as error:
+            outcome['error'] = error
+        finally:
+            finished.set()
+
+    worker = threading.Thread(target=invoke, daemon=True)
+    worker.start()
+    try:
+        assert started.wait(3)
+        gone.set()
+        assert finished.wait(3), 'Stopping must not wait for a model response event'
+        assert isinstance(outcome.get('error'), agent_tools.Cancelled)
+        assert 'events' not in outcome and closed == ['model', 'runner']
+    finally:
+        gone.set()
+        release.set()
+        worker.join(3)
+    assert not worker.is_alive()
