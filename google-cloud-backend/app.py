@@ -27,6 +27,7 @@ import re
 import threading
 
 from flask import Flask, Response, g, jsonify, request, stream_with_context
+import cost_guard
 from owner_auth import OwnerAuthError, verify_owner
 
 app = Flask(__name__)
@@ -75,6 +76,35 @@ SSE_HEADERS = {
 _client = None
 _models = {}
 
+# Every Vertex call gets an HTTP timeout and a few retries for temporary errors (429 / 5xx / network). Calls with
+# their own deadline (Agent steps) still pass a shorter per-call timeout. Bounded so a bad value cannot disable them.
+VERTEX_RETRY_CODES = (408, 429, 500, 502, 503, 504)
+
+
+def _bounded_env(name, default, low, high):
+    try:
+        value = int(str(os.environ.get(name, "")).strip() or default)
+    except ValueError:
+        return default
+    return value if low <= value <= high else default
+
+
+VERTEX_HTTP_TIMEOUT_SECONDS = _bounded_env("VERTEX_HTTP_TIMEOUT_SECONDS", 180, 10, 600)
+VERTEX_HTTP_ATTEMPTS = _bounded_env("VERTEX_HTTP_ATTEMPTS", 3, 1, 5)
+
+
+def vertex_retry_options():
+    """Limited retries with exponential backoff (1 s, 2 s ... at most 8 s) on temporary Vertex errors only."""
+    from google.genai import types
+    return types.HttpRetryOptions(attempts=VERTEX_HTTP_ATTEMPTS, initial_delay=1.0, max_delay=8.0,
+                                  http_status_codes=list(VERTEX_RETRY_CODES))
+
+
+def vertex_http_options(timeout_seconds=None):
+    from google.genai import types
+    seconds = timeout_seconds or VERTEX_HTTP_TIMEOUT_SECONDS
+    return types.HttpOptions(timeout=int(seconds * 1000), retry_options=vertex_retry_options())
+
 
 class BadRequest(Exception):
     def __init__(self, message, status=400):
@@ -90,7 +120,7 @@ def get_client():
         if not PROJECT_ID:
             raise RuntimeError("GOOGLE_CLOUD_PROJECT is not set")
         from google import genai
-        _client = genai.Client(vertexai=True, project=PROJECT_ID, location=LOCATION)
+        _client = genai.Client(vertexai=True, project=PROJECT_ID, location=LOCATION, http_options=vertex_http_options())
     return _client
 
 
@@ -126,7 +156,7 @@ class GenaiModel:
         level = options.pop("thinking_level", None)
         timeout = options.pop("timeout_seconds", None)
         if timeout:
-            options["http_options"] = types.HttpOptions(timeout=int(timeout * 1000))
+            options["http_options"] = vertex_http_options(timeout)
         if tools:
             options["tools"] = tools
         thinking = thinking_config(self.model_name, self.thinking_level)
@@ -137,6 +167,14 @@ class GenaiModel:
         return types.GenerateContentConfig(**options)
 
     def generate_content(self, contents, stream=False, generation_config=None, tools=None):
+        response = self._generate(contents, stream, generation_config, tools)
+        # Daily token budget (cost_guard): streamed replies are counted when the stream ends.
+        if stream:
+            return cost_guard.counted_stream(response, cost_guard.BUDGET)
+        cost_guard.BUDGET.add_tokens(cost_guard.usage_tokens(response))
+        return response
+
+    def _generate(self, contents, stream, generation_config, tools):
         models = get_client().models
         config = self.config(generation_config, tools)
         call = models.generate_content_stream if stream else models.generate_content
@@ -476,7 +514,7 @@ def adk_config(model_name, max_tokens, json_out=False):
     import agent_tools
     from google.genai import types
     level = AGENT_THINKING_LEVEL if model_name == AGENT_MODEL and AGENT_MODEL != MODEL_NAME else THINKING_LEVEL
-    options = {"max_output_tokens": max_tokens, "http_options": types.HttpOptions(timeout=agent_tools.STEP_SECONDS * 1000)}
+    options = {"max_output_tokens": max_tokens, "http_options": vertex_http_options(agent_tools.STEP_SECONDS)}
     thinking = thinking_config(model_name, level)
     if thinking is not None:
         options["thinking_config"] = thinking
@@ -629,6 +667,18 @@ def agent_notes_status():
     return response
 
 
+def budget_reply(message, retry_after, stream):
+    """Daily cap reached: a friendly message the app shows (SSE error event for streams, 429 JSON otherwise)."""
+    app.logger.warning("daily cost cap reached; request refused")
+    headers = {"Retry-After": str(retry_after), "Cache-Control": "no-store"}
+    if stream:
+        body = ": heartbeat\n\n" + sse({"type": "error", "message": message, "status": 429, "retryAfterSeconds": retry_after})
+        return Response(body, headers={**SSE_HEADERS, **headers}, content_type="text/event-stream; charset=utf-8")
+    response = jsonify({"error": message, "retryAfterSeconds": retry_after})
+    response.headers.update(headers)
+    return response, 429
+
+
 @app.route("/api/chat", methods=["POST"])
 def api_chat():
     denied = owner_access_error()
@@ -658,6 +708,9 @@ def api_chat():
         and not data.get("web") and not data.get("code")
     if agent and data.get("stream") is not True:
         return jsonify({"error": "Agent mode needs streaming. Update the app."}), 400
+    over_budget = cost_guard.BUDGET.admit("agent" if agent else "chat")
+    if over_budget:
+        return budget_reply(*over_budget, stream=data.get("stream") is True)
     if data.get("stream") is not True:
         try:
             response = get_model(system).generate_content(contents)
@@ -854,6 +907,9 @@ def chat():
         return jsonify({"error": "Message is empty"}), 400
     if len(user_message) > MAX_MESSAGE_CHARS:
         return jsonify({"error": "Message is too long"}), 413
+    over_budget = cost_guard.BUDGET.admit("chat")
+    if over_budget:
+        return budget_reply(*over_budget, stream=False)
     try:
         response = get_model().generate_content(user_message)
         return jsonify({"reply": response.text})

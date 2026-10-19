@@ -34,11 +34,12 @@ After either path, optional add-ons run:
 | `AGENT_TEST_CODE` | `0` | `1` turns on pre-checks + CI wait + one fix. |
 | `AGENT_CI_SECONDS` | `420` | Total CI wait per request. |
 | `AGENT_NOTES` | `1` | `0` turns Agent notes off. |
-| `AGENT_MAX_STEPS` | `12` | Model calls per Agent request. |
+| `AGENT_MAX_STEPS` | `8` | Model calls per Agent request (1–30). |
 | `AGENT_MAX_SECONDS` | `600` | Total Agent time limit. |
 | `AGENT_STEP_SECONDS` | `150` | Deadline per model step. |
 | `AGENT_TOOL_SECONDS` | `45` | Default deadline per tool (search/code 90 s, image 120 s). |
-| `AGENT_STEP_TOKENS` | `16384` (`32768` for `gemini-4*` models) | Output cap per step, thinking included. |
+| `AGENT_STEP_TOKENS` | `8192` (all models, Argon included) | Output cap per step, thinking included (1024–65536). |
+| `DUA_DAILY_AGENT_RUNS`, `DUA_DAILY_CHAT_REQUESTS`, `DUA_DAILY_TOKENS` | `50`, `500`, `5000000` | Daily caps per instance ([Cost guards](../google-cloud-backend/README.md#cost-guards)); `0` = off. |
 | `AGENT_SUB_TOKENS`, `AGENT_ANSWER_TOKENS`, `AGENT_ROUTER_TOKENS` | `3072`, `4096`, `256` | Output caps for sub-calls, the final answer and the router. |
 | `GITHUB_TOKEN`, `DUA_REPO` | unset, `KRFbrothers/Dua-ai` | Optional coding agent token and its single target repository. |
 

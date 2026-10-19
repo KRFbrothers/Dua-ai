@@ -151,7 +151,7 @@ test('service handler applies the configurable chat deadline', async () => {
   assert.equal(chatDeadlineMs({ DUA_CHAT_DEADLINE_SECONDS: '5000' }), 280000);
   const hanging = (url, init) => new Promise((resolve, reject) => init.signal.addEventListener('abort', () => reject(init.signal.reason), { once: true }));
   const started = Date.now();
-  const response = await handleService(chatRequest(body({ stream: true })), { env: { ...env, DUA_CHAT_DEADLINE_SECONDS: '10' }, fetcher: hanging });
+  const response = await handleService(chatRequest(body({ stream: true })), { env: { ...env, DUA_ALLOW_OPEN_ACCESS: '1', DUA_CHAT_DEADLINE_SECONDS: '10' }, fetcher: hanging });
   assert.equal(response.status, 200);
   const events = await readEvents(response);
   assert.equal(events.length, 1);

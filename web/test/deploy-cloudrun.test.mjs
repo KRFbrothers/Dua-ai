@@ -56,15 +56,17 @@ test('Cloud Run deployment keeps secrets out of builds and grants runtime access
   assert.equal(deploys.length, 1);
   const deploy = deploys[0];
   assert.equal(deploy[2], 'dua-api');
-  for (const option of ['--timeout=900s', '--min-instances=0', '--port=8080', '--allow-unauthenticated']) assert.ok(deploy.includes(option));
+  for (const option of ['--timeout=900s', '--min-instances=0', '--max-instances=2', '--port=8080', '--allow-unauthenticated']) assert.ok(deploy.includes(option));
+  assert.ok(!deploy.some(arg => arg.startsWith('--set-env-vars') || arg.startsWith('--set-secrets')), 'settings are only updated, never replaced');
   assert.equal(deploy[deploy.indexOf('--region') + 1], 'us-central1');
   assert.equal(deploy[deploy.indexOf('--service-account') + 1], 'dua-api@dua-test-project.iam.gserviceaccount.com');
-  const env = deploy.find(arg => arg.startsWith('--set-env-vars='));
+  const env = deploy.find(arg => arg.startsWith('--update-env-vars='));
   assert.match(env, /DUA_REQUIRE_LOGIN=1/);
   assert.match(env, /DUA_CHAT_DEADLINE_SECONDS=780/);
   assert.match(env, /DUA_BUILD_PR=0/);
   assert.doesNotMatch(env, /DUA_FILES=/, 'a supplied feature flag is imported as a secret instead');
-  const refs = deploy.find(arg => arg.startsWith('--set-secrets=')).slice('--set-secrets='.length).split(',');
+  assert.ok(deploy.includes('--remove-env-vars=DUA_FILES'), 'an old plain DUA_FILES=0 setting is dropped when the flag becomes a secret');
+  const refs = deploy.find(arg => arg.startsWith('--update-secrets=')).slice('--update-secrets='.length).split(',');
   assert.deepEqual(refs.sort(), selected.map(name => `${name}=${name}:7`).sort());
   const bindings = result.calls.filter(args => args[0] === 'secrets' && args[1] === 'add-iam-policy-binding');
   assert.deepEqual(bindings.map(args => args[2]).sort(), [...selected].sort());
@@ -112,8 +114,9 @@ test('existing feature flag secrets must be attached from the template before an
   }
   const absent = deployment({ omitTemplateFlags: flags });
   assert.equal(absent.status, 0, absent.stderr);
-  const env = absent.calls.find(args => args[0] === 'run' && args[1] === 'deploy').find(arg => arg.startsWith('--set-env-vars='));
+  const env = absent.calls.find(args => args[0] === 'run' && args[1] === 'deploy').find(arg => arg.startsWith('--update-env-vars='));
   for (const flag of flags) assert.ok(env.includes(`${flag}=0`));
+  assert.ok(!absent.calls.find(args => args[0] === 'run' && args[1] === 'deploy').some(arg => arg.startsWith('--remove-env-vars')));
 });
 
 test('deployment validates project/deadline and supports a longer explicit deadline', () => {
@@ -125,8 +128,8 @@ test('deployment validates project/deadline and supports a longer explicit deadl
   const result = deployment({ resourcesExist: true, settings: { DUA_CHAT_DEADLINE_SECONDS: '600' } });
   assert.equal(result.status, 0, result.stderr);
   const deploy = result.calls.find(args => args[0] === 'run' && args[1] === 'deploy');
-  assert.match(deploy.find(arg => arg.startsWith('--set-env-vars=')), /DUA_CHAT_DEADLINE_SECONDS=600/);
-  assert.match(deploy.find(arg => arg.startsWith('--set-env-vars=')), /DUA_FILES=0/);
+  assert.match(deploy.find(arg => arg.startsWith('--update-env-vars=')), /DUA_CHAT_DEADLINE_SECONDS=600/);
+  assert.match(deploy.find(arg => arg.startsWith('--update-env-vars=')), /DUA_FILES=0/);
   assert.ok(!result.calls.some(args => ['iam', 'artifacts'].includes(args[0]) && args.includes('create')));
   assert.ok(result.calls.some(args => args[0] === 'artifacts' && args[2] === 'add-iam-policy-binding' && args.includes('--role=roles/artifactregistry.writer')),
     'an existing repository still receives the scoped writer grant');
@@ -165,4 +168,16 @@ if (out > 0 && process.env.MOCK_SITE_FAIL !== '1') { mkdirSync(args[out + 1], { 
     assert.match(broken.stderr, /did not produce web\/site\/index.html/);
     assert.ok(!broken.calls.some(args => ['iam', 'builds', 'run'].includes(args[0])));
   } finally { rmSync(site, { recursive: true, force: true }); }
+});
+
+test('max instances defaults to 2, accepts an explicit 1-10 and rejects anything else before any gcloud call', () => {
+  const custom = deployment({ settings: { DUA_API_MAX_INSTANCES: '3' } });
+  assert.equal(custom.status, 0, custom.stderr);
+  assert.ok(custom.calls.find(args => args[0] === 'run' && args[1] === 'deploy').includes('--max-instances=3'));
+  for (const value of ['0', '11', 'two', '-1', '2.5']) {
+    const result = deployment({ settings: { DUA_API_MAX_INSTANCES: value } });
+    assert.notEqual(result.status, 0, value);
+    assert.match(result.stderr, /DUA_API_MAX_INSTANCES must be 1–10/);
+    assert.equal(result.calls.length, 0, value);
+  }
 });

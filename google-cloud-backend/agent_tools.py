@@ -25,10 +25,18 @@ import ssl
 import time
 from urllib.parse import urljoin, urlsplit
 
-MAX_STEPS = int(os.environ.get("AGENT_MAX_STEPS", "12"))
-# Argon thinks longer (output cap includes thinking), so it gets 32768 per step unless AGENT_STEP_TOKENS is set.
-STEP_TOKENS = int(os.environ.get("AGENT_STEP_TOKENS") or
-                  ("32768" if os.environ.get("AGENT_MODEL", "").startswith("gemini-4") else "16384"))
+# Cost caps (owner can raise them with --update-env-vars): 8 model steps x 8192 output tokens (thinking included)
+# per Agent request, for every model including Argon (was 12 x 32768). Values outside 1..30 / 1024..65536 use defaults.
+def _env_int(name, default, low, high):
+    try:
+        value = int(str(os.environ.get(name, "")).strip() or default)
+    except ValueError:
+        return default
+    return value if low <= value <= high else default
+
+
+MAX_STEPS = _env_int("AGENT_MAX_STEPS", 8, 1, 30)
+STEP_TOKENS = _env_int("AGENT_STEP_TOKENS", 8192, 1024, 65536)
 SUB_TOKENS = int(os.environ.get("AGENT_SUB_TOKENS", "3072"))
 MAX_SECONDS = int(os.environ.get("AGENT_MAX_SECONDS", "600"))
 # Hard per-call deadlines so one slow model step or tool can never freeze the reply.

@@ -10,6 +10,7 @@ import { handleImagine } from '../core/imagine.mjs';
 import { handleVoice } from '../core/voice.mjs';
 import { handleBuildPr } from '../core/build-pr.mjs';
 import { withRequestLog } from '../core/request-logging.mjs';
+import { ownerSetupProblem, protectedPath } from '../core/access-setup.mjs';
 
 /** DUA_CHAT_DEADLINE_SECONDS: whole-request chat deadline (default 280 s, allowed 10–790 s). */
 export const chatDeadlineMs = env => envInteger(env, 'DUA_CHAT_DEADLINE_SECONDS', 280, 10, 790) * 1000;
@@ -25,6 +26,8 @@ async function routeService(request,{env=process.env,fetcher=fetch}={}) {
  // timeout (900 s; deploy-cloudrun.sh sets 780 s) so the reply can end cleanly.
  if(path==='/api/chat')request=new Request(request,{signal:AbortSignal.any([request.signal,AbortSignal.timeout(chatDeadlineMs(env))])});
  if(request.headers.get('origin')&&request.headers.get('origin')!==url.origin)return Response.json({error:'Request origin is not allowed.'},{status:403,headers:{'Cache-Control':'no-store'}});
+ // Fail closed: without the owner lock (DUA_ALLOWED_EMAIL + Supabase login) protected routes answer 503.
+ if(protectedPath(path)){const problem=ownerSetupProblem(env);if(problem)return Response.json({error:problem,code:'owner_setup_required'},{status:503,headers:{'Cache-Control':'no-store'}});}
  if(path==='/api/setup')return handleSetup(request,{env});
  if(path==='/api/config')return handleChat(request,{env,fetcher});
  // Account and cloud routes: owner-locked by DUA_ALLOWED_EMAIL inside handleAccount (session, features and logout stay open).

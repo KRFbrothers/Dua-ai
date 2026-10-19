@@ -4,6 +4,7 @@ import path from 'node:path';
 import { MAX_REQUEST_BYTES } from '../core/attachments.mjs';
 import { handleService } from './service-handler.mjs';
 import { requestOrigin, serveSite } from './static-site.mjs';
+import { startupAccessWarning } from '../core/access-setup.mjs';
 
 function json(res, code, data) {
   res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
@@ -70,6 +71,8 @@ export function makeServer({ key = process.env.GEMINI_API_KEY, model = process.e
   });
 }
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const warning = startupAccessWarning(process.env);
+  if (warning) console.warn(warning);
   const server = makeServer();
   const options = listenOptions();
   server.listen(options, () => console.log(`Dua API ready: http://${options.host}:${server.address().port}/api/`));

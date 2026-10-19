@@ -37,6 +37,8 @@ test('server entry point honors container binding and serves unauthenticated con
     child.once('error', reject);
     child.once('exit', code => reject(new Error(`Server exited before listening (${code})`)));
   });
+  let errors = '';
+  child.stderr.on('data', chunk => { errors += chunk; });
   try {
     const port = await ready;
     for (const route of ['/api/config', '/api/setup']) {
@@ -48,6 +50,11 @@ test('server entry point honors container binding and serves unauthenticated con
       if (route === '/api/setup') assert.equal(data.account.requireLogin, true);
     }
     assert.equal((await fetch(`http://127.0.0.1:${port}/`)).status, 404);
+    // No owner/Supabase settings: protected routes fail closed and startup logs why (names only).
+    const chat = await fetch(`http://127.0.0.1:${port}/api/chat`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
+    assert.equal(chat.status, 503);
+    assert.equal((await chat.json()).code, 'owner_setup_required');
+    assert.match(errors, /\[dua-access\] WARNING: protected routes will answer 503\..*DUA_ALLOWED_EMAIL, SUPABASE_URL, SUPABASE_ANON_KEY/);
   } finally {
     child.kill('SIGTERM');
     await exited;
@@ -56,7 +63,7 @@ test('server entry point honors container binding and serves unauthenticated con
 
 test('local server streams chunks to the client as they are produced', async () => {
   const fetcher = mockFetch(sseResponse(geminiChunks(['One ', 'two ', 'three']), { delayMs: 60 }));
-  const server = makeServer({ env: { ...env }, key: env.GEMINI_API_KEY, model: env.GEMINI_MODEL, fetcher, supabaseUrl: '', supabaseKey: '' }).listen(0, '127.0.0.1');
+  const server = makeServer({ env: { ...env, DUA_ALLOW_OPEN_ACCESS: '1' }, key: env.GEMINI_API_KEY, model: env.GEMINI_MODEL, fetcher, supabaseUrl: '', supabaseKey: '' }).listen(0, '127.0.0.1');
   await new Promise(resolve => server.once('listening', resolve));
   try {
     const arrivals = [];

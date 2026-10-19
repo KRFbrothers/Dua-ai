@@ -22,10 +22,10 @@ Always deploy from a clean, up-to-date `main`.
 ### dua-ai-engine
 
 ```bash
-cd ~/Dua-ai && git fetch origin && git checkout main && git reset --hard origin/main && cd google-cloud-backend && gcloud run deploy dua-ai-engine --source . --region us-central1 --project global-healer-m6shk --allow-unauthenticated --timeout 900
+cd ~/Dua-ai && git fetch origin && git checkout main && git reset --hard origin/main && cd google-cloud-backend && gcloud run deploy dua-ai-engine --source . --region us-central1 --project global-healer-m6shk --allow-unauthenticated --timeout 900 --max-instances 2
 ```
 
-A source deploy keeps the service's existing environment variables and secrets.
+A source deploy keeps the service's existing environment variables and secrets. `--max-instances 2` caps how many copies can run (and bill) at once.
 
 ### dua-api
 
@@ -33,7 +33,9 @@ A source deploy keeps the service's existing environment variables and secrets.
 cd ~/Dua-ai && git fetch origin && git checkout main && git reset --hard origin/main && PROJECT_ID=global-healer-m6shk bash web/deploy-cloudrun.sh
 ```
 
-[`deploy-cloudrun.sh`](../web/deploy-cloudrun.sh) builds `website/` into `web/site`, builds the container with Cloud Build and deploys it. It rebuilds dua-api's settings from Secret Manager (names listed in `web/.env.example`), so keep dua-api configuration in Secret Manager rather than setting it by hand.
+[`deploy-cloudrun.sh`](../web/deploy-cloudrun.sh) builds `website/` into `web/site`, builds the container with Cloud Build and deploys it with `--max-instances=2` (override: `DUA_API_MAX_INSTANCES=1..10`). It attaches dua-api's settings from Secret Manager (names listed in `web/.env.example`) with `--update-env-vars` / `--update-secrets`, so settings that are not in the template are kept, not wiped. A secret binding you no longer want must be removed once by hand (`gcloud run services update dua-api ... --remove-secrets NAME`).
+
+dua-api **fails closed**: if `DUA_ALLOWED_EMAIL`, `SUPABASE_URL` or `SUPABASE_ANON_KEY` is missing, chat, search, connectors, Build PR, cloud sync, sign-in, files, Imagine and voice answer `503` ("This Dua server is locked because owner login setup is incomplete …"), and the startup log shows `[dua-access] WARNING: protected routes will answer 503`. `/api/setup`, `/api/config`, the session check, logout and the website stay up. `DUA_ALLOW_OPEN_ACCESS=1` opens it for local development only and is ignored on Cloud Run.
 
 ## Changing settings safely
 
@@ -91,10 +93,10 @@ Or open Cloud Run → service → **Logs** in the console. See [GITHUB_LOGGING.m
 
 ## Cost and the free credit
 
-The project runs on a Google Cloud free credit that **expires on 3 November 2026**. Before then, consider switching the Agent back to the cheaper default model:
+The project runs on a Google Cloud free credit that **expires on 3 November 2026**. Switch the Agent from Gemini 4 Argon back to the cheaper default model **before 1 November 2026** (only `AGENT_MODEL` changes):
 
 ```bash
 gcloud run services update dua-ai-engine --region us-central1 --project global-healer-m6shk --update-env-vars AGENT_MODEL=gemini-3.8-flash
 ```
 
-Check Billing → Reports for spend. Optional paid flags (`AGENT_VERIFY`, `AGENT_TEST_CODE`, `AGENT_ENGINE=adk`) add model calls; see [AGENT.md](AGENT.md).
+Daily caps on Agent runs, chat requests and tokens, and the lower Agent step limits, are described in [Cost guards](../google-cloud-backend/README.md#cost-guards). Check Billing → Reports for spend. Optional paid flags (`AGENT_VERIFY`, `AGENT_TEST_CODE`, `AGENT_ENGINE=adk`) add model calls; see [AGENT.md](AGENT.md).

@@ -12,6 +12,12 @@ if [[ ! "$deadline" =~ ^[0-9]{2,3}$ ]] || (( 10#$deadline < 10 || 10#$deadline >
   echo "DUA_CHAT_DEADLINE_SECONDS must be 10–790 (default 780; Cloud Run timeout is 900)." >&2
   exit 1
 fi
+max_instances="${DUA_API_MAX_INSTANCES:-2}"
+if [[ ! "$max_instances" =~ ^[0-9]{1,2}$ ]] || (( 10#$max_instances < 1 || 10#$max_instances > 10 )); then
+  echo "DUA_API_MAX_INSTANCES must be 1–10 (default 2)." >&2
+  exit 1
+fi
+max_instances=$((10#$max_instances))
 command -v gcloud >/dev/null || { echo "Install Google Cloud CLI or run this script in Cloud Shell." >&2; exit 1; }
 web_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 region=us-central1
@@ -113,16 +119,28 @@ gcloud builds submit "$web_dir" --project "$PROJECT_ID" --region "$region" \
   --default-buckets-behavior=regional-user-owned-bucket --quiet
 
 # Keep optional write/file features off unless the matching Secret Manager flag enables them.
-# --set-* replaces this service's old settings, so removed secret bindings do not linger.
+# --update-* only adds/changes the listed settings and never wipes the others (no --set-env-vars),
+# so settings added by hand in Cloud Run survive a redeploy. A secret binding removed from the
+# template is NOT removed automatically: remove it once with --remove-secrets=NAME if needed.
+# --max-instances caps cost and parallel abuse; DUA_API_MAX_INSTANCES (1-10, default 2) overrides it.
 settings=("NODE_ENV=production" "DUA_REQUIRE_LOGIN=1" "DUA_CHAT_DEADLINE_SECONDS=${deadline}")
 for flag in "${feature_flags[@]}"; do
   [[ -v "attached_settings[$flag]" ]] || settings+=("${flag}=0")
 done
 join_csv() { local IFS=,; printf '%s' "$*"; }
+# A feature flag now supplied as a secret must not also stay as an old plain "=0" setting
+# (Cloud Run refuses one name as both), so drop that plain setting in the same deploy.
+plain_to_remove=()
+for flag in "${feature_flags[@]}"; do
+  [[ -v "attached_settings[$flag]" ]] && plain_to_remove+=("$flag")
+done
+remove_args=()
+(( ${#plain_to_remove[@]} )) && remove_args+=("--remove-env-vars=$(join_csv "${plain_to_remove[@]}")")
 echo "Deploying dua-api in us-central1; application owner authentication remains required..."
 gcloud run deploy "$service" --project "$PROJECT_ID" --region "$region" --image "$image" \
   --service-account "$runtime_account" --port=8080 --timeout=900s --min-instances=0 \
-  --allow-unauthenticated --set-env-vars="$(join_csv "${settings[@]}")" \
-  --set-secrets="$(join_csv "${secret_refs[@]}")" --quiet
+  --max-instances="$max_instances" \
+  --allow-unauthenticated --update-env-vars="$(join_csv "${settings[@]}")" \
+  --update-secrets="$(join_csv "${secret_refs[@]}")" "${remove_args[@]}" --quiet
 echo "dua-api URL:"
 gcloud run services describe "$service" --project "$PROJECT_ID" --region "$region" --format='value(status.url)'

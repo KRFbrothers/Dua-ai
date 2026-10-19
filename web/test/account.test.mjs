@@ -110,9 +110,13 @@ test('the owner keeps refresh, cloud read/write; session, features and logout st
   assert.equal((await logout.json()).revoked, true);
 });
 
-test('without DUA_ALLOWED_EMAIL any signed-in account may use cloud; a malformed owner setting fails closed', async () => {
-  const open = await call('/api/cloud', { env: { ...serviceEnv, DUA_ALLOWED_EMAIL: '' } }, mockFetch(userJson('someone@else.com', strangerId), Response.json([])));
-  assert.equal(open.status, 200);
+test('without DUA_ALLOWED_EMAIL cloud and sign-in fail closed; a malformed owner setting fails closed', async () => {
+  const locked = await call('/api/cloud', { env: { ...serviceEnv, DUA_ALLOWED_EMAIL: '' } }, mockFetch());
+  assert.equal(locked.status, 503);
+  assert.match((await locked.json()).error, /missing: DUA_ALLOWED_EMAIL/);
+  assert.equal((await call('/api/account/google-token', { method: 'POST', body: googleBody, token: null, env: { ...serviceEnv, DUA_ALLOWED_EMAIL: '' } }, mockFetch())).status, 503);
+  // Session and logout stay open so the app can still show "signed out" and clear cookies.
+  assert.equal((await call('/api/account/logout', { method: 'POST', body: {}, env: { ...serviceEnv, DUA_ALLOWED_EMAIL: '' } }, mockFetch(new Response(null, { status: 204 })))).status, 200);
   const broken = { ...serviceEnv, DUA_ALLOWED_EMAIL: 'not-an-email' };
   assert.equal((await call('/api/account/google-token', { method: 'POST', body: googleBody, token: null, env: broken }, mockFetch())).status, 503);
   assert.equal((await call('/api/cloud', { env: broken }, mockFetch(userJson('fareed@example.com')))).status, 503);

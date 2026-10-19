@@ -72,7 +72,7 @@ Runtime settings (`GOOGLE_CLOUD_PROJECT`, `VERTEX_LOCATION`, `VERTEX_MODEL`, `SU
 **Cloud Run service**. A redeploy keeps them, so the standard command passes no settings:
 
 ```bash
-cd ~/Dua-ai && git fetch origin && git checkout main && git reset --hard origin/main && cd google-cloud-backend && gcloud run deploy dua-ai-engine --source . --region us-central1 --project global-healer-m6shk --allow-unauthenticated --timeout 900
+cd ~/Dua-ai && git fetch origin && git checkout main && git reset --hard origin/main && cd google-cloud-backend && gcloud run deploy dua-ai-engine --source . --region us-central1 --project global-healer-m6shk --allow-unauthenticated --timeout 900 --max-instances 2
 ```
 
 To change one setting, use `gcloud run services update dua-ai-engine --region us-central1 --project
@@ -187,13 +187,13 @@ each one runs on this server, behind the same owner sign-in as `/api/chat`.
 | `list_files`, `read_file`, `search_code`, `propose_changes` | GitHub tools on `DUA_REPO`, only when `GITHUB_TOKEN` is set; same allowlist (new `dua-agent/` branch + PR, never merges) | coding caps |
 | `list_issues`, `read_issue`, `search_issues`, `create_issue`, `comment_on_issue` | Issues on `KRFbrothers/Dua-ai` only (needs `GITHUB_TOKEN` with Issues: Read and write). Pull requests are skipped; bodies/comments capped at 4,000 characters. New issues end with "Created by Dua Agent", comments with "Comment by Dua Agent"; only existing labels. No close, edit, assign, lock or delete | 5 reads (shared), 1 create, 1 comment |
 
-Loop caps: `AGENT_MAX_STEPS` model calls (default 12), `AGENT_STEP_TOKENS` output tokens per step (16384),
+Loop caps: `AGENT_MAX_STEPS` model calls (default 8), `AGENT_STEP_TOKENS` output tokens per step (8192),
 `AGENT_SUB_TOKENS` per search/code call (3072) and `AGENT_MAX_SECONDS` total (600). Each tool shows a step chip
 in the app ("Searching the web…", "Opening page…", "Running code…", "Creating image…").
 
 ## Agent model (optional)
 
-`AGENT_MODEL` sets the model for the Dua Agent tool loop only (its search/code sub-calls included); the router, casual replies, titles and normal chat stay on `VERTEX_MODEL`. Default: same as `VERTEX_MODEL`. Example: `AGENT_MODEL=gemini-4-argon` (Vertex locations `global`, `us`, `eu`). `AGENT_THINKING_LEVEL` is `low`, `medium` or `high` (default `medium` when `AGENT_MODEL` differs). With a `gemini-4*` agent model the per-step output cap (thinking included) defaults to 32768; `AGENT_STEP_TOKENS` overrides it. Step, time and tool caps are unchanged. If the agent model returns 404/403 (not found or no permission), the request falls back once to `VERTEX_MODEL` and logs `[dua-agent] ... falling back`.
+`AGENT_MODEL` sets the model for the Dua Agent tool loop only (its search/code sub-calls included); the router, casual replies, titles and normal chat stay on `VERTEX_MODEL`. Default: same as `VERTEX_MODEL`. Example: `AGENT_MODEL=gemini-4-argon` (Vertex locations `global`, `us`, `eu`). `AGENT_THINKING_LEVEL` is `low`, `medium` or `high` (default `medium` when `AGENT_MODEL` differs). The per-step output cap (thinking included) is 8192 for every model, Argon too (it was 32768 for `gemini-4*`); `AGENT_STEP_TOKENS` (1024–65536) overrides it. See "Cost guards" below. If the agent model returns 404/403 (not found or no permission), the request falls back once to `VERTEX_MODEL` and logs `[dua-agent] ... falling back`.
 
 ## Agent notes (self-learning, optional)
 
@@ -248,3 +248,45 @@ Each Agent model step has a hard deadline, `AGENT_STEP_SECONDS` (default 150; al
 4. **`check_pr_ci` tool:** reads the status of the agent's own PR.
 
 **Token:** reading CI needs 'Actions: Read-only' (or 'Checks') on the fine-grained token; without it the answer says so.
+
+## Cost guards
+
+These stop a runaway loop, a stolen session or a busy day from burning the Google Cloud credit. All are
+environment variables on `dua-ai-engine`; change them with `--update-env-vars` only (never `--set-env-vars`).
+
+| Setting | Default | What it does |
+| --- | --- | --- |
+| `DUA_DAILY_AGENT_RUNS` | `50` | Agent-mode requests per day. |
+| `DUA_DAILY_CHAT_REQUESTS` | `500` | Normal chat requests per day (`/api/chat`, `/chat`). |
+| `DUA_DAILY_TOKENS` | `5000000` | Vertex tokens per day (input + thinking + output). |
+| `AGENT_MAX_STEPS` | `8` (was 12) | Model calls per Agent request (1–30). |
+| `AGENT_STEP_TOKENS` | `8192` (was 32768 on Argon) | Output cap per Agent step, thinking included (1024–65536). |
+| `VERTEX_HTTP_TIMEOUT_SECONDS` | `180` | HTTP timeout for every Vertex call without its own deadline (10–600). |
+| `VERTEX_HTTP_ATTEMPTS` | `3` | Tries per Vertex call; retries only 408/429/5xx and network errors, waiting 1–8 s (1–5). |
+
+- **When a cap is full** the app shows a friendly message ("Today's limit for Agent runs is used up …") and no
+  model is called. Days reset at midnight UTC (5:30 AM India time). `0` turns one cap off; a bad value uses the default.
+- **Where counts live:** in memory on each Cloud Run instance (no database, no new library). A restart or a new
+  revision resets them, and with `--max-instances 2` the worst case is about twice each cap. Token counts come from
+  Vertex usage data of the engine's own calls; the optional ADK engine's model calls are not counted (each ADK
+  request still counts as an Agent run). A request that is already running is never cut off.
+- **Gunicorn** runs with `--timeout 930` (above Cloud Run's 900 s and the Agent's 600 s), so a stuck worker is
+  restarted instead of hanging forever. Deploy with `--max-instances 2` (see Redeploy) to cap parallel cost.
+
+Example (raise the Agent cap to 80 a day):
+
+```bash
+gcloud run services update dua-ai-engine --region us-central1 --project global-healer-m6shk --update-env-vars DUA_DAILY_AGENT_RUNS=80
+```
+
+### Switch Argon back to Flash before 1 November 2026
+
+Gemini 4 Argon (`AGENT_MODEL=gemini-4-argon`) is paid from the free credit, which **expires on 3 November 2026**.
+Switch the Agent to `gemini-3.8-flash` **before 1 November 2026** so nothing is billed after the credit ends:
+
+```bash
+gcloud run services update dua-ai-engine --region us-central1 --project global-healer-m6shk --update-env-vars AGENT_MODEL=gemini-3.8-flash
+```
+
+This changes only `AGENT_MODEL`; every other setting and secret stays as it is. Check with
+`gcloud run services describe dua-ai-engine --region us-central1 --project global-healer-m6shk --format='value(spec.template.spec.containers[0].env)'`.

@@ -291,7 +291,7 @@ def test_step_cap_stops_loop():
     model = Script([call("current_time")] * 50)
     text, *_ = run(model)
     assert f"after {at.MAX_STEPS} steps" in text
-    assert sum(1 for c in model.calls if c["tools"] == ["TOOLS"]) == at.MAX_STEPS == 12
+    assert sum(1 for c in model.calls if c["tools"] == ["TOOLS"]) == at.MAX_STEPS == 8
 
 
 def test_time_cap_stops_loop():
