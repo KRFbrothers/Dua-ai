@@ -528,8 +528,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         try { localPreferences.update(value); _settingsStatus.value = "Saved on this device." }
         catch (error: Exception) { _settingsStatus.value = error.message ?: "Settings could not be saved." }
     }
-    fun shareChatText(chat: SavedChat): String = "Dua conversation\n\n" + chat.messages.filter { it.state == "complete" }
-        .joinToString("\n\n") { (if (it.isUser) "You" else "Dua") + ": " + it.text }
 
     private var generation = 0
     private val _error = MutableStateFlow<String?>(null)

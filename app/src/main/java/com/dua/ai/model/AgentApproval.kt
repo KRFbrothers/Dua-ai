@@ -20,7 +20,6 @@ data class AgentApproval(
 ) {
     enum class Status { Pending, Working, Done, Failed, Rejected, Expired }
 
-    val decided: Boolean get() = status != Status.Pending && status != Status.Working
     fun expired(now: Long) = status == Status.Pending && expiresAt in 1..now
 }
 

@@ -80,7 +80,6 @@ object ChatSizes {
     val searchSelectionBorder = 2.dp
     val fileChipNameMax = 160.dp
     val legacyFileChipNameMax = 140.dp
-    val sourceTextMax = 200.dp
     /** Citation cards stay compact while leaving a peek at the next source on a phone. */
     val sourceCardWidth = 240.dp
     val siteIcon = 20.dp

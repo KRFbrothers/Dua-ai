@@ -20,5 +20,4 @@ internal object ProjectShapes {
     val search = RoundedCornerShape(26.dp); val name = RoundedCornerShape(18.dp)
     val button = RoundedCornerShape(27.dp); val settings = RoundedCornerShape(21.dp)
     val popup = RoundedCornerShape(24.dp); val attachments = RoundedCornerShape(28.dp)
-    val sourceAdd = RoundedCornerShape(22.dp)
 }

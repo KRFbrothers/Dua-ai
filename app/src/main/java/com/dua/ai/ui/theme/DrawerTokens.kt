@@ -48,7 +48,6 @@ object DrawerSizes {
     val width = 286.dp
     val paddingH = 16.dp
     val paddingV = 16.dp
-    val headerTop = 4.dp
     val headerBottom = 20.dp
     val searchCircle = 46.dp
     val searchIcon = 24.dp
@@ -57,8 +56,6 @@ object DrawerSizes {
     val actionPaddingH = 12.dp
     val menuGap = 14.dp
     val menuPaddingV = 12.dp
-    val subIcon = menuIcon
-    val subGap = menuGap
     val subIndent = 38.dp
     val chevron = 20.dp
     val dividerThickness = 1.dp
@@ -66,23 +63,13 @@ object DrawerSizes {
     val chatPaddingV = 12.dp
     val pinIcon = 20.dp
     val dockTop = 12.dp
-    val newChatPaddingH = 24.dp
-    val newChatPaddingV = 13.dp
-    val newChatIcon = 20.dp
-    val newChatGap = 10.dp
     val avatar = 44.dp
     val voiceIcon = 18.dp
-    val dockGap = 0.dp
     val touch = 48.dp
     /** Soft elevation under the white search circle (reference ~6 dp blur). */
     val searchElevation = 6.dp
     /** White ring around the profile photo / initial. */
     val avatarRing = 3.dp
-    /** Height of the top background gradient and of the bottom fade over the recent chats. */
-    val gradientHeight = 220.dp
-    val bottomFade = 96.dp
-    /** Space reserved under the list so the last chat can scroll clear of the dock. */
-    val dockReserve = 72.dp
 }
 
 object DrawerShapes {

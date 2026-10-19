@@ -51,7 +51,7 @@ class FeatureIsolationUiTest(private val dark: Boolean, private val compact: Boo
         compose.onNodeWithContentDescription("Find in chat").assertDoesNotExist()
         compose.onNodeWithContentDescription("New chat").assertDoesNotExist()
         compose.onNodeWithContentDescription("Model, Dua").assertDoesNotExist()
-        ReferencePrompts.forEach { compose.onNodeWithText(it.second).assertDoesNotExist() }
+        listOf("Create an image or sticker", "Write or edit").forEach { compose.onNodeWithText(it).assertDoesNotExist() }
     }
     @Test fun normalHeaderIsUnchangedBySendStreamingAndCompletion() {
         val state = mutableStateOf(ChatUiState())
