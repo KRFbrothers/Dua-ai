@@ -55,7 +55,7 @@ class DynamicComposerUiTest(private val dark: Boolean, private val largeFont: Bo
         val streaming = mutableStateOf(false)
         var sent = ""; var live = 0; var mic = 0; var attach = 0; var stopped = 0
         show { Composer(value = draft.value, controlled = true, onDraftChange = { draft.value = it }, typing = streaming.value,
-            onSend = { sent = it }, onVoiceMode = { live++ }, onMic = { mic++ }, onAttach = { attach++ }, onStop = { stopped++ }) }
+            onSend = { sent = it; draft.value = "" }, onVoiceMode = { live++ }, onMic = { mic++ }, onAttach = { attach++ }, onStop = { stopped++ }) }
         compose.onNodeWithText("Ask Dua AI...").assertIsDisplayed()
         compose.onNodeWithTag("composer-container").assertHeightIsAtLeast(64.dp)
         control("Voice mode").performClick(); control("Dictate").performClick(); control("Add photos and files").performClick()
@@ -111,8 +111,10 @@ class DynamicComposerUiTest(private val dark: Boolean, private val largeFont: Bo
         show { Composer(controlled = true, uploads = upload.value, uploading = upload.value.any { it.uploading },
             sendEnabled = false, onRemoveUpload = { cancelled = it; upload.value = emptyList() }) }
         compose.onNodeWithTag("attachment-upload-progress").assertExists()
-        compose.onNodeWithContentDescription("Send message").assertIsNotEnabled()
+        control("Cancel upload").assertIsEnabled()
+        compose.onNodeWithContentDescription("Send message").assertDoesNotExist()
         compose.runOnIdle { upload.value = upload.value.map { it.copy(state = PendingUpload.FAILED, error = "Upload failed. Remove and choose the file again.") } }
+        compose.onNodeWithContentDescription("Send message").assertIsNotEnabled()
         compose.onNodeWithText("Upload failed.", substring = true).assertIsDisplayed()
         control("Remove attachment report.pdf").performClick()
         assertEquals("upload", cancelled)

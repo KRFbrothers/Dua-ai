@@ -93,7 +93,7 @@ class HomeComposerPolishUiTest(private val dark: Boolean, private val largeText:
                 DuaTheme(LocalPreferences(theme = if (dark) "dark" else "light")) {
                     Box(Modifier.requiredSize(width.value, 650.dp).background(ChatTheme.colors.background), contentAlignment = Alignment.BottomCenter) {
                         Composer(homeLayout = true, controlled = true, showModelSelector = false,
-                            value = draft.value, onDraftChange = { draft.value = it }, onSend = { sent = it })
+                            value = draft.value, onDraftChange = { draft.value = it }, onSend = { sent = it; draft.value = "" })
                     }
                 }
             }

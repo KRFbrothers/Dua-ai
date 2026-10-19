@@ -49,3 +49,33 @@ battery impact and authenticated photo loading are not established by these
 tests or screenshots.
 
 Validated on 2026-10-19: `:app:testDebugUnitTest :app:assembleDebug -Pdua.ui-record --offline` passed 1,385 tests across 182 classes with zero failures/errors/skips. Native light/dark phone, 2× text and wide-window captures were reviewed. `git diff --check` passed, and the attachment-sheet/shared sheet files have no changes. Device keyboard timing remains unverified.
+
+## Send rejection and upload recovery
+
+Controlled composers now leave draft clearing to their state owner. The chat
+ViewModel already clears its draft when it accepts a request, after its local
+validation. Rejecting a request (for example, the 8,000-character guard) or
+deferring preparation therefore keeps the typed text. Both Send and the IME Send
+action use this behavior. Standalone composers still clear their local text
+after sending. Existing successful-send tests explicitly model owner acceptance.
+
+While files upload, the primary action is an enabled Cancel upload instead of a
+disabled Send. It uses the existing ChatScreen cancellation callback, which
+removes only currently uploading items and retains ready attachments and the
+draft. Stop response takes priority during generation. Pending uploads still
+block both Send and IME submission; file-by-file removal and the locked + sheet
+retain their existing geometry and callbacks.
+
+`ComposerRecoveryUiTest` checks rejected/deferred/accepted controlled submissions,
+local draft clearing, current-list upload cancellation through ChatScreen,
+retention of a ready file and draft, and Stop priority. Cases run in both themes
+at normal and 2× text; native previews use
+`app/build/approved-ui/composer-recovery-*.png`. Tests use synthetic uploads and
+callbacks, without a network upload or provider request. Physical-device upload
+cancellation and keyboard timing remain phone checks.
+
+Validated recovery behavior on 2026-10-19: `:app:testDebugUnitTest
+:app:assembleDebug -Pdua.ui-record --offline` passed all 1,405 tests across
+184 classes with zero failures/errors/skips. Debug APK packaging and
+`git diff --check` passed. Light/dark and 2× text recovery previews were
+reviewed. AttachmentSheet.kt and the shared sheet source/tokens have no changes.
