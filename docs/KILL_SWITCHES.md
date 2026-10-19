@@ -59,5 +59,11 @@ gcloud run services update dua-ai-engine --project=global-healer-m6shk --region=
 
 Check: `curl -s https://<dua-api URL>/api/config | jq .switches`.
 
-Important: `web/deploy-cloudrun.sh` deploys dua-api with `--set-env-vars`, which replaces all variables, so a
-redeploy of dua-api turns every switch **off** again. Re-run the needed command above after deploying, then check `switches`.
+## Deploys keep the switches
+
+`web/deploy-cloudrun.sh` only uses `--update-env-vars` / `--update-secrets` (never `--set-*` or `--clear-*`), and it never
+passes any `DUA_DISABLE_*` or `DUA_MAINTENANCE*` variable, so a switch you set stays set across dua-api deploys
+(tested in `web/test/deploy-cloudrun.test.mjs`). The only removals it can make are explicit and narrow:
+a feature flag that moved into Secret Manager drops its old literal value, and `DUA_REMOVE_SECRETS=NAME1,NAME2`
+(optional, when running the script) detaches exactly those secret bindings; kill-switch names are refused there.
+Turn a switch off with the "Back on" / "Off" commands above.
