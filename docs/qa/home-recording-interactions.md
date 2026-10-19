@@ -7,12 +7,12 @@ Reference: the user's 39.9-second Gemini recording, `Record_2026-10-19-06-24-37_
 - Chat typing/clearing (approximately 2–11 s): greeting, logo and tagline fade out when a draft contains content and return when cleared. The empty canvas keeps its size; the composer and Chat/Task controls remain mounted. Short Home drafts keep the inline pill and switch Voice to Send. Text wider than the available inline space, explicit newlines or attachments expand the composer. Large text retains space for its full placeholder. Attachments/uploads also count as composer content.
 - Task and keyboard (12–24 s): while the keyboard is visible and the draft is empty, suggestions remain reachable and the large Task heading is hidden. Typing hides suggestions too; clearing restores them. Closing the keyboard restores the empty Task heading. Chat/Task changes preserve the draft and composer focus.
 - Keyboard dismissal: tapping empty Home space or opening the drawer/account panel clears input focus and requests IME dismissal without clearing the draft. The existing IME/navigation-bar union still owns the Home inset; a second bottom animation or padding is not added.
-- Drawer (about 26 s): retain the real saved chats, search, pinned filter, inline pins, navigation, account footer, scrim and close gesture from the merged drawer implementation.
+- Drawer (about 26 s): retain the real saved chats, search, pinned filter, inline pins, navigation, bottom actions, scrim and close gesture from the merged drawer implementation.
 - Account overlay (30–34 s): the avatar opens a dismissible native dialog over Home. It displays the real account name/photo/email, or Guest with Sign in. Manage account/Sign in, Usage limits, Personal memory, Notifications and Settings open existing Dua destinations. Close, Android Back and outside dismissal return to the same Home state.
 
 The recording's Google account services and subscription badge are not Dua features. The menu uses working Dua destinations and the existing sheet palette. Dua's logo, Google Sans Home typography, purple voice action, gradients, dynamic model label, real dictation/send handlers and global theme remain in use.
 
-The drawer footer was subsequently simplified to a single bottom-right New chat icon per the newer screenshots. See [current drawer QA](drawer-reference.md).
+The latest drawer footer keeps New chat on the left and an icon-only profile/settings action on the right per the user’s follow-up. See [current drawer QA](drawer-reference.md).
 
 ## Verification
 

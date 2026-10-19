@@ -55,7 +55,6 @@ object DrawerSizes {
     val brandIcon = 32.dp
     val menuIcon = 26.dp
     val actionPaddingH = 12.dp
-    val footerPaddingV = 8.dp
     val menuGap = 14.dp
     val menuPaddingV = 12.dp
     val subIcon = menuIcon
@@ -96,6 +95,4 @@ val DrawerTitleStyle = TextStyle(fontFamily = HomeFontFamily, fontWeight = FontW
 val DrawerMenuStyle = TextStyle(fontFamily = HomeFontFamily, fontWeight = FontWeight.Normal, fontSize = 17.sp)
 val DrawerSubStyle = DrawerMenuStyle
 val DrawerChatStyle = TextStyle(fontFamily = HomeFontFamily, fontWeight = FontWeight.Normal, fontSize = 16.sp)
-val DrawerNewChatStyle = DrawerMenuStyle
-val DrawerProfileStyle = DrawerMenuStyle.copy(fontWeight = FontWeight.Medium)
 val DrawerAvatarStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Bold, fontSize = 16.sp)

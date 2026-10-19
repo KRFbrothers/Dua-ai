@@ -48,10 +48,10 @@ class DrawerReferenceUiTest(private val dark: Boolean, private val large: Boolea
         file.parentFile!!.mkdirs(); compose.onRoot().captureRoboImage(file.absolutePath)
     }
 
-    @Test fun bottomRightNewChatIsTheOnlyFooterActionAndStaysClearOfScrollableHistory() {
-        var newChats = 0
+    @Test fun bottomActionsKeepNewChatLeftAndProfileSettingsRightClearOfHistory() {
+        var newChats = 0; var settings = 0
         show { HistoryDrawer(chats = listOf(chat("a", "My first conversation"), chat("b", "My saved question", true)),
-            onNewChat = { newChats++ }) }
+            profileName = "Signed-in Owner", onNewChat = { newChats++ }, onOpenSettings = { settings++ }) }
         compose.onAllNodesWithTag("drawer-new-chat").assertCountEquals(1)
         compose.onNodeWithTag("drawer-new-chat").assertIsDisplayed().assertContentDescriptionEquals("Start a new chat")
             .assertHeightIsAtLeast(48.dp).assertWidthIsAtLeast(48.dp).performClick()
@@ -59,19 +59,25 @@ class DrawerReferenceUiTest(private val dark: Boolean, private val large: Boolea
         val body = compose.onNodeWithTag("drawer-body").fetchSemanticsNode().boundsInRoot
         val footer = compose.onNodeWithTag("drawer-bottom-actions").fetchSemanticsNode().boundsInRoot
         assertTrue(body.bottom <= footer.top)
-        assertEquals(footer.right, newChat.right, 1f)
+        val profile = compose.onNodeWithTag("drawer-profile").assertIsDisplayed().assertWidthIsAtLeast(48.dp)
+            .assertHeightIsAtLeast(48.dp).fetchSemanticsNode().boundsInRoot
+        assertEquals(footer.left, newChat.left, 1f)
+        assertEquals(footer.right, profile.right, 1f)
+        assertTrue(newChat.right <= profile.left)
         compose.onNodeWithText("New chat").assertDoesNotExist() // Icon only.
         compose.onNodeWithTag("drawer-profile-footer").assertDoesNotExist()
         compose.onNodeWithContentDescription("Profile & Settings").assertDoesNotExist()
         compose.onNodeWithContentDescription("Open drawer settings").assertDoesNotExist()
-        compose.onNodeWithTag("drawer-account-avatar", useUnmergedTree = true).assertDoesNotExist()
+        compose.onNodeWithTag("drawer-account-avatar", useUnmergedTree = true).assertWidthIsEqualTo(44.dp)
+        compose.onNodeWithText("Signed-in Owner").assertDoesNotExist()
         compose.onNodeWithTag("account-avatar", useUnmergedTree = true).assertDoesNotExist()
         compose.onNodeWithText("PRO").assertDoesNotExist()
         compose.onNodeWithText("My saved question").performScrollTo().assertIsDisplayed()
         val lastChat = compose.onNodeWithText("My saved question").fetchSemanticsNode().boundsInRoot
         assertTrue(lastChat.bottom <= footer.top)
-        capture("bottom-new-chat")
-        assertEquals(1, newChats)
+        capture("bottom-actions")
+        compose.onNodeWithContentDescription("Open drawer profile and settings").performClick()
+        assertEquals(1, newChats); assertEquals(1, settings)
     }
 
     @Test fun pinnedFilterAndInlinePinUseRealStateWithoutOpeningTheChat() {
@@ -105,14 +111,16 @@ class DrawerReferenceUiTest(private val dark: Boolean, private val large: Boolea
     }
 
     @Test fun emptyGuestDrawerHasNoInventedChatsOrSubscriptionAndRespectsDisabledNewChat() {
-        var created = 0
-        show { HistoryDrawer(newChatEnabled = false, onNewChat = { created++ }) }
+        var created = 0; var settings = 0
+        show { HistoryDrawer(newChatEnabled = false, onNewChat = { created++ }, onOpenSettings = { settings++ }) }
         compose.onNodeWithTag("drawer-new-chat").assertIsNotEnabled()
         compose.onNodeWithText("No chats yet").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Profile & settings").assertDoesNotExist()
         compose.onNodeWithText("PRO").assertDoesNotExist()
-        compose.onNodeWithContentDescription("Anonymous profile").assertDoesNotExist()
+        compose.onNodeWithTag("drawer-profile").assertIsEnabled().assertIsDisplayed().performClick()
+        compose.onNodeWithTag("drawer-account-avatar", useUnmergedTree = true).assertExists()
         assertEquals(0, created)
+        assertEquals(1, settings)
         capture("empty")
     }
 }

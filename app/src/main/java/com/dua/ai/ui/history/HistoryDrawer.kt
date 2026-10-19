@@ -34,12 +34,15 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.style.TextOverflow
 import com.dua.ai.history.SavedChat
 import com.dua.ai.ui.navigation.DuaDestination
 import com.dua.ai.ui.components.ReferenceIcons
+import com.dua.ai.ui.components.AccountAvatar
 import com.dua.ai.ui.theme.*
 import android.graphics.BitmapFactory
 import java.io.ByteArrayOutputStream
@@ -58,7 +61,7 @@ fun SearchField(query: String = "", onQueryChange: (String) -> Unit = {}, modifi
 }
 
 /**
- * Drawer: brand/search, destinations and filtered real chats, with a fixed bottom-right New chat icon. Long-press retains Rename / Pin / Delete.
+ * Drawer: brand/search, destinations and real chats, with fixed New chat and profile actions.
  */
 @Composable
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
@@ -68,6 +71,9 @@ fun HistoryDrawer(
     onSelectChat: (String) -> Unit = {},
     onNewChat: () -> Unit = {},
     onSearch: () -> Unit = {},
+    onOpenSettings: () -> Unit = {},
+    profileName: String = "",
+    profilePhotoUrl: String = "",
     onDeleteChat: (String) -> Unit = {},
     onRenameChat: (String, String) -> String? = { _, _ -> null },
     serverDeletionEnabled: Boolean = false,
@@ -175,10 +181,18 @@ fun HistoryDrawer(
                 notice?.let { Text(it, style = DrawerChatStyle, color = colors.subText, modifier = Modifier.padding(vertical = DrawerSizes.chatPaddingV)) }
             }
             Row(Modifier.fillMaxWidth().padding(top = DrawerSizes.dockTop).testTag("drawer-bottom-actions"),
-                horizontalArrangement = Arrangement.End) {
+                horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onNewChat, enabled = newChatEnabled,
                     modifier = Modifier.size(DrawerSizes.touch).testTag("drawer-new-chat")) {
                     Icon(ReferenceIcons.Chat, "Start a new chat", tint = colors.menuText, modifier = Modifier.size(DrawerSizes.menuIcon))
+                }
+                IconButton(onClick = onOpenSettings, modifier = Modifier.size(DrawerSizes.touch).testTag("drawer-profile")
+                    .semantics { contentDescription = "Open drawer profile and settings" }) {
+                    val density = LocalDensity.current
+                    CompositionLocalProvider(LocalDensity provides Density(density.density, 1f)) {
+                        AccountAvatar(email = null, displayName = profileName, avatarUrl = profilePhotoUrl,
+                            size = DrawerSizes.avatar, tag = "drawer-account-avatar")
+                    }
                 }
             }
         }

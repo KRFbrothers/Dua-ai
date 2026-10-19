@@ -16,8 +16,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import com.dua.ai.motion.DuaHapticManager
-import com.dua.ai.motion.DuaMotionConfig
 
 /** Standard motion physics tokens adhering to Dua AI animation guidelines. */
 object DuaMotion {
@@ -65,18 +63,4 @@ fun rememberMotionAllowed(): Boolean {
         }
     }
     return allowed
-}
-
-/** Remember the device tier and motion capabilities configuration. */
-@Composable
-fun rememberDuaMotionConfig(): DuaMotionConfig {
-    val context = LocalContext.current.applicationContext
-    return remember(context) { DuaMotionConfig(context) }
-}
-
-/** Remember the tactile haptic manager. */
-@Composable
-fun rememberDuaHapticManager(): DuaHapticManager {
-    val context = LocalContext.current.applicationContext
-    return remember(context) { DuaHapticManager(context) }
 }
