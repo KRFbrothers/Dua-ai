@@ -11,7 +11,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.ui.platform.testTag
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -94,20 +93,10 @@ fun EditingBanner(onCancel: () -> Unit, modifier: Modifier = Modifier) {
 
 
 /**
- * Waiting for the first token: the existing "Thinking" dots plus two softly pulsing placeholder lines
- * (theme colors, draw-phase alpha only). Replaced by the streaming text as soon as it arrives.
+ * Waiting for the first token: the approved orb and existing Thinking status.
+ * Replaced by the streaming text as soon as it arrives.
  */
 @Composable
 fun ReplyPlaceholder(modifier: Modifier = Modifier) {
-    val alpha = if (rememberReplyMotionAllowed()) rememberInfiniteTransition(label = "reply-placeholder").animateFloat(0.35f, 0.9f,
-        infiniteRepeatable(tween(ChatSizes.placeholderPulseMs, easing = LinearEasing), RepeatMode.Reverse), label = "placeholder-alpha") else null
-    val fill = ChatTheme.colors.chipFill
-    androidx.compose.foundation.layout.Column(modifier.fillMaxWidth().testTag("reply-placeholder")) {
-        TypingIndicator(Modifier.heightIn(min = Sizes.touchTarget))
-        listOf(0.92f, 0.6f).forEach { width ->
-            Box(Modifier.padding(top = ChatSizes.placeholderLineGap).fillMaxWidth(width).height(ChatSizes.placeholderLineHeight)
-                .graphicsLayer { this.alpha = alpha?.value ?: 0.65f }.background(fill, com.dua.ai.ui.theme.DuaShape.chip)
-                .clearAndSetSemantics { })
-        }
-    }
+    TypingIndicator(modifier.fillMaxWidth().heightIn(min = Sizes.touchTarget).testTag("reply-placeholder"))
 }

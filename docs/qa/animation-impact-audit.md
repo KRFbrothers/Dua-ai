@@ -6,7 +6,7 @@ Reference: the supplied `Dua Ai Animation Impact Map.md`. Audit date: 2026-10-19
 
 | Area | Current source evidence | Implication |
 | --- | --- | --- |
-| Home | Cached blue/purple waves, Chat/Task fades, keyboard-aware layout and draft-driven visibility | Keep the approved Home layout; no new full-screen animation loop is needed for this phase. |
+| Home (initial audit) | Cached blue/purple waves, Chat/Task fades, keyboard-aware layout and draft-driven visibility | The first phase retained these. The later owner-approved ambient pass replaces the waves; see [native ambient QA](home-ambient-motion.md). |
 | Chat streaming | `ChatViewModel.collectReply` applies every event to the accumulator before conflating UI snapshots, with `STREAM_FRAME_MS = 24L` | Buffering already exists. A 24 ms delay allows at most about 42 UI snapshots/sec before processing overhead; it does not promise 120 FPS or reduce server response time. |
 | Motion and haptics | `DuaMotion` spring tokens, `rememberMotionAllowed`, preference-aware `ChatActions.haptic` / `LocalChatHaptic` | Reuse these paths. The initial helper cached the animator setting once; direct custom-vibrator calls in ChatScreen bypassed the existing preference-aware callback. |
 | Voice | Cached waveform buffers, draw-phase level reads, a lifecycle-bound frame loop | Audio-reactive Canvas rendering is already present. This is amplitude/envelope feedback, not measured pitch tracking or viseme lip-sync. |
@@ -50,7 +50,7 @@ The later drawer/profile and unused-runtime cleanup is documented in [project cl
 
 ## Reply-feedback follow-up
 
-Pending-reply dots, placeholder lines, the streaming cursor, Agent-step pulse
+Pending-reply feedback, the streaming cursor, Agent-step pulse
 and spinner, reasoning badge/expansion and message placement now follow the live
 Remove animations setting and resumed lifecycle. Reduced motion keeps static
 feedback visible; the active Agent step uses a clock icon rather than a spinner.
@@ -84,3 +84,12 @@ Local Gradle verification is available again through the supported permissions
 path. Full-suite/build results are recorded in the PR and CI checks;
 `git diff --check` passes. Device frame timing, battery effects and TalkBack still
 require device verification.
+
+## Approved ambient follow-up
+
+The owner-approved browser preview is now adapted to native Compose: cached
+drifting radial washes on Home, a subdued standard-conversation backdrop and a
+rotating/pulsing thinking orb. The orb replaces both the pending dots and the
+old skeleton lines; the existing status announcement and first-token replacement
+remain. All decorative loops use the live motion/resumed-lifecycle guard above.
+See [native ambient QA](home-ambient-motion.md) for scope and verification.
