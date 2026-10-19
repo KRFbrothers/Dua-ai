@@ -94,7 +94,6 @@ import com.dua.ai.ui.agent.AgentContent
 import com.dua.ai.ui.agent.AgentModePill
 import com.dua.ai.ui.screens.ProjectsFeaturePage
 
-import com.dua.ai.ui.theme.rememberDuaHapticManager
 
 private data class ConversationResults(val messages: List<ChatMessage>, val query: String, val matches: List<ConversationMatch>)
 
@@ -115,12 +114,11 @@ fun ChatScreen(
     dismissOverlaysRequest: String? = null,
 ) {
     val drawerState = rememberDrawerState(initialDrawerValue)
-    val hapticManager = rememberDuaHapticManager()
     var lastDrawerValue by remember { mutableStateOf(drawerState.currentValue) }
     LaunchedEffect(drawerState.currentValue) {
         if (drawerState.currentValue != lastDrawerValue) {
             lastDrawerValue = drawerState.currentValue
-            hapticManager.onStateChange()
+            actions.haptic(ChatHaptic.Tap)
         }
     }
     val scope = rememberCoroutineScope()
@@ -246,7 +244,6 @@ fun ChatScreen(
     var inputBounds by remember { mutableStateOf(Rect.Zero) }
     var bottomCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
     BackHandler(enabled = feature != null && sheet == null && viewer == null && !searchOpen) { actions.onExitFeature() }
-    BackHandler(enabled = drawerState.isOpen) { scope.launch { drawerState.close() } }
     LaunchedEffect(listState) {
         listState.interactionSource.interactions.collect { interaction ->
             when (interaction) {
@@ -269,8 +266,9 @@ fun ChatScreen(
     var previousUserId by remember(conversationKey) { mutableStateOf(lastUserId) }
     val streamingSize = state.messages.lastOrNull()?.takeIf { it.streaming }?.let { it.text.length + (it.thinking?.length ?: 0) } ?: -1
     val lastMessageId = state.messages.lastOrNull()?.id
+    val streamHaptic = remember(conversationKey) { StreamHapticThrottle() }
     LaunchedEffect(streamingSize) {
-        if (streamingSize > 0) hapticManager.onTokenTick()
+        if (streamingSize > 0) streamHaptic.tick { actions.haptic(ChatHaptic.Tap) }
     }
     LaunchedEffect(conversationKey, lastUserId, lastMessageId, streamingSize) {
         val newPrompt = lastUserId != previousUserId
@@ -295,6 +293,7 @@ fun ChatScreen(
                 gesturesEnabled = drawerState.isOpen,
                 drawerContent = {
                     if (feature == null) HistoryDrawer(
+                        drawerState = drawerState,
                         chats = state.savedChats.filter { it.projectId == state.projectId },
                         currentChatId = state.chatId,
                         newChatEnabled = !state.typing,

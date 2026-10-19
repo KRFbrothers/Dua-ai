@@ -1,6 +1,13 @@
 package com.dua.ai.ui.chat
 
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -251,10 +258,17 @@ fun Composer(
 @Composable
 private fun ComposerAction(icon: ImageVector, label: String, enabled: Boolean = true, onClick: () -> Unit, iconSize: Dp = HomeSizes.voiceIcon) {
     val c = HomeTheme.colors
+    val motion = com.dua.ai.ui.theme.rememberMotionAllowed()
     Box(Modifier.size(Sizes.touchTarget).clip(HomeShapes.round).clickable(enabled = enabled, role = Role.Button, onClick = onClick)
         .semantics(mergeDescendants = true) { contentDescription = label }, contentAlignment = Alignment.Center) {
         Box(Modifier.size(ComposerSizes.actionButton).clip(HomeShapes.round).background(c.voice), contentAlignment = Alignment.Center) {
-            Icon(icon, null, tint = c.onVoice, modifier = Modifier.size(iconSize))
+            if (motion) AnimatedContent(icon, contentAlignment = Alignment.Center,
+                transitionSpec = {
+                    (fadeIn(tween(150)) + scaleIn(tween(150), initialScale = 0.85f)) togetherWith
+                        (fadeOut(tween(100)) + scaleOut(tween(100), targetScale = 0.85f))
+                }, label = "Composer action") { target ->
+                Icon(target, null, tint = c.onVoice, modifier = Modifier.size(iconSize))
+            } else Icon(icon, null, tint = c.onVoice, modifier = Modifier.size(iconSize))
         }
     }
 }

@@ -65,7 +65,7 @@ fun SearchField(query: String = "", onQueryChange: (String) -> Unit = {}, modifi
  * and a separately measured profile footer. Long-press retains Rename / Pin / Delete.
  */
 @Composable
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 fun HistoryDrawer(
     chats: List<SavedChat> = emptyList(),
     currentChatId: String? = null,
@@ -86,6 +86,7 @@ fun HistoryDrawer(
     profilePhotoUrl: String = "",
     newChatEnabled: Boolean = true,
     modifier: Modifier = Modifier,
+    drawerState: DrawerState = rememberDrawerState(DrawerValue.Closed),
 ) {
     val colors = DrawerTheme.colors
     var auraExpanded by rememberSaveable { mutableStateOf(false) }
@@ -99,7 +100,7 @@ fun HistoryDrawer(
         HistoryGrouping.filter(HistoryGrouping.recent(chats), query).filter { !pinnedOnly || it.pinned }.sortedWith(compareByDescending<SavedChat> { it.pinned }.thenByDescending { it.updatedAt })
     }
 
-    ModalDrawerSheet(drawerShape = RectangleShape, drawerContainerColor = colors.container,
+    ModalDrawerSheet(drawerState = drawerState, drawerShape = RectangleShape, drawerContainerColor = colors.container,
         modifier = modifier.width(DrawerSizes.width).testTag("history-drawer")) {
         Column(Modifier.fillMaxSize().background(colors.container)
             .statusBarsPadding().navigationBarsPadding().imePadding()
