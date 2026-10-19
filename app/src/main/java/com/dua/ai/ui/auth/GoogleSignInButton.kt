@@ -28,9 +28,9 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.credentials.exceptions.GetCredentialCancellationException
 import com.dua.ai.R
 import com.dua.ai.auth.GoogleSignIn
+import com.dua.ai.auth.GoogleIdentity
 import com.dua.ai.ui.theme.DuaTheme
 import com.dua.ai.ui.theme.Spacing
 import com.dua.ai.viewmodel.ChatViewModel
@@ -46,15 +46,22 @@ fun rememberGoogleSignIn(viewModel: ChatViewModel, emailHint: String? = null): (
         if (!viewModel.googleSignIn.value.busy) {
             viewModel.googleSignInStarted()
             scope.launch {
-                try {
-                    val identity = GoogleSignIn.requestIdToken(context, emailHint)
-                    viewModel.signInWithGoogle(identity.idToken, identity.nonce, identity.photoUrl, expectedEmail = emailHint)
-                } catch (cancelled: CancellationException) { viewModel.googleSignInFailed(null); throw cancelled }
-                catch (_: GetCredentialCancellationException) { viewModel.googleSignInFailed(null) }
-                catch (failure: Exception) { viewModel.googleSignInFailed(GoogleSignIn.friendlyMessage(failure)) }
+                completeGoogleSignIn(
+                    requestIdentity = { GoogleSignIn.requestIdToken(context, emailHint) },
+                    submitIdentity = { identity -> viewModel.signInWithGoogle(identity.idToken, identity.nonce, identity.photoUrl, expectedEmail = emailHint) },
+                    onFailure = viewModel::googleSignInFailed
+                )
             }
         }
     }
+}
+
+/** Provider cancellation is a visible incomplete sign-in; leaving the screen still cancels normally. */
+internal suspend fun completeGoogleSignIn(requestIdentity: suspend () -> GoogleIdentity,
+    submitIdentity: (GoogleIdentity) -> Unit, onFailure: (String?) -> Unit) {
+    try { submitIdentity(requestIdentity()) }
+    catch (cancelled: CancellationException) { onFailure(null); throw cancelled }
+    catch (failure: Exception) { onFailure(GoogleSignIn.friendlyMessage(failure)) }
 }
 
 /** Primary "Sign in with Google" button with its loading state and any error shown below it. */
