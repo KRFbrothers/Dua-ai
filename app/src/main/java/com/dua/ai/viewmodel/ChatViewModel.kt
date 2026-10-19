@@ -538,7 +538,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             accumulator.apply(it)
         }.conflate().collect {
             val snapshot = accumulator.snapshot()
-            updateMessage(id) { it.copy(progress = snapshot.progress, media = snapshot.media.ifEmpty { it.media }, text = snapshot.text, thinking = snapshot.thinking, thinkingSeconds = snapshot.thinkingSeconds, notice = snapshot.notice, codeRuns = snapshot.codeRuns, build = snapshot.build ?: it.build, proposal = snapshot.proposal ?: it.proposal) }
+            updateMessage(id) { it.copy(progress = snapshot.progress, approvals = snapshot.approvals.ifEmpty { it.approvals }, media = snapshot.media.ifEmpty { it.media }, text = snapshot.text, thinking = snapshot.thinking, thinkingSeconds = snapshot.thinkingSeconds, notice = snapshot.notice, codeRuns = snapshot.codeRuns, build = snapshot.build ?: it.build, proposal = snapshot.proposal ?: it.proposal) }
             delay(STREAM_FRAME_MS)
         }
     }
@@ -746,6 +746,44 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             } catch (cancelled: CancellationException) { setState(null); throw cancelled }
             catch (failure: Exception) {
                 setState(com.dua.ai.ui.chat.BuildPrUiState(error = failure.message?.take(300)?.takeIf { it.isNotBlank() } ?: "Creating the pull request failed. Retry."))
+            }
+        }
+    }
+
+    // Dua Agent approvals: the engine never runs a write tool by itself. This is the single place that asks it to run (or
+    // drop) one stored action, and only from the approval card's Approve / Reject buttons. Only the id is sent.
+    private fun updateApproval(messageId: String, approval: com.dua.ai.model.AgentApproval, outcome: Boolean = false) {
+        val change = { item: ChatMessage ->
+            if (item.id != messageId) item else item.copy(approvals = item.approvals.map { if (it.id == approval.id) approval else it },
+                text = if (outcome) com.dua.ai.model.AgentApprovals.appendOutcome(item.text, com.dua.ai.model.AgentApprovals.transcriptLine(approval)) else item.text)
+        }
+        // The owner may have switched chats meanwhile: update the message wherever it is now.
+        if (_messages.value.any { it.id == messageId }) _messages.value = _messages.value.map(change)
+        else _savedChats.value = _savedChats.value.map { chat -> if (chat.messages.any { it.id == messageId }) chat.copy(messages = chat.messages.map(change)) else chat }
+        if (outcome) saveHistory()
+    }
+
+    fun decideAgentApproval(messageId: String, approvalId: String, approve: Boolean) {
+        val approval = _messages.value.firstOrNull { it.id == messageId }?.approvals?.firstOrNull { it.id == approvalId } ?: return
+        if (approval.status != com.dua.ai.model.AgentApproval.Status.Pending) return
+        if (approval.expired(System.currentTimeMillis())) {
+            updateApproval(messageId, approval.copy(status = com.dua.ai.model.AgentApproval.Status.Expired), outcome = true); return
+        }
+        updateApproval(messageId, approval.copy(status = com.dua.ai.model.AgentApproval.Status.Working))
+        viewModelScope.launch {
+            try {
+                val (status, text) = account.withToken { token -> api.agentAction(approvalId, approve, token) }
+                updateApproval(messageId, approval.copy(status = status, result = text), outcome = true)
+            } catch (cancelled: CancellationException) { updateApproval(messageId, approval); throw cancelled }
+            catch (failure: DuaApiException) {
+                // 404/410: the server no longer has it (used, expired or restarted); nothing can run twice.
+                if (failure.status == 404 || failure.status == 410)
+                    updateApproval(messageId, approval.copy(status = com.dua.ai.model.AgentApproval.Status.Expired, result = failure.message), outcome = true)
+                else { updateApproval(messageId, approval); _error.value = failure.message ?: "Action nahi ho saka. Dobara try karein." }
+            } catch (failure: Exception) {
+                // Safe to try again: the server runs each approval at most once.
+                updateApproval(messageId, approval)
+                _error.value = "${failureText(failure)} The action was not confirmed; tap Approve or Reject again."
             }
         }
     }
@@ -2098,7 +2136,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         val startedAt = System.currentTimeMillis()
         _error.value = null; _isTyping.value = true; refreshSyncBusy()
         retryOriginal = original
-        updateMessage(messageId) { it.copy(text = "", thinking = null, thinkingSeconds = null, notice = null, codeRuns = emptyList(), build = requestBuild?.let { com.dua.ai.model.BuildInfo(it) }, proposal = null, state = ChatMessage.STREAMING, startedAt = startedAt) }
+        updateMessage(messageId) { it.copy(text = "", thinking = null, thinkingSeconds = null, notice = null, codeRuns = emptyList(), build = requestBuild?.let { com.dua.ai.model.BuildInfo(it) }, proposal = null, approvals = emptyList(), state = ChatMessage.STREAMING, startedAt = startedAt) }
         replyJob = viewModelScope.launch {
             var accumulator: com.dua.ai.network.StreamAccumulator? = null
             try {
@@ -2117,7 +2155,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 if (generation == currentGeneration) {
                     val final = accumulator!!.snapshot(ended = true)
                     retryOriginal = null
-                    updateMessage(messageId) { it.copy(text = final.text, thinking = final.thinking, thinkingSeconds = final.thinkingSeconds, notice = final.notice, codeRuns = final.codeRuns, build = final.build ?: it.build, proposal = final.proposal ?: it.proposal, state = "complete") }
+                    updateMessage(messageId) { it.copy(text = final.text, thinking = final.thinking, thinkingSeconds = final.thinkingSeconds, notice = final.notice, codeRuns = final.codeRuns, build = final.build ?: it.build, proposal = final.proposal ?: it.proposal, approvals = final.approvals.ifEmpty { it.approvals }, state = "complete") }
                 }
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (failure: Exception) {
@@ -2125,7 +2163,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     val partial = accumulator?.snapshot(ended = true)
                     retryOriginal = null
                     if (partial != null && partial.text.isNotBlank()) {
-                        updateMessage(messageId) { it.copy(text = partial.text, thinking = partial.thinking, thinkingSeconds = partial.thinkingSeconds, notice = partial.notice, codeRuns = partial.codeRuns, build = partial.build ?: it.build, proposal = partial.proposal ?: it.proposal, state = "stopped") }
+                        updateMessage(messageId) { it.copy(text = partial.text, thinking = partial.thinking, thinkingSeconds = partial.thinkingSeconds, notice = partial.notice, codeRuns = partial.codeRuns, build = partial.build ?: it.build, proposal = partial.proposal ?: it.proposal, approvals = partial.approvals.ifEmpty { it.approvals }, state = "stopped") }
                         _error.value = "Retry interrupted: ${failureText(failure)} Partial reply kept; tap retry."
                     } else {
                         updateMessage(messageId) { original }
@@ -2237,7 +2275,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     _uploads.update { list -> list.filterNot { it.ref?.path in sentPaths } }
                     clearAttachments()
                     val final = accumulator!!.snapshot(ended = true)
-                    updateMessage(reply.id) { it.copy(text = final.text, thinking = final.thinking, thinkingSeconds = final.thinkingSeconds, notice = final.notice, codeRuns = final.codeRuns, build = final.build ?: it.build, proposal = final.proposal ?: it.proposal, state = "complete") }
+                    updateMessage(reply.id) { it.copy(text = final.text, thinking = final.thinking, thinkingSeconds = final.thinkingSeconds, notice = final.notice, codeRuns = final.codeRuns, build = final.build ?: it.build, proposal = final.proposal ?: it.proposal, approvals = final.approvals.ifEmpty { it.approvals }, state = "complete") }
                     maybeAutoTitle(activeId)
                 }
             } catch (cancelled: CancellationException) {
@@ -2249,7 +2287,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                         // The request reached the model: keep the turn and its partial reply; Retry regenerates it.
                         _uploads.update { list -> list.filterNot { it.ref?.path in sentPaths } }
                         clearAttachments()
-                        updateMessage(reply.id) { it.copy(text = partial.text, thinking = partial.thinking, thinkingSeconds = partial.thinkingSeconds, notice = partial.notice, codeRuns = partial.codeRuns, build = partial.build ?: it.build, proposal = partial.proposal ?: it.proposal, state = "stopped") }
+                        updateMessage(reply.id) { it.copy(text = partial.text, thinking = partial.thinking, thinkingSeconds = partial.thinkingSeconds, notice = partial.notice, codeRuns = partial.codeRuns, build = partial.build ?: it.build, proposal = partial.proposal ?: it.proposal, approvals = partial.approvals.ifEmpty { it.approvals }, state = "stopped") }
                         _error.value = "Reply interrupted: ${failureText(failure)} Partial reply kept; tap retry."
                     } else {
                         _messages.value = _messages.value.filterNot { it.id == userMessage.id || it.id == reply.id }

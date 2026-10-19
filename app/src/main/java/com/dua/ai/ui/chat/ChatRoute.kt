@@ -278,6 +278,7 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
             onBuildRepository = viewModel::setBuildRepository,
             onRetryBuildRepositories = { viewModel.loadBuildRepositories(force = true) },
             onCreatePr = viewModel::createPullRequest,
+            onAgentApproval = viewModel::decideAgentApproval,
             imagine = ImagineActions(
                 onSave = { items ->
                     if (com.dua.ai.imagine.MediaExport.needsPermission() && androidx.core.content.ContextCompat.checkSelfPermission(context,

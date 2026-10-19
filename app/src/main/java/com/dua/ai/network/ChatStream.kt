@@ -25,6 +25,8 @@ sealed interface ReplyEvent {
     data class Media(val media: List<com.dua.ai.imagine.GeneratedMedia>, val links: Map<String, String>) : ReplyEvent
     /** Dua Agent remember: a proposed memory note; the user reviews it before anything is saved. */
     data class Memory(val fact: String) : ReplyEvent
+    /** Dua Agent write action waiting for the owner's Approve / Reject (nothing was done yet). */
+    data class Approval(val approval: com.dua.ai.model.AgentApproval) : ReplyEvent
     data class Saved(val receipt: com.dua.ai.account.ReplySaved) : ReplyEvent
     data class Done(val truncated: Boolean) : ReplyEvent
     data class Failed(val message: String, val status: Int) : ReplyEvent
@@ -113,6 +115,7 @@ class ChatStreamParser {
                     ?.let { ReplyEvent.Media(it.media.take(MAX_AGENT_MEDIA), it.links) }
                 "memory" -> json.optString("fact").trim().replace(Regex("\\s+"), " ")
                     .takeIf { it.isNotEmpty() && it.length <= MAX_MEMORY_FACT }?.let { ReplyEvent.Memory(it) }
+                "approval" -> com.dua.ai.model.AgentApprovals.fromEvent(json)?.let { ReplyEvent.Approval(it) }
                 "saved" -> ReplyEvent.Saved(com.dua.ai.account.ReplyPersistenceCodec.receipt(json))
                 "done" -> ReplyEvent.Done(json.optBoolean("truncated"))
                 "error" -> ReplyEvent.Failed(json.optString("message").takeIf { it.isNotBlank() }?.take(300)
@@ -134,6 +137,7 @@ class StreamAccumulator(private val startedAt: Long, private val clock: () -> Lo
     private var proposal: com.dua.ai.model.BuildProposal? = null
     private var progress: List<com.dua.ai.model.AgentStep> = emptyList()
     private var media: List<com.dua.ai.imagine.GeneratedMedia> = emptyList()
+    private var approvals: List<com.dua.ai.model.AgentApproval> = emptyList()
     var finished = false
         private set
 
@@ -150,6 +154,7 @@ class StreamAccumulator(private val startedAt: Long, private val clock: () -> Lo
             is ReplyEvent.Progress -> progress = com.dua.ai.model.AgentProgress.apply(progress, event.step, event.label, event.done)
             is ReplyEvent.Media -> media = (media + event.media).distinctBy { it.key }.take(ChatStreamParser.MAX_AGENT_MEDIA)
             is ReplyEvent.Memory -> if (notice == null) notice = ChatStreamParser.MEMORY_NOTICE
+            is ReplyEvent.Approval -> approvals = com.dua.ai.model.AgentApprovals.merge(approvals, event.approval)
             is ReplyEvent.Build -> build = event.info
             is ReplyEvent.Proposal -> proposal = event.proposal
             is ReplyEvent.Code -> codeRuns = com.dua.ai.model.CodeRuns.merge(codeRuns, event.index, event.language, event.code, event.output, event.outcome)
@@ -169,7 +174,7 @@ class StreamAccumulator(private val startedAt: Long, private val clock: () -> Lo
         val visibleThinking = thinking.toString().takeIf { it.isNotBlank() }
         return StreamSnapshot(text.toString(), visibleThinking,
             if (visibleThinking == null) null else thinkingSeconds ?: if (ended) elapsedSeconds() else null,
-            notice, finished, codeRuns, build, proposal, progress, media)
+            notice, finished, codeRuns, build, proposal, progress, media, approvals)
     }
 
     private fun elapsedSeconds() = (((clock() - startedAt) + 500) / 1000).toInt().coerceIn(1, 86400)
@@ -178,4 +183,5 @@ class StreamAccumulator(private val startedAt: Long, private val clock: () -> Lo
 data class StreamSnapshot(val text: String = "", val thinking: String? = null, val thinkingSeconds: Int? = null, val notice: String? = null, val finished: Boolean = false,
     val codeRuns: List<com.dua.ai.model.CodeRun> = emptyList(), val build: com.dua.ai.model.BuildInfo? = null,
     val proposal: com.dua.ai.model.BuildProposal? = null, val progress: List<com.dua.ai.model.AgentStep> = emptyList(),
-    val media: List<com.dua.ai.imagine.GeneratedMedia> = emptyList())
+    val media: List<com.dua.ai.imagine.GeneratedMedia> = emptyList(),
+    val approvals: List<com.dua.ai.model.AgentApproval> = emptyList())

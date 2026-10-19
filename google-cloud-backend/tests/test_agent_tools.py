@@ -56,7 +56,10 @@ def run(model, **extra):
 
 
 def tool_results(model):
-    return [c["contents"][-1][1] for c in model.calls if c["tools"] == ["TOOLS"] and c["contents"][-1][0] == "tool"]
+    """Tool results the model saw, with untrusted-data fences removed (agent_safety.fence is tested separately)."""
+    import agent_safety
+    return [[(name, agent_safety.unfence(name, result)) for name, result in c["contents"][-1][1]]
+            for c in model.calls if c["tools"] == ["TOOLS"] and c["contents"][-1][0] == "tool"]
 
 
 # ---------------- calculator / time
@@ -268,14 +271,21 @@ class FakeGitHub:
 
 
 def test_github_read_tools_and_propose_changes_open_pr():
+    import agent_safety
     gh = FakeGitHub()
+    store = agent_safety.PendingStore()
     model = Script([call("list_files", {"prefix": "app/"}), call("read_file", {"path": "app/Main.kt"}), call("search_code", {"query": "main"}),
                     call("propose_changes", {"title": "Hi", "description": "d", "files": [{"path": "app/Main.kt", "content": "x"}]})])
-    text, _, _, progress, _ = run(model, github=gh)
+    text, agent, events, progress, _ = run(model, github=gh, approvals=store, owner_id="me")
     results = tool_results(model)
     assert results[0][0][1]["paths"] == ["app/Main.kt"] and results[1][0][1]["content"] == "fun main() {}"
-    assert "#7" in text and gh.opened[0][2].startswith("dua-agent/")
-    assert [p[0] for p in progress] == ["read", "read", "search_code", "pr"]
+    # The loop only asks for approval; nothing was written to GitHub yet.
+    assert gh.opened == [] and "Approval needed" in text and len(agent.pending) == 1
+    assert [p[0] for p in progress] == ["read", "read", "search_code"]
+    card = next(e for e in events if e["type"] == "approval")
+    assert card["tool"] == "propose_changes" and "app/Main.kt (1 bytes)" in card["details"] and "content" not in json.dumps(card)
+    ok, done = agent_safety.execute(store.take(card["id"], "me"), {"github": gh})
+    assert ok and "#7" in done and gh.opened[0][2].startswith("dua-agent/")
 
 
 def test_github_tools_absent_without_token():

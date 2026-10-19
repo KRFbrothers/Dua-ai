@@ -365,8 +365,13 @@ def test_coding_route_runs_pipeline_and_streams_pr_link(monkeypatch, owner):
     kinds = [e["type"] for e in evs]
     assert "thinking" in kinds and kinds[-1] == "done"
     text = "".join(e["delta"] for e in evs if e["type"] == "text")
-    assert "pull/201" in text
+    # The coding route now stops at an approval card; no PR exists until the owner approves.
+    assert "Approval needed" in text and not any(p.endswith("/pulls") for _, p, _ in opener.calls)
     assert any("48dp" in s for s in systems)  # repo rules in the agent instructions
+    assert any("UNTRUSTED_DATA" in s for s in systems)  # injection guard in the agent instructions
+    card = next(e for e in evs if e["type"] == "approval")
+    r = engine.app.test_client().post("/api/agent/action", json={"id": card["id"], "decision": "approve"})
+    assert r.status_code == 200 and r.get_json()["status"] == "done" and "pull/201" in r.get_json()["text"]
     assert any(p.endswith("/pulls") for _, p, _ in opener.calls)
 
 
@@ -403,4 +408,5 @@ def test_coding_reports_read_and_pr_progress(monkeypatch, owner):
     monkeypatch.setattr(ca, "default_tool_response", lambda results: ("tool", results))
     evs = post("code likho: add a hello screen to the app")
     steps = [e["step"] for e in evs if e["type"] == "progress"]
-    assert steps[0] == "plan" and steps[-2:] == ["pr", "answer"] and "Opening PR\u2026" in [e["label"] for e in evs if e["type"] == "progress"]
+    assert steps[0] == "plan" and steps[-2:] == ["approval", "answer"] and "read" in steps
+    assert "Waiting for your approval" in [e["label"] for e in evs if e["type"] == "progress"]

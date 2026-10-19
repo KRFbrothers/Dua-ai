@@ -37,6 +37,8 @@ fun AssistantMessage(
     buildPrDraft: Boolean = true,
     confirmPr: Boolean = false,
     onCreatePr: (String) -> Unit = {},
+    /** Agent approval card decision: (approval id, approve). */
+    onApproval: (String, Boolean) -> Unit = { _, _ -> },
     showActions: Boolean = isLast,
     onOpenMedia: (Int) -> Unit = {},
     onOpenCanvas: ((List<com.dua.ai.model.ChatArtifact>) -> Unit)? = null,
@@ -76,6 +78,10 @@ fun AssistantMessage(
         // Build mode (Phase 5C): the proposed pull request, for review. Only its confirmed Create PR button writes to GitHub.
         if (!streaming) message.proposal?.let {
             BuildProposalCard(message.id, it, buildPr, buildPrHint, buildPrDraft, onCreatePr, Modifier.padding(top = Spacing.md), initiallyConfirming = confirmPr)
+        }
+        // Dua Agent: write actions wait here for Approve / Reject; nothing was done before the owner decides.
+        if (!streaming) message.approvals.forEach { approval ->
+            AgentApprovalCard(approval, onDecide = { approve -> onApproval(approval.id, approve) }, modifier = Modifier.padding(top = Spacing.md))
         }
         message.notice?.let {
             Text(it, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
