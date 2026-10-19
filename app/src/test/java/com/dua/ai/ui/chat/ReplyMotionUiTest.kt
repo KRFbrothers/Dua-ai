@@ -140,13 +140,20 @@ class ReplyMotionUiTest(private val dark: Boolean, private val large: Boolean) {
             reply.value = reply.value.copy(text = "The visible answer")
         }
         compose.mainClock.advanceTimeByFrame()
-        compose.onNodeWithText("The visible answer").assertIsDisplayed()
+        val answer = compose.onNodeWithText("The visible answer")
+        // Markdown composition and lazy-list measurement can need subsequent frames
+        // even when every decorative transition is disabled.
+        compose.mainClock.advanceTimeUntil(timeoutMillis = 1_000) { answer.isDisplayed() }
+        answer.assertIsDisplayed()
         compose.onNodeWithTag("reply-placeholder").assertDoesNotExist()
         compose.onNodeWithContentDescription("Done: Searching documents").assertExists()
         compose.onNodeWithContentDescription("Writing reply…").assertExists()
         compose.onNodeWithContentDescription("Retry response with web off").assertDoesNotExist()
         compose.runOnIdle { reply.value = reply.value.copy(state = "stopped") }
         compose.mainClock.advanceTimeByFrame()
+        compose.mainClock.advanceTimeUntil(timeoutMillis = 1_000) {
+            compose.onNodeWithText("Stopped · partial reply").isDisplayed()
+        }
         compose.onNodeWithText("Stopped · partial reply").assertIsDisplayed()
         compose.onNodeWithContentDescription("Retry response with web off").assertIsEnabled().performClick()
         assertEquals(1, retries)

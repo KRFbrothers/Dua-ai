@@ -72,9 +72,15 @@ token replacement, real step completion, visible streamed text and stopped-reply
 Retry. Cases cover both themes and normal/2× text; fixtures use synthetic replies
 and steps. Captures are under `app/build/approved-ui/reply-motion-*.png`.
 
-Local Gradle verification is currently blocked: the permission-review service
-returned a usage-limit failure, and a run within the default sandbox failed to
-open Gradle's required local socket. No local pass count is claimed for this
-follow-up. Verification is delegated to the repository's existing CI checks.
+With the test clock paused, one frame after changing streamed text was too early
+to assert Markdown visibility. The four theme/text-size variants reproduced this
+failure locally; the answer became visible on the next 16 ms test-clock frame.
+The transition test now advances the clock until the answer/stopped-state layout
+is visible, with a 1,000 ms simulated-time bound, before retaining its strict
+visibility, step-state and Retry callback assertions. It does not sleep, skip the
+test or remove an assertion. All four previously failing cases pass locally.
+
+Local Gradle verification is available again through the supported permissions
+path. Full-suite/build results are recorded in the PR and CI checks;
 `git diff --check` passes. Device frame timing, battery effects and TalkBack still
 require device verification.
