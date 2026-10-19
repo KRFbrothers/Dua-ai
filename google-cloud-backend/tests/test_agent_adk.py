@@ -85,7 +85,8 @@ def fake_adk(plan_text, scripts, merge_text="MERGED [1]", fail=None, slow=None):
             Runner.merge_prompt = prompt
             yield SimpleNamespace(author="merger", content=SimpleNamespace(parts=[SimpleNamespace(text=merge_text)]))
 
-    return SimpleNamespace(LlmAgent=FakeAgent, ParallelAgent=FakeAgent, SequentialAgent=FakeAgent,
+    return SimpleNamespace(LlmResponse=lambda **kwargs: SimpleNamespace(**kwargs),
+                           LlmAgent=FakeAgent, ParallelAgent=FakeAgent, SequentialAgent=FakeAgent,
                            RunConfig=lambda **k: k, InMemoryRunner=Runner,
                            types=SimpleNamespace(Content=lambda **k: k, Part=lambda **k: k)), Runner
 
@@ -629,3 +630,163 @@ def test_real_adk_disconnect_cancels_waiting_model_and_closes_runner(monkeypatch
         release.set()
         worker.join(3)
     assert not worker.is_alive()
+
+
+@pytest.mark.parametrize('plan', [
+    {'split': 'false', 'subtasks': PLAN['subtasks']},
+    {'split': 1, 'subtasks': PLAN['subtasks']},
+    {'split': True, 'subtasks': 42},
+    {'split': True, 'subtasks': {'kind': 'research', 'task': 'news'}},
+    {'split': True, 'subtasks': [{'kind': 'research', 'task': None}, {'kind': 'notes', 'task': 'pref'}]},
+    {'split': True, 'subtasks': [{'kind': 'research', 'task': ['news']}, {'kind': 'notes', 'task': 'pref'}]},
+])
+def test_invalid_planner_shapes_do_not_launch_helpers(plan):
+    assert agent_adk.parse_plan(json.dumps(plan), ['research', 'notes']) == []
+
+
+@pytest.mark.parametrize('paths,contents', [
+    (['a.txt', 'b.txt'], ['one']),
+    (['a.txt'], ['one', 'two']),
+    ([], []),
+    ('a.txt', ['one']),
+    (['a.txt'], 'one'),
+    (['a.txt'], [None]),
+])
+def test_proposal_rejects_unmatched_file_pairs_before_requesting_approval(paths, contents):
+    calls = []
+
+    async def call(name, args):
+        calls.append((name, args))
+        return {'pending': True}
+
+    propose = agent_adk.make_tools(['propose_changes'], call)[0]
+    result = asyncio.run(propose('Title', 'Description', paths, contents))
+    assert result.get('error') and calls == []
+
+
+def test_proposal_keeps_every_complete_file_including_empty_content():
+    calls = []
+
+    async def call(name, args):
+        calls.append((name, args))
+        return {'pending': True}
+
+    propose = agent_adk.make_tools(['propose_changes'], call)[0]
+    result = asyncio.run(propose('Title', 'Description', ['a.txt', 'b.txt'], ['', 'two']))
+    assert result == {'pending': True}
+    assert calls == [('propose_changes', {'title': 'Title', 'description': 'Description',
+                                         'files': [{'path': 'a.txt', 'content': ''}, {'path': 'b.txt', 'content': 'two'}]})]
+
+
+def test_real_adk_caps_each_helper_and_still_merges_partial_results(monkeypatch):
+    pytest.importorskip('google.adk')
+    from google.adk.models import BaseLlm, LlmResponse
+    from google.genai import types
+    monkeypatch.setattr(agent_adk, 'SUB_STEPS', 2)
+    calls = {'controller': 0, 'research': 0, 'notes': 0, 'merger': 0}
+
+    class Loopy(BaseLlm):
+        async def generate_content_async(self, llm_request, stream=False):
+            system = str(llm_request.config.system_instruction or '')
+            if 'controller of the Dua Agent' in system:
+                calls['controller'] += 1
+                part = types.Part(text=json.dumps(PLAN))
+            elif 'You research' in system:
+                calls['research'] += 1
+                part = types.Part(function_call=types.FunctionCall(name='calculator', args={'expression': '2+2'}))
+            elif 'Helper results' in system:
+                calls['merger'] += 1
+                assert system.count('This part is incomplete') == 2
+                part = types.Part(text='Some work is incomplete because both helpers reached their call limits.')
+            else:
+                calls['notes'] += 1
+                part = types.Part(function_call=types.FunctionCall(name='search_notes', args={'query': 'preference'}))
+            yield LlmResponse(content=types.Content(role='model', parts=[part]))
+
+    model, events = Loopy(model='offline'), []
+    text, result = agent_adk.run(make_env(events), 'news and notes', model, model,
+                                 lambda m, t, json_out=False: types.GenerateContentConfig(max_output_tokens=t),
+                                 log=lambda m: None)
+    assert text == 'Some work is incomplete because both helpers reached their call limits.'
+    assert calls == {'controller': 1, 'research': 2, 'notes': 2, 'merger': 1}
+    assert len(result.steps) == 4
+    assert ('sub_a', 'Research: model call limit reached', 'done') in events
+    assert ('sub_b', 'Notes: model call limit reached', 'done') in events
+    assert ('sub_a', 'Research: done', 'done') not in events
+
+
+def callback_sdk():
+    return SimpleNamespace(LlmResponse=lambda **kwargs: SimpleNamespace(**kwargs),
+                           types=SimpleNamespace(Content=lambda **kwargs: SimpleNamespace(**kwargs),
+                                                 Part=lambda **kwargs: SimpleNamespace(**kwargs)))
+
+
+def test_helper_call_limits_are_independent_and_report_once():
+    limited = []
+    adk = callback_sdk()
+    first = agent_adk.helper_model_callback(adk, lambda: False, 1, lambda: limited.append('first'))
+    second = agent_adk.helper_model_callback(adk, lambda: False, 1, lambda: limited.append('second'))
+    assert first() is None
+    assert 'This part is incomplete' in first().content.parts[0].text
+    first()
+    assert limited == ['first']
+    assert second() is None  # another helper/request retains its own budget
+    second()
+    assert limited == ['first', 'second']
+
+
+def test_helper_cancellation_takes_priority_and_does_not_spend_call_budget():
+    gone, limited = {'v': True}, []
+    callback = agent_adk.helper_model_callback(callback_sdk(), lambda: gone['v'], 1, lambda: limited.append(1))
+    assert callback().content.parts[0].text == 'Stopped.'
+    assert limited == []
+    gone['v'] = False
+    assert callback() is None
+    gone['v'] = True
+    assert callback().content.parts[0].text == 'Stopped.'
+    assert limited == []
+
+
+def test_real_adk_repairs_unmatched_file_pairs_before_one_complete_approval():
+    pytest.importorskip('google.adk')
+    import agent_safety
+    from google.adk.models import BaseLlm, LlmResponse
+    from google.genai import types
+    plan = {'split': True, 'subtasks': [{'kind': 'code', 'task': 'Propose two text files'},
+                                       {'kind': 'notes', 'task': 'Check my preference'}]}
+    code_calls, approvals = [], []
+
+    class Repair(BaseLlm):
+        async def generate_content_async(self, llm_request, stream=False):
+            system = str(llm_request.config.system_instruction or '')
+            if 'controller of the Dua Agent' in system:
+                part = types.Part(text=json.dumps(plan))
+            elif 'You work on' in system:
+                responses = [p.function_response for c in llm_request.contents for p in (c.parts or [])
+                             if p.function_response is not None]
+                code_calls.append(1)
+                if not responses:
+                    args = {'title': 'Two files', 'description': 'Propose both', 'paths': ['a.txt', 'b.txt'], 'contents': ['one']}
+                    part = types.Part(function_call=types.FunctionCall(name='propose_changes', args=args))
+                elif len(responses) == 1:
+                    assert responses[-1].response.get('error')
+                    args = {'title': 'Two files', 'description': 'Propose both', 'paths': ['a.txt', 'b.txt'], 'contents': ['one', 'two']}
+                    part = types.Part(function_call=types.FunctionCall(name='propose_changes', args=args))
+                else:
+                    part = types.Part(text='Both files await approval.')
+            elif 'Helper results' in system:
+                part = types.Part(text='Waiting for your approval.')
+            else:
+                part = types.Part(text='No preference found.')
+            yield LlmResponse(content=types.Content(role='model', parts=[part]))
+
+    store, model = agent_safety.PendingStore(), Repair(model='offline')
+    env = dict(make_env([], github=object()), owner_id='test-owner', approvals=store,
+               enqueue=lambda kind, event=None: approvals.append(event) or True)
+    text, result = agent_adk.run(env, 'Propose two files and check notes', model, model,
+                                 lambda m, t, json_out=False: types.GenerateContentConfig(max_output_tokens=t),
+                                 log=lambda m: None)
+    assert 'Approval needed' in text and len(code_calls) == 3
+    assert len(result.pending) == 1 and len(store) == 1
+    assert result.pending[0]['args']['files'] == [{'path': 'a.txt', 'content': 'one'}, {'path': 'b.txt', 'content': 'two'}]
+    assert sum(bool(e and e.get('type') == 'approval') for e in approvals) == 1

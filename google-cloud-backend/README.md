@@ -269,6 +269,16 @@ result is thrown away and no further calls are made.)
 3. **Progress & Chain-of-Thought (CoT):** goes out as the existing chips (`sub_a`/`sub_b`/`sub_c`, `merge`) and live thinking events (`part.thought` extraction) streamed directly to Dua AI's Android `ThinkingBlock` UI.
 4. **Artifacts Canvas formatting:** The merger formats diagrams, SVG, React, and code snippets with explicit language identifiers for interactive preview in Dua AI's Claude-style Artifacts Canvas.
 
+**Plans, helper limits and proposals:** the planner must return an actual JSON
+`true` and valid available helper tasks. Malformed plans fall back to the normal
+loop. A per-helper before-model callback enforces `AGENT_SUB_STEPS`, while
+`RunConfig.max_llm_calls` separately caps the whole parallel run. Hitting a
+helper's cap produces an incomplete result and a matching progress label; it
+preserves the other helpers' budgets and lets the merger use partial results.
+`propose_changes` rejects mismatched path/content lists before approval, returning
+a tool error so the model can repair its arguments instead of silently omitting
+files. Existing file validation and owner approvals still apply.
+
 **Runner lifecycle:** the request thread uses ADK's production `run_async`
 interface with async session creation. Thought updates are forwarded during the
 run. The stream and runner close on the same event loop on success, failure or

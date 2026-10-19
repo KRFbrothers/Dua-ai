@@ -25,6 +25,18 @@ worker to stop before further model/tool calls. An HTTP call already executing
 inside a synchronous tool thread still depends on its existing bounded timeout;
 this does not promise that a remote provider stopped processing or billing it.
 
+The controller starts helpers only for a real JSON `true` with a list of valid,
+available helper kinds and non-empty string tasks. Invalid plans use the normal
+loop. Each helper's `AGENT_SUB_STEPS` limit is enforced before model calls, in
+addition to the run-wide SDK limit. A capped helper returns an explicit incomplete
+result and retains that status in progress, so the merger can finish honestly
+with the available results. Other helpers keep their own call allowance.
+
+Code proposals require matching, non-empty path/content lists of strings. A
+mismatch returns a repairable tool error before creating any approval; no file
+is silently dropped. Complete proposals still use the existing owner approval
+and repository validation rules.
+
 **Rollback to the loop:** if the request does not split, or ADK fails before any tool ran, the normal tool loop answers. Coding-mode requests always use the loop. To turn ADK off, remove the flag:
 
 ```bash

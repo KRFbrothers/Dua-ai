@@ -39,6 +39,12 @@ Runner tests also cover thought delivery before generation finishes, cleanup on
 session/model/callback failures, disconnect while the real SDK awaits a model
 response, and deadline cleanup before the merger can run. Cleanup probes use the
 SDK's `App` plugin configuration, and all model responses are scripted locally.
+Planner/proposal cases reject invalid JSON field types and unmatched file pairs;
+empty file contents remain valid. A real-SDK looping model proves each helper
+stops at its own call allowance and the merger still runs with incomplete-result
+markers. Another scripted model repairs an invalid two-file proposal, yielding
+exactly one complete pending approval and no repository write. Callback cases
+also verify cancellation priority and independent helper/request call budgets.
 These tests do not measure a deployed model's quality, latency or billing, and do
 not enable `AGENT_ENGINE=adk` in production.
 

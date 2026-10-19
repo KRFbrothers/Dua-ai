@@ -106,15 +106,20 @@ def parse_plan(text, allowed):
         data = json.loads(cleaned or "{}")
     except (ValueError, TypeError):
         return []
-    if not isinstance(data, dict) or not data.get("split"):
+    if not isinstance(data, dict) or data.get("split") is not True:
+        return []
+    items = data.get("subtasks")
+    if not isinstance(items, list):
         return []
     subtasks, seen = [], set()
-    for item in data.get("subtasks") or []:
+    for item in items:
         if not isinstance(item, dict):
             continue
         kind = item.get("kind")
-        raw_task = item.get("task", "")
-        task = " ".join(str(raw_task).split())[:2000]
+        raw_task = item.get("task")
+        if not isinstance(kind, str) or kind not in SPECIALISTS or not isinstance(raw_task, str):
+            continue
+        task = " ".join(raw_task.split())[:2000]
         if kind in allowed and kind not in seen and task:
             seen.add(kind)
             subtasks.append({"kind": kind, "task": task, "title": SPECIALISTS[kind][0]})
@@ -240,7 +245,12 @@ def make_tools(names, call):
         return await call("search_code", {"query": query})
 
     async def propose_changes(title: str, description: str, paths: list[str], contents: list[str]) -> dict:
-        """Finish code work: open ONE pull request. paths[i] gets the full new content contents[i]."""
+        """Propose ONE pull request for approval. Each path needs its full corresponding content."""
+        if (not isinstance(paths, list) or not isinstance(contents, list) or not paths or
+                len(paths) != len(contents) or not all(isinstance(p, str) for p in paths) or
+                not all(isinstance(c, str) for c in contents)):
+            return {"error": "Provide equally sized, non-empty paths and contents lists of strings. "
+                             "Include the full content for every path; nothing was proposed."}
         return await call("propose_changes", {"title": title, "description": description,
                                               "files": [{"path": p, "content": c} for p, c in zip(paths, contents)]})
 
@@ -284,6 +294,35 @@ def stop_model_callback(adk, cancelled):
         if not cancelled():
             return None
         return adk.LlmResponse(content=adk.types.Content(role="model", parts=[adk.types.Part(text="Stopped.")]))
+    return callback
+
+
+def helper_model_callback(adk, cancelled, max_calls, on_limit):
+    """Enforce this helper's model-call budget before ADK calls the model.
+
+    RunConfig caps the whole parallel run, not each helper. A synthetic final
+    response ends just this helper without scheduling another model call, so
+    the other helpers and merger retain their own remaining budget.
+    """
+    stop = stop_model_callback(adk, cancelled)
+    calls, reported = 0, False
+
+    def callback(callback_context=None, llm_request=None, **kwargs):
+        nonlocal calls, reported
+        if stop is not None:
+            response = stop(callback_context=callback_context, llm_request=llm_request, **kwargs)
+            if response is not None:
+                return response
+        if calls < max_calls:
+            calls += 1
+            return None
+        if not reported:
+            reported = True
+            on_limit()
+        return adk.LlmResponse(content=adk.types.Content(role="model", parts=[adk.types.Part(
+            text="Helper stopped: model call limit reached. This part is incomplete; "
+                 "use only the results already obtained and do not claim the remaining work is done.")]))
+
     return callback
 
 
@@ -353,21 +392,27 @@ def run(env, request_text, flash_model, agent_model, config_for, adk=None, log=p
         if not subtasks:
             return None
         log(f"[dua-agent] adk plan: {', '.join(s['kind'] for s in subtasks)}")
-        helpers = []
+        helpers, limited = [], set()
         for i, sub in enumerate(subtasks):
             title, names, role = SPECIALISTS[sub["kind"]]
             progress(CHIPS[i], f"{title}: starting\u2026")
             text = (f"{role}{agent_safety.SAFETY_PROMPT}\nYour part of the user's request: {sub['task']}\n"
                     "Finish with a short summary of results.")
+            def on_limit(index=i, kind=sub["kind"], helper_title=title):
+                limited.add(kind)
+                progress(CHIPS[index], f"{helper_title}: model call limit reached", "done")
+
             helpers.append(adk.LlmAgent(
                 name=f"{sub['kind']}_agent", model=flash_model, include_contents="none",
                 generate_content_config=config_for(flash_model, SUB_TOKENS), output_key=f"{sub['kind']}_result",
-                instruction=(lambda t: (lambda ctx: t))(text), **extra,
+                instruction=(lambda t: (lambda ctx: t))(text),
+                before_model_callback=helper_model_callback(adk, cancelled, SUB_STEPS, on_limit),
                 tools=make_tools(names, specialist_call(i, title, "ABC"[i]))))
 
         def merge_instruction(ctx):
             for i, sub in enumerate(subtasks):
-                progress(CHIPS[i], f"{sub['title']}: done", "done")
+                status = "model call limit reached" if sub["kind"] in limited else "done"
+                progress(CHIPS[i], f"{sub['title']}: {status}", "done")
             progress("merge", "Combining results\u2026")
             results = "\n\n".join(f"## {s['title']}\nTask: {s['task']}\nResult:\n"
                                   f"{str(ctx.state.get(s['kind'] + '_result') or '(no result)')[:6000]}"
