@@ -6,7 +6,7 @@ description: >-
   project cleanup, Cloud Run operations and signed personal APKs. Use for work
   on this project, not unrelated conversation or general AI questions.
 metadata:
-  version: "1.1.0"
+  version: "1.1.1"
   updated: "2026-10-19"
 ---
 
@@ -29,9 +29,15 @@ the user has not authorized.
 
 ## 1. Start from evidence
 
-1. Locate the active skill source and perform the lightweight freshness check in
-   section 11. Read applicable `AGENTS.md`, inspect the worktree and Git status, and identify
-   the branch, base commit and any existing PR. Preserve unrelated user changes.
+1. Read applicable `AGENTS.md`. The repository skill lives at
+   `.agents/skills/dua-ai-engineering/SKILL.md`; open that exact path even when
+   `$dua-ai-engineering` is absent from the host's skill catalog. Default file
+   searches may skip the hidden `.agents` directory. Check the worktree/ref if
+   the file is missing; an existing cloud task may predate its merge. With a
+   connected repository reader, read the canonical file from a verified ref and
+   identify that ref rather than claiming the checkout was updated. Perform the
+   lightweight freshness check in section 11, inspect Git status, and preserve
+   unrelated user changes.
 2. Read the relevant repository docs and implementation before editing. Treat
    this skill's system map as a guide, not proof of current production settings.
 3. Define the requested outcome and the smallest complete change that achieves
@@ -248,6 +254,13 @@ Use locked dependencies and the current CI configuration for exact setup.
 For a Gradle filtered run, place `--tests` immediately after the test task,
 before the next task. Tests requiring unavailable credentials or a phone must
 be reported as unverified, not passed.
+
+A sandbox failure opening Gradle's localhost sockets is an environment failure,
+not a test assertion failure. Offline mode does not remove that socket need.
+Use the execution tool's supported permission mechanism when authorized; do not
+bypass a denial. If a retry is cancelled or unavailable, keep the checks marked
+unverified, explain the blocker and use CI or another permitted environment.
+Do not describe the skill as missing merely because the build could not run.
 
 PR sequence:
 
