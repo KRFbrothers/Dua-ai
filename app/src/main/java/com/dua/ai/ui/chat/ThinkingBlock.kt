@@ -60,6 +60,9 @@ import com.dua.ai.ui.theme.Sizes
 import com.dua.ai.ui.theme.Spacing
 import com.dua.ai.ui.theme.rememberMotionAllowed
 import com.dua.ai.ui.theme.DuaMotion
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.delay
 
 /** A timer for the server-provided summary, not a claim about hidden model reasoning. */
@@ -122,7 +125,12 @@ fun ThinkingBlock(
     val foreground = rememberReplyForeground()
     val motion = rememberMotionAllowed() && foreground
     val ticking = live && !answering
-    LaunchedEffect(ticking, foreground) { while (ticking && foreground) { now = System.currentTimeMillis(); delay(1000) } }
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(ticking, lifecycle) {
+        if (ticking) lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            while (true) { now = System.currentTimeMillis(); delay(1000) }
+        }
+    }
     val elapsed = if (live && seconds == null && startedAt > 0) ((now - startedAt) / 1000).coerceIn(0, Int.MAX_VALUE.toLong()).toInt() else seconds
     val label = thinkingLabel(live && !answering, elapsed)
     val scheme = MaterialTheme.colorScheme
