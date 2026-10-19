@@ -169,6 +169,7 @@ API keys are stored server-side (Google Cloud Run / Secret Manager or Supabase) 
 ### 7. On-device AI and Remove background (Android)
 
 - **On-device AI** (General → Device preferences): on supported phones, new chat titles and Imagine "Polish my prompt" run on the phone with Gemini Nano through Android AICore and Google ML Kit. The first message and reply (for titles) or the draft prompt (for polish) stay on the phone for this step. If the phone is unsupported, the setting is off, or the model gives no answer, titles use the existing Dua server path (`/api/title`) exactly as before. Dua does not log these prompts or answers.
+- **Summarize / Rewrite**: on supported phones with On-device AI on, the reply or draft text is processed on the phone. If you choose **Ask Dua instead**, the request is placed in the message box and goes to the Dua server only when you tap Send, like any chat message.
 - **Remove background**: the photo is cut out on the phone with ML Kit subject segmentation from Google Play services. The image is not sent to Dua's servers for this. The result is saved only to your gallery (Pictures/Dua) and a short-lived private cache copy.
 - The system (AICore, Google Play services) downloads and updates the on-device models under Google's terms; Dua does not control that download. See https://developers.google.com/ml-kit/terms.
 

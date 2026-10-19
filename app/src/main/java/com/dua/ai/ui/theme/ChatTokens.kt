@@ -71,6 +71,8 @@ object ChatSizes {
     val listPaddingTop = 20.dp
     val listPaddingBottom = 12.dp
     val messageSpacing = 14.dp
+    /** Between consecutive messages from the same author (Jetchat-style grouping). */
+    val groupedMessageSpacing = 6.dp
     val bubblePaddingH = 16.dp
     val bubblePaddingV = 10.dp
     val border = 1.dp

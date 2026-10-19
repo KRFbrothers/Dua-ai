@@ -262,6 +262,12 @@ fun ChatScreen(
                 if (!searchOpen && followTail && moreBelow && !scrolling && !automatic && !userDragging) goToLatest()
             }
     }
+    // Messages the reader has seen at the bottom; later Dua replies show as "new" on the Latest reply pill.
+    var seenMessages by remember(conversationKey) { mutableStateOf(state.messages.size) }
+    LaunchedEffect(followTail, state.messages.size) { if (followTail) seenMessages = state.messages.size }
+    // Keyboard opening shrinks the list; keep the newest message visible when the reader was at the bottom (Jetchat).
+    val imeBottom = WindowInsets.ime.getBottom(androidx.compose.ui.platform.LocalDensity.current)
+    LaunchedEffect(imeBottom) { if (imeBottom > 0 && followTail && !searchOpen) goToLatest() }
     // Stop/completion never move a reader who has scrolled up.
     val lastUserId = state.messages.lastOrNull { it.isUser }?.id
     var previousUserId by remember(conversationKey) { mutableStateOf(lastUserId) }
@@ -364,17 +370,10 @@ fun ChatScreen(
                                         searchMessageId = selectedMatch?.messageId)
                                 }
                             }
-                            if (!searchOpen && !followTail && listState.canScrollForward) FilledTonalButton(
+                            JumpToLatest(visible = !searchOpen && !followTail && listState.canScrollForward,
+                                newReplies = MessageGrouping.newReplies(state.messages, seenMessages),
                                 onClick = { scope.launch { followTail = true; goToLatest() } },
-                                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = Spacing.md)
-                                    .heightIn(min = Sizes.touchTarget).semantics { contentDescription = "Go to latest reply" },
-                                colors = androidx.compose.material3.ButtonDefaults.filledTonalButtonColors(containerColor = com.dua.ai.ui.theme.PageTheme.colors.card,
-                                    contentColor = com.dua.ai.ui.theme.PageTheme.colors.text),
-                                border = androidx.compose.foundation.BorderStroke(com.dua.ai.ui.theme.SettingsSizes.border, com.dua.ai.ui.theme.PageTheme.colors.cardBorder),
-                            ) {
-                                Icon(Icons.Outlined.ArrowDownward, contentDescription = null, modifier = Modifier.size(Sizes.iconSmall))
-                                Text("Latest reply", modifier = Modifier.padding(start = Spacing.xs))
-                            }
+                                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = Spacing.md))
                         }
                     }
                     if (feature != null || state.homeTab != HomeTab.Work) Column(Modifier.fillMaxWidth()
@@ -432,6 +431,7 @@ fun ChatScreen(
                                 uploads = state.uploads,
                                 onRemoveAttachment = actions.onRemoveAttachment,
                                 onRemoveAttachmentBackground = if (state.removeBackground) actions.onRemoveAttachmentBackground else null,
+                                writingTools = { task -> actions.onWriting(state.draft, true, task) },
                                 onRemoveUpload = actions.onCancelUpload,
                                 aboveInput = if (feature != null) null else { {
                                     HomeModeSwitcher(if (taskHome) HomeMode.Task else HomeMode.Chat,
@@ -513,6 +513,7 @@ fun ChatScreen(
         null -> Unit
     }
 
+    state.writing?.let { session -> WritingToolsSheet(session, actions.writing) }
     viewer?.let { (id, index) ->
         val media = state.messages.firstOrNull { it.id == id }?.media.orEmpty()
         if (media.isNotEmpty()) MediaViewer(media, index, mediaActions, state.videoAvailable, onDismiss = { viewer = null })
