@@ -621,7 +621,10 @@ def chunk_text(chunk):
 def home():
     # Capabilities: the app shows Agent mode only when this says "agent": true.
     import openrouter
-    info = {"status": "Dua AI Engine is running!", "engine": "google-cloud", "agent": True, "titles": True, "model": MODEL_NAME,
+    import kill_switches
+    # DUA_DISABLE_AGENT / DUA_MAINTENANCE: report Agent as unavailable so every app version hides it.
+    info = {"status": "Dua AI Engine is running!", "engine": "google-cloud",
+            "agent": not kill_switches.agent_disabled() and kill_switches.maintenance_message() is None, "titles": True, "model": MODEL_NAME,
             "agentModel": AGENT_MODEL, "personalization": {"personality": True}, "agentApprovals": True}
     # Free OpenRouter models appear only when OPENROUTER_API_KEY is set (Secret Manager).
     info["freeModels"] = openrouter.models()
@@ -662,6 +665,12 @@ def api_chat():
         return jsonify({"error": error.message}), error.status
 
     agent = data.get("mode") == "agent"
+    import kill_switches
+    paused = kill_switches.maintenance_message()
+    if paused:
+        return no_store(jsonify({"error": paused, "maintenance": True}), 503)
+    if agent and kill_switches.agent_disabled():
+        return no_store(jsonify({"error": kill_switches.AGENT_PAUSED, "paused": "agent"}), 503)
     import openrouter
     free_model = data.get("openrouter")
     if free_model is not None and (not openrouter.enabled() or not openrouter.allowed(free_model)):
@@ -803,9 +812,13 @@ def approval_env(owner_id, owner_token):
 def agent_action():
     """Owner approves or rejects ONE pending Agent write action by id. Only the stored args are used."""
     import agent_safety
+    import kill_switches
     denied = owner_access_error()
     if denied is not None:
         return denied
+    if kill_switches.agent_disabled() or kill_switches.maintenance_message():
+        # Nothing is executed or consumed; the approval can be retried once Agent is back.
+        return no_store(jsonify({"error": kill_switches.maintenance_message() or kill_switches.AGENT_PAUSED}), 503)
     data = request.get_json(silent=True)
     action_id = data.get("id") if isinstance(data, dict) else None
     decision = data.get("decision") if isinstance(data, dict) else None
@@ -836,6 +849,9 @@ def add_imagine_capability(response):
         data = response.get_json()
         if isinstance(data, dict):
             data["imagine"] = imagine.capability()
+            import kill_switches
+            if (kill_switches.imagine_disabled() or kill_switches.maintenance_message()) and isinstance(data["imagine"], dict):
+                data["imagine"] = {**data["imagine"], "enabled": False, "reason": kill_switches.IMAGINE_PAUSED}
             response.set_data(json.dumps(data))
     return response
 
@@ -852,6 +868,10 @@ def api_imagine_image():
         response = jsonify({"error": error.message})
         response.headers["Cache-Control"] = "no-store"
         return response, error.status
+    import kill_switches
+    paused = kill_switches.maintenance_message() or (kill_switches.IMAGINE_PAUSED if kill_switches.imagine_disabled() else None)
+    if paused:
+        return no_store(jsonify({"error": paused}), 503)
     if not imagine.enabled():
         return jsonify({"error": "Imagine is turned off on the Google Cloud engine."}), 503
     token = request.headers.get("Authorization", "").split(" ", 1)[1]

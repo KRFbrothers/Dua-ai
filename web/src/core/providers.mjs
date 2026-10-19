@@ -1,3 +1,4 @@
+import { killSwitches, PAUSED } from './kill-switches.mjs';
 import { readJsonLimited } from './limited-json.mjs';
 import { geminiUpstreamError, GEMINI_SYSTEM_PROMPT } from './gemini.mjs';
 import { attachmentParts, MAX_REQUEST_BYTES, providerType } from './attachments.mjs';
@@ -199,6 +200,16 @@ export async function relayStream({ provider, response, sources = [], reasoning,
   send({ type: 'done', truncated: Boolean(state.truncated), ...(state.usage ? { usage: state.usage } : {}) });
 }
 
+/** Older apps read only `imagine`/`voice`: a paused feature is reported as off with the friendly reason. */
+function pausedImagine(config, switches) {
+  if (!switches.imagine || !config) return config;
+  return { ...config, enabled: false, image: { ...config.image, enabled: false, reason: PAUSED.imagine }, video: { ...config.video, enabled: false, reason: PAUSED.imagine } };
+}
+function pausedVoice(config, switches) {
+  if (!switches.voice) return config;
+  return { ...config, tts: { enabled: false, reason: PAUSED.voice, providers: [], defaultProvider: null }, live: { ...config.live, enabled: false, reason: PAUSED.voice } };
+}
+
 export async function handleChat(request, { env = process.env, fetcher = fetch, pageReader, deadlineAt } = {}) {
   const startedAt = Date.now();
   const url = new URL(request.url);
@@ -207,7 +218,8 @@ export async function handleChat(request, { env = process.env, fetcher = fetch, 
     const configured = new Set(providers.filter(provider => provider.configured).map(provider => provider.name));
     const web = { ...chatWebConfiguration(env), nativeSearch: nativeSearchProviders(env, definitions).filter(name => configured.has(name)), xSearch: xSearchAvailable(env) && configured.has('Grok'), preferBrave: preferBrave(env) };
     const context = { summaries: true, budgets: Object.fromEntries(definitions.map(provider => [provider.name, contextBudget(provider.prefix, env)])) };
-    return json({ geminiConfigured: providers[0].configured, model: providers[0].model, providers, web, streaming: true, personalization: { personality: true }, files: filesConfiguration(env), context, imagine: publicImagineConfiguration(env), voice: voiceConfiguration(env),
+    const switches = killSwitches(env);
+    return json({ geminiConfigured: providers[0].configured, model: providers[0].model, providers, web, streaming: true, personalization: { personality: true }, files: filesConfiguration(env), context, imagine: pausedImagine(publicImagineConfiguration(env), switches), voice: pausedVoice(voiceConfiguration(env), switches), switches,
       history: { rename: true, pin: true, delete: Boolean(env.DUA_ALLOWED_EMAIL?.trim() && env.SUPABASE_URL && env.SUPABASE_ANON_KEY), persistReplies: Boolean(env.DUA_ALLOWED_EMAIL?.trim() && env.SUPABASE_URL && env.SUPABASE_ANON_KEY) },
       code: codeExecutionConfiguration(env, definitions, configured), build: buildConfiguration(env, configured), projects: { enabled: Boolean(env.DUA_ALLOWED_EMAIL?.trim() && env.SUPABASE_URL && env.SUPABASE_ANON_KEY), tasks: true, dueDates: true, memory: true } });
   }

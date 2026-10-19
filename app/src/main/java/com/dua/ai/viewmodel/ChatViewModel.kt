@@ -111,6 +111,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         if (_liveStart.value.busy || com.dua.ai.voice.live.LiveVoiceController.active) return
         val options = liveOptions()
         val reason = when {
+            _switches.value.voice -> com.dua.ai.setup.RemoteSwitches.VOICE_PAUSED
             projectUnavailable() != null -> projectUnavailable()
             _projectId.value != com.dua.ai.projects.ProjectCodec.PERSONAL || localSettings.value.projects.find { it.id == _projectId.value }?.instructions?.isNotBlank() == true -> "Use Voice mode for this project so its instructions apply. Live voice is available in Personal without custom instructions."
             options == null -> _integrations.value.voice?.live?.reason?.ifBlank { null } ?: "Live voice needs the latest Dua backend. Voice mode works now."
@@ -201,10 +202,44 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         null
     } catch (failure: Exception) { failure.message ?: "Memory could not be saved. Try again." }
     fun integrationNotice(text: String) { _integrations.value = _integrations.value.copy(notice = text) }
+    // Remote kill switches (/api/config › switches). Cached for the first frame; any failure falls back to "all off".
+    private val switchPrefs = application.getSharedPreferences("dua_remote_switches", 0)
+    private val _switches = MutableStateFlow(com.dua.ai.setup.RemoteSwitches.fromCache(
+        switchPrefs.getString("value", null), switchPrefs.getLong("savedAt", 0L), System.currentTimeMillis()))
+    val switches: StateFlow<com.dua.ai.setup.RemoteSwitches> = _switches.asStateFlow()
+    private val _switchesChecking = MutableStateFlow(false)
+    val switchesChecking: StateFlow<Boolean> = _switchesChecking.asStateFlow()
+    private var switchesCheckedAt = 0L
+    private fun applySwitches(next: com.dua.ai.setup.RemoteSwitches) {
+        _switches.value = next
+        switchPrefs.edit().putString("value", next.toJson()).putLong("savedAt", System.currentTimeMillis()).apply()
+        if (next.agent && _agent.value && !_isTyping.value) _agent.value = false
+        if (next.agent) _agentAvailable.value = false
+        if (next.imagine && _imagine.value && !_isTyping.value) _imagine.value = false
+    }
+    /** Start and resume: re-reads /api/config (5 s timeout, at most once a minute unless [force]). */
+    fun refreshRemoteSwitches(force: Boolean = false) {
+        val now = System.currentTimeMillis()
+        if (_switchesChecking.value || (!force && now - switchesCheckedAt < 60_000L)) return
+        switchesCheckedAt = now
+        _switchesChecking.value = true
+        viewModelScope.launch {
+            try {
+                val config = kotlinx.coroutines.withTimeout(5_000L) { setupApi.request("/api/config") }
+                applySwitches(com.dua.ai.setup.RemoteSwitches.fromConfig(config))
+            } catch (cancelled: kotlinx.coroutines.TimeoutCancellationException) { failOpenSwitches() }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { failOpenSwitches() }
+            finally { _switchesChecking.value = false }
+        }
+    }
+    /** Config unreachable: never trap the user on the paused screen or hide features because of a stale value. */
+    private fun failOpenSwitches() { _switches.value = com.dua.ai.setup.RemoteSwitches() }
     fun loadProviderConfiguration() = viewModelScope.launch {
         refreshEngineCapabilities(force = true)
         try {
             val config = setupApi.request("/api/config")
+            applySwitches(com.dua.ai.setup.RemoteSwitches.fromConfig(config))
             _integrations.value = api.chatConfiguration(com.dua.ai.setup.IntegrationCapabilities.configuration(config, _integrations.value))
             flushPendingFileDeletes()
         } catch (cancelled: CancellationException) { throw cancelled }
@@ -667,7 +702,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         if ((!force && _agentAvailable.value) || engineCheck?.isActive == true) return
         engineCheck = viewModelScope.launch {
             val engine = try { api.engineCapabilities() } catch (cancelled: CancellationException) { throw cancelled } catch (_: Exception) { com.dua.ai.network.EngineCapabilities() }
-            val available = engine.agent
+            val available = engine.agent && !_switches.value.agent
             _enginePersonalityAvailable.value = engine.personality
             _freeModels.value = engine.freeModels
             _agentAvailable.value = available
@@ -676,6 +711,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     }
     fun setAgent(enabled: Boolean) {
         if (_isTyping.value) return
+        if (enabled && _switches.value.agent) { _error.value = com.dua.ai.setup.RemoteSwitches.AGENT_PAUSED; return }
         if (enabled && !_agentAvailable.value) { _error.value = "Agent mode needs the Google Cloud engine."; return }
         _agent.value = enabled
         if (enabled) { _reasoning.value = false; _xSearch.value = false; _imagine.value = false; _runCode.value = false; _webMode.value = null; leaveBuild() }
@@ -2400,6 +2436,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     fun setImagine(enabled: Boolean) {
         if (_isTyping.value) return
         if (!enabled) { _imagine.value = false; return }
+        if (_switches.value.imagine) { _error.value = com.dua.ai.setup.RemoteSwitches.IMAGINE_PAUSED; return }
         refreshCloudImagine()
         _agent.value = false
         val config = imagineConfig()

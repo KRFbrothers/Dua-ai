@@ -10,6 +10,7 @@ import { handleImagine } from '../core/imagine.mjs';
 import { handleVoice } from '../core/voice.mjs';
 import { handleBuildPr } from '../core/build-pr.mjs';
 import { withRequestLog } from '../core/request-logging.mjs';
+import { switchResponse } from '../core/kill-switches.mjs';
 
 /** DUA_CHAT_DEADLINE_SECONDS: whole-request chat deadline (default 280 s, allowed 10–790 s). */
 export const chatDeadlineMs = env => envInteger(env, 'DUA_CHAT_DEADLINE_SECONDS', 280, 10, 790) * 1000;
@@ -25,6 +26,9 @@ async function routeService(request,{env=process.env,fetcher=fetch}={}) {
  // timeout (900 s; deploy-cloudrun.sh sets 780 s) so the reply can end cleanly.
  if(path==='/api/chat')request=new Request(request,{signal:AbortSignal.any([request.signal,AbortSignal.timeout(chatDeadlineMs(env))])});
  if(request.headers.get('origin')&&request.headers.get('origin')!==url.origin)return Response.json({error:'Request origin is not allowed.'},{status:403,headers:{'Cache-Control':'no-store'}});
+ // Remote kill switches (DUA_MAINTENANCE, DUA_DISABLE_IMAGINE, DUA_DISABLE_VOICE): refused before any provider work.
+ const paused=switchResponse(path,env);
+ if(paused)return paused;
  if(path==='/api/setup')return handleSetup(request,{env});
  if(path==='/api/config')return handleChat(request,{env,fetcher});
  // Account and cloud routes: owner-locked by DUA_ALLOWED_EMAIL inside handleAccount (session, features and logout stay open).
