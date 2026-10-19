@@ -2,7 +2,7 @@ Google Sans Trademarks
 ===========================
 
 Google commissioned the Google Sans fonts collection, including Google Sans, as 'work for hire' and owns all rights to these works.
-However, Google also does not include within the Open Font License ([OFL.txt](OFL.txt)) any Reserved Font Names (RFNs) within the copyright statement. 
+However, Google also does not include within the Open Font License ([OFL.txt](GoogleSans-OFL.txt)) any Reserved Font Names (RFNs) within the copyright statement. 
 
 “Google”, and “Google Sans” are trademarks of Google LLC.
 

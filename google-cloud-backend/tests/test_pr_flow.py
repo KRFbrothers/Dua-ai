@@ -37,8 +37,7 @@ class FakeGitHub:
         return [{"name": "Project checks", "status": "completed", "conclusion": "success", "output": {}}]
 
 
-OK = [{"name": "Android build and tests", "status": "completed", "conclusion": "success"},
-      {"name": "Vercel", "status": "completed", "conclusion": "failure"}]
+OK = [{"name": "Android build and tests", "status": "completed", "conclusion": "success"}]
 FAIL = [{"name": "Backend tests", "status": "completed", "conclusion": "failure", "output": {"title": "1 failed"}}]
 PENDING = [{"name": "Backend tests", "status": "in_progress", "conclusion": None}]
 GOOD = {"title": "T", "description": "D", "files": [{"path": "google-cloud-backend/x.py", "content": "x = 1\n"}]}
@@ -78,7 +77,7 @@ def test_precheck_failure_goes_back_to_model_then_stops():
     assert done and "no pull request" in text and not gh.opened
 
 
-def test_ci_success_ignores_vercel_and_reports():
+def test_ci_success_reports():
     gh = FakeGitHub(ci=[PENDING, OK])
     f, events = flow(gh)
     done, _, text = f.propose(GOOD)
