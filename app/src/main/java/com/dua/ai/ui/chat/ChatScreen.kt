@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowDownward
 import androidx.compose.material.icons.outlined.Lightbulb
@@ -287,6 +288,8 @@ fun ChatScreen(
         }
         if (followTail && (!listState.isScrollInProgress || newPrompt)) goToLatest()
     }
+    /** Wide windows: the menu button hides or shows the permanent history panel. */
+    var historyPanelVisible by rememberSaveable { mutableStateOf(true) }
     fun closeDrawerThen(action: () -> Unit) { scope.launch { drawerState.close() }; action() }
 
     var dropHover by remember { mutableStateOf(false) }
@@ -299,11 +302,9 @@ fun ChatScreen(
                 .calculateEndPadding(LocalLayoutDirection.current)
             val controlInset = maxOf(HomeSizes.topBarPaddingH, HomeSizes.composerHorizontalMargin(maxWidth) + HomeSizes.barPaddingH)
             val drawerWidth = minOf(DrawerSizes.width, (maxWidth - endInset - controlInset - Sizes.touchTarget).coerceAtLeast(0.dp))
-            ModalNavigationDrawer(
-                drawerState = drawerState,
-                // Only swipe to close: an edge swipe to open would fight horizontal scrolling in code blocks.
-                gesturesEnabled = drawerState.isOpen,
-                drawerContent = {
+            // Expanded windows (>= 840dp): history stays open on the left, chat on the right (Reply/Now in Android pattern).
+            val wideHistory = WideLayout.permanentHistory(maxWidth, featureOpen = feature != null)
+            val historyPanel: @Composable (Boolean) -> Unit = { permanent ->
                     if (feature == null) HistoryDrawer(
                         drawerState = drawerState,
                         profileName = state.profileName, profilePhotoUrl = state.profilePhotoUrl,
@@ -321,10 +322,11 @@ fun ChatScreen(
                         onDeleteServerChat = { id -> actions.onDismissChatDeletion(); deletingServerId = id },
                         onProjects = { closeDrawerThen { taskHome = false; actions.onOpenDestination(DuaDestination.Projects) } },
                         onDestination = { destination -> closeDrawerThen { taskHome = false; actions.onOpenDestination(destination) } },
-                        modifier = Modifier.width(drawerWidth),
+                        permanent = permanent,
+                        modifier = Modifier.width(if (permanent) DrawerSizes.width else drawerWidth),
                     )
-                },
-            ) {
+            }
+            val chatPane: @Composable () -> Unit = {
                 Column(Modifier.fillMaxSize().background(com.dua.ai.ui.theme.ChatTheme.colors.background)
                     .let { if (feature == null) it.windowInsetsPadding(
                         WindowInsets.ime.union(WindowInsets.navigationBars).only(WindowInsetsSides.Bottom)) else it }
@@ -334,7 +336,7 @@ fun ChatScreen(
                     else if (feature != null) FeatureTopBar(feature.title, actions.onExitFeature, actions.onNewFeatureSession,
                         newSessionEnabled = !state.typing && (feature != ChatFeature.Agent || state.agentAvailable))
                     else ChatTopBar(
-                        onMenu = { dismissInput(); scope.launch { drawerState.open() } },
+                        onMenu = { dismissInput(); if (wideHistory) historyPanelVisible = !historyPanelVisible else scope.launch { drawerState.open() } },
                         task = taskHome, modelName = homeModelName(state),
                         profileName = state.profileName, profilePhotoUrl = state.profilePhotoUrl,
                         onModel = { sheet = ChatSheet.Model }, onProfile = { sheet = ChatSheet.Profile },
@@ -450,6 +452,16 @@ fun ChatScreen(
                     }
                 }
             }
+            if (wideHistory && historyPanelVisible) Row(Modifier.fillMaxSize()) {
+                historyPanel(true)
+                androidx.compose.material3.VerticalDivider(color = com.dua.ai.ui.theme.DrawerTheme.colors.divider)
+                Box(Modifier.weight(1f).fillMaxHeight()) { chatPane() }
+            } else ModalNavigationDrawer(
+                drawerState = drawerState,
+                // Only swipe to close: an edge swipe to open would fight horizontal scrolling in code blocks.
+                gesturesEnabled = drawerState.isOpen,
+                drawerContent = { historyPanel(false) },
+            ) { chatPane() }
             ChatDropOverlay(dropHover, dropMotion)
         }
     }
