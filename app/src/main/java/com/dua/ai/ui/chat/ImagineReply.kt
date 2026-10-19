@@ -1,5 +1,7 @@
 package com.dua.ai.ui.chat
 
+import com.dua.ai.ui.components.predictiveBack
+
 import com.dua.ai.ui.components.ShimmerBox
 
 import androidx.compose.material3.ButtonDefaults
@@ -251,16 +253,26 @@ fun VideoPlayer(url: String, modifier: Modifier = Modifier, autoPlay: Boolean = 
 fun MediaViewer(media: List<GeneratedMedia>, startIndex: Int, actions: ImagineActions, videoAvailable: Boolean, onDismiss: () -> Unit,
     prompt: String? = null, showEditActions: Boolean = true) {
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
-        MediaViewerContent(media, startIndex, actions, videoAvailable, onDismiss, prompt = prompt, showEditActions = showEditActions)
+        // Edge-to-edge in the dialog window too: draw behind a display cutout (the content keeps safeDrawing padding).
+        val dialogWindow = (androidx.compose.ui.platform.LocalView.current.parent as? androidx.compose.ui.window.DialogWindowProvider)?.window
+        androidx.compose.runtime.LaunchedEffect(dialogWindow) {
+            if (dialogWindow != null && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P)
+                dialogWindow.attributes = dialogWindow.attributes.apply {
+                    layoutInDisplayCutoutMode = android.view.WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+                }
+        }
+        val back = com.dua.ai.ui.components.rememberPredictiveBack(onBack = onDismiss)
+        MediaViewerContent(media, startIndex, actions, videoAvailable, onDismiss, prompt = prompt, showEditActions = showEditActions,
+            modifier = Modifier.predictiveBack(back))
     }
 }
 
 @Composable
 fun MediaViewerContent(media: List<GeneratedMedia>, startIndex: Int, actions: ImagineActions, videoAvailable: Boolean, onDismiss: () -> Unit,
-    playVideo: Boolean = true, prompt: String? = null, showEditActions: Boolean = true) {
+    playVideo: Boolean = true, prompt: String? = null, showEditActions: Boolean = true, modifier: Modifier = Modifier) {
     val pager = rememberPagerState(initialPage = startIndex.coerceIn(0, (media.size - 1).coerceAtLeast(0))) { media.size }
     val loader = LocalMediaLoader.current
-    Box(Modifier.fillMaxSize().background(DuaTheme.colors.mediaBackground)) {
+    Box(modifier.fillMaxSize().background(DuaTheme.colors.mediaBackground)) {
         HorizontalPager(pager, modifier = Modifier.fillMaxSize(), key = { media[it].key }) { page ->
             val item = media[page]
             if (item.isVideo) {

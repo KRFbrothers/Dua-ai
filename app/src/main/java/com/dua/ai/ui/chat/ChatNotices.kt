@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.CloudOff
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -44,6 +45,7 @@ fun ChatNotices(state: ChatUiState, actions: ChatActions) {
         if (state.attachmentStatus.isNotBlank()) Text(state.attachmentStatus, style = MaterialTheme.typography.bodySmall,
             color = c.mutedText, maxLines = 3, overflow = TextOverflow.Ellipsis,
             modifier = Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite })
+        if (state.offline && state.error == null) OfflineLine()
         state.error?.let { message ->
             val needsSetup = message.contains("setup", ignoreCase = true)
             Surface(color = c.errorFill, shape = DuaShape.card, modifier = Modifier.fillMaxWidth()) {
@@ -65,5 +67,17 @@ private fun StatusLine(text: String, actionLabel: String?, onAction: () -> Unit)
         Text(text, style = MaterialTheme.typography.bodySmall, color = ChatTheme.colors.mutedText,
             maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
         if (actionLabel != null) TextButton(onClick = onAction, colors = chatTextButtonColors(), modifier = Modifier.heightIn(min = Sizes.touchTarget)) { Text(actionLabel) }
+    }
+}
+
+/** Subtle offline notice; a message that fails while offline is sent again on reconnect. */
+@Composable
+private fun OfflineLine() {
+    val c = ChatTheme.colors
+    Row(Modifier.fillMaxWidth().padding(vertical = Spacing.xs).semantics { liveRegion = LiveRegionMode.Polite },
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+        Icon(Icons.Outlined.CloudOff, contentDescription = null, tint = c.mutedText, modifier = Modifier.size(Sizes.iconSmall))
+        Text("You're offline. A failed message resends when you're back.", style = MaterialTheme.typography.bodySmall, color = c.mutedText,
+            maxLines = 2, overflow = TextOverflow.Ellipsis)
     }
 }

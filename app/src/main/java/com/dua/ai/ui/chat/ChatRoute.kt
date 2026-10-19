@@ -65,6 +65,7 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
     val typing by viewModel.isTyping.collectAsState()
     val error by viewModel.error.collectAsState()
     val failedPrompt by viewModel.failedPrompt.collectAsState()
+    val online by viewModel.online.collectAsState()
     val account by viewModel.account.state.collectAsState()
     val speech by voice.speaker.state.collectAsState()
     val generatedSpeech by voice.generated.state.collectAsState()
@@ -125,7 +126,7 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
         profileName = account.user?.displayName.orEmpty().ifBlank { account.user?.email.orEmpty() },
         profilePhotoUrl = account.user?.avatarUrl.orEmpty(),
         profileEmail = account.user?.email,
-        chatId = chatId, messages = messages, draft = draft, editingId = editingId?.takeIf { id -> messages.any { it.id == id } }, typing = typing, error = error, model = model,
+        chatId = chatId, messages = messages, draft = draft, editingId = editingId?.takeIf { id -> messages.any { it.id == id } }, typing = typing, error = error, offline = !online, model = model,
         feature = feature, homeTab = homeTab,
         providers = integrations.providers, webMode = webMode, reasoning = reasoning,
         webSearchConfigured = integrations.searchAvailable(model), pageReadingAvailable = integrations.pageReadingAvailable,
