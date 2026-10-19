@@ -1,6 +1,7 @@
 package com.dua.ai.ui.chat
 
 import android.graphics.BitmapFactory
+import android.provider.Settings
 import android.view.ViewGroup
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.CompositionLocalProvider
@@ -17,6 +18,7 @@ import androidx.core.view.WindowInsetsCompat
 import com.dua.ai.model.ChatMessage
 import com.dua.ai.settings.LocalPreferences
 import com.dua.ai.ui.theme.DuaTheme
+import com.dua.ai.ui.theme.HomeSizes
 import com.github.takahirom.roborazzi.captureRoboImage
 import java.io.File
 import org.junit.Assert.*
@@ -109,6 +111,7 @@ class HomeGradientUiTest(private val dark: Boolean, private val large: Boolean) 
         dispatchKeyboard(0)
         val closedSurface = compose.onNodeWithTag("home-gradient").fetchSemanticsNode().boundsInRoot
         val closedBar = compose.onNodeWithTag("composer-container").fetchSemanticsNode().boundsInRoot
+        val inputId = compose.onNodeWithContentDescription("Message").fetchSemanticsNode().id
         compose.onNodeWithContentDescription("Dua AI").assertWidthIsEqualTo(48.dp)
         compose.onNodeWithContentDescription("Message").performClick().assertIsFocused()
         dispatchKeyboard(280)
@@ -117,6 +120,10 @@ class HomeGradientUiTest(private val dark: Boolean, private val large: Boolean) 
         assertEquals("The gradient must end at the keyboard", closedSurface.bottom - 280f, surface.bottom, 2f)
         assertEquals("IME inset must be applied once", closedBar.bottom - 280f, bar.bottom, 2f)
         assertTrue(bar.bottom <= surface.bottom)
+        assertTrue("The keyboard opens more horizontal writing room", bar.width > closedBar.width)
+        assertEquals("The wider composer remains centered", closedBar.center.x, bar.center.x, 1f)
+        if (!large) assertTrue("The inline keyboard composer leaves more room for content", bar.height < closedBar.height)
+        assertEquals("Keyboard changes must not recreate the input", inputId, compose.onNodeWithContentDescription("Message").fetchSemanticsNode().id)
         compose.onNodeWithContentDescription("Dua AI").assertWidthIsEqualTo(36.dp)
         val tabs = compose.onNode(hasText("Chat") and isSelectable()).assertIsDisplayed().fetchSemanticsNode().boundsInRoot
         assertTrue(tabs.bottom <= bar.top)
@@ -127,6 +134,9 @@ class HomeGradientUiTest(private val dark: Boolean, private val large: Boolean) 
         capture("typing-keyboard")
         dispatchKeyboard(0)
         compose.onNodeWithContentDescription("Message").assertIsFocused().assertTextContains("Keep my draft")
+        val restoredBar = compose.onNodeWithTag("composer-container").fetchSemanticsNode().boundsInRoot
+        assertEquals(closedBar.left, restoredBar.left, 1f)
+        assertEquals(closedBar.right, restoredBar.right, 1f)
         compose.onNodeWithTag("home-hero").assertDoesNotExist()
         compose.onNode(hasText("Task") and isSelectable()).performClick()
         compose.onNodeWithText("What can I take off\nyour plate?").assertDoesNotExist()
@@ -148,6 +158,31 @@ class HomeGradientUiTest(private val dark: Boolean, private val large: Boolean) 
         compose.onNodeWithText("Ask away, Fareed!").assertExists()
         compose.onNodeWithContentDescription("Dua AI").assertWidthIsEqualTo(48.dp)
         compose.onNodeWithContentDescription("Message").assertIsFocused()
+    }
+
+    @Test
+    @Config(qualifiers = "w1000dp-h900dp-mdpi")
+    fun wideHomeKeepsItsHeroAndTaskStartersCenteredWithReducedMotion() {
+        val resolver = compose.activity.contentResolver
+        val previous = Settings.Global.getFloat(resolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f)
+        try {
+            Settings.Global.putFloat(resolver, Settings.Global.ANIMATOR_DURATION_SCALE, 0f)
+            show(mutableStateOf(ChatUiState(profileName = "Fareed", agentAvailable = true)))
+            val canvas = compose.onNodeWithTag("home-empty-content").fetchSemanticsNode().boundsInRoot
+            val hero = compose.onNodeWithTag("home-hero").fetchSemanticsNode().boundsInRoot
+            assertTrue(hero.width <= HomeSizes.composerMaxWidth.value + 1f)
+            assertEquals(canvas.center.x, hero.center.x, 1f)
+            capture("wide-chat")
+            compose.onNode(hasText("Task") and isSelectable()).performClick().assertIsSelected()
+            compose.onNodeWithText("Ask away, Fareed!").assertDoesNotExist()
+            for (prompt in HomeTaskPrompts) {
+                val row = compose.onNodeWithText(prompt).performScrollTo().assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+                assertTrue(row.width <= HomeSizes.composerMaxWidth.value + 1f)
+                assertEquals(canvas.center.x, row.center.x, 1f)
+            }
+            compose.onNodeWithText("What can I take off\nyour plate?").assertExists()
+            capture("wide-task")
+        } finally { Settings.Global.putFloat(resolver, Settings.Global.ANIMATOR_DURATION_SCALE, previous) }
     }
 
     @Test fun navigationAndKeyboardInsetsUseTheirUnionAndDoNotAccumulateAcrossToggles() {

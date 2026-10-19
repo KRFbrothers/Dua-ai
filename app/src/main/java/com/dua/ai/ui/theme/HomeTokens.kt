@@ -27,15 +27,15 @@ data class HomeColors(
 
 val HomeLightColors = HomeColors(
     roundButton = Color(0xFFF3F4F6), roundButtonIcon = Color(0xFF1F2937),
-    segmentTrack = Color(0xFFE5E7EB), segmentSelected = Color(0xFFFFFFFF), segmentSelectedText = Color(0xFF111827), segmentText = Color(0xFF6B7280),
+    segmentTrack = Color(0xFFE5E7EB), segmentSelected = Color(0xFFFFFFFF), segmentSelectedText = Color(0xFF111827), segmentText = Color(0xFF374151),
     promptIcon = Color(0xFF374151), promptText = Color(0xFF1F2937),
-    bar = Color(0xFFF9FAFB), barBorder = Color(0xFFE5E7EB), barIcon = Color(0xFF374151), input = Color(0xFF111827), placeholder = Color(0xFF9CA3AF),
+    bar = Color(0xFFF9FAFB), barBorder = Color(0xFFE5E7EB), barIcon = Color(0xFF374151), input = Color(0xFF111827), placeholder = Color(0xFF6B7280),
     voice = Color(0xFF8B5CF6), onVoice = Color(0xFFFFFFFF), modelLabel = Color(0xFF6B7280),
 )
 
 val HomeDarkColors = HomeColors(
     roundButton = Color(0xFF1F2937), roundButtonIcon = Color(0xFFE5E7EB),
-    segmentTrack = Color(0xFF1F2937), segmentSelected = Color(0xFF4B5563), segmentSelectedText = Color(0xFFF9FAFB), segmentText = Color(0xFF9CA3AF),
+    segmentTrack = Color(0xFF1F2937), segmentSelected = Color(0xFF4B5563), segmentSelectedText = Color(0xFFF9FAFB), segmentText = Color(0xFFD1D5DB),
     promptIcon = Color(0xFFD1D5DB), promptText = Color(0xFFF3F4F6),
     bar = Color(0xFF111827), barBorder = Color(0xFF374151), barIcon = Color(0xFFD1D5DB), input = Color(0xFFF9FAFB), placeholder = Color(0xFF9CA3AF),
     voice = Color(0xFF8B5CF6), onVoice = Color(0xFFFFFFFF), modelLabel = Color(0xFF9CA3AF),
@@ -50,6 +50,7 @@ object HomeTheme {
 object HomeSizes {
     /** Compact original Dua lockup, scaled down as a single asset. */
     val heroLogo = 48.dp
+    val heroCompactLogo = 36.dp
     val heroCompactHeight = 320.dp
     /** assistant_robin_chat_input_max_width from the supplied Google App resource table. */
     val composerMaxWidth = 696.dp
@@ -58,6 +59,7 @@ object HomeSizes {
     val composerCompactMarginH = 16.dp
     val composerRoomyWidth = 360.dp
     val composerIdlePaddingV = 16.dp
+    val composerKeyboardPaddingV = 8.dp
     val composerElevation = 2.dp
     val noElevation = 0.dp
     fun composerHorizontalMargin(availableWidth: Dp): Dp =

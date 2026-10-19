@@ -17,6 +17,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.dua.ai.ui.theme.DuaTheme
 import com.dua.ai.ui.theme.ChatTheme
+import com.dua.ai.ui.theme.rememberMotionAllowed
 
 /** Decorative empty-Home layer only. Conversation/feature surfaces and shared tokens stay intact. */
 @Composable
@@ -25,7 +26,8 @@ internal fun Modifier.homeBackdrop(task: Boolean): Modifier {
     val base = ChatTheme.colors.background
     val sky = if (dark) Color(0xFF173853) else Color(0xFFB9DEFF)
     val violet = if (dark) Color(0xFF4A3588) else Color(0xFF9294FF)
-    val taskFraction by animateFloatAsState(if (task) 1f else 0f, tween(500), label = "Home ambient mode")
+    val duration = if (rememberMotionAllowed()) 500 else 0
+    val taskFraction by animateFloatAsState(if (task) 1f else 0f, tween(duration), label = "Home ambient mode")
     return testTag("home-gradient").drawWithCache {
         val chatWash = Brush.verticalGradient(
             0f to base, 0.5f to base,

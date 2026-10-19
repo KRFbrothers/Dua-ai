@@ -22,7 +22,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
@@ -41,6 +40,7 @@ import com.dua.ai.ui.theme.HomeSizes
 import com.dua.ai.ui.theme.HomeTheme
 import com.dua.ai.ui.theme.Sizes
 import com.dua.ai.ui.theme.Spacing
+import com.dua.ai.ui.theme.rememberMotionAllowed
 
 internal val HomeTaskPrompts = listOf("Nudge me to backup my photos", "Learn React by building an app", "Compare views on a topic I follow")
 
@@ -63,19 +63,23 @@ internal fun ChatContent(
         val keyboardOpen = WindowInsets.ime.getBottom(LocalDensity.current) > 0
         val compact = maxHeight < HomeSizes.heroCompactHeight
         val headingStyle = if (compact) HomeHeroCompactStyle else HomeHeroStyle
+        val motion = rememberMotionAllowed()
+        val enterDuration = if (motion) 240 else 0
+        val exitDuration = if (motion) 180 else 0
         // Keep the empty canvas and bottom controls stationary while the draft hides decoration.
-        AnimatedVisibility(visible = !composing, modifier = Modifier.fillMaxSize(),
-            enter = fadeIn(tween(240)), exit = fadeOut(tween(180))) {
+        AnimatedVisibility(visible = !composing,
+            modifier = Modifier.widthIn(max = HomeSizes.composerMaxWidth).fillMaxSize().align(Alignment.Center),
+            enter = fadeIn(tween(enterDuration)), exit = fadeOut(tween(exitDuration))) {
             // Animate decorative content only; the composer/focus and Agent callbacks stay outside.
             AnimatedContent(targetState = task, modifier = Modifier.fillMaxSize(),
-                transitionSpec = { fadeIn(tween(240)) togetherWith fadeOut(tween(180)) }, label = "Home mode content") { selectedTask ->
+                transitionSpec = { fadeIn(tween(enterDuration)) togetherWith fadeOut(tween(exitDuration)) }, label = "Home mode content") { selectedTask ->
                 if (selectedTask && (compact || keyboardOpen)) {
                     // All three real starter handlers remain reachable in a short keyboard viewport.
                     Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).heightIn(min = maxHeight),
                         verticalArrangement = Arrangement.Bottom) {
                         AnimatedVisibility(visible = !keyboardOpen,
-                            enter = fadeIn(tween(240)) + expandVertically(tween(250)),
-                            exit = fadeOut(tween(180)) + shrinkVertically(tween(250))) {
+                            enter = fadeIn(tween(enterDuration)) + expandVertically(tween(if (motion) 250 else 0)),
+                            exit = fadeOut(tween(exitDuration)) + shrinkVertically(tween(if (motion) 250 else 0))) {
                             HomeHero(true, headingStyle, profileName, keyboardOpen)
                         }
                         TaskStarters(onTask)
@@ -95,9 +99,10 @@ internal fun ChatContent(
 
 @Composable
 private fun HomeHero(task: Boolean, style: TextStyle, profileName: String, keyboardOpen: Boolean) {
-    val padding by animateDpAsState(if (keyboardOpen) Spacing.sm else Spacing.xxl, tween(250), label = "Home hero padding")
-    val gap by animateDpAsState(if (keyboardOpen) Spacing.sm else Spacing.lg, tween(250), label = "Home hero gap")
-    val logoWidth by animateDpAsState(if (keyboardOpen) 36.dp else HomeSizes.heroLogo, tween(250), label = "Home logo width")
+    val duration = if (rememberMotionAllowed()) 250 else 0
+    val padding by animateDpAsState(if (keyboardOpen) Spacing.sm else Spacing.xxl, tween(duration), label = "Home hero padding")
+    val gap by animateDpAsState(if (keyboardOpen) Spacing.sm else Spacing.lg, tween(duration), label = "Home hero gap")
+    val logoWidth by animateDpAsState(if (keyboardOpen) HomeSizes.heroCompactLogo else HomeSizes.heroLogo, tween(duration), label = "Home logo width")
     Column(Modifier.fillMaxWidth().padding(vertical = padding).testTag("home-hero"),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(gap)) {
