@@ -15,7 +15,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import com.dua.ai.ui.theme.AmbientDark
@@ -54,12 +53,12 @@ internal fun ThinkingOrb(modifier: Modifier = Modifier) {
             close()
         }
         onDrawBehind {
-            clipRect {
-                drawCircle(glow, radius = r * 1.7f, alpha = pulse?.value ?: .72f)
-                rotate(spin?.value ?: 0f) { drawCircle(sweep, radius = r * .92f) }
-                drawCircle(highlight, radius = r * .5f, alpha = .5f)
-                drawPath(star, Color.White, alpha = .9f * (sparkle?.value ?: .15f))
-            }
+            // The halo is wider than the glyph. Clipping it to 28 dp leaves a hard square.
+            // Its transparent edge fits the parent's 48 dp status row and the existing text gap.
+            drawCircle(glow, radius = r * 1.7f, alpha = pulse?.value ?: .72f)
+            rotate(spin?.value ?: 0f) { drawCircle(sweep, radius = r * .92f) }
+            drawCircle(highlight, radius = r * .5f, alpha = .5f)
+            drawPath(star, Color.White, alpha = .9f * (sparkle?.value ?: .15f))
         }
     })
 }

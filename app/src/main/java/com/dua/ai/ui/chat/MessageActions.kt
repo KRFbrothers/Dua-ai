@@ -4,6 +4,7 @@ import android.content.ActivityNotFoundException
 import android.content.Intent
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -41,12 +42,14 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.onLongClick
 import androidx.compose.ui.semantics.Role
@@ -196,7 +199,12 @@ fun MessageActions(
         TextButton(onClick = actions.copy, enabled = copyText.isNotBlank(), modifier = Modifier.heightIn(min = Sizes.touchTarget)) {
             Icon(if (actions.copied) Icons.Outlined.Check else Icons.Outlined.ContentCopy, if (actions.copied) "Response copied" else "Copy response",
                 tint = copyTint, modifier = Modifier.size(Sizes.iconSmall))
-            Text(if (actions.copied) "Copied" else "Copy", color = copyTint, modifier = Modifier.padding(start = Spacing.xs))
+            Box(Modifier.padding(start = Spacing.xs)) {
+                // Measure the longer confirmation with the actual button font/text scale.
+                // Layout-only text is excluded from accessibility and never drawn.
+                Text("Copied", modifier = Modifier.alpha(0f).clearAndSetSemantics { })
+                Text(if (actions.copied) "Copied" else "Copy", color = copyTint)
+            }
         }
         if (showRetry) TextButton(onClick = { haptic(ChatHaptic.Tap); onRetry() }, enabled = retryEnabled, modifier = Modifier.heightIn(min = Sizes.touchTarget)) {
             Icon(Icons.Outlined.Refresh, retryDescription, tint = if (retryEnabled) tint else tint.copy(alpha = .38f), modifier = Modifier.size(Sizes.iconSmall))
