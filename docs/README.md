@@ -9,6 +9,7 @@ Start with [ARCHITECTURE.md](ARCHITECTURE.md) for how the pieces fit, and [OPERA
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Runtime map, request flow, data ownership, where to change what |
 | [OPERATIONS.md](OPERATIONS.md) | Project/region, redeploy commands, safe settings changes, secrets, `dua-backup`, monitoring, logs, credit expiry |
 | [AGENT.md](AGENT.md) | Agent tool loop vs ADK, Agent flags, Agent notes vs phone Memory, GitHub token permissions |
+| [ADK_SCOPE.md](ADK_SCOPE.md) | Fareed's final six-part ADK scope, 25 requirements, implementation gaps and official open-source references |
 | [WEBSITE.md](WEBSITE.md) | Website served by dua-api, email sign-in, browser access to the engine, roadmap |
 | [TESTING.md](TESTING.md) | CI jobs, test commands, flagship feature tests |
 | [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md) | Owner-only lock, spending limits, staging/device checks, installing the APK |

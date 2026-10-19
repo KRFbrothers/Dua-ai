@@ -2,6 +2,10 @@
 
 The Agent is the tool-using mode of the Cloud Run engine (`google-cloud-backend/`). This page summarises how it runs and which settings control it. Implementation details and setup steps live in the [engine README](../google-cloud-backend/README.md#dua-agent-tools-general-tool-loop). Change settings only with `--update-env-vars` ([OPERATIONS.md](OPERATIONS.md#changing-settings-safely)).
 
+The approved ADK target is recorded in [ADK_SCOPE.md](ADK_SCOPE.md): Fareed's
+unchanged six-part checklist, current integration gaps and official GitHub sources.
+Keep its pending requirements distinct from implemented behavior below.
+
 ## Two ways to run: tool loop vs ADK
 
 | Mode | When | How |
