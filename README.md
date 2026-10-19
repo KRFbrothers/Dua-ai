@@ -108,7 +108,7 @@ For the engine's mocked tests, run from the repository root:
 
 ```sh
 python3 -m venv /tmp/dua-gcb-tests
-/tmp/dua-gcb-tests/bin/python -m pip install Flask==3.0.3 pytest==8.3.5
+/tmp/dua-gcb-tests/bin/python -m pip install Flask==3.1.3 pytest==8.3.5
 /tmp/dua-gcb-tests/bin/python -m pytest -q google-cloud-backend/tests
 ```
 

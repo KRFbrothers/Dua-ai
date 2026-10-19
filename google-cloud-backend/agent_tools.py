@@ -12,7 +12,7 @@ The model decides which tools to call; every tool runs here on the server with i
   never run inside the loop: the call is stored server-side and the user approves or rejects it in the app.
 - Untrusted tool output goes back to the model inside UNTRUSTED_DATA markers (agent_safety.fence).
 - env["cancelled"] (the app disconnected): the loop stops before the next model call or tool.
-Caps per request: AGENT_MAX_STEPS model calls (default 12), per-tool limits below and a total time limit.
+Caps per request: AGENT_MAX_STEPS model calls (default: MAX_STEPS below), per-tool limits below and a total time limit.
 """
 import ast
 import datetime

@@ -154,7 +154,7 @@ then run the `--update-secrets` line again. To switch free models off: `gcloud r
 pip install -r requirements.txt pytest && python -m pytest -q tests
 ```
 
-For mocked unit tests only, Vertex credentials/SDK are unnecessary: install `Flask==3.0.3 pytest==8.3.5` and run `python -m pytest -q tests`. GitHub's Google Cloud engine check uses this isolated setup.
+For mocked unit tests only, Vertex credentials/SDK are unnecessary: install `Flask==3.1.3 pytest==8.3.5` (same Flask as `requirements.txt`) and run `python -m pytest -q tests`. GitHub's Google Cloud engine check uses this isolated setup (its workflow file still installs Flask 3.0.3 until it is updated by hand).
 
 Separate-engine Android builds treat Dua/Gemini chat as configured independently of the base backend's provider keys. Chat file selection uses the existing bounded inline path (up to 3 files / 2 MB total; oversized photos are resized). Audio can also be sent inline. Use CSV/UTF-8 text for spreadsheets; XLSX/ODS and documents over the inline limit are rejected rather than uploaded as inaccessible storage references. Imagine retains the base-backend storage path.
 

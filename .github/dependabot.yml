@@ -1,0 +1,74 @@
+# Dependabot: weekly, grouped, quiet. Minor and patch updates of one ecosystem arrive as ONE pull request;
+# major updates (e.g. AGP, Kotlin, Compose BOM, Flask 4) come separately and need a careful review.
+# Security updates are separate and are not limited by these settings. Dependabot never merges anything.
+version: 2
+updates:
+  - package-ecosystem: "pip"
+    directory: "/google-cloud-backend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Asia/Kolkata"
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "deps(engine)"
+    groups:
+      engine-minor-patch:
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: "npm"
+    directory: "/web"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Asia/Kolkata"
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "deps(api)"
+    groups:
+      api-minor-patch:
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: "npm"
+    directory: "/website"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Asia/Kolkata"
+    open-pull-requests-limit: 2
+    commit-message:
+      prefix: "deps(website)"
+    groups:
+      website-minor-patch:
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: "gradle"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Asia/Kolkata"
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "deps(app)"
+    groups:
+      app-minor-patch:
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Asia/Kolkata"
+    open-pull-requests-limit: 2
+    commit-message:
+      prefix: "deps(actions)"
+    groups:
+      actions-minor-patch:
+        update-types: ["minor", "patch"]
