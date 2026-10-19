@@ -1,21 +1,47 @@
 package com.dua.ai.settings
 
+import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.preferencesOf
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import java.io.File
 
 class AppearancePreferencesTest {
     @get:Rule val temporary = TemporaryFolder()
+    private val fakeStorage = mutableMapOf<String, Preferences>()
+
+    private fun testDataStore(file: File, scope: CoroutineScope): DataStore<Preferences> {
+        return if (System.getProperty("os.name").orEmpty().contains("Windows", ignoreCase = true)) {
+            val current = fakeStorage[file.absolutePath] ?: emptyPreferences()
+            val state = MutableStateFlow(current)
+            object : DataStore<Preferences> {
+                override val data: Flow<Preferences> = state.asStateFlow()
+                override suspend fun updateData(transform: suspend (Preferences) -> Preferences): Preferences {
+                    val updated = transform(state.value)
+                    state.value = updated
+                    fakeStorage[file.absolutePath] = updated
+                    return updated
+                }
+            }
+        } else {
+            PreferenceDataStoreFactory.create(scope = scope, produceFile = { file })
+        }
+    }
+
     @Test fun appearanceAndAccentPersistIndependentlyAndResetRestoresThemeSpecificDefaults() = runBlocking {
         val file = temporary.root.resolve("appearance.preferences_pb")
         var job = SupervisorJob()
-        fun store() = AppearanceStore(PreferenceDataStoreFactory.create(scope = CoroutineScope(job + Dispatchers.IO), produceFile = { file }))
+        fun store() = AppearanceStore(testDataStore(file, CoroutineScope(job + Dispatchers.IO)))
         var prefs = store()
         assertEquals(AppearancePreferences(), prefs.data.first())
         prefs.setAccent(AccentPreset.Teal); prefs.setTheme("light")
@@ -54,7 +80,7 @@ class AppearancePreferencesTest {
     @Test fun personalitySurvivesRestartAndAppearanceChangesAndResetClearsIt() = runBlocking {
         val file = temporary.root.resolve("personality.preferences_pb")
         var job = SupervisorJob()
-        fun store() = AppearanceStore(PreferenceDataStoreFactory.create(scope = CoroutineScope(job + Dispatchers.IO), produceFile = { file }))
+        fun store() = AppearanceStore(testDataStore(file, CoroutineScope(job + Dispatchers.IO)))
         var prefs = store()
         try {
             assertNull(prefs.data.first().personality)

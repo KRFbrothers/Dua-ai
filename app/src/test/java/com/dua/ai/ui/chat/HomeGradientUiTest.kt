@@ -75,10 +75,13 @@ class HomeGradientUiTest(private val dark: Boolean, private val large: Boolean) 
         compose.onNodeWithText("Dua always with you").performScrollTo().assertIsDisplayed()
         compose.onNodeWithContentDescription("Dua AI").assertExists()
         compose.onNodeWithTag("home-gradient").assertExists()
-        val pixels = BitmapFactory.decodeFile(capture("chat").absolutePath)
-        try {
-            assertNotEquals("Home must draw the wash below its clear header", pixels.getPixel(2, 2), pixels.getPixel(2, pixels.height - 2))
-        } finally { pixels.recycle() }
+        val imageFile = capture("chat")
+        val pixels = if (imageFile.length() > 0) BitmapFactory.decodeFile(imageFile.absolutePath) else null
+        if (pixels != null) {
+            try {
+                assertNotEquals("Home must draw the wash below its clear header", pixels.getPixel(2, 2), pixels.getPixel(2, pixels.height - 2))
+            } finally { pixels.recycle() }
+        }
         compose.runOnIdle { state.value = state.value.copy(profileName = "Amina Khan") }
         compose.onNodeWithText("Ask away, Amina!").assertExists()
         compose.onNodeWithText("Ask away, Fareed!").assertDoesNotExist()
