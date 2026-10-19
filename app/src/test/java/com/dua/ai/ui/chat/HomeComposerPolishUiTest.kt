@@ -18,6 +18,7 @@ import com.dua.ai.settings.LocalPreferences
 import com.dua.ai.ui.theme.DuaTheme
 import com.dua.ai.ui.theme.ChatTheme
 import com.dua.ai.ui.theme.Sizes
+import com.dua.ai.ui.theme.HomeSizes
 import com.github.takahirom.roborazzi.captureRoboImage
 import java.io.File
 import org.junit.Assert.*
@@ -121,5 +122,34 @@ class HomeComposerPolishUiTest(private val dark: Boolean, private val largeText:
         assertEquals("Keep this draft", sent)
         compose.onNodeWithContentDescription("Message").assertIsFocused()
         compose.onNodeWithContentDescription("Voice mode").assertIsDisplayed()
+    }
+
+    @Test
+    @Config(qualifiers = "w1000dp-h800dp-mdpi")
+    fun wideComposerWrapsInsideItsActualCardAndKeepsItsInputWhenResized() {
+        val width = mutableStateOf(1000.dp)
+        val draft = mutableStateOf("")
+        compose.setContent {
+            CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, if (largeText) 2f else 1f)) {
+                DuaTheme(LocalPreferences(theme = if (dark) "dark" else "light")) {
+                    Box(Modifier.requiredSize(width.value, 650.dp), contentAlignment = Alignment.BottomCenter) {
+                        Composer(homeLayout = true, controlled = true, showModelSelector = false,
+                            value = draft.value, onDraftChange = { draft.value = it })
+                    }
+                }
+            }
+        }
+        val card = compose.onNodeWithTag("composer-container").fetchSemanticsNode().boundsInRoot
+        assertTrue(card.width <= HomeSizes.composerMaxWidth.value + 1f)
+        assertEquals(500f, card.center.x, 1f)
+        val text = "A longer draft should wrap inside the centered composer rather than stretch across a tablet."
+        compose.onNodeWithContentDescription("Message").performClick().performTextInput(text)
+        val field = compose.onNodeWithContentDescription("Message").assertIsFocused().fetchSemanticsNode().boundsInRoot
+        val attach = compose.onNodeWithContentDescription("Add photos and files").fetchSemanticsNode().boundsInRoot
+        assertTrue("Wrapping uses the bounded card width", field.bottom <= attach.top)
+        val file = File("build/approved-ui/home-polish-wide-draft-$dark-$largeText.png")
+        file.parentFile!!.mkdirs(); compose.onRoot().captureRoboImage(file.absolutePath)
+        compose.runOnIdle { width.value = 320.dp }
+        compose.onNodeWithContentDescription("Message").assertIsFocused().assertTextContains(text)
     }
 }

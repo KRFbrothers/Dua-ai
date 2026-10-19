@@ -1,6 +1,7 @@
 package com.dua.ai.ui.chat
 
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -8,6 +9,7 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.snap
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -64,6 +66,8 @@ import com.dua.ai.ui.theme.HomeSizes
 import com.dua.ai.ui.theme.HomeTheme
 import com.dua.ai.ui.theme.Sizes
 import com.dua.ai.ui.theme.Spacing
+import com.dua.ai.ui.theme.DuaMotion
+import com.dua.ai.ui.theme.rememberMotionAllowed
 
 const val AUTO_MODEL = "Auto"
 
@@ -73,19 +77,24 @@ internal enum class HomeMode { Chat, Task }
 @Composable
 internal fun HomeModeSwitcher(mode: HomeMode, onSelect: (HomeMode) -> Unit, enabled: Boolean) {
     val c = HomeTheme.colors
+    val duration = if (rememberMotionAllowed()) DuaMotion.DurationFast else 0
     Row(Modifier.heightIn(min = Sizes.touchTarget).selectableGroup(), verticalAlignment = Alignment.CenterVertically) {
         HomeMode.entries.forEach { tab ->
             val selected = mode == tab
+            val fill by animateColorAsState(if (selected) c.segmentSelected else Color.Transparent,
+                tween(duration), label = "Home tab fill")
+            val text by animateColorAsState(if (selected) c.segmentSelectedText else c.segmentText,
+                tween(duration), label = "Home tab text")
             Box(Modifier.heightIn(min = Sizes.touchTarget).widthIn(min = Sizes.touchTarget)
                 .clip(ComposerSizes.tabShape)
                 .selectable(selected = selected, enabled = enabled, role = Role.Tab, onClick = { onSelect(tab) }),
                 contentAlignment = Alignment.Center) {
                 Box(Modifier.heightIn(min = HomeSizes.segmentTab).clip(ComposerSizes.tabShape)
-                    .background(if (selected) c.segmentSelected else Color.Transparent)
+                    .background(fill)
                     .then(if (selected) Modifier.border(HomeSizes.barBorder, c.barBorder, ComposerSizes.tabShape) else Modifier)
                     .padding(horizontal = HomeSizes.segmentTabPaddingH), contentAlignment = Alignment.Center) {
                     Text(tab.name, style = ComposerModeStyle,
-                        color = if (selected) c.segmentSelectedText else c.segmentText, maxLines = 1)
+                        color = text, maxLines = 1)
                 }
             }
         }
@@ -134,9 +143,13 @@ fun Composer(
     homeLayout: Boolean = false,
 ) {
     var localText by remember { mutableStateOf(value) }
+    var inputFocused by remember { mutableStateOf(false) }
     val activeText = if (controlled) value else if (value.isNotEmpty()) value else localText
 
     val c = HomeTheme.colors
+    val motion = rememberMotionAllowed()
+    val border by animateColorAsState(if (homeLayout && inputFocused) c.voice else c.barBorder,
+        tween(if (motion) DuaMotion.DurationFast else 0), label = "Home input focus")
     val hasAttachments = attachments.isNotEmpty() || uploads.isNotEmpty()
     val inputStyle = if (homeLayout) HomeComposerInputStyle else ComposerInputStyle
     val textMeasurer = rememberTextMeasurer()
@@ -153,8 +166,9 @@ fun Composer(
     }
 
     // Keep the input spacious on regular phones and leave room for controls on narrow windows.
-    BoxWithConstraints(modifier.fillMaxWidth()) {
-        val margin = if (homeLayout) HomeSizes.composerHorizontalMargin(maxWidth) else HomeSizes.composerCompactMarginH
+    BoxWithConstraints(modifier.let { if (homeLayout) it.widthIn(max = HomeSizes.composerMaxWidth) else it }.fillMaxWidth()) {
+        val keyboardOpen = homeLayout && WindowInsets.ime.getBottom(LocalDensity.current) > 0
+        val margin = if (homeLayout && !keyboardOpen) HomeSizes.composerHorizontalMargin(maxWidth) else HomeSizes.composerCompactMarginH
         // Large text gets its own input row before the placeholder loses space to the controls.
         // Keep the field in the same Layout slot so resizing never discards focus or the draft.
         val inlineTextWidth = maxWidth - margin * 2 - HomeSizes.barPaddingH * 2 - Sizes.touchTarget * 3 - Spacing.sm * 2
@@ -188,10 +202,16 @@ fun Composer(
                 Spacer(Modifier.height(Spacing.md))
             }
             val shape = if (stacked) ComposerSizes.expandedShape else if (homeLayout) HomeShapes.homeBar else HomeShapes.bar
-            Column(Modifier.fillMaxWidth().animateContentSize().testTag("composer-container")
+            Column(Modifier.fillMaxWidth()
+                .let { if (homeLayout) it.animateContentSize(animationSpec = if (motion) DuaMotion.gentle() else snap()) else it.animateContentSize() }
+                .testTag("composer-container")
                 .shadow(if (homeLayout) HomeSizes.composerElevation else HomeSizes.noElevation, shape)
-                .clip(shape).background(c.bar).border(HomeSizes.barBorder, c.barBorder, shape)
-                .padding(horizontal = HomeSizes.barPaddingH, vertical = if (homeLayout && !stacked) HomeSizes.composerIdlePaddingV else Spacing.sm)) {
+                .clip(shape).background(c.bar).border(HomeSizes.barBorder, border, shape)
+                .padding(horizontal = HomeSizes.barPaddingH, vertical = when {
+                    homeLayout && !stacked && !keyboardOpen -> HomeSizes.composerIdlePaddingV
+                    homeLayout && !stacked -> HomeSizes.composerKeyboardPaddingV
+                    else -> Spacing.sm
+                })) {
                 if (hasAttachments) AttachmentBar(attachments, uploads, !typing, onRemoveAttachment, onRemoveUpload)
                 if (dictation?.listening == true) {
                     Row(Modifier.fillMaxWidth().heightIn(min = Sizes.touchTarget), verticalAlignment = Alignment.CenterVertically) {
@@ -205,7 +225,7 @@ fun Composer(
                             onValueChange = { localText = it; onValueChange(it); onDraftChange(it) },
                             modifier = Modifier.fillMaxWidth().heightIn(min = Sizes.touchTarget).padding(horizontal = Spacing.sm)
                                 .let { if (focusRequester != null) it.focusRequester(focusRequester) else it }
-                                .onFocusChanged { onTextFieldFocus?.invoke(it.isFocused) }
+                                .onFocusChanged { inputFocused = it.isFocused; onTextFieldFocus?.invoke(it.isFocused) }
                                 .onGloballyPositioned { onTextFieldBounds?.invoke(it.boundsInRoot()) }
                                 .semantics { contentDescription = "Message" },
                             textStyle = inputStyle.copy(color = c.input),
