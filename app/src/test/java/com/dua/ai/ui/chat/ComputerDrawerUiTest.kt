@@ -74,8 +74,11 @@ class ComputerDrawerUiTest(private val dark: Boolean, private val small: Boolean
         compose.onNodeWithContentDescription("Open profile and settings").performClick()
         compose.onNodeWithText("Settings").performScrollTo().performClick()
         compose.onNodeWithContentDescription("Open chat history").performClick()
+        compose.onNodeWithContentDescription("Open drawer profile and settings").assertIsDisplayed().performClick()
+        compose.onNodeWithTag("history-drawer").assertIsNotDisplayed()
+        compose.onNodeWithContentDescription("Open chat history").performClick()
         compose.onNodeWithText("Computer").performScrollTo().performClick()
-        compose.runOnIdle { assertEquals(listOf(DuaDestination.Computer), opened); assertEquals(0, newChats); assertEquals(1, settings) }
+        compose.runOnIdle { assertEquals(listOf(DuaDestination.Computer), opened); assertEquals(0, newChats); assertEquals(2, settings) }
     }
 
     @Test fun expandedAuraUsesTheSameTextStyleAndColorAsMainRows() {

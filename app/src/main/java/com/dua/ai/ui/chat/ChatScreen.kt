@@ -294,6 +294,8 @@ fun ChatScreen(
                 drawerContent = {
                     if (feature == null) HistoryDrawer(
                         drawerState = drawerState,
+                        profileName = state.profileName, profilePhotoUrl = state.profilePhotoUrl,
+                        onOpenSettings = { closeDrawerThen(actions.onOpenSettings) },
                         chats = state.savedChats.filter { it.projectId == state.projectId },
                         currentChatId = state.chatId,
                         newChatEnabled = !state.typing,
