@@ -28,7 +28,7 @@ The codebase already has strong safety ideas: repository validation, path valida
 - Add screenshots or a short feature tour if possible.
 
 ### 1.2 Add a contributor-friendly project map
-- Create a `docs/ARCHITECTURE.md` or `docs/PROJECT_STRUCTURE.md`.
+- Done: [`docs/ARCHITECTURE.md`](ARCHITECTURE.md) exists; keep it current.
 - Explain what each major directory is for.
 - Describe the safe boundaries between read-only and write-capable code.
 

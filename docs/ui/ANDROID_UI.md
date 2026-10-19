@@ -28,7 +28,7 @@ Actual Compose renders: [Dark preview](compact-preview-dark.png) · [Light previ
 
 - Existing `ui/theme/Color.kt` neutral surfaces, error/code roles and full logo artwork are preserved.
 - `DuaTheme.kt` and `AccentColors.kt` apply Light/Dark plus six accent presets independently. Defaults: Light Purple `#AA4FF6`; Dark Orange `#FF6308`. Accent reset clears only the override.
-- `Type.kt` supplies the Inter-based text scale: 16sp body, 14sp secondary/buttons, 20sp page titles; Android font scaling stays enabled. The Home tagline keeps the existing Montserrat family.
+- `Type.kt` supplies the Inter-based text scale: 16sp body, 14sp secondary/buttons, 20sp page titles; Android font scaling stays enabled. The Home tagline uses `InterFont` (bundled `krfbrothers_regular`), like the rest of the text scale.
 - `Spacing.kt` supplies the 4dp spacing scale. Rounded surfaces use `Shape.kt`. Controls retain 48dp touch targets; menu/footer stay fixed while history scrolls. Code/Think/Search use accessible icon-only controls when their labels cannot fit.
 - The header and project actions are neutral. Accent is used selectively for selection and settings; the logo is never tinted.
 - Existing reduced-motion handling, keyboard insets, Android back navigation and conversation scroll-follow behavior remain in place.
@@ -82,7 +82,7 @@ The default native UI tests render production components with synthetic fixtures
 | Email login/signup and existing-account password setup | Implemented under Account (and Continue with email on Welcome when configured); owner-only, mandatory email confirmation and provider/SMTP setup required. Passwords are transient; password reset/recovery UI remains pending. |
 | Unrestricted online guest mode | Outside the owner-only access model |
 
-Code/build/render verification is not proof of live provider, account, Storage, permission or physical-device behavior. Check these with [RELEASE-CHECKLIST.md](../RELEASE_CHECKLIST.md) and the owner's installed release APK.
+Code/build/render verification is not proof of live provider, account, Storage, permission or physical-device behavior. Check these with [RELEASE_CHECKLIST.md](../RELEASE_CHECKLIST.md) and the owner's installed release APK.
 
 ## Validation for the compact-chat update
 
@@ -117,7 +117,7 @@ Six accent presets and independent persisted appearance still work; the accent i
 
 The sections above cover the Light/Dark previews, the sample-conversation debug entry point, setup and remaining features.
 
-Read Page 1, **Dua AI — Navigation Flow**, and **Dua AI — Complete UI Map** before implementation. The approved Sidebar, expanded Aura, Profile & Settings, accent and appearance mockups define the layout. The additive GitHub source gallery describes the earlier source inventory (304014a); it is not the target design. The latest source also has planner, history search and editable project memory, which remain available. No `AGENTS.md` or `Dua_AI_UI_Placement_List.md` was present in this checkout.
+Read Page 1, **Dua AI — Navigation Flow**, and **Dua AI — Complete UI Map** before implementation. The approved Sidebar, expanded Aura, Profile & Settings, accent and appearance mockups define the layout. The additive GitHub source gallery describes the earlier source inventory (304014a); it is not the target design. The latest source also has planner, history search and editable project memory, which remain available. No `Dua_AI_UI_Placement_List.md` was present in this checkout.
 
 ### Placement and real actions
 
