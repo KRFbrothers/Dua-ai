@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.AutoFixHigh
 import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.Movie
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -29,6 +30,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
@@ -60,16 +62,17 @@ internal fun imagineSummary(options: ImagineOptions, config: ImagineConfig?): St
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ImagineSheet(options: ImagineOptions, config: ImagineConfig, usage: ImagineUsage?, hasSource: Boolean,
-    onChange: (ImagineOptions) -> Unit, onDismiss: () -> Unit) {
+    onChange: (ImagineOptions) -> Unit, onDismiss: () -> Unit, polish: PromptPolishState? = null, onPolish: () -> Unit = {}) {
     DuaSheet(onDismiss = onDismiss) {
-        ImagineOptionsContent(options, config, usage, hasSource, onChange, onDismiss)
+        ImagineOptionsContent(options, config, usage, hasSource, onChange, onDismiss, polish = polish, onPolish = onPolish)
     }
 }
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ImagineOptionsContent(options: ImagineOptions, config: ImagineConfig, usage: ImagineUsage?, hasSource: Boolean,
-    onChange: (ImagineOptions) -> Unit, onDismiss: () -> Unit, modifier: Modifier = Modifier) {
+    onChange: (ImagineOptions) -> Unit, onDismiss: () -> Unit, modifier: Modifier = Modifier,
+    polish: PromptPolishState? = null, onPolish: () -> Unit = {}) {
     val video = options.kind == ImagineInfo.VIDEO
     Column(modifier.verticalScroll(rememberScrollState()).padding(horizontal = Spacing.xl).padding(bottom = Spacing.xxl),
         verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
@@ -88,6 +91,7 @@ fun ImagineOptionsContent(options: ImagineOptions, config: ImagineConfig, usage:
         val reason = if (video) config.videoReason else config.imageReason
         if (!config.videoEnabled && config.videoReason.isNotBlank() && !video) Hint("Video: ${config.videoReason}")
         if (reason.isNotBlank() && (if (video) !config.videoEnabled else !config.imageEnabled)) Hint(reason)
+        if (polish != null) PromptPolishRow(polish, onPolish)
         if (hasSource) Hint(if (video) "Your photo becomes the first frame. Auto keeps its shape." else "Your photo will be edited. Describe the change.")
 
         Label("Aspect ratio")
@@ -129,6 +133,20 @@ fun ImagineOptionsContent(options: ImagineOptions, config: ImagineConfig, usage:
             style = SheetNoteStyle, color = SheetTheme.colors.subText)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { SheetTextButton("Done", onClick = onDismiss) }
     }
+}
+
+/** On-device prompt polish. [canPolish] is false while the draft is empty. Text label only; no brand art. */
+data class PromptPolishState(val busy: Boolean = false, val notice: String = "", val canPolish: Boolean = true)
+
+@Composable
+private fun PromptPolishRow(polish: PromptPolishState, onPolish: () -> Unit) {
+    SheetGroup {
+        SheetActionRow(if (polish.busy) "Polishing your prompt…" else "Polish my prompt", Icons.Outlined.AutoFixHigh,
+            onClick = onPolish, enabled = polish.canPolish && !polish.busy,
+            trailing = { Text("On-device", style = SheetNoteStyle, color = SheetTheme.colors.subText) },
+            modifier = Modifier.testTag("imagine-polish"))
+    }
+    Hint(polish.notice.ifBlank { if (polish.canPolish) "Rewrites your prompt with more detail on this phone. Nothing is sent." else "Type an idea in the message box first." })
 }
 
 @Composable

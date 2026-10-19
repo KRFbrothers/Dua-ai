@@ -189,6 +189,11 @@ dependencies {
     implementation("androidx.credentials:credentials-play-services-auth:1.3.0")
     implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
     implementation("androidx.exifinterface:exifinterface:1.4.1")
+    // On-device AI (Gemini Nano via ML Kit GenAI Prompt). beta2 is the last build on Kotlin stdlib 1.8 (beta3+ needs Kotlin 2.3).
+    // The model itself is downloaded by Android AICore on supported phones, so nothing large ships in the APK.
+    implementation("com.google.mlkit:genai-prompt:1.0.0-beta2")
+    // Remove background: Play services-delivered subject segmentation (model downloaded by Play services on first use).
+    implementation("com.google.android.gms:play-services-mlkit-subject-segmentation:16.0.0-beta1")
     implementation(libs.androidx.core.ktx)
     // Installs the bundled baseline profile (src/main/baseline-prof.txt) on sideloaded APKs too: faster cold start.
     implementation(libs.androidx.profileinstaller)

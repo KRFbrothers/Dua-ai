@@ -24,7 +24,9 @@ data class LocalPreferences(val theme: String = "dark", val font: String = "defa
     /** Chat dictation: send automatically when you stop speaking (off = review in the composer first). */
     val dictationAutoSend: Boolean = false,
     /** Chosen free OpenRouter model id ("" = none; the normal model answers). Used only when the engine still offers it. */
-    val freeModel: String = "")
+    val freeModel: String = "",
+    /** Small on-device AI (chat titles, Imagine prompt polish). Used only on phones that support it; off = always the server. */
+    val onDeviceAi: Boolean = true)
 
 object PreferencesCodec {
     fun validate(value: LocalPreferences): LocalPreferences {
@@ -46,7 +48,7 @@ object PreferencesCodec {
             .put("imagineProvider", value.imagineProvider).put("imagineAspect", value.imagineAspect)
             .put("voiceProvider", value.voiceProvider).put("voiceName", value.voiceName).put("deviceVoice", value.deviceVoice)
             .put("voiceSpeed", value.voiceSpeed.toDouble()).put("replyLanguage", value.replyLanguage).put("inputLanguage", value.inputLanguage).put("liveVoice", value.liveVoice)
-            .put("dictationAutoSend", value.dictationAutoSend).put("freeModel", value.freeModel)
+            .put("dictationAutoSend", value.dictationAutoSend).put("freeModel", value.freeModel).put("onDeviceAi", value.onDeviceAi)
             .put("projects", com.dua.ai.projects.ProjectCodec.toJson(value.projects)).toString()
     }
     fun decode(raw: String): LocalPreferences {
@@ -68,7 +70,8 @@ object PreferencesCodec {
             imagineProvider, imagineAspect, voiceProvider, voiceName, deviceVoice, voiceSpeed, replyLanguage, inputLanguage, liveVoice,
             com.dua.ai.projects.ProjectCodec.fromJson(if (data.has("projects")) data.getJSONArray("projects") else null),
             dictationAutoSend = data.optBoolean("dictationAutoSend", false),
-            freeModel = data.optString("freeModel").takeIf { it.isEmpty() || com.dua.ai.model.FreeModels.validId(it) } ?: ""))
+            freeModel = data.optString("freeModel").takeIf { it.isEmpty() || com.dua.ai.model.FreeModels.validId(it) } ?: "",
+            onDeviceAi = data.optBoolean("onDeviceAi", true)))
     }
     fun memoryText(value: LocalPreferences): String = if (value.memoryEnabled) value.memory.joinToString("\n") { "- $it" } else ""
 }

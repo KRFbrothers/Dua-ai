@@ -28,6 +28,7 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoFixHigh
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.ContentCut
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Fullscreen
@@ -86,6 +87,8 @@ class ImagineActions(
     val onAnimate: (GeneratedMedia) -> Unit = {},
     val onCancelVideo: (String) -> Unit = {},
     val onReuse: (ImagineInfo) -> Unit = {},
+    /** On-device "Remove background" for images; null hides the button. */
+    val onRemoveBackground: ((GeneratedMedia) -> Unit)? = null,
 )
 
 /** A generated-media reply: progress, image grid or video, failures, and Save · Share · Edit actions. */
@@ -283,6 +286,9 @@ fun MediaViewerContent(media: List<GeneratedMedia>, startIndex: Int, actions: Im
                 ViewerButton(Icons.Outlined.AutoFixHigh, "Edit") { onDismiss(); actions.onEdit(current) }
                 if (videoAvailable) ViewerButton(Icons.Outlined.Movie, "Animate") { onDismiss(); actions.onAnimate(current) }
             }
+            val removeBackground = actions.onRemoveBackground
+            if (!current.isVideo && current.path != null && removeBackground != null)
+                ViewerButton(Icons.Outlined.ContentCut, "Remove background") { removeBackground(current) }
         }
     }
 }

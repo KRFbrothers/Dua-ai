@@ -37,4 +37,10 @@ class PreferencesCodecTest {
             try { PreferencesCodec.encode(value); fail("Invalid voice setting accepted") } catch (_: IllegalArgumentException) { }
         }
     }
+    @Test fun onDeviceAiDefaultsOnForOldSettingsAndRoundTripsOff() {
+        val old = org.json.JSONObject(PreferencesCodec.encode(LocalPreferences())).apply { remove("onDeviceAi") }.toString()
+        assertTrue(PreferencesCodec.decode(old).onDeviceAi)
+        val off = LocalPreferences(onDeviceAi = false)
+        assertEquals(off, PreferencesCodec.decode(PreferencesCodec.encode(off)))
+    }
 }

@@ -9,6 +9,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.ContentCut
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -32,14 +35,14 @@ import java.util.Base64
 /** Draft-only previews: removal reuses the upload cancellation/storage cleanup path. */
 @Composable
 internal fun AttachmentBar(attachments: List<ChatAttachment>, uploads: List<PendingUpload>, enabled: Boolean,
-    onRemoveAttachment: (Int) -> Unit, onRemoveUpload: (String) -> Unit) {
+    onRemoveAttachment: (Int) -> Unit, onRemoveUpload: (String) -> Unit, onRemoveBackground: ((Int) -> Unit)? = null) {
     Row(Modifier.fillMaxWidth().testTag("composer-attachments").horizontalScroll(rememberScrollState())
         .padding(start = Spacing.xs, end = Spacing.xs, bottom = Spacing.sm), horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
         attachments.forEachIndexed { index, file ->
             key(index, file.name) {
-                AttachmentPreview(file.name, file.mimeType.startsWith("image/"), enabled, { onRemoveAttachment(index) }) {
-                    InlineAttachmentImage(file)
-                }
+                val image = file.mimeType.startsWith("image/")
+                AttachmentPreview(file.name, image, enabled, { onRemoveAttachment(index) }) { InlineAttachmentImage(file) }
+                if (image && onRemoveBackground != null) RemoveBackgroundChip(file.name, enabled) { onRemoveBackground(index) }
             }
         }
         uploads.forEach { upload ->
@@ -81,6 +84,33 @@ private fun AttachmentPreview(name: String, image: Boolean, enabled: Boolean, on
         IconButton(onClick = onRemove, enabled = enabled, modifier = Modifier.size(Sizes.touchTarget).align(Alignment.TopEnd)) {
             Icon(Icons.Outlined.Close, "Remove attachment $name", tint = c.barIcon,
                 modifier = Modifier.clip(HomeShapes.round).background(c.bar).padding(Spacing.xs).size(Sizes.iconTiny))
+        }
+    }
+}
+
+/**
+ * A small chip next to a photo attachment, the same height as the attachment, so the composer does not grow and the
+ * photo's remove button is untouched. It opens "Remove background · On-device".
+ */
+@Composable
+private fun RemoveBackgroundChip(name: String, enabled: Boolean, onRemoveBackground: () -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    val c = HomeTheme.colors
+    Box {
+        Surface(onClick = { open = true }, enabled = enabled, shape = ComposerSizes.attachmentShape, color = c.segmentSelected,
+            border = androidx.compose.foundation.BorderStroke(HomeSizes.barBorder, c.barBorder),
+            modifier = Modifier.size(ComposerSizes.attachment).testTag("attachment-image-options")
+                .semantics { contentDescription = "Image options for $name" }) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                Icon(Icons.Outlined.ContentCut, null, tint = c.barIcon, modifier = Modifier.size(Sizes.iconSmall))
+                Text("On-device", style = MaterialTheme.typography.labelSmall, color = c.modelLabel, maxLines = 1, overflow = TextOverflow.Clip)
+            }
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            DropdownMenuItem(text = { Text("Remove background") }, onClick = { open = false; onRemoveBackground() },
+                leadingIcon = { Icon(Icons.Outlined.ContentCut, null) },
+                trailingIcon = { Text("On-device", style = MaterialTheme.typography.labelSmall, color = c.modelLabel) },
+                modifier = Modifier.semantics { contentDescription = "Remove background from $name, on this phone" })
         }
     }
 }
