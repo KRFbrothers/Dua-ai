@@ -91,7 +91,7 @@ class GeminiHomeReferenceUiTest(private val dark: Boolean, private val compact: 
         }
         val file = File("build/approved-ui/gemini-home-$dark-$compact.png")
         file.parentFile!!.mkdirs(); compose.onNodeWithTag("reference-home-viewport").captureRoboImage(file.absolutePath)
-        compose.onNodeWithContentDescription("Voice mode").performClick(); assertEquals(1, voice)
+        compose.onNodeWithContentDescription("Voice mode").performClick(); compose.waitForIdle(); assertEquals(1, voice)
         compose.onNode(hasText("Task") and isSelectable()).performClick()
         compose.onNodeWithText("Describe...").assertIsDisplayed()
         compose.onNodeWithText(HomeTaskPrompts[1]).performScrollTo().performClick()
