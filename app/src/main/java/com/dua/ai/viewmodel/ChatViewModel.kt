@@ -510,7 +510,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     fun setForeground(value: Boolean) {
         foreground = value
         automaticSync.setForeground(value)
-        refreshSyncNetwork()
+        setNetwork(networkMonitor.currentlyOnline())
     }
     fun resetSettings() {
         try { localPreferences.reset() }
@@ -1849,22 +1849,21 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private fun syncBlocked() = account.state.value.busy || _dataBusy.value || _isTyping.value || liveProjectBusy() ||
         _cloudPreview.value != null || _importPreview.value != null || _buildPr.value.values.any { it.creating }
     private fun refreshSyncBusy() = automaticSync.setBusy(syncBlocked())
-    private val connectivity = application.getSystemService(android.net.ConnectivityManager::class.java)
-    private val networkObserver = object : android.net.ConnectivityManager.NetworkCallback() {
-        override fun onAvailable(network: android.net.Network) { viewModelScope.launch { refreshSyncNetwork() } }
-        override fun onLost(network: android.net.Network) { viewModelScope.launch { refreshSyncNetwork() } }
-        override fun onCapabilitiesChanged(network: android.net.Network, capabilities: android.net.NetworkCapabilities) {
-            viewModelScope.launch { refreshSyncNetwork() }
-        }
-    }
-    private var networkObserverRegistered = false
-    private fun refreshSyncNetwork() {
-        val online = runCatching {
-            connectivity.getNetworkCapabilities(connectivity.activeNetwork)
-                ?.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED) == true
-        }.getOrDefault(false)
+    private val networkMonitor: com.dua.ai.network.NetworkMonitor = com.dua.ai.network.ConnectivityManagerNetworkMonitor(application)
+    private val offlineRetry = com.dua.ai.network.OfflineRetry()
+    private val _offlineRetryPending = MutableStateFlow(false)
+    /** A message that failed while offline will be sent again once the connection returns. */
+    val offlineRetryPending: StateFlow<Boolean> = _offlineRetryPending.asStateFlow()
+    private var autoRetrying = false
+    private fun setNetwork(online: Boolean) {
         _online.value = online
         automaticSync.setOnline(online)
+        val resend = offlineRetry.onConnectivity(online, activeId, _draft.value, busy = _isTyping.value || _preparingFiles.value || _readingFiles.value)
+        _offlineRetryPending.value = offlineRetry.hasPending
+        if (resend != null) {
+            autoRetrying = true
+            try { sendMessage(resend) } finally { autoRetrying = false }
+        }
     }
 
     init {
@@ -1896,8 +1895,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
         refreshCloudImagine()
-        refreshSyncNetwork()
-        networkObserverRegistered = runCatching { connectivity.registerDefaultNetworkCallback(networkObserver); true }.getOrDefault(false)
+        setNetwork(networkMonitor.currentlyOnline())
+        viewModelScope.launch { networkMonitor.isOnline.collect { setNetwork(it) } }
         viewModelScope.launch {
             combine(account.state, _dataBusy, _isTyping, _cloudPreview, _importPreview) { state, dataBusy, typing, cloud, imported ->
                 state.busy || dataBusy || typing || cloud != null || imported != null
@@ -1925,7 +1924,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         recorder.cancel()
         pollJobs.values.forEach { it.cancel() }
         automaticSync.close()
-        if (networkObserverRegistered) runCatching { connectivity.unregisterNetworkCallback(networkObserver) }
         super.onCleared()
     }
 
@@ -2255,6 +2253,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     fun sendMessage(userText: String) {
         if (_preparingFiles.value) return
+        if (!autoRetrying) { offlineRetry.clear(); _offlineRetryPending.value = false }
         val requestProjectId = _projectId.value
         projectUnavailable()?.let { _error.value = it; return }
         if (_imagine.value && _editingId.value != null) { _error.value = "Turn off Imagine to resend an edited message."; return }
@@ -2353,6 +2352,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     clearAttachments()
                     val final = accumulator!!.snapshot(ended = true)
                     updateMessage(reply.id) { it.copy(text = final.text, thinking = final.thinking, thinkingSeconds = final.thinkingSeconds, notice = final.notice, codeRuns = final.codeRuns, build = final.build ?: it.build, proposal = final.proposal ?: it.proposal, approvals = final.approvals.ifEmpty { it.approvals }, state = "complete") }
+                    offlineRetry.delivered()
                     maybeAutoTitle(activeId)
                 }
             } catch (cancelled: CancellationException) {
@@ -2372,7 +2372,11 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                         replyWebModes.remove(reply.id); replyReasoning.remove(reply.id); replyAgent.remove(reply.id); replyCode.remove(reply.id); replyBuild.remove(reply.id)
                         _draft.value = userText
                         _failedPrompt.value = userText
-                        _error.value = failureText(failure)
+                        // Offline, text-only, not an edit: send it again once the phone reconnects (at most once).
+                        val queued = offlineRetry.sendFailed(activeId, userText,
+                            offline = !edited && files.isEmpty() && storedFiles.isEmpty() && (!_online.value || failure is java.io.IOException))
+                        _offlineRetryPending.value = queued
+                        _error.value = if (queued) "You're offline. Dua will send this message when you're back online." else failureText(failure)
                     }
                 }
             } finally {

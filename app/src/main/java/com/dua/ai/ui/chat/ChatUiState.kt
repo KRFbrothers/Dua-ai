@@ -24,6 +24,8 @@ data class ChatUiState(
     val draft: String = "",
     val typing: Boolean = false,
     val error: String? = null,
+    /** No working internet connection: a quiet line above the composer. */
+    val offline: Boolean = false,
     val model: String = "Dua",
     val providers: List<ProviderCapability> = IntegrationCapabilities.fallbackProviders,
     val webMode: String? = null,

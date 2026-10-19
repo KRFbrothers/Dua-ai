@@ -1,5 +1,7 @@
 package com.dua.ai.ui.chat
 
+import com.dua.ai.ui.components.predictiveBack
+
 import com.dua.ai.ui.theme.SheetBodyStyle
 import com.dua.ai.ui.theme.SheetTheme
 import androidx.compose.ui.semantics.semantics
@@ -125,8 +127,8 @@ fun ChatScreen(
     var sheet by rememberSaveable { mutableStateOf(initialSheet) }
     LaunchedEffect(dismissOverlaysRequest) { if (dismissOverlaysRequest != null) sheet = null }
     if (sheet == ChatSheet.Projects) {
-        BackHandler { sheet = null }
-        ProjectsFeaturePage(state, actions, onBack = { sheet = null })
+        val projectsBack = com.dua.ai.ui.components.rememberPredictiveBack { sheet = null }
+        Box(Modifier.fillMaxSize().predictiveBack(projectsBack)) { ProjectsFeaturePage(state, actions, onBack = { sheet = null }) }
         return
     }
     var taskHome by rememberSaveable { mutableStateOf(false) }

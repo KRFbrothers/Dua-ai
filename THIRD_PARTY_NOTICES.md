@@ -46,6 +46,26 @@ other Google brand assets.
 | --- | --- | --- |
 | `app/src/main/java/com/dua/ai/ui/chat/JumpToLatest.kt` | `conversation/JumpToBottom.kt`, `conversation/Conversation.kt` (same-author grouping) | Dua colours, 48 dp target, new-replies count with a dot, no slide when animations are off, no backdrop magnifier |
 
+## Now in Android
+
+- Source: <https://github.com/android/nowinandroid> (fork <https://github.com/KRFbrothers/nowinandroid>, commit `a49ed253`)
+- Copyright 2022 The Android Open Source Project
+- License: Apache License, Version 2.0 (same text as above)
+
+| Dua file | Adapted from | What changed |
+| --- | --- | --- |
+| `app/src/main/java/com/dua/ai/network/NetworkMonitor.kt` | `core/data/.../util/ConnectivityManagerNetworkMonitor.kt`, `NetworkMonitor.kt` | No Hilt or tracing, default network only, requires a validated connection, repeated values filtered |
+
+## Android snippets
+
+- Source: <https://github.com/android/snippets> (fork <https://github.com/KRFbrothers/snippets>, commit `c31bceff`)
+- Copyright 2024 The Android Open Source Project
+- License: Apache License, Version 2.0 (same text as above)
+
+| Dua file | Adapted from | What changed |
+| --- | --- | --- |
+| `app/src/main/java/com/dua/ai/ui/components/PredictiveBack.kt` | `compose/snippets/.../predictiveback/PredictiveBackSnippets.kt` (`PredictiveBackHandler` example) | Reusable progress state and a small scale/fade, no motion when animations are off |
+
 ## Google ML Kit and Google Play services libraries
 
 The Android app depends on `com.google.mlkit:genai-prompt` and
