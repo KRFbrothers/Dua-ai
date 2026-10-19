@@ -147,7 +147,8 @@ fun ChatScreen(
     }
     var viewer by remember { mutableStateOf(initialViewer) }
     val mediaActions = remember(actions) { ImagineActions(onOpen = { id, index -> viewer = id to index }, onSave = actions.imagine.onSave, onShare = actions.imagine.onShare,
-        onEdit = actions.imagine.onEdit, onAnimate = actions.imagine.onAnimate, onCancelVideo = actions.imagine.onCancelVideo, onReuse = actions.imagine.onReuse) }
+        onEdit = actions.imagine.onEdit, onAnimate = actions.imagine.onAnimate, onCancelVideo = actions.imagine.onCancelVideo, onReuse = actions.imagine.onReuse,
+        onRemoveBackground = actions.imagine.onRemoveBackground) }
     val conversationKey = "${feature?.name}:" + state.chatId.ifEmpty { state.messages.firstOrNull()?.id.orEmpty() }
     var searchOpen by rememberSaveable(conversationKey) { mutableStateOf(false) }
     var searchQuery by rememberSaveable(conversationKey) { mutableStateOf("") }
@@ -430,6 +431,7 @@ fun ChatScreen(
                                 attachments = state.attachments,
                                 uploads = state.uploads,
                                 onRemoveAttachment = actions.onRemoveAttachment,
+                                onRemoveAttachmentBackground = if (state.removeBackground) actions.onRemoveAttachmentBackground else null,
                                 onRemoveUpload = actions.onCancelUpload,
                                 aboveInput = if (feature != null) null else { {
                                     HomeModeSwitcher(if (taskHome) HomeMode.Task else HomeMode.Chat,
@@ -496,7 +498,9 @@ fun ChatScreen(
         )
         ChatSheet.Imagine -> state.imagineConfig?.let { config ->
             ImagineSheet(options = state.imagineOptions, config = config, usage = state.imagineUsage, hasSource = state.imagineSource,
-                onChange = actions.onImagineOptions, onDismiss = { sheet = null })
+                onChange = actions.onImagineOptions, onDismiss = { sheet = null },
+                polish = state.promptPolish?.let { polish -> polish.copy(canPolish = polish.canPolish && state.draft.isNotBlank()) },
+                onPolish = actions.onPolishPrompt)
         }
         ChatSheet.Build -> BuildSheet(
             current = state.buildRepo, hint = state.buildHint, repositories = state.buildRepositories, enabled = !state.typing,

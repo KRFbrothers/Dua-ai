@@ -131,6 +131,8 @@ fun Composer(
     attachments: List<ChatAttachment> = (state as? ChatUiState)?.attachments.orEmpty(),
     uploads: List<PendingUpload> = (state as? ChatUiState)?.uploads.orEmpty(),
     onRemoveAttachment: (Int) -> Unit = {},
+    /** On-device "Remove background" for image attachments; null hides it. */
+    onRemoveAttachmentBackground: ((Int) -> Unit)? = null,
     onRemoveUpload: (String) -> Unit = {},
     attachmentPopup: @Composable () -> Unit = {},
     /** Inline dictation (chat). Null = the mic calls [onMic] (opens the Voice page). */
@@ -216,7 +218,7 @@ fun Composer(
                     homeLayout && !stacked -> HomeSizes.composerKeyboardPaddingV
                     else -> Spacing.sm
                 })) {
-                if (hasAttachments) AttachmentBar(attachments, uploads, !typing, onRemoveAttachment, onRemoveUpload)
+                if (hasAttachments) AttachmentBar(attachments, uploads, !typing, onRemoveAttachment, onRemoveUpload, onRemoveAttachmentBackground)
                 if (dictation?.listening == true) {
                     Row(Modifier.fillMaxWidth().heightIn(min = Sizes.touchTarget), verticalAlignment = Alignment.CenterVertically) {
                         DictationBar(dictation.level, dictation.cancel, dictation.confirm)

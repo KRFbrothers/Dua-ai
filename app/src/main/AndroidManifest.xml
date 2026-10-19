@@ -18,6 +18,8 @@
     <queries>
         <intent><action android:name="android.speech.RecognitionService" /></intent>
         <intent><action android:name="android.intent.action.TTS_SERVICE" /></intent>
+        <!-- On-device AI: only checks whether Android AICore (Gemini Nano host) is installed. -->
+        <package android:name="com.google.android.aicore" />
     </queries>
 
     <application

@@ -84,6 +84,10 @@ data class ChatUiState(
     val imagineOptions: com.dua.ai.imagine.ImagineOptions = com.dua.ai.imagine.ImagineOptions(),
     val imagineConfig: com.dua.ai.imagine.ImagineConfig? = null,
     val imagineUsage: com.dua.ai.imagine.ImagineUsage? = null,
+    /** "Polish my prompt · On-device" in the Imagine sheet; null hides it (unsupported phone or setting off). */
+    val promptPolish: PromptPolishState? = null,
+    /** "Remove background" (on-device) for photo attachments and Imagine images; false hides it. */
+    val removeBackground: Boolean = false,
     /** Run code for the next reply and the server's Run code capability (null hides the chip on older backends). */
     val runCode: Boolean = false,
     val codeConfig: com.dua.ai.setup.CodeExecutionConfig? = null,
@@ -166,6 +170,8 @@ class ChatActions(
     val onDrop: (ChatDrop) -> Unit = {},
     val onClearAttachments: () -> Unit = {},
     val onRemoveAttachment: (Int) -> Unit = {},
+    val onRemoveAttachmentBackground: (Int) -> Unit = {},
+    val onPolishPrompt: () -> Unit = {},
     val onCancelUpload: (String) -> Unit = {},
     val onPickAudio: () -> Unit = {},
     val onStartRecording: () -> Unit = {},

@@ -74,6 +74,9 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
     val imagineSettings by viewModel.imagineSettings.collectAsState()
     val imagineOptions by viewModel.imagineOptions.collectAsState()
     val imagineUsage by viewModel.imagineUsage.collectAsState()
+    val onDeviceStatus by viewModel.onDeviceAi.status.collectAsState()
+    val polishing by viewModel.polishing.collectAsState()
+    val polishNotice by viewModel.polishNotice.collectAsState()
     val runCode by viewModel.runCode.collectAsState()
     val buildRepo by viewModel.buildRepo.collectAsState()
     val buildRepositories by viewModel.buildRepositories.collectAsState()
@@ -146,6 +149,8 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
         generatedVoiceStatus = generatedSpeech.status, generatedVoiceActive = generatedSpeech.activeId != null,
         greeting = greeting, suggestions = viewModel.promptSuggestions,
         imagine = imagine, imagineOptions = imagineOptions, imagineConfig = imagineSettings, imagineUsage = imagineUsage,
+        promptPolish = if (onDeviceStatus != null && viewModel.onDeviceAiEnabled() && preferences.onDeviceAi) PromptPolishState(polishing, polishNotice) else null,
+        removeBackground = viewModel.backgroundRemovalAvailable,
         runCode = runCode, codeConfig = integrations.codeExecution,
         codeSnippetUnavailableReason = viewModel.codeSnippetUnavailableReason(),
         buildRepo = buildRepo, buildConfig = integrations.build, buildRepositories = buildRepositories,
@@ -166,9 +171,31 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
             catch (failure: Exception) { attachmentNotice = failure.message ?: "Could not save to the gallery." }
         }
     }
+    // Remove background: cut out on the phone, then save the transparent PNG with the same gallery path as Save.
+    var pendingCutout by remember { mutableStateOf<(suspend () -> ByteArray?)?>(null) }
+    fun saveCutout(load: suspend () -> ByteArray?) {
+        scope.launch {
+            attachmentNotice = "Removing the background on this phone…"
+            try {
+                val bytes = load() ?: error("This image is no longer available.")
+                val file = viewModel.removeBackground(bytes)
+                com.dua.ai.imagine.MediaExport.saveToGallery(context, file, com.dua.ai.imagine.GeneratedMedia(file.path, "image/png", file.length()))
+                attachmentNotice = "Image without background saved to Pictures/Dua."
+            } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+            catch (failure: Exception) { attachmentNotice = failure.message ?: "Could not remove the background." }
+        }
+    }
     val storagePermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         val items = pendingSave; pendingSave = emptyList()
-        if (granted) saveMedia(items) else attachmentNotice = "Storage permission is needed to save on this Android version."
+        val cutout = pendingCutout; pendingCutout = null
+        if (!granted) attachmentNotice = "Storage permission is needed to save on this Android version."
+        else if (cutout != null) saveCutout(cutout) else saveMedia(items)
+    }
+    fun removeBackground(load: suspend () -> ByteArray?) {
+        if (com.dua.ai.imagine.MediaExport.needsPermission() && androidx.core.content.ContextCompat.checkSelfPermission(context,
+                android.Manifest.permission.WRITE_EXTERNAL_STORAGE) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            pendingCutout = load; storagePermission.launch(android.Manifest.permission.WRITE_EXTERNAL_STORAGE)
+        } else saveCutout(load)
     }
     val actions = remember(viewModel, voice) {
         ChatActions(
@@ -264,6 +291,8 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
             },
             onClearAttachments = { viewModel.clearAttachments(); attachmentNotice = "" },
             onRemoveAttachment = viewModel::removeAttachment,
+            onRemoveAttachmentBackground = { index -> viewModel.attachmentImageBytes(index)?.let { bytes -> removeBackground { bytes } } },
+            onPolishPrompt = viewModel::polishImaginePrompt,
             onOpenSettings = onOpenSettings,
             // Drawer and Home use the same destination dispatch, including the existing Computer screen.
             onOpenDestination = { destination ->
@@ -288,6 +317,10 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
             onCreatePr = viewModel::createPullRequest,
             onAgentApproval = viewModel::decideAgentApproval,
             imagine = ImagineActions(
+                onRemoveBackground = if (!viewModel.backgroundRemovalAvailable) null else { item ->
+                    removeBackground { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        viewModel.mediaCache.file(item)?.takeIf { it.length() in 1..MAX_CUTOUT_SOURCE }?.readBytes() } }
+                },
                 onSave = { items ->
                     if (com.dua.ai.imagine.MediaExport.needsPermission() && androidx.core.content.ContextCompat.checkSelfPermission(context,
                             android.Manifest.permission.WRITE_EXTERNAL_STORAGE) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
@@ -351,3 +384,6 @@ internal fun greetingFor(hour: Int, name: String?): String {
     val first = name?.trim()?.substringBefore(' ')?.takeIf { it.isNotBlank() }
     return if (first != null) "$part, $first" else part
 }
+
+/** Largest Imagine image read for "Remove background" (generated images are far smaller). */
+private const val MAX_CUTOUT_SOURCE = 25L * 1024 * 1024

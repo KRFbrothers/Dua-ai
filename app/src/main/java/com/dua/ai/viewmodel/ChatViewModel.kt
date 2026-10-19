@@ -418,6 +418,41 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val pollJobs = mutableMapOf<String, Job>()
     private val localPreferences = com.dua.ai.settings.DevicePreferences(application)
     val localSettings = localPreferences.state
+    /** Small on-device AI (titles, Imagine prompt polish). Unsupported phones always use the server path. */
+    val onDeviceAi = com.dua.ai.ondevice.OnDeviceAi(com.dua.ai.ondevice.OnDeviceServices.textModel(application), viewModelScope)
+    init { onDeviceAi.refresh() }
+    /** True only when this phone supports it and the "On-device AI" setting is on. */
+    fun onDeviceAiEnabled(): Boolean = onDeviceAi.supported && localSettings.value.onDeviceAi
+    private val _polishing = MutableStateFlow(false)
+    val polishing = _polishing.asStateFlow()
+    private val _polishNotice = MutableStateFlow("")
+    val polishNotice = _polishNotice.asStateFlow()
+    /** Rewrites the composer draft as a richer Imagine prompt, on the phone. The draft is left alone if it changed meanwhile. */
+    fun polishImaginePrompt() {
+        val original = _draft.value
+        if (_polishing.value || original.isBlank() || !onDeviceAiEnabled()) return
+        _polishing.value = true; _polishNotice.value = ""
+        viewModelScope.launch {
+            try {
+                val polished = onDeviceAi.polish(original)
+                _polishNotice.value = when {
+                    polished == null -> "On-device polish is not ready on this phone right now. Your prompt was not changed."
+                    _draft.value != original -> "Your prompt changed while polishing, so it was kept as is."
+                    else -> { updateDraft(polished); "Prompt polished on this phone." }
+                }
+            } finally { _polishing.value = false }
+        }
+    }
+    private val backgroundRemover by lazy { com.dua.ai.ondevice.OnDeviceServices.backgroundRemover(application) }
+    /** Google Play services is present, so the on-device background tool can run (or be downloaded once). */
+    val backgroundRemovalAvailable: Boolean by lazy { backgroundRemover.available() }
+    /** A transparent PNG of the photo's subject, made on the phone, in the private cache. Throws with a user-facing message. */
+    suspend fun removeBackground(bytes: ByteArray): java.io.File =
+        com.dua.ai.ondevice.Cutouts.create(getApplication(), backgroundRemover, bytes)
+    /** Bytes of a draft image attachment, or null when it is not an image any more. */
+    fun attachmentImageBytes(index: Int): ByteArray? = _attachments.value.getOrNull(index)
+        ?.takeIf { it.mimeType.startsWith("image/") && it.data.length <= (com.dua.ai.attachments.AttachmentReader.MAX_BYTES + 2) / 3 * 4 }
+        ?.let { runCatching { java.util.Base64.getDecoder().decode(it.data) }.getOrNull() }
     private val appearanceStore = com.dua.ai.settings.AppearanceStore(application)
     private var appearanceLoaded = false
     val appearance = appearanceStore.data.onEach { appearanceLoaded = true }.stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, appearanceStore.initial)
@@ -1924,7 +1959,10 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         if (!com.dua.ai.model.AutoTitles.shouldTitle(messages)) return
         if (_savedChats.value.find { it.id == chatId }?.customTitle != null) return
         viewModelScope.launch {
-            val title = try { account.withToken { token -> api.chatTitle(messages[0].text, messages[1].text, token) } }
+            // On-device first (supported phones with the setting on); otherwise, or if it gives nothing, the server as before.
+            val local = if (onDeviceAiEnabled()) try { onDeviceAi.title(messages[0].text, messages[1].text) }
+                catch (cancelled: CancellationException) { throw cancelled } catch (_: Exception) { null } else null
+            val title = local ?: try { account.withToken { token -> api.chatTitle(messages[0].text, messages[1].text, token) } }
                 catch (cancelled: CancellationException) { throw cancelled } catch (_: Exception) { null } ?: return@launch
             val chat = _savedChats.value.find { it.id == chatId } ?: return@launch
             if (chat.customTitle != null) return@launch

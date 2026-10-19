@@ -15,15 +15,19 @@ internal fun GeneralScreen(viewModel: ChatViewModel, onBack: () -> Unit, onOpen:
     val status by viewModel.settingsStatus.collectAsState()
     val busy by viewModel.dataBusy.collectAsState()
     val haptics = androidx.compose.ui.platform.LocalHapticFeedback.current
+    val onDevice by viewModel.onDeviceAi.status.collectAsState()
     GeneralContent(settings, status, !busy, onBack, onOpen, onHaptic = { value ->
         viewModel.updateSettings(viewModel.localSettings.value.copy(haptic = value))
         if (value && viewModel.localSettings.value.haptic) haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-    })
+    }, onDeviceSupported = onDevice?.let { it != com.dua.ai.ondevice.OnDeviceStatus.Unsupported },
+        onOnDeviceAi = { value -> viewModel.updateSettings(viewModel.localSettings.value.copy(onDeviceAi = value)) })
 }
 
 @Composable
 internal fun GeneralContent(settings: LocalPreferences, status: String, enabled: Boolean, onBack: () -> Unit,
-    onOpen: (DuaDestination) -> Unit, onHaptic: (Boolean) -> Unit) {
+    onOpen: (DuaDestination) -> Unit, onHaptic: (Boolean) -> Unit,
+    /** null while checking; false shows the switch off and disabled. */
+    onDeviceSupported: Boolean? = null, onOnDeviceAi: (Boolean) -> Unit = {}) {
     DuaPageScaffold("General", onBack) {
         SettingsGroup("Display and interaction") {
             SettingsNavRow(Icons.Outlined.Palette, "Appearance and font", value = fontLabel(settings.font)) { onOpen(DuaDestination.Appearance) }
@@ -34,6 +38,12 @@ internal fun GeneralContent(settings: LocalPreferences, status: String, enabled:
             SettingsNavRow(Icons.Outlined.Notifications, "Notifications", "Reply alerts and task reminders") { onOpen(DuaDestination.Notifications) }
             SettingsRowDivider()
             SettingsNavRow(Icons.Outlined.GraphicEq, "Voice and language", "Dictation, reply voice and live voice") { onOpen(DuaDestination.VoiceSettings) }
+            SettingsRowDivider()
+            SettingsToggleRow(Icons.Outlined.PhoneAndroid, "On-device AI", when (onDeviceSupported) {
+                true -> "Chat titles and Imagine prompt polish run on this phone. Off uses the Dua server."
+                false -> "Not available on this phone. Dua uses the server instead."
+                null -> "Checking this phone…"
+            }, onDeviceSupported == true && settings.onDeviceAi, enabled && onDeviceSupported == true, onOnDeviceAi)
         }
         PageNote("Text size follows your phone's font size setting. Voice language is configured separately from the app interface.")
         if (status.isNotBlank()) PageStatus(status)
