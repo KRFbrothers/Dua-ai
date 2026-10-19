@@ -60,6 +60,7 @@ import com.dua.ai.ui.theme.Spacing
 @Composable
 fun MessageList(state: ChatUiState, actions: ChatActions, listState: LazyListState, modifier: Modifier = Modifier,
     imagineActions: ImagineActions = actions.imagine, searchMessageId: String? = null) {
+    val motion = rememberReplyMotionAllowed()
     val lastId = state.messages.lastOrNull()?.id
     val lastAssistantId = state.messages.lastOrNull { !it.isUser }?.id
     var actionsId by rememberSaveable(state.chatId) { mutableStateOf<String?>(null) }
@@ -79,10 +80,10 @@ fun MessageList(state: ChatUiState, actions: ChatActions, listState: LazyListSta
         itemsIndexed(state.messages, key = { _, message -> message.id }, contentType = { _, message -> if (message.isUser) "user" else "assistant" }) { index, message ->
             val selected = message.id == searchMessageId
             Column(Modifier.widthIn(max = Sizes.contentMaxWidth).fillMaxWidth()
-                .animateItem(
+                .then(if (motion) Modifier.animateItem(
                     fadeInSpec = DuaMotion.gentle(),
                     placementSpec = DuaMotion.bouncy(),
-                )
+                ) else Modifier)
                 .testTag("message-${message.id}")
                 .then(if (selected) Modifier.border(ChatSizes.searchSelectionBorder, ChatTheme.colors.accent, ChatShapes.searchSelection) else Modifier)
                 .semantics { if (selected) stateDescription = "Selected search result" }) {
@@ -157,15 +158,15 @@ fun SummaryDivider(modifier: Modifier = Modifier) {
 /** Three softly pulsing dots while a reply is pending. */
 @Composable
 fun TypingIndicator(modifier: Modifier = Modifier) {
-    val transition = rememberInfiniteTransition(label = "typing")
     val c = ChatTheme.colors
-    val phase = transition.animateFloat(0f, 3f, infiniteRepeatable(tween(1200), RepeatMode.Restart), label = "phase")
+    val phase = if (rememberReplyMotionAllowed()) rememberInfiniteTransition(label = "typing")
+        .animateFloat(0f, 3f, infiniteRepeatable(tween(1200), RepeatMode.Restart), label = "phase") else null
     Row(modifier.clearAndSetSemantics {
         contentDescription = "Dua is thinking"; liveRegion = LiveRegionMode.Polite
     }, verticalAlignment = Alignment.CenterVertically) {
         repeat(3) { index ->
-            val distance = kotlin.math.abs(phase.value - index - 0.5f).coerceAtMost(1.5f)
-            Box(Modifier.size(ChatSizes.typingDot).alpha(1f - distance / 2f).background(c.mutedText, CircleShape))
+            val alpha = phase?.let { 1f - kotlin.math.abs(it.value - index - 0.5f).coerceAtMost(1.5f) / 2f } ?: 1f
+            Box(Modifier.size(ChatSizes.typingDot).alpha(alpha).background(c.mutedText, CircleShape))
             if (index < 2) Spacer(Modifier.width(ChatSizes.typingDotGap))
         }
         Spacer(Modifier.width(Spacing.md))

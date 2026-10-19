@@ -1,12 +1,19 @@
 package com.dua.ai.ui.chat
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.snap
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -52,6 +59,7 @@ import com.dua.ai.ui.theme.DuaShape
 import com.dua.ai.ui.theme.Sizes
 import com.dua.ai.ui.theme.Spacing
 import com.dua.ai.ui.theme.rememberMotionAllowed
+import com.dua.ai.ui.theme.DuaMotion
 import kotlinx.coroutines.delay
 
 /** A timer for the server-provided summary, not a claim about hidden model reasoning. */
@@ -111,15 +119,18 @@ fun ThinkingBlock(
         if (!live || answering) { if (!initiallyExpanded) expanded = false } else if (followStream) expanded = true
     }
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    val foreground = rememberReplyForeground()
+    val motion = rememberMotionAllowed() && foreground
     val ticking = live && !answering
-    LaunchedEffect(ticking) { while (ticking) { now = System.currentTimeMillis(); delay(1000) } }
+    LaunchedEffect(ticking, foreground) { while (ticking && foreground) { now = System.currentTimeMillis(); delay(1000) } }
     val elapsed = if (live && seconds == null && startedAt > 0) ((now - startedAt) / 1000).coerceIn(0, Int.MAX_VALUE.toLong()).toInt() else seconds
     val label = thinkingLabel(live && !answering, elapsed)
     val scheme = MaterialTheme.colorScheme
-    val rotation by animateFloatAsState(if (expanded) 180f else 0f, label = "chevron")
+    val rotation by animateFloatAsState(if (expanded) 180f else 0f,
+        animationSpec = if (motion) DuaMotion.gentle() else snap(), label = "chevron")
     val body = remember(thinking) { thinking?.let(::plainThinking).orEmpty() }
     val steps = remember(thinking) { reasoningSteps(thinking.orEmpty()) }
-    val animate = ticking && rememberMotionAllowed()
+    val animate = ticking && motion
     val pulse = if (animate) rememberInfiniteTransition(label = "thinking-badge").animateFloat(
         .55f, 1f, infiniteRepeatable(tween(900), RepeatMode.Reverse), label = "thinking-shimmer") else null
     Column(modifier.fillMaxWidth()) {
@@ -145,7 +156,9 @@ fun ThinkingBlock(
                     modifier = Modifier.padding(start = Spacing.xs).size(Sizes.iconSmall).rotate(rotation))
             }
         }
-        AnimatedVisibility(visible = expanded && body.isNotEmpty()) {
+        AnimatedVisibility(visible = expanded && body.isNotEmpty(),
+            enter = if (motion) fadeIn() + expandVertically(expandFrom = Alignment.Top) else EnterTransition.None,
+            exit = if (motion) fadeOut() + shrinkVertically(shrinkTowards = Alignment.Top) else ExitTransition.None) {
             Column(Modifier.fillMaxWidth().padding(bottom = Spacing.sm).testTag("reasoning-step-tree")) {
                 steps.forEachIndexed { index, step ->
                     Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {

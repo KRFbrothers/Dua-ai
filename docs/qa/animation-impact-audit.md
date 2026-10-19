@@ -47,3 +47,34 @@ Verified results on 2026-10-19:
 - `git diff --check` passed; debug APK contains no supplied-demo `com/example/geminiapp` package in DEX.
 
 The later drawer/profile and unused-runtime cleanup is documented in [project cleanup QA](project-cleanup.md); the verification counts above describe the original animation implementation.
+
+## Reply-feedback follow-up
+
+Pending-reply dots, placeholder lines, the streaming cursor, Agent-step pulse
+and spinner, reasoning badge/expansion and message placement now follow the live
+Remove animations setting and resumed lifecycle. Reduced motion keeps static
+feedback visible; the active Agent step uses a clock icon rather than a spinner.
+Completed-step checks still come only from actual completed steps. Backgrounding
+removes decorative infinite transitions and pauses the reasoning-label timer;
+resuming recomputes elapsed time from the existing start time. These changes do
+not cancel reply generation or change the streamed message/approval state.
+
+Streamed text remains fully visible with motion disabled. The first-word fade
+snaps to visible on pause or a preference change and does not replay when motion
+returns. Typing/step accessibility labels, Stop/Retry handlers, Markdown and the
+latest completed/stopped reply actions retain their existing behavior. The
+Agent approval callback from the current main branch is preserved.
+
+`ReplyMotionUiTest` compares native captures at separated animation-clock times:
+foreground feedback changes, reduced-motion and paused feedback stays still,
+and feedback resumes on the same mounted screen. Separate cases exercise first
+token replacement, real step completion, visible streamed text and stopped-reply
+Retry. Cases cover both themes and normal/2× text; fixtures use synthetic replies
+and steps. Captures are under `app/build/approved-ui/reply-motion-*.png`.
+
+Local Gradle verification is currently blocked: the permission-review service
+returned a usage-limit failure, and a run within the default sandbox failed to
+open Gradle's required local socket. No local pass count is claimed for this
+follow-up. Verification is delegated to the repository's existing CI checks.
+`git diff --check` passes. Device frame timing, battery effects and TalkBack still
+require device verification.
