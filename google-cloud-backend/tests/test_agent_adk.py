@@ -480,22 +480,50 @@ def test_run_agent_closes_resources_on_failure(failure):
 
 
 def test_total_deadline_closes_worker_before_merger_can_run(monkeypatch):
-    monkeypatch.setattr(agent_adk, 'TOTAL_SECONDS', 0.05)
-    monkeypatch.setattr(agent_tools, 'CANCEL_POLL_SECONDS', 0.01)
-    adk, original = fake_adk(json.dumps(PLAN), {'research': ['r'], 'notes': ['n']}, slow='notes')
-    closed = threading.Event()
+    monkeypatch.setattr(agent_tools, "CANCEL_POLL_SECONDS", 0.01)
+    adk, original = fake_adk(json.dumps(PLAN), {"research": ["r"], "notes": ["n"]}, slow="notes")
+    entered, closed = threading.Event(), threading.Event()
+    workers, failures = [], []
 
     class Runner(original):
+        async def run_async(self, **kwargs):
+            if self.agent.name == "dua_root":
+                entered.set()
+            async for event in super().run_async(**kwargs):
+                yield event
+
         async def close(self):
             await super().close()
-            if self.agent.name == 'dua_root':
+            if self.agent.name == "dua_root":
                 closed.set()
 
+    def deadline_after_helpers_start(fn, seconds, **kwargs):
+        # The existing deadline test verifies the real timer. This test controls
+        # its expiry boundary so machine speed cannot time out the planner first.
+        def work():
+            try:
+                fn()
+            except agent_tools.Cancelled:
+                pass
+            except BaseException as error:
+                failures.append(error)
+
+        worker = threading.Thread(target=work, daemon=True)
+        workers.append(worker)
+        worker.start()
+        assert entered.wait(3)
+        raise agent_tools.DeadlineExceeded()
+
+    monkeypatch.setattr(agent_tools, "call_with_deadline", deadline_after_helpers_start)
     adk.InMemoryRunner = Runner
-    text, result = agent_adk.run(make_env([]), 'news and notes', 'f', 'a', cfg, adk=adk, log=lambda m: None)
-    assert 'time limit' in text and not result.cancelled
-    assert closed.wait(2), 'The timed-out ADK worker must close, not continue in the background'
-    assert not hasattr(original, 'merge_prompt'), 'Do not start a merger after the deadline'
+    text, result = agent_adk.run(make_env([]), "news and notes", "f", "a", cfg, adk=adk, log=lambda m: None)
+    assert "time limit" in text and not result.cancelled
+    assert closed.wait(3), "The timed-out ADK worker must close, not continue in the background"
+    for worker in workers:
+        worker.join(3)
+        assert not worker.is_alive()
+    assert failures == []
+    assert not hasattr(original, "merge_prompt"), "Do not start a merger after the deadline"
 
 
 @pytest.mark.parametrize('failure', [None, 'model', 'callback'])
