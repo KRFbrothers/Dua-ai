@@ -18,7 +18,7 @@ The separate [app-wide theme](../ui/previews/app-wide-theme.html) remains a refe
 - `AmbientTokens.kt` keeps shared palettes, dimensions and timings together.
   Brushes, arrays and paths are cached per size/theme. Animated state is read
   in the draw phase rather than rebuilding Home, messages or composer each frame.
-  Drawing is clipped to its own bounds, including the IME-adjusted surface.
+  Backdrop drawing is clipped to its own bounds, including the IME-adjusted surface.
 - Infinite transitions exist only while the existing motion preference permits
   them and the owner lifecycle is resumed. Otherwise the same feedback renders
   as a static frame. This does not cancel generation, microphone work or uploads.
@@ -48,7 +48,7 @@ Native captures are recorded under `app/build/approved-ui/`:
 `ambient-*`, `home-gradient-*` and `reply-motion-*`. The existing Home, composer,
 drawer and attachment suites also run in the full standard Android check.
 
-Validated locally on 2026-10-19: the focused motion/Home/reply run passed all 36
+The initial ambient integration was validated locally on 2026-10-19: the focused motion/Home/reply run passed all 36
 cases; the full `:app:testDebugUnitTest :app:assembleDebug -Pdua.ui-record --offline`
 run passed 1,429 tests across 189 classes with zero failures/errors/skips and
 built the debug APK. `git diff --check` passed. Reviewed native light/dark Home,
@@ -59,3 +59,32 @@ Pixel captures do
 not establish physical keyboard synchronization, FPS, battery/GPU cost, TalkBack
 speech behavior or real provider/login success. Verify these on the owner's
 signed APK; this UI-only change does not require a server deployment.
+
+## Chat feedback polish
+
+The first installed dark-mode screenshots exposed a square edge around the orb:
+the 47.6 dp halo was clipped to the 28 dp glyph box while still visibly colored
+at that box's edges. The orb now lets its radial alpha reach transparency inside
+the existing 48 dp status row and text gap. Glyph size/position, row layout,
+status semantics, cached drawing and motion/lifecycle guards remain unchanged.
+The full-screen backdrop retains its own clipping and inset ownership.
+
+The Copy button reserves the width of “Copied” using the actual button font and
+text scale. Its temporary confirmation no longer pushes Retry/Share/Listen to
+another row in narrow, large-text layouts. The measurement-only label is neither
+drawn nor exposed to accessibility. Clipboard payloads, two-second feedback,
+Android sharing, retry mode, speech callbacks and enabled states are unchanged.
+
+Before the fix, both theme variants of `ThinkingOrbHaloUiTest` reproduced the
+clipped halo, and `MessageActionsInteractionTest` reproduced Retry moving after
+Copy at 2× text in a 240 dp column. The same assertions remain: halo pixels must
+extend beyond the glyph and fade out before the capture edge, layout stays
+28 × 28 dp, and the other actions keep their positions. Narrow-column checks
+also cover Share's full 48 dp target. Existing native motion/reply tests continue
+to cover reduced motion, background/resume, streaming replacement and Retry.
+
+Follow-up validation on 2026-10-19: 20 focused cases passed; the complete Android
+suite and debug APK assembly passed with 1,432 tests across 190 classes and zero
+failures/errors/skips. Native light/dark halo and 2× text Copy/Copied captures
+were reviewed. `git diff --check` passed. No device frame-time or battery result
+is claimed; the owner can verify this follow-up with the next signed APK.

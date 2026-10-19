@@ -11,10 +11,12 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
@@ -24,6 +26,8 @@ import com.dua.ai.model.CodeRuns
 import com.dua.ai.model.ReplyRetryPlan
 import com.dua.ai.settings.LocalPreferences
 import com.dua.ai.ui.theme.DuaTheme
+import com.github.takahirom.roborazzi.captureRoboImage
+import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -112,6 +116,37 @@ class MessageActionsInteractionTest {
         compose.runOnIdle { assertTrue(!retried) }
     }
 
+    @Test fun copyingDoesNotMoveOtherActionsInANarrowLargeTextColumn() {
+        compose.setContent {
+            CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, fontScale = 2f)) {
+                DuaTheme(LocalPreferences()) {
+                    Box(Modifier.width(240.dp).testTag("copy-stability")) {
+                        MessageActions(copyText = "Answer", showRetry = true, retryEnabled = true,
+                            retryDescription = "Retry response", speaking = false, speakEnabled = true,
+                            speakDescription = "Speak response", onRetry = {}, onSpeak = {})
+                    }
+                }
+            }
+        }
+        val descriptions = listOf("Retry response", "Share response", "Speak response")
+        compose.onAllNodesWithText("Copied").assertCountEquals(0)
+        fun capture(label: String) {
+            val file = File("build/approved-ui/copy-feedback-$label.png")
+            file.parentFile!!.mkdirs()
+            compose.onNodeWithTag("copy-stability").captureRoboImage(file.absolutePath)
+        }
+        capture("ready")
+        val before = descriptions.associateWith { compose.onNodeWithContentDescription(it).fetchSemanticsNode().boundsInRoot }
+        compose.onNodeWithContentDescription("Copy response").performClick()
+        compose.onNodeWithText("Copied").assertIsDisplayed()
+        capture("copied")
+        descriptions.forEach { description ->
+            val after = compose.onNodeWithContentDescription(description).assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+            assertEquals("Copy feedback must not move $description horizontally", before.getValue(description).left, after.left, .5f)
+            assertEquals("Copy feedback must not move $description to another row", before.getValue(description).top, after.top, .5f)
+        }
+    }
+
     @Test fun largeTextKeepsEveryActionVisibleAndTappableInANarrowColumn() {
         val events = mutableListOf<String>()
         compose.setContent {
@@ -128,6 +163,10 @@ class MessageActionsInteractionTest {
         }
         val space = compose.onNodeWithTag("action-space").fetchSemanticsNode().boundsInRoot
         val minimum = space.width * (48f / 240f)
+        val share = compose.onNodeWithContentDescription("Share response").assertIsDisplayed().assertIsEnabled()
+            .fetchSemanticsNode().boundsInRoot
+        assertTrue("Share needs a full touch target", share.width >= minimum - 1f && share.height >= minimum - 1f)
+        assertTrue("Share must fit inside the column", share.left >= space.left - 1f && share.right <= space.right + 1f)
         for (action in listOf("Copy response", "Retry response", "Speak response")) {
             val node = compose.onNodeWithContentDescription(action).assertIsDisplayed().assertIsEnabled()
             val bounds = node.fetchSemanticsNode().boundsInRoot
