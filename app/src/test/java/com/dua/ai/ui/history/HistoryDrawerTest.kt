@@ -27,8 +27,9 @@ class HistoryDrawerTest {
 
     @Test fun showsReferenceStructureWithRealChatsAndNoSamples() {
         compose.setContent { DuaTheme(LocalPreferences()) { HistoryDrawer(chats = chats) } }
-        for (t in listOf("Dua AI", "Images", "Library", "Projects", "Computer", "AI Agent", "Aura", "New chat", "Alpha roadmap", "Beta plugin", "Pinned note"))
+        for (t in listOf("Dua AI", "Images", "Library", "Projects", "Computer", "AI Agent", "Aura", "Alpha roadmap", "Beta plugin", "Pinned note"))
             compose.onNodeWithText(t).assertExists()
+        compose.onNodeWithContentDescription("Start a new chat").assertExists()
         compose.onNodeWithText("Replace Dua").assertDoesNotExist()
         val titles = compose.onNodeWithTag("drawer-recent-chats").onChildren().fetchSemanticsNodes()
         assertTrue(titles.isNotEmpty())
@@ -54,18 +55,17 @@ class HistoryDrawerTest {
         compose.onNodeWithText("Work").assertDoesNotExist()
     }
 
-    @Test fun selectNewChatProfileAndSearchWithoutVoiceCircle() {
-        var selected: String? = null; var newChats = 0; var settings = 0
+    @Test fun selectBottomNewChatAndSearchWithoutProfileOrVoiceCircle() {
+        var selected: String? = null; var newChats = 0
         compose.setContent { DuaTheme(LocalPreferences()) {
-            HistoryDrawer(chats = chats, onSelectChat = { selected = it }, onNewChat = { newChats++ }, onOpenSettings = { settings++ }, profileName = "Fareed")
+            HistoryDrawer(chats = chats, onSelectChat = { selected = it }, onNewChat = { newChats++ })
         } }
         compose.onNodeWithText("Beta plugin").performClick()
         compose.onNodeWithTag("drawer-new-chat").performClick()
-        compose.onNodeWithContentDescription("Profile & Settings").performClick()
+        compose.onNodeWithContentDescription("Profile & Settings").assertDoesNotExist()
         compose.onNodeWithContentDescription("Voice").assertDoesNotExist()
         compose.onNodeWithContentDescription("Voice mode").assertDoesNotExist()
-        compose.runOnIdle { assertEquals("b", selected); assertEquals(1, newChats); assertEquals(1, settings) }
-        compose.onNodeWithText("F").assertExists()
+        compose.runOnIdle { assertEquals("b", selected); assertEquals(1, newChats) }
         compose.onNodeWithContentDescription("Search chats").performClick()
         compose.onNodeWithTag("drawer-search-field").performTextInput("alpha")
         compose.onNodeWithText("Alpha roadmap").assertExists()

@@ -12,6 +12,8 @@ Reference: the user's 39.9-second Gemini recording, `Record_2026-10-19-06-24-37_
 
 The recording's Google account services and subscription badge are not Dua features. The menu uses working Dua destinations and the existing sheet palette. Dua's logo, Google Sans Home typography, purple voice action, gradients, dynamic model label, real dictation/send handlers and global theme remain in use.
 
+The drawer footer was subsequently simplified to a single bottom-right New chat icon per the newer screenshots. See [current drawer QA](drawer-reference.md).
+
 ## Verification
 
 Native Compose tests exercise draft/focus retention across typing, keyboard and mode changes; Task starters still fill the real composer and send through the Agent handler. Dialog coverage includes live identity updates, guest sign-in, each destination, Settings, explicit close and Android Back. Existing drawer tests cover navigation/search/pins and scrim sizing.

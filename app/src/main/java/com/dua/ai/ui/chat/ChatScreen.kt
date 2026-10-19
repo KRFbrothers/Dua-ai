@@ -305,11 +305,8 @@ fun ChatScreen(
                         onPinChat = { id, pinned -> actions.onPinChat(id, pinned) },
                         serverDeletionEnabled = state.serverChatDeletionEnabled,
                         onDeleteServerChat = { id -> actions.onDismissChatDeletion(); deletingServerId = id },
-                        onOpenSettings = { closeDrawerThen(actions.onOpenSettings) },
                         onProjects = { closeDrawerThen { taskHome = false; actions.onOpenDestination(DuaDestination.Projects) } },
                         onDestination = { destination -> closeDrawerThen { taskHome = false; actions.onOpenDestination(destination) } },
-                        profileName = state.profileName,
-                        profilePhotoUrl = state.profilePhotoUrl,
                         modifier = Modifier.width(drawerWidth),
                     )
                 },

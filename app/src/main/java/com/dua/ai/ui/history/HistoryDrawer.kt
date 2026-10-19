@@ -34,10 +34,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
-import com.dua.ai.ui.components.AccountAvatar
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.style.TextOverflow
 import com.dua.ai.history.SavedChat
@@ -61,8 +58,7 @@ fun SearchField(query: String = "", onQueryChange: (String) -> Unit = {}, modifi
 }
 
 /**
- * Reference drawer: brand/search, top New chat action, destinations, filtered real chats,
- * and a separately measured profile footer. Long-press retains Rename / Pin / Delete.
+ * Drawer: brand/search, destinations and filtered real chats, with a fixed bottom-right New chat icon. Long-press retains Rename / Pin / Delete.
  */
 @Composable
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
@@ -72,18 +68,14 @@ fun HistoryDrawer(
     onSelectChat: (String) -> Unit = {},
     onNewChat: () -> Unit = {},
     onSearch: () -> Unit = {},
-    onNavigateSettings: () -> Unit = {},
     onDeleteChat: (String) -> Unit = {},
     onRenameChat: (String, String) -> String? = { _, _ -> null },
     serverDeletionEnabled: Boolean = false,
     onDeleteServerChat: (String) -> Unit = {},
-    onOpenSettings: () -> Unit = onNavigateSettings,
     onProjects: () -> Unit = {},
     onDestination: (DuaDestination) -> Unit = {},
     pinEnabled: Boolean = false,
     onPinChat: (String, Boolean) -> String? = { _, _ -> null },
-    profileName: String = "",
-    profilePhotoUrl: String = "",
     newChatEnabled: Boolean = true,
     modifier: Modifier = Modifier,
     drawerState: DrawerState = rememberDrawerState(DrawerValue.Closed),
@@ -121,15 +113,6 @@ fun HistoryDrawer(
                 exit = shrinkVertically(animationSpec = DuaMotion.gentle()) + fadeOut(animationSpec = DuaMotion.gentle())) {
                 SearchField(query, { query = it }, Modifier.padding(bottom = DrawerSizes.menuPaddingV))
             }
-            Row(Modifier.fillMaxWidth().heightIn(min = DrawerSizes.touch).clip(DrawerShapes.newChat)
-                .background(ChatTheme.colors.userBubble)
-                .clickable(enabled = newChatEnabled, role = Role.Button, onClickLabel = "Start a new chat", onClick = onNewChat)
-                .testTag("drawer-new-chat").padding(horizontal = DrawerSizes.actionPaddingH, vertical = DrawerSizes.menuPaddingV),
-                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(DrawerSizes.menuGap)) {
-                Icon(ReferenceIcons.Chat, null, tint = colors.menuText, modifier = Modifier.size(DrawerSizes.menuIcon))
-                Text("New chat", style = DrawerNewChatStyle, color = colors.menuText)
-            }
-
             // The body scrolls clear of the measured footer even at 2x text or with the IME open.
             Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).testTag("drawer-body")) {
                 Spacer(Modifier.height(DrawerSizes.menuPaddingV))
@@ -191,8 +174,13 @@ fun HistoryDrawer(
                 }
                 notice?.let { Text(it, style = DrawerChatStyle, color = colors.subText, modifier = Modifier.padding(vertical = DrawerSizes.chatPaddingV)) }
             }
-            HorizontalDivider(color = colors.divider, thickness = DrawerSizes.dividerThickness)
-            DrawerProfileFooter(profileName, profilePhotoUrl, onOpenSettings)
+            Row(Modifier.fillMaxWidth().padding(top = DrawerSizes.dockTop).testTag("drawer-bottom-actions"),
+                horizontalArrangement = Arrangement.End) {
+                IconButton(onClick = onNewChat, enabled = newChatEnabled,
+                    modifier = Modifier.size(DrawerSizes.touch).testTag("drawer-new-chat")) {
+                    Icon(ReferenceIcons.Chat, "Start a new chat", tint = colors.menuText, modifier = Modifier.size(DrawerSizes.menuIcon))
+                }
+            }
         }
     }
 
@@ -247,48 +235,6 @@ private fun ChatRow(chat: SavedChat, current: Boolean, serverDeletion: Boolean, 
         }
         if (menu) ChatOptionsSheet(chat.title.ifBlank { "New chat" }, chat.pinned, pinEnabled, serverDeletion, onDismiss = { menu = false },
             onRename = { menu = false; onRename() }, onPin = { menu = false; onPin() }, onDelete = { menu = false; onDelete() })
-    }
-}
-
-/** The real account name reflows below its avatar when large text needs the full width. */
-@Composable
-private fun DrawerProfileFooter(name: String, photoUrl: String, onSettings: () -> Unit) {
-    val colors = DrawerTheme.colors
-    val density = LocalDensity.current
-    val avatar: @Composable () -> Unit = {
-        CompositionLocalProvider(LocalDensity provides Density(density.density, 1f)) {
-            AccountAvatar(email = null, displayName = name, avatarUrl = photoUrl, size = DrawerSizes.avatar, tag = "drawer-account-avatar")
-        }
-    }
-    val label: @Composable () -> Unit = {
-        Text(name.ifBlank { "Profile & settings" }, style = DrawerProfileStyle,
-            color = colors.menuText, maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.fillMaxWidth())
-    }
-    val settings: @Composable () -> Unit = {
-        IconButton(onClick = onSettings, modifier = Modifier.size(DrawerSizes.touch)) {
-            Icon(Icons.Outlined.Settings, "Open drawer settings", tint = colors.subText)
-        }
-    }
-    BoxWithConstraints(Modifier.fillMaxWidth().testTag("drawer-profile-footer").padding(top = DrawerSizes.dockTop)) {
-        val profileAction = Modifier.clip(DrawerShapes.row).clickable(role = Role.Button, onClick = onSettings)
-            .semantics(mergeDescendants = true) { contentDescription = "Profile & Settings" }
-            .padding(vertical = DrawerSizes.footerPaddingV)
-        if (density.fontScale > 1.3f && maxWidth < 320.dp) {
-            Column(Modifier.fillMaxWidth().then(profileAction)) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically) { avatar(); settings() }
-                label()
-            }
-        } else {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Row(Modifier.weight(1f).heightIn(min = DrawerSizes.touch).then(profileAction),
-                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(DrawerSizes.menuGap)) {
-                    avatar()
-                    Box(Modifier.weight(1f)) { label() }
-                }
-                settings()
-            }
-        }
     }
 }
 
