@@ -70,7 +70,7 @@ class HomeGradientUiTest(private val dark: Boolean, private val large: Boolean) 
         return file
     }
 
-    @Test fun greetingTracksRealProfileAndGradientStaysOutOfConversationsAndFeatures() {
+    @Test fun greetingTracksRealProfileAndConversationWashStaysOutOfFeatures() {
         val state = mutableStateOf(ChatUiState(profileName = "Fareed Ansari"))
         show(state)
         compose.onNodeWithText("Ask away, Fareed!").performScrollTo().assertIsDisplayed()
@@ -91,9 +91,12 @@ class HomeGradientUiTest(private val dark: Boolean, private val large: Boolean) 
         compose.onNodeWithText("Ask away!").assertExists()
         compose.runOnIdle { state.value = state.value.copy(messages = listOf(ChatMessage(text = "A real reply", isUser = false))) }
         compose.onNodeWithTag("home-gradient").assertDoesNotExist()
+        compose.onNodeWithTag("conversation-ambient").assertExists()
         compose.onNodeWithText("A real reply").assertIsDisplayed()
+        capture("conversation")
         compose.runOnIdle { state.value = ChatUiState(feature = ChatFeature.Agent) }
         compose.onNodeWithTag("home-gradient").assertDoesNotExist()
+        compose.onNodeWithTag("conversation-ambient").assertDoesNotExist()
         compose.onNodeWithText("Ask away!").assertDoesNotExist()
     }
 
@@ -172,7 +175,7 @@ class HomeGradientUiTest(private val dark: Boolean, private val large: Boolean) 
             val hero = compose.onNodeWithTag("home-hero").fetchSemanticsNode().boundsInRoot
             assertTrue(hero.width <= HomeSizes.composerMaxWidth.value + 1f)
             assertEquals(canvas.center.x, hero.center.x, 1f)
-            capture("wide-chat")
+            val chatCapture = capture("wide-chat")
             compose.onNode(hasText("Task") and isSelectable()).performClick().assertIsSelected()
             compose.onNodeWithText("Ask away, Fareed!").assertDoesNotExist()
             for (prompt in HomeTaskPrompts) {
@@ -181,7 +184,16 @@ class HomeGradientUiTest(private val dark: Boolean, private val large: Boolean) 
                 assertEquals(canvas.center.x, row.center.x, 1f)
             }
             compose.onNodeWithText("What can I take off\nyour plate?").assertExists()
-            capture("wide-task")
+            val taskCapture = capture("wide-task")
+            val chatPixels = requireNotNull(BitmapFactory.decodeFile(chatCapture.absolutePath))
+            val taskPixels = requireNotNull(BitmapFactory.decodeFile(taskCapture.absolutePath))
+            try {
+                // The outer edge contains only the backdrop, so text/layout changes cannot
+                // make this assertion pass. Exercise the real tab action with motion off.
+                val y = (chatPixels.height * .95f).toInt()
+                assertNotEquals("Task must switch the blue wash to violet with motion disabled",
+                    chatPixels.getPixel(2, y), taskPixels.getPixel(2, y))
+            } finally { chatPixels.recycle(); taskPixels.recycle() }
         } finally { Settings.Global.putFloat(resolver, Settings.Global.ANIMATOR_DURATION_SCALE, previous) }
     }
 

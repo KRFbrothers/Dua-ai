@@ -1,10 +1,5 @@
 package com.dua.ai.ui.chat
 
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -29,7 +24,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -42,7 +36,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -121,7 +114,7 @@ fun MessageList(state: ChatUiState, actions: ChatActions, listState: LazyListSta
                 if (message.id == state.summarisedThroughId && message.id != lastId) SummaryDivider(Modifier.padding(top = Spacing.md))
             }
         }
-        // Streaming replies render their own progress; the dots cover non-streaming waits.
+        // Streaming replies render their own progress; the orb covers non-streaming waits.
         if (state.typing && state.messages.none { it.streaming }) item(key = "typing") {
             AssistantTurn(modifier = Modifier.widthIn(max = Sizes.contentMaxWidth)) { TypingIndicator(Modifier.heightIn(min = Sizes.touchTarget)) }
         }
@@ -155,20 +148,14 @@ fun SummaryDivider(modifier: Modifier = Modifier) {
     }
 }
 
-/** Three softly pulsing dots while a reply is pending. */
+/** Approved ambient orb while a reply is pending; retains the existing status announcement. */
 @Composable
 fun TypingIndicator(modifier: Modifier = Modifier) {
     val c = ChatTheme.colors
-    val phase = if (rememberReplyMotionAllowed()) rememberInfiniteTransition(label = "typing")
-        .animateFloat(0f, 3f, infiniteRepeatable(tween(1200), RepeatMode.Restart), label = "phase") else null
     Row(modifier.clearAndSetSemantics {
         contentDescription = "Dua is thinking"; liveRegion = LiveRegionMode.Polite
     }, verticalAlignment = Alignment.CenterVertically) {
-        repeat(3) { index ->
-            val alpha = phase?.let { 1f - kotlin.math.abs(it.value - index - 0.5f).coerceAtMost(1.5f) / 2f } ?: 1f
-            Box(Modifier.size(ChatSizes.typingDot).alpha(alpha).background(c.mutedText, CircleShape))
-            if (index < 2) Spacer(Modifier.width(ChatSizes.typingDotGap))
-        }
+        ThinkingOrb()
         Spacer(Modifier.width(Spacing.md))
         Text("Thinking", style = MaterialTheme.typography.bodyMedium, color = c.mutedText)
     }

@@ -65,9 +65,7 @@ object ChatSizes {
     val streamingCursor = 10.dp
     const val streamingCursorBlinkMs = 530
     const val streamingFadeInMs = 180
-    /** Pulsing placeholder lines while waiting for the first token. */
-    val placeholderLineHeight = 12.dp
-    val placeholderLineGap = 8.dp
+    /** Shared pulse timing for the active Agent step. */
     const val placeholderPulseMs = 900
     val listPaddingH = 16.dp
     val listPaddingTop = 20.dp
@@ -85,8 +83,6 @@ object ChatSizes {
     val sourceCardWidth = 240.dp
     val siteIcon = 20.dp
     val favicon = 16.dp
-    val typingDot = 8.dp
-    val typingDotGap = 6.dp
     val mediaMaxWidth = 420.dp
     val portraitVideoMaxWidth = 280.dp
     val placeholderSingleMaxWidth = 300.dp

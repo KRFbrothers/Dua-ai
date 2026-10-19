@@ -12,8 +12,15 @@ no external assets or package installation required.
 Both HTML files are preserved byte-for-byte, including their existing preview
 media guard. The descriptive filenames distinguish the two uploaded index files.
 
-These are design references, not the running Android or website implementation.
-References inside them to Kotlin files, matching parameters or performance
-budgets should be checked against actual app source and measurements before
-implementation. This collection does not change the approved Dua branding,
-attachment-sheet layout or current app behavior.
+These HTML files remain design references rather than the running app. The
+approved backdrop/orb direction from the first file is now implemented natively
+in `HomeBackdrop.kt` / `ThinkingOrb.kt`, with shared `AmbientTokens.kt`, Dua's
+blue Chat/violet Task washes and existing logo, font and voice button. Standard
+conversations use the subdued backdrop. The broader app-wide theme is still a
+reference; it has not been applied across features or the website.
+
+The originals' claims about matching Kotlin filenames, performance budgets or
+prior builds are not verification of the native implementation. See
+[native ambient QA](../../qa/home-ambient-motion.md) for actual scope, checks and
+device limitations. The attachment-sheet layout and account/actions retain
+their existing ownership.
