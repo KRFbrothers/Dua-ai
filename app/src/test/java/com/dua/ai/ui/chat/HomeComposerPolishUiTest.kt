@@ -98,6 +98,20 @@ class HomeComposerPolishUiTest(private val dark: Boolean, private val largeText:
             }
         }
         compose.onNodeWithContentDescription("Message").performClick().assertIsFocused()
+        val idleHeight = compose.onNodeWithTag("composer-container").fetchSemanticsNode().boundsInRoot.height
+        compose.onNodeWithContentDescription("Message").performTextInput("Hi")
+        compose.onNodeWithContentDescription("Message").assertIsFocused().assertTextContains("Hi")
+        compose.onNodeWithContentDescription("Send message").assertIsDisplayed()
+        val shortHeight = compose.onNodeWithTag("composer-container").fetchSemanticsNode().boundsInRoot.height
+        assertEquals("A short Home draft keeps the inline pill", idleHeight, shortHeight, 1f)
+        val file = File("build/approved-ui/home-polish-short-draft-$dark-$largeText.png")
+        file.parentFile!!.mkdirs(); compose.onRoot().captureRoboImage(file.absolutePath)
+        compose.onNodeWithContentDescription("Message").performTextInput("\nSecond line")
+        val multiline = compose.onNodeWithContentDescription("Message").assertIsFocused().fetchSemanticsNode().boundsInRoot
+        val attach = compose.onNodeWithContentDescription("Add photos and files").fetchSemanticsNode().boundsInRoot
+        assertTrue("Multiline drafts get a separate input row", multiline.bottom <= attach.top)
+        compose.onNodeWithContentDescription("Message").performTextClearance()
+        assertEquals(idleHeight, compose.onNodeWithTag("composer-container").fetchSemanticsNode().boundsInRoot.height, 1f)
         compose.runOnIdle { width.value = 320.dp }
         compose.onNodeWithContentDescription("Message").assertIsFocused().performTextInput("Keep this draft")
         compose.onNodeWithContentDescription("Message").assertIsFocused().assertTextContains("Keep this draft")

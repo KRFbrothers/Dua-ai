@@ -120,6 +120,7 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
     val state = ChatUiState(
         profileName = account.user?.displayName.orEmpty().ifBlank { account.user?.email.orEmpty() },
         profilePhotoUrl = account.user?.avatarUrl.orEmpty(),
+        profileEmail = account.user?.email,
         chatId = chatId, messages = messages, draft = draft, editingId = editingId?.takeIf { id -> messages.any { it.id == id } }, typing = typing, error = error, model = model,
         feature = feature, homeTab = homeTab,
         providers = integrations.providers, webMode = webMode, reasoning = reasoning,

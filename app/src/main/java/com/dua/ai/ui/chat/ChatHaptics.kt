@@ -24,3 +24,14 @@ internal fun View.performChatHaptic(kind: ChatHaptic) { performHapticFeedback(ki
  * respects the system Touch feedback setting. Default: no haptics (previews, tests).
  */
 val LocalChatHaptic = androidx.compose.runtime.staticCompositionLocalOf<(ChatHaptic) -> Unit> { {} }
+
+/** Throttle streamed text feedback before dispatching through the app/system preference-aware callback. */
+internal class StreamHapticThrottle(private val clock: () -> Long = android.os.SystemClock::uptimeMillis) {
+    private var lastTick: Long? = null
+    fun tick(haptic: () -> Unit) {
+        val now = clock()
+        if (lastTick?.let { now - it < 40 } == true) return
+        lastTick = now
+        haptic()
+    }
+}

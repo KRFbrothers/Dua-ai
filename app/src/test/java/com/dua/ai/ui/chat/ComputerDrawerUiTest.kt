@@ -72,6 +72,7 @@ class ComputerDrawerUiTest(private val dark: Boolean, private val small: Boolean
         val opened = mutableListOf<DuaDestination>(); var newChats = 0; var settings = 0
         show { ChatScreen(ChatUiState(), ChatActions(onOpenDestination = { opened += it }, onNewChat = { newChats++ }, onOpenSettings = { settings++ })) }
         compose.onNodeWithContentDescription("Open profile and settings").performClick()
+        compose.onNodeWithText("Settings").performScrollTo().performClick()
         compose.onNodeWithContentDescription("Open chat history").performClick()
         compose.onNodeWithText("Computer").performScrollTo().performClick()
         compose.runOnIdle { assertEquals(listOf(DuaDestination.Computer), opened); assertEquals(0, newChats); assertEquals(1, settings) }

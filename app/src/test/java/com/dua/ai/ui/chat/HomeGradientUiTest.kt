@@ -120,18 +120,31 @@ class HomeGradientUiTest(private val dark: Boolean, private val large: Boolean) 
         compose.onNodeWithContentDescription("Voice mode").assertIsDisplayed()
         capture("keyboard")
         compose.onNodeWithContentDescription("Message").performTextInput("Keep my draft")
+        compose.onNodeWithTag("home-hero").assertDoesNotExist()
+        capture("typing-keyboard")
         dispatchKeyboard(0)
         compose.onNodeWithContentDescription("Message").assertIsFocused().assertTextContains("Keep my draft")
-        compose.onNodeWithContentDescription("Dua AI").assertWidthIsEqualTo(48.dp)
+        compose.onNodeWithTag("home-hero").assertDoesNotExist()
         compose.onNode(hasText("Task") and isSelectable()).performClick()
-        compose.onNodeWithText("What can I take off\nyour plate?").assertExists()
-        compose.onNodeWithText(HomeTaskPrompts.last()).performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("What can I take off\nyour plate?").assertDoesNotExist()
+        compose.onNodeWithText(HomeTaskPrompts.last()).assertDoesNotExist()
         assertEquals("Keep my draft", state.value.draft)
         compose.onNodeWithContentDescription("Message").assertIsFocused().assertTextContains("Keep my draft")
         capture("task")
+        compose.onNodeWithContentDescription("Message").performTextClearance()
+        dispatchKeyboard(280)
+        compose.onNodeWithText("What can I take off\nyour plate?").assertDoesNotExist()
+        compose.onNodeWithText(HomeTaskPrompts.last()).performScrollTo().assertIsDisplayed()
+        dispatchKeyboard(0)
+        compose.onNodeWithText("What can I take off\nyour plate?").assertExists()
+        compose.onNodeWithContentDescription("Message").performTextInput("Another draft")
         compose.onNode(hasText("Chat") and isSelectable()).performClick()
+        compose.onNodeWithText("Ask away, Fareed!").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Message").assertIsFocused().assertTextContains("Another draft")
+        compose.onNodeWithContentDescription("Message").performTextClearance()
         compose.onNodeWithText("Ask away, Fareed!").assertExists()
-        compose.onNodeWithContentDescription("Message").assertIsFocused().assertTextContains("Keep my draft")
+        compose.onNodeWithContentDescription("Dua AI").assertWidthIsEqualTo(48.dp)
+        compose.onNodeWithContentDescription("Message").assertIsFocused()
     }
 
     @Test fun navigationAndKeyboardInsetsUseTheirUnionAndDoNotAccumulateAcrossToggles() {
@@ -147,5 +160,49 @@ class HomeGradientUiTest(private val dark: Boolean, private val large: Boolean) 
             dispatchKeyboard(0, navigationBar = 24)
             assertEquals(closed.bottom, compose.onNodeWithTag("composer-container").fetchSemanticsNode().boundsInRoot.bottom, 2f)
         }
+    }
+
+    @Test fun blankCanvasAndDrawerDismissInputWithoutDiscardingTheDraft() {
+        val state = mutableStateOf(ChatUiState())
+        compose.setContent {
+            CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, if (large) 2f else 1f)) {
+                DuaTheme(LocalPreferences(theme = if (dark) "dark" else "light")) {
+                    ChatScreen(state.value, ChatActions(onDraftChange = { state.value = state.value.copy(draft = it) }))
+                }
+            }
+        }
+        compose.onNodeWithContentDescription("Message").performClick().performTextInput("Keep this draft")
+        compose.onNodeWithTag("home-empty-content").performTouchInput { click(center) }
+        compose.onNodeWithContentDescription("Message").assertIsNotFocused().assertTextContains("Keep this draft")
+        compose.onNodeWithContentDescription("Message").performClick().assertIsFocused()
+        compose.onNodeWithContentDescription("Open chat history").performClick()
+        compose.onNodeWithTag("history-drawer").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Message").assertIsNotFocused()
+        compose.runOnUiThread { compose.activity.onBackPressedDispatcher.onBackPressed() }
+        compose.onNodeWithTag("history-drawer").assertIsNotDisplayed()
+        compose.onNodeWithContentDescription("Message").assertTextContains("Keep this draft").assertIsNotFocused()
+        assertEquals("Keep this draft", state.value.draft)
+    }
+
+    @Test fun predictiveBackCanCancelOrCloseTheDrawerWithOneHapticPerStateChange() {
+        val haptics = mutableListOf<ChatHaptic>()
+        compose.setContent { DuaTheme(LocalPreferences(theme = if (dark) "dark" else "light")) {
+            ChatScreen(ChatUiState(), ChatActions(haptic = { haptics += it }))
+        } }
+        compose.onNodeWithContentDescription("Open chat history").performClick()
+        compose.onNodeWithTag("history-drawer").assertIsDisplayed()
+        assertEquals(listOf(ChatHaptic.Tap), haptics)
+        val dispatcher = compose.activity.onBackPressedDispatcher
+        compose.runOnUiThread {
+            dispatcher.dispatchOnBackStarted(androidx.activity.BackEventCompat(0f, 200f, 0f, androidx.activity.BackEventCompat.EDGE_LEFT))
+            dispatcher.dispatchOnBackProgressed(androidx.activity.BackEventCompat(80f, 200f, 0.5f, androidx.activity.BackEventCompat.EDGE_LEFT))
+        }
+        compose.onNodeWithTag("history-drawer").assertIsDisplayed()
+        compose.runOnUiThread { dispatcher.dispatchOnBackCancelled() }
+        compose.onNodeWithTag("history-drawer").assertIsDisplayed()
+        assertEquals(1, haptics.size)
+        compose.runOnUiThread { dispatcher.onBackPressed() }
+        compose.onNodeWithTag("history-drawer").assertIsNotDisplayed()
+        assertEquals(listOf(ChatHaptic.Tap, ChatHaptic.Tap), haptics)
     }
 }

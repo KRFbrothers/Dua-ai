@@ -17,8 +17,14 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.snap
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
@@ -28,10 +34,11 @@ import com.dua.ai.setup.ProviderCapability
 import com.dua.ai.ui.theme.SheetDisabledAlpha
 import com.dua.ai.ui.theme.SheetNoteStyle
 import com.dua.ai.ui.theme.SheetRowStyle
-import com.dua.ai.ui.theme.SheetShapes
 import com.dua.ai.ui.theme.SheetSizes
 import com.dua.ai.ui.theme.SheetSubStyle
 import com.dua.ai.ui.theme.SheetTheme
+import com.dua.ai.ui.theme.DuaMotion
+import com.dua.ai.ui.theme.rememberMotionAllowed
 
 private val MODEL_ORDER = listOf("Dua", "ChatGPT", "Gemini", "Claude", "Grok", "Kimi")
 
@@ -42,6 +49,7 @@ fun ModelPickerSheet(current: String, providers: List<ProviderCapability>, onSel
     freeModels: List<com.dua.ai.model.FreeModel> = emptyList(), currentFree: String? = null, onSelectFree: (String) -> Unit = {}) {
     val c = SheetTheme.colors
     val haptic = LocalChatHaptic.current
+    val motion = rememberMotionAllowed()
     DuaSheet(onDismiss = onDismiss) {
         Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = SheetSizes.paddingH).padding(bottom = SheetSizes.paddingBottom)
             .testTag("model-picker-sheet")) {
@@ -62,17 +70,15 @@ fun ModelPickerSheet(current: String, providers: List<ProviderCapability>, onSel
                         }
                         .semantics { stateDescription = if (selected) "Selected" else if (available) "Available" else "Setup required" }
                         .padding(horizontal = SheetSizes.rowPaddingH, vertical = SheetSizes.rowPaddingV), verticalAlignment = Alignment.CenterVertically) {
-                        Surface(color = if (selected) c.accent else c.container, shape = SheetShapes.badge) {
-                            Box(Modifier.size(SheetSizes.badge), contentAlignment = Alignment.Center) {
-                                Text(name.take(1), style = SheetRowStyle, color = (if (selected) c.onAccent else c.text).copy(alpha = alpha))
-                            }
-                        }
+                        ModelSelectionBadge(name.take(1), selected, motion, alpha)
                         Column(Modifier.weight(1f).padding(start = SheetSizes.rowGap)) {
                             Text(if (name == AUTO_MODEL) "$name · Auto" else name, style = SheetRowStyle, color = c.text.copy(alpha = alpha))
                             Text(if (available) "$provider · ${capability?.model.orEmpty()}" else "$provider · Setup required",
                                 style = SheetSubStyle, color = c.subText.copy(alpha = alpha))
                         }
-                        if (selected) Icon(Icons.Filled.Check, contentDescription = "Selected", tint = c.accent, modifier = Modifier.size(SheetSizes.rowIcon))
+                        Box(Modifier.size(SheetSizes.rowIcon)) {
+                            if (selected) Icon(Icons.Filled.Check, contentDescription = "Selected", tint = c.accent)
+                        }
                     }
                 }
             }
@@ -91,16 +97,14 @@ fun ModelPickerSheet(current: String, providers: List<ProviderCapability>, onSel
                             }
                             .semantics { stateDescription = if (selected) "Selected" else "Available" }
                             .padding(horizontal = SheetSizes.rowPaddingH, vertical = SheetSizes.rowPaddingV), verticalAlignment = Alignment.CenterVertically) {
-                            Surface(color = if (selected) c.accent else c.container, shape = SheetShapes.badge) {
-                                Box(Modifier.size(SheetSizes.badge), contentAlignment = Alignment.Center) {
-                                    Text(model.name.take(1), style = SheetRowStyle, color = if (selected) c.onAccent else c.text)
-                                }
-                            }
+                            ModelSelectionBadge(model.name.take(1), selected, motion)
                             Column(Modifier.weight(1f).padding(start = SheetSizes.rowGap)) {
                                 Text(model.name, style = SheetRowStyle, color = c.text)
                                 Text("Free · OpenRouter · chat only", style = SheetSubStyle, color = c.subText)
                             }
-                            if (selected) Icon(Icons.Filled.Check, contentDescription = "Selected", tint = c.accent, modifier = Modifier.size(SheetSizes.rowIcon))
+                            Box(Modifier.size(SheetSizes.rowIcon)) {
+                                if (selected) Icon(Icons.Filled.Check, contentDescription = "Selected", tint = c.accent)
+                            }
                         }
                     }
                 }
@@ -113,6 +117,22 @@ fun ModelPickerSheet(current: String, providers: List<ProviderCapability>, onSel
                 SheetTextButton("Feature setup", onOpenSetup, modifier = Modifier.heightIn(min = SheetSizes.touch))
                 SheetTextButton("Done", onDismiss, modifier = Modifier.heightIn(min = SheetSizes.touch))
             }
+        }
+    }
+}
+
+@Composable
+private fun ModelSelectionBadge(letter: String, selected: Boolean, motion: Boolean, alpha: Float = 1f) {
+    val c = SheetTheme.colors
+    val fill by animateColorAsState(if (selected) c.accent else c.container,
+        if (motion) DuaMotion.gentle() else snap(), label = "Model badge fill")
+    val foreground by animateColorAsState((if (selected) c.onAccent else c.text).copy(alpha = alpha),
+        if (motion) DuaMotion.gentle() else snap(), label = "Model badge text")
+    val corner by animateDpAsState(if (selected) 20.dp else 12.dp,
+        if (motion) DuaMotion.gentle() else snap(), label = "Model badge shape")
+    Surface(color = fill, shape = RoundedCornerShape(corner)) {
+        Box(Modifier.size(SheetSizes.badge), contentAlignment = Alignment.Center) {
+            Text(letter, style = SheetRowStyle, color = foreground)
         }
     }
 }
