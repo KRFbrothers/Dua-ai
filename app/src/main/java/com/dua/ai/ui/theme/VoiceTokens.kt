@@ -50,7 +50,6 @@ object VoiceSizes {
     // Voice mode
     val controlMax = 56.dp
     val controlGap = 6.dp
-    val statusDot = 7.dp
     val statusPaddingV = 6.dp
     val logo = 88.dp
     val replyActionsOffset = (-12).dp

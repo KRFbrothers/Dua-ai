@@ -53,13 +53,6 @@ class DuaApiClientAgentTest {
         assertEquals("AI news", parts.sources.single().title)
     }
 
-    @Test fun agentCapabilityNeedsExplicitTrue() {
-        assertTrue(DuaApiClient.parseAgentCapability("""{"status":"ok","agent":true}"""))
-        assertFalse(DuaApiClient.parseAgentCapability("""{"status":"ok"}"""))
-        assertFalse(DuaApiClient.parseAgentCapability("""{"agent":"true"}"""))
-        assertFalse(DuaApiClient.parseAgentCapability("<html>Vercel</html>"))
-    }
-
     @Test fun engineCapabilityIsFetchedFromRootAndFailureHidesAgent() = runBlocking {
         val certificate = HeldCertificate.Builder().addSubjectAlternativeName("localhost").addSubjectAlternativeName("127.0.0.1").build()
         val serverTls = HandshakeCertificates.Builder().heldCertificate(certificate).build()
@@ -69,18 +62,18 @@ class DuaApiClientAgentTest {
         try {
             val engine = DuaApiClient(server.url("/").toString(), transport, appToken = "abc")
             server.enqueue(MockResponse().setHeader("Content-Type", "application/json").setBody("""{"status":"ok","agent":true}"""))
-            assertTrue(engine.engineAgentAvailable())
+            assertTrue(engine.engineCapabilities().agent)
             val request = server.takeRequest()
             assertEquals("/", request.path)
             assertEquals("GET", request.method)
             assertEquals("abc", request.getHeader("X-Dua-App-Token"))
             server.enqueue(MockResponse().setResponseCode(500).setBody("""{"agent":true}"""))
-            assertFalse(engine.engineAgentAvailable())
+            assertFalse(engine.engineCapabilities().agent)
             server.enqueue(MockResponse().setHeader("Content-Type", "application/json").setBody("""{"status":"ok"}"""))
-            assertFalse(engine.engineAgentAvailable())
+            assertFalse(engine.engineCapabilities().agent)
         } finally {
             server.shutdown()
         }
-        assertFalse(DuaApiClient("http://insecure.example").engineAgentAvailable())
+        assertFalse(DuaApiClient("http://insecure.example").engineCapabilities().agent)
     }
 }

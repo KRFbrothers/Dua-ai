@@ -66,9 +66,7 @@ object HomeSizes {
         if (availableWidth >= composerRoomyWidth) composerMarginH else composerCompactMarginH
     val roundButton = 44.dp
     val segmentTab = 36.dp
-    val segmentTrackInset = 3.dp
     val segmentTabPaddingH = 20.dp
-    val barButton = 38.dp
     val voiceButton = 40.dp
     val plusIcon = 24.dp
     val micIcon = 22.dp
@@ -78,7 +76,6 @@ object HomeSizes {
     val barBorder = 1.dp
     /** Reference bar padding 8/6 dp, less the 5 dp each 48 dp slot adds around a 38 dp button. */
     val barPaddingH = 3.dp
-    val barPaddingV = 1.dp
     /** Reference top bar padding 16/8 dp, less the 2 dp each 48 dp slot adds around a 44 dp button. */
     val topBarPaddingH = 14.dp
     val topBarPaddingV = 6.dp

@@ -37,16 +37,5 @@ object Sizes {
     /** Readable line length on tablets and foldables. */
     val contentMaxWidth = 760.dp
     val drawerWidth = 320.dp
-    /** Round buttons in the chat top bar (menu, new chat). */
-    val topBarButton = 44.dp
     val topBarHeight = 64.dp
-    /** Mode chips above the composer (Run code, Reasoning, Search). */
-    val modeChipHeight = 44.dp
-    /** Round buttons and the Auto pill inside the composer. */
-    val composerButton = 36.dp
-    val sendButton = 38.dp
-    /** Home logo height on a roomy screen; it shrinks on short screens and with the keyboard open. */
-    val homeLogoHeight = 196.dp
-    /** Composer round buttons: +, mic, voice/send/stop. */
-    val composerRound = 48.dp
 }

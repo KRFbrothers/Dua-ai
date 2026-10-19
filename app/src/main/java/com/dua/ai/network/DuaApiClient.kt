@@ -68,8 +68,6 @@ class DuaApiClient(
         }.getOrNull()
     }
 
-    suspend fun engineAgentAvailable(): Boolean = engineCapabilities().agent
-
     /** GET / of the chat engine: Agent mode and free OpenRouter models. Any failure = nothing offered. */
     suspend fun engineCapabilities(): EngineCapabilities = withContext(Dispatchers.IO) {
         runCatching {
@@ -330,8 +328,6 @@ class DuaApiClient(
             val json = JSONObject(body)
             EngineCapabilities(agent = json.opt("agent") == true, freeModels = com.dua.ai.model.FreeModels.parse(json), personality = json.optJSONObject("personalization")?.opt("personality") == true)
         }.getOrDefault(EngineCapabilities())
-        internal fun parseAgentCapability(body: String): Boolean =
-            runCatching { JSONObject(body).opt("agent") == true }.getOrDefault(false)
         private fun attachmentJson(files: List<ChatAttachment>) = JSONArray().apply { files.forEach { file ->
             put(JSONObject().put("name", file.name).put("mimeType", file.mimeType).put("data", file.data))
         } }
