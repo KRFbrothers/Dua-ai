@@ -75,8 +75,6 @@ object HomeSizes {
     val voiceIcon = 20.dp
     val promptIcon = 20.dp
     val promptGap = 12.dp
-    /** Reference spacing (14 dp) minus the extra height of the 48 dp row (38 dp in the reference). */
-    val promptSpacing = 4.dp
     val barBorder = 1.dp
     /** Reference bar padding 8/6 dp, less the 5 dp each 48 dp slot adds around a 38 dp button. */
     val barPaddingH = 3.dp

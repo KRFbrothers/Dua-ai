@@ -9,7 +9,7 @@ Dua AI keeps its original name and artwork. This is the owner's personal assista
 | Screen | Production code / behavior |
 | --- | --- |
 | Welcome | `ui/onboarding/OnboardingScreen.kt`: full Dua logo, real Google login, Skip for now |
-| Home | `ui/chat/ChatScreen.kt`, `ChatTopBar.kt`, `EmptyState.kt`: current-project header, Computer shortcut, logo and suggested prompts that fill the draft, without sending |
+| Home | `ui/chat/ChatScreen.kt`, `ChatTopBar.kt`: current-project header, Computer shortcut, logo and suggested prompts that fill the draft, without sending |
 | Conversation | `MessageList.kt`, `UserMessage.kt`, `AssistantMessage.kt`, `MarkdownMessage.kt`: bubbles, streamed replies, Markdown, copyable code blocks, sources, typing and partial-stop states |
 | Composer | `Composer.kt`, `AttachmentSheet.kt`, `StoredFileChips.kt`: multiline input, send/stop, model choice, mic/voice and file tools |
 | History / Aura | `ui/history/HistoryDrawer.kt`: project search, fixed navigation/footer and independently scrolling recent chats |
