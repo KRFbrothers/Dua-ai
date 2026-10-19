@@ -1,21 +1,17 @@
 # Drawer reference QA
 
-Reference: the supplied Dua AI drawer screenshot, `1001718092.jpg`.
+Current reference: the user's `1001718195.jpg`, `1001718193.jpg` and `1001718194.jpg` request: remove the top New chat row and the bottom profile/settings area; keep only a New chat icon at the bottom right.
 
-The native Compose drawer uses a flat themed surface, cube-style header icon, transparent search action, a neutral full-width New chat row at the top, regular Google Sans navigation labels, an All/Pinned filter and a separately measured account footer. The real account name reflows below the avatar at large text sizes. Existing light/dark color objects and Home/feature styling are unchanged; no new dependencies or external assets are added.
+The drawer has a fixed brand/search header, scrollable destinations and real chat history, and one fixed bottom-right New chat icon. The icon retains the existing `drawer-new-chat` tag, a Start a new chat accessibility label, a 48 dp touch target and the existing enabled state/callback. Its label is distinct from the Home header control while the drawer is offscreen. The footer has no avatar, account name, settings control, text label or divider. The removed account/footer arguments are no longer passed to HistoryDrawer. Home's avatar and account menu remain available through their existing header entry.
 
-The existing responsive modal widths (277 dp at 360 dp, 253 dp at 320 dp) are retained to keep Home's profile and voice controls in the scrim. Images and Projects remain directly reachable alongside the reference destinations. Plugins is a direct row; Aura still expands to Work. The supplied reference's sample chat titles, identity and PRO badge are not populated in the app. Real user chats/profile data remain the only content source.
+Responsive modal widths (277 dp at 360 dp, 253 dp at 320 dp), theme colors, Google Sans labels, predictive Back, Aura expansion, search, All/Pinned filtering, inline pins and existing destinations remain in use. Rename and local/server deletion retain their existing handlers.
 
-Search uses the existing title/message search. All/Pinned composes with that query. Inline pin buttons call the same feature-gated handler as long-press options without opening the chat; rename and local/server deletion paths remain intact. The main body scrolls between fixed New chat and profile areas, and consumes keyboard insets. Existing drawer entry/search/list test tags remain available.
+## Verification
 
-## Visual and interaction review
+Existing drawer tests now check that the only New chat action is at the lower right, remains clear of scrollable history and respects its disabled state. They check that profile/settings/avatar UI is absent. Existing selection, search, filtering, pinning, navigation and long-press tests remain in the default suite.
 
-Native Compose captures in `app/build/approved-ui/drawer-reference-*.png` cover normal and 2x text in light/dark modes, populated/empty history, Pinned filtering and search. Reviewed the supplied reference and these rendered states. At large text, the footer name has no measured visual overflow, its settings action stays visible, and history can scroll clear of the footer. At normal text, the avatar, account name and settings icon share one row.
+Native captures in `app/build/approved-ui/drawer-reference-*.png` cover light/dark, normal/2× text, populated/empty history, filtering and search. Capture `drawer-reference-bottom-new-chat-*.png` shows the current fixed icon footer. Preview chat fixtures are test-only.
 
-Existing navigation, Aura expansion, new-chat/profile callbacks, recent-chat deduplication/draft hiding, search and long-press options remain covered. New tests cover filtered real state, inline pin isolation, guest/empty states, disabled new chat and footer geometry/name reflow. The drawer avatar uses its own tag so the existing Home avatar identifier remains unique even while the drawer is offscreen. Preview fixtures are test-only; they are not app defaults.
+Physical-device gestures and keyboard animation are outside Robolectric validation.
 
-Intentional adaptations: preserve all existing destinations and the modal scrim width; use existing Material/ReferenceIcons navigation artwork; omit an unsupported subscription label. No open P0/P1/P2 visual issues remain in the reviewed states. Real authenticated photo downloading and physical-device keyboard animation are outside Robolectric validation.
-
-Validation: all 1,350 default Android unit/Compose UI tests passed across 178 classes on the latest main containing the Home changes, with zero failures, errors or skips. This includes all 20 Home Chat/Task cases, Home gradient/keyboard coverage and 12 new drawer cases. The initial focused drawer/history run passed 46 cases. Debug APK assembly and `git diff --check` passed. The Gradle run used `-Pdua.ui-record --offline --no-daemon --max-workers=2` with the local SDK/test cache. Optional dedicated screenshot-package tests are outside this default suite.
-
-Final result: passed for the reviewed native states.
+Validated on 2026-10-19: all 1,376 default Android unit/Compose UI tests passed across 182 classes, with zero failures/errors/skips. Debug APK assembly and `git diff --check` passed. The run used `-Pdua.ui-record --offline`; current light/dark and 2× text captures were reviewed. Header/account access, new-chat callbacks, search/pins and predictive Back coverage remain passing.

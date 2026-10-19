@@ -10,8 +10,6 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.semantics.SemanticsActions
-import androidx.compose.ui.text.TextLayoutResult
 import com.dua.ai.history.SavedChat
 import com.dua.ai.model.ChatMessage
 import com.dua.ai.settings.LocalPreferences
@@ -50,32 +48,30 @@ class DrawerReferenceUiTest(private val dark: Boolean, private val large: Boolea
         file.parentFile!!.mkdirs(); compose.onRoot().captureRoboImage(file.absolutePath)
     }
 
-    @Test fun newChatHeaderAndRealProfileFooterStaySeparateFromScrollableHistory() {
-        var newChats = 0; var settings = 0
+    @Test fun bottomRightNewChatIsTheOnlyFooterActionAndStaysClearOfScrollableHistory() {
+        var newChats = 0
         show { HistoryDrawer(chats = listOf(chat("a", "My first conversation"), chat("b", "My saved question", true)),
-            profileName = "Signed-in Owner", onNewChat = { newChats++ }, onOpenSettings = { settings++ }) }
-        compose.onNodeWithTag("drawer-new-chat").assertIsDisplayed().assertHeightIsAtLeast(48.dp).performClick()
+            onNewChat = { newChats++ }) }
+        compose.onAllNodesWithTag("drawer-new-chat").assertCountEquals(1)
+        compose.onNodeWithTag("drawer-new-chat").assertIsDisplayed().assertContentDescriptionEquals("Start a new chat")
+            .assertHeightIsAtLeast(48.dp).assertWidthIsAtLeast(48.dp).performClick()
         val newChat = compose.onNodeWithTag("drawer-new-chat").fetchSemanticsNode().boundsInRoot
         val body = compose.onNodeWithTag("drawer-body").fetchSemanticsNode().boundsInRoot
-        val footer = compose.onNodeWithTag("drawer-profile-footer").fetchSemanticsNode().boundsInRoot
-        assertTrue(newChat.bottom <= body.top)
+        val footer = compose.onNodeWithTag("drawer-bottom-actions").fetchSemanticsNode().boundsInRoot
         assertTrue(body.bottom <= footer.top)
-        compose.onNodeWithContentDescription("Profile & Settings").assertIsDisplayed().assertHeightIsAtLeast(48.dp).performClick()
-        compose.onNodeWithContentDescription("Open drawer settings").assertIsDisplayed().assertWidthIsAtLeast(48.dp).performClick()
-        compose.onNodeWithText("Signed-in Owner").assertExists()
-        compose.onNodeWithTag("drawer-account-avatar", useUnmergedTree = true).assertWidthIsEqualTo(44.dp)
+        assertEquals(footer.right, newChat.right, 1f)
+        compose.onNodeWithText("New chat").assertDoesNotExist() // Icon only.
+        compose.onNodeWithTag("drawer-profile-footer").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Profile & Settings").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Open drawer settings").assertDoesNotExist()
+        compose.onNodeWithTag("drawer-account-avatar", useUnmergedTree = true).assertDoesNotExist()
         compose.onNodeWithTag("account-avatar", useUnmergedTree = true).assertDoesNotExist()
-        val nameLayout = mutableListOf<TextLayoutResult>()
-        compose.onNodeWithText("Signed-in Owner", useUnmergedTree = true)
-            .performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(nameLayout) }
-        val nameText = nameLayout.single()
-        assertFalse("Profile name overflow: size=${nameText.size}, width=${nameText.didOverflowWidth}, height=${nameText.didOverflowHeight}, constraints=${nameText.layoutInput.constraints}", nameText.hasVisualOverflow)
         compose.onNodeWithText("PRO").assertDoesNotExist()
         compose.onNodeWithText("My saved question").performScrollTo().assertIsDisplayed()
         val lastChat = compose.onNodeWithText("My saved question").fetchSemanticsNode().boundsInRoot
         assertTrue(lastChat.bottom <= footer.top)
-        capture("profile-history")
-        assertEquals(1, newChats); assertEquals(2, settings)
+        capture("bottom-new-chat")
+        assertEquals(1, newChats)
     }
 
     @Test fun pinnedFilterAndInlinePinUseRealStateWithoutOpeningTheChat() {
@@ -101,7 +97,7 @@ class DrawerReferenceUiTest(private val dark: Boolean, private val large: Boolea
         compose.onNodeWithTag("drawer-search-field").performTextInput("beta")
         compose.onNodeWithText("Owner beta").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Owner alpha").assertDoesNotExist()
-        compose.onNodeWithContentDescription("Open drawer settings").assertIsDisplayed()
+        compose.onNodeWithTag("drawer-new-chat").assertIsDisplayed()
         capture("search")
         compose.onNodeWithContentDescription("Close chat search").performClick()
         compose.onNodeWithText("Owner alpha").assertExists()
@@ -113,9 +109,9 @@ class DrawerReferenceUiTest(private val dark: Boolean, private val large: Boolea
         show { HistoryDrawer(newChatEnabled = false, onNewChat = { created++ }) }
         compose.onNodeWithTag("drawer-new-chat").assertIsNotEnabled()
         compose.onNodeWithText("No chats yet").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("Profile & settings").assertExists()
+        compose.onNodeWithText("Profile & settings").assertDoesNotExist()
         compose.onNodeWithText("PRO").assertDoesNotExist()
-        compose.onNodeWithContentDescription("Anonymous profile").assertExists()
+        compose.onNodeWithContentDescription("Anonymous profile").assertDoesNotExist()
         assertEquals(0, created)
         capture("empty")
     }
