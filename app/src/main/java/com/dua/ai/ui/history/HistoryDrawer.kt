@@ -112,6 +112,8 @@ fun HistoryDrawer(
     newChatEnabled: Boolean = true,
     modifier: Modifier = Modifier,
     drawerState: DrawerState = rememberDrawerState(DrawerValue.Closed),
+    /** Wide windows: always-visible side panel (no drawer back handling or scrim). */
+    permanent: Boolean = false,
 ) {
     val colors = DrawerTheme.colors
     val motionAllowed = rememberMotionAllowed()
@@ -131,8 +133,7 @@ fun HistoryDrawer(
         HistoryGrouping.filter(HistoryGrouping.recent(chats), query).filter { !pinnedOnly || it.pinned }.sortedWith(compareByDescending<SavedChat> { it.pinned }.thenByDescending { it.updatedAt })
     }
 
-    ModalDrawerSheet(drawerState = drawerState, drawerShape = RectangleShape, drawerContainerColor = colors.container,
-        modifier = modifier.width(DrawerSizes.width).testTag("history-drawer")) {
+    HistorySheet(permanent, drawerState, colors.container, modifier.width(DrawerSizes.width).testTag("history-drawer")) {
         Column(Modifier.fillMaxSize().background(colors.container)
             .statusBarsPadding().navigationBarsPadding().imePadding()
             .padding(horizontal = DrawerSizes.paddingH, vertical = DrawerSizes.paddingV)) {
@@ -155,7 +156,7 @@ fun HistoryDrawer(
                 enter = expandVertically(animationSpec = if (motionAllowed) DuaMotion.gentle() else snap()) + fadeIn(animationSpec = if (motionAllowed) DuaMotion.gentle() else snap()),
                 exit = shrinkVertically(animationSpec = if (motionAllowed) DuaMotion.gentle() else snap()) + fadeOut(animationSpec = if (motionAllowed) DuaMotion.gentle() else snap())) {
                 SearchField(query, { query = it.take(HistorySearch.MAX_QUERY_CHARS) }, Modifier.padding(bottom = DrawerSizes.menuPaddingV),
-                    requestFocus = searching && drawerState.isOpen)
+                    requestFocus = searching && (permanent || drawerState.isOpen))
             }
             // The body scrolls clear of the measured footer even at 2x text or with the IME open.
             Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(if (searching) searchScroll else browseScroll).testTag("drawer-body")) {
@@ -394,4 +395,14 @@ internal object ProfilePhotoCache {
         val options = BitmapFactory.Options().apply { inSampleSize = sample }
         return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)?.asImageBitmap()
     }
+}
+
+/** Modal sheet inside the drawer on phones; a permanent sheet beside the chat on expanded windows. */
+@Composable
+private fun HistorySheet(permanent: Boolean, drawerState: DrawerState, container: androidx.compose.ui.graphics.Color, modifier: Modifier,
+    content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
+    if (permanent) androidx.compose.foundation.layout.Box(Modifier.testTag("history-panel")) {
+        androidx.compose.material3.PermanentDrawerSheet(modifier = modifier, drawerShape = RectangleShape, drawerContainerColor = container, content = content)
+    }
+    else ModalDrawerSheet(drawerState = drawerState, drawerShape = RectangleShape, drawerContainerColor = container, modifier = modifier, content = content)
 }

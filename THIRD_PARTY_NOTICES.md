@@ -36,15 +36,16 @@ other Google brand assets.
 | --- | --- | --- |
 | `app/src/main/java/com/dua/ai/ondevice/WritingTools.kt` | `samples/genai-summarization/.../GenAISummarizationViewModel.kt`, `samples/genai-writing-assistance/.../GenAIWritingAssistanceViewModel.kt` | Same check → download → run → result/error flow, but on Dua's existing ML Kit GenAI Prompt client (no extra Summarization/Rewriting libraries), Dua prompts, output clean-up, visible server fallback |
 
-## Jetchat (Compose samples)
+## Jetchat and Reply (Compose samples)
 
-- Source: <https://github.com/android/compose-samples> (fork <https://github.com/KRFbrothers/compose-samples>), `Jetchat/`
+- Source: <https://github.com/android/compose-samples> (fork <https://github.com/KRFbrothers/compose-samples>), `Jetchat/` and `Reply/`
 - Copyright 2020 The Android Open Source Project
 - License: Apache License, Version 2.0 (same text as above)
 
 | Dua file | Adapted from | What changed |
 | --- | --- | --- |
 | `app/src/main/java/com/dua/ai/ui/chat/JumpToLatest.kt` | `conversation/JumpToBottom.kt`, `conversation/Conversation.kt` (same-author grouping) | Dua colours, 48 dp target, new-replies count with a dot, no slide when animations are off, no backdrop magnifier |
+| `app/src/main/java/com/dua/ai/ui/chat/WideLayout.kt` | `Reply/.../ui/ReplyApp.kt`, `Reply/.../ui/navigation/ReplyNavigationComponents.kt` (fork commit `0bc770fd`) | Width from `BoxWithConstraints` instead of the window-size-class library; only switches chat history between a permanent side panel and the existing modal drawer |
 
 ## Now in Android
 
@@ -55,6 +56,7 @@ other Google brand assets.
 | Dua file | Adapted from | What changed |
 | --- | --- | --- |
 | `app/src/main/java/com/dua/ai/network/NetworkMonitor.kt` | `core/data/.../util/ConnectivityManagerNetworkMonitor.kt`, `NetworkMonitor.kt` | No Hilt or tracing, default network only, requires a validated connection, repeated values filtered |
+| `app/src/main/java/com/dua/ai/ui/chat/WideLayout.kt` | `app/.../ui/NiaApp.kt` (adaptive shell: permanent navigation on expanded widths) | Same expanded-width rule, applied to Dua's chat history panel |
 
 ## Android snippets
 
