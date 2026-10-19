@@ -26,6 +26,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
@@ -37,6 +38,24 @@ import com.dua.ai.ui.theme.ChatSizes
 import com.dua.ai.ui.theme.ChatTheme
 import com.dua.ai.ui.theme.Sizes
 import com.dua.ai.ui.theme.Spacing
+import com.dua.ai.ui.theme.rememberMotionAllowed
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.currentStateAsState
+
+/** Decorative reply feedback follows both the system preference and the visible activity. */
+@Composable
+internal fun rememberReplyForeground(): Boolean {
+    val state by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
+    return state.isAtLeast(Lifecycle.State.RESUMED)
+}
+
+@Composable
+internal fun rememberReplyMotionAllowed(): Boolean {
+    val motion = rememberMotionAllowed()
+    val foreground = rememberReplyForeground()
+    return motion && foreground
+}
 
 /**
  * Blinking dot shown after a reply while it streams (ChatGPT-style). The blink runs in the draw phase
@@ -44,19 +63,21 @@ import com.dua.ai.ui.theme.Spacing
  */
 @Composable
 fun StreamingCursor(modifier: Modifier = Modifier) {
-    val transition = rememberInfiniteTransition(label = "streaming-cursor")
-    val alpha = transition.animateFloat(1f, 0.15f,
-        infiniteRepeatable(tween(ChatSizes.streamingCursorBlinkMs, easing = LinearEasing), RepeatMode.Reverse), label = "cursor-alpha")
-    Box(modifier.padding(top = Spacing.xs).size(ChatSizes.streamingCursor).graphicsLayer { this.alpha = alpha.value }
+    val alpha = if (rememberReplyMotionAllowed()) rememberInfiniteTransition(label = "streaming-cursor").animateFloat(1f, 0.15f,
+        infiniteRepeatable(tween(ChatSizes.streamingCursorBlinkMs, easing = LinearEasing), RepeatMode.Reverse), label = "cursor-alpha") else null
+    Box(modifier.padding(top = Spacing.xs).size(ChatSizes.streamingCursor).graphicsLayer { this.alpha = alpha?.value ?: 1f }
         .background(MaterialTheme.colorScheme.onSurface, CircleShape).clearAndSetSemantics { })
 }
 
 /** Fades content in once when it first appears (the first streamed words); later deltas are not re-animated. */
 @Composable
 fun FadeInOnce(content: @Composable () -> Unit) {
-    val alpha = remember { Animatable(0f) }
-    LaunchedEffect(Unit) { alpha.animateTo(1f, tween(ChatSizes.streamingFadeInMs)) }
-    Box(Modifier.fillMaxWidth().graphicsLayer { this.alpha = alpha.value }) { content() }
+    val motion = rememberReplyMotionAllowed()
+    val alpha = remember { Animatable(if (motion) 0f else 1f) }
+    LaunchedEffect(motion) {
+        if (motion) alpha.animateTo(1f, tween(ChatSizes.streamingFadeInMs)) else alpha.snapTo(1f)
+    }
+    Box(Modifier.fillMaxWidth().graphicsLayer { this.alpha = if (motion) alpha.value else 1f }) { content() }
 }
 
 /** Shown above the composer while a sent message is being edited. */
@@ -78,15 +99,14 @@ fun EditingBanner(onCancel: () -> Unit, modifier: Modifier = Modifier) {
  */
 @Composable
 fun ReplyPlaceholder(modifier: Modifier = Modifier) {
-    val transition = rememberInfiniteTransition(label = "reply-placeholder")
-    val alpha = transition.animateFloat(0.35f, 0.9f,
-        infiniteRepeatable(tween(ChatSizes.placeholderPulseMs, easing = LinearEasing), RepeatMode.Reverse), label = "placeholder-alpha")
+    val alpha = if (rememberReplyMotionAllowed()) rememberInfiniteTransition(label = "reply-placeholder").animateFloat(0.35f, 0.9f,
+        infiniteRepeatable(tween(ChatSizes.placeholderPulseMs, easing = LinearEasing), RepeatMode.Reverse), label = "placeholder-alpha") else null
     val fill = ChatTheme.colors.chipFill
     androidx.compose.foundation.layout.Column(modifier.fillMaxWidth().testTag("reply-placeholder")) {
         TypingIndicator(Modifier.heightIn(min = Sizes.touchTarget))
         listOf(0.92f, 0.6f).forEach { width ->
             Box(Modifier.padding(top = ChatSizes.placeholderLineGap).fillMaxWidth(width).height(ChatSizes.placeholderLineHeight)
-                .graphicsLayer { this.alpha = alpha.value }.background(fill, com.dua.ai.ui.theme.DuaShape.chip)
+                .graphicsLayer { this.alpha = alpha?.value ?: 0.65f }.background(fill, com.dua.ai.ui.theme.DuaShape.chip)
                 .clearAndSetSemantics { })
         }
     }
