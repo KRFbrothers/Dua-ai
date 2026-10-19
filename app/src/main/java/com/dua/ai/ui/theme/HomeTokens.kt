@@ -94,6 +94,4 @@ object HomeShapes {
     val round = CircleShape
 }
 
-val HomeSegmentSelectedStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
-val HomeSegmentStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Medium, fontSize = 14.sp)
 val HomeModelLabelStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Medium, fontSize = 12.sp)

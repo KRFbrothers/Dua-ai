@@ -52,12 +52,6 @@ import com.dua.ai.ui.theme.SheetTileStyle
 import androidx.compose.material.icons.filled.Check
 import com.dua.ai.ui.theme.Spacing
 
-/** Short summary for the composer's options chip, e.g. "Image · 1:1 · ×2" or "Video · 8 s · 720p". */
-internal fun imagineSummary(options: ImagineOptions, config: ImagineConfig?): String =
-    if (options.kind == ImagineInfo.VIDEO) "Video · ${options.duration} s · ${options.resolution}" + (if (options.aspectRatio != "auto") " · ${options.aspectRatio}" else "")
-    else "Image · ${ImagineCodec.aspectLabel(options.aspectRatio)}" + (if (options.count > 1) " · ×${options.count}" else "") +
-        (if ((config?.providers?.size ?: 0) > 1 && options.provider != null) " · ${config!!.providerName(options.provider).substringBefore(' ')}" else "")
-
 /** Imagine options: Image or Video, aspect ratio, count or duration/resolution, provider, and today's usage. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

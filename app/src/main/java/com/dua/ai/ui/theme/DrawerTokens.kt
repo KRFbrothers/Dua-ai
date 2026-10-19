@@ -93,6 +93,4 @@ object DrawerShapes {
 
 val DrawerTitleStyle = TextStyle(fontFamily = HomeFontFamily, fontWeight = FontWeight.Medium, fontSize = 22.sp)
 val DrawerMenuStyle = TextStyle(fontFamily = HomeFontFamily, fontWeight = FontWeight.Normal, fontSize = 17.sp)
-val DrawerSubStyle = DrawerMenuStyle
 val DrawerChatStyle = TextStyle(fontFamily = HomeFontFamily, fontWeight = FontWeight.Normal, fontSize = 16.sp)
-val DrawerAvatarStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Bold, fontSize = 16.sp)
