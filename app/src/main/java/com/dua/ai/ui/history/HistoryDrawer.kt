@@ -106,7 +106,7 @@ fun HistoryDrawer(
             .padding(horizontal = DrawerSizes.paddingH, vertical = DrawerSizes.paddingV)) {
             Row(Modifier.fillMaxWidth().padding(bottom = DrawerSizes.headerBottom),
                 verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Outlined.ViewInAr, null, tint = colors.subText, modifier = Modifier.size(DrawerSizes.brandIcon))
+                DrawerBrandMark(Modifier.size(DrawerSizes.brandIcon))
                 Text("Dua AI", style = DrawerTitleStyle, color = colors.title,
                     modifier = Modifier.weight(1f).padding(start = DrawerSizes.menuGap).semantics { heading() })
                 IconButton(onClick = { searching = !searching; if (!searching) query = ""; onSearch() },
