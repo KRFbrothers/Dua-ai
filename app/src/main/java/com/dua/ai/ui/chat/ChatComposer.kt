@@ -159,9 +159,13 @@ fun Composer(
     fun submit() {
         if (canSubmit) {
             onSend(activeText)
-            localText = ""
-            onValueChange("")
-            onDraftChange("")
+            // The state owner clears controlled drafts only after accepting the request.
+            // Validation/preparation may reject or defer sending without consuming the text.
+            if (!controlled) {
+                localText = ""
+                onValueChange("")
+                onDraftChange("")
+            }
         }
     }
 
@@ -262,11 +266,11 @@ fun Composer(
                             }
                             val (icon, label, action) = when {
                                 typing -> Triple(Icons.Rounded.Stop, "Stop response", { onStop() })
-                                hasContent -> Triple(Icons.Default.ArrowUpward, "Send message", { submit() })
                                 uploading -> Triple(Icons.Default.Close, "Cancel upload", { onCancelUpload() })
+                                hasContent -> Triple(Icons.Default.ArrowUpward, "Send message", { submit() })
                                 else -> Triple(ImageVector.vectorResource(R.drawable.ls_live_wave), "Voice mode", { onVoiceMode() })
                             }
-                            ComposerAction(icon, label, enabled = typing || !hasContent || canSubmit, onClick = action,
+                            ComposerAction(icon, label, enabled = typing || uploading || !hasContent || canSubmit, onClick = action,
                                 iconSize = if (homeLayout && !typing && !hasContent) HomeSizes.referenceIcon else HomeSizes.voiceIcon)
                         }
                     })
