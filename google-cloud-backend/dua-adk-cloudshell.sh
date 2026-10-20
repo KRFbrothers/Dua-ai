@@ -565,13 +565,25 @@ def supabase_sign_in(base,key,owner):
     return token
 
 
+SMOKE_CHAT_PROMPT='Smoke test: reply with one short friendly sentence confirming you are working.'
+SMOKE_AGENT_PROMPT='Smoke test: what is 17 multiplied by 23? Answer in one short sentence.'
+
+
+def smoke_request(text,agent=False):
+    """Same JSON the Android app (DuaApiClient) streams to /api/chat: turns use
+    'role'/'text' (not 'content'), plus model, attachments, memory, stream, mode."""
+    return {'model':'Dua','messages':[{'role':'user','text':text}],'attachments':[],'memory':'',
+            'stream':True,'mode':'agent' if agent else 'auto'}
+
+
 def chat_stream(url,token,payload,timeout=300,extra=None):
     """POST /api/chat and read SSE. Returns reply text, events, latency figures."""
     import time
     from urllib.request import Request
     from urllib.error import HTTPError
     req=Request(url+'/api/chat',data=json.dumps(payload).encode(),method='POST',
-        headers={'Content-Type':'application/json','Accept':'text/event-stream','Authorization':'Bearer '+token,**(extra or {})})
+        headers={'Content-Type':'application/json; charset=utf-8','Accept':'text/event-stream, application/json','x-dua-native':'1',
+                 'Authorization':'Bearer '+token,**(extra or {})})
     started=time.monotonic();first=None;text=[];events=[];errors=[]
     try:
         with urlopen(req,timeout=timeout) as response:
@@ -617,14 +629,14 @@ def smoke(service):
     result={'candidate':url,'revision':candidate.get('revisionName'),'servingTrafficChanged':False}
     try:
         step('chat check')
-        chat=chat_stream(url,token,{'stream':True,'messages':[{'role':'user','content':'Smoke test: reply with one short friendly sentence confirming you are working.'}]},extra=extra)
+        chat=chat_stream(url,token,smoke_request(SMOKE_CHAT_PROMPT),extra=extra)
         step('Agent check')
-        agent=chat_stream(url,token,{'mode':'agent','stream':True,'messages':[{'role':'user','content':'Smoke test: what is 17 multiplied by 23? Answer in one short sentence.'}]},extra=extra)
+        agent=chat_stream(url,token,smoke_request(SMOKE_AGENT_PROMPT,agent=True),extra=extra)
         run_id=next((e[6:] for e in agent['events'] if e.startswith('runId:')),None)
         persisted='no_run_id'
         if run_id:
             step('durable session check')
-            status,body=http_json(url+'/api/chat',{'resumeRun':run_id},{'Authorization':'Bearer '+token,**extra},timeout=60)
+            status,body=http_json(url+'/api/chat',{'resumeRun':run_id},{'Authorization':'Bearer '+token,'x-dua-native':'1',**extra},timeout=60)
             # 409 = the completed run was loaded back from the Supabase dua_adk schema.
             persisted={409:'loaded_from_database',404:'not_found',503:'storage_unavailable'}.get(status,'http_'+str(status))
         for name,item in (('chat',chat),('agent',agent)):
