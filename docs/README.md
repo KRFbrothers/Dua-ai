@@ -16,6 +16,8 @@ Start with [ARCHITECTURE.md](ARCHITECTURE.md) for how the pieces fit, and [OPERA
 | [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md) | Owner-only lock, spending limits, staging/device checks, installing the APK |
 | [PROVIDERS.md](PROVIDERS.md) | Node API AI provider keys, models, reasoning, Run code, attachments, web search, voice, Imagine |
 | [PRIVACY.md](PRIVACY.md) | What data goes where and to which providers |
+| [KILL_SWITCHES.md](KILL_SWITCHES.md) | Remote kill switches (Agent, Imagine, Voice, maintenance) via Cloud Run env vars, off by default |
+| [PERFORMANCE.md](PERFORMANCE.md) | Baseline Profile, `:benchmark` module and startup benchmarks (needs a connected phone) |
 | [ROADMAP.md](ROADMAP.md) | Dua AI improvement roadmap and phases |
 | [REPLIES_CODE_CANVAS.md](REPLIES_CODE_CANVAS.md) | Thinking summaries, code blocks, previews, Run code, Artifacts Canvas |
 | [ANDROID_ENTRY_POINTS.md](ANDROID_ENTRY_POINTS.md) | Home widget and share targets |

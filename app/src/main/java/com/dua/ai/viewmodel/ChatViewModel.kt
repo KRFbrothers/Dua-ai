@@ -1885,15 +1885,11 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private fun refreshSyncBusy() = automaticSync.setBusy(syncBlocked())
     private val networkMonitor: com.dua.ai.network.NetworkMonitor = com.dua.ai.network.ConnectivityManagerNetworkMonitor(application)
     private val offlineRetry = com.dua.ai.network.OfflineRetry()
-    private val _offlineRetryPending = MutableStateFlow(false)
-    /** A message that failed while offline will be sent again once the connection returns. */
-    val offlineRetryPending: StateFlow<Boolean> = _offlineRetryPending.asStateFlow()
     private var autoRetrying = false
     private fun setNetwork(online: Boolean) {
         _online.value = online
         automaticSync.setOnline(online)
         val resend = offlineRetry.onConnectivity(online, activeId, _draft.value, busy = _isTyping.value || _preparingFiles.value || _readingFiles.value)
-        _offlineRetryPending.value = offlineRetry.hasPending
         if (resend != null) {
             autoRetrying = true
             try { sendMessage(resend) } finally { autoRetrying = false }
@@ -2287,7 +2283,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     fun sendMessage(userText: String) {
         if (_preparingFiles.value) return
-        if (!autoRetrying) { offlineRetry.clear(); _offlineRetryPending.value = false }
+        if (!autoRetrying) offlineRetry.clear()
         val requestProjectId = _projectId.value
         projectUnavailable()?.let { _error.value = it; return }
         if (_imagine.value && _editingId.value != null) { _error.value = "Turn off Imagine to resend an edited message."; return }
@@ -2409,7 +2405,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                         // Offline, text-only, not an edit: send it again once the phone reconnects (at most once).
                         val queued = offlineRetry.sendFailed(activeId, userText,
                             offline = !edited && files.isEmpty() && storedFiles.isEmpty() && (!_online.value || failure is java.io.IOException))
-                        _offlineRetryPending.value = queued
                         _error.value = if (queued) "You're offline. Dua will send this message when you're back online." else failureText(failure)
                     }
                 }
