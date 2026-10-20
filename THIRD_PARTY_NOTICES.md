@@ -103,3 +103,11 @@ The Android app depends on `com.google.mlkit:genai-prompt` and
 provided by Google under the ML Kit terms (<https://developers.google.com/ml-kit/terms>) and the Android SDK / Google APIs
 terms; their bundled open-source licenses are listed by Google Play services at runtime. Dua uses only the plain text label
 "On-device" for these features and no Gemini or Google brand art.
+
+## Telegram for Android (inspiration only, no code copied)
+
+- Project: https://github.com/DrKLO/Telegram (GPL-2.0)
+- Used for: interaction design reference for swipe-to-reply, the long-press message actions and the
+  new-message appear motion in the chat screen (`app/src/main/java/com/dua/ai/ui/chat/ChatSwipeReply.kt`).
+- No Telegram source code is copied or adapted; the behaviour is reimplemented from scratch in Jetpack Compose,
+  so the GPL does not apply to Dua's code and the repository licence is unchanged.

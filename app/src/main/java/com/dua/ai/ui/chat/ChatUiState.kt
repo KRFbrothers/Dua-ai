@@ -134,6 +134,8 @@ data class ChatUiState(
 class ChatActions(
     val onDraftChange: (String) -> Unit = {},
     val onSend: () -> Unit = {},
+    /** Send the draft with a quoted message (swipe-to-reply) as context; the quote is a markdown blockquote prefix. */
+    val onSendReply: (ReplyQuote) -> Unit = { onSend() },
     val onStop: () -> Unit = {},
     val onRetry: (String) -> Unit = {},
     val onEditMessage: (String) -> Unit = {},

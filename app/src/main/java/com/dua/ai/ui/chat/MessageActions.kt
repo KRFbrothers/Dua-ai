@@ -27,6 +27,8 @@ import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material.icons.outlined.TextFields
+import androidx.compose.material.icons.automirrored.outlined.Reply
 import androidx.compose.material.icons.outlined.StopCircle
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -70,6 +72,23 @@ import com.dua.ai.ui.theme.SheetTheme
 import androidx.compose.foundation.clickable
 import com.dua.ai.ui.theme.Spacing
 import kotlinx.coroutines.delay
+
+internal fun copyTextOf(message: ChatMessage): String = message.text + if (!message.isUser) CodeRuns.copyText(message.codeRuns) else ""
+
+/** Full message text in a selectable view (Telegram's "Select text"). */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SelectTextSheet(text: String, onDismiss: () -> Unit) {
+    DuaSheet(onDismiss = onDismiss) {
+        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = SheetSizes.paddingH).padding(bottom = SheetSizes.paddingBottom)
+            .testTag("select-text-sheet")) {
+            SheetTitle("Select text")
+            androidx.compose.foundation.text.selection.SelectionContainer {
+                Text(text, style = MaterialTheme.typography.bodyLarge, color = SheetTheme.colors.text)
+            }
+        }
+    }
+}
 
 internal fun replyRetryDescription(mode: String?): String = when (mode) {
     "search" -> "Retry response with web search"
@@ -121,9 +140,11 @@ internal fun Modifier.messageLongPress(onLongPress: () -> Unit, haptic: () -> Un
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun MessageActionsSheet(message: ChatMessage, state: ChatUiState, actions: ChatActions,
-    imagineActions: ImagineActions, onDismiss: () -> Unit) {
+    imagineActions: ImagineActions, onDismiss: () -> Unit, onReply: ((ChatMessage) -> Unit)? = null) {
+    var selecting by remember(message.id) { mutableStateOf(false) }
+    if (selecting) { SelectTextSheet(copyTextOf(message), onDismiss = { selecting = false; onDismiss() }); return }
     val assistant = !message.isUser
-    val copyText = message.text + if (assistant) CodeRuns.copyText(message.codeRuns) else ""
+    val copyText = copyTextOf(message)
     val textActions = rememberTextMessageActions(copyText, assistant)
     val haptic = LocalChatHaptic.current
     val retryEnabled = assistant && !message.isImagine && state.messages.lastOrNull()?.id == message.id && !state.typing &&
@@ -158,6 +179,16 @@ internal fun MessageActionsSheet(message: ChatMessage, state: ChatUiState, actio
                 if (speaking) Icons.Outlined.StopCircle else Icons.AutoMirrored.Outlined.VolumeUp, speakEnabled) {
                 onDismiss(); actions.onSpeak(message)
             }
+            }
+            Spacer(Modifier.height(SheetSizes.sectionGap))
+            SheetGroup {
+                if (onReply != null) {
+                    SheetMessageAction("reply", "Reply", "Reply to this message", Icons.AutoMirrored.Outlined.Reply, !message.streaming && message.text.isNotBlank()) {
+                        onDismiss(); onReply(message)
+                    }
+                    SheetDivider()
+                }
+                SheetMessageAction("select", "Select text", "Select part of this message", Icons.Outlined.TextFields, message.text.isNotBlank()) { selecting = true }
             }
             if (assistant && !message.isImagine && !message.streaming && message.text.isNotBlank()) {
                 Spacer(Modifier.height(SheetSizes.sectionGap))

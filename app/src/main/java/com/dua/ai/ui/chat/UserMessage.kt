@@ -3,6 +3,7 @@ package com.dua.ai.ui.chat
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -42,7 +43,8 @@ internal fun splitFileNames(text: String): Pair<String, List<String>> {
 @Composable
 fun UserMessage(text: String, modifier: Modifier = Modifier, files: List<com.dua.ai.files.FileRef> = emptyList(), onOpenFile: (com.dua.ai.files.FileRef) -> Unit = {},
     onLongPress: (() -> Unit)? = null, longPressHaptic: () -> Unit = {}) {
-    val (body, names) = remember(text) { splitFileNames(text) }
+    val (quoted, withFiles) = remember(text) { ReplyQuote.split(text) }
+    val (body, names) = remember(withFiles) { splitFileNames(withFiles) }
     Column(modifier.fillMaxWidth(), horizontalAlignment = Alignment.End,
         verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
         if (files.isNotEmpty()) MessageFileChips(names, files, onOpenFile)
@@ -60,10 +62,11 @@ fun UserMessage(text: String, modifier: Modifier = Modifier, files: List<com.dua
         Surface(color = ChatTheme.colors.userBubble, shape = ChatShapes.bubble,
             modifier = Modifier.widthIn(min = Sizes.touchTarget).heightIn(min = Sizes.touchTarget)
                 .then(if (onLongPress != null) Modifier.messageLongPress(onLongPress, longPressHaptic) else Modifier)) {
-            SelectionContainer {
+            SelectionContainer { Column {
+                if (quoted != null) Box(Modifier.padding(start = ChatSizes.bubblePaddingH, end = ChatSizes.bubblePaddingH, top = ChatSizes.bubblePaddingV)) { BubbleQuote(quoted) }
                 Text(body, style = ChatMessageStyle, color = ChatTheme.colors.onUserBubble,
                     modifier = Modifier.padding(horizontal = ChatSizes.bubblePaddingH, vertical = ChatSizes.bubblePaddingV))
-            }
+            } }
         }
     }
 }

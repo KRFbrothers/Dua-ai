@@ -53,7 +53,10 @@ import com.dua.ai.ui.theme.Spacing
 
 @Composable
 fun MessageList(state: ChatUiState, actions: ChatActions, listState: LazyListState, modifier: Modifier = Modifier,
-    imagineActions: ImagineActions = actions.imagine, searchMessageId: String? = null) {
+    imagineActions: ImagineActions = actions.imagine, searchMessageId: String? = null,
+    onReply: ((com.dua.ai.model.ChatMessage) -> Unit)? = null) {
+    // Ids present on first show (history) do not animate in; only bubbles that arrive later do.
+    val initialIds = remember(state.chatId) { state.messages.map { it.id }.toHashSet() }
     val motion = rememberReplyMotionAllowed()
     val lastId = state.messages.lastOrNull()?.id
     val lastAssistantId = state.messages.lastOrNull { !it.isUser }?.id
@@ -77,11 +80,15 @@ fun MessageList(state: ChatUiState, actions: ChatActions, listState: LazyListSta
                     fadeInSpec = DuaMotion.gentle(),
                     placementSpec = DuaMotion.bouncy(),
                 ) else Modifier)
+                .bubbleAppear(motion && message.id !in initialIds)
                 .testTag("message-${message.id}")
                 .then(if (selected) Modifier.border(ChatSizes.searchSelectionBorder, ChatTheme.colors.accent, ChatShapes.searchSelection) else Modifier)
                 .semantics { if (selected) stateDescription = "Selected search result" }) {
                 val openActions = { canvas = null; actionsId = message.id }
                 val longPressHaptic = { actions.haptic(ChatHaptic.LongPress) }
+                val replyHere = onReply?.takeIf { !message.streaming && message.text.isNotBlank() }
+                SwipeToReply(enabled = replyHere != null, onReply = { replyHere?.invoke(message) },
+                    haptic = { actions.haptic(ChatHaptic.Tap) }) {
                 if (message.isUser) UserMessage(message.text, files = message.files, onOpenFile = actions.onOpenFile,
                     onLongPress = openActions, longPressHaptic = longPressHaptic)
                 else AssistantTurn(modifier = Modifier.messageLongPress(openActions, longPressHaptic)) {
@@ -111,6 +118,7 @@ fun MessageList(state: ChatUiState, actions: ChatActions, listState: LazyListSta
                         showActions = message.id == lastAssistantId,
                     )
                 }
+                }
                 if (message.id == state.summarisedThroughId && message.id != lastId) SummaryDivider(Modifier.padding(top = Spacing.md))
             }
         }
@@ -119,7 +127,7 @@ fun MessageList(state: ChatUiState, actions: ChatActions, listState: LazyListSta
             AssistantTurn(modifier = Modifier.padding(top = if (state.messages.isEmpty()) 0.dp else ChatSizes.messageSpacing).widthIn(max = Sizes.contentMaxWidth)) { TypingIndicator(Modifier.heightIn(min = Sizes.touchTarget)) }
         }
     }
-    if (selectedMessage != null) MessageActionsSheet(selectedMessage, state, actions, imagineActions, onDismiss = { actionsId = null })
+    if (selectedMessage != null) MessageActionsSheet(selectedMessage, state, actions, imagineActions, onDismiss = { actionsId = null }, onReply = onReply)
     canvas?.let { session -> ArtifactCanvasSheet(session.artifacts, onDismiss = { canvas = null }) }
 }
 

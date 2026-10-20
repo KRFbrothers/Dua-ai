@@ -210,6 +210,13 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
                 if ((current.isNotBlank() || viewModel.attachments.value.isNotEmpty() || viewModel.uploads.value.any { it.ref != null }) && !viewModel.isTyping.value && !viewModel.readingFiles.value && !viewModel.preparingFiles.value)
                     viewModel.sendMessage(current)
             },
+            onSendReply = { quote ->
+                if (viewModel.localSettings.value.haptic) view.performChatHaptic(ChatHaptic.Confirm)
+                voice.stopAll()
+                val current = viewModel.draft.value
+                if (current.isNotBlank() && !viewModel.isTyping.value && !viewModel.readingFiles.value && !viewModel.preparingFiles.value)
+                    viewModel.sendMessage(ReplyQuote.compose(quote, current))
+            },
             onStop = { pulse(); viewModel.stopReply() },
             onRetry = { id -> voice.stopAll(); viewModel.retryResponse(id) },
             onEditMessage = viewModel::startEdit,

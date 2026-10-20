@@ -262,7 +262,10 @@ fun ChatScreen(
     }
     val onRunCode: (Boolean) -> Unit = { tap(); if (it) taskHome = false; actions.onRunCode(it) }
     val taskReady = !taskHome || (state.agent && state.agentAvailable)
-    val sendFromComposer: () -> Unit = { if (taskReady) actions.onSend() }
+    var replyTo by remember(state.chatId) { mutableStateOf<ReplyQuote?>(null) }
+    val sendFromComposer: () -> Unit = {
+        if (taskReady) { val quote = replyTo; if (quote != null && feature == null) { actions.onSendReply(quote); replyTo = null } else actions.onSend() }
+    }
     // Swipe up on the input card or the chips above it opens the + sheet, except from inside the text field while typing.
     var inputFocused by remember { mutableStateOf(false) }
     var inputBounds by remember { mutableStateOf(Rect.Zero) }
@@ -399,6 +402,7 @@ fun ChatScreen(
                                 androidx.compose.runtime.CompositionLocalProvider(LocalCodeExecutionUi provides CodeExecutionUi(
                                     state.codeSnippetUnavailableReason, actions.onRunCodeSnippet)) {
                                     MessageList(state = visibleState, actions = actions, listState = listState, imagineActions = mediaActions,
+                                        onReply = if (feature != null) null else { m -> replyTo = ReplyQuote.of(m.id, m.text, m.isUser); runCatching { inputFocus.requestFocus() } },
                                         searchMessageId = selectedMatch?.messageId)
                                 }
                             }
@@ -467,10 +471,13 @@ fun ChatScreen(
                                 writingTools = { task -> actions.onWriting(state.draft, true, task) },
                                 onRemoveUpload = actions.onCancelUpload,
                                 aboveInput = if (feature != null) null else { {
+                                    androidx.compose.foundation.layout.Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    replyTo?.let { quote -> ReplyPreview(quote, onCancel = { replyTo = null }) }
                                     HomeModeSwitcher(if (taskHome) HomeMode.Task else HomeMode.Chat,
                                         onSelect = { mode ->
                                             if (!state.typing) { tap(); taskHome = mode == HomeMode.Task; actions.onAgent(taskHome) }
                                         }, enabled = !state.typing)
+                                    }
                                 } },
                                 attachmentPopup = {
                                     if (feature == ChatFeature.Projects) com.dua.ai.ui.projects.ProjectAttachmentMenu(sheet == ChatSheet.Attach, { sheet = null },
