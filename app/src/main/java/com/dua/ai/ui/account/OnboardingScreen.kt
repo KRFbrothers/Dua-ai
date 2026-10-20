@@ -1,4 +1,4 @@
-package com.dua.ai.ui.onboarding
+package com.dua.ai.ui.account
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
@@ -16,7 +16,6 @@ import com.dua.ai.R
 import com.dua.ai.account.AccountUser
 import com.dua.ai.account.AccountProvider
 import com.dua.ai.account.EmailCredentials
-import com.dua.ai.ui.auth.rememberGoogleSignIn
 import com.dua.ai.ui.components.AccountAvatar
 import com.dua.ai.ui.theme.*
 import com.dua.ai.viewmodel.ChatViewModel
