@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.MicNone
+import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.rounded.Stop
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -145,6 +146,14 @@ fun Composer(
     uploading: Boolean = uploads.any { it.uploading },
     /** Spacious reference layout is limited to Home, preserving feature and project composers. */
     homeLayout: Boolean = false,
+    /** Conversation look: translucent glass bar, faint animated gradient behind it, focus pop (ComposerGlass.kt). */
+    glass: Boolean = false,
+    /** Prompt chips shown above an empty glass composer; tapping one calls [onSuggestion]. */
+    suggestions: List<String> = emptyList(),
+    onSuggestion: (String) -> Unit = {},
+    /** Image button next to the mic (glass composer); null hides it. */
+    onImage: (() -> Unit)? = null,
+    imageSelected: Boolean = false,
 ) {
     var localText by remember { mutableStateOf(value) }
     var inputFocused by remember { mutableStateOf(false) }
@@ -179,7 +188,7 @@ fun Composer(
         val margin = if (homeLayout && !keyboardOpen) HomeSizes.composerHorizontalMargin(maxWidth) else HomeSizes.composerCompactMarginH
         // Large text gets its own input row before the placeholder loses space to the controls.
         // Keep the field in the same Layout slot so resizing never discards focus or the draft.
-        val inlineTextWidth = maxWidth - margin * 2 - HomeSizes.barPaddingH * 2 - Sizes.touchTarget * 3 - Spacing.sm * 2
+        val inlineTextWidth = maxWidth - margin * 2 - HomeSizes.barPaddingH * 2 - Sizes.touchTarget * (if (onImage != null) 4 else 3) - Spacing.sm * 2
         val stacked = expanded || (homeLayout && maxOf(
             textMeasurer.measure(AnnotatedString(placeholder), style = inputStyle, softWrap = false, maxLines = 1).size.width,
             textMeasurer.measure(AnnotatedString(activeText), style = inputStyle, softWrap = false, maxLines = 1).size.width,
@@ -191,6 +200,10 @@ fun Composer(
                 // Home owns the union of IME/navigation insets around the whole surface.
                 .then(if (homeLayout) Modifier else Modifier.navigationBarsPadding().imePadding())
         ) {
+            if (glass && !typing && activeText.isEmpty() && !hasAttachments && dictation?.listening != true) {
+                ComposerSuggestionChips(suggestions, onSuggestion)
+                if (suggestions.isNotEmpty()) Spacer(Modifier.height(Spacing.xs))
+            }
             // Standalone composers can retain this row; Home opens the model sheet from its header.
             if (showModelSelector) Row(
                 Modifier.align(Alignment.End)
@@ -213,8 +226,9 @@ fun Composer(
             Column(Modifier.fillMaxWidth()
                 .let { if (homeLayout) it.animateContentSize(animationSpec = if (motion) DuaMotion.gentle() else snap()) else it.animateContentSize() }
                 .testTag("composer-container")
+                .composerFocusPop(inputFocused, glass)
                 .shadow(if (homeLayout) HomeSizes.composerElevation else HomeSizes.noElevation, shape)
-                .clip(shape).background(c.bar).border(HomeSizes.barBorder, border, shape)
+                .clip(shape).composerAurora(glass).background(if (glass) c.bar.copy(alpha = ComposerGlass.GLASS_ALPHA) else c.bar).border(HomeSizes.barBorder, border, shape)
                 .padding(horizontal = HomeSizes.barPaddingH, vertical = when {
                     homeLayout && !stacked && !keyboardOpen -> HomeSizes.composerIdlePaddingV
                     homeLayout && !stacked -> HomeSizes.composerKeyboardPaddingV
@@ -279,6 +293,10 @@ fun Composer(
                     },
                     controls = {
                         Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (onImage != null) IconButton(onClick = onImage, modifier = Modifier.size(Sizes.touchTarget)) {
+                                Icon(Icons.Outlined.Image, if (imageSelected) "Imagine on" else "Create image",
+                                    tint = if (imageSelected) c.voice else c.barIcon, modifier = Modifier.size(HomeSizes.micIcon))
+                            }
                             IconButton(onClick = { dictation?.start?.invoke() ?: onMic() }, modifier = Modifier.size(Sizes.touchTarget)) {
                                 Icon(if (homeLayout) ImageVector.vectorResource(R.drawable.ls_microphone_outline) else Icons.Outlined.MicNone,
                                     "Dictate", tint = c.barIcon, modifier = Modifier.size(if (homeLayout) HomeSizes.referenceIcon else HomeSizes.micIcon))
