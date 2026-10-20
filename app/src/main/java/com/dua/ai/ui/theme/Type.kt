@@ -18,7 +18,10 @@ val InterFont: FontFamily = FontFamily(
     Font(R.font.krfbrothers_regular, FontWeight.Bold)
 )
 
-/** Current, offline Google Fonts original. Home only; see licenses/GoogleSans-NOTICE.txt. */
+/**
+ * Google Sans (SIL OFL 1.1), byte-identical to google/fonts ofl/googlesans/GoogleSans[GRAD,opsz,wght].ttf.
+ * Home only; see app/src/main/assets/licenses/GoogleSans-NOTICE.txt, GoogleSans-OFL.txt and THIRD_PARTY_NOTICES.md.
+ */
 @OptIn(ExperimentalTextApi::class)
 val HomeFontFamily = FontFamily(
     Font(R.font.home_google_sans_variable, FontWeight.Normal,

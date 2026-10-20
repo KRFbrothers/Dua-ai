@@ -2,7 +2,7 @@
 
 Dua AI is MIT-licensed (see [LICENSE](LICENSE)). Some source files contain code adapted from
 the open-source projects below. Each adapted file keeps a header naming its source, the original
-copyright and the license. Only code was reused: no logos, brand art, images, videos or fonts.
+copyright and the license. Only code was reused: no logos, brand art, images or videos. Bundled open-licensed fonts are listed under [Fonts](#fonts).
 
 ## Androidify
 
@@ -89,3 +89,17 @@ The Android app depends on `com.google.mlkit:genai-prompt` and
 provided by Google under the ML Kit terms (<https://developers.google.com/ml-kit/terms>) and the Android SDK / Google APIs
 terms; their bundled open-source licenses are listed by Google Play services at runtime. Dua uses only the plain text label
 "On-device" for these features and no Gemini or Google brand art.
+
+## Fonts
+
+Bundled unchanged for offline use; full license texts ship inside the APK under `app/src/main/assets/licenses/`.
+
+| Font | Dua file | Source | License |
+| --- | --- | --- | --- |
+| Google Sans (variable, Home only) | `app/src/main/res/font/home_google_sans_variable.ttf` | <https://github.com/google/fonts/tree/47d54ca1ebb14fd864695f1d39dc734f39017c33/ofl/googlesans> (`GoogleSans[GRAD,opsz,wght].ttf`, SHA-256 `d0a87d835a944b8b40d0e82a5651bb59ab97b936a2aeed5946eb57e7b2a3a90a`) | SIL Open Font License 1.1, Copyright 2025 The Google Sans Project Authors. [GoogleSans-OFL.txt](app/src/main/assets/licenses/GoogleSans-OFL.txt), [GoogleSans-NOTICE.txt](app/src/main/assets/licenses/GoogleSans-NOTICE.txt) |
+| Inter | `app/src/main/res/font/inter_*.ttf` | <https://github.com/rsms/inter> | SIL Open Font License 1.1. [Inter-OFL.txt](app/src/main/assets/licenses/Inter-OFL.txt) |
+
+"Google" and "Google Sans" are trademarks of Google LLC (see
+[GoogleSans-TRADEMARKS.md](app/src/main/assets/licenses/GoogleSans-TRADEMARKS.md)). The font is used only as a
+typeface; Dua does not use Google logos or brand assets, and the font is not modified or re-branded.
+
