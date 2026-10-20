@@ -58,7 +58,7 @@ class FeatureHubUiTest(private val dark: Boolean, private val compact: Boolean) 
         }
     }
     private fun noHome() {
-        for (text in listOf("Coming soon", "Dua always with you", "Dua ⌄", "What can I take off")) compose.onNodeWithText(text).assertDoesNotExist()
+        for (text in listOf("Coming soon", "Your AI, always with you", "Dua ⌄", "What can I take off")) compose.onNodeWithText(text).assertDoesNotExist()
         compose.onNode(hasText("Task") and isSelectable()).assertDoesNotExist()
         compose.onNodeWithContentDescription("Model, Flash").assertDoesNotExist()
     }

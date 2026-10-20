@@ -63,7 +63,7 @@ class HomeChatTaskUiTest(private val dark: Boolean, private val compact: Boolean
         val state = mutableStateOf(initial)
         var profile = 0; var newChat = 0
         show { ChatScreen(state.value, ChatActions(onOpenSettings = { profile++ }, onNewChat = { newChat++ })) }
-        compose.onNodeWithText("Dua always with you").assertExists()
+        compose.onNodeWithText("Your AI, always with you").assertExists()
         compose.onNodeWithContentDescription("Dua AI").assertWidthIsEqualTo(if (compact) HomeSizes.heroCompactLogo else HomeSizes.heroLogo)
         compose.onNodeWithContentDescription("Model, Flash").assertIsDisplayed().performClick()
         compose.onNodeWithTag("model-picker-sheet").assertExists()

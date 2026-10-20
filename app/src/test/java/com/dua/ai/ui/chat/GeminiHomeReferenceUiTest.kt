@@ -82,7 +82,7 @@ class GeminiHomeReferenceUiTest(private val dark: Boolean, private val compact: 
             assertTrue(hero.top > content.top && hero.center.y < content.center.y)
             assertTrue("Hero should leave breathing space", hero.height < content.height)
         }
-        compose.onNodeWithText("Dua always with you").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Your AI, always with you").performScrollTo().assertIsDisplayed()
         val composer = compose.onNodeWithTag("composer-container").fetchSemanticsNode().boundsInRoot
         assertTrue(hero.bottom <= composer.top)
         for (label in listOf("Add photos and files", "Dictate", "Voice mode")) {
