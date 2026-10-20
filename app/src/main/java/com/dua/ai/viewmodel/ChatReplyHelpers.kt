@@ -5,6 +5,9 @@ import com.dua.ai.network.DuaApiException
 
 // Pure helpers moved out of ChatViewModel.kt unchanged (refactor only).
 
+/** Empty streamed reply message. Top-level so both ChatViewModel and ChatLifecycle read one declaration. */
+internal const val EMPTY_REPLY = "Model ne text reply nahi diya. Dobara try karein."
+
 internal fun failureText(failure: Throwable): String = when (failure) {
     is DuaApiException, is IllegalArgumentException -> failure.message ?: "Reply nahi aa saka. Dobara try karein."
     is java.net.SocketTimeoutException -> "Dua response timeout hua. Dobara try karein."
