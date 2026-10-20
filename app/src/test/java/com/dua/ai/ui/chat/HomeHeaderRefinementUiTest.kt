@@ -110,7 +110,7 @@ class HomeHeaderRefinementUiTest(private val dark: Boolean, private val large: B
         capture("task-pro")
     }
 
-    @Test fun chatKeepsOriginalLogoAndTaskHasOnlyItsHeadingAndRealPromptHandlers() {
+    @Test fun chatAndTaskShareTheDuaLogoWithoutHeadlineAndKeepRealPromptHandlers() {
         val task = mutableStateOf(false)
         var chosen = ""
         show { ChatContent(task.value, onTask = { chosen = it }) }
@@ -119,9 +119,9 @@ class HomeHeaderRefinementUiTest(private val dark: Boolean, private val large: B
         compose.onNodeWithText("What can I take off\nyour plate?").assertDoesNotExist()
         capture("chat-hero")
         compose.runOnIdle { task.value = true }
-        compose.onNodeWithContentDescription("Dua AI").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Dua AI").assertExists()
         compose.onNodeWithText("Dua always with you").assertDoesNotExist()
-        compose.onNodeWithText("What can I take off\nyour plate?").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("home-hero").assertExists(); compose.onNodeWithContentDescription("Dua AI").assertExists()
         for (prompt in HomeTaskPrompts) {
             compose.onNodeWithText(prompt).performScrollTo().performClick()
             assertEquals(prompt, chosen)

@@ -391,7 +391,7 @@ fun ChatScreen(
                             Text(if (feature == ChatFeature.Projects) state.projects.firstOrNull { it.id == state.projectId }?.name ?: "Projects" else "Create an image with Dua",
                                 Modifier.align(Alignment.Center).padding(Spacing.lg), style = MaterialTheme.typography.titleLarge)
                         } else if (home) {
-                            ChatContent(task = taskHome, profileName = state.profileName,
+                            ChatContent(task = taskHome,
                                 composing = state.draft.isNotBlank() || state.attachments.isNotEmpty() || state.uploads.isNotEmpty(),
                                 onTask = { prompt -> actions.onDraftChange(prompt); inputFocus.requestFocus(); keyboard?.show() })
                         } else {

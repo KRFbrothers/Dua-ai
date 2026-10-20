@@ -97,8 +97,8 @@ class HomeChatTaskUiTest(private val dark: Boolean, private val compact: Boolean
                 state.value = state.value.copy(draft = "", messages = listOf(ChatMessage(text = "Task output", isUser = false)))
             })) }
         compose.onNode(hasText("Task") and isSelectable()).performClick().assertIsSelected()
-        compose.onNodeWithText("What can I take off\nyour plate?").assertExists()
-        compose.onNodeWithContentDescription("Dua AI").assertDoesNotExist()
+        compose.onNodeWithTag("home-hero").assertExists(); compose.onNodeWithContentDescription("Dua AI").assertExists()
+        compose.onNodeWithContentDescription("Dua AI").assertExists()
         compose.onNodeWithText("Describe...").assertIsDisplayed()
         compose.onNodeWithContentDescription("New chat").assertDoesNotExist()
         compose.onNodeWithText("AI Agent").assertIsNotDisplayed() // The closed drawer retains its destination label.

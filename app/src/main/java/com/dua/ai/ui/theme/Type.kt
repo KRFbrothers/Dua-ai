@@ -97,8 +97,6 @@ val HomePromptStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.
 /** Brand and short model label share a single baseline in the Home header. */
 val HomeHeaderStyle = TextStyle(fontFamily = HomeFontFamily, fontWeight = FontWeight.Medium, fontSize = 19.sp, lineHeight = 26.sp)
 /** Home uses Google Sans; other screens retain their existing font preference. */
-val HomeHeroStyle = TextStyle(fontFamily = HomeFontFamily, fontWeight = FontWeight.Normal, fontSize = 32.sp, lineHeight = 40.sp)
-val HomeHeroCompactStyle = HomeHeroStyle.copy(fontSize = 28.sp, lineHeight = 36.sp)
 val HomeTaskPromptStyle = HomePromptStyle.copy(fontFamily = HomeFontFamily)
 /** Composer input and its "Ask Dua AI" placeholder. */
 val ComposerTextStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Normal, fontSize = 16.sp, lineHeight = 22.sp)
