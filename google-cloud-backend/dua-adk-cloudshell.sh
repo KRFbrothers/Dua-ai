@@ -61,9 +61,19 @@ def metadata(*args):
     return json.loads(gcloud(*args,'--format=json'))
 
 
+STEP='starting'
+
+
+def step(name):
+    global STEP
+    STEP=name
+
+
 def prompt(label):
-    with open('/dev/tty','r+') as tty:
-        tty.write(label);tty.flush()
+    # A tty is not seekable: open('/dev/tty','r+') raises UnsupportedOperation.
+    # Use separate read and write handles.
+    with open('/dev/tty','w') as out, open('/dev/tty') as tty:
+        out.write(label);out.flush()
         return tty.readline().strip()
 
 
@@ -172,11 +182,13 @@ def database_setup(source,account):
     from psycopg import sql
     # Use verified Supabase session pooling for IPv4. Never guess the host from
     # the region: copy it from this project's Connect > Session pooler panel.
+    step('reading existing Secret Manager entries')
     version=secret_versions(DB_SECRET)
     ca_version=secret_versions(CA_SECRET)
     system_ca=Path(ssl.get_default_verify_paths().cafile or '/etc/ssl/certs/ca-certificates.crt')
     ca_file=system_ca
     extra=None
+    step('loading database CA certificate')
     if ca_version:
         # The secret holds only the Supabase CA (small); combine with system trust locally.
         extra=gcloud('secrets','versions','access',ca_version,'--secret',CA_SECRET)
@@ -188,6 +200,7 @@ def database_setup(source,account):
         combined.write_text(system_ca.read_text()+'\n'+extra);combined.chmod(0o600)
         ssl.create_default_context(cafile=str(combined))
         ca_file=combined
+    step('checking stored database credential')
     reuse_password=None
     if version:
         url=gcloud('secrets','versions','access',version,'--secret',DB_SECRET)
@@ -210,11 +223,13 @@ def database_setup(source,account):
         host=prompt('Supabase Connect > Session pooler HOST (no URL/password): ')
         if not re.fullmatch(HOST_RE,host):
             raise ValueError('Copy the session pooler host from the project Connect panel; do not use the transaction port.')
+    step('saving CA certificate secret')
     if extra and not ca_version:ca_version=save_secret(CA_SECRET,extra)
     if needs_admin:
         runtime_password=reuse_password or secrets.token_urlsafe(36)
         if not reuse_password:
             url='postgresql://'+ROLE+'.'+SUPABASE_REF+':'+quote(runtime_password,safe='')+'@'+host+':5432/postgres'
+        step('database admin login')
         admin_password=getpass.getpass('Supabase DATABASE password (hidden; not your Google password): ')
         try:
             admin=psycopg.connect(host=host,port=5432,dbname='postgres',user='postgres.'+SUPABASE_REF,
@@ -222,6 +237,7 @@ def database_setup(source,account):
         except Exception as error:
             raise ValueError('Database login/TLS failed ('+type(error).__name__+'). Verify the session host, database password and project CA; TLS was not weakened.') from None
         del admin_password
+        step('preparing database role/schema')
         with admin:
             ext=admin.execute("SELECT n.nspname FROM pg_extension e JOIN pg_namespace n ON e.extnamespace=n.oid WHERE e.extname='vector'").fetchone()
             if ext and ext[0]!='extensions':
@@ -253,6 +269,7 @@ def database_setup(source,account):
             if not reuse_password:version=save_secret(DB_SECRET,url)
         del runtime_password
         print('Private ADK schema, dedicated role and pgvector prepared in the existing project.')
+    step('granting runtime secret access')
     allow_runtime(DB_SECRET,account)
     if ca_version:allow_runtime(CA_SECRET,account)
     os.environ['PGSSLROOTCERT']=str(ca_file)
@@ -261,6 +278,7 @@ def database_setup(source,account):
     os.environ.pop('ADK_DB_LOCAL',None)
     sys.path.insert(0,str(source/'google-cloud-backend'))
     import agent_store,agent_documents
+    step('initializing ADK tables')
     agent_store.initialize();agent_documents.initialize()
     async def prepare():
         store=agent_store.service()
@@ -279,6 +297,7 @@ def database_setup(source,account):
             unrelated=con.execute(text("SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname IN ('public','auth','storage') AND c.relkind IN ('r','p','v','m','f') AND has_table_privilege(current_user,c.oid,'SELECT,INSERT,UPDATE,DELETE')")).scalar_one()
             if unrelated:raise ValueError('Dedicated role can access unrelated app tables. Stop for a focused permission review; no public grants were changed.')
     finally:engine.dispose()
+    step('storage smoke test')
     verify_storage()
     os.environ.pop('ADK_SESSION_DB_URL',None)
     return str(version),str(ca_version) if ca_version else None
@@ -292,6 +311,7 @@ def stage(source,service):
     # registry/project/branch or enable services as a side effect.
     match=re.fullmatch(r'([a-z0-9-]+-docker\.pkg\.dev/'+re.escape(PROJECT)+r'/[^/]+)/[^/:]+(?::[^/]+)?',image)
     if not match:raise ValueError('Existing image is not in the expected Artifact Registry project. Review an image target before deploying.')
+    step('checking pinned source')
     sha=command(['git','-C',str(source),'rev-parse','HEAD'])
     if command(['git','-C',str(source),'status','--porcelain']):raise ValueError('Source checkout is not clean.')
     account=spec.get('serviceAccountName')
@@ -300,6 +320,7 @@ def stage(source,service):
         account=number+'-compute@developer.gserviceaccount.com'
     db_version,ca_version=database_setup(source,account)
     target=match[1]+'/dua-ai-engine-adk:'+sha
+    step('building image')
     print('Building the merged source; Cloud Build/registry usage follows your existing project billing.')
     command(['gcloud','builds','submit',str(source/'google-cloud-backend'),'--project',PROJECT,
         '--config',str(source/'google-cloud-backend/cloudbuild-adk.yaml'),
@@ -327,6 +348,7 @@ def stage(source,service):
     else:env_updates+=['PGSSLROOTCERT=/etc/ssl/certs/ca-certificates.crt']
     if service_info().get('metadata',{}).get('generation')!=service.get('metadata',{}).get('generation'):
         raise RuntimeError('Service configuration changed during setup. Inspect it and rerun; no candidate was deployed.')
+    step('deploying 0% candidate')
     gcloud('run','deploy',SERVICE,'--region',REGION,'--image',immutable,'--timeout','900',
         '--no-traffic','--tag','adk-candidate','--update-env-vars',','.join(env_updates),
         '--update-secrets',','.join(bindings))
@@ -369,6 +391,7 @@ def main():
     parser.add_argument('--source',type=Path,required=True)
     args=parser.parse_args()
     try:
+        step('reading Cloud Run service')
         service=service_info()
         if args.action=='plan':
             names=sorted(e['name'] for e in service['spec']['template']['spec']['containers'][0].get('env',[]))
@@ -382,8 +405,12 @@ def main():
         return 0
     except Exception as error:
         # Our diagnostics contain metadata; third-party errors can include DSNs.
-        if type(error) in (ValueError,RuntimeError):print('SETUP STOPPED: '+str(error),file=sys.stderr)
-        else:print('SETUP STOPPED ('+type(error).__name__+'). Check database/Cloud Console access; no exception payload printed.',file=sys.stderr)
+        if type(error) in (ValueError,RuntimeError):print('SETUP STOPPED during '+STEP+': '+str(error),file=sys.stderr)
+        else:
+            # Third-party messages can include DSNs; print only type, step and a fixed hint.
+            hint={'OSError':'a local file or terminal could not be read','UnsupportedOperation':'terminal input could not be read',
+                  'FileNotFoundError':'a file path was not found','PermissionError':'a local file was not readable'}.get(type(error).__name__,'check database/Cloud Console access')
+            print('SETUP STOPPED during '+STEP+' ('+type(error).__name__+': '+hint+'). No exception payload printed.',file=sys.stderr)
         return 1
 
 
