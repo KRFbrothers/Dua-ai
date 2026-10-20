@@ -384,3 +384,152 @@ Teeno pass hone chahiye. Uske baad app mein yeh 6 jagah check karo:
 4. **Maintenance screen** — `DUA_MAINTENANCE=1` par "App paused" page + Try again (`AppPausedScreen`)
 5. **Chat mein OG generation backdrop** — blob animation chalti hai (`BlobDrawable` ab `ui/chat`)
 6. **Settings → Account** — logout dialog aur account rows (`ProfileScreen` + `AccountContent`)
+
+---
+
+## 🔃 Pass 6 — `ui/screens/` poora khatam, `ui/features/` bana (20 Oct 2026)
+
+**Base:** `main` @ `49ce66d` (PR #307 merge ke baad).
+**Is PR mein kuch delete nahi hua** — sirf 7 files move hui hain aur unke package/import paths update hue hain. `_to_delete/` folder mein is pass mein kuch nahi daala gaya.
+
+**Sabse badi baat:** pichhle paanch pass se jo `ui/screens/` "chhoda hua" tha, woh **ab poora khatam ho gaya**. Us folder mein bache saare 7 files ek hi concern ke hain — **feature hub ke pages** (Images, Library, Plugins, Computer, Projects) — aur teeno trap files bhi wahin ki thin. Isliye poora folder ek naam ke saath `ui/features/` ban gaya, taaki aage koi "screens" naam ka confusion na rahe.
+
+### Kya move hua — 7 files (saari `R` rename, koi `A`+`D` nahi)
+
+| Purana path | Naya path | Kyun |
+| --- | --- | --- |
+| `ui/screens/AssetFeatureRoutes.kt` | `ui/features/AssetFeatureRoutes.kt` | **Trap file** (zinda). `DuaNavHost.kt:227,231` se chalti hai. Isme `ImagesScreen` + `LibraryScreen` declared hain |
+| `ui/screens/FeatureScreens.kt` | `ui/features/FeatureScreens.kt` | **Trap file** (zinda). `ChatScreen.kt:102` par `ProjectsFeaturePage` import hota hai |
+| `ui/screens/PluginsRoute.kt` | `ui/features/PluginsRoute.kt` | **Trap file** (zinda). `DuaNavHost.kt:237` se chalti hai. Isme `PluginsScreen` declared hai |
+| `ui/screens/ImagesScreen.kt` | `ui/features/ImagesScreen.kt` | `ImagesContent` + `ImageStarterPrompts`. Sirf `AssetFeatureRoutes` (same package) aur 2 tests use karte hain |
+| `ui/screens/LibraryScreen.kt` | `ui/features/LibraryScreen.kt` | `LibraryContent`. Sirf `AssetFeatureRoutes` (same package) aur 2 tests |
+| `ui/screens/PluginsScreen.kt` | `ui/features/PluginsScreen.kt` | `PluginsContent`. Sirf `PluginsRoute` (same package) aur 2 tests |
+| `ui/screens/ComputerScreen.kt` | `ui/features/ComputerScreen.kt` | Home top bar se khulne wala "Computer" placeholder page. `DuaNavHost.kt:243` + 3 tests |
+
+**Package change:** `com.dua.ai.ui.screens` → `com.dua.ai.ui.features` (saat files).
+
+**Khaali dir hat gaya:** `app/src/main/java/com/dua/ai/ui/screens/` — ab maujood nahi.
+
+**`ui/` ab (13 entries):** `DuaApp.kt` + `AppPausedScreen.kt` root par, aur **11 subpackages** — `account`, `agent`, `chat`, `components`, `features`, `history`, `navigation`, `projects`, `settings`, `theme`, `voice`. (`screens` gaya.)
+
+### Trap files hilaye — par kuch kamzor nahi hua
+
+Yeh pass ka sabse nazuk hissa tha: teeno trap files **move** hui hain, delete nahi. `_to_delete/README.md` ka pehla section kehta hai "inhe delete MAT karo" — **delete kisi ko bhi nahi kiya**. Move karna safe tha kyunki:
+
+1. Teenonu trap files ne **apni same-package calls** saath rakhi — `AssetFeatureRoutes` → `ImagesContent`/`LibraryContent`, `PluginsRoute` → `PluginsContent`. Saat files ek saath isi liye hili, taaki koi same-package reference na toote.
+2. Bahar ke saare consumers ke import update hue (neeche table).
+3. `THIRD_PARTY_NOTICES.md` mein in 7 files ka **koi row nahi hai** — verify kiya (`grep "ui/screens"` → 0 hits). Isliye license trail ko chhune ki zaroorat hi nahi padi.
+4. In 7 files mein **koi license header bhi nahi** hai (Telegram/Androidify type) — `head -8` se check kiya.
+5. Manifest / proguard / build.gradle.kts mein in classes ka **koi zikr nahi** — koi component ya keep-rule inhe naam se nahi bulata.
+6. `Class.forName` / reflection — **0 hits**.
+
+### Import updates — 13 lines, 7 files
+
+| File | Kya badla |
+| --- | --- |
+| `ui/navigation/DuaNavHost.kt` | 4 fully-qualified calls: `ui.screens.ImagesScreen`, `.LibraryScreen`, `.PluginsScreen`, `.ComputerScreen` → `ui.features.*` |
+| `ui/chat/ChatScreen.kt` | 1 import: `ui.screens.ProjectsFeaturePage` → `ui.features.ProjectsFeaturePage` |
+| `test/screenshots/HomeScreenshotTest.kt` | 1 import (`ComputerScreen`) |
+| `test/ui/voice/VoiceTokensTest.kt` | 1 import (`ComputerScreen`) |
+| `test/ui/chat/FeatureIsolationUiTest.kt` | 4 imports (`ImagesContent`, `LibraryContent`, `PluginsContent`, `ProjectsFeaturePage`) |
+| `test/ui/navigation/FeatureHubUiTest.kt` | 1 wildcard: `ui.screens.*` → `ui.features.*` |
+| `test/ui/pages/RemainingPagesTokensTest.kt` | 1 wildcard: `ui.screens.*` → `ui.features.*` |
+
+`git diff --shortstat` (README chhod kar) = **14 files changed, 20 insertions(+), 23 deletions(-)** — 7 rename + 7 consumers. README ke saath poora diff **15 files, +169 −23**.
+
+### Verify — jo actually chalaya
+
+| Check | Result |
+| --- | --- |
+| `com.dua.ai.ui.screens` — `*.kt *.java *.xml *.kts *.pro *.gradle` | **0 hits** ✅ |
+| Filesystem path `com/dua/ai/ui/screens` | **0** (dir hi nahi raha) ✅ |
+| `^package com.dua.ai.ui.screens` in moved files | **0** ✅ |
+| Har moved symbol ka old-path grep (10 symbols) | **0 · 0 · 0 · 0 · 0 · 0 · 0 · 0 · 0 · 0** ✅ |
+| Symbol sweep — har consumer ka package vs import (14 files) | **0 broken** — 8 `SAME-PKG ok` + 6 `RESOLVED` ✅ |
+| Extension function/property declarations in moved files | **0** — koi `fun X.y` / `val X.y` nahi (isliye pass 3/4 wala pitfall yahan lagoo nahi hota) |
+| Wildcard collision (`features.*` vs `theme.*`/`settings.*`/`chat.*`/`components.*`/`setup.*`/`library.*`/`imagine.*`/`account.*`/`model.*`) | **0** — ek bhi naam nahi takra raha ✅ |
+| Duplicate declarations (10 symbols) | **1-1 hi** — koi purani copy nahi bachi ✅ |
+| `THIRD_PARTY_NOTICES.md` mein in 7 files ka row | **0** ✅ |
+| `docs/**/*.md` + `README.md` mein in 7 basenames ka zikr | **0** ✅ |
+| `AndroidManifest.xml` / `res/` / `proguard-rules.pro` / `build.gradle.kts` | **0** ✅ |
+| `_to_delete/README.md` ke purane sections | **chhue nahi** — sirf yeh naya section juda ✅ |
+
+**Build nahi chala paaya — imaandaari se.** Is sandbox mein Java aur Android SDK dono nahi hain (`java: command not found`, `ANDROID_HOME` khaali). `./gradlew assembleDebug` **verify nahi kiya**. Jo kar liya woh hai compile-level path checking: har moved symbol ka declaration package + har consumer ka import/wildcard/fully-qualified match.
+
+### Left alone and why (jaan-boojh kar nahi chhua)
+
+| Cheez | Kyun nahi chhui |
+| --- | --- |
+| **`ui/agent/AgentScreen.kt`** (1-file package) | **Yahan `ui/chat` mein merge karna galat hota.** Dono packages ek doosre ko import karte hain — `ChatRoute.kt:30-32` → `ui.agent.AgentTask`/`GITHUB_AGENT_PROMPT`/`briefingPrompt`, `ChatScreen.kt:100-101` → `AgentContent`/`AgentModePill`, `ChatUiState.kt:157` → `AgentTask`; aur ulta `AgentScreen.kt:26-27` → `ui.chat.ChatFeature`/`ChatRoute`. Yaani `ui/agent` → `ui/chat` **aur** `ui/chat` → `ui/agent`. Merge karne par yeh ek hi package ban jaata — technically compile hota, par `AgentScreen` ka **`internal`** contract khatam ho jaata (`AgentContent`, `AgentModePill`, `briefingPrompt`, `GITHUB_AGENT_PROMPT` sab `internal`) aur 660-line `ChatScreen` ke saath ek hi package mein 4 agent symbols ghus jaate. Fayda sirf "ek folder kam" — risk asli. **ChatViewModel split ke saath karna behtar.** |
+| `web/`, `website/` | Aapke nirdesh ke mutabiq — rename nahi kiya |
+| `ChatViewModel.kt` (todna) | Aapke nirdesh ke mutabiq — sirf **plan** diya hai (neeche) |
+| `diagnostics/DuaLog.kt`, `widget/DuaToolbarWidgetReceiver.kt` | Bache hue do 1-file top-level packages. `DuaLog` ko `DriveBackupWorker.kt:59`, `AutomaticCloudSync.kt:185,291`, `ChatViewModel.kt:1557,1682` fully-qualified use karte hain — `ui/` ke bahar rehna hi sahi hai (logging + widget app-wide concern hai, UI concern nahi). `widget/` manifest-declared receiver hai (`.widget.DuaToolbarWidgetReceiver`), move karne se manifest path update karna padta — fayda zero |
+| Email/GitHub/Cloud backend | Is pass ka scope nahi tha |
+
+### 📋 `ChatViewModel.kt` ka split plan (sirf plan — code nahi toda)
+
+File: `viewmodel/ChatViewModel.kt` — **1,748 lines, 178 functions, 377 top-level members**.
+
+#### Jo pehle se theek hai — isko dobara mat banao
+
+Sabse important baat jo measurement se nikli: **file already tod ke rakhi hai**. `ChatHistory`, `ChatAgentControls`, `ChatUploads`, `ChatAccount`, `ChatDataControls`, `ChatProjects`, `ChatImagine` — saat features pehle se alag files mein hain (`viewmodel/Chat*.kt`, 164–315 lines each), aur `ChatViewModel` sirf `by lazy` delegates se unhe bandhta hai:
+
+```kotlin
+private val historyFeature:  ChatHistory        by lazy { ChatHistory(historyHost) }
+private val agentFeature:    ChatAgentControls  by lazy { ChatAgentControls(agentHost) }
+private val uploadsFeature:  ChatUploads        by lazy { ChatUploads(uploadsHost) }
+private val accountFeature:  ChatAccount        by lazy { ChatAccount(accountHost) }
+private val dataFeature:     ChatDataControls   by lazy { ChatDataControls(dataHost) }
+private val projectsFeature: ChatProjects       by lazy { ChatProjects(projectsHost) }
+private val imagineFeature:  ChatImagine        by lazy { ChatImagine(imagineHost) }
+```
+
+Har feature ke saath ek **`XxxHost` interface** hai jo `ChatViewModel` ko anonymous object se pass karta hai (state flows, `viewModelScope`, `api`, `account` etc.). Yeh **Facade pattern ka sahi implementation** hai, aur har host block 27–52 lines ka hai (kul **277 lines**) — wo peelne layak hai, par woh "split" nahi, "chhota cleanup" hai.
+
+**Iska matlab:** file ki asli 1,472 lines ek hi cheez karti hain — **chat ki apni core loop** (message list, streaming, drafts, attachments, model/mode selection, TTS). Woh 7 features mein se kisi mein nahi hai kyunki woh sab ka base hai.
+
+#### Baaki 1,472 lines ka breakdown
+
+| Region | Lines | Lines count | Concern |
+| --- | --- | --- | --- |
+| 341–756 | 416 | Voice/TTS, settings/appearance, writing tools, memory notes |
+| 757–1031 | 275 | **Reply loop** — `sendMessage` (136 lines), `cancelReply`, `collectReply` (35), `finalizeStreaming`, retry |
+| 1032–1330 | 299 | Stored files / uploads UI glue — `uploadPicked` (29), `cancelUpload` (35), `discardUploads` (33) |
+| 1331–1711 | 381 | Data & cloud sync, `startNewChat` (71), `retryResponse` (69), `deleteChat` (34), server-chat deletion |
+| 1712–1749 | 38 | `imagineSettings` StateFlow |
+
+Bade functions: `sendMessage` **136 lines** (1575–1710), `startNewChat` **71** (1503–1573), `retryResponse` **69** (1505–1573), `projectMemory` **39** (1243–1281), `deleteServerChat` **38** (1455–1492).
+
+#### Order — sabse safe pehle
+
+| Step | Kya nikalna hai | Naya ghar | Kyun safe | Risk |
+| --- | --- | --- | --- | --- |
+| **1** | **Voice/TTS block** — `replyTtsOptions`, `replyVoicePlan`, `generateReplyAudio`, `replyAudioCache`, `generatedAudioApi`, `liveStart`/`liveUsage`/`startLiveVoice`/`finishLiveVoice`/`loadLiveUsage` (est. 180–200 lines) | `viewmodel/ChatVoice.kt` + `ChatVoiceHost` | Sabse dekha-bhaala: **same pattern** jo 7 baar pehle se chalta hai. `voice/` package se hi baat karta hai, chat state par sirf padhta hai | **Low** — 4 public fun + 2 StateFlow |
+| **2** | **Attachment / stored-files glue** — `uploadPicked`, `cancelUpload`, `discardUploads`, `flushPendingFileDeletes`, `attachmentImageBytes`, `_attachments` clear paths (est. 250–280 lines) | `viewmodel/ChatAttachments.kt` + host | `uploadsFeature` (`ChatUploads`) already maujood hai — yeh uska **UI-side glue** hai jo upar reh gaya | **Low-Med** — `_attachments` StateFlow shared hai |
+| **3** | **Settings / appearance / writing** — `setPersonality`, `setAppearance`, `setAccent`, `saveAppearance`, `resetSettings`, `updateSettings`, `openWriting`/`runWriting`/`useWritingResult`/`askServerForWriting`/`closeWriting` (est. 200–230 lines) | `viewmodel/ChatSettings.kt` + host | `localSettings`/`appearanceStore` sirf padhe-jaate hain; `onDeviceAi` already inject-able | **Med** — `writingJob` lifecycle |
+| **4** | **Memory notes** — `proposeMemoryNotes`, `acceptMemoryNote`, `suggestAgentMemory`, `dismissMemoryNote`, `confirmSharedMemory` (est. 60–80 lines) | `viewmodel/ChatMemory.kt` | Chhota, self-contained, sirf `memoryCandidates` StateFlow | **Low** (chhota) |
+| **5** | **`sendMessage` ko todna** — 136 lines se `prepareSend` / `streamReply` / `persistResult` | same file, private funs | **Yeh split nahi, function-length fix hai** — build risk sabse kam, review sabse aasan | **Low** — par asli fayda bhi kam |
+| **6** | **`startNewChat` / `retryResponse` / `deleteChat` / `deleteServerChat`** | `viewmodel/ChatLifecycle.kt` | **Sabse aakhir** — yeh chat ka dil hai, `sendMessage` aur history feature dono se bandha hua | **High** — yahan galti user-facing |
+
+**Rukne ka point:** Step 3 ke baad file ~1,050–1,100 lines par aa jaayegi aur 10 features alag honge. **Step 4 ke baad ruk sakte hain.** Steps 5–6 ka fayda "line count" se zyada "readability" hai — unhe alag PR mein karein, aur pehle `sendMessage` ka test coverage dekhein.
+
+**Golden rule (pass 3 se):** ek step = ek feature = ek commit. Tests pass → commit. Fail → revert, aage na badhein.
+
+**Ek cheez jo is PR mein theek honi chahiye thi:** `ChatViewModel.kt` line ~581 ka comment abhi bhi `com.dua.ai.auth.GoogleSignIn` kehta hai (pass 3 se). Comment compile nahi hota, isliye 1,748-line file sirf uske liye dobara nahi likhi. **Step 1 karte waqt (jab file waise bhi khulegi) yeh saath theek kar lein.**
+
+### Merge checklist
+
+```bash
+./gradlew assembleDebug
+./gradlew testDebugUnitTest
+./gradlew lint
+```
+
+Teeno pass hone chahiye. Uske baad app mein yeh **6 jagah** check karo — yeh exactly woh screens hain jo is pass mein hili hain:
+
+1. **Home top bar → Computer** — "Coming soon" page khulti hai, sparkle icon dikhta hai (`ComputerScreen`)
+2. **Chat → feature hub → Images** — prompt bubbles (`ImageStarterPrompts`), aspect chips, generate button (`ImagesContent`)
+3. **Chat → feature hub → Library** — files list, filter, search, upload (`LibraryContent`)
+4. **Chat → feature hub → Plugins** — search/GitHub toggles, provider rows (`PluginsContent`)
+5. **Chat → Projects ka page** — chat ke andar se projects page khulta hai (`ProjectsFeaturePage`)
+6. **Images / Library / Plugins ke back arrows** — `DuaNavHost` se `navigate` sahi jagah jaata hai (`AssetFeatureRoutes` + `PluginsRoute`)
