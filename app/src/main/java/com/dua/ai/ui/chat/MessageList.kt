@@ -10,6 +10,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.unit.dp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Compress
+import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.MoreHoriz
+import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material.icons.outlined.TextFields
+import androidx.compose.material.icons.automirrored.outlined.Reply
 import androidx.compose.material3.Icon
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.layout.PaddingValues
@@ -53,7 +58,10 @@ import com.dua.ai.ui.theme.Spacing
 
 @Composable
 fun MessageList(state: ChatUiState, actions: ChatActions, listState: LazyListState, modifier: Modifier = Modifier,
-    imagineActions: ImagineActions = actions.imagine, searchMessageId: String? = null) {
+    imagineActions: ImagineActions = actions.imagine, searchMessageId: String? = null,
+    onReply: ((com.dua.ai.model.ChatMessage) -> Unit)? = null) {
+    // Ids present on first show (history) do not animate in; only bubbles that arrive later do.
+    val initialIds = remember(state.chatId) { state.messages.map { it.id }.toHashSet() }
     val motion = rememberReplyMotionAllowed()
     val lastId = state.messages.lastOrNull()?.id
     val lastAssistantId = state.messages.lastOrNull { !it.isUser }?.id
@@ -62,6 +70,8 @@ fun MessageList(state: ChatUiState, actions: ChatActions, listState: LazyListSta
     LaunchedEffect(canvas?.messageId, state.messages) {
         if (canvas?.messageId?.let { id -> state.messages.none { it.id == id } } == true) canvas = null
     }
+    var popupId by remember(state.chatId) { mutableStateOf<String?>(null) }
+    var selectTextId by remember(state.chatId) { mutableStateOf<String?>(null) }
     val selectedMessage = state.messages.firstOrNull { it.id == actionsId }
     LaunchedEffect(actionsId, selectedMessage?.id) { if (actionsId != null && selectedMessage == null) actionsId = null }
     LazyColumn(
@@ -77,11 +87,17 @@ fun MessageList(state: ChatUiState, actions: ChatActions, listState: LazyListSta
                     fadeInSpec = DuaMotion.gentle(),
                     placementSpec = DuaMotion.bouncy(),
                 ) else Modifier)
+                .bubbleAppear(motion && message.id !in initialIds)
                 .testTag("message-${message.id}")
                 .then(if (selected) Modifier.border(ChatSizes.searchSelectionBorder, ChatTheme.colors.accent, ChatShapes.searchSelection) else Modifier)
                 .semantics { if (selected) stateDescription = "Selected search result" }) {
-                val openActions = { canvas = null; actionsId = message.id }
+                val openActions = { canvas = null; popupId = message.id }
+                if (popupId == message.id) MessagePopup(message, onReply,
+                    onSelectText = { selectTextId = message.id }, onMore = { actionsId = message.id }, onDismiss = { popupId = null })
                 val longPressHaptic = { actions.haptic(ChatHaptic.LongPress) }
+                val replyHere = onReply?.takeIf { !message.streaming && message.text.isNotBlank() }
+                SwipeToReply(enabled = replyHere != null, onReply = { replyHere?.invoke(message) },
+                    haptic = { actions.haptic(ChatHaptic.Tap) }) {
                 if (message.isUser) UserMessage(message.text, files = message.files, onOpenFile = actions.onOpenFile,
                     onLongPress = openActions, longPressHaptic = longPressHaptic)
                 else AssistantTurn(modifier = Modifier.messageLongPress(openActions, longPressHaptic)) {
@@ -111,6 +127,7 @@ fun MessageList(state: ChatUiState, actions: ChatActions, listState: LazyListSta
                         showActions = message.id == lastAssistantId,
                     )
                 }
+                }
                 if (message.id == state.summarisedThroughId && message.id != lastId) SummaryDivider(Modifier.padding(top = Spacing.md))
             }
         }
@@ -119,7 +136,8 @@ fun MessageList(state: ChatUiState, actions: ChatActions, listState: LazyListSta
             AssistantTurn(modifier = Modifier.padding(top = if (state.messages.isEmpty()) 0.dp else ChatSizes.messageSpacing).widthIn(max = Sizes.contentMaxWidth)) { TypingIndicator(Modifier.heightIn(min = Sizes.touchTarget)) }
         }
     }
-    if (selectedMessage != null) MessageActionsSheet(selectedMessage, state, actions, imagineActions, onDismiss = { actionsId = null })
+    if (selectedMessage != null) MessageActionsSheet(selectedMessage, state, actions, imagineActions, onDismiss = { actionsId = null }, onReply = onReply)
+    state.messages.firstOrNull { it.id == selectTextId }?.let { m -> SelectTextSheet(copyTextOf(m), onDismiss = { selectTextId = null }) }
     canvas?.let { session -> ArtifactCanvasSheet(session.artifacts, onDismiss = { canvas = null }) }
 }
 
@@ -159,4 +177,21 @@ fun TypingIndicator(modifier: Modifier = Modifier) {
         Spacer(Modifier.width(Spacing.md))
         Text("Thinking", style = MaterialTheme.typography.bodyMedium, color = c.mutedText)
     }
+}
+
+/** Telegram-style long-press popup; "More" keeps every action of the full sheet reachable. */
+@Composable
+private fun MessagePopup(message: com.dua.ai.model.ChatMessage, onReply: ((com.dua.ai.model.ChatMessage) -> Unit)?,
+    onSelectText: () -> Unit, onMore: () -> Unit, onDismiss: () -> Unit) {
+    val text = copyTextOf(message)
+    val textActions = rememberTextMessageActions(text, !message.isUser)
+    val hasText = text.isNotBlank()
+    val items = buildList {
+        if (onReply != null) add(PopupItem("reply", "Reply", Icons.AutoMirrored.Outlined.Reply, hasText && !message.streaming) { onReply(message) })
+        add(PopupItem("copy", "Copy", Icons.Outlined.ContentCopy, hasText) { textActions.copy() })
+        add(PopupItem("select", "Select text", Icons.Outlined.TextFields, message.text.isNotBlank(), onSelectText))
+        add(PopupItem("share", "Share", Icons.Outlined.Share, hasText) { textActions.share() })
+        add(PopupItem("more", "More", Icons.Outlined.MoreHoriz, true, onMore))
+    }
+    TelegramMessagePopup(alignEnd = message.isUser, items = items, onDismiss = onDismiss)
 }

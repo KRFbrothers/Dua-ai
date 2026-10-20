@@ -66,7 +66,7 @@ We will acknowledge reports within 48 hours and aim to provide an update within 
 ## Compliance & Audits
 
 ### Current Compliance Status
-- ✅ MIT License
+- ✅ GPL-3.0-or-later License
 - ✅ Privacy guidelines documented
 - Repository/org settings such as branch protection, required reviews/checks, secret scanning and Dependabot are not verifiable from this checkout.
 
