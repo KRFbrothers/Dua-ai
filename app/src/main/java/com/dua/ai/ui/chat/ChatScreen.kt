@@ -1,9 +1,7 @@
 package com.dua.ai.ui.chat
 
 import com.dua.ai.ui.components.agentEdgeGlow
-
 import com.dua.ai.ui.components.predictiveBack
-
 import com.dua.ai.ui.theme.SheetBodyStyle
 import com.dua.ai.ui.theme.SheetTheme
 import androidx.compose.ui.semantics.semantics
@@ -99,7 +97,7 @@ import com.dua.ai.model.ChatMessage
 import com.dua.ai.ui.components.FeatureTopBar
 import com.dua.ai.ui.agent.AgentContent
 import com.dua.ai.ui.agent.AgentModePill
-import com.dua.ai.ui.screens.ProjectsFeaturePage
+import com.dua.ai.ui.features.ProjectsFeaturePage
 
 
 private data class ConversationResults(val messages: List<ChatMessage>, val query: String, val matches: List<ConversationMatch>)
