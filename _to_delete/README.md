@@ -752,3 +752,107 @@ Teeno pass hone chahiye. Uske baad app mein yeh **5 jagah** — exactly woh raas
 5. **Naya chat / chat switch** — `clearAttachments()` sab chips saaf kare, uploads bhi
 
 **Build yahan nahi chala** — sandbox mein Java/Android SDK nahi hai. Jo kiya woh byte-compare + host/interface parity + import/brace balance hai. Asli confirmation CI se aayegi.
+
+---
+
+## ⚙️ Chat split — Step 3: settings / appearance / writing → `ChatSettings.kt` (20 Oct 2026)
+
+**Base:** `main` @ `3a40a88` (PR #310 / Step 2 merge ke baad). **Kuch delete nahi hua** — sirf code move hua. **7 trap files ko haath nahi lagaya.** Golden rule follow hua: **ek step = ek feature = ek commit**.
+
+Yeh `ChatViewModel.kt` split plan ka **Step 3** hai (Pass 6 section ki table).
+
+### Line count — before → after
+
+| File | Pehle | Ab | Farq |
+| --- | --- | --- | --- |
+| `viewmodel/ChatViewModel.kt` | **1,654** | **1,597** | **−57** |
+| `viewmodel/ChatSettings.kt` | — | **118** (naya) | +118 |
+| `viewmodel/` total | 3,642 | 3,703 | +61 (host + forwarders) |
+
+`ChatViewModel` se **84 line nikli** aur **27 wapas aayi** (host object 10 + forwarders 16 + comment 1) → net **−57**.
+
+`git diff --shortstat` = **1 file, +27 −84** (naya file alag se +118).
+
+### Kya nikaala — 16 public members + 6 private names
+
+| Kya | Purana | Naya |
+| --- | --- | --- |
+| `polishing` · `polishNotice` | `ChatViewModel` | `ChatSettings` |
+| `polishImaginePrompt()` | `ChatViewModel` | `ChatSettings` |
+| `writing` · `openWriting` · `runWriting` · `useWritingResult` · `askServerForWriting` · `closeWriting` | `ChatViewModel` | `ChatSettings` |
+| `settingsStatus` · `setPersonality` · `setAppearance` · `setAccent` · `resetSettings` · `settingsNotice` · `updateSettings` | `ChatViewModel` | `ChatSettings` |
+| `_polishing` · `_polishNotice` · `_writing` · `writingJob` · `_settingsStatus` · `saveAppearance` (private) | `ChatViewModel` | `ChatSettings` (`private`) |
+
+**Pattern wahi jo pehle se 9 features mein hai:** `SettingsHost` interface + `ChatSettings : SettingsHost by host` + `ChatViewModel` mein `by lazy` delegate.
+
+```kotlin
+private val settingsFeature: ChatSettings by lazy { ChatSettings(settingsHost) }
+private val settingsHost: SettingsHost by lazy { object : SettingsHost { /* 7 members */ } }
+```
+
+### Public API bilkul same — `ui/` ko touch nahi kiya
+
+`ChatViewModel` par **16 forwarders** hain, wahi naam aur wahi signature. Isliye **ek bhi consumer file nahi badli**. External refs jo forwarder se serve hote hain:
+
+| Member | External refs | Kahan |
+| --- | --- | --- |
+| `updateSettings` | **23** | `SettingsOverviewPages`, `AppearanceScreen`, `ImagineSettingsScreen`, `MemoryScreen`, `IntegrationSetupScreen`, `ChatRoute`, `PluginsRoute`, + tests |
+| `settingsStatus` | **8** | `DuaNavHost` (×2), `AppearanceScreen`, `ImagineSettingsScreen`, `MemoryScreen`, `NotificationsScreen`, `SettingsOverviewPages`, `VoiceSettingsScreen` |
+| `setAccent` · `setAppearance` · `setPersonality` | 7 · 1 · 3 | `AppearanceScreen`, `PersonalityPromptingTest`, `AppearancePreferencesTest` |
+| `writing` · `openWriting` · `runWriting` · `useWritingResult` · `askServerForWriting` · `closeWriting` | 9 · 4 · 2 · 2 · 1 · 1 | `ChatRoute` (writer sheet), `OnDeviceFeaturesTest` |
+| `polishing` · `polishNotice` · `polishImaginePrompt` | 2 · 3 · 3 | `ChatRoute` (prompt polish chip), `OnDeviceFeaturesTest` |
+| `resetSettings` · `settingsNotice` | 4 · 4 | `DuaNavHost`, `MemoryScreen`, `LiveVoiceScreen`, `ProjectSwitchingTest` |
+
+**Ek bhi line ki body badalne ki zaroorat nahi padi** — is baar `discardUploads()` jaisa cross-feature qualify bhi nahi karna pada, kyunki moved bodies sirf apne host members aur `com.dua.ai.ondevice.*` / `com.dua.ai.settings.*` use karti hain.
+
+### Jo `ChatViewModel` mein hi rehna chahiye tha (chhua nahi)
+
+| Member | Kyun |
+| --- | --- |
+| `localPreferences` · `localSettings` | **`ChatProjects` (7 refs), `ChatDataControls` (3), `ChatAccount` (3), `ChatVoice` (5), `ChatImagine` (4), `ChatHistory` (3)** — 9 host contracts inhe padhte hain |
+| `onDeviceAi` · `onDeviceAiEnabled()` | `ChatHistory` automatic chat titles ke liye padhta hai (`HistoryHost` ka member hai) |
+| `appearance` · `appearanceLoaded` | `sendMessage` 2 jagah `appearance.value.personality?.instruction` padhta hai; `personalityUnavailable()` bhi `appearanceLoaded` padhta hai |
+| `appearanceNotice` | `AppearanceScreen` sirf read karta hai, write kahin nahi |
+| `foreground` · `setForeground()` | `sendMessage` notifications gate karta hai (`!foreground && ... notifications`) |
+| `_draft` · `updateDraft()` | Har feature ka shared composer (7 host contracts) |
+
+**Koi duplicate state nahi** — `ChatSettings` sab kuch host ke through padhta hai.
+
+### Verify — jo actually chalaya
+
+| Check | Result |
+| --- | --- |
+| **Byte-compare** — 4 moved blocks (normalised) vs naya file, ordered subsequence | **83/83 lines identical** — `597-616` 20/20 · `617-654` 38/38 · `667-675` 9/9 · `684-699` 16/16 ✅ |
+| `SettingsHost` members vs host overrides | **7 = 7**, missing 0 · extra 0 ✅ |
+| Accidental override (`_liveStart` wala Step-1 bug) | **0** — 22 class decls mein se ek bhi interface naam nahi ✅ |
+| Duplicate class decls | `ChatSettings.kt` **0** ✅ |
+| Purane private naam repo-wide | `_polishing` · `_polishNotice` · `_writing` · `writingJob` · `_settingsStatus` · `saveAppearance` — **sab 0** outside `ChatSettings.kt` ✅ |
+| Unused imports | **0** — 6 imports, sab use ✅ |
+| Brace balance dono files | **0 / 0** ✅ |
+| Manifest / res XML / proguard / `build.gradle.kts` / `.pro` | **0** reference ✅ |
+| **Reflection trap** — `PersonalityPromptingTest` `getDeclaredField("appearanceLoaded")` | **safe** — `appearanceLoaded` `ChatViewModel` mein hi hai, move nahi hua ✅ |
+| 7 trap files / `THIRD_PARTY_NOTICES.md` | **koi touch nahi** ✅ |
+
+### Aage kya
+
+- **Step 4:** memory notes (`proposeMemoryNotes`, `acceptMemoryNote`, `suggestAgentMemory`, `dismissMemoryNote`, `confirmSharedMemory` — est. 60–80 line) → `ChatMemory.kt`
+- **Step 5–6:** `sendMessage` split, lifecycle — **high risk, alag PR**
+- **Rukne ka point: Step 4 ke baad** (file ~1,500 line, 11 features alag)
+
+### Merge checklist
+
+```bash
+./gradlew assembleDebug
+./gradlew testDebugUnitTest
+./gradlew lint
+```
+
+Teeno pass hone chahiye. Uske baad app mein yeh **5 jagah** — exactly woh raaste jo settings/writing code se guzarte hain:
+
+1. **Settings → Appearance** — theme (light/dark/system), accent colour, Dua AI Personality chip → "Saved on this device." dikhe
+2. **Chat composer → prompt polish** — Imagine mode mein sparkle icon → draft rewrite ho, notice dikhe; draft badal jaye to "kept as is" message
+3. **Chat → reply → Summarize / Rewrite** — sheet khule, task chale, "Use" draft mein daale, "Ask server" request banaye, dismiss band kare
+4. **Settings → Reset** — device settings + Personal memory reset hon, project settings bache ("Project settings and memory kept")
+5. **Chat → model picker → free model** — `updateSettings(freeModel=…)` still save ho (yeh `ChatViewModel` se forwarder se jaata hai)
+
+**Build yahan nahi chala** — sandbox mein Java/Android SDK nahi hai. Jo kiya woh byte-compare + host/interface parity + import/brace balance + reflection-trap check hai. Asli confirmation CI se aayegi.
