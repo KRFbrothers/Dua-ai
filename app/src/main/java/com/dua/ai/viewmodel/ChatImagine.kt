@@ -119,12 +119,6 @@ internal class ChatImagine(host: ImagineHost) : ImagineHost by host {
         return _isTyping.value
     }
 
-    private fun imagineFailure(failure: Throwable): String = when (failure) {
-        is com.dua.ai.account.AccountException -> failure.message ?: "Imagine request failed."
-        is IllegalArgumentException, is IllegalStateException -> failure.message ?: "Imagine request failed."
-        is java.net.SocketTimeoutException -> "Imagine took too long to answer. Check your daily usage in Settings before trying again."
-        else -> "Connection fail hua. Dobara try karein."
-    }
 
     internal fun sendImagine(userText: String) {
         if (_isTyping.value || _readingFiles.value) return
