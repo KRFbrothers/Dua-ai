@@ -4,9 +4,21 @@ set -euo pipefail
 set +x
 umask 077
 adk_action="${1:-plan}"
-case "$adk_action" in plan|stage) ;; *) echo 'Usage: bash dua-adk-cloudshell.sh plan|stage' >&2; exit 2;; esac
+case "$adk_action" in plan|stage) ;; *) echo 'Usage: bash dua-adk-cloudshell.sh plan|stage [--reset-db-credential]' >&2; exit 2;; esac
+adk_extra=()
+for adk_arg in "${@:2}"; do
+  case "$adk_arg" in --reset-db-credential) adk_extra+=("$adk_arg");; *) echo "Unknown option: $adk_arg" >&2; exit 2;; esac
+done
 for adk_bin in gcloud git python3 openssl; do command -v "$adk_bin" >/dev/null || { echo "Missing $adk_bin; open Google Cloud Shell." >&2; exit 2; }; done
+# Earlier runs left large work dirs (venv) in $HOME. Keep only rollback
+# snapshots of runs that staged a candidate; remove everything else.
+adk_cleanup_dir() {
+  [ -d "$1" ] || return 0
+  if [ -f "$1/rollback.json" ]; then rm -rf "$1/venv" "$1/database-ca.pem" "$1/cloudshell_setup.py"; else rm -rf "$1"; fi
+}
+for adk_old in "$HOME"/dua-adk-stage.*; do adk_cleanup_dir "$adk_old"; done
 adk_work="$(mktemp -d "$HOME/dua-adk-stage.XXXXXX")"
+trap 'adk_cleanup_dir "$adk_work"' EXIT
 adk_source="$adk_work/source"
 git init -q "$adk_source"
 git -C "$adk_source" remote add origin https://github.com/KRFbrothers/Dua-ai.git
@@ -177,7 +189,132 @@ def verify_storage():
     print('Database session persistence and native vector smoke passed; synthetic records cleaned.')
 
 
-def database_setup(source,account):
+SEARCH_PATH='dua_adk, extensions'
+RETRYABLE_SQLSTATES=('28P01','28000','42501','42P01','3F000','3D000')
+
+
+def sanitize(text,hidden=()):
+    text=str(text)
+    for value in hidden:
+        if value:text=text.replace(value,'***').replace(quote(value,safe=''),'***')
+    text=re.sub(r'postgres(?:ql)?(?:\+\w+)?://\S+','postgresql://***',text)
+    text=re.sub(r'(?i)(password\s*=\s*)\S+',r'\1***',text)
+    return ' '.join(text.split())[:400]
+
+
+def db_error(error,hidden=()):
+    """Return (sqlstate, safe one-line server message). Never includes credentials."""
+    orig=getattr(error,'orig',None) or error
+    state=getattr(orig,'sqlstate',None) or getattr(orig,'pgcode',None)
+    diag=getattr(orig,'diag',None)
+    primary=getattr(diag,'message_primary',None) if diag else None
+    message=primary or (str(orig).splitlines() or [''])[0]
+    message=re.sub(r"<class '[^']*'>:\s*",'',message)
+    return state,sanitize(message,hidden)
+
+
+def database_failure(error,hidden=()):
+    state,message=db_error(error,hidden)
+    return 'Database error'+(' '+state if state else '')+' ('+type(getattr(error,'orig',None) or error).__name__+'): '+message
+
+
+def ask_yes(label):
+    try:return prompt(label).strip().lower() in ('y','yes')
+    except OSError:return False
+
+
+def runtime_connect(url,ca_file):
+    import psycopg
+    return psycopg.connect(url,sslmode='verify-full',sslrootcert=str(ca_file),connect_timeout=15,autocommit=True)
+
+
+def ensure_search_path(url,ca_file,hidden=()):
+    """Supabase's session pooler ignores libpq '-csearch_path' startup options,
+    so the ADK tables landed in 'public' (permission denied). A role-level
+    default applies to every new session regardless of what the pooler forwards."""
+    import time
+    try:
+        with runtime_connect(url,ca_file) as con:
+            con.execute('ALTER ROLE CURRENT_USER SET search_path = '+SEARCH_PATH)
+            # Pooled idle sessions of this dedicated role still carry the old
+            # path; recycle only those (nothing serves with this role yet).
+            con.execute('SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE usename=current_user AND pid<>pg_backend_pid()')
+        for _ in range(5):
+            with runtime_connect(url,ca_file) as con:
+                schema=con.execute('SELECT current_schema()').fetchone()[0]
+            if schema=='dua_adk':return
+            time.sleep(2)
+    except Exception as error:
+        if type(error) in (ValueError,RuntimeError):raise
+        raise ValueError(database_failure(error,hidden)) from None
+    raise ValueError('The database role search_path is not active through the pooler (current schema: '+str(schema)+'). Rerun in a few minutes.')
+
+
+def admin_repair(psycopg,sql,host,runtime_password,ca_file,save_url=None):
+    """Create/repair the dedicated role, private schema and grants as the Supabase admin."""
+    step('database admin login')
+    admin_password=getpass.getpass('Supabase DATABASE password (hidden; not your Google password): ')
+    try:
+        admin=psycopg.connect(host=host,port=5432,dbname='postgres',user='postgres.'+SUPABASE_REF,
+            password=admin_password,sslmode='verify-full',sslrootcert=str(ca_file),connect_timeout=15)
+    except Exception as error:
+        raise ValueError('Database login/TLS failed ('+type(error).__name__+'). Verify the session host, database password and project CA; TLS was not weakened.') from None
+    del admin_password
+    step('preparing database role/schema')
+    version=None
+    try:
+        with admin:
+            ext=admin.execute("SELECT n.nspname FROM pg_extension e JOIN pg_namespace n ON e.extnamespace=n.oid WHERE e.extname='vector'").fetchone()
+            if ext and ext[0]!='extensions':
+                raise ValueError('pgvector already exists outside extensions. Ask the database administrator to review it; no extension was moved or reinstalled.')
+            admin.execute("SET LOCAL lock_timeout='5s'")
+            # Send only the SCRAM verifier in DDL, not the cleartext password.
+            verifier=admin.pgconn.encrypt_password(runtime_password.encode(),ROLE.encode(),algorithm=b'scram-sha-256').decode()
+            role=sql.Identifier(ROLE)
+            if admin.execute('SELECT 1 FROM pg_roles WHERE rolname=%s',(ROLE,)).fetchone():
+                # Dedicated ADK-only role: align its password with the stored secret.
+                # On PostgreSQL 16+ a non-superuser may not even name SUPERUSER/
+                # REPLICATION/BYPASSRLS in ALTER ROLE, so set only what is needed
+                # and verify the privileged attributes are off instead.
+                admin.execute(sql.SQL('ALTER ROLE {} WITH LOGIN NOINHERIT PASSWORD {}').format(role,sql.Literal(verifier)))
+                unsafe=admin.execute('SELECT rolsuper OR rolcreaterole OR rolcreatedb OR rolreplication OR rolbypassrls FROM pg_roles WHERE rolname=%s',(ROLE,)).fetchone()[0]
+                if unsafe:raise ValueError('Existing '+ROLE+' role has elevated attributes. Stop for a focused permission review; nothing was committed.')
+            else:
+                admin.execute(sql.SQL('CREATE ROLE {} LOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS PASSWORD {}').format(role,sql.Literal(verifier)))
+            admin.execute(sql.SQL('ALTER ROLE {} SET search_path = '+SEARCH_PATH).format(role))
+            admin.execute('CREATE SCHEMA IF NOT EXISTS extensions')
+            admin.execute('CREATE EXTENSION IF NOT EXISTS vector WITH SCHEMA extensions')
+            # Supabase's postgres login cannot GRANT a role to itself or create a
+            # schema AUTHORIZATION another role. Own the schema as the current
+            # admin user and grant the runtime role exactly what it needs.
+            admin.execute('CREATE SCHEMA IF NOT EXISTS dua_adk')
+            admin.execute('REVOKE ALL ON SCHEMA dua_adk FROM PUBLIC,anon,authenticated')
+            admin.execute(sql.SQL('GRANT USAGE, CREATE ON SCHEMA dua_adk TO {}').format(role))
+            admin.execute(sql.SQL('GRANT ALL ON ALL TABLES IN SCHEMA dua_adk TO {}').format(role))
+            admin.execute(sql.SQL('GRANT ALL ON ALL SEQUENCES IN SCHEMA dua_adk TO {}').format(role))
+            admin.execute(sql.SQL('ALTER DEFAULT PRIVILEGES IN SCHEMA dua_adk GRANT ALL ON TABLES TO {}').format(role))
+            admin.execute(sql.SQL('ALTER DEFAULT PRIVILEGES IN SCHEMA dua_adk GRANT ALL ON SEQUENCES TO {}').format(role))
+            admin.execute(sql.SQL('GRANT USAGE ON SCHEMA extensions TO {}').format(role))
+            # Store first, commit second: a Secret Manager error rolls back SQL.
+            if save_url:version=save_secret(DB_SECRET,save_url)
+    except Exception as error:
+        if type(error) in (ValueError,RuntimeError):raise
+        raise ValueError(database_failure(error,(runtime_password,))) from None
+    print('Private ADK schema, dedicated role and pgvector prepared in the existing project.')
+    return version
+
+
+def initialize_tables(source):
+    import agent_store,agent_documents
+    agent_store.initialize();agent_documents.initialize()
+    async def prepare():
+        store=agent_store.service()
+        try:await store.prepare_tables()
+        finally:await store.close()
+    asyncio.run(prepare())
+
+
+def database_setup(source,account,reset_credential=False):
     import psycopg
     from psycopg import sql
     # Use verified Supabase session pooling for IPv4. Never guess the host from
@@ -202,6 +339,7 @@ def database_setup(source,account):
         ca_file=combined
     step('checking stored database credential')
     reuse_password=None
+    host=None
     if version:
         url=gcloud('secrets','versions','access',version,'--secret',DB_SECRET)
         parsed=urlsplit(url)
@@ -209,17 +347,22 @@ def database_setup(source,account):
            parsed.username not in (ROLE,ROLE+'.'+SUPABASE_REF) or parsed.port not in (None,5432) or \
            parsed.path!='/postgres' or parsed.query or not (parsed.hostname=='db.'+SUPABASE_REF+'.supabase.co' or \
            re.fullmatch(HOST_RE,parsed.hostname)):
-            raise ValueError('Existing database secret does not identify the expected dedicated ADK role.')
-        if runtime_ready(url,ca_file):
+            if not reset_credential:
+                raise ValueError('Existing database secret does not identify the expected dedicated ADK role. Rerun with: stage --reset-db-credential')
+        else:host=parsed.hostname
+        if reset_credential:
+            print('Resetting the ADK database credential: a new password is generated and stored as a new secret version.')
+            needs_admin=True
+        elif runtime_ready(url,ca_file):
             print('Reusing the existing ADK database credential and schema; no password rotation.')
             needs_admin=False
         else:
             print('Stored ADK credential found, but the database role/schema is not ready yet. Repairing it with the same stored password (no rotation).')
             needs_admin=True
-            host=parsed.hostname
             reuse_password=unquote(parsed.password)
     else:
         needs_admin=True
+    if needs_admin and not reuse_password and not host:
         host=prompt('Supabase Connect > Session pooler HOST (no URL/password): ')
         if not re.fullmatch(HOST_RE,host):
             raise ValueError('Copy the session pooler host from the project Connect panel; do not use the transaction port.')
@@ -227,48 +370,15 @@ def database_setup(source,account):
     if extra and not ca_version:ca_version=save_secret(CA_SECRET,extra)
     if needs_admin:
         runtime_password=reuse_password or secrets.token_urlsafe(36)
+        save_url=None
         if not reuse_password:
-            url='postgresql://'+ROLE+'.'+SUPABASE_REF+':'+quote(runtime_password,safe='')+'@'+host+':5432/postgres'
-        step('database admin login')
-        admin_password=getpass.getpass('Supabase DATABASE password (hidden; not your Google password): ')
-        try:
-            admin=psycopg.connect(host=host,port=5432,dbname='postgres',user='postgres.'+SUPABASE_REF,
-                password=admin_password,sslmode='verify-full',sslrootcert=str(ca_file),connect_timeout=15)
-        except Exception as error:
-            raise ValueError('Database login/TLS failed ('+type(error).__name__+'). Verify the session host, database password and project CA; TLS was not weakened.') from None
-        del admin_password
-        step('preparing database role/schema')
-        with admin:
-            ext=admin.execute("SELECT n.nspname FROM pg_extension e JOIN pg_namespace n ON e.extnamespace=n.oid WHERE e.extname='vector'").fetchone()
-            if ext and ext[0]!='extensions':
-                raise ValueError('pgvector already exists outside extensions. Ask the database administrator to review it; no extension was moved or reinstalled.')
-            admin.execute("SET LOCAL lock_timeout='5s'")
-            # Send only the SCRAM verifier in DDL, not the cleartext password.
-            verifier=admin.pgconn.encrypt_password(runtime_password.encode(),ROLE.encode(),algorithm=b'scram-sha-256').decode()
-            attrs='LOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS PASSWORD {}'
-            if admin.execute('SELECT 1 FROM pg_roles WHERE rolname=%s',(ROLE,)).fetchone():
-                # Dedicated ADK-only role: align its password with the stored secret.
-                admin.execute(sql.SQL('ALTER ROLE {} '+attrs).format(sql.Identifier(ROLE),sql.Literal(verifier)))
-            else:
-                admin.execute(sql.SQL('CREATE ROLE {} '+attrs).format(sql.Identifier(ROLE),sql.Literal(verifier)))
-            admin.execute('CREATE SCHEMA IF NOT EXISTS extensions')
-            admin.execute('CREATE EXTENSION IF NOT EXISTS vector WITH SCHEMA extensions')
-            # Supabase's postgres login cannot GRANT a role to itself or create a
-            # schema AUTHORIZATION another role. Own the schema as the current
-            # admin user and grant the runtime role exactly what it needs.
-            admin.execute('CREATE SCHEMA IF NOT EXISTS dua_adk')
-            admin.execute('REVOKE ALL ON SCHEMA dua_adk FROM PUBLIC,anon,authenticated')
-            role=sql.Identifier(ROLE)
-            admin.execute(sql.SQL('GRANT USAGE, CREATE ON SCHEMA dua_adk TO {}').format(role))
-            admin.execute(sql.SQL('GRANT ALL ON ALL TABLES IN SCHEMA dua_adk TO {}').format(role))
-            admin.execute(sql.SQL('GRANT ALL ON ALL SEQUENCES IN SCHEMA dua_adk TO {}').format(role))
-            admin.execute(sql.SQL('ALTER DEFAULT PRIVILEGES IN SCHEMA dua_adk GRANT ALL ON TABLES TO {}').format(role))
-            admin.execute(sql.SQL('ALTER DEFAULT PRIVILEGES IN SCHEMA dua_adk GRANT ALL ON SEQUENCES TO {}').format(role))
-            admin.execute(sql.SQL('GRANT USAGE ON SCHEMA extensions TO {}').format(role))
-            # Store first, commit second: a Secret Manager error rolls back SQL.
-            if not reuse_password:version=save_secret(DB_SECRET,url)
+            url=save_url='postgresql://'+ROLE+'.'+SUPABASE_REF+':'+quote(runtime_password,safe='')+'@'+host+':5432/postgres'
+        saved=admin_repair(psycopg,sql,host,runtime_password,ca_file,save_url)
+        if saved:version=saved
         del runtime_password
-        print('Private ADK schema, dedicated role and pgvector prepared in the existing project.')
+    hidden=(unquote(urlsplit(url).password or ''),)
+    step('setting database search_path')
+    ensure_search_path(url,ca_file,hidden)
     step('granting runtime secret access')
     allow_runtime(DB_SECRET,account)
     if ca_version:allow_runtime(CA_SECRET,account)
@@ -277,33 +387,46 @@ def database_setup(source,account):
     os.environ['ADK_SESSION_DB_URL']=url
     os.environ.pop('ADK_DB_LOCAL',None)
     sys.path.insert(0,str(source/'google-cloud-backend'))
-    import agent_store,agent_documents
-    step('initializing ADK tables')
-    agent_store.initialize();agent_documents.initialize()
-    async def prepare():
-        store=agent_store.service()
-        try:await store.prepare_tables()
-        finally:await store.close()
-    asyncio.run(prepare())
-    status=agent_store.status()
-    if not status.get('ready') or not status.get('durableAcrossInstances'):
-        raise ValueError('Storage readiness failed; no candidate was deployed.')
-    engine=agent_store.engine()
-    try:
-        from sqlalchemy import text
-        with engine.connect() as con:
-            # The runtime must not own or have direct grants to unrelated public
-            # app tables. PUBLIC grants cannot be fixed by NOINHERIT alone.
-            unrelated=con.execute(text("SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname IN ('public','auth','storage') AND c.relkind IN ('r','p','v','m','f') AND has_table_privilege(current_user,c.oid,'SELECT,INSERT,UPDATE,DELETE')")).scalar_one()
-            if unrelated:raise ValueError('Dedicated role can access unrelated app tables. Stop for a focused permission review; no public grants were changed.')
-    finally:engine.dispose()
-    step('storage smoke test')
-    verify_storage()
+    import agent_store
+    def prepare_storage(label):
+        step('initializing ADK tables'+label)
+        initialize_tables(source)
+        status=agent_store.status()
+        if not status.get('ready') or not status.get('durableAcrossInstances'):
+            raise ValueError('Storage readiness failed ('+sanitize(status.get('reason','unknown'),hidden)+'); no candidate was deployed.')
+        engine=agent_store.engine()
+        try:
+            from sqlalchemy import text
+            with engine.connect() as con:
+                # The runtime must not own or have direct grants to unrelated public
+                # app tables. PUBLIC grants cannot be fixed by NOINHERIT alone.
+                unrelated=con.execute(text("SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname IN ('public','auth','storage') AND c.relkind IN ('r','p','v','m','f') AND has_table_privilege(current_user,c.oid,'SELECT,INSERT,UPDATE,DELETE')")).scalar_one()
+                if unrelated:raise ValueError('Dedicated role can access unrelated app tables. Stop for a focused permission review; no public grants were changed.')
+        finally:engine.dispose()
+        step('storage smoke test'+label)
+        verify_storage()
+    reset_hint='. To re-enter the database credential, rerun: bash ~/dua-adk-cloudshell.sh stage --reset-db-credential'
+    try:prepare_storage('')
+    except Exception as error:
+        if type(error) in (ValueError,RuntimeError):raise
+        state,_=db_error(error,hidden)
+        failed=STEP
+        print('SETUP PROBLEM during '+failed+': '+database_failure(error,hidden),file=sys.stderr)
+        if state not in RETRYABLE_SQLSTATES or not host or \
+           not ask_yes('Repair the database role/grants with the Supabase admin password and retry once? [y/N]: '):
+            raise ValueError(database_failure(error,hidden)+reset_hint) from None
+        admin_repair(psycopg,sql,host,hidden[0],ca_file)
+        step('setting database search_path')
+        ensure_search_path(url,ca_file,hidden)
+        try:prepare_storage(' (retry)')
+        except Exception as again:
+            if type(again) in (ValueError,RuntimeError):raise
+            raise ValueError(database_failure(again,hidden)+reset_hint) from None
     os.environ.pop('ADK_SESSION_DB_URL',None)
     return str(version),str(ca_version) if ca_version else None
 
 
-def stage(source,service):
+def stage(source,service,reset_credential=False):
     spec=service['spec']['template']['spec']
     container=spec['containers'][0]
     image=container['image'].split('@',1)[0]
@@ -318,7 +441,7 @@ def stage(source,service):
     if not account:
         number=gcloud('projects','describe',PROJECT,'--format=value(projectNumber)')
         account=number+'-compute@developer.gserviceaccount.com'
-    db_version,ca_version=database_setup(source,account)
+    db_version,ca_version=database_setup(source,account,reset_credential)
     target=match[1]+'/dua-ai-engine-adk:'+sha
     step('building image')
     print('Building the merged source; Cloud Build/registry usage follows your existing project billing.')
@@ -389,6 +512,7 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('action',choices=('plan','stage'))
     parser.add_argument('--source',type=Path,required=True)
+    parser.add_argument('--reset-db-credential',action='store_true',help='Generate a new ADK database password (needs the Supabase admin password).')
     args=parser.parse_args()
     try:
         step('reading Cloud Run service')
@@ -401,7 +525,7 @@ def main():
                 'Store/reuse version-pinned DB credential and optional CA in Secret Manager (adds a version if the secret exists)','Grant only the existing runtime service account access to those secrets',
                 'Build merged source in the existing registry','Create a tagged candidate with serving traffic unchanged'],
                 'noAutomaticPromotion':True,'noAutomaticHostedModelCalls':True},indent=2))
-        else:stage(args.source,service)
+        else:stage(args.source,service,args.reset_db_credential)
         return 0
     except Exception as error:
         # Our diagnostics contain metadata; third-party errors can include DSNs.
@@ -420,9 +544,9 @@ if [ "$adk_action" = stage ]; then
   adk_python="$(command -v python3.12 || command -v python3)"
   "$adk_python" -c 'import sys; assert sys.version_info[:2]==(3,12), "Use Python 3.12 for the tested lock file"'
   "$adk_python" -m venv "$adk_work/venv"
-  "$adk_work/venv/bin/python" -m pip install --disable-pip-version-check -q -r "$adk_source/google-cloud-backend/requirements-adapters-lock.txt"
+  "$adk_work/venv/bin/python" -m pip install --disable-pip-version-check --no-cache-dir -q -r "$adk_source/google-cloud-backend/requirements-adapters-lock.txt"
   "$adk_work/venv/bin/python" -m pip check
-  "$adk_work/venv/bin/python" "$adk_work/cloudshell_setup.py" stage --source "$adk_source"
+  "$adk_work/venv/bin/python" "$adk_work/cloudshell_setup.py" stage --source "$adk_source" "${adk_extra[@]}"
 else
   python3 "$adk_work/cloudshell_setup.py" plan --source "$adk_source"
 fi
