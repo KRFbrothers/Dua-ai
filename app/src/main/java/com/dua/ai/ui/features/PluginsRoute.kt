@@ -1,4 +1,4 @@
-package com.dua.ai.ui.screens
+package com.dua.ai.ui.features
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
