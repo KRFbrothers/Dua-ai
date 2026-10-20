@@ -4,6 +4,8 @@ Ye folder abhi **khaali** hai — sirf yahi README hai. Yahan aage woh files aay
 
 Sab line numbers `main` branch ke commit **`e6fac6e`** par **20 Oct 2026** ko fresh grep se liye gaye hain. Purane numbers copy nahi kiye.
 
+> **Pass 2 update (20 Oct 2026, `main` @ `c947d09`):** Neeche naya section **"Pass 2 — poore repo ka dead-code scan"** add hua hai. Us pass mein **0 files** dead mili, isliye is PR mein koi file move nahi ki gayi. Saath hi ek pichhli galti bhi sudhaari gayi hai — **"Ye teen pakka dead hain" wala section ab GALAT hai**, neeche correction padho.
+
 ---
 
 ## ⚠️ Traps — inhe delete MAT karo
@@ -30,27 +32,63 @@ Pichhli audit mein likha tha ki yeh "manifest string se uthta hai". **Woh galat 
 
 ---
 
-## ✅ Ye teen pakka dead hain
+## ❌ CORRECTION — "Ye teen pakka dead hain" wali baat GALAT thi
 
-Inke object ka naam poore `.kt` codebase mein **kahin nahi** aata (sirf apni hi file ke andar):
+Pichhle pass mein likha tha ki ye teen files dead hain. **Woh galat tha.** Pass 2 mein poore repo ka symbol-level scan chalaya, aur teeno ke andar ke symbols **production code se use ho rahe hain**:
 
-| File path | Proof |
+| File | Symbol | Kaun use karta hai (production) |
+| --- | --- | --- |
+| `ui/chat/TelegramInterpolators.kt` | `TelegramChatAnimator` | `ui/chat/ChatSwipeReply.kt:222` |
+| | `TelegramCubicBezier` | `ui/components/TelegramThemeSwitch.kt:41` (import) + `:51` |
+| | `TelegramDecelerate` | `ui/chat/ChatSwipeReply.kt:138`, `ui/chat/TelegramMessagePopup.kt:104`, `ui/chat/TelegramPageDown.kt:72,73` |
+| `ui/chat/TelegramImageReveal.kt` | `TelegramImageCrossfade` | `ui/chat/ImagineMedia.kt:81` |
+| | `imageReveal` (Modifier extension) | `ui/chat/ImagineMedia.kt:90` |
+| `ui/history/TelegramDialogSwipe.kt` | `ChatUndoBar` | `ui/history/HistoryDrawer.kt:241` |
+| | `DialogSwipeAction` | `ui/history/HistoryDrawer.kt:227,229` |
+| | `DialogSwipeRow` | `ui/history/HistoryDrawer.kt:226` |
+| | `SwipeDeleteIcon` | `ui/history/HistoryDrawer.kt:229` |
+| | `SwipePinIcon` | `ui/history/HistoryDrawer.kt:227` |
+
+**Galti ki wajah:** pehla scan **file ke naam** se grep kar raha tha (`TelegramInterpolators`), jo kabhi import nahi hota. Asli symbol ka naam alag hai (`TelegramChatAnimator`). Isliye "0 hits" mila — aur woh jhooth tha.
+
+**Inhe delete MAT karo.** Teeno `THIRD_PARTY_NOTICES.md` ke Telegram section mein bhi hain, isliye delete karne par license trail bhi tootega.
+
+---
+
+## 🔍 Pass 2 — poore repo ka dead-code scan (20 Oct 2026)
+
+**Result: 0 files dead mili. Is PR mein koi file move nahi ki gayi.**
+
+### Method
+
+1. `main` @ `c947d09` clone kiya (PR #303 merge ke baad ka HEAD).
+2. `app/src/main/java/` ke **290** Kotlin/Java files se declared symbols nikale — `class`, `interface`, `object`, `typealias`, **extension functions** (`fun Modifier.foo`), aur top-level `val`/`var`.
+3. Poore repo (sources + tests + XML + gradle + md) ka word index banaya, phir har symbol ke inbound references gine.
+4. Saath mein **reachability BFS** — `MainActivity`, `DuaApp`, aur AndroidManifest ke components se shuru karke poora reference graph traverse kiya.
+
+### Result
+
+| Check | Number |
 | --- | --- |
-| `app/src/main/java/com/dua/ai/ui/chat/TelegramInterpolators.kt` | `TelegramInterpolators` → apni file ke bahar **0 hits** |
-| `app/src/main/java/com/dua/ai/ui/chat/TelegramImageReveal.kt` | `TelegramImageReveal` → apni file ke bahar **0 hits** |
-| `app/src/main/java/com/dua/ai/ui/history/TelegramDialogSwipe.kt` | `TelegramDialogSwipe` → apni file ke bahar **0 hits** |
+| Source files scanned | 290 |
+| Files with **0 inbound refs** (kisi bhi file se) | **0** |
+| Files with **0 inbound refs** (sirf production, tests hataake) | **0** |
+| Files **unreachable** from production roots | **0** |
 
-### ⚠️ Par ek problem hai — ye teen notices mein bhi hain
+### Non-grep traps bhi check kiye
 
-Teeno files `THIRD_PARTY_NOTICES.md` ke **Telegram for Android** section mein row ke saath listed hain (us section mein total **7 rows**). Aur teeno ke header mein likha hai:
+| Trap | Result |
+| --- | --- |
+| `AndroidManifest.xml` components | 5 app classes: `MainActivity`, `RememberThisShareTargetActivity`, `tasks.TaskReminderReceiver`, `voice.live.LiveVoiceService`, `widget.DuaToolbarWidgetReceiver` — sab reachable |
+| `res/` XML | `res/xml/sharing_shortcuts.xml` → `com.dua.ai.MainActivity` (4 hits) |
+| Reflection / `Class.forName` | **0** hits (sirf normal `::class.java` Kotlin) |
+| Proguard | `app/proguard-rules.pro` — koi class-specific keep rule nahi |
+| `build.gradle` sourceSets | koi custom `srcDir` nahi |
+| `THIRD_PARTY_NOTICES.md` | 30 rows — koi bhi un files ka nahi jo is pass mein candidate bani |
 
-> Adapted from Telegram ... Original: Telegram for Android, Copyright Nikolai Kudashov, 2013-2018 ... licensed under GNU GPL v. 2 or later
+### Ek blind spot jo pakda gaya
 
-Matlab: code dead hai, par **attribution dead nahi hai**. Delete karo to notice file mein dangling row reh jaayega — jo license hygiene kharab karta hai.
-
-**Sahi tareeka:** delete wale commit mein hi `THIRD_PARTY_NOTICES.md` ki woh 3 rows bhi hatao. Pehle us file ka header dekho jo inhe adapt kiya tha.
-
-Phir bhi **seedha delete mat karo** — neeche wala process follow karo. Grep se "0 hits" milna proof nahi hai (neeche wajah likhi hai).
+Pehla scan **extension functions miss kar raha tha** (`fun Modifier.homeBackdrop`, `fun NavGraphBuilder.settingsFeaturePages`). Isse 7 files galti se "unreachable" dikhi — `ui/chat/HomeBackdrop.kt`, `ui/chat/SwipeUpToOpen.kt`, `ui/chat/OgGenerationBackdrop.kt`, `ui/components/PressScale.kt`, `ui/navigation/ComingSoonRoutes.kt`, `ui/navigation/SettingsFeatureRoutes.kt`, `ui/og/BlobDrawable.java`. Regex theek karne ke baad **saari 7 reachable nikli** — sab zinda hain. Jaise `homeBackdrop` `ui/chat/ChatScreen.kt:371` se aur `swipeUpToOpen` `ChatScreen.kt:436` se call hote hain.
 
 ---
 
@@ -76,13 +114,14 @@ Grep akela kaafi nahi. Yeh order follow karo:
 1. **Baseline banao** — `./gradlew assembleDebug` chalao, pass hona chahiye.
 2. **Grep se symbol dhoondo** — file ka nahi, **andar ke class/function ka** naam. File ka naam kabhi import nahi hota, isliye file naam se 0 hits normal hai.
 3. **Wildcard import ka dhyaan rakho** — `import com.dua.ai.ui.theme.*` jaisi line 19 theme files ko "dead" dikha sakti hai. Isliye symbol-level check karo.
-4. **File delete karo, phir build** — `./gradlew assembleDebug && ./gradlew lint`. Dono pass hone chahiye.
-5. **Runtime par test karo** — build pass hona kaafi nahi. WorkManager, reflection, aur manifest-declared cheezein sirf app chala kar hi pakdi jaati hain. Backup, widget, notification wale hisse zaroor test karo.
-6. **`THIRD_PARTY_NOTICES.md` check karo** — deleted file ka naam wahan hai kya? Hai to usi commit mein row hatao, warna license trail toot jaayega.
-7. **Tab jaake delete commit karo** — aur PR mein likho ki build + app test dono pass hue.
+4. **Extension functions yaad rakho** — `fun Modifier.foo` aur `fun NavGraphBuilder.bar` ka naam file ke naam se alag hota hai. Inhe miss karna sabse aam galti hai (pass 2 mein yahi hui thi).
+5. **File delete karo, phir build** — `./gradlew assembleDebug && ./gradlew lint`. Dono pass hone chahiye.
+6. **Runtime par test karo** — build pass hona kaafi nahi. WorkManager, reflection, aur manifest-declared cheezein sirf app chala kar hi pakdi jaati hain. Backup, widget, notification wale hisse zaroor test karo.
+7. **`THIRD_PARTY_NOTICES.md` check karo** — deleted file ka naam wahan hai kya? Hai to usi commit mein row hatao, warna license trail toot jaayega.
+8. **Tab jaake delete commit karo** — aur PR mein likho ki build + app test dono pass hue.
 
 ---
 
 ## Is PR mein kya nahi kiya
 
-Koi file move ya delete **nahi** hui. `ChatViewModel.kt` todna, `ui/screens/` merge karna, `auth/` merge karna, `web/` rename karna — kuch bhi is PR mein nahi hai. Sirf yahi README add hui hai.
+Koi file move ya delete **nahi** hui. `ChatViewModel.kt` todna, `ui/screens/` merge karna, `auth/` merge karna, `web/` rename karna — kuch bhi is PR mein nahi hai. Sirf yahi README update hui hai (pass 2 ka section + Telegram correction).
