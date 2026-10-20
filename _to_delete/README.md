@@ -644,3 +644,111 @@ Teeno pass hone chahiye. Uske baad app mein yeh **5 jagah** — yeh exactly woh 
 3. **Live voice screen** — mic permission → session start, minutes count, end par transcript chat mein save
 4. **Voice mode (hands-free)** — orb tap → live voice available ho to LiveVoice par jaata hai, warna HandsFree
 5. **Offline** — internet off karke AI voice → "AI voice setup is unavailable. Try device voice." wala sahi message
+
+---
+
+## 📎 Chat split — Step 2: draft-attachment glue → `ChatAttachments.kt` (20 Oct 2026)
+
+**Base:** `main` @ `acbae0b` (PR #309 / Step 1 merge ke baad). **Kuch delete nahi hua** — sirf code move hua. **7 trap files ko haath nahi lagaya.** Golden rule follow hua: **ek step = ek feature = ek commit**.
+
+Yeh `ChatViewModel.kt` split plan ka **Step 2** hai (upar Pass 6 section ki table).
+
+### Line count — before → after
+
+| File | Pehle | Ab | Farq |
+| --- | --- | --- | --- |
+| `viewmodel/ChatViewModel.kt` | **1,684** | **1,654** | **−30** |
+| `viewmodel/ChatAttachments.kt` | — | **93** (naya) | +93 |
+| `viewmodel/` total | 3,579 | 3,642 | +63 (host + forwarders) |
+
+`ChatViewModel` se **51 line nikli** (attachment bodies) aur **21 line wapas aayi** (host object 13 + forwarders 6 + comment 1) → net **−30**.
+
+`git diff --shortstat` = **2 files, +114 −51**.
+
+### Kya nikaala — 5 members
+
+| Kya | Purana | Naya |
+| --- | --- | --- |
+| `attachmentImageBytes(index)` | `ChatViewModel` | `ChatAttachments` |
+| `acceptSharedAttachments(uris)` | `ChatViewModel` | `ChatAttachments` |
+| `removeAttachment(index)` | `ChatViewModel` | `ChatAttachments` |
+| `clearAttachments()` | `ChatViewModel` | `ChatAttachments` |
+| `uploadPicked(files)` (private) | `ChatViewModel` | `ChatAttachments` (`internal`) |
+| `MAX_UPLOADS = 10` (companion) | `ChatViewModel` | `ChatAttachments` ka `private companion` |
+
+**Pattern wahi jo pehle se 8 features mein hai:** `AttachmentsHost` interface + `ChatAttachments : AttachmentsHost by host` + `ChatViewModel` mein `by lazy` delegate.
+
+```kotlin
+private val attachmentsFeature: ChatAttachments by lazy { ChatAttachments(attachmentsHost) }
+private val attachmentsHost: AttachmentsHost by lazy { object : AttachmentsHost { /* 11 members */ } }
+```
+
+### Public API bilkul same — `ui/` ko touch nahi kiya
+
+`ChatViewModel` par **5 forwarders** hain, wahi naam aur wahi signature. Isliye `ChatRoute.kt`, `ProjectsFlow.kt`, `VoiceModeScreen.kt` — **ek bhi consumer file nahi badli**:
+
+| Caller | Kya call karta hai |
+| --- | --- |
+| `ChatRoute.kt:383` | `viewModel.acceptSharedAttachments(entry.uris)` |
+| `ChatRoute.kt:303` | `viewModel::removeAttachment` |
+| `ChatRoute.kt:235,259,302` · `ProjectsFlow.kt:167` · `VoiceModeScreen.kt:339` | `viewModel.clearAttachments()` |
+| `ChatRoute.kt:304` | `viewModel.attachmentImageBytes(index)` |
+| `DraftAttachmentRemovalTest:39,43,48` · `OnDeviceFeaturesTest:89,90` | `vm.removeAttachment` · `model.attachmentImageBytes` |
+
+**Sirf 1 line ki body badli hai:** `clearAttachments()` mein `discardUploads()` → `uploadsFeature.discardUploads()` — kyunki wo method ab `ChatAttachments` mein nahi hai, `ChatUploads` mein hai. Behavior identical (`ChatViewModel.discardUploads()` bhi wahi call karta hai). `uploadPicked` mein `maxStoredBytes()` → `uploadsFeature.maxStoredBytes()` aur `startUpload(...)` → `uploadsFeature.startUpload(...)`, wahi wajah — `UploadsHost` se already available.
+
+### Jo `ChatViewModel` mein hi rehna chahiye tha (chhua nahi)
+
+| Member | Kyun | Kahan |
+| --- | --- | --- |
+| `_attachments` · `_attachmentError` · `_readingFiles` · `_preparingFiles` · `_uploads` | 5 features + `sendMessage` + backup preflight sab padhte hain | `ChatViewModel` (host se share) |
+| `selectionVersion` · `preparingSelections` | `ChatUploads` selection race control karta hai | `ChatViewModel` (host se share) |
+| `attachmentImageBytes` ka base64 decode | **abhi yahan hai** (`ChatAttachments`) | puri body move hui |
+| `describe()` · `copyCapped()` | pehle se `ChatAttachmentFiles.kt` mein | chhue nahi |
+| `_dataBusy` / `_isTyping` | shared chat state | `ChatViewModel` (host se share) |
+
+**Koi duplicate state nahi** — `ChatAttachments` sab kuch host ke through padhta hai.
+
+### Verify — jo actually chalaya
+
+| Check | Result |
+| --- | --- |
+| **Byte-compare** — 5 moved bodies (normalised) vs naya file | `attachmentImageBytes` 3/3 · `acceptSharedAttachments` 6/6 (1 line intentionally badli) · `removeAttachment` 4/4 · `clearAttachments` 6/6 (1 line intentionally badli) · `uploadPicked` **28/28 lines present** (4 lines intentionally qualified) ✅ |
+| `AttachmentsHost` members | **11** — host object ke 11 overrides se **11 = 11**, missing 0 · extra 0 ✅ |
+| Duplicate declarations | `ChatAttachments.kt` **0** · `ChatViewModel.kt` **0 naye** ✅ |
+| `MAX_UPLOADS` dangling refs | **0** — sirf naye file ke companion mein ✅ |
+| Unused imports in `ChatAttachments.kt` | **0** — 10 imports, sab use ✅ |
+| Brace balance dono files | **0 / 0** ✅ |
+| Moved members ka repo-wide reach (main + test + androidTest) | 5 symbols, **0 break** — saare public API par forwarder se serve hote hain ✅ |
+| `chat.id`-type class ka silent break (pass 3/4 ka pattern) | **0** — moved bodies ke andar koi same-package symbol nahi hai; sab `ChatViewModel` ke host members ya fully-qualified/imported ✅ |
+| 7 trap files | **koi touch nahi** ✅ |
+| `_to_delete/README.md` purane 646 line | **byte-identical** — sirf naya section juda ✅ |
+
+### ⚠️ Ek honest note
+
+`ChatViewModel.kt` mein **3 unused imports** mile — `PhotoPolicy` (line 11), `CameraCaptureStore` (16), `SignedUpload` (46). **Yeh Step 1 se pehle se hain**, mere is change se nahi — `ChatViewModel.kt` ke `/tmp/CVM_before.kt` (base version) mein bhi teeno ke 0 use hain. Voice split ke waqt `ChatUploads` mein chale gaye the par import reh gaye. **Is PR mein nahi hataye** — scope se bahar, aur unrelated line touch karna review ko ganda karta hai. Agle step mein saath theek ho sakte hain.
+
+### Aage kya
+
+- **Step 3:** settings / appearance / writing (`setPersonality`, `setAppearance`, `setAccent`, `saveAppearance`, `resetSettings`, `updateSettings`, `openWriting`/`runWriting`/`useWritingResult`/`askServerForWriting`/`closeWriting` — est. 200–230 line) → `ChatSettings.kt`
+- **Step 4:** memory notes (`proposeMemoryNotes`, `acceptMemoryNote`, `suggestAgentMemory`, `dismissMemoryNote`, `confirmSharedMemory` — est. 60–80 line) → `ChatMemory.kt`
+- **Step 5–6:** `sendMessage` split, lifecycle — **high risk, alag PR**
+- **Rukne ka point: Step 4 ke baad** (file ~1,050–1,100 line, 10 features alag)
+
+### Merge checklist
+
+```bash
+./gradlew assembleDebug
+./gradlew testDebugUnitTest
+./gradlew lint
+```
+
+Teeno pass hone chahiye. Uske baad app mein yeh **5 jagah** — exactly woh raaste jo attachment code se guzarte hain:
+
+1. **Photo attach** — chat mein photo chips → thumbnail dikhe, remove (×) kaam kare
+2. **File attach (stored)** — bada file (spreadsheet/audio) sign-in ke saath → upload progress, phir send
+3. **Camera se photo** — camera icon → photo pick → chip add ho
+4. **Share sheet se file** — doosri app se Dua ko file share → `acceptSharedAttachments` queue
+5. **Naya chat / chat switch** — `clearAttachments()` sab chips saaf kare, uploads bhi
+
+**Build yahan nahi chala** — sandbox mein Java/Android SDK nahi hai. Jo kiya woh byte-compare + host/interface parity + import/brace balance hai. Asli confirmation CI se aayegi.

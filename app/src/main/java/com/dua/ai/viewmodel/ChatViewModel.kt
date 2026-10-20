@@ -193,6 +193,22 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         override fun describe(uris: List<Uri>) = this@ChatViewModel.describe(uris)
         override suspend fun uploadPicked(files: List<PickedFile>) = this@ChatViewModel.uploadPicked(files)
     } }
+    private val attachmentsFeature: ChatAttachments by lazy { ChatAttachments(attachmentsHost) }
+    private val attachmentsHost: AttachmentsHost by lazy { object : AttachmentsHost {
+        override fun <T : Application> getApplication(): T = this@ChatViewModel.getApplication()
+        override val uploadsFeature get() = this@ChatViewModel.uploadsFeature
+        override var selectionVersion: Int
+            get() = this@ChatViewModel.selectionVersion
+            set(value) { this@ChatViewModel.selectionVersion = value }
+        override val _attachments get() = this@ChatViewModel._attachments
+        override val _attachmentError get() = this@ChatViewModel._attachmentError
+        override val _readingFiles get() = this@ChatViewModel._readingFiles
+        override val _preparingFiles get() = this@ChatViewModel._preparingFiles
+        override val _uploads get() = this@ChatViewModel._uploads
+        override val _isTyping get() = this@ChatViewModel._isTyping
+        override val _dataBusy get() = this@ChatViewModel._dataBusy
+        override fun copyCapped(uri: Uri, limit: Long): File? = this@ChatViewModel.copyCapped(uri, limit)
+    } }
     private val accountFeature: ChatAccount by lazy { ChatAccount(accountHost) }
     private val accountHost: AccountHost by lazy { object : AccountHost {
         override val viewModelScope get() = this@ChatViewModel.viewModelScope
@@ -643,9 +659,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     suspend fun removeBackground(bytes: ByteArray): java.io.File =
         com.dua.ai.ondevice.Cutouts.create(getApplication(), backgroundRemover, bytes)
     /** Bytes of a draft image attachment, or null when it is not an image any more. */
-    fun attachmentImageBytes(index: Int): ByteArray? = _attachments.value.getOrNull(index)
-        ?.takeIf { it.mimeType.startsWith("image/") && it.data.length <= (com.dua.ai.attachments.AttachmentReader.MAX_BYTES + 2) / 3 * 4 }
-        ?.let { runCatching { java.util.Base64.getDecoder().decode(it.data) }.getOrNull() }
+    fun attachmentImageBytes(index: Int): ByteArray? = attachmentsFeature.attachmentImageBytes(index)
     private val appearanceStore = com.dua.ai.settings.AppearanceStore(application)
     private var appearanceLoaded = false
     val appearance = appearanceStore.data.onEach { appearanceLoaded = true }.stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, appearanceStore.initial)
@@ -944,26 +958,12 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     val preparingFiles: StateFlow<Boolean> = _preparingFiles.asStateFlow()
 
     /** Reserve shared-file intake synchronously, before the next queued entry can dispatch. */
-    fun acceptSharedAttachments(uris: List<Uri>): Boolean {
-        if (_isTyping.value || _dataBusy.value || _preparingFiles.value || _readingFiles.value ||
-            _attachments.value.isNotEmpty() || _uploads.value.isNotEmpty()) return false
-        selectAttachments(uris)
-        return true
-    }
+    fun acceptSharedAttachments(uris: List<Uri>): Boolean = attachmentsFeature.acceptSharedAttachments(uris)
 
     /** Remove only the selected inline draft file; keep every other attachment intact. */
-    fun removeAttachment(index: Int) {
-        if (_isTyping.value) return
-        _attachments.update { files -> files.filterIndexed { i, _ -> i != index } }
-    }
+    fun removeAttachment(index: Int) = attachmentsFeature.removeAttachment(index)
 
-    fun clearAttachments() {
-        selectionVersion++
-        _attachments.value = emptyList()
-        _attachmentError.value = ""
-        _readingFiles.value = false
-        discardUploads()
-    }
+    fun clearAttachments() = attachmentsFeature.clearAttachments()
 
     // ---- Stored files: direct uploads to the private Supabase bucket (owner sign-in required) ----
     private val fileClient = StoredFileClient()
@@ -1008,36 +1008,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private fun discardUploads() = uploadsFeature.discardUploads()
 
 
-    /** Uploads picked files that storage accepts; returns the rest for the small inline path. */
-    private suspend fun uploadPicked(files: List<PickedFile>): List<Uri> {
-        val resolver = getApplication<Application>().contentResolver
-        val inline = mutableListOf<Uri>()
-        var errors = 0
-        for (file in files) {
-            val type = StoredFileTypes.storedType(file.name, file.type)
-            if (type == null) { inline += file.uri; continue }
-            if (_uploads.value.count { it.state != PendingUpload.FAILED } >= MAX_UPLOADS) { _attachmentError.value = "Up to $MAX_UPLOADS stored files per message."; break }
-            var size = file.size
-            var temp: File? = null
-            if (size == null) {
-                // Some providers do not report a size; copy to cache first (capped) so the upload has a length.
-                temp = withContext(Dispatchers.IO) { copyCapped(file.uri, maxStoredBytes()) }
-                size = temp?.length()
-            }
-            when {
-                size == null -> { errors++; _attachmentError.value = "\"${file.name}\" is larger than ${StoredFileTypes.sizeLabel(maxStoredBytes())}." }
-                size == 0L -> { temp?.delete(); errors++; _attachmentError.value = "\"${file.name}\" is empty." }
-                size > maxStoredBytes() -> { temp?.delete(); errors++; _attachmentError.value = "\"${file.name}\" is larger than ${StoredFileTypes.sizeLabel(maxStoredBytes())}. Choose a smaller file." }
-                else -> {
-                    val copy = temp
-                    startUpload(file.name, type, size, open = { copy?.inputStream() ?: resolver.openInputStream(file.uri) ?: throw java.io.IOException("File cannot be read.") },
-                        cleanup = { copy?.delete() })
-                }
-            }
-        }
-        if (errors == 0 && inline.isEmpty()) _attachmentError.value = ""
-        return inline
-    }
+    private suspend fun uploadPicked(files: List<PickedFile>): List<Uri> = attachmentsFeature.uploadPicked(files)
 
 
     /** Deletes storage objects now (or later, if offline / signed out). */
@@ -1677,7 +1648,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private companion object {
         const val STREAM_FRAME_MS = 24L
         const val EMPTY_REPLY = "Model ne text reply nahi diya. Dobara try karein."
-        const val MAX_UPLOADS = 10
         /** Draft typing is saved this long after the last keystroke (and at once on stop or send). */
         const val DRAFT_SAVE_DELAY_MS = 500L
     }
