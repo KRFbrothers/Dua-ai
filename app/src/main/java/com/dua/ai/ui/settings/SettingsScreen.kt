@@ -222,11 +222,15 @@ fun SettingsItemRow(icon: ImageVector, label: String, value: String? = null, sho
     val color = if (tint == Color.Unspecified) c.rowText else tint
     BoxWithConstraints {
         val inline = settingsValueFitsInline(maxWidth, label, value, icon = true, chevron = chevron)
+        var taps by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableIntStateOf(0) }
         Column {
-            Row(Modifier.fillMaxWidth().heightIn(min = SettingsSizes.touch).clickable(enabled = enabled, role = Role.Button, onClickLabel = onClickLabel, onClick = onClick)
+            Row(Modifier.fillMaxWidth().heightIn(min = SettingsSizes.touch).clickable(enabled = enabled, role = Role.Button, onClickLabel = onClickLabel, onClick = { taps++; onClick() })
                 .padding(SettingsSizes.rowPadding), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(SettingsSizes.rowGap), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(icon, null, tint = if (tint == Color.Unspecified) c.rowIcon else tint, modifier = Modifier.size(SettingsSizes.rowIcon))
+                    val iconTint = if (tint == Color.Unspecified) c.rowIcon else tint
+                    val lottie = com.dua.ai.ui.components.AnimatedAssets.settingsIcons[label]
+                    if (lottie != null) com.dua.ai.ui.components.LottieIconOrFallback(lottie, icon, iconTint, SettingsSizes.rowIcon, playKey = taps)
+                    else Icon(icon, null, tint = iconTint, modifier = Modifier.size(SettingsSizes.rowIcon))
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                         Text(label, style = SettingsRowStyle, color = color)
                         if (!inline && !value.isNullOrBlank()) Text(value, style = SettingsValueStyle, color = c.value)

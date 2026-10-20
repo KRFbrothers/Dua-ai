@@ -217,6 +217,8 @@ dependencies {
     implementation(libs.androidx.profileinstaller)
     // Offline voice typing. Models are downloaded on demand in Settings > Voice, never bundled.
     implementation(libs.vosk.android)
+    implementation(libs.rive.android)
+    implementation(libs.lottie.compose)
     // Generator only (not packaged): ./gradlew :app:generateBaselineProfile with a phone connected.
     baselineProfile(project(":benchmark"))
     implementation(libs.androidx.datastore.preferences)
