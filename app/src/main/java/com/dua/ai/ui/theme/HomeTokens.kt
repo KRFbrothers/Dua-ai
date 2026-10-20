@@ -81,6 +81,13 @@ object HomeSizes {
     val topBarPaddingV = 6.dp
 }
 
+/** Home empty-state motion durations (ms); callers snap to 0 when reduce-motion is on. */
+object HomeMotion {
+    const val fadeIn = 240
+    const val fadeOut = 180
+    const val resize = DuaMotion.DurationNormal
+}
+
 object HomeShapes {
     val segmentTrack = RoundedCornerShape(24.dp)
     val segmentTab = RoundedCornerShape(20.dp)

@@ -27,6 +27,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.vectorResource
 import com.dua.ai.R
 import com.dua.ai.ui.components.DuaCalligraphyLogo
@@ -34,6 +35,7 @@ import com.dua.ai.ui.theme.ChatTheme
 import com.dua.ai.ui.theme.HomeTaskPromptStyle
 import com.dua.ai.ui.theme.HomeTaglineCompactStyle
 import com.dua.ai.ui.theme.HomeFontFamily
+import com.dua.ai.ui.theme.HomeMotion
 import com.dua.ai.ui.theme.HomeShapes
 import com.dua.ai.ui.theme.HomeSizes
 import com.dua.ai.ui.theme.HomeTheme
@@ -41,7 +43,8 @@ import com.dua.ai.ui.theme.Sizes
 import com.dua.ai.ui.theme.Spacing
 import com.dua.ai.ui.theme.rememberMotionAllowed
 
-internal val HomeTaskPrompts = listOf("Nudge me to backup my photos", "Learn React by building an app", "Compare views on a topic I follow")
+/** Task starter labels (strings.xml) paired with their icons. */
+internal val HomeTaskPromptIds = listOf(R.string.home_task_prompt_backup, R.string.home_task_prompt_react, R.string.home_task_prompt_compare)
 
 /** A quiet, centered Home canvas. Task starters keep the existing draft/focus handler. */
 @Composable
@@ -54,8 +57,8 @@ internal fun ChatContent(
         val keyboardOpen = WindowInsets.ime.getBottom(LocalDensity.current) > 0
         val compact = maxHeight < HomeSizes.heroCompactHeight
         val motion = rememberMotionAllowed()
-        val enterDuration = if (motion) 240 else 0
-        val exitDuration = if (motion) 180 else 0
+        val enterDuration = if (motion) HomeMotion.fadeIn else 0
+        val exitDuration = if (motion) HomeMotion.fadeOut else 0
         // Keep the empty canvas and bottom controls stationary while the draft hides decoration.
         AnimatedVisibility(visible = !composing,
             modifier = Modifier.widthIn(max = HomeSizes.composerMaxWidth).fillMaxSize().align(Alignment.Center),
@@ -68,8 +71,8 @@ internal fun ChatContent(
                     Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).heightIn(min = maxHeight),
                         verticalArrangement = Arrangement.Bottom) {
                         AnimatedVisibility(visible = !keyboardOpen,
-                            enter = fadeIn(tween(enterDuration)) + expandVertically(tween(if (motion) 250 else 0)),
-                            exit = fadeOut(tween(exitDuration)) + shrinkVertically(tween(if (motion) 250 else 0))) {
+                            enter = fadeIn(tween(enterDuration)) + expandVertically(tween(if (motion) HomeMotion.resize else 0)),
+                            exit = fadeOut(tween(exitDuration)) + shrinkVertically(tween(if (motion) HomeMotion.resize else 0))) {
                             HomeHero(true, small = true)
                         }
                         TaskStarters(onTask)
@@ -93,7 +96,7 @@ internal fun ChatContent(
 
 @Composable
 private fun HomeHero(task: Boolean, small: Boolean) {
-    val duration = if (rememberMotionAllowed()) 250 else 0
+    val duration = if (rememberMotionAllowed()) HomeMotion.resize else 0
     val padding by animateDpAsState(if (small) Spacing.sm else Spacing.xxl, tween(duration), label = "Home hero padding")
     val gap by animateDpAsState(if (small) Spacing.sm else Spacing.lg, tween(duration), label = "Home hero gap")
     val logoWidth by animateDpAsState(if (small) HomeSizes.heroCompactLogo else HomeSizes.heroLogo, tween(duration), label = "Home logo width")
@@ -103,7 +106,7 @@ private fun HomeHero(task: Boolean, small: Boolean) {
         // Same Dua logo, size and placement in Chat and Task; no headline text.
         DuaCalligraphyLogo(Modifier.width(logoWidth))
         // Task keeps the tagline's space (hidden, no semantics) so the logo is centred identically.
-        Text("Dua always with you", style = HomeTaglineCompactStyle.copy(fontFamily = HomeFontFamily),
+        Text(stringResource(R.string.home_tagline), style = HomeTaglineCompactStyle.copy(fontFamily = HomeFontFamily),
             color = ChatTheme.colors.mutedText, textAlign = TextAlign.Center,
             modifier = if (task) Modifier.alpha(0f).clearAndSetSemantics {} else Modifier)
     }
@@ -117,7 +120,8 @@ private fun TaskStarters(onTask: (String) -> Unit, modifier: Modifier = Modifier
     Column(modifier.then(hidden).fillMaxWidth().padding(horizontal = Spacing.lg).padding(bottom = Spacing.sm),
         verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
         val icons = listOf(R.drawable.home_task_attach_file, R.drawable.home_task_code, R.drawable.home_task_public)
-        HomeTaskPrompts.forEachIndexed { i, prompt ->
+        HomeTaskPromptIds.forEachIndexed { i, id ->
+            val prompt = stringResource(id)
             Row(Modifier.fillMaxWidth().heightIn(min = Sizes.touchTarget)
                 .clip(HomeShapes.segmentTab)
                 .clickable(enabled = visible, role = Role.Button) { haptic(ChatHaptic.Tap); onTask(prompt) },
