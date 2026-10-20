@@ -186,7 +186,9 @@ fun Composer(
     BoxWithConstraints(modifier.let { if (homeLayout) it.widthIn(max = HomeSizes.composerMaxWidth) else it }.fillMaxWidth()) {
         val keyboardOpen = homeLayout && WindowInsets.ime.getBottom(LocalDensity.current) > 0
         val margin = (if (homeLayout && !keyboardOpen) HomeSizes.composerHorizontalMargin(maxWidth) else HomeSizes.composerCompactMarginH)
-            .let { if (glass) maxOf(it, ComposerGlass.MarginH) else it }
+            // The image shortcut needs another 48 dp slot. Use the glass card's own margin
+            // rather than also inheriting the empty Home's wider hero margins.
+            .let { if (glass) ComposerGlass.MarginH else it }
         // Large text gets its own input row before the placeholder loses space to the controls.
         // Keep the field in the same Layout slot so resizing never discards focus or the draft.
         val inlineTextWidth = maxWidth - margin * 2 - HomeSizes.barPaddingH * 2 - Sizes.touchTarget * (if (onImage != null) 4 else 3) - Spacing.sm * 2
@@ -223,96 +225,100 @@ fun Composer(
                 Box(Modifier.align(Alignment.CenterHorizontally)) { aboveInput() }
                 Spacer(Modifier.height(Spacing.md))
             }
-            val shape = if (glass) ComposerGlass.Shape else if (stacked) ComposerSizes.expandedShape else if (homeLayout) HomeShapes.homeBar else HomeShapes.bar
-            Column(Modifier.fillMaxWidth()
-                .let { if (homeLayout) it.animateContentSize(animationSpec = if (motion) DuaMotion.gentle() else snap()) else it.animateContentSize() }
+            val shape = if (homeLayout && !stacked) HomeShapes.homeBar else if (glass) ComposerGlass.Shape else if (stacked) ComposerSizes.expandedShape else HomeShapes.bar
+            // Keep the rounded surface/shadow outside animateContentSize's rectangular clip.
+            // Only the inner layout resizes, so its shadow can feather beyond all four edges.
+            Box(Modifier.fillMaxWidth()
                 .testTag("composer-container")
                 .composerFocusPop(inputFocused, glass)
-                .shadow(if (glass) ComposerGlass.Elevation else if (homeLayout) HomeSizes.composerElevation else HomeSizes.noElevation, shape)
-                .clip(shape).composerAurora(glass).background(if (glass) c.bar.copy(alpha = ComposerGlass.GLASS_ALPHA) else c.bar).border(HomeSizes.barBorder, border, shape)
-                .padding(horizontal = HomeSizes.barPaddingH, vertical = when {
-                    glass -> ComposerGlass.PaddingV
-                    homeLayout && !stacked && !keyboardOpen -> HomeSizes.composerIdlePaddingV
-                    homeLayout && !stacked -> HomeSizes.composerKeyboardPaddingV
-                    else -> Spacing.sm
-                })) {
-                if (hasAttachments) AttachmentBar(attachments, uploads, !typing, onRemoveAttachment, onRemoveUpload, onRemoveAttachmentBackground)
-                if (dictation?.listening == true) {
-                    Row(Modifier.fillMaxWidth().heightIn(min = Sizes.touchTarget), verticalAlignment = Alignment.CenterVertically) {
-                        DictationBar(dictation.level, dictation.cancel, dictation.confirm)
-                        if (typing) ComposerAction(Icons.Rounded.Stop, "Stop response", onClick = onStop)
-                    }
-                } else ComposerFields(expanded = stacked,
-                    input = {
-                        val view = androidx.compose.ui.platform.LocalView.current
-                        val currentText by rememberUpdatedState(activeText)
-                        val currentTools by rememberUpdatedState(writingTools)
-                        val platformToolbar = androidx.compose.ui.platform.LocalTextToolbar.current
-                        val toolbar = remember(view) {
-                            DuaTextToolbar(view) {
-                                val tools = currentTools
-                                if (tools == null || currentText.isBlank()) emptyList()
-                                else listOf(TextToolbarExtra("Summarize") { tools(com.dua.ai.ondevice.WritingTask.Summarize) },
-                                    TextToolbarExtra("Rewrite") { tools(null) })
-                            }
+                .shadow(if (glass) ComposerGlass.Elevation else if (homeLayout) HomeSizes.composerElevation else HomeSizes.noElevation, shape, clip = false)
+                .clip(shape).background(c.bar).composerAurora(glass).border(HomeSizes.barBorder, border, shape)) {
+                Column(Modifier.fillMaxWidth()
+                    .let { if (homeLayout) it.animateContentSize(animationSpec = if (motion) DuaMotion.gentle() else snap()) else it.animateContentSize() }
+                    .padding(horizontal = HomeSizes.barPaddingH, vertical = when {
+                        glass -> ComposerGlass.PaddingV
+                        homeLayout && !stacked && !keyboardOpen -> HomeSizes.composerIdlePaddingV
+                        homeLayout && !stacked -> HomeSizes.composerKeyboardPaddingV
+                        else -> Spacing.sm
+                    })) {
+                    if (hasAttachments) AttachmentBar(attachments, uploads, !typing, onRemoveAttachment, onRemoveUpload, onRemoveAttachmentBackground)
+                    if (dictation?.listening == true) {
+                        Row(Modifier.fillMaxWidth().heightIn(min = Sizes.touchTarget), verticalAlignment = Alignment.CenterVertically) {
+                            DictationBar(dictation.level, dictation.cancel, dictation.confirm)
+                            if (typing) ComposerAction(Icons.Rounded.Stop, "Stop response", onClick = onStop)
                         }
-                        androidx.compose.runtime.CompositionLocalProvider(androidx.compose.ui.platform.LocalTextToolbar provides
-                            if (writingTools != null) toolbar else platformToolbar) {
-                        BasicTextField(
-                            value = activeText,
-                            onValueChange = { localText = it; onValueChange(it); onDraftChange(it) },
-                            modifier = Modifier.fillMaxWidth().heightIn(min = Sizes.touchTarget).padding(horizontal = Spacing.sm)
-                                .let { if (focusRequester != null) it.focusRequester(focusRequester) else it }
-                                .onFocusChanged { inputFocused = it.isFocused; onTextFieldFocus?.invoke(it.isFocused) }
-                                .onGloballyPositioned { onTextFieldBounds?.invoke(it.boundsInRoot()) }
-                                .semantics { contentDescription = "Message" },
-                            textStyle = inputStyle.copy(color = c.input),
-                            cursorBrush = SolidColor(c.input),
-                            singleLine = !stacked,
-                            maxLines = 6,
-                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                            keyboardActions = KeyboardActions(onSend = { submit() }),
-                            decorationBox = { innerTextField ->
-                                Box(Modifier.heightIn(min = Sizes.touchTarget), contentAlignment = Alignment.CenterStart) {
-                                    if (activeText.isEmpty()) Text(placeholder, style = inputStyle, color = c.placeholder,
-                                        modifier = if (homeLayout) Modifier.fillMaxWidth() else Modifier,
-                                        maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                    innerTextField()
+                    } else ComposerFields(expanded = stacked,
+                        input = {
+                            val view = androidx.compose.ui.platform.LocalView.current
+                            val currentText by rememberUpdatedState(activeText)
+                            val currentTools by rememberUpdatedState(writingTools)
+                            val platformToolbar = androidx.compose.ui.platform.LocalTextToolbar.current
+                            val toolbar = remember(view) {
+                                DuaTextToolbar(view) {
+                                    val tools = currentTools
+                                    if (tools == null || currentText.isBlank()) emptyList()
+                                    else listOf(TextToolbarExtra("Summarize") { tools(com.dua.ai.ondevice.WritingTask.Summarize) },
+                                        TextToolbarExtra("Rewrite") { tools(null) })
                                 }
                             }
-                        )
-                        }
-                    },
-                    attach = {
-                        Box {
-                            IconButton(onClick = onAttach, modifier = Modifier.size(Sizes.touchTarget)) {
-                                Icon(if (homeLayout) ImageVector.vectorResource(R.drawable.home_add) else Icons.Default.Add,
-                                    "Add photos and files", tint = c.barIcon,
-                                    modifier = Modifier.size(if (homeLayout) HomeSizes.referenceIcon else HomeSizes.plusIcon))
+                            androidx.compose.runtime.CompositionLocalProvider(androidx.compose.ui.platform.LocalTextToolbar provides
+                                if (writingTools != null) toolbar else platformToolbar) {
+                            BasicTextField(
+                                value = activeText,
+                                onValueChange = { localText = it; onValueChange(it); onDraftChange(it) },
+                                modifier = Modifier.fillMaxWidth().heightIn(min = Sizes.touchTarget).padding(horizontal = Spacing.sm)
+                                    .let { if (focusRequester != null) it.focusRequester(focusRequester) else it }
+                                    .onFocusChanged { inputFocused = it.isFocused; onTextFieldFocus?.invoke(it.isFocused) }
+                                    .onGloballyPositioned { onTextFieldBounds?.invoke(it.boundsInRoot()) }
+                                    .semantics { contentDescription = "Message" },
+                                textStyle = inputStyle.copy(color = c.input),
+                                cursorBrush = SolidColor(c.input),
+                                singleLine = !stacked,
+                                maxLines = 6,
+                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                                keyboardActions = KeyboardActions(onSend = { submit() }),
+                                decorationBox = { innerTextField ->
+                                    Box(Modifier.heightIn(min = Sizes.touchTarget), contentAlignment = Alignment.CenterStart) {
+                                        if (activeText.isEmpty()) Text(placeholder, style = inputStyle, color = c.placeholder,
+                                            modifier = if (homeLayout) Modifier.fillMaxWidth() else Modifier,
+                                            maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                        innerTextField()
+                                    }
+                                }
+                            )
                             }
-                            attachmentPopup()
-                        }
-                    },
-                    controls = {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            if (onImage != null) IconButton(onClick = onImage, modifier = Modifier.size(Sizes.touchTarget)) {
-                                Icon(Icons.Outlined.Image, if (imageSelected) "Imagine on" else "Create image",
-                                    tint = if (imageSelected) c.voice else c.barIcon, modifier = Modifier.size(HomeSizes.micIcon))
+                        },
+                        attach = {
+                            Box {
+                                IconButton(onClick = onAttach, modifier = Modifier.size(Sizes.touchTarget)) {
+                                    Icon(if (homeLayout) ImageVector.vectorResource(R.drawable.home_add) else Icons.Default.Add,
+                                        "Add photos and files", tint = c.barIcon,
+                                        modifier = Modifier.size(if (homeLayout) HomeSizes.referenceIcon else HomeSizes.plusIcon))
+                                }
+                                attachmentPopup()
                             }
-                            IconButton(onClick = { dictation?.start?.invoke() ?: onMic() }, modifier = Modifier.size(Sizes.touchTarget)) {
-                                Icon(if (homeLayout) ImageVector.vectorResource(R.drawable.ls_microphone_outline) else Icons.Outlined.MicNone,
-                                    "Dictate", tint = c.barIcon, modifier = Modifier.size(if (homeLayout) HomeSizes.referenceIcon else HomeSizes.micIcon))
+                        },
+                        controls = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                if (onImage != null) IconButton(onClick = onImage, modifier = Modifier.size(Sizes.touchTarget)) {
+                                    Icon(Icons.Outlined.Image, if (imageSelected) "Imagine on" else "Create image",
+                                        tint = if (imageSelected) c.voice else c.barIcon, modifier = Modifier.size(HomeSizes.micIcon))
+                                }
+                                IconButton(onClick = { dictation?.start?.invoke() ?: onMic() }, modifier = Modifier.size(Sizes.touchTarget)) {
+                                    Icon(if (homeLayout) ImageVector.vectorResource(R.drawable.ls_microphone_outline) else Icons.Outlined.MicNone,
+                                        "Dictate", tint = c.barIcon, modifier = Modifier.size(if (homeLayout) HomeSizes.referenceIcon else HomeSizes.micIcon))
+                                }
+                                val (icon, label, action) = when {
+                                    typing -> Triple(Icons.Rounded.Stop, "Stop response", { onStop() })
+                                    uploading -> Triple(Icons.Default.Close, "Cancel upload", { onCancelUpload() })
+                                    hasContent -> Triple(Icons.Default.ArrowUpward, "Send message", { submit() })
+                                    else -> Triple(ImageVector.vectorResource(R.drawable.ls_live_wave), "Voice mode", { onVoiceMode() })
+                                }
+                                ComposerAction(icon, label, enabled = typing || uploading || !hasContent || canSubmit, onClick = action,
+                                    iconSize = if (homeLayout && !typing && !hasContent) HomeSizes.referenceIcon else HomeSizes.voiceIcon)
                             }
-                            val (icon, label, action) = when {
-                                typing -> Triple(Icons.Rounded.Stop, "Stop response", { onStop() })
-                                uploading -> Triple(Icons.Default.Close, "Cancel upload", { onCancelUpload() })
-                                hasContent -> Triple(Icons.Default.ArrowUpward, "Send message", { submit() })
-                                else -> Triple(ImageVector.vectorResource(R.drawable.ls_live_wave), "Voice mode", { onVoiceMode() })
-                            }
-                            ComposerAction(icon, label, enabled = typing || uploading || !hasContent || canSubmit, onClick = action,
-                                iconSize = if (homeLayout && !typing && !hasContent) HomeSizes.referenceIcon else HomeSizes.voiceIcon)
-                        }
-                    })
+                        })
+                }
             }
         }
     }
