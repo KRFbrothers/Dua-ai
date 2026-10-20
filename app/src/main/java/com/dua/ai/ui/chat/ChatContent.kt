@@ -9,6 +9,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -31,9 +32,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.vectorResource
 import com.dua.ai.R
 import com.dua.ai.ui.components.DuaCalligraphyLogo
-import com.dua.ai.ui.theme.ChatTheme
 import com.dua.ai.ui.theme.HomeTaskPromptStyle
-import com.dua.ai.ui.theme.HomeTaglineCompactStyle
+import com.dua.ai.ui.theme.HomeTaglineQuietStyle
 import com.dua.ai.ui.theme.HomeFontFamily
 import com.dua.ai.ui.theme.HomeMotion
 import com.dua.ai.ui.theme.HomeShapes
@@ -106,8 +106,8 @@ private fun HomeHero(task: Boolean, small: Boolean) {
         // Same Dua logo, size and placement in Chat and Task; no headline text.
         DuaCalligraphyLogo(Modifier.width(logoWidth))
         // Task keeps the tagline's space (hidden, no semantics) so the logo is centred identically.
-        Text(stringResource(R.string.home_tagline), style = HomeTaglineCompactStyle.copy(fontFamily = HomeFontFamily),
-            color = ChatTheme.colors.mutedText, textAlign = TextAlign.Center,
+        Text(stringResource(R.string.home_tagline), style = HomeTaglineQuietStyle.copy(fontFamily = HomeFontFamily),
+            color = HomeTheme.colors.tagline, textAlign = TextAlign.Center,
             modifier = if (task) Modifier.alpha(0f).clearAndSetSemantics {} else Modifier)
     }
 }
@@ -117,14 +117,16 @@ private fun TaskStarters(onTask: (String) -> Unit, modifier: Modifier = Modifier
     val c = HomeTheme.colors
     val haptic = LocalChatHaptic.current
     val hidden = if (visible) Modifier else Modifier.alpha(0f).clearAndSetSemantics {}
-    Column(modifier.then(hidden).fillMaxWidth().padding(horizontal = Spacing.lg).padding(bottom = Spacing.sm),
+    Column(modifier.then(hidden).fillMaxWidth().padding(bottom = Spacing.sm),
         verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
         val icons = listOf(R.drawable.home_task_attach_file, R.drawable.home_task_code, R.drawable.home_task_public)
         HomeTaskPromptIds.forEachIndexed { i, id ->
             val prompt = stringResource(id)
             Row(Modifier.fillMaxWidth().heightIn(min = Sizes.touchTarget)
-                .clip(HomeShapes.segmentTab)
-                .clickable(enabled = visible, role = Role.Button) { haptic(ChatHaptic.Tap); onTask(prompt) },
+                .clip(HomeShapes.promptRow)
+                .background(c.promptRow)
+                .clickable(enabled = visible, role = Role.Button) { haptic(ChatHaptic.Tap); onTask(prompt) }
+                .padding(horizontal = HomeSizes.promptRowPaddingH),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(HomeSizes.promptGap)) {
                 Icon(ImageVector.vectorResource(icons[i]), null, tint = c.promptIcon, modifier = Modifier.size(HomeSizes.promptIcon))
