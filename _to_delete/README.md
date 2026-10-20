@@ -1212,9 +1212,14 @@ Base: `main` @ `c7afa0d` (PR #314 / Step 6 merge ke baad). Yeh Step 6 ke report 
 
 ### File
 
-`app/src/test/java/com/dua/ai/viewmodel/RetryResponseTest.kt` — **278 lines, 5 `@Test`**. Koi naya dependency nahi — wahi stack jo baaki `viewmodel/` tests use karte hain: **JUnit4 + Robolectric (`sdk 34`, `LooperMode.PAUSED`) + OkHttp interceptor** (network se pehle intercept, `PersonalityPromptingTest` ka pattern).
+`app/src/test/java/com/dua/ai/viewmodel/RetryResponseTest.kt` — **263 lines, 5 `@Test`**. Koi naya dependency nahi — wahi stack jo baaki `viewmodel/` tests use karte hain: **JUnit4 + Robolectric (`sdk 34`, `LooperMode.PAUSED`) + OkHttp interceptor** (network se pehle intercept, `PersonalityPromptingTest` ka pattern).
 
-Harness note: pehla version CI par **hang** ho gaya (gradle 25-min timeout par cancel). Wajah: `CountDownLatch.await()` OkHttp interceptor ke andar chal raha tha, aur woh interceptor **Main thread** par invoke hota hai — matlab Main block, aur `await()` ka `idleFor` bhi nahi chal paaya. Fix: koi blocking gate nahi. `retryResponse()` streaming turn **synchronously** set karta hai (coroutine launch se pehle), isliye Stop aur chat-switch dono usi window mein bina koi thread block kiye assert hote hain. `PersonalityPromptingTest` ka `await()` (idleFor + `Thread.sleep`) sirf un tests ke liye hai jinhe response aane ka intezaar hai.
+Harness note — **two hangs the first version had**, dono CI par pakde gaye (gradle 25-min timeout, `conclusion: cancelled`):
+
+1. **Blocking interceptor gate.** `CountDownLatch.await()` OkHttp interceptor ke andar chal raha tha, aur woh interceptor **Main thread** par invoke hota hai. Main block → Robolectric ka `idleFor()` bhi Main par hai → deadlock. **Fix:** koi blocking gate nahi. `retryResponse()` streaming turn **synchronously** set karta hai (coroutine launch se pehle), aur "text abhi nahi aana chahiye" wala window SSE payload ke **`delayMs: 30000`** field se banta hai — server-side delay, koi thread block nahi, koi clock advance nahi.
+2. **Signed-in account path.** Pehle test signed-in session seed karta tha, jisse retry ek extra cloud path le raha tha. **Fix:** `read() = null` — wahi jo `PersonalityPromptingTest` karta hai — matlab test sirf local retry path chalata hai.
+
+Test 2 aur 5 **poori tarah synchronous** hain: na `await()`, na `settle()`, na `sleep`. Sirf tests 1/3/4 response ka intezaar karte hain (`PersonalityPromptingTest` wala `idleFor` + `Thread.sleep`), kyunki wahan SSE body OkHttp thread par real time mein padhi jaati hai.
 
 ### 5 cases
 

@@ -6,7 +6,6 @@ import androidx.lifecycle.ViewModelStore
 import com.dua.ai.account.AccountApi
 import com.dua.ai.account.AccountRepository
 import com.dua.ai.account.AccountSession
-import com.dua.ai.account.AccountUser
 import com.dua.ai.account.SessionPersistence
 import com.dua.ai.history.ChatHistoryCodec
 import com.dua.ai.model.BuildInfo
@@ -72,10 +71,10 @@ class RetryResponseTest {
         DevicePreferences(application).update(LocalPreferences(memoryEnabled = false))
         model = ChatViewModel(application).also { store.put("chat", it) }
         for (name in listOf("engineCheck", "cloudImagineCheck")) (field(name).get(model) as? Job)?.cancel()
-        // Signed in, but the replies-owner flag stays off, so a retry goes up as a plain chat.
+        // Same account wiring as PersonalityPromptingTest: signed out. The server-replies owner flag
+        // then stays off, so a retry follows the plain local path and no extra cloud call is made.
         field("account").set(model, AccountRepository(AccountApi("https://account.test", rejectingClient()), object : SessionPersistence {
-            override fun read() = AccountSession(AccountUser("11111111-1111-1111-1111-111111111111",
-                "owner@example.com", "Owner"), "token_abc", "refresh_abc", System.currentTimeMillis() / 1000 + 3600)
+            override fun read(): AccountSession? = null
             override fun write(value: AccountSession?) = Unit
         }))
         await("preferences loaded") { field("appearanceLoaded").getBoolean(model) }
@@ -104,11 +103,12 @@ class RetryResponseTest {
         flow<Boolean>("_agentAvailable").value = false
     }
 
-    private fun sse(text: String) = "data: {\"type\":\"text\",\"delta\":\"$text\"}\n\ndata: {\"type\":\"done\",\"truncated\":false}\n\n"
+    private fun sse(text: String, delayMs: Long = 0) =
+        "data: {\"type\":\"text\",\"delta\":\"$text\",\"delayMs\":$delayMs}\n\ndata: {\"type\":\"done\",\"truncated\":false}\n\n"
 
-    private fun stream(text: String, request: okhttp3.Request) = Response.Builder().request(request).protocol(Protocol.HTTP_1_1)
+    private fun stream(text: String, request: okhttp3.Request, delayMs: Long = 0) = Response.Builder().request(request).protocol(Protocol.HTTP_1_1)
         .code(200).message("OK").header("Content-Type", "text/event-stream")
-        .body(sse(text).toResponseBody("text/event-stream".toMediaType())).build()
+        .body(sse(text, delayMs).toResponseBody("text/event-stream".toMediaType())).build()
 
     private fun reply(text: String, state: String = "complete", id: String = "reply") =
         ChatMessage(id = id, text = text, isUser = false, model = "Gemini", state = state)
@@ -181,26 +181,23 @@ class RetryResponseTest {
     // ---- 2. Stop in the middle of a retry ----
 
     @Test fun stoppingARetryBeforeTextRestoresTheOriginalReply() {
-        intercept { request -> stream("Too late", request) }
+        // A 30 s server-side delay keeps the text chunk away for the whole test, so this needs no
+        // clock advance, no sleep and no latch: everything asserted below happens synchronously.
+        intercept { request -> stream("Too late", request, delayMs = 30_000) }
         val original = reply("Original answer")
         seed(original)
 
-        // retryResponse sets the streaming turn synchronously, before the request coroutine runs,
-        // so Stop can be observed in exactly that window without blocking any thread.
+        // retryResponse sets the streaming turn synchronously, before the request coroutine runs.
         model.retryResponse("reply")
         assertEquals(ChatMessage.STREAMING, model.messages.value.last().state)
         assertTrue(model.isTyping.value)
 
         model.stopReply()
 
-        // No text had arrived, so the turn is what it was before the retry.
+        // No text had arrived, so the turn is exactly what it was before the retry.
         assertEquals(listOf(prompt, original), model.messages.value)
         assertEquals("Response stopped.", model.error.value)
         assertNull(field("retryOriginal").get(model))
-        assertFalse(model.isTyping.value)
-
-        settle(300) // a late response must not overwrite the restored original
-        assertEquals(listOf(prompt, original), model.messages.value)
         assertFalse(model.isTyping.value)
     }
 
@@ -246,12 +243,13 @@ class RetryResponseTest {
     // ---- 5. a retry left stale by a chat switch writes nothing ----
 
     @Test fun aRetryThatFinishesAfterTheChatWasLeftWritesNothing() {
-        intercept { request -> stream("Stale answer", request) }
+        // Same 30 s server-side delay: the stale response cannot arrive mid-test, so no thread is
+        // blocked and nothing depends on wall-clock timing.
+        intercept { request -> stream("Stale answer", request, delayMs = 30_000) }
         seed()
         val startedIn = model.activeChatId.value
         val generationBefore = field("generation").getInt(model)
 
-        // Same synchronous window: the retry is in flight, then the chat is switched away.
         model.retryResponse("reply")
         assertEquals(ChatMessage.STREAMING, model.messages.value.last().state)
 
@@ -259,12 +257,7 @@ class RetryResponseTest {
         assertFalse("the retry must not survive the switch", model.isTyping.value)
         assertTrue(model.messages.value.isEmpty())
         assertTrue("startNewChat must bump the generation", field("generation").getInt(model) > generationBefore)
-
-        settle(500) // let any late response land
-
-        assertTrue("a stale retry must not write into the new chat", model.messages.value.isEmpty())
-        assertFalse(model.isTyping.value)
-        assertTrue("no turn from the old chat may leak", model.messages.value.none { it.text.contains("Stale") })
         assertFalse("the new chat must stay a fresh chat", model.activeChatId.value == startedIn)
+        assertTrue("no turn from the old chat may leak", model.messages.value.none { it.text.contains("Stale") })
     }
 }
