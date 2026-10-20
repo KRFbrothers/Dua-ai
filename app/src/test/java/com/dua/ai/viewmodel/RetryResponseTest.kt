@@ -17,7 +17,6 @@ import com.dua.ai.settings.AppearanceStore
 import com.dua.ai.settings.DevicePreferences
 import com.dua.ai.settings.LocalPreferences
 import java.util.concurrent.CopyOnWriteArrayList
-import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -182,27 +181,25 @@ class RetryResponseTest {
     // ---- 2. Stop in the middle of a retry ----
 
     @Test fun stoppingARetryBeforeTextRestoresTheOriginalReply() {
-        val gate = CountDownLatch(1)
-        intercept { request -> gate.await(10, TimeUnit.SECONDS); stream("Too late", request) }
+        intercept { request -> stream("Too late", request) }
         val original = reply("Original answer")
         seed(original)
 
-        try {
-            model.retryResponse("reply")
-            await("retry started") { model.isTyping.value }
-            assertEquals(ChatMessage.STREAMING, model.messages.value.last().state)
+        // retryResponse sets the streaming turn synchronously, before the request coroutine runs,
+        // so Stop can be observed in exactly that window without blocking any thread.
+        model.retryResponse("reply")
+        assertEquals(ChatMessage.STREAMING, model.messages.value.last().state)
+        assertTrue(model.isTyping.value)
 
-            model.stopReply()
+        model.stopReply()
 
-            // No text arrived, so the turn is byte-for-byte what it was before the retry.
-            assertEquals(listOf(prompt, original), model.messages.value)
-            assertEquals("Response stopped.", model.error.value)
-            assertNull(field("retryOriginal").get(model))
-            assertFalse(model.isTyping.value)
-        } finally {
-            gate.countDown()
-        }
-        settle(150)
+        // No text had arrived, so the turn is what it was before the retry.
+        assertEquals(listOf(prompt, original), model.messages.value)
+        assertEquals("Response stopped.", model.error.value)
+        assertNull(field("retryOriginal").get(model))
+        assertFalse(model.isTyping.value)
+
+        settle(300) // a late response must not overwrite the restored original
         assertEquals(listOf(prompt, original), model.messages.value)
         assertFalse(model.isTyping.value)
     }
@@ -249,30 +246,25 @@ class RetryResponseTest {
     // ---- 5. a retry left stale by a chat switch writes nothing ----
 
     @Test fun aRetryThatFinishesAfterTheChatWasLeftWritesNothing() {
-        val gate = CountDownLatch(1)
-        intercept { request -> gate.await(10, TimeUnit.SECONDS); stream("Stale answer", request) }
+        intercept { request -> stream("Stale answer", request) }
         seed()
         val startedIn = model.activeChatId.value
         val generationBefore = field("generation").getInt(model)
 
-        try {
-            model.retryResponse("reply")
-            await("retry started") { requests.size == 1 }
+        // Same synchronous window: the retry is in flight, then the chat is switched away.
+        model.retryResponse("reply")
+        assertEquals(ChatMessage.STREAMING, model.messages.value.last().state)
 
-            model.startNewChat() // cancels the retry job and bumps the generation
-            assertFalse("the retry must not survive the switch", model.isTyping.value)
-            assertTrue(model.messages.value.isEmpty())
-            assertTrue("startNewChat must bump the generation", field("generation").getInt(model) > generationBefore)
+        model.startNewChat() // cancels the retry job and bumps the generation
+        assertFalse("the retry must not survive the switch", model.isTyping.value)
+        assertTrue(model.messages.value.isEmpty())
+        assertTrue("startNewChat must bump the generation", field("generation").getInt(model) > generationBefore)
 
-            gate.countDown()
-            settle(400) // let the old response land late
+        settle(500) // let any late response land
 
-            assertTrue("a stale retry must not write into the new chat", model.messages.value.isEmpty())
-            assertFalse(model.isTyping.value)
-            assertTrue("no turn from the old chat may leak", model.messages.value.none { it.text.contains("Stale") })
-            assertFalse("the new chat must stay a fresh chat", model.activeChatId.value == startedIn)
-        } finally {
-            gate.countDown()
-        }
+        assertTrue("a stale retry must not write into the new chat", model.messages.value.isEmpty())
+        assertFalse(model.isTyping.value)
+        assertTrue("no turn from the old chat may leak", model.messages.value.none { it.text.contains("Stale") })
+        assertFalse("the new chat must stay a fresh chat", model.activeChatId.value == startedIn)
     }
 }
