@@ -21,3 +21,5 @@ dependencyResolutionManagement {
 
 rootProject.name = "DuaAI"
 include(":app")
+// Macrobenchmarks and the Baseline Profile generator (needs a connected phone; see docs/PERFORMANCE.md).
+include(":benchmark")

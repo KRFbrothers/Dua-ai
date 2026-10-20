@@ -9,7 +9,9 @@ import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.isSpecified
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.DragInteraction
@@ -239,7 +241,25 @@ fun ChatScreen(
         if (enabled) sheet = null
     }
     val onXSearch: (Boolean) -> Unit = { tap(); if (it) taskHome = false; actions.onXSearch(it) }
-    val onImagine: (Boolean) -> Unit = { tap(); if (it) taskHome = false; actions.onImagine(it) }
+    // Colour splash (Androidify): Voice mode and Imagine from Home grow a circle from the last tap, then switch.
+    var lastTap by remember { mutableStateOf(Offset.Unspecified) }
+    var splash by remember { mutableStateOf<Pair<com.dua.ai.ui.components.ColorSplashRequest, () -> Unit>?>(null) }
+    val splashMotion = com.dua.ai.ui.theme.rememberMotionAllowed()
+    fun splashThen(color: androidx.compose.ui.graphics.Color, action: () -> Unit) {
+        if (splash != null) return
+        if (!splashMotion || !lastTap.isSpecified) { action(); return }
+        splash = com.dua.ai.ui.components.ColorSplashRequest(lastTap, color) to action
+    }
+    val voiceSplash = com.dua.ai.ui.theme.VoiceTheme.colors.background
+    val imagineSplash = MaterialTheme.colorScheme.primary
+    val openVoiceMode: () -> Unit = {
+        actions.haptic(ChatHaptic.Tap)
+        if (home && feature == null) splashThen(voiceSplash) { actions.onOpenVoiceMode() } else actions.onOpenVoiceMode()
+    }
+    val onImagine: (Boolean) -> Unit = { on ->
+        tap(); if (on) taskHome = false
+        if (on && home && feature == null) splashThen(imagineSplash) { actions.onImagine(true) } else actions.onImagine(on)
+    }
     val onRunCode: (Boolean) -> Unit = { tap(); if (it) taskHome = false; actions.onRunCode(it) }
     val taskReady = !taskHome || (state.agent && state.agentAvailable)
     val sendFromComposer: () -> Unit = { if (taskReady) actions.onSend() }
@@ -295,7 +315,15 @@ fun ChatScreen(
     var dropHover by remember { mutableStateOf(false) }
     val dropMotion = com.dua.ai.ui.theme.rememberMotionAllowed()
     key(conversationKey) {
-        BoxWithConstraints(Modifier.fillMaxSize().chatDropTarget(enabled = sheet == null && viewer == null,
+        BoxWithConstraints(Modifier.fillMaxSize().pointerInput(Unit) {
+            // Remember where the last press started (never consumed) as the splash origin.
+            awaitPointerEventScope {
+                while (true) {
+                    val event = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+                    event.changes.firstOrNull { it.pressed && !it.previousPressed }?.let { lastTap = it.position }
+                }
+            }
+        }.chatDropTarget(enabled = sheet == null && viewer == null,
             maxBytes = state.storedFilesMaxBytes, onHover = { dropHover = it }, onDrop = actions.onDrop)) {
             // Keep the entire right-hand Home touch target in the scrim, including on narrow windows.
             val endInset = WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal).asPaddingValues()
@@ -417,8 +445,8 @@ fun ChatScreen(
                                 onAttach = { sheet = ChatSheet.Attach },
                                 onClearAttachments = actions.onClearAttachments,
                                 onMic = actions.onOpenVoice,
-                                onVoiceClick = { actions.haptic(ChatHaptic.Tap); actions.onOpenVoiceMode() },
-                                onVoiceMode = { actions.haptic(ChatHaptic.Tap); actions.onOpenVoiceMode() },
+                                onVoiceClick = openVoiceMode,
+                                onVoiceMode = openVoiceMode,
                                 onTextFieldFocus = { inputFocused = it },
                                 onTextFieldBounds = { inputBounds = it },
                                 value = state.draft,
@@ -463,6 +491,9 @@ fun ChatScreen(
                 drawerContent = { historyPanel(false) },
             ) { chatPane() }
             ChatDropOverlay(dropHover, dropMotion)
+            splash?.let { (request, action) ->
+                com.dua.ai.ui.components.ColorSplash(request, splashMotion, onCovered = action, onFinished = { splash = null })
+            }
         }
     }
     when (sheet) {
