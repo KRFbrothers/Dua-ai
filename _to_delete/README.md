@@ -947,3 +947,94 @@ Phir app mein yeh **5 jagah**:
 5. **Share sheet se memory save** — `confirmSharedMemory` galat owner par error de, sahi owner par save kare
 
 **Build yahan nahi chala** — sandbox mein Java/Android SDK nahi hai. Jo kiya woh byte-compare + host/interface parity + symbol sweep + reflection-trap check hai. Asli confirmation CI se aayegi.
+
+---
+
+## 🔧 Chat split — Step 5: `sendMessage` internal refactor (20 Oct 2026)
+
+Base: `main` @ `7b712aa` (PR #312 / Step 4 merge ke baad).
+
+Yeh `ChatViewModel.kt` split plan ka **Step 5** hai (Pass 6 section ki table). Step 1–4 se **nature alag** hai: **koi code move nahi hua, koi naya file nahi bana.** Sirf `sendMessage` (136 lines) ko usi file ke andar private functions mein toda gaya. Golden rule wahi: **ek step = ek commit**.
+
+### Line count — before → after
+
+| File | Pehle | Ab | Farq |
+| --- | --- | --- | --- |
+| `viewmodel/ChatViewModel.kt` | **1,574** | **1,628** | **+54** |
+| `sendMessage` khud | **136** | **4** | **−132** |
+| `viewmodel/` total | 3,749 | 3,803 | +54 |
+
+`git diff --shortstat` = **1 file changed, 100 insertions(+), 46 deletions(-)**.
+
+Yeh **akela step hai jisme file badi hoti hai** — wajah: har extraction ka apna signature line + `return`/bare-brace, plus `SendPlan` data class. Steps 1–4 mein −174 lines net aayi thi; Step 5 ka fayda line count nahi, **readability aur reviewability** hai.
+
+### Naya structure
+
+| Member | Lines | Kya karta hai |
+| --- | --- | --- |
+| `sendMessage(userText)` | **4** (`1402–1405`) | Orchestrator — `_prepareSend` → `_streamReply` |
+| `SendPlan` (private data class) | **24** (`1408–1431`) | Ek outgoing turn ka frozen snapshot: files, convert, storedFiles, edited, sentPaths, userMessage, reply, request, persistenceBase, persistenceOwner, currentGeneration, startedAt, requestProjectId, responseModel, requestWebMode/Reasoning/XSearch/Code/Build/Agent/Personality |
+| `_prepareSend(userText)` | **84** (`1433–1516`) | 16 guards + request snapshot + user/reply pair + commit. `null` = turn reject/handled |
+| `_streamReply(plan, userText)` | **46** (`1518–1563`) | `viewModelScope.launch` + `try/catch/finally`, file prep, `collectReply` |
+| `_persistResult(plan, state, final)` | **7** (`1565–1571`) | Uploads filter → `clearAttachments()` → snapshot → `updateMessage` |
+| `_failedReply(plan, userText, failure)` | **11** (`1573–1583`) | Turn wapas hatao, draft/failedPrompt restore, offline queue |
+| `_finishReply(currentGeneration)` | **6** (`1585–1591`) | Typing flag off, `saveHistory()`, notification gate |
+
+### Public API bilkul same — `ui/` ki ek bhi file nahi badli
+
+`sendMessage(userText: String)` ka signature wahi. **15 call-sites** unchanged: `ChatRoute` (3), `ProjectsFlow`, `VoiceModeScreen`, `AgentScreen`, `ChatAgentControls:77`, `ChatImagine:118`, `ChatViewModel:1174` (offline retry) + 5 test files (`PersonalityPromptingTest` ×3, `ProjectSwitchingTest` ×2, `ExternalRoutingTest`). Diff mein `ui/` ka koi path nahi — **sirf `ChatViewModel.kt`**.
+
+### Reviewer ke liye — 3 jagah dhyan dena
+
+1. **Early returns.** `sendMessage` mein 16 `return` the → `_prepareSend` mein **`return null`** ban gaye, aur orchestrator `?: return` se exit karta hai. Har guard ka effect same: aage ka kuch nahi chalta. Ek subtility — `_imagine.value` wala branch `imagineFeature.sendImagine(userText)` call karke `null` deta hai, yaani woh bhi turn khatam karta hai, pehle jaisa.
+2. **`finally` ka scope.** `_finishReply` `_streamReply` ke `finally` se **hamesha** chalta hai, aur andar `generation == currentGeneration` guard same hai. `catch (cancelled: CancellationException) { throw cancelled }` `finally` se pehle hi re-throw karta hai — matlab cancel par bhi cleanup chalta hai, pehle jaisa. `_finishReply` ko koi `return` nahi, isliye `finally` skip nahi ho sakta.
+3. **Coroutine scope + evaluation order.** `replyJob = viewModelScope.launch { … }` `_streamReply` mein hai, `replyJob` par assignment wahi hai. Do ordering bugs verification mein **pakde gaye aur theek kiye**:
+   - `accumulator!!.snapshot(ended = true)` original mein `clearAttachments()` ke **baad** evaluate hota tha. Direct parameter pass karne se woh pehle chal jaata — to `_persistResult` ko **lambda** (`() -> StreamSnapshot`) diya, jo uploads filter + `clearAttachments()` ke baad call hota hai. Snapshot ek hi baar evaluate hota hai.
+   - `_persistResult` ka `state: String` — original do jagah `"complete"` / `"stopped"` hardcoded tha. Ab parameter hai, values wahi.
+
+### Verify — jo actually chalaya
+
+| Check | Result |
+| --- | --- |
+| **Byte-compare** — base `1402–1537` vs naya region (`diff`, whitespace-normalised) | **117/136 lines byte-identical**; baaki 19 lines sirf footer/brace lines jo helper mein chali gayin ✅ |
+| **Guard block** `1403–1418` vs `1434–1449` | 16 → 16 lines, **sirf `return` → `return null`** ✅ |
+| **Snapshot+request block** `1419–1477` vs `1450–1508` | 59 → 59 lines, **sirf 6 `return` → `return null`** — ek bhi logic line nahi badli ✅ |
+| **Reply setup + commit** `1454–1477` vs `1484–1510` | 24 → 24 lines **IDENTICAL**, sirf `return SendPlan(...)` juda ✅ |
+| **try-head** `1478–1497` vs `1519–1538` | 20 → 20 lines, sirf `plan.` prefix + `final` local ✅ |
+| **`_persistResult`** vs complete-path `1499–1502` | 4 → 4 lines, sirf `plan.` + `final`→`final()` ✅ |
+| **`_failedReply`** vs failed-path `1519–1526` | 8 → 8 lines, sirf `plan.` prefix ✅ |
+| **`_finishReply`** vs finally `1530–1534` | 5 → 5 lines **IDENTICAL** ✅ |
+| `SendPlan` type — `StreamSnapshot` (nested nahi) | `ChatStream.kt:183` se confirm ✅ |
+| Brace balance · final depth | **352 / 352** · **0** ✅ |
+| `sendMessage` call-sites | **15** — signature nahi badla ✅ |
+| Naam clash (`SendPlan`, `_prepareSend`, `_streamReply`, `_persistResult`, `_failedReply`, `_finishReply`) | pehle **0 hits** — `streamReply` sirf `api.streamReply` ka method hai, clash nahi ✅ |
+| Changed files | **sirf `ChatViewModel.kt`** — `ui/`, tests, trap files, notices sab untouched ✅ |
+| README purane 949 line | **md5 `dbdc8405…` identical** (sirf naya section juda) ✅ |
+
+### Kya nahi chhua
+
+`collectReply` · `finalizeStreaming` · `cancelReply` · `retryResponse` · `startNewChat` · `deleteChat` · `deleteServerChat` · `projectMemory` — **sab jahan the wahin hain**. `sendMessage` ka **behaviour, error strings, offline-retry condition, notification gate** — sab byte-identical.
+
+### Merge checklist
+
+```bash
+./gradlew assembleDebug
+./gradlew testDebugUnitTest
+./gradlew lint
+```
+
+Phir app mein yeh **6 jagah**:
+
+1. **Normal text send** — user bubble + streaming reply, typing indicator chale
+2. **Attachment ke saath send** — uploads send ke baad composer se hatein, preview clear ho
+3. **Build mode** — repo ke saath send, attachment ke saath reject ho (error same)
+4. **Offline send** — "You're offline. Dua will send this message when you're back online." aaye, reconnect par auto resend
+5. **Stream beech mein stop** — partial reply rahe, "Reply interrupted: … Partial reply kept; tap retry."
+6. **Edit karke resend** — purana turn replace ho, Imagine on ho to "Turn off Imagine…" error aaye
+
+**Build yahan nahi chala** — sandbox mein Java/Android SDK nahi hai. Jo kiya woh line-by-line diff + ordering audit + brace balance + call-site check hai. Asli confirmation CI se aayegi.
+
+### Agla step
+
+- **Step 6:** `startNewChat` (71) / `retryResponse` (69) / `deleteChat` (34) / `deleteServerChat` (38) → `viewmodel/ChatLifecycle.kt`. **High risk** — yahan galti user-facing hai (chat loss / duplicate chat). Alag PR, aur pehle `sendMessage` + history ka test coverage dekh lein.
+- Steps 1–5 ke baad `ChatViewModel.kt` = **1,628 lines**, 11 features alag. Step 6 ke bina bhi file reviewable hai.
