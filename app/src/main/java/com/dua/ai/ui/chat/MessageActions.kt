@@ -78,7 +78,7 @@ internal fun copyTextOf(message: ChatMessage): String = message.text + if (!mess
 /** Full message text in a selectable view (Telegram's "Select text"). */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SelectTextSheet(text: String, onDismiss: () -> Unit) {
+internal fun SelectTextSheet(text: String, onDismiss: () -> Unit) {
     DuaSheet(onDismiss = onDismiss) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = SheetSizes.paddingH).padding(bottom = SheetSizes.paddingBottom)
             .testTag("select-text-sheet")) {

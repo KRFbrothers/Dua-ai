@@ -1,18 +1,26 @@
+/*
+ * Dua AI - Copyright (C) 2026 KRFbrothers
+ * Adapted from Telegram TMessagesProj/src/main/java/org/telegram/ui/ChatActivity.java (chat list swipe-to-reply tracking and drawReplyButton) and ui/recyclerview/ChatListItemAnimator.java (animateAddImpl) (commit 68c6775ac373f4bdb30ae9986282dd5ec0407756).
+ * Original: Telegram for Android, Copyright Nikolai Kudashov, 2013-2018, https://github.com/DrKLO/Telegram
+ * (commit 68c6775ac373f4bdb30ae9986282dd5ec0407756), licensed under GNU GPL v. 2 or later.
+ *
+ * This program is free software: you can redistribute it and/or modify it under the terms of the GNU General
+ * Public License as published by the Free Software Foundation, either version 3 of the License, or (at your
+ * option) any later version. This program is distributed WITHOUT ANY WARRANTY; without even the implied warranty
+ * of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details
+ * (LICENSE in the repository root, or <https://www.gnu.org/licenses/>).
+ */
 package com.dua.ai.ui.chat
 
-// Swipe-to-reply, reply quote and new-bubble motion. Behaviour (thresholds, feel, curve) is modelled on
-// Telegram for Android (https://github.com/DrKLO/Telegram). No Telegram source code is copied; this is a
-// Compose reimplementation. See THIRD_PARTY_NOTICES.md.
+// Swipe-to-reply tracking, reply button progress and the new-bubble add animation are ported from Telegram
+// (see header). Telegram swipes left; Dua mirrors it to a right swipe as the owner asked. ReplyQuote and the
+// composer preview are Dua glue.
 
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.CubicBezierEasing
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.awaitHorizontalTouchSlopOrCancellation
-import androidx.compose.foundation.gestures.horizontalDrag
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -53,31 +61,35 @@ import com.dua.ai.ui.theme.Sizes
 import com.dua.ai.ui.theme.Spacing
 import kotlinx.coroutines.launch
 
-/** Pure swipe-to-reply maths so thresholds can be unit tested without a device. Values in px. */
-internal class SwipeReplyState(private val thresholdPx: Float, private val maxPx: Float = thresholdPx * 2f) {
+/**
+ * Telegram ChatActivity swipe-to-reply tracking (mirrored to the right). Values in px:
+ * offset = clamp(dx, 0, dp(80)); vibrate once when |dx| >= dp(50) (re-armed when it drops below); on release
+ * reply if the offset is still >= dp(50).
+ */
+internal class SwipeReplyState(private val thresholdPx: Float, private val maxPx: Float = thresholdPx * 80f / 50f) {
     var offset = 0f; private set
-    /** True once the drag has crossed [thresholdPx]; flips back if the finger returns below it. */
+    /** Telegram's wasTrackingVibrate. */
     var armed = false; private set
 
     /** Apply a horizontal drag delta. Returns true exactly when the threshold is first crossed (fire the haptic). */
     fun drag(delta: Float): Boolean {
-        // Linear up to the threshold, then rubber-band resistance up to maxPx (Telegram-like feel).
-        val raw = (rawOffset + delta).coerceAtLeast(0f)
-        rawOffset = raw
-        offset = if (raw <= thresholdPx) raw else (thresholdPx + (raw - thresholdPx) * RESISTANCE).coerceAtMost(maxPx)
-        val wasArmed = armed
-        armed = offset >= thresholdPx
-        return armed && !wasArmed
+        offset = (offset + delta).coerceIn(0f, maxPx)
+        if (offset >= thresholdPx) {
+            if (!armed) { armed = true; return true }
+        } else armed = false
+        return false
     }
 
     /** Finger lifted: returns true if a reply should start. Resets the state. */
-    fun release(): Boolean { val fire = armed; reset(); return fire }
-    fun reset() { rawOffset = 0f; offset = 0f; armed = false }
-    /** 0..1 progress for the reply arrow's scale/alpha. */
-    val progress: Float get() = if (thresholdPx <= 0f) 0f else (offset / thresholdPx).coerceIn(0f, 1f)
+    fun release(): Boolean { val fire = offset >= thresholdPx; reset(); return fire }
+    fun reset() { offset = 0f; armed = false }
+    /** drawReplyButton: clamp((|translationX| - dp(20)) / dp(30), 0, 1). */
+    val progress: Float get() = if (thresholdPx <= 0f) 0f else ((offset - thresholdPx * 20f / 50f) / (thresholdPx * 30f / 50f)).coerceIn(0f, 1f)
 
-    private var rawOffset = 0f
-    companion object { const val RESISTANCE = 0.35f }
+    companion object {
+        /** Telegram starts tracking after 0.4 cm of horizontal travel with |dx| / 3 > |dy|. */
+        fun shouldStart(dx: Float, dy: Float, startPx: Float): Boolean = dx >= startPx && dx / 3f > kotlin.math.abs(dy)
+    }
 }
 
 /** Quoted context for the next message. */
@@ -106,9 +118,6 @@ data class ReplyQuote(val messageId: String, val text: String, val fromUser: Boo
     }
 }
 
-/** Telegram-style list item curve (fast start, soft landing). */
-internal val BubbleAppearEasing = CubicBezierEasing(0.2f, 0.01f, 0.28f, 0.91f)
-internal const val BubbleAppearMillis = 250
 
 /**
  * Drag the bubble to the right to reply. Only rightward drags are claimed, so left swipes and
@@ -125,33 +134,44 @@ internal fun SwipeToReply(enabled: Boolean, onReply: () -> Unit, haptic: () -> U
     val scope = rememberCoroutineScope()
     val reply by rememberUpdatedState(onReply)
     val tick by rememberUpdatedState(haptic)
+    val startPx = with(density) { 0.4f * 160f / 2.54f * this.density } // AndroidUtilities.getPixelsInCM(0.4f, true)
+    val returnAnim = tween<Float>(180, easing = TelegramDecelerate) // trackAnimationProgress += dt / 180f, decelerate
     Box(modifier
         .semantics { customActions = listOf(CustomAccessibilityAction("Reply") { reply(); true }) }
         .pointerInput(threshold) {
             awaitEachGesture {
                 val down = awaitFirstDown(requireUnconsumed = false)
-                var accepted = false
-                val drag = awaitHorizontalTouchSlopOrCancellation(down.id) { change, over ->
-                    if (over > 0f) { accepted = true; change.consume(); if (logic.drag(over)) tick() }
-                }
-                if (drag == null || !accepted) return@awaitEachGesture
-                scope.launch { offset.snapTo(logic.offset) }
-                horizontalDrag(drag.id) { change ->
+                val origin = down.position
+                var tracking = false
+                while (true) {
+                    val event = awaitPointerEvent()
+                    val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                    if (!change.pressed) break
+                    val dx = change.position.x - origin.x
+                    val dy = change.position.y - origin.y
+                    if (!tracking) {
+                        if (change.isConsumed) break // a child (code block scroll, selection) owns it
+                        if (SwipeReplyState.shouldStart(dx, dy, startPx)) { tracking = true; logic.reset() }
+                        else if (kotlin.math.abs(dy) > viewConfiguration.touchSlop || dx < -viewConfiguration.touchSlop) break
+                        else continue
+                    }
+                    // Telegram re-bases startedTrackingX when tracking begins, then follows the finger.
                     if (logic.drag(change.positionChange().x)) tick()
                     change.consume()
                     scope.launch { offset.snapTo(logic.offset) }
                 }
+                if (!tracking) return@awaitEachGesture
                 val fire = logic.release()
-                scope.launch { offset.animateTo(0f, spring(dampingRatio = 0.8f, stiffness = 600f)) }
+                scope.launch { offset.animateTo(0f, returnAnim) }
                 if (fire) reply()
             }
         }) {
-        SwipeReplyArrow(offset.value / threshold, Modifier.align(Alignment.CenterStart))
+        SwipeReplyArrow(((offset.value - threshold * 0.4f) / (threshold * 0.6f)).coerceIn(0f, 1f), Modifier.align(Alignment.CenterStart))
         Box(Modifier.graphicsLayer { translationX = offset.value }) { content() }
     }
 }
 
-private val SwipeReplyThreshold = 56.dp
+private val SwipeReplyThreshold = 50.dp // AndroidUtilities.dp(50)
 
 /** Reply arrow revealed on the left while swiping. */
 @Composable
@@ -190,13 +210,16 @@ internal fun BubbleQuote(text: String) {
     }
 }
 
-/** Slide up + fade for bubbles that arrive after the list is shown (not for history on first load). */
+/**
+ * ChatListItemAnimator.animateAddImpl: a newly added bubble starts translated down by the added height and
+ * animates translationY to 0 with DEFAULT_INTERPOLATOR over DEFAULT_DURATION (alpha stays 1, as in Telegram).
+ */
 @Composable
 internal fun Modifier.bubbleAppear(animate: Boolean): Modifier {
     if (!animate) return this
-    val density = LocalDensity.current
-    val shift = with(density) { 24.dp.toPx() }
     val progress = remember { Animatable(0f) }
-    LaunchedEffect(Unit) { progress.animateTo(1f, tween(BubbleAppearMillis, easing = BubbleAppearEasing)) }
-    return graphicsLayer { alpha = progress.value; translationY = (1f - progress.value) * shift }
+    LaunchedEffect(Unit) {
+        progress.animateTo(1f, tween(TelegramChatAnimator.DEFAULT_DURATION, easing = TelegramChatAnimator.DEFAULT_INTERPOLATOR))
+    }
+    return graphicsLayer { translationY = (1f - progress.value) * size.height }
 }

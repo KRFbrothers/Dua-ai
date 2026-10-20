@@ -65,9 +65,11 @@ class WritingAndJetchatUiTest {
                 ChatActions(onWriting = { text, fromDraft, task -> assertFalse(fromDraft); calls += text to task }), rememberLazyListState())
         } }
         compose.onNodeWithText("A long answer", useUnmergedTree = true).performTouchInput { longClick() }
+        compose.onNodeWithTag("popup-more").performClick()
         compose.onNodeWithTag("message-action-summarize").performScrollTo().assertHeightIsAtLeast(SheetSizes.rowMin).performClick()
         assertEquals("A long answer" to WritingTask.Summarize, calls.single())
         compose.onNodeWithText("A long answer", useUnmergedTree = true).performTouchInput { longClick() }
+        compose.onNodeWithTag("popup-more").performClick()
         compose.onNodeWithTag("message-action-rewrite").performScrollTo().performClick()
         assertEquals("A long answer" to null, calls.last())
     }

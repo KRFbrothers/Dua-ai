@@ -74,7 +74,13 @@ class MessageLongPressTest(private val dark: Boolean) {
             }
         }
     }
-    private fun longPress(text: String) = compose.onNodeWithText(text, useUnmergedTree = true).performTouchInput { longClick() }
+    /** Long-press opens the Telegram popup; its "More" row opens the full actions sheet these tests cover. */
+    private fun longPress(text: String) {
+        compose.onNodeWithText(text, useUnmergedTree = true).performTouchInput { longClick() }
+        compose.waitForIdle()
+        compose.onNodeWithTag("popup-more").performClick()
+        compose.waitForIdle()
+    }
     private fun sheetAction(key: String) = compose.onNodeWithTag("message-action-$key")
     private fun capture(name: String) {
         if (System.getProperty("roborazzi.test.record") == "true") {
@@ -116,6 +122,7 @@ class MessageLongPressTest(private val dark: Boolean) {
         show()
         compose.onNode(SemanticsMatcher.keyIsDefined(SemanticsActions.OnLongClick) and hasAnyAncestor(hasTestTag("message-prompt")))
             .performSemanticsAction(SemanticsActions.OnLongClick) { assertTrue(it()) }
+        compose.onNodeWithTag("popup-more").performClick()
         sheetAction("retry").assertDoesNotExist(); sheetAction("speak").assertDoesNotExist()
         sheetAction("edit").assertIsEnabled().assertContentDescriptionEquals("Edit message and resend")
         sheetAction("share").assertIsEnabled()
@@ -127,6 +134,7 @@ class MessageLongPressTest(private val dark: Boolean) {
         show()
         compose.onNode(SemanticsMatcher.keyIsDefined(SemanticsActions.OnLongClick) and hasAnyAncestor(hasTestTag("message-prompt")))
             .performSemanticsAction(SemanticsActions.OnLongClick) { assertTrue(it()) }
+        compose.onNodeWithTag("popup-more").performClick()
         sheetAction("edit").performClick()
         compose.runOnIdle { assertEquals(listOf(prompt.id), edits) }
         compose.onNodeWithTag("message-actions-sheet").assertDoesNotExist()

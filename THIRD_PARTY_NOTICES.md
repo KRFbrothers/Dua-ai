@@ -1,6 +1,6 @@
 # Third-party notices
 
-Dua AI is MIT-licensed (see [LICENSE](LICENSE)). Some source files contain code adapted from
+Dua AI is licensed under the GNU GPL, version 3 or (at your option) any later version (GPL-3.0-or-later, see [LICENSE](LICENSE)); it was MIT-licensed before it included Telegram code. Some source files contain code adapted from
 the open-source projects below. Each adapted file keeps a header naming its source, the original
 copyright and the license. Only code was reused: no logos, brand art, images, videos or fonts.
 
@@ -25,7 +25,7 @@ copyright and the license. Only code was reused: no logos, brand art, images, vi
 | `app/src/main/java/com/dua/ai/ui/screens/AppPausedScreen.kt` | `feature/home/.../AppInactiveScreen.kt` | Dua calligraphy logo (no Android robot), server message, Try again button, no top bar |
 | `app/src/main/java/com/dua/ai/ui/components/ColorSplash.kt` | `core/theme/.../transitions/ColorSplashTransition.kt` | Circle grows from the tap point over Home for Voice mode / Imagine, Dua colours, instant when animations are off |
 
-The adapted portions stay under the Apache License 2.0; the rest of Dua stays under MIT. "Android" is a trademark of Google LLC; Dua does not use the Android robot or
+The adapted portions keep their Apache License 2.0 notices; Apache-2.0 is compatible with GPL-3.0, so they are distributed as part of the GPL-3.0-or-later work. "Android" is a trademark of Google LLC; Dua does not use the Android robot or
 other Google brand assets.
 
 ## Android AI samples
@@ -104,10 +104,21 @@ provided by Google under the ML Kit terms (<https://developers.google.com/ml-kit
 terms; their bundled open-source licenses are listed by Google Play services at runtime. Dua uses only the plain text label
 "On-device" for these features and no Gemini or Google brand art.
 
-## Telegram for Android (inspiration only, no code copied)
+## Telegram for Android
 
-- Project: https://github.com/DrKLO/Telegram (GPL-2.0)
-- Used for: interaction design reference for swipe-to-reply, the long-press message actions and the
-  new-message appear motion in the chat screen (`app/src/main/java/com/dua/ai/ui/chat/ChatSwipeReply.kt`).
-- No Telegram source code is copied or adapted; the behaviour is reimplemented from scratch in Jetpack Compose,
-  so the GPL does not apply to Dua's code and the repository licence is unchanged.
+- Source: <https://github.com/DrKLO/Telegram>, commit `68c6775ac373f4bdb30ae9986282dd5ec0407756`
+- Copyright Nikolai Kudashov, 2013-2018 (and Telegram contributors)
+- License: GNU GPL v. 2 **or later** (stated in Telegram's source file headers, e.g. `ChatMessageCell.java`,
+  `ActionBarPopupWindow.java`; the repository LICENSE file is the GPLv2 text). Dua uses the "or later" option and
+  is distributed under GPL-3.0-or-later.
+- Java/Android Views code translated to Kotlin/Jetpack Compose. Each Dua file carries a GPL header and an
+  "Adapted from Telegram <path> (commit)" line. No Telegram logos, icons, stickers or other brand art are used.
+
+| Dua file | Adapted from (Telegram, `TMessagesProj/src/main/java/org/telegram/`) | What changed |
+| --- | --- | --- |
+| `app/src/main/java/com/dua/ai/ui/chat/TelegramInterpolators.kt` | `ui/Components/CubicBezierInterpolator.java`, `ui/recyclerview/ChatListItemAnimator.java` (`DEFAULT_INTERPOLATOR`, `DEFAULT_DURATION`) | Compose `Easing` instead of `Interpolator` |
+| `app/src/main/java/com/dua/ai/ui/chat/ChatSwipeReply.kt` | `ui/ChatActivity.java` (chat list swipe tracking: 0.4 cm start, `|dx|/3 > dy`, dp(80) clamp, dp(50) haptic/reply, 180 ms decelerate return, `drawReplyButton` progress), `ui/recyclerview/ChatListItemAnimator.java` (`animateAddImpl`) | Compose pointer input; mirrored to a right swipe; reply opens Dua's quote preview |
+| `app/src/main/java/com/dua/ai/ui/chat/TelegramMessagePopup.kt` | `ui/ActionBar/ActionBarPopupWindow.java` (`startAnimation`, `startChildAnimation`, `setBackScaleY`, `dismiss`) | Compose `Popup`; Dua colours and actions; "More" opens Dua's full actions sheet |
+
+Apache-2.0 and MIT dependencies remain compatible with GPL-3.0-or-later. Note: closed-source Google Play services /
+ML Kit binaries are not GPL-compatible "system libraries" in a strict reading; see the PR discussion.
