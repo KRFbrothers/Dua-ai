@@ -397,47 +397,24 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     val searchResults = _searchResults.asStateFlow()
     private val _connectorRepositories = MutableStateFlow<List<com.dua.ai.setup.RepositoryResult>>(emptyList())
     val connectorRepositories = _connectorRepositories.asStateFlow()
-    private val _memoryCandidates = MutableStateFlow<List<String>>(emptyList())
-    val memoryCandidates = _memoryCandidates.asStateFlow()
-    fun proposeMemoryNotes() {
-        if (_projectId.value != com.dua.ai.projects.ProjectCodec.PERSONAL) {
-            _memoryCandidates.value = emptyList()
-            integrationNotice("Personal memory suggestions are available in Personal chats. Use this project's instructions for its context.")
-            return
-        }
-        val existing = localSettings.value.memory
-        _memoryCandidates.value = _messages.value.filter { it.isUser && it.state == "complete" }.takeLast(20)
-            .flatMap { com.dua.ai.setup.AutomationMemoryCandidates.propose(it.text, existing) }.distinct().take(4)
-        integrationNotice(if (_memoryCandidates.value.isEmpty()) "No explicit memory requests found. Try saying ‘remember that I prefer Hindi’." else "Review each proposed note before saving. Nothing has been sent or saved automatically.")
-    }
-    fun acceptMemoryNote(note: String) {
-        if (_projectId.value != com.dua.ai.projects.ProjectCodec.PERSONAL) return
-        if (note !in _memoryCandidates.value) return
-        try {
-            val settings = localSettings.value
-            val notes = com.dua.ai.setup.AutomationMemoryCandidates.confirm(note, settings.memory)
-            localPreferences.update(settings.copy(memory = notes))
-            _memoryCandidates.value = _memoryCandidates.value.filterNot { it == note }
-            integrationNotice("Note saved and cached on this phone; the server copy wins on sync. Notes are sent with chat only when Memory is enabled.")
-        } catch (failure: Exception) { integrationNotice(failure.message ?: "Memory could not be saved.") }
-    }
-    /** Dua Agent `remember`: queued as a reviewable suggestion (Personal chats only); nothing is saved without a tap. */
-    private fun suggestAgentMemory(fact: String) {
-        if (_projectId.value != com.dua.ai.projects.ProjectCodec.PERSONAL) return
-        if (fact in localSettings.value.memory) return
-        _memoryCandidates.value = (_memoryCandidates.value + fact).distinct().takeLast(4)
-    }
-    fun dismissMemoryNote(note: String) { _memoryCandidates.value = _memoryCandidates.value.filterNot { it == note } }
-    /** Share target writes only after explicit review, using the existing personal-memory cache/sync protocol. */
-    fun confirmSharedMemory(note: String, expectedOwnerId: String): String? = try {
-        check(account.state.value.user?.id == expectedOwnerId && expectedOwnerId.isNotBlank()) { "Sign in to the account shown before saving memory." }
-        check(!syncBlocked()) { "Finish the current reply or sync action, then save this note." }
-        localPreferences.requireReadable()
-        val settings = localSettings.value
-        val notes = com.dua.ai.setup.AutomationMemoryCandidates.confirm(note, settings.memory)
-        localPreferences.update(settings.copy(memory = notes))
-        null
-    } catch (failure: Exception) { failure.message ?: "Memory could not be saved. Try again." }
+    private val memoryFeature: ChatMemory by lazy { ChatMemory(memoryHost) }
+    private val memoryHost: MemoryHost by lazy { object : MemoryHost {
+        override val _projectId get() = this@ChatViewModel._projectId
+        override val localPreferences get() = this@ChatViewModel.localPreferences
+        override val localSettings get() = this@ChatViewModel.localSettings
+        override val _messages get() = this@ChatViewModel._messages
+        override val account get() = this@ChatViewModel.account
+        override fun syncBlocked() = this@ChatViewModel.syncBlocked()
+        override fun integrationNotice(text: String) { this@ChatViewModel.integrationNotice(text) }
+    } }
+
+    // Personal-memory note proposals (moved to ChatMemory.kt; public API unchanged).
+    val memoryCandidates: StateFlow<List<String>> get() = memoryFeature.memoryCandidates
+    fun proposeMemoryNotes() = memoryFeature.proposeMemoryNotes()
+    fun acceptMemoryNote(note: String) = memoryFeature.acceptMemoryNote(note)
+    private fun suggestAgentMemory(fact: String) = memoryFeature.suggestAgentMemory(fact)
+    fun dismissMemoryNote(note: String) = memoryFeature.dismissMemoryNote(note)
+    fun confirmSharedMemory(note: String, expectedOwnerId: String): String? = memoryFeature.confirmSharedMemory(note, expectedOwnerId)
     fun integrationNotice(text: String) { _integrations.value = _integrations.value.copy(notice = text) }
     // Remote kill switches (/api/config › switches). Cached for the first frame; any failure falls back to "all off".
     private val switchPrefs = application.getSharedPreferences("dua_remote_switches", 0)

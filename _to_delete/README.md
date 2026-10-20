@@ -856,3 +856,94 @@ Teeno pass hone chahiye. Uske baad app mein yeh **5 jagah** — exactly woh raas
 5. **Chat → model picker → free model** — `updateSettings(freeModel=…)` still save ho (yeh `ChatViewModel` se forwarder se jaata hai)
 
 **Build yahan nahi chala** — sandbox mein Java/Android SDK nahi hai. Jo kiya woh byte-compare + host/interface parity + import/brace balance + reflection-trap check hai. Asli confirmation CI se aayegi.
+
+---
+
+## 🧠 Chat split — Step 4: memory notes → `ChatMemory.kt` (20 Oct 2026)
+
+Base: `main` @ `6e6e7f2` (PR #311 / Step 3 merge ke baad).
+
+### Line count — before → after
+
+| File | Pehle | Ab | Farq |
+| --- | --- | --- | --- |
+| `viewmodel/ChatViewModel.kt` | **1,597** | **1,574** | **−23** |
+| `viewmodel/ChatMemory.kt` | — | **69** (naya) | +69 |
+| `viewmodel/` total | 3,703 | 3,749 | +46 |
+
+`ChatViewModel` se **41 line nikli** aur **18 wapas aayi** (host object 9 + forwarders 6 + blank/comment 3) → net **−23**. `git diff --shortstat` = **1 file, +18 −41** (naya file alag).
+
+### Kya nikaala — 5 public members + 1 private
+
+| Member | Purana | Naya |
+| --- | --- | --- |
+| `memoryCandidates` (`StateFlow`) | `ChatViewModel` | `ChatMemory` + forwarder |
+| `proposeMemoryNotes()` | `ChatViewModel` | `ChatMemory` + forwarder |
+| `acceptMemoryNote(note)` | `ChatViewModel` | `ChatMemory` + forwarder |
+| `dismissMemoryNote(note)` | `ChatViewModel` | `ChatMemory` + forwarder |
+| `confirmSharedMemory(note, expectedOwnerId)` | `ChatViewModel` | `ChatMemory` + forwarder |
+| `suggestAgentMemory(fact)` (private) | `ChatViewModel` | `ChatMemory` (`internal`, forwarder `private`) |
+| `_memoryCandidates` (private flow) | `ChatViewModel` | `ChatMemory` |
+
+Pattern wahi jo pehle se **10 features** mein hai (`ChatHistory`, `ChatAgentControls`, `ChatUploads`, `ChatAccount`, `ChatDataControls`, `ChatProjects`, `ChatImagine`, `ChatVoice`, `ChatAttachments`, `ChatSettings`) — `MemoryHost` interface + `ChatMemory : MemoryHost by host` + `by lazy` delegate (`memoryFeature`, naam clash se bacha).
+
+### Public API bilkul same — `ui/` ki ek bhi file nahi badli
+
+6 forwarders, wahi naam aur signature. External refs jo forwarder se serve hote hain: `memoryCandidates` 5 refs (`IntegrationSetupScreen` 4, `ProjectSwitchingTest` 1), `confirmSharedMemory` 6 (`SharedMemoryTest` 5, `DuaNavHost` 1), `proposeMemoryNotes` 2, `acceptMemoryNote` 1, `dismissMemoryNote` 1 — **sab forwarder se jaate hain**. Diff mein `ui/` ka koi path nahi.
+
+### Jo `ChatViewModel` mein hi rehna chahiye tha
+
+| Member | Kyun |
+| --- | --- |
+| `_projectId` | **5 host contracts** padhte hain (`ChatProjects`, `ChatDataControls`, `ChatVoice`, `ChatHistory`, `ChatImagine`) — shared project state |
+| `localPreferences` · `localSettings` | **9 host contracts** ka shared store |
+| `_messages` | core chat loop ka state, sab features padhte hain |
+| `account` | `ChatAccount` / cloud sync ka base |
+| `syncBlocked()` | `ChatDataControls` contract member — sync/reply gate |
+| `_integrations` · `integrationNotice()` | integration notice line poore screen par shared hai |
+
+Inhe `ChatMemory` **host ke through padhta hai** — koi copy nahi, koi duplicate state nahi.
+
+### Verify — jo actually chalaya
+
+| Check | Result |
+| --- | --- |
+| **Byte-compare** — base `400-430` vs `ChatMemory.kt` body (line-by-line `diff`) | **40/41 lines byte-identical**, ek hi line badli: `private fun suggestAgentMemory` → `internal` (forwarder ke liye zaroori) ✅ |
+| `MemoryHost` members vs host overrides | **7 = 7**, missing 0 · extra 0 ✅ |
+| Accidental override (Step 1 ka `_liveStart` bug) | **0** — 10 class decls mein ek bhi interface naam nahi ✅ |
+| Purana `_memoryCandidates` outside `ChatMemory.kt` | **0** ✅ |
+| Unused imports | **0** — 4 imports, sab use ✅ |
+| Brace balance (dono files) | **349/349** · **17/17** ✅ |
+| Duplicate class-level decls | `ChatViewModel` 1 · `ChatMemory` 2 (interface + class, intended) ✅ |
+| `MemoryHost` / `ChatMemory` naam repo mein pehle se? | **0** — koi clash nahi ✅ |
+| Non-Kotlin refs (`.xml`, `.kts`, `.pro`, `.md`, `.json`) | **0** ✅ |
+| **Reflection trap** — 16 test files `getDeclaredField`/`getDeclaredMethod` | koi bhi memory field/method target nahi karta — `safe` ✅ |
+| **androidTest** source set | **maujood nahi** — `app/src/` mein `debug`, `main`, `test` hi hain (skip nahi, khaali) ⚠️ |
+| `_to_delete/README.md` purane 858 line | **md5 identical** (`a37cada6…`), sirf naya section juda ✅ |
+| 7 trap files · `THIRD_PARTY_NOTICES.md` · `ui/` | **koi touch nahi** ✅ |
+
+**Step 2 ka sabak dobara check kiya:** `suggestAgentMemory` ek `private` member thi jo `ChatViewModel` ke `ReplyEvent.Memory` handler se call hoti hai (line ~696). Isliye usse `internal` kiya aur `ChatViewModel` par `private` forwarder rakha — public surface nahi khula.
+
+### Aage kya
+
+- **Step 5:** `sendMessage` (136 lines) ko `prepareSend` / `streamReply` / `persistResult` mein todna — same file, private funs. **Split nahi, function-length fix.**
+- **Step 6:** `startNewChat` / `retryResponse` / `deleteChat` / `deleteServerChat` → `ChatLifecycle.kt`. **High risk** — yahan galti user-facing hai.
+- **Rukne ka point: yahan (Step 4 ke baad).** File 1,574 lines par hai, 11 features alag ho chuke hain.
+
+### Merge checklist
+
+```bash
+./gradlew assembleDebug
+./gradlew testDebugUnitTest
+./gradlew lint
+```
+
+Phir app mein yeh **5 jagah**:
+
+1. **Settings → Integrations → memory suggestions** — "Propose notes" dabao, 4 se zyada na aayein, notice dikhe
+2. **Memory note accept** — "Remember" wala note save ho, notice "Note saved and cached on this phone…" aaye
+3. **Memory note dismiss** — candidate list se hat jaaye
+4. **Dua Agent `remember`** — reply ke dauraan memory event se suggestion queue mein aaye (bina tap ke save na ho)
+5. **Share sheet se memory save** — `confirmSharedMemory` galat owner par error de, sahi owner par save kare
+
+**Build yahan nahi chala** — sandbox mein Java/Android SDK nahi hai. Jo kiya woh byte-compare + host/interface parity + symbol sweep + reflection-trap check hai. Asli confirmation CI se aayegi.
