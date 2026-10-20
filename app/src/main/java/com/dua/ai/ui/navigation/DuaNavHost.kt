@@ -38,7 +38,7 @@ import com.dua.ai.ui.chat.ChatFeature
 import com.dua.ai.ui.chat.HomeTab
 import com.dua.ai.ui.projects.ProjectsFeatureFlow
 import com.dua.ai.ui.projects.ProjectChatRoute
-import com.dua.ai.ui.onboarding.OnboardingScreen
+import com.dua.ai.ui.account.OnboardingScreen
 import com.dua.ai.ui.settings.CloudSyncScreen
 import com.dua.ai.ui.settings.DataControlsScreen
 import com.dua.ai.ui.settings.IntegrationSetupScreen
@@ -323,7 +323,7 @@ fun DuaNavHost(viewModel: ChatViewModel, voice: ReplyVoice, notificationRoute: P
             SettingsScreen(viewModel, onBack = navigator::back, onOpen = navigator::open)
         }
         composable(DuaDestination.EmailAccount.route) {
-            com.dua.ai.ui.auth.EmailAuthScreen(viewModel, onBack = navigator::back)
+            com.dua.ai.ui.account.EmailAuthScreen(viewModel, onBack = navigator::back)
         }
         composable(DuaDestination.Account.route) {
             BusyBackGuard(viewModel)
