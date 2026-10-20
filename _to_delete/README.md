@@ -533,3 +533,114 @@ Teeno pass hone chahiye. Uske baad app mein yeh **6 jagah** check karo — yeh e
 4. **Chat → feature hub → Plugins** — search/GitHub toggles, provider rows (`PluginsContent`)
 5. **Chat → Projects ka page** — chat ke andar se projects page khulta hai (`ProjectsFeaturePage`)
 6. **Images / Library / Plugins ke back arrows** — `DuaNavHost` se `navigate` sahi jagah jaata hai (`AssetFeatureRoutes` + `PluginsRoute`)
+
+---
+
+## 🎙 Chat split — Step 1: Voice/TTS → `ChatVoice.kt` (20 Oct 2026)
+
+**Base:** `main` @ `37d24ae` (PR #308 merge ke baad). **Kuch delete nahi hua** — sirf code move hua. **7 trap files ko haath nahi lagaya.**
+
+Yeh `ChatViewModel.kt` split plan ka **Step 1** hai (upar Pass 6 section mein table). Golden rule follow hua: **ek step = ek feature = ek commit**.
+
+### Line count — before → after
+
+| File | Pehle | Ab | Farq |
+| --- | --- | --- | --- |
+| `viewmodel/ChatViewModel.kt` | **1,748** | **1,684** | **−64** |
+| `viewmodel/ChatVoice.kt` | — | **136** (naya) | +136 |
+| `viewmodel/` total | 3,507 | 3,579 | +72 (host + forwarders) |
+
+`ChatViewModel` se **101 line nikli** (voice chunk) aur **37 line wapas aayi** (host object 19 + forwarders 11 + `_online`/`online`/`replyAudioCache` 5 + comments) — net **−64**.
+
+### Kya nikaala — 10 public members + live session internals
+
+| Kya | Purana ghar | Naya ghar |
+| --- | --- | --- |
+| `replyTtsOptions()` · `replyVoicePlan()` · `generateReplyAudio()` | `ChatViewModel` | `ChatVoice` |
+| `liveVoiceAvailable()` · `liveOptions()` · `loadLiveUsage()` · `clearLiveError()` · `startLiveVoice()` | `ChatViewModel` | `ChatVoice` |
+| `liveStart` · `liveUsage` (StateFlow) | `ChatViewModel` | `ChatVoice` |
+| `_liveStart` · `_liveUsage` (private → `internal`) | `ChatViewModel` | `ChatVoice` |
+| `generatedAudioApi` (private) | `ChatViewModel` | `ChatVoice` |
+| `finishLiveVoice()` (private suspend) | `ChatViewModel` | `ChatVoice` |
+| `LiveStartState` | `ChatViewModel` ka **nested** class | **top-level** class `ChatVoice.kt` mein |
+
+**Pattern wahi hai jo pehle se 7 features mein hai** (`ChatHistory`, `ChatAgentControls`, `ChatUploads`, `ChatAccount`, `ChatDataControls`, `ChatProjects`, `ChatImagine`): ek `VoiceHost` interface + `ChatVoice` class `: VoiceHost by host` + `ChatViewModel` mein `by lazy` delegate.
+
+```kotlin
+private val voiceFeature: ChatVoice by lazy { ChatVoice(voiceHost) }
+private val voiceHost: VoiceHost by lazy { object : VoiceHost { /* 17 members */ } }
+```
+
+`ChatVoice` object `voiceFeature` ke naam se hai — **`ChatVoice` class ka naam host property (`voice`) se collide nahi karta**, isliye koi naming clash nahi.
+
+### Public API bilkul same — UI ko touch nahi karna pada
+
+`ChatViewModel` par **10 forwarders** hain, wahi naam aur wahi signature:
+
+```kotlin
+fun replyTtsOptions(): com.dua.ai.voice.TtsOptions? = voiceFeature.replyTtsOptions()
+fun replyVoicePlan(text: String): List<String> = voiceFeature.replyVoicePlan(text)
+suspend fun generateReplyAudio(text: String): ByteArray = voiceFeature.generateReplyAudio(text)
+val liveStart: StateFlow<LiveStartState> get() = voiceFeature.liveStart
+val liveUsage: StateFlow<com.dua.ai.voice.live.LiveUsage?> get() = voiceFeature.liveUsage
+fun liveVoiceAvailable(): Boolean = voiceFeature.liveVoiceAvailable()
+fun liveOptions(): com.dua.ai.voice.live.LiveOptions? = voiceFeature.liveOptions()
+fun loadLiveUsage() = voiceFeature.loadLiveUsage()
+fun clearLiveError() = voiceFeature.clearLiveError()
+fun startLiveVoice() = voiceFeature.startLiveVoice()
+```
+
+Isliye **`ui/` ke 4 consumer files chhue hi nahi** — `LiveVoiceScreen.kt`, `VoiceSettingsScreen.kt`, `ReplyVoice.kt`, `DuaNavHost.kt` sab `viewModel.<same name>` hi call karte hain.
+
+### Jo `ChatViewModel` mein hi rehna chahiye tha
+
+Yeh teen voice block ke aas-paas pade the par **voice ke nahi hain** — inhe chheda nahi:
+
+| Member | Kyun ChatViewModel mein hi |
+| --- | --- |
+| `_online` / `online` | Network state — `setNetwork()`, `sendMessage` offline-retry, aur 3 UI files (`ChatRoute`, `ReplyVoice`, `VoiceModeScreen`) use karte hain |
+| `replyAudioCache` | `HistoryHost` ka contract hai — `ChatHistory.clearAllChats()` ise `clear()` karta hai |
+| `integrations` / `_switches` / `_projectId` / `localSettings` | Shared state, sirf voice ka nahi |
+
+**`ChatVoice` inhe host ke through padhta hai** (`VoiceHost` mein declared, `ChatViewModel` implement karta hai) — koi copy nahi, koi duplicate state nahi.
+
+### Verify — jo actually chalaya
+
+| Check | Result |
+| --- | --- |
+| **Byte-compare** — purana chunk vs naya `ChatVoice` body | **sirf 4 line different, sab intentional** (`private`→`internal` ×2, `_projectId.value`→`projectId.value` ×2). Baaki **89 line byte-identical** ✅ |
+| Moved block ke **17 class-level members** — sab present? | `generatedAudioApi`, `_liveStart`, `_liveUsage` ChatVoice mein; **14 ChatViewModel surface par** → **0 missing** ✅ |
+| `VoiceHost` interface members | **17** — host object ke saare 17 overrides match ✅ |
+| **Accidental override** (`ChatVoice` bhi declare kare + interface mein bhi ho) | **0** ✅ |
+| Duplicate class-level declarations | `ChatVoice.kt` **0** · `ChatViewModel.kt` ke 2 (`refreshEngineCapabilities`, `storedFileUrl`) **pehle se the** — verify kiya `/tmp/CVM_before.kt` mein bhi 2-2 ✅ |
+| Dangling internal refs (`_liveStart`/`_liveUsage`/`generatedAudioApi`/`finishLiveVoice`) ChatVoice ke bahar | **0** — bas do deliberate `voiceFeature._liveStart` reads (`liveProjectBusy`, init collector) ✅ |
+| Unused imports in `ChatVoice.kt` | **0** — 9 imports, sab use hote hain ✅ |
+| Brace balance dono files | **0 / 0** ✅ |
+| Voice symbols ka repo-wide reach (main + test + androidTest) | 12 symbols, **0 break** — `replyTtsOptions` 5 · `liveStart` 14 · `liveUsage` 13 · `LiveStartState` 11 · `replyAudioCache` 8 · baaki 3–8 each ✅ |
+| Stale comment `com.dua.ai.auth.GoogleSignIn` (line ~581) | **theek kiya** → `com.dua.ai.account.GoogleSignIn` (Pass 3 ka bacha hua) ✅ |
+| `\u0000` cache-key separator | **byte-exact** preserve hua ✅ |
+| 7 trap files | **koi touch nahi** ✅ |
+
+### Aage kya — Step 2
+
+Plan table ke mutabiq agla: **Attachment / stored-files glue → `ChatAttachments.kt`** (`uploadPicked`, `cancelUpload`, `discardUploads`, `flushPendingFileDeletes`, `attachmentImageBytes`, `_attachments` clear paths, ~250–280 line). `uploadsFeature` (`ChatUploads`) already maujood hai — yeh uska UI-side glue hai jo upar reh gaya.
+
+Steps 3–6 (settings/writing, memory notes, `sendMessage` split, lifecycle) abhi baaki. **Step 4 ke baad rukne ka point** hai.
+
+**Build yahan nahi chala** — sandbox mein Java/Android SDK nahi hai. Jo kiya woh byte-compare + interface/override/duplicate/import parity hai. Asli confirmation CI se aayegi.
+
+### Merge checklist
+
+```bash
+./gradlew assembleDebug
+./gradlew testDebugUnitTest
+./gradlew lint
+```
+
+Teeno pass hone chahiye. Uske baad app mein yeh **5 jagah** — yeh exactly woh raaste hain jo voice code se guzarte hain:
+
+1. **Reply ka AI voice** — koi reply suno (AI voice on) → audio chalta hai, replay cache se free
+2. **Settings → Voice** — provider/voice/speed badlo, preview suno, live usage number dikhe
+3. **Live voice screen** — mic permission → session start, minutes count, end par transcript chat mein save
+4. **Voice mode (hands-free)** — orb tap → live voice available ho to LiveVoice par jaata hai, warna HandsFree
+5. **Offline** — internet off karke AI voice → "AI voice setup is unavailable. Try device voice." wala sahi message
