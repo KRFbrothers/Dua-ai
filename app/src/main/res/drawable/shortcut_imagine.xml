@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Launcher shortcut icon: Dua's dark launcher background with the in-app gs_spark glyph. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="48dp" android:height="48dp" android:viewportWidth="960" android:viewportHeight="960">
+    <path android:fillColor="@color/ic_launcher_background" android:pathData="M480,0A480,480 0,1 1,480,960A480,480 0,1 1,480,0Z" />
+    <group android:translateX="240" android:translateY="240" android:scaleX="0.5" android:scaleY="0.5">
+        <path android:fillColor="#FFFFFF" android:pathData="M469.62,860.15q-4.69-3.85-6.69-9.85q-16.69-64.23-49.31-120.92T334.15,625.85T230.62,546.38T109.39,497.08q-5.69-2-9.54-6.69T96,480t3.85-10.38t9.54-6.69q64.54-16.69 121.23-49.31t103.54-79.46t79.46-103.54t49.31-121.23q2-5.69 6.54-9.54T480,96t10.28,3.85t6.22,9.54q17.27,64.54 49.88,121.23t79.46,103.54t103.54,79.46t121.23,49.31q5.69,2 9.54,6.69T864,480t-3.85,10.38t-9.54,6.69q-64.54,16.69-121.23,49.31T625.85,625.85T546.38,729.38T497.08,850.31q-2,6-6.69,9.85T480,864t-10.38-3.85Z" />
+    </group>
+</vector>

@@ -4,7 +4,8 @@ The Agent is the tool-using mode of the Cloud Run engine (`google-cloud-backend/
 
 The approved ADK target is recorded in [ADK_SCOPE.md](ADK_SCOPE.md): Fareed's
 unchanged six-part checklist, current integration gaps and official GitHub sources.
-Keep its pending requirements distinct from implemented behavior below.
+The integration and live-configuration boundaries are documented in
+[ADK_IMPLEMENTATION.md](ADK_IMPLEMENTATION.md).
 
 ## Two ways to run: tool loop vs ADK
 
@@ -20,8 +21,9 @@ parallel helpers, multipart answers, approvals and disconnect handling. This is
 integration verification; it does not establish which path a deployed revision
 currently enables or how well its live model answers.
 
-ADK runs through the official production `run_async` API. Each planning/helper
-run owns an ephemeral in-memory session, closes its event stream, and awaits
+ADK runs through the official production `run_async` API. Planning uses an ephemeral session. The helper/merger pipeline uses the official
+SQL session service when `ADK_SESSION_DB_URL` is configured, and supports owned
+resume through `resumeRun`; otherwise it uses an in-memory session. Each run closes its event stream, and awaits
 `Runner.close()` in the same asyncio task/event loop, including failure paths. Thought events
 reach the existing progress stream as they arrive. Cancellation is checked while
 waiting for an event (about once per second), and a deadline also signals the
@@ -41,7 +43,7 @@ mismatch returns a repairable tool error before creating any approval; no file
 is silently dropped. Complete proposals still use the existing owner approval
 and repository validation rules.
 
-**Rollback to the loop:** if the request does not split, or ADK fails before any tool ran, the normal tool loop answers. Coding-mode requests always use the loop. To turn ADK off, remove the flag:
+**Fallback to the loop:** ordinary unsplit requests can use the existing loop. Configured provider routes, custom tools and indexed documents can use a single ADK helper. After streaming/actions, on resume, or with explicit provider routes, failures stop without replay or silent provider changes. Coding-mode requests use the existing coding loop. To turn ADK off, remove the flag:
 
 ```bash
 gcloud run services update dua-ai-engine --region us-central1 --project global-healer-m6shk --remove-env-vars AGENT_ENGINE
@@ -51,6 +53,9 @@ After either path, optional add-ons run:
 
 - **Self-check** (`AGENT_VERIFY=1`, [`agent_verify.py`](../google-cloud-backend/agent_verify.py)): a cheap critic call compares the draft with the request and sources; only if it finds issues, one revision. Failures keep the draft; a revision that drops a PR link is rejected. Casual replies and coding mode skip it.
 - **Tested PRs** (`AGENT_TEST_CODE=1`, [`pr_flow.py`](../google-cloud-backend/pr_flow.py)): proposed Python files are byte-compiled and JSON parsed before a PR opens; after the PR opens, the engine polls GitHub CI and allows **one** fix commit on the same `dua-agent/` branch (never main, never force, never merge). The `check_pr_ci` tool reads the agent's own PR status.
+
+See the [new ADK configuration and operations guide](ADK_IMPLEMENTATION.md) for
+SQL persistence, embeddings, provider routes, tools, telemetry and CLI settings.
 
 ## Settings (verified from code)
 

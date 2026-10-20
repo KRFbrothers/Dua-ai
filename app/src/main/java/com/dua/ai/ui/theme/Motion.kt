@@ -21,7 +21,6 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 object DuaMotion {
     const val DurationFast = 150
     const val DurationNormal = 250
-    const val DurationSlow = 400
 
     fun <T> bouncy() = spring<T>(
         dampingRatio = Spring.DampingRatioLowBouncy,

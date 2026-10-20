@@ -88,7 +88,7 @@ internal object BuildData {
     const val REASON = "Build mode needs the GitHub connector: set ENABLE_GITHUB_CONNECTOR=1 and a read-only GITHUB_CONNECTOR_TOKEN in hosting settings."
     private const val REPO = "KRFbrothers/Dua-ai"
     private val repositories = listOf(
-        RepositoryResult("Dua-ai", "https://github.com/$REPO", "Personal AI assistant: Android app and Vercel backend", REPO),
+        RepositoryResult("Dua-ai", "https://github.com/$REPO", "Personal AI assistant: Android app and Cloud Run backend", REPO),
         RepositoryResult("dua-apk-private", "https://github.com/KRFbrothers/dua-apk-private", "Private debug builds", "KRFbrothers/dua-apk-private", private = true),
         RepositoryResult("notes", "https://github.com/KRFbrothers/notes", "", "KRFbrothers/notes"),
     )
@@ -97,11 +97,11 @@ internal object BuildData {
         buildRepo = REPO, buildConfig = BuildModeConfig(true), buildRepositories = BuildRepositories(repositories = repositories))
 
     private val diff = """
-        Rate limiting already lives in `vercel-handler.mjs`; the chat group allows 5 requests a minute. To make it configurable:
+        Rate limiting already lives in `chat-handler.mjs`; the chat group allows 5 requests a minute. To make it configurable:
 
         ```diff
-        --- a/web/src/server/vercel-handler.mjs
-        +++ b/web/src/server/vercel-handler.mjs
+        --- a/web/src/server/chat-handler.mjs
+        +++ b/web/src/server/chat-handler.mjs
         @@ -12,7 +12,8 @@
          const GROUPS = {
         -  chat: { limit: 5, windowMs: 60_000 },
@@ -117,8 +117,8 @@ internal object BuildData {
     val chat = base.copy(messages = listOf(
         ChatMessage(id = "u1", text = "Where is the chat rate limit, and how do I make it configurable?", isUser = true),
         ChatMessage(id = "m1", text = diff, isUser = false, model = "Dua", build = BuildInfo(REPO, "main", listOf(
-            BuildFile("web/src/server/vercel-handler.mjs", 4210), BuildFile("web/src/server/service-handler.mjs", 3120),
+            BuildFile("web/src/server/chat-handler.mjs", 4210), BuildFile("web/src/server/service-handler.mjs", 3120),
             BuildFile("web/src/core/access-policy.mjs", 2890), BuildFile("web/test/chat.test.mjs", 61440),
-            BuildFile("web/vercel.json", 310), BuildFile("PROVIDERS.md", 102400, truncated = true)))),
+            BuildFile("web/cloudbuild.yaml", 310), BuildFile("PROVIDERS.md", 102400, truncated = true)))),
     ))
 }

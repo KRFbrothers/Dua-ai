@@ -58,78 +58,80 @@ where it affects these decisions. Source availability is not integration proof.
 Use the SDK APIs and focused official examples, retaining required notices for
 any copied material. Add only dependencies with actual callers. Do not vendor
 another copy of the entire ADK, introduce a competing runtime, or install every
-optional backend to make this checklist appear complete. The adapters listed
-below remain candidates until exercised through Dua with appropriate tests.
+optional backend to make this checklist appear complete. The integrations below use those upstream APIs through Dua adapters and are
+exercised with offline models. Hosted-provider acceptance remains separate.
 Open-source code does not make hosted model calls, embeddings or storage free.
 
 ## Implementation status and acceptance criteria
 
-Snapshot: Dua PR [#257](https://github.com/KRFbrothers/Dua-ai/pull/257), code head
-`9ea489cd996da315a3f11e7c75c0ea2016d89c20`. The hardening is on that PR;
-production deployment and the deployed ADK flag have not been inspected.
-**Partial** means there is relevant Dua code but the complete approved requirement
-still needs integration. **Pending** means the required Dua integration is absent.
-**Implemented/tested** refers only to the stated code and offline behavior.
+This map describes the implementation in PR [#257](https://github.com/KRFbrothers/Dua-ai/pull/257).
+All 25 requirements remain unchanged. **Implemented; offline verified** means
+exercised code with the pinned SDK/scripted providers, not a production deployment.
+**Configuration required / live acceptance pending** means code exists but operator
+credentials, database readiness or real-provider checks remain outstanding. See
+[ADK_IMPLEMENTATION.md](ADK_IMPLEMENTATION.md) for exact configuration, commands,
+limits and verification boundaries, and [TESTING.md](TESTING.md) for checks.
 
 ### 1. Core Architecture
 
-| Requirement | Dua state | Official GitHub starting point | Evidence needed to complete |
+| Requirement | Current state | Dua evidence / remaining acceptance | Official GitHub source |
 | --- | --- | --- | --- |
-| Agent Core Runtime | Implemented/tested: planner, bounded parallel specialists and merger in [agent_adk.py](../google-cloud-backend/agent_adk.py). | [runners.py](https://github.com/google/adk-python/blob/v2.12.0/src/google/adk/runners.py) | Keep request cancellation, deadlines, cleanup and tool-loop fallback covered. Live deployment remains separate. |
-| Prompt Manager / Templates | Partial: planner/helper/merger instructions exist in the ADK module. | [LlmAgent instructions](https://github.com/google/adk-python/blob/v2.12.0/src/google/adk/agents/llm_agent.py) | A consistent prompt-template interface exercised by the runtime, including context isolation and missing-value checks. |
-| Memory Management | Partial: ephemeral ADK sessions and owner-only Supabase notes; no integrated vector memory or durable multi-turn ADK history. | [sessions](https://github.com/google/adk-python/tree/v2.12.0/src/google/adk/sessions), [memory services](https://github.com/google/adk-python/tree/v2.12.0/src/google/adk/memory) | Durable owner-scoped chat context plus the approved vector-backed long-term memory, tested for retrieval, deletion and cross-owner isolation. Notes alone do not satisfy the vector requirement. |
-| RAG (Retrieval) | Partial: web and note retrieval; no complete owned-document ingestion/retrieval pipeline. | [retrieval tools](https://github.com/google/adk-python/tree/v2.12.0/src/google/adk/tools/retrieval) | Ingest and index owned documents, retrieve relevant chunks and cite them; deletion must remove searchable content. Choose the actual storage/embedding backend during this integration. |
-| State & Session Management | Partial: current sessions are temporary; no durable interrupted-task resume. | [database_session_service.py](https://github.com/google/adk-python/blob/v2.12.0/src/google/adk/sessions/database_session_service.py), [ResumabilityConfig](https://github.com/google/adk-python/blob/v2.12.0/src/google/adk/apps/_configs.py) | Restart and resume an owned task from persisted state; retain approvals and prevent duplicate writes. Upstream resumability is experimental and best-effort/at-least-once, requiring idempotent tools. |
+| Agent Core Runtime | Implemented; offline verified | Official ADK Runner, bounded planner, helpers and merger; cancellation/deadlines/cleanup remain covered. | [Upstream](https://github.com/google/adk-python/blob/v2.12.0/src/google/adk/runners.py) |
+| Prompt Manager / Templates | Implemented; offline verified | Existing role templates plus agent_context preserve bounded owner instructions, multimodal history and isolated helper tool history. Strict planner schema rejects incomplete values. | [Upstream](https://github.com/google/adk-python/blob/v2.12.0/src/google/adk/agents/llm_agent.py) |
+| Memory Management | Implemented; configuration required | Durable SQL sessions plus pgvector semantic notes. Existing Supabase notes remain authoritative; explicit bounded reindex migrates historical notes. No hosted embeddings were called. | [Upstream](https://github.com/google/adk-python/blob/v2.12.0/src/google/adk/sessions/database_session_service.py) |
+| RAG (Retrieval) | Implemented; configuration required | Owner-only text ingestion/chunking, native pgvector search, private document citations, replacement and deletion. SQLite exact search is a local test fallback. | [Upstream](https://github.com/google/adk-python/tree/v2.12.0/src/google/adk/tools/retrieval) |
+| State & Session Management | Implemented; offline verified | Official SQL session persistence/resume, owner leases, stored input restoration, completed-task rejection and durable single-use approvals. Upstream resumability is experimental; arbitrary external writes are not exactly-once. | [Upstream](https://github.com/google/adk-python/blob/v2.12.0/src/google/adk/apps/_configs.py) |
 
 ### 2. Tooling & Integrations
 
-| Requirement | Dua state | Official GitHub starting point | Evidence needed to complete |
+| Requirement | Current state | Dua evidence / remaining acceptance | Official GitHub source |
 | --- | --- | --- | --- |
-| Built-in Tools | Partial: ADK exposes web, calculator, time, GitHub file reads and approval-gated file proposals. Python execution exists in the ordinary loop, not the ADK tool list. | [FunctionTool](https://github.com/google/adk-python/blob/v2.12.0/src/google/adk/tools/function_tool.py) | Exercise read/write/execute/calculate through ADK with existing authorization, sandbox and timeout boundaries. File writes must remain approved proposals. |
-| API Connectors | Partial: Google Search, GitHub and Supabase adapters; no dedicated weather connector. | [tools](https://github.com/google/adk-python/tree/v2.12.0/src/google/adk/tools) | Stable connector contracts and tests for auth failures, malformed responses, timeouts and the external services required by actual tasks. |
-| Custom Tool SDK | Partial: Python functions are wrapped as ADK FunctionTools in make_tools. | [BaseTool](https://github.com/google/adk-python/blob/v2.12.0/src/google/adk/tools/base_tool.py), [FunctionTool](https://github.com/google/adk-python/blob/v2.12.0/src/google/adk/tools/function_tool.py) | A documented, exercised way to register a custom tool with schema validation, cancellation, ownership and per-tool limits. |
-| Error Handling & Retry | Partial: bounded calls, repairable tool errors and fallback before side effects; no unified transient-error retry policy. | [reflect_retry_tool_plugin.py](https://github.com/google/adk-python/blob/v2.12.0/src/google/adk/plugins/reflect_retry_tool_plugin.py) | Bounded transient retries/backoff, cancellation and an honest terminal error. Model repair and transport retries are different. Never blindly retry non-idempotent writes. |
+| Built-in Tools | Implemented; offline verified | ADK exposes search, calculator, time, sandboxed Python, GitHub file reads, notes and approval-gated write proposals. No unrestricted host filesystem or shell tool. | [Upstream](https://github.com/google/adk-python/blob/v2.12.0/src/google/adk/tools/function_tool.py) |
+| API Connectors | Implemented for configured services | Existing Google Search, GitHub and Supabase connectors share bounded dispatch; custom SDK extends reviewed APIs. Weather is an example of an optional external service, not a newly configured paid endpoint. Live API credentials/permissions require operator verification. | [Upstream](https://github.com/google/adk-python/tree/v2.12.0/src/google/adk/tools) |
+| Custom Tool SDK | Implemented; offline verified | agent_toolkit provides typed registration, per-tool quotas, bounded JSON responses and source/revision-bound write approval. The installed word_count example runs through the real SDK. | [Upstream](https://github.com/google/adk-python/blob/v2.12.0/src/google/adk/tools/function_tool.py) |
+| Error Handling & Retry | Implemented; offline verified | Read-only classified transient retries/backoff, cancellation and bounded native Gemini retries. Unknown, timeout and write outcomes are never blindly replayed. | [Upstream](https://github.com/google/adk-python/blob/v2.12.0/src/google/adk/models/google_llm.py) |
 
 ### 3. Model Connectors
 
-| Requirement | Dua state | Official GitHub starting point | Evidence needed to complete |
+| Requirement | Current state | Dua evidence / remaining acceptance | Official GitHub source |
 | --- | --- | --- | --- |
-| LLM Providers Support | Partial: ADK currently uses Gemini/Vertex. Other app chat providers do not establish ADK adapter support. | [LiteLlm adapter](https://github.com/google/adk-python/blob/v2.12.0/src/google/adk/models/lite_llm.py), [model registry](https://github.com/google/adk-python/blob/v2.12.0/src/google/adk/models/registry.py) | Exercise the approved Gemini/OpenAI/Claude/local-model routes through a common ADK contract using offline fixtures first. Install optional adapters only with callers; do not route private data to an unintended endpoint. |
-| Embedding Models | Pending: no Dua ADK embedding/indexing pipeline. | [retrieval interfaces](https://github.com/google/adk-python/tree/v2.12.0/src/google/adk/tools/retrieval) | An actual embedding provider and vector store integrated with ingestion/query/deletion, consistent dimensions/versioning and owner isolation. ADK's retrieval API is not itself an embedding model. |
-| Streaming | Partial: runtime consumes async SDK events and forwards progress; final visible author text is accumulated, not emitted as token deltas. | [RunConfig](https://github.com/google/adk-python/blob/v2.12.0/src/google/adk/agents/run_config.py), [runners.py](https://github.com/google/adk-python/blob/v2.12.0/src/google/adk/runners.py) | Incremental user-visible answer text through the existing API, with ordered deltas, no repeated text and Stop/disconnect cleanup. Progress events alone are not answer streaming. |
-| Model Fallback | Partial: the ordinary engine has fallback behavior; the ADK path has no configured multi-provider fallback chain. | [official fallback sample](https://github.com/google/adk-python/tree/v2.12.0/contributing/samples/models/litellm_with_fallback_models) | Configured bounded fallback with error classification, remaining request budget and no replay of completed actions. Upstream FallbackModel is experimental in this release. |
+| LLM Providers Support | Implemented; live acceptance pending | Gemini plus official LiteLlm OpenAI, Anthropic, OpenRouter and opt-in local routes. Explicit server configuration; offline adapter contracts tested. No claim of live provider/model availability or quality. | [Upstream](https://github.com/google/adk-python/blob/v2.12.0/src/google/adk/models/lite_llm.py) |
+| Embedding Models | Implemented; live acceptance pending | Explicit Vertex embedding model/dimensions with vector validation, model-space identity and owner isolation. Native pgvector integration tested on disposable PostgreSQL. | [Upstream](https://github.com/google/adk-python/tree/v2.12.0/src/google/adk/tools/retrieval) |
+| Streaming | Implemented; offline verified | Merger token deltas reach existing SSE text events without duplicate final aggregates; Stop/disconnect cancel work. Critic-enabled runs intentionally buffer until verification. | [Upstream](https://github.com/google/adk-python/blob/v2.12.0/src/google/adk/agents/run_config.py) |
+| Model Fallback | Implemented; offline verified | Bounded server-configured official FallbackModel chain; no switch after emitted response. Failed attempts retain unknown usage; no action replay or silent provider-route override. | [Upstream](https://github.com/google/adk-python/blob/v2.12.0/src/google/adk/models/_fallback_model.py) |
 
 ### 4. Guardrails & Orchestration
 
-| Requirement | Dua state | Official GitHub starting point | Evidence needed to complete |
+| Requirement | Current state | Dua evidence / remaining acceptance | Official GitHub source |
 | --- | --- | --- | --- |
-| Multi-Agent Orchestrator | Implemented/tested for independent research/code/notes work with a merger and per-helper limits. | [agent implementations](https://github.com/google/adk-python/tree/v2.12.0/src/google/adk/agents) | Retain task isolation, independent budgets, cancellation and explicit incomplete-helper results. Installed orchestration APIs have deprecation warnings; do not migrate without testing. |
-| Guardrails & Safety Filters | Partial: agent_safety.py, owner checks, fenced tool output and bounded operations. | [plugin interfaces](https://github.com/google/adk-python/tree/v2.12.0/src/google/adk/plugins), [LlmAgent callbacks](https://github.com/google/adk-python/blob/v2.12.0/src/google/adk/agents/llm_agent.py) | Input/tool/output policy checks with adversarial fixtures and clear refusal/error states. Filters do not guarantee every answer is correct or safe. |
-| Input/Output Validators | Partial: strict planner and complete proposal-pair checks are tested on the PR. | [LlmAgent schemas](https://github.com/google/adk-python/blob/v2.12.0/src/google/adk/agents/llm_agent.py), [FunctionTool schema handling](https://github.com/google/adk-python/blob/v2.12.0/src/google/adk/tools/function_tool.py) | Validate every externally actionable tool payload and structured model result before use, with repairable errors and malformed-input coverage. |
-| Human-in-the-Loop | Partial: owner-scoped, expiring, single-use approvals for explicit file/note proposals; pending approvals are in memory. | [tool confirmation sample](https://github.com/google/adk-python/tree/v2.12.0/contributing/samples/hitl/tool_confirmation) | Persist approval state where resume needs it and preserve confirmation for consequential actions. Automatic note learning is separate behavior; do not describe every existing write as approval-gated. |
-| Security & Secrets | Partial: owner verification, secret references and single-repository boundaries exist; live IAM/secrets not audited here. | [ADK auth](https://github.com/google/adk-python/tree/v2.12.0/src/google/adk/auth) | Server-side credentials, least-privilege connectors, safe errors/logs, owner isolation and reviewable deployment permissions. Keep existing controls while adding tools. |
+| Multi-Agent Orchestrator | Implemented; offline verified | Independent helper histories, shared run budget, per-helper limits and explicit incomplete results. Single extension requests can also use ADK directly. | [Upstream](https://github.com/google/adk-python/tree/v2.12.0/src/google/adk/agents) |
+| Guardrails & Safety Filters | Implemented; offline verified | Existing policy/authorization plus fenced custom retrieval and buffered/incremental secret filtering. Adversarial fixtures exercise boundaries; no filter guarantees all advice safe or accurate. | [Upstream](https://github.com/google/adk-python/blob/v2.12.0/src/google/adk/agents/llm_agent.py) |
+| Input/Output Validators | Implemented; offline verified | Strict planner schemas, actionable proposal pairs, custom typed JSON arguments/results, vector dimensions and owner-only API payload validation. | [Upstream](https://github.com/google/adk-python/blob/v2.12.0/src/google/adk/tools/function_tool.py) |
+| Human-in-the-Loop | Implemented; offline verified | SQL approvals survive restart, expire, bind owner/tool revision and are atomically claimed once before execution. Automatic note learning is separate existing behavior, not universally approval-gated. | [Upstream](https://github.com/google/adk-python/blob/v2.12.0/src/google/adk/tools/tool_context.py) |
+| Security & Secrets | Implemented in code; live IAM pending | Server-only keys/routes, private SQL schema/role, verified TLS for hosted DB, owner checks, safe errors and content-free traces. Production IAM, secret bindings and data retention were not inspected or changed. | [Upstream](https://github.com/google/adk-python/tree/v2.12.0/src/google/adk/auth) |
 
 ### 5. Monitoring & Evaluation
 
-| Requirement | Dua state | Official GitHub starting point | Evidence needed to complete |
+| Requirement | Current state | Dua evidence / remaining acceptance | Official GitHub source |
 | --- | --- | --- | --- |
-| Logging & Tracing | Partial: logs, tool steps and progress exist; no Dua request-correlated trace contract verified. | [telemetry](https://github.com/google/adk-python/tree/v2.12.0/src/google/adk/telemetry) | Correlate request/agent/tool spans, duration, outcome and cancellation with safe structured fields. Record actions and safe summaries, not private chain-of-thought or secrets. |
-| Token & Cost Trackers | Pending at the per-request ADK reporting boundary. Output caps are not usage accounting. | [LlmResponse usage_metadata](https://github.com/google/adk-python/blob/v2.12.0/src/google/adk/models/llm_response.py), [token usage telemetry](https://github.com/google/adk-python/blob/v2.12.0/src/google/adk/telemetry/_token_usage.py) | Aggregate actual reported input/output/cached/thinking usage without double-counting streamed totals. Mark missing usage unknown and pricing-based costs estimated; do not invent billed amounts. |
-| Evaluation Metrics | Pending: regression tests do not measure live answer accuracy. | [evaluation](https://github.com/google/adk-python/tree/v2.12.0/src/google/adk/evaluation), [CLI evaluation](https://github.com/google/adk-python/blob/v2.12.0/src/google/adk/cli/cli_eval.py) | Versioned cases and separate quality reports for answers, retrieval and tool decisions. Keep paid/live evaluation opt-in, separate from deterministic offline CI. |
-| Automated Testing | Implemented/tested for current ADK behavior: minimal mocks and real SDK with offline scripted models. | [upstream unit tests](https://github.com/google/adk-python/tree/v2.12.0/tests/unittests) | Continue [test_agent_adk.py](../google-cloud-backend/tests/test_agent_adk.py) and [CI](../.github/workflows/checks.yml); add meaningful behavioral coverage for each integration. The inspected PR code has 428 passing SDK-suite tests, not 428 answer-quality benchmarks. |
+| Logging & Tracing | Implemented; offline verified | Request-correlated model/provider/tool spans, duration/status/retries and terminal usage events. SDK content capture disabled. No prompt bodies, tool arguments, credentials or private chain-of-thought in these traces. | [Upstream](https://github.com/google/adk-python/tree/v2.12.0/src/google/adk/telemetry) |
+| Token & Cost Trackers | Implemented; offline verified | Actual reported per-attempt usage, streamed-total deduplication, cached/thinking fields and explicit operator-verified pricing. Missing usage/prices remain unknown; estimates are not bills. SDK internal HTTP retry billing remains provider-authoritative. | [Upstream](https://github.com/google/adk-python/blob/v2.12.0/src/google/adk/models/llm_response.py) |
+| Evaluation Metrics | Implemented harness; live quality unmeasured | Versioned six-case reference dataset and JSONL scorer for answers, retrieval citations, tools, approval and boundaries; missing/duplicate cases fail. This starter deterministic rubric is not a comprehensive semantic quality judge. No live answer-accuracy score is claimed. | [Upstream](https://github.com/google/adk-python/tree/v2.12.0/src/google/adk/evaluation) |
+| Automated Testing | Implemented; offline verified | Minimal dependency mocks plus real pinned SDK, SQLite and disposable PostgreSQL/pgvector tests. New coverage exercises context, streaming, adapters, recovery, approval races, custom tools, telemetry, RAG and rollback. See TESTING.md; regression counts are not quality benchmarks. | [Upstream](https://github.com/google/adk-python/tree/v2.12.0/tests/unittests) |
 
 ### 6. CLI & Deployment
 
-| Requirement | Dua state | Official GitHub starting point | Evidence needed to complete |
+| Requirement | Current state | Dua evidence / remaining acceptance | Official GitHub source |
 | --- | --- | --- | --- |
-| Command Line Interface (CLI) | Partial: official adk command is installed; Dua's Flask app is not a configured discoverable ADK CLI agent package. | [cli_create.py](https://github.com/google/adk-python/blob/v2.12.0/src/google/adk/cli/cli_create.py), [cli.py](https://github.com/google/adk-python/blob/v2.12.0/src/google/adk/cli/cli.py) | Document and exercise scaffold/run/test commands against Dua's actual entry point without making local debugging publicly accessible. |
-| Deployment Configuration | Partial: existing Flask/Gunicorn Cloud Run entry point and runbook; no newly integrated ADK Docker/AWS template. | [official deployers](https://github.com/google/adk-python/tree/v2.12.0/src/google/adk/cli/deployers) | Reproducible image/startup/health/secrets configuration, with validated examples for the selected deployment target. The pinned official deployer documents GCP and Docker; it does not establish an AWS implementation. Supabase serves data/auth; deployment targets are not interchangeable. |
-| Versioning & Rollback | Partial: SDK pinned, Git branches/PRs and operations guidance exist; live healthy revision/rollback unverified. | [pinned ADK release](https://github.com/google/adk-python/tree/v2.12.0) | Record code/config/schema versions and a tested rollback to a known healthy revision, preserving owner data and session compatibility. Fareed merges; deploying or changing cloud settings requires the relevant authorization. |
+| Command Line Interface (CLI) | Implemented; offline verified | Dua CLI status/run/resume/index/delete/reindex/scaffold/test/evaluate commands; scaffold creates an official ADK package without overwriting. Live commands are explicit authenticated operations. | [Upstream](https://github.com/google/adk-python/blob/v2.12.0/src/google/adk/cli/cli.py) |
+| Deployment Configuration | Implemented for Docker + GCP; undeployed | Pinned nonroot Docker image, dependency locks, startup/health checks, Cloud Build candidate revision and existing Supabase data/auth boundary. AWS was not selected or provisioned; hosted targets are not interchangeable. | [Upstream](https://github.com/google/adk-python/tree/v2.12.0/src/google/adk/cli/deployers) |
+| Versioning & Rollback | Implemented; cloud acceptance pending | Build SHA and schema version, clean merged-main deployment, no-traffic candidate, explicit verified promotion and target-checked prior traffic restoration. Mocked rollback tests pass; no production revision or data migration was rolled back. | [Upstream](https://github.com/google/adk-python/tree/v2.12.0/src/google/adk/cli/deployers) |
 
 ## Delivery boundary
 
-Implement the pending work in focused increments under these same requirements;
-do not delete a pending requirement to claim completion. Verify each increment
-with the real pinned SDK and offline providers before live testing. No model,
-storage, deployment or billing change is implied by saving this scope. Update
-status only from observed code/tests and label live checks separately.
+No live cloud, model, embedding, storage, IAM or billing settings were changed by
+this implementation. Production acceptance requires an initialized private
+PostgreSQL/pgvector store, reviewed secret bindings, selected model/provider smoke
+checks and a no-traffic candidate verification before promotion. Keep unknown
+usage/cost and unmeasured live quality explicitly unknown. Fareed reviews and
+merges the PR; saving this code does not deploy it.

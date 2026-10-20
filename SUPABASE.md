@@ -168,7 +168,7 @@ The Node API moved from Vercel to Cloud Run (`dua-api`) and kept the existing Su
 
 Version 1 chat records now accept optional `pinned: true/false`. Missing fields decode as unpinned; invalid non-Booleans are rejected. New Android uploads send both states explicitly. On an existing account-bound, revision-checked `/api/cloud` PUT, the updated backend preserves the server’s pin for a matching chat when a legacy APK omits `pinned`. Explicit false unpins. Server deletion removes the chat and its pin together; a pin cannot bypass deleted-ID protection.
 
-Deploy this backend before installing the pin-enabled APK and refresh setup (`history.pin: true`). No SQL/RLS migration or new API route is required. Automatic sync stores pin IDs separately from content hashes, preserving old content baselines and avoiding pin-only recovery copies. Owner lock, account checks and the existing RPC conflict checks remain in force. Source tests use mocked Auth/REST/RPC responses; no live database write or physical-device sync is verified by them. See [HISTORY-SEARCH.md](docs/features/HISTORY_SEARCH.md) for pending edits and reviewed-download behavior.
+Deploy this backend before installing the pin-enabled APK and refresh setup (`history.pin: true`). No SQL/RLS migration or new API route is required. Automatic sync stores pin IDs separately from content hashes, preserving old content baselines and avoiding pin-only recovery copies. Owner lock, account checks and the existing RPC conflict checks remain in force. Source tests use mocked Auth/REST/RPC responses; no live database write or physical-device sync is verified by them. See [HISTORY_SEARCH.md](docs/features/HISTORY_SEARCH.md) for pending edits and reviewed-download behavior.
 
 ## Owner email login and signup
 

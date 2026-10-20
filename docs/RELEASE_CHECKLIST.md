@@ -22,7 +22,7 @@ Source/mock tests do not establish live RPC deployment or physical-device behavi
 - [ ] Turn project memory off, sync and verify a new chat excludes notes while the editor retains them. Archive the project and confirm notes become read-only.
 - [ ] Edit/delete a note, restart and review a cloud download. Confirm server notes and their switch restore without losing tasks/instructions. If both copies changed the project, review the conflict before proceeding.
 - [ ] Export/import project-only JSON, verify project notes/switches are included and differing imported definitions become separate projects. Keep the export private; global Personal notes remain excluded.
-- [ ] Check real-phone editor taps, scrolling, keyboard, rotation and returning to Projects. Automated tests do not establish physical-device/live-provider behavior. See [MEMORY.md](features/PROJECT_MEMORY.md).
+- [ ] Check real-phone editor taps, scrolling, keyboard, rotation and returning to Projects. Automated tests do not establish physical-device/live-provider behavior. See [PROJECT_MEMORY.md](features/PROJECT_MEMORY.md).
 
 ## Owner-only lock and spend controls
 
@@ -184,7 +184,7 @@ No private signing keys are supplied by this repository. The manual `Build perso
 - Clear the query and confirm all current-project chats return. Try mixed case, code symbols and an unmatched phrase; no-results should suggest refreshing history by sync.
 - Type quickly and edit/restore the snapshot while a search is pending. Old query/snapshot results must disappear, and the final query must show current matches.
 - Switch projects with an active query: it must clear, and another project's matches must stay hidden. Verify no extra network/provider request or persistent search index.
-- On the phone, check typing responsiveness, emoji/long-line snippets, restart/rotation and sync-refresh results. These device/live checks remain pending; see [HISTORY-SEARCH.md](features/HISTORY_SEARCH.md).
+- On the phone, check typing responsiveness, emoji/long-line snippets, restart/rotation and sync-refresh results. These device/live checks remain pending; see [HISTORY_SEARCH.md](features/HISTORY_SEARCH.md).
 
 ## Daily planner update
 

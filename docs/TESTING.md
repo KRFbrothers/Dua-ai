@@ -94,3 +94,19 @@ These automated checks do not certify physical microphone echo cancellation, Blu
 - Storage/backups: [STORAGE_BACKUP.md](STORAGE_BACKUP.md#archive-implementation-and-verification)
 - GitHub policy and logs: [GITHUB_VALIDATION.md](GITHUB_VALIDATION.md#verification), [GITHUB_LOGGING.md](GITHUB_LOGGING.md#verify)
 - Design tokens: [ui/design-system-tokens.md](ui/design-system-tokens.md#checks)
+
+### ADK completion integration checks
+
+The production SDK pass installs `requirements-adapters-lock.txt` and explicitly
+imports SDK/database/provider adapters. A disposable pgvector/PostgreSQL CI
+service exercises native vectors, least-privilege schema setup and official SDK
+resume, in addition to SQLite/mock tests. Tests never call paid providers.
+The new `test_adk_capabilities.py` covers context/streaming, usage, retries,
+custom tools, persistence, CLI/evaluation and rollback commands.
+
+Locally, set `ADK_TEST_POSTGRES_URL` only for a disposable loopback test database
+administrator. `test_adk_postgres.py` creates its own random database/role and
+cleans only those; it refuses non-local hosts. Without that opt-in, the native
+PostgreSQL case skips and cannot establish PostgreSQL verification. Quality
+scoring is separate from regression counts; see `evals/adk-v1.json` and
+`python google-cloud-backend/adk_cli.py evaluate --help`.

@@ -97,4 +97,48 @@ class OnDeviceFeaturesTest {
         remover.available = false
         assertFalse(model().backgroundRemovalAvailable)
     }
+
+    @Test fun summarizeAReplyOnThePhoneThenUseItInTheMessageBox() {
+        text.answer = "- Short point"
+        val model = model()
+        model.openWriting("A long reply", fromDraft = false, task = com.dua.ai.ondevice.WritingTask.Summarize); idle()
+        val session = model.writing.value!!
+        assertEquals(com.dua.ai.ondevice.WritingSession.Phase.Result, session.phase)
+        assertEquals("- Short point", session.result)
+        model.useWritingResult()
+        assertEquals("- Short point", model.draft.value)
+        assertNull(model.writing.value)
+    }
+
+    @Test fun rewriteWaitsForAStyleAndReplacesTheDraft() {
+        text.answer = "Could you please send the file?"
+        val model = model()
+        model.updateDraft("send file")
+        model.openWriting("send file", fromDraft = true, task = null)
+        assertEquals(com.dua.ai.ondevice.WritingSession.Phase.Choose, model.writing.value!!.phase)
+        assertTrue(text.prompts.isEmpty())
+        model.runWriting(com.dua.ai.ondevice.WritingTask.Rewrite(com.dua.ai.ondevice.RewriteStyle.Professional)); idle()
+        model.useWritingResult()
+        assertEquals("Could you please send the file?", model.draft.value)
+    }
+
+    @Test fun settingOffFallsBackToAVisibleServerRequestWithoutSending() {
+        val model = model()
+        model.updateSettings(model.localSettings.value.copy(onDeviceAi = false)); idle()
+        model.openWriting("A long reply", fromDraft = false, task = com.dua.ai.ondevice.WritingTask.Summarize); idle()
+        assertEquals(com.dua.ai.ondevice.WritingSession.Phase.Unavailable, model.writing.value!!.phase)
+        assertTrue(text.prompts.isEmpty())
+        model.askServerForWriting()
+        assertEquals("Summarize this in 3 short bullet points:\n\nA long reply", model.draft.value)
+        assertTrue(model.messages.value.isEmpty())
+    }
+
+    @Test fun emptyModelAnswerShowsFailedWithServerOption() {
+        text.answer = null
+        val model = model()
+        model.openWriting("text", fromDraft = true, task = com.dua.ai.ondevice.WritingTask.Summarize); idle()
+        assertEquals(com.dua.ai.ondevice.WritingSession.Phase.Failed, model.writing.value!!.phase)
+        model.closeWriting()
+        assertNull(model.writing.value)
+    }
 }

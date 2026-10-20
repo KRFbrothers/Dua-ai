@@ -20,16 +20,16 @@ class CloudImagineTest {
         assertNull(CloudImagine.parse("<html>"))
     }
 
-    @Test fun mergeAddsGoogleCloudAsDefaultAndKeepsVercelProviders() {
-        val vercel = ImagineConfig(imageEnabled = true, providers = listOf(ImagineProvider("xai", "Grok Imagine", "grok-imagine")), defaultProvider = "xai",
+    @Test fun mergeAddsGoogleCloudAsDefaultAndKeepsDuaApiProviders() {
+        val duaApi = ImagineConfig(imageEnabled = true, providers = listOf(ImagineProvider("xai", "Grok Imagine", "grok-imagine")), defaultProvider = "xai",
             videoEnabled = true, dailyImages = 10)
-        val merged = CloudImagine.merge(vercel, cloud)!!
+        val merged = CloudImagine.merge(duaApi, cloud)!!
         assertEquals(listOf(CloudImagine.PROVIDER, "xai"), merged.providers.map { it.id })
         assertEquals(CloudImagine.PROVIDER, merged.defaultProvider)
         assertTrue(merged.videoEnabled && merged.imageEnabled)
         assertEquals(CloudImagine.NAME, merged.providerName(null))
-        assertSame(vercel, CloudImagine.merge(vercel, null))
-        // Vercel Imagine off or missing: Cloud Run alone enables new images.
+        assertSame(duaApi, CloudImagine.merge(duaApi, null))
+        // dua-api Imagine off or missing: Cloud Run alone enables new images.
         val alone = CloudImagine.merge(null, cloud)!!
         assertTrue(alone.imageEnabled); assertFalse(alone.videoEnabled); assertEquals(20, alone.dailyImages)
         assertTrue(CloudImagine.merge(ImagineConfig(imageEnabled = false, imageReason = "No key"), cloud)!!.imageEnabled)
@@ -40,7 +40,7 @@ class CloudImagineTest {
         val image = ImagineOptions()
         assertTrue(CloudImagine.routes(cloud, image, sources = 0))
         assertTrue(CloudImagine.routes(cloud, image.copy(provider = CloudImagine.PROVIDER), 0))
-        assertFalse(CloudImagine.routes(cloud, image, sources = 1))  // edits stay on Vercel
+        assertFalse(CloudImagine.routes(cloud, image, sources = 1))  // edits stay on dua-api
         assertFalse(CloudImagine.routes(cloud, image.copy(provider = "xai"), 0))
         assertFalse(CloudImagine.routes(cloud, image.copy(kind = ImagineInfo.VIDEO), 0))
         assertFalse(CloudImagine.routes(null, image, 0))

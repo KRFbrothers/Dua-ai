@@ -9,7 +9,7 @@ Dua AI keeps its original name and artwork. This is the owner's personal assista
 | Screen | Production code / behavior |
 | --- | --- |
 | Welcome | `ui/onboarding/OnboardingScreen.kt`: full Dua logo, real Google login, Skip for now |
-| Home | `ui/chat/ChatScreen.kt`, `ChatTopBar.kt`, `EmptyState.kt`: current-project header, Computer shortcut, logo and suggested prompts that fill the draft, without sending |
+| Home | `ui/chat/ChatScreen.kt`, `ChatTopBar.kt`: current-project header, Computer shortcut, logo and suggested prompts that fill the draft, without sending |
 | Conversation | `MessageList.kt`, `UserMessage.kt`, `AssistantMessage.kt`, `MarkdownMessage.kt`: bubbles, streamed replies, Markdown, copyable code blocks, sources, typing and partial-stop states |
 | Composer | `Composer.kt`, `AttachmentSheet.kt`, `StoredFileChips.kt`: multiline input, send/stop, model choice, mic/voice and file tools |
 | History / Aura | `ui/history/HistoryDrawer.kt`: project search, fixed navigation/footer and independently scrolling recent chats |
@@ -28,7 +28,7 @@ Actual Compose renders: [Dark preview](compact-preview-dark.png) · [Light previ
 
 - Existing `ui/theme/Color.kt` neutral surfaces, error/code roles and full logo artwork are preserved.
 - `DuaTheme.kt` and `AccentColors.kt` apply Light/Dark plus six accent presets independently. Defaults: Light Purple `#AA4FF6`; Dark Orange `#FF6308`. Accent reset clears only the override.
-- `Type.kt` supplies the Inter-based text scale: 16sp body, 14sp secondary/buttons, 20sp page titles; Android font scaling stays enabled. The Home tagline keeps the existing Montserrat family.
+- `Type.kt` supplies the Inter-based text scale: 16sp body, 14sp secondary/buttons, 20sp page titles; Android font scaling stays enabled. The Home tagline uses `InterFont` (bundled `krfbrothers_regular`), like the rest of the text scale.
 - `Spacing.kt` supplies the 4dp spacing scale. Rounded surfaces use `Shape.kt`. Controls retain 48dp touch targets; menu/footer stay fixed while history scrolls. Code/Think/Search use accessible icon-only controls when their labels cannot fit.
 - The header and project actions are neutral. Accent is used selectively for selection and settings; the logo is never tinted.
 - Existing reduced-motion handling, keyboard insets, Android back navigation and conversation scroll-follow behavior remain in place.
@@ -36,6 +36,8 @@ Actual Compose renders: [Dark preview](compact-preview-dark.png) · [Light previ
 - Drag and drop (`ui/chat/ChatDropTarget.kt`, `attachments/DroppedFiles.kt`): photos and files dragged from another app (split screen, tablet, foldable, desktop mode) are copied into private cache (`cache/dropped-files/`, cleared after a day) and go through the normal attachment path; dropped text is added to the draft. Up to 3 files per drop; Dua's own provider URIs are rejected, as for Share. The + attachment sheet is unchanged.
 - On-device AI (`ondevice/`, setting: General → Device preferences → **On-device AI**): on phones where Android AICore offers Gemini Nano (through ML Kit GenAI Prompt), new chat titles are made on the phone first and the Imagine sheet shows **Polish my prompt** with the text label "On-device" (no brand art). It rewrites the composer draft in place; nothing is sent until the user sends. Unsupported phones, the setting off, a timeout or an empty answer quietly use the existing server title path, and the polish row is hidden. Titles never start a model download; only a polish tap may ask the system to download the model.
 - Remove background (`ondevice/MlKitBackgroundRemover.kt`, `ondevice/Cutouts.kt`): Imagine images get a **Remove background** button in the full-screen viewer, and photo attachments get a small 60 dp "On-device" chip next to them (same height as the attachment, so the composer does not grow; the photo's own remove button is unchanged) that opens **Remove background · On-device**. ML Kit subject segmentation runs on the phone (the model is downloaded once by Google Play services) and the transparent PNG is saved to Pictures/Dua with the same gallery code as Save (storage permission on Android 8–9). Hidden on phones without Google Play services. Uploaded files (stored, not inline) are not offered yet.
+- Summarize and Rewrite (`ondevice/WritingTools.kt`, `ui/chat/WritingToolsSheet.kt`, `ui/chat/DuaTextToolbar.kt`): long-press a Dua reply → **Summarize** / **Rewrite** (under the normal message actions, with "On-device when supported"); long-press text in the message box → the text menu also shows **Summarize** and **Rewrite** for the whole draft. Rewrite offers Rephrase, Shorter, More detail, Friendly, Professional and Fix grammar. Results appear in a sheet labelled "On-device" (text only) with Copy and Use in message box / Replace message; nothing changes until the user taps. With the On-device AI setting off, an unsupported phone, or no answer, the sheet offers **Ask Dua instead**, which puts a plain "Summarize/Rewrite this" request in the message box for the normal server chat (nothing is sent until Send).
+- Jetchat-style chat polish (`ui/chat/JumpToLatest.kt`): the **Latest reply** pill slides in (no slide with animations off) and shows "1 new reply" / "N new replies" with a dot when Dua replies while the reader is scrolled up; consecutive messages from the same author sit 6 dp apart instead of 14 dp; when the keyboard opens and the reader was at the bottom, the newest message stays visible.
 - Diff, voice, danger and media colors now use the extended `LocalDuaColors` roles in both appearances. Screens have no literal Compose palette colors or text sizes; custom branding/code sizes live in `Type.kt`. See the [complete value-to-token mapping](design-system-tokens.md) and contrast checks.
 
 ## Run the real app
@@ -80,7 +82,7 @@ The default native UI tests render production components with synthetic fixtures
 | Email login/signup and existing-account password setup | Implemented under Account (and Continue with email on Welcome when configured); owner-only, mandatory email confirmation and provider/SMTP setup required. Passwords are transient; password reset/recovery UI remains pending. |
 | Unrestricted online guest mode | Outside the owner-only access model |
 
-Code/build/render verification is not proof of live provider, account, Storage, permission or physical-device behavior. Check these with [RELEASE-CHECKLIST.md](../RELEASE_CHECKLIST.md) and the owner's installed release APK.
+Code/build/render verification is not proof of live provider, account, Storage, permission or physical-device behavior. Check these with [RELEASE_CHECKLIST.md](../RELEASE_CHECKLIST.md) and the owner's installed release APK.
 
 ## Validation for the compact-chat update
 
@@ -115,7 +117,7 @@ Six accent presets and independent persisted appearance still work; the accent i
 
 The sections above cover the Light/Dark previews, the sample-conversation debug entry point, setup and remaining features.
 
-Read Page 1, **Dua AI — Navigation Flow**, and **Dua AI — Complete UI Map** before implementation. The approved Sidebar, expanded Aura, Profile & Settings, accent and appearance mockups define the layout. The additive GitHub source gallery describes the earlier source inventory (304014a); it is not the target design. The latest source also has planner, history search and editable project memory, which remain available. No `AGENTS.md` or `Dua_AI_UI_Placement_List.md` was present in this checkout.
+Read Page 1, **Dua AI — Navigation Flow**, and **Dua AI — Complete UI Map** before implementation. The approved Sidebar, expanded Aura, Profile & Settings, accent and appearance mockups define the layout. The additive GitHub source gallery describes the earlier source inventory (304014a); it is not the target design. The latest source also has planner, history search and editable project memory, which remain available. No `Dua_AI_UI_Placement_List.md` was present in this checkout.
 
 ### Placement and real actions
 

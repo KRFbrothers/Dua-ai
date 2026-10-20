@@ -188,11 +188,13 @@ class HomeGradientUiTest(private val dark: Boolean, private val large: Boolean) 
             val chatPixels = requireNotNull(BitmapFactory.decodeFile(chatCapture.absolutePath))
             val taskPixels = requireNotNull(BitmapFactory.decodeFile(taskCapture.absolutePath))
             try {
-                // The outer edge contains only the backdrop, so text/layout changes cannot
+                // The chat pane's outer edge contains only the backdrop (at 1000dp the history panel sits to its left), so text/layout changes cannot
                 // make this assertion pass. Exercise the real tab action with motion off.
                 val y = (chatPixels.height * .95f).toInt()
+                // mdpi: just inside the chat pane, right of the permanent history panel and its 1 dp divider.
+                val x = com.dua.ai.ui.theme.DrawerSizes.width.value.toInt() + 3
                 assertNotEquals("Task must switch the blue wash to violet with motion disabled",
-                    chatPixels.getPixel(2, y), taskPixels.getPixel(2, y))
+                    chatPixels.getPixel(x, y), taskPixels.getPixel(x, y))
             } finally { chatPixels.recycle(); taskPixels.recycle() }
         } finally { Settings.Global.putFloat(resolver, Settings.Global.ANIMATOR_DURATION_SCALE, previous) }
     }

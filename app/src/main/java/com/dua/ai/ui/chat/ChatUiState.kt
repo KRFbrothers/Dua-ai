@@ -24,6 +24,8 @@ data class ChatUiState(
     val draft: String = "",
     val typing: Boolean = false,
     val error: String? = null,
+    /** No working internet connection: a quiet line above the composer. */
+    val offline: Boolean = false,
     val model: String = "Dua",
     val providers: List<ProviderCapability> = IntegrationCapabilities.fallbackProviders,
     val webMode: String? = null,
@@ -88,6 +90,8 @@ data class ChatUiState(
     val promptPolish: PromptPolishState? = null,
     /** "Remove background" (on-device) for photo attachments and Imagine images; false hides it. */
     val removeBackground: Boolean = false,
+    /** The open Summarize / Rewrite sheet (on-device first, visible server fallback). */
+    val writing: com.dua.ai.ondevice.WritingSession? = null,
     /** Run code for the next reply and the server's Run code capability (null hides the chip on older backends). */
     val runCode: Boolean = false,
     val codeConfig: com.dua.ai.setup.CodeExecutionConfig? = null,
@@ -172,6 +176,9 @@ class ChatActions(
     val onRemoveAttachment: (Int) -> Unit = {},
     val onRemoveAttachmentBackground: (Int) -> Unit = {},
     val onPolishPrompt: () -> Unit = {},
+    /** Summarize / Rewrite [text]; a null task opens the rewrite style list. */
+    val onWriting: (text: String, fromDraft: Boolean, task: com.dua.ai.ondevice.WritingTask?) -> Unit = { _, _, _ -> },
+    val writing: WritingActions = WritingActions(),
     val onCancelUpload: (String) -> Unit = {},
     val onPickAudio: () -> Unit = {},
     val onStartRecording: () -> Unit = {},

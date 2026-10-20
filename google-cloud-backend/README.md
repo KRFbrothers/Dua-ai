@@ -286,7 +286,7 @@ cancellation; the total deadline also signals background ADK work to stop.
 Already-started synchronous tool calls retain their existing HTTP timeouts.
 See [ADK SDK checks](../docs/TESTING.md#agent--adk-sdk-checks) for offline regression coverage.
 
-**Fallback:** if the request doesn't split, or ADK fails before any tool ran, the normal loop answers. Coding-mode requests always use the normal loop. Notes learning runs after the reply as before.
+**Fallback:** ordinary unsplit requests can use the existing loop. Explicit provider routes and extension tools use ADK even for one part. Failures after streaming/actions, during resume, or with explicit routes stop without replay or silent provider changes. Coding-mode requests use the existing coding loop. Optional notes learning is included in request usage reporting.
 
 ## Self-check (`AGENT_VERIFY=1`)
 
@@ -307,3 +307,12 @@ by `POST /api/agent/action` after you approve, without the CI wait / auto-fix be
 4. **`check_pr_ci` tool:** reads the status of the agent's own PR.
 
 **Token:** reading CI needs 'Actions: Read-only' (or 'Checks') on the fine-grained token; without it the answer says so.
+
+## Complete ADK integrations
+
+See [ADK implementation and operations](../docs/ADK_IMPLEMENTATION.md) for the
+unchanged 25-requirement scope, durable SQL sessions/resume and approvals, native
+pgvector document/note retrieval, provider routing/fallback, custom typed tools,
+streaming, safe tracing/usage, evaluations, CLI and staged deployment/rollback.
+Use `python adk_cli.py --help` for actual commands. Configuration/live provider
+readiness is separate from code and offline tests.

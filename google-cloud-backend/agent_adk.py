@@ -29,7 +29,7 @@ MERGE_TOKENS = 8192
 CHIPS = ("sub_a", "sub_b", "sub_c")
 
 SPECIALISTS = {
-    "research": ("Research", ("google_search", "fetch_url", "calculator", "current_time"),
+    "research": ("Research", ("google_search", "fetch_url", "calculator", "current_time", "run_python", "recall"),
                  "You research on the web. Use google_search/fetch_url, then write compact factual findings citing "
                  "sources like [1] with the ids the tools return."),
     "code": ("Code", ("list_files", "read_file", "search_code", "propose_changes"),
@@ -82,7 +82,9 @@ def load_adk():
         SequentialAgent=agents.SequentialAgent,
         RunConfig=run_config.RunConfig,
         InMemoryRunner=runners.InMemoryRunner,
+        Runner=runners.Runner,
         types=genai.types,
+        StreamingMode=run_config.StreamingMode,
     )
 
 
@@ -151,10 +153,12 @@ def final_text(events, author, on_thought=None):
         response = "".join(visible)
         if response.strip():
             text = response
-    return text.strip()
+    from agent_policy import filter_text
+    return filter_text(text.strip())
 
 
-def run_agent(adk, agent, message, max_calls, on_thought=None, cancelled=None):
+def run_agent(adk, agent, message, max_calls, on_thought=None, cancelled=None,
+              on_text=None, observer=None, stream_author=None, session_options=None):
     """Bridge the request thread to ADK's production async API.
 
     Consume events and emit thought updates as they arrive. Poll cancellation
@@ -164,33 +168,99 @@ def run_agent(adk, agent, message, max_calls, on_thought=None, cancelled=None):
     import agent_tools
 
     async def collect():
-        runner = adk.InMemoryRunner(agent=agent, app_name="dua-agent")
+        database = None
+        lease = None
+        if session_options:
+            import agent_store
+            from google.adk.apps import App, ResumabilityConfig
+            database = agent_store.service()
+            runner = adk.Runner(app=App(name="dua-agent", root_agent=agent,
+                resumability_config=ResumabilityConfig(is_resumable=True)), session_service=database)
+        else:
+            runner = adk.InMemoryRunner(agent=agent, app_name="dua-agent")
         stream = None
+        from agent_policy import Redactor
+        redactor = Redactor()
         try:
+            if session_options:
+                lease = agent_store.acquire(session_options["owner"], session_options["id"],
+                                            seconds=TOTAL_SECONDS + 600)
             if cancelled is not None and cancelled():
                 raise agent_tools.Cancelled()
-            session = await runner.session_service.create_session(app_name="dua-agent", user_id="owner")
+            user_id = session_options["owner"] if session_options else "owner"
+            if session_options and session_options.get("resume"):
+                session = await database.get_session(app_name="dua-agent", user_id=user_id,
+                                                     session_id=session_options["id"])
+                if session is None:
+                    raise ValueError("Owned session not found")
+            else:
+                options = {"session_id": session_options["id"], "state": session_options["state"]} if session_options else {}
+                session = await runner.session_service.create_session(app_name="dua-agent", user_id=user_id, **options)
             content = adk.types.Content(role="user", parts=[adk.types.Part(text=message)])
-            stream = runner.run_async(user_id="owner", session_id=session.id, new_message=content,
-                                      run_config=adk.RunConfig(max_llm_calls=max_calls))
+            config = {"max_llm_calls": max_calls}
+            if hasattr(adk, "Runner"):
+                from google.adk.telemetry.context import TelemetryConfig, ContentCapturingMode
+                config["telemetry"] = TelemetryConfig(capture_message_content=ContentCapturingMode.NO_CONTENT)
+            if on_text is not None and hasattr(adk, "StreamingMode"):
+                config["streaming_mode"] = adk.StreamingMode.SSE
+            resume = bool(session_options and session_options.get("resume"))
+            invocation = next((e.invocation_id for e in reversed(session.events) if e.invocation_id), None) if resume else None
+            if resume and not invocation:
+                raise ValueError("This session has no interrupted invocation to resume")
+            invoke_options = {"invocation_id": invocation} if resume else {}
+            stream = runner.run_async(user_id=user_id, session_id=session.id, new_message=None if resume else content,
+                                      run_config=adk.RunConfig(**config), **invoke_options)
+            emitted = ""
             events = []
             async for event in stream:
                 if cancelled is not None and cancelled():
                     raise agent_tools.Cancelled()
                 events.append(event)
+                event_content = getattr(event, "content", None)
+                if observer is not None and not getattr(observer,"sdk_metered",False) and not getattr(event, "partial", False) and (
+                        getattr(event, "usage_metadata", None) is not None or getattr(event_content, "role", None) == "model"):
+                    observer.usage(getattr(event, "id", None) or str(id(event)),
+                                   getattr(event, "model_version", None) or getattr(observer, "models_by_agent", {}).get(
+                                       getattr(event, "author", ""), "unknown"),
+                                   getattr(event, "usage_metadata", None))
+                if on_text is not None and getattr(event, "author", None) == stream_author:
+                    visible = "".join(getattr(p, "text", None) or "" for p in
+                                      (getattr(getattr(event, "content", None), "parts", None) or [])
+                                      if not getattr(p, "thought", False))
+                    if getattr(event, "partial", False):
+                        delta = visible
+                    else:
+                        delta = visible[len(emitted):] if visible.startswith(emitted) else (visible if not emitted else "")
+                    if delta:
+                        emitted += delta
+                        safe = redactor.feed(delta)
+                        if safe and on_text(safe) is False:
+                            raise agent_tools.Cancelled()
                 if on_thought is not None:
                     parts = getattr(getattr(event, "content", None), "parts", None) or []
                     for part in parts:
                         text = getattr(part, "text", None) or ""
                         if getattr(part, "thought", False) and text.strip():
                             on_thought(text)
+            if on_text is not None:
+                safe = redactor.feed(final=True)
+                if safe and on_text(safe) is False:
+                    raise agent_tools.Cancelled()
             return events
         finally:
             try:
                 if stream is not None:
                     await stream.aclose()
             finally:
-                await runner.close()
+                try:
+                    await runner.close()
+                finally:
+                    if database is not None:
+                        try:
+                            await database.close()
+                        finally:
+                            if lease:
+                                agent_store.release(session_options["owner"], session_options["id"], lease)
 
     async def invoke():
         # The resource owner also closes them, in the same asyncio task. The
@@ -214,8 +284,12 @@ def run_agent(adk, agent, message, max_calls, on_thought=None, cancelled=None):
     return asyncio.run(invoke())
 
 
-def make_tools(names, call):
+def make_tools(names, call, documents=False):
     """Async ADK function tools with explicit signatures; every call goes through call(name, args)."""
+    async def search_documents(query: str) -> dict:
+        """Search the owner's indexed documents. Cite the returned [D:document:chunk] IDs exactly."""
+        return await call("search_documents", {"query": query})
+
     async def google_search(query: str) -> dict:
         """Search the web (Google) for current facts. Returns notes and numbered sources."""
         return await call("google_search", {"query": query})
@@ -227,6 +301,14 @@ def make_tools(names, call):
     async def calculator(expression: str) -> dict:
         """Evaluate a math expression, e.g. '(12.5*3)/7'."""
         return await call("calculator", {"expression": expression})
+
+    async def run_python(task: str) -> dict:
+        """Execute Python via the existing provider sandbox, with the shared request limits."""
+        return await call("run_python", {"task": task})
+
+    async def recall() -> dict:
+        """Read the owner-approved Memory supplied with this request."""
+        return await call("recall", {})
 
     async def current_time() -> dict:
         """Current date and time in India (IST)."""
@@ -266,8 +348,10 @@ def make_tools(names, call):
         """Save one short durable lesson (preference|worked|failed|repo|fact). Never secrets or emails."""
         return await call("save_note", {"note": note, "kind": kind})
 
-    table = {f.__name__: f for f in (google_search, fetch_url, calculator, current_time, list_files, read_file,
+    table = {f.__name__: f for f in (search_documents, google_search, fetch_url, calculator, current_time, run_python, recall, list_files, read_file,
                                      search_code, propose_changes, check_pr_ci, search_notes, save_note)}
+    if documents and "google_search" in names:
+        names = tuple(names) + ("search_documents",)
     import pr_flow
     if "propose_changes" in names and pr_flow.enabled():
         names = tuple(names) + ("check_pr_ci",)
@@ -283,6 +367,9 @@ class Result:
         self.evidence = agent.evidence
         self.pending = agent.pending
         self.cancelled = agent.cancelled
+        self.status = getattr(agent, "status", "ok")
+        self.streamed = getattr(agent, "streamed", False)
+        self.usage = agent.trace.summary() if getattr(agent, "trace", None) is not None else None
 
 
 def stop_model_callback(adk, cancelled):
@@ -309,12 +396,18 @@ def helper_model_callback(adk, cancelled, max_calls, on_limit):
 
     def callback(callback_context=None, llm_request=None, **kwargs):
         nonlocal calls, reported
+        state = getattr(callback_context, "state", None)
+        state_key = "dua_calls_" + str(getattr(callback_context, "agent_name", "helper"))
+        if state is not None:
+            calls = max(calls, state.get(state_key, 0))
         if stop is not None:
             response = stop(callback_context=callback_context, llm_request=llm_request, **kwargs)
             if response is not None:
                 return response
         if calls < max_calls:
             calls += 1
+            if state is not None:
+                state[state_key] = calls
             return None
         if not reported:
             reported = True
@@ -328,7 +421,15 @@ def helper_model_callback(adk, cancelled, max_calls, on_limit):
 
 def with_pending(answer, shared):
     import agent_safety
-    return answer + (agent_safety.pending_text(shared.pending) if shared.pending else "")
+    pending = agent_safety.pending_text(shared.pending) if shared.pending else ""
+    if getattr(shared, "streamed", False):
+        # Normal success appends only the approval footer; errors append an explicit
+        # terminal notice, not a second copy of the already-streamed answer.
+        if answer.startswith("Agent stopped:"):
+            shared.env["stream_text"]("\n\n" + answer + pending)
+        elif pending:
+            shared.env["stream_text"](pending)
+    return answer + pending
 
 
 def run(env, request_text, flash_model, agent_model, config_for, adk=None, log=print):
@@ -343,10 +444,20 @@ def run(env, request_text, flash_model, agent_model, config_for, adk=None, log=p
         return None
     progress, thinking = env["progress"], env["thinking"]
     shared = agent_tools.AgentRun(env)
+    shared.streamed = False
+    shared.trace = env.get("trace")
+    if shared.trace is not None:
+        shared.trace.models_by_agent = {"controller": agent_model, "merger": agent_model,
+                                       **{k + "_agent": flash_model for k in SPECIALISTS}}
     if env.get("github") is not None:
         shared.coding = coding_agent.CodingSession(env["github"], lambda d: True, time.monotonic)
     allowed = ["research"] + (["code"] if env.get("github") is not None else []) + \
               (["notes"] if env.get("notes") is not None else [])
+    import agent_models
+    registry = env.get("custom_tools")
+    extensions = bool(agent_models.routes()) or env.get("documents") is not None or bool(registry and registry.tools)
+    if len(allowed) < 2 and not extensions:
+        return None
     started = time.monotonic()
     pr_text = []  # kept for old in-run PR results; write tools now only ask for approval
     import threading
@@ -356,39 +467,78 @@ def run(env, request_text, flash_model, agent_model, config_for, adk=None, log=p
     def cancelled():
         return finished.is_set() or (app_cancelled is not None and app_cancelled())
 
-    stop_cb = stop_model_callback(adk, cancelled)
+    import agent_context
+    context = lambda callback: agent_context.callback(env.get("adk_contents", []), env.get("adk_system", ""),
+        callback, request_text=request_text, observer=shared.trace)
+    stop_cb = context(stop_model_callback(adk, cancelled))
     extra = {"before_model_callback": stop_cb} if stop_cb is not None else {}
+    if shared.trace is not None:
+        extra["after_model_callback"] = shared.trace.end_model
 
     def specialist_call(index, title, letter):
         async def call(name, args):
             if cancelled() or shared.stop_requested():
                 raise agent_tools.Cancelled()
             label = agent_tools.PROGRESS.get(name, ("", name))[1].rstrip("\u2026")
-            if name in agent_safety.WRITE_TOOLS:
+            custom = registry.tools.get(name) if registry else None
+            if name in agent_safety.WRITE_TOOLS or (custom and custom.write):
                 label = "Waiting for your approval"
             progress(CHIPS[index], f"{title}: {label}\u2026")
             shown = {k: (v if not isinstance(v, str) else v[:100]) for k, v in args.items() if k not in ("files",)}
             line = f"- {name} {json.dumps(shown, ensure_ascii=False)[:160]}\n"
             shared.steps.append(f"[{letter}] {line}")
             thinking(f"[{letter}] {line}")
-            if name in agent_safety.WRITE_TOOLS:
+            custom = registry.tools.get(name) if registry else None
+            if name in agent_safety.WRITE_TOOLS or (custom and custom.write):
                 # Never executed here: stored server-side for the user's approval in the app.
-                return await asyncio.to_thread(shared.request_approval, name, args)
+                return await asyncio.to_thread(shared.request_approval, name,
+                    {**args, "__dua_tool_revision": custom.identity} if custom else args)
             result = await asyncio.to_thread(shared.run_tool_timed, name, args)
             if shared.cancelled:
                 raise agent_tools.Cancelled()
-            return agent_safety.fence(name, result)
+            return agent_safety.fence(name, result, untrusted=True) if custom else agent_safety.fence(name, result)
         return call
 
     def pipeline():
+        import agent_models
+        import agent_store
+        def model_for(role,default):
+            model=agent_models.resolve(role,default)
+            return agent_models.observed(model,shared.trace) if shared.trace is not None and hasattr(adk,"Runner") else model
+        saved = None
+        if env.get("adk_resume"):
+            saved = asyncio.run(agent_store.get_task(env["owner_id"], env["adk_run_id"]))
+            if saved is None or saved.state.get("dua_schema") != 1:
+                raise ValueError("Compatible owned task not found")
+            if saved.state.get("dua_answer"):
+                return str(saved.state["dua_answer"])
+            for event in saved.events:
+                for part in getattr(getattr(event, "content", None), "parts", None) or []:
+                    fc = getattr(part, "function_call", None)
+                    if fc is not None:
+                        name = "issue_reads" if fc.name in agent_tools.ISSUE_READ_TOOLS else fc.name
+                        shared.counts[name] = shared.counts.get(name, 0) + 1
+                    fr = getattr(part, "function_response", None)
+                    if fr is not None and isinstance(fr.response, dict):
+                        try:
+                            result = agent_safety.unfence(fr.name, fr.response)
+                            shared.add_sources(result.get("sources", []))
+                        except (ValueError, TypeError, KeyError):
+                            pass
         cfg_plan = config_for(agent_model, PLAN_TOKENS, json_out=True)
-        planner = adk.LlmAgent(name="controller", model=agent_model, generate_content_config=cfg_plan, **extra,
+        planner = adk.LlmAgent(name="controller", model=model_for("controller", agent_model), generate_content_config=cfg_plan, **extra,
                                instruction=lambda ctx: PLAN_PROMPT.format(
                                    code_note="" if "code" in allowed else "; NOT available now",
                                    notes_note="" if "notes" in allowed else "; NOT available now"))
-        subtasks = parse_plan(final_text(run_agent(adk, planner, request_text, 2,
-                                                    on_thought=lambda t: thinking(f"[Plan] {t}"), cancelled=cancelled),
-                                         "controller"), allowed)
+        if saved is not None:
+            subtasks = saved.state["dua_plan"]
+        elif len(allowed) < 2:
+            subtasks = []
+        else:
+            subtasks = parse_plan(final_text(run_agent(adk, planner, request_text, 2,
+                on_thought=lambda t: thinking(f"[Plan] {t}"), cancelled=cancelled, observer=shared.trace), "controller"), allowed)
+        if not subtasks and extensions:
+            subtasks = [{"kind": "research", "task": request_text, "title": "Research"}]
         if not subtasks:
             return None
         log(f"[dua-agent] adk plan: {', '.join(s['kind'] for s in subtasks)}")
@@ -402,12 +552,16 @@ def run(env, request_text, flash_model, agent_model, config_for, adk=None, log=p
                 limited.add(kind)
                 progress(CHIPS[index], f"{helper_title}: model call limit reached", "done")
 
+            call = specialist_call(i, title, "ABC"[i])
+            tools = make_tools(names, call, documents=True) if env.get("documents") is not None else make_tools(names, call)
+            if registry:
+                tools += registry.wrappers(sub["kind"], call)
             helpers.append(adk.LlmAgent(
-                name=f"{sub['kind']}_agent", model=flash_model, include_contents="none",
+                name=f"{sub['kind']}_agent", model=model_for("helper", flash_model), include_contents="none",
                 generate_content_config=config_for(flash_model, SUB_TOKENS), output_key=f"{sub['kind']}_result",
                 instruction=(lambda t: (lambda ctx: t))(text),
-                before_model_callback=helper_model_callback(adk, cancelled, SUB_STEPS, on_limit),
-                tools=make_tools(names, specialist_call(i, title, "ABC"[i]))))
+                before_model_callback=context(helper_model_callback(adk, cancelled, SUB_STEPS, on_limit)),
+                **({"after_model_callback":shared.trace.end_model} if shared.trace else {}), tools=tools))
 
         def merge_instruction(ctx):
             for i, sub in enumerate(subtasks):
@@ -418,13 +572,26 @@ def run(env, request_text, flash_model, agent_model, config_for, adk=None, log=p
                                   f"{str(ctx.state.get(s['kind'] + '_result') or '(no result)')[:6000]}"
                                   for s in subtasks)
             return MERGE_PROMPT.format(request=request_text[:4000], results=results)
-        merger = adk.LlmAgent(name="merger", model=agent_model, include_contents="none",
-                              generate_content_config=config_for(agent_model, MERGE_TOKENS),
+        merger = adk.LlmAgent(name="merger", model=model_for("merger", agent_model), include_contents="none",
+                              generate_content_config=config_for(agent_model, MERGE_TOKENS), output_key="dua_answer",
                               instruction=merge_instruction, **extra)
         root = adk.SequentialAgent(name="dua_root", sub_agents=[
             adk.ParallelAgent(name="helpers", sub_agents=helpers), merger])
+        def stream_text(delta):
+            shared.streamed = True
+            return env["stream_text"](delta)
+        # A critic must see the full draft before any answer is published.
+        import agent_verify
+        live = stream_text if env.get("stream_text") is not None and not agent_verify.enabled() else None
+        session_options = None
+        if agent_store.database_url() and env.get("owner_id"):
+            env.setdefault("adk_run_id", str(uuid.uuid4()))
+            session_options = {"id": env["adk_run_id"], "owner": env["owner_id"], "resume": saved is not None,
+                               "state": {"dua_schema": 1, "dua_plan": subtasks, "dua_request": env.get("adk_request", {})}}
+            env["enqueue"]("event", {"type": "agent_session", "runId": env["adk_run_id"], "resumable": True})
         events = run_agent(adk, root, request_text, SUB_STEPS * len(helpers) + 2,
-                           on_thought=lambda t: thinking(f"[Merge] {t}"), cancelled=cancelled)
+                           on_thought=lambda t: thinking(f"[Merge] {t}"), cancelled=cancelled,
+                           on_text=live, stream_author="merger", observer=shared.trace, session_options=session_options)
         return final_text(events, "merger")
 
     try:
@@ -433,9 +600,11 @@ def run(env, request_text, flash_model, agent_model, config_for, adk=None, log=p
                                                 cancel=cancelled)
     except agent_tools.Cancelled:
         shared.cancelled = True
+        shared.status = "cancelled"
         log("[dua-agent] adk stopped: the app disconnected")
         return agent_tools.STOPPED_TEXT, Result(shared)
     except agent_tools.DeadlineExceeded:
+        shared.status = "deadline"
         log(f"[dua-agent] adk deadline {TOTAL_SECONDS}s reached")
         answer = "Agent stopped: the parallel helpers took longer than the time limit. Please try a smaller request."
         if pr_text:
@@ -444,7 +613,8 @@ def run(env, request_text, flash_model, agent_model, config_for, adk=None, log=p
             answer += f"\n\nA pull request was opened: {shared.prflow.pr['url']}"
         return with_pending(answer, shared), Result(shared)
     except Exception as error:  # any ADK problem: the old loop answers instead
-        if shared.steps or pr_text:  # tools already ran: do not repeat side effects in the old loop
+        shared.status = "error"
+        if shared.steps or pr_text or shared.streamed or env.get("adk_resume") or os.environ.get("ADK_MODELS_JSON"):  # work already ran: do not repeat side effects in the old loop
             log(f"[dua-agent] adk failed mid-run ({type(error).__name__})")
             answer = "Agent stopped: the parallel helpers hit an error. Please try again."
             return with_pending(answer + ("\n\n" + pr_text[0] if pr_text else ""), shared), Result(shared)
@@ -452,6 +622,8 @@ def run(env, request_text, flash_model, agent_model, config_for, adk=None, log=p
         return None
     finally:
         finished.set()
+        if shared.trace is not None:
+            shared.trace.fail_pending()
     if answer is None:
         return None
     log(f"[dua-agent] adk total {time.monotonic() - started:.1f}s")

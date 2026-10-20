@@ -47,7 +47,7 @@ LIMITS = {"google_search": 3, "fetch_url": 5, "run_python": 2, "generate_image":
           # One pull request per request (counted when it is queued for the user's approval).
           "propose_changes": 1,
           # Agent notes (agent_notes.py): the agent's own private lessons, separate from the app's Memory.
-          "save_note": 3, "search_notes": 3, "delete_note": 3}
+          "save_note": 3, "search_notes": 3, "delete_note": 3, "search_documents": 3}
 NOTE_TOOLS = ("save_note", "search_notes", "delete_note")
 NOTES_HINT = (". Your private notes from earlier tasks may appear below; save_note a durable lesson (preference, what "
               "worked or failed, repo fact) when you learn one, search_notes to look one up, delete_note to remove a "
@@ -367,6 +367,8 @@ class AgentRun:
     """State for one agent request. [env] gives the tool implementations their dependencies (mocked in tests)."""
 
     def __init__(self, env):
+        import threading
+        self.lock = threading.RLock()
         self.env = env
         self.counts = {}
         self.sources = []
@@ -386,9 +388,15 @@ class AgentRun:
         return self.cancelled
 
     def use_budget(self, name):
+        with self.lock:
+            return self._use_budget(name)
+
+    def _use_budget(self, name):
         """Counts one use of [name]; returns an error dict when its per-request limit is reached."""
         budget = "issue_reads" if name in ISSUE_READ_TOOLS else name
-        limit = LIMITS.get(budget)
+        registry = self.env.get("custom_tools")
+        custom = registry.tools.get(name) if registry else None
+        limit = LIMITS.get(budget, custom.limit if custom else None)
         if limit is not None:
             if self.counts.get(budget, 0) >= limit:
                 return {"error": f"{name} limit reached for this request ({limit}). Answer with what you have."}
@@ -396,6 +404,10 @@ class AgentRun:
         return None
 
     def request_approval(self, name, args):
+        with self.lock:
+            return self._request_approval(name, args)
+
+    def _request_approval(self, name, args):
         """A write tool call: checked and stored for the user's approval, never executed here."""
         import agent_safety
         env = self.env
@@ -408,7 +420,14 @@ class AgentRun:
         if len(self.pending) >= agent_safety.MAX_PENDING_PER_REQUEST:
             return {"error": "Enough actions are already waiting for the user's approval. Finish your answer now."}
         try:
+            registry = env.get("custom_tools")
+            spec = registry.tools.get(name) if registry else None
             stored = agent_safety.prepare(name, args)
+            if spec:
+                revision = stored.pop("__dua_tool_revision", None)
+                if not spec.write or revision != spec.identity:
+                    raise ValueError("Custom write tool revision changed")
+                stored = {**spec.validate(stored), "__dua_tool_revision": revision}
         except ValueError as error:
             return {"error": str(error)[:600]}
         except Exception:
@@ -417,8 +436,13 @@ class AgentRun:
         if over is not None:
             return over
         store = env.get("approvals")
+        options = {}
+        if env.get("adk_run_id"):
+            import hashlib
+            digest = hashlib.sha256(json.dumps(stored, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+            options["request_key"] = env["adk_run_id"] + ":" + name + ":" + digest
         action = (agent_safety.STORE if store is None else store).create(env.get("owner_id"), name, stored,
-                                                                         env.get("request_text", ""))
+                                                                         env.get("request_text", ""), **options)
         self.pending.append(action)
         self.emit(agent_safety.event(action))
         log(f"approval requested: {name}")
@@ -428,6 +452,10 @@ class AgentRun:
         return self.env["enqueue"]("event", event)
 
     def add_sources(self, found):
+        with self.lock:
+            return self._add_sources(found)
+
+    def _add_sources(self, found):
         ids = []
         for item in found:
             existing = next((s for s in self.sources if s["url"] == item["url"]), None)
@@ -449,8 +477,14 @@ class AgentRun:
         """run_tool with a hard deadline; a slow tool returns an error to the model instead of hanging."""
         seconds = SLOW_TOOL_SECONDS.get(name, TOOL_SECONDS)
         started = time.monotonic()
+        trace = self.env.get("trace")
+        if trace:
+            trace.emit("tool.start", tool=name)
         try:
-            result = call_with_deadline(lambda: self.run_tool(name, args), seconds, cancel=self.env.get("cancelled"))
+            from agent_resilience import retry_read
+            result = call_with_deadline(lambda: retry_read(name, lambda: self.run_tool(name, args),
+                                        self.env.get("cancelled"), observer=trace),
+                                        seconds, cancel=self.env.get("cancelled"))
         except Cancelled:
             self.cancelled = True
             result = {"error": "Stopped: the app disconnected."}
@@ -461,6 +495,9 @@ class AgentRun:
                 self.evidence.append(f"{name}: {json.dumps(result, ensure_ascii=False, default=str)[:1500]}")
             except (TypeError, ValueError):
                 pass
+        if trace:
+            trace.emit("tool.end", tool=name, status="error" if isinstance(result, dict) and "error" in result else "ok",
+                       duration_ms=round((time.monotonic() - started) * 1000))
         log(f"tool {name}: {time.monotonic() - started:.1f}s{' (error)' if isinstance(result, dict) and 'error' in result else ''}")
         return result
 
@@ -470,6 +507,12 @@ class AgentRun:
             return over
         env = self.env
         try:
+            registry = env.get("custom_tools")
+            spec = registry.tools.get(name) if registry else None
+            if spec:
+                if spec.write:
+                    return {"error": "Custom writes require user approval."}
+                return spec.run(args)
             if name == "google_search":
                 query = str(args.get("query", "")).strip()[:300]
                 if not query:
@@ -480,6 +523,10 @@ class AgentRun:
                 notes = env["chunk_text"](response)[:8000]
                 sources = self.add_sources(env["grounding_sources"](response))
                 return {"notes": notes or "(no notes)", "sources": sources}
+            if name == "search_documents":
+                if env.get("documents") is None:
+                    return {"error": "Document retrieval is not configured."}
+                return {"matches": env["documents"].search(args.get("query"))}
             if name == "fetch_url":
                 page = env["fetch"](str(args.get("url", "")))
                 self.add_sources([{"title": page["title"] or page["url"], "url": page["url"], "domain": urlsplit(page["url"]).hostname or ""}]
@@ -552,7 +599,8 @@ class AgentRun:
                                                              "BlockedRequest", "ZeroDivisionError") else "The tool failed."
             if type(error).__name__ == "ImagineError":
                 message = getattr(error, "message", message)
-            return {"error": message[:300]}
+            from agent_resilience import transient
+            return {"error": message[:300], **({"retryable": True} if transient(error) else {})}
 
 
 def function_calls(response):

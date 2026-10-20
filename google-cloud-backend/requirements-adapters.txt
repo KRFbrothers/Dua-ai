@@ -1,0 +1,4 @@
+-r requirements-postgres.txt
+# The official ADK LiteLlm adapter imports this package. Install only the used
+# adapter, not every unrelated optional ADK integration.
+litellm==1.106.0

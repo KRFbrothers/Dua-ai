@@ -14,19 +14,21 @@ import java.util.UUID
 
 enum class EntryAction(val wire: String) {
     Query("query"), Camera("camera"), Photos("photos"), Files("files"), Mic("mic"), Live("live"), Screenshare("screenshare"),
-    Share("share"), Remember("remember");
+    Share("share"), Remember("remember"), NewChat("new_chat"), Imagine("imagine");
     companion object { val widget = entries.filter { it != Share && it != Remember } }
 }
 
 data class ExternalEntry(val id: String = UUID.randomUUID().toString(), val action: EntryAction, val text: String = "",
-    val uris: List<Uri> = emptyList(), val notice: String = "") {
+    val uris: List<Uri> = emptyList(), val notice: String = "",
+    /** Direct Share target: the Dua chat the user picked in the share sheet. */
+    val chatId: String? = null) {
     fun bundle() = Bundle().apply { putString("id", id); putString("action", action.wire); putString("text", text)
-        putStringArrayList("uris", ArrayList(uris.map(Uri::toString))); putString("notice", notice) }
+        putStringArrayList("uris", ArrayList(uris.map(Uri::toString))); putString("notice", notice); putString("chatId", chatId) }
     companion object {
         const val IS_REMEMBER_THIS = "is_remember_this"
         const val MAX_TEXT = 32000
         fun restore(b: Bundle) = ExternalEntry(b.getString("id")!!, EntryAction.entries.first { it.wire == b.getString("action") },
-            b.getString("text").orEmpty().take(MAX_TEXT), b.getStringArrayList("uris").orEmpty().take(3).map(Uri::parse), b.getString("notice").orEmpty())
+            b.getString("text").orEmpty().take(MAX_TEXT), b.getStringArrayList("uris").orEmpty().take(3).map(Uri::parse), b.getString("notice").orEmpty(), b.getString("chatId"))
         fun parse(intent: Intent, packageName: String): ExternalEntry? = try {
             if (intent.action !in setOf(Intent.ACTION_SEND, Intent.ACTION_SEND_MULTIPLE)) {
                 EntryAction.widget.find { it.wire == intent.getStringExtra(DuaToolbarWidgetReceiver.EXTRA_WIDGET_ACTION) }?.let { ExternalEntry(action = it) }
@@ -51,7 +53,8 @@ data class ExternalEntry(val id: String = UUID.randomUUID().toString(), val acti
                         "Some shared files could not be accepted. Share them from Photos or Files with read access.".takeIf { safe.size != unique.size },
                         "Nothing was shared. Choose text or files and try again.".takeIf { text.isBlank() && unique.isEmpty() }
                     ).joinToString(" ")
-                    ExternalEntry(action = EntryAction.Share, text = text, uris = safe.take(3), notice = notice)
+                    ExternalEntry(action = EntryAction.Share, text = text, uris = safe.take(3), notice = notice,
+                        chatId = ChatShortcuts.chatId(intent.getStringExtra(androidx.core.content.pm.ShortcutManagerCompat.EXTRA_SHORTCUT_ID)))
                 }
             }
         } catch (_: RuntimeException) { ExternalEntry(action = EntryAction.Share, notice = "This shared item could not be read. Share it again from the source app.") }

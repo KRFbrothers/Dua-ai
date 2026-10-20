@@ -8,6 +8,7 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.roborazzi)
+    alias(libs.plugins.baselineprofile)
     id("com.google.gms.google-services")
     id("com.google.firebase.crashlytics")
 }
@@ -146,6 +147,11 @@ android {
             configure<com.google.firebase.crashlytics.buildtools.gradle.CrashlyticsExtension> { mappingFileUploadEnabled = false }
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
+        // The baselineprofile plugin adds benchmarkRelease / nonMinifiedRelease (copies of release)
+        // for the :benchmark module. They are local test builds only, so sign them with the debug key.
+        matching { it.name == "benchmarkRelease" || it.name == "nonMinifiedRelease" }.configureEach {
+            signingConfig = signingConfigs.getByName("debug")
+        }
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -161,6 +167,14 @@ android {
     testOptions {
         unitTests.isIncludeAndroidResources = true
     }
+}
+
+baselineProfile {
+    // Never generate during normal/CI builds (needs a phone). A generated profile is saved in
+    // src/release/generated/baselineProfiles; the hand-written src/main/baseline-prof.txt stays as fallback.
+    automaticGenerationDuringBuild = false
+    saveInSrc = true
+    dexLayoutOptimization = false
 }
 
 // Roborazzi screenshot tests (src/test/.../screenshots) need Robolectric's Android runtime
@@ -197,6 +211,8 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     // Installs the bundled baseline profile (src/main/baseline-prof.txt) on sideloaded APKs too: faster cold start.
     implementation(libs.androidx.profileinstaller)
+    // Generator only (not packaged): ./gradlew :app:generateBaselineProfile with a phone connected.
+    baselineProfile(project(":benchmark"))
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.core.splashscreen)
     implementation(libs.androidx.lifecycle.runtime.ktx)

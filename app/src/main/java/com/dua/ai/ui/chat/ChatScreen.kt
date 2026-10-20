@@ -1,5 +1,7 @@
 package com.dua.ai.ui.chat
 
+import com.dua.ai.ui.components.predictiveBack
+
 import com.dua.ai.ui.theme.SheetBodyStyle
 import com.dua.ai.ui.theme.SheetTheme
 import androidx.compose.ui.semantics.semantics
@@ -7,7 +9,9 @@ import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.isSpecified
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.DragInteraction
@@ -16,6 +20,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowDownward
 import androidx.compose.material.icons.outlined.Lightbulb
@@ -125,8 +130,8 @@ fun ChatScreen(
     var sheet by rememberSaveable { mutableStateOf(initialSheet) }
     LaunchedEffect(dismissOverlaysRequest) { if (dismissOverlaysRequest != null) sheet = null }
     if (sheet == ChatSheet.Projects) {
-        BackHandler { sheet = null }
-        ProjectsFeaturePage(state, actions, onBack = { sheet = null })
+        val projectsBack = com.dua.ai.ui.components.rememberPredictiveBack { sheet = null }
+        Box(Modifier.fillMaxSize().predictiveBack(projectsBack)) { ProjectsFeaturePage(state, actions, onBack = { sheet = null }) }
         return
     }
     var taskHome by rememberSaveable { mutableStateOf(false) }
@@ -236,7 +241,25 @@ fun ChatScreen(
         if (enabled) sheet = null
     }
     val onXSearch: (Boolean) -> Unit = { tap(); if (it) taskHome = false; actions.onXSearch(it) }
-    val onImagine: (Boolean) -> Unit = { tap(); if (it) taskHome = false; actions.onImagine(it) }
+    // Colour splash (Androidify): Voice mode and Imagine from Home grow a circle from the last tap, then switch.
+    var lastTap by remember { mutableStateOf(Offset.Unspecified) }
+    var splash by remember { mutableStateOf<Pair<com.dua.ai.ui.components.ColorSplashRequest, () -> Unit>?>(null) }
+    val splashMotion = com.dua.ai.ui.theme.rememberMotionAllowed()
+    fun splashThen(color: androidx.compose.ui.graphics.Color, action: () -> Unit) {
+        if (splash != null) return
+        if (!splashMotion || !lastTap.isSpecified) { action(); return }
+        splash = com.dua.ai.ui.components.ColorSplashRequest(lastTap, color) to action
+    }
+    val voiceSplash = com.dua.ai.ui.theme.VoiceTheme.colors.background
+    val imagineSplash = MaterialTheme.colorScheme.primary
+    val openVoiceMode: () -> Unit = {
+        actions.haptic(ChatHaptic.Tap)
+        if (home && feature == null) splashThen(voiceSplash) { actions.onOpenVoiceMode() } else actions.onOpenVoiceMode()
+    }
+    val onImagine: (Boolean) -> Unit = { on ->
+        tap(); if (on) taskHome = false
+        if (on && home && feature == null) splashThen(imagineSplash) { actions.onImagine(true) } else actions.onImagine(on)
+    }
     val onRunCode: (Boolean) -> Unit = { tap(); if (it) taskHome = false; actions.onRunCode(it) }
     val taskReady = !taskHome || (state.agent && state.agentAvailable)
     val sendFromComposer: () -> Unit = { if (taskReady) actions.onSend() }
@@ -262,6 +285,12 @@ fun ChatScreen(
                 if (!searchOpen && followTail && moreBelow && !scrolling && !automatic && !userDragging) goToLatest()
             }
     }
+    // Messages the reader has seen at the bottom; later Dua replies show as "new" on the Latest reply pill.
+    var seenMessages by remember(conversationKey) { mutableStateOf(state.messages.size) }
+    LaunchedEffect(followTail, state.messages.size) { if (followTail) seenMessages = state.messages.size }
+    // Keyboard opening shrinks the list; keep the newest message visible when the reader was at the bottom (Jetchat).
+    val imeBottom = WindowInsets.ime.getBottom(androidx.compose.ui.platform.LocalDensity.current)
+    LaunchedEffect(imeBottom) { if (imeBottom > 0 && followTail && !searchOpen) goToLatest() }
     // Stop/completion never move a reader who has scrolled up.
     val lastUserId = state.messages.lastOrNull { it.isUser }?.id
     var previousUserId by remember(conversationKey) { mutableStateOf(lastUserId) }
@@ -279,23 +308,31 @@ fun ChatScreen(
         }
         if (followTail && (!listState.isScrollInProgress || newPrompt)) goToLatest()
     }
+    /** Wide windows: the menu button hides or shows the permanent history panel. */
+    var historyPanelVisible by rememberSaveable { mutableStateOf(true) }
     fun closeDrawerThen(action: () -> Unit) { scope.launch { drawerState.close() }; action() }
 
     var dropHover by remember { mutableStateOf(false) }
     val dropMotion = com.dua.ai.ui.theme.rememberMotionAllowed()
     key(conversationKey) {
-        BoxWithConstraints(Modifier.fillMaxSize().chatDropTarget(enabled = sheet == null && viewer == null,
+        BoxWithConstraints(Modifier.fillMaxSize().pointerInput(Unit) {
+            // Remember where the last press started (never consumed) as the splash origin.
+            awaitPointerEventScope {
+                while (true) {
+                    val event = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+                    event.changes.firstOrNull { it.pressed && !it.previousPressed }?.let { lastTap = it.position }
+                }
+            }
+        }.chatDropTarget(enabled = sheet == null && viewer == null,
             maxBytes = state.storedFilesMaxBytes, onHover = { dropHover = it }, onDrop = actions.onDrop)) {
             // Keep the entire right-hand Home touch target in the scrim, including on narrow windows.
             val endInset = WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal).asPaddingValues()
                 .calculateEndPadding(LocalLayoutDirection.current)
             val controlInset = maxOf(HomeSizes.topBarPaddingH, HomeSizes.composerHorizontalMargin(maxWidth) + HomeSizes.barPaddingH)
             val drawerWidth = minOf(DrawerSizes.width, (maxWidth - endInset - controlInset - Sizes.touchTarget).coerceAtLeast(0.dp))
-            ModalNavigationDrawer(
-                drawerState = drawerState,
-                // Only swipe to close: an edge swipe to open would fight horizontal scrolling in code blocks.
-                gesturesEnabled = drawerState.isOpen,
-                drawerContent = {
+            // Expanded windows (>= 840dp): history stays open on the left, chat on the right (Reply/Now in Android pattern).
+            val wideHistory = WideLayout.permanentHistory(maxWidth, featureOpen = feature != null)
+            val historyPanel: @Composable (Boolean) -> Unit = { permanent ->
                     if (feature == null) HistoryDrawer(
                         drawerState = drawerState,
                         profileName = state.profileName, profilePhotoUrl = state.profilePhotoUrl,
@@ -313,10 +350,11 @@ fun ChatScreen(
                         onDeleteServerChat = { id -> actions.onDismissChatDeletion(); deletingServerId = id },
                         onProjects = { closeDrawerThen { taskHome = false; actions.onOpenDestination(DuaDestination.Projects) } },
                         onDestination = { destination -> closeDrawerThen { taskHome = false; actions.onOpenDestination(destination) } },
-                        modifier = Modifier.width(drawerWidth),
+                        permanent = permanent,
+                        modifier = Modifier.width(if (permanent) DrawerSizes.width else drawerWidth),
                     )
-                },
-            ) {
+            }
+            val chatPane: @Composable () -> Unit = {
                 Column(Modifier.fillMaxSize().background(com.dua.ai.ui.theme.ChatTheme.colors.background)
                     .let { if (feature == null) it.windowInsetsPadding(
                         WindowInsets.ime.union(WindowInsets.navigationBars).only(WindowInsetsSides.Bottom)) else it }
@@ -326,7 +364,7 @@ fun ChatScreen(
                     else if (feature != null) FeatureTopBar(feature.title, actions.onExitFeature, actions.onNewFeatureSession,
                         newSessionEnabled = !state.typing && (feature != ChatFeature.Agent || state.agentAvailable))
                     else ChatTopBar(
-                        onMenu = { dismissInput(); scope.launch { drawerState.open() } },
+                        onMenu = { dismissInput(); if (wideHistory) historyPanelVisible = !historyPanelVisible else scope.launch { drawerState.open() } },
                         task = taskHome, modelName = homeModelName(state),
                         profileName = state.profileName, profilePhotoUrl = state.profilePhotoUrl,
                         onModel = { sheet = ChatSheet.Model }, onProfile = { sheet = ChatSheet.Profile },
@@ -364,17 +402,10 @@ fun ChatScreen(
                                         searchMessageId = selectedMatch?.messageId)
                                 }
                             }
-                            if (!searchOpen && !followTail && listState.canScrollForward) FilledTonalButton(
+                            JumpToLatest(visible = !searchOpen && !followTail && listState.canScrollForward,
+                                newReplies = MessageGrouping.newReplies(state.messages, seenMessages),
                                 onClick = { scope.launch { followTail = true; goToLatest() } },
-                                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = Spacing.md)
-                                    .heightIn(min = Sizes.touchTarget).semantics { contentDescription = "Go to latest reply" },
-                                colors = androidx.compose.material3.ButtonDefaults.filledTonalButtonColors(containerColor = com.dua.ai.ui.theme.PageTheme.colors.card,
-                                    contentColor = com.dua.ai.ui.theme.PageTheme.colors.text),
-                                border = androidx.compose.foundation.BorderStroke(com.dua.ai.ui.theme.SettingsSizes.border, com.dua.ai.ui.theme.PageTheme.colors.cardBorder),
-                            ) {
-                                Icon(Icons.Outlined.ArrowDownward, contentDescription = null, modifier = Modifier.size(Sizes.iconSmall))
-                                Text("Latest reply", modifier = Modifier.padding(start = Spacing.xs))
-                            }
+                                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = Spacing.md))
                         }
                     }
                     if (feature != null || state.homeTab != HomeTab.Work) Column(Modifier.fillMaxWidth()
@@ -414,8 +445,8 @@ fun ChatScreen(
                                 onAttach = { sheet = ChatSheet.Attach },
                                 onClearAttachments = actions.onClearAttachments,
                                 onMic = actions.onOpenVoice,
-                                onVoiceClick = { actions.haptic(ChatHaptic.Tap); actions.onOpenVoiceMode() },
-                                onVoiceMode = { actions.haptic(ChatHaptic.Tap); actions.onOpenVoiceMode() },
+                                onVoiceClick = openVoiceMode,
+                                onVoiceMode = openVoiceMode,
                                 onTextFieldFocus = { inputFocused = it },
                                 onTextFieldBounds = { inputBounds = it },
                                 value = state.draft,
@@ -432,6 +463,7 @@ fun ChatScreen(
                                 uploads = state.uploads,
                                 onRemoveAttachment = actions.onRemoveAttachment,
                                 onRemoveAttachmentBackground = if (state.removeBackground) actions.onRemoveAttachmentBackground else null,
+                                writingTools = { task -> actions.onWriting(state.draft, true, task) },
                                 onRemoveUpload = actions.onCancelUpload,
                                 aboveInput = if (feature != null) null else { {
                                     HomeModeSwitcher(if (taskHome) HomeMode.Task else HomeMode.Chat,
@@ -448,7 +480,20 @@ fun ChatScreen(
                     }
                 }
             }
+            if (wideHistory && historyPanelVisible) Row(Modifier.fillMaxSize()) {
+                historyPanel(true)
+                androidx.compose.material3.VerticalDivider(color = com.dua.ai.ui.theme.DrawerTheme.colors.divider)
+                Box(Modifier.weight(1f).fillMaxHeight()) { chatPane() }
+            } else ModalNavigationDrawer(
+                drawerState = drawerState,
+                // Only swipe to close: an edge swipe to open would fight horizontal scrolling in code blocks.
+                gesturesEnabled = drawerState.isOpen,
+                drawerContent = { historyPanel(false) },
+            ) { chatPane() }
             ChatDropOverlay(dropHover, dropMotion)
+            splash?.let { (request, action) ->
+                com.dua.ai.ui.components.ColorSplash(request, splashMotion, onCovered = action, onFinished = { splash = null })
+            }
         }
     }
     when (sheet) {
@@ -513,6 +558,7 @@ fun ChatScreen(
         null -> Unit
     }
 
+    state.writing?.let { session -> WritingToolsSheet(session, actions.writing) }
     viewer?.let { (id, index) ->
         val media = state.messages.firstOrNull { it.id == id }?.media.orEmpty()
         if (media.isNotEmpty()) MediaViewer(media, index, mediaActions, state.videoAvailable, onDismiss = { viewer = null })

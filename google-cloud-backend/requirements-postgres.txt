@@ -1,0 +1,4 @@
+-r requirements.txt
+# Async official ADK sessions and sync atomic approval/document transactions.
+asyncpg>=0.30,<1
+psycopg[binary]>=3.2,<4

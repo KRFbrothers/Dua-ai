@@ -83,18 +83,18 @@ class BuildPrScreenshotTest(private val dark: Boolean) {
 }
 
 internal object BuildPrData {
-    const val CONFLICT = "web/src/server/vercel-handler.mjs changed on main since Dua read it. The proposal is out of date: ask Dua to regenerate it."
+    const val CONFLICT = "web/src/server/chat-handler.mjs changed on main since Dua read it. The proposal is out of date: ask Dua to regenerate it."
     const val OFF = "Pull requests from Build mode are off. To allow them, set DUA_BUILD_PR=1 and GITHUB_BUILD_WRITE_TOKEN in hosting settings."
     private const val REPO = "KRFbrothers/Dua-ai"
     private const val BRANCH = "dua/make-chat-burst-limit-configurable-261008-134512"
     private val handlerDiff = """
-        --- a/web/src/server/vercel-handler.mjs
-        +++ b/web/src/server/vercel-handler.mjs
+        --- a/web/src/server/chat-handler.mjs
+        +++ b/web/src/server/chat-handler.mjs
         @@ -1,9 +1,11 @@
-         import { createBurstGuard } from './vercel-burst.mjs';
+         import { createBurstGuard } from './chat-burst.mjs';
          import { handleService } from './service-handler.mjs';
         +import { envInteger } from '../core/adapters.mjs';
-         export function createVercelHandler({ env = process.env } = {}) {
+         export function createChatHandler({ env = process.env } = {}) {
         -   const wait = guard(request, group, group === 'chat' ? 5 : 20);
         +   // DUA_CHAT_BURST: chat requests per minute (default 5).
         +   const chat = envInteger(env, 'DUA_CHAT_BURST', 5, 1, 60);
@@ -105,9 +105,9 @@ internal object BuildPrData {
         val proposal = BuildProposal(
             id = "0f8fad5b-d9cb-469f-a165-70867728950e", repository = REPO, baseBranch = "main", branch = BRANCH,
             title = "Make the chat burst limit configurable",
-            summary = "Adds DUA_CHAT_BURST (default 5 per minute) to the Vercel handler and documents it. Test: cd web && npm test.",
+            summary = "Adds DUA_CHAT_BURST (default 5 per minute) to the chat handler and documents it. Test: cd web && npm test.",
             files = listOf(
-                ProposalFile("web/src/server/vercel-handler.mjs", "update", "…", "a".repeat(40), handlerDiff, 4, 1),
+                ProposalFile("web/src/server/chat-handler.mjs", "update", "…", "a".repeat(40), handlerDiff, 4, 1),
                 ProposalFile("web/test/burst.test.mjs", "create", "…", null, "--- /dev/null\n+++ b/web/test/burst.test.mjs\n@@ -0,0 +1,3 @@\n+import test from 'node:test';", 24, 0),
                 ProposalFile("docs/old-limits.md", "delete", null, "b".repeat(40), "--- a/docs/old-limits.md\n+++ /dev/null\n@@ -1,1 +0,0 @@\n-Old", 0, 12),
             ),
@@ -116,7 +116,7 @@ internal object BuildPrData {
         return BuildData.base.copy(buildConfig = BuildModeConfig(true, pr = BuildPrConfig(true)), messages = listOf(
             ChatMessage(id = "u1", text = "Make the chat rate limit configurable with an env var.", isUser = true),
             ChatMessage(id = "m1", text = "I read the handler and its test. Here is a small change; review it below and tap **Create PR** if it looks right.",
-                isUser = false, model = "Dua", build = BuildInfo(REPO, "main", listOf(BuildFile("web/src/server/vercel-handler.mjs", 940), BuildFile("web/src/server/vercel-burst.mjs", 610))),
+                isUser = false, model = "Dua", build = BuildInfo(REPO, "main", listOf(BuildFile("web/src/server/chat-handler.mjs", 940), BuildFile("web/src/server/chat-burst.mjs", 610))),
                 proposal = proposal),
         ))
     }

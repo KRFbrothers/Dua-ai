@@ -7,7 +7,7 @@ import { spawnSync } from 'node:child_process';
 
 const required = ['SUPABASE_URL', 'SUPABASE_ANON_KEY', 'DUA_ALLOWED_EMAIL'];
 
-function deployment({ secrets = required, version = '7', listFailure = false, buildFailure = false, resourcesExist = false, omitTemplateFlags = [], settings = {} } = {}) {
+function deployment({ secrets = required, version = '7', listFailure = false, buildFailure = false, resourcesExist = false, omitTemplateFlags = [], appendTemplate = '', settings = {} } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'dua-cloudrun-deploy-'));
   try {
     for (const file of ['deploy-cloudrun.sh', '.env.example', 'cloudbuild.yaml']) copyFileSync(new URL('../' + file, import.meta.url), join(dir, file));
@@ -16,6 +16,7 @@ function deployment({ secrets = required, version = '7', listFailure = false, bu
       writeFileSync(template, readFileSync(template, 'utf8').split('\n')
         .filter(line => !omitTemplateFlags.some(flag => new RegExp('^#?\\s*' + flag + '=').test(line))).join('\n'));
     }
+    if (appendTemplate) writeFileSync(join(dir, '.env.example'), readFileSync(join(dir, '.env.example'), 'utf8') + '\n' + appendTemplate + '\n');
     // This would execute if a deployment ever sourced local .env files.
     writeFileSync(join(dir, '.env'), 'touch "$GCLOUD_CALLS.leaked"\nGEMINI_API_KEY=must-not-enter-build-or-command-args\n');
     const log = join(dir, 'gcloud-calls');
@@ -59,12 +60,12 @@ test('Cloud Run deployment keeps secrets out of builds and grants runtime access
   for (const option of ['--timeout=900s', '--min-instances=0', '--port=8080', '--allow-unauthenticated']) assert.ok(deploy.includes(option));
   assert.equal(deploy[deploy.indexOf('--region') + 1], 'us-central1');
   assert.equal(deploy[deploy.indexOf('--service-account') + 1], 'dua-api@dua-test-project.iam.gserviceaccount.com');
-  const env = deploy.find(arg => arg.startsWith('--set-env-vars='));
+  const env = deploy.find(arg => arg.startsWith('--update-env-vars='));
   assert.match(env, /DUA_REQUIRE_LOGIN=1/);
   assert.match(env, /DUA_CHAT_DEADLINE_SECONDS=780/);
   assert.match(env, /DUA_BUILD_PR=0/);
   assert.doesNotMatch(env, /DUA_FILES=/, 'a supplied feature flag is imported as a secret instead');
-  const refs = deploy.find(arg => arg.startsWith('--set-secrets=')).slice('--set-secrets='.length).split(',');
+  const refs = deploy.find(arg => arg.startsWith('--update-secrets=')).slice('--update-secrets='.length).split(',');
   assert.deepEqual(refs.sort(), selected.map(name => `${name}=${name}:7`).sort());
   const bindings = result.calls.filter(args => args[0] === 'secrets' && args[1] === 'add-iam-policy-binding');
   assert.deepEqual(bindings.map(args => args[2]).sort(), [...selected].sort());
@@ -112,7 +113,7 @@ test('existing feature flag secrets must be attached from the template before an
   }
   const absent = deployment({ omitTemplateFlags: flags });
   assert.equal(absent.status, 0, absent.stderr);
-  const env = absent.calls.find(args => args[0] === 'run' && args[1] === 'deploy').find(arg => arg.startsWith('--set-env-vars='));
+  const env = absent.calls.find(args => args[0] === 'run' && args[1] === 'deploy').find(arg => arg.startsWith('--update-env-vars='));
   for (const flag of flags) assert.ok(env.includes(`${flag}=0`));
 });
 
@@ -125,8 +126,8 @@ test('deployment validates project/deadline and supports a longer explicit deadl
   const result = deployment({ resourcesExist: true, settings: { DUA_CHAT_DEADLINE_SECONDS: '600' } });
   assert.equal(result.status, 0, result.stderr);
   const deploy = result.calls.find(args => args[0] === 'run' && args[1] === 'deploy');
-  assert.match(deploy.find(arg => arg.startsWith('--set-env-vars=')), /DUA_CHAT_DEADLINE_SECONDS=600/);
-  assert.match(deploy.find(arg => arg.startsWith('--set-env-vars=')), /DUA_FILES=0/);
+  assert.match(deploy.find(arg => arg.startsWith('--update-env-vars=')), /DUA_CHAT_DEADLINE_SECONDS=600/);
+  assert.match(deploy.find(arg => arg.startsWith('--update-env-vars=')), /DUA_FILES=0/);
   assert.ok(!result.calls.some(args => ['iam', 'artifacts'].includes(args[0]) && args.includes('create')));
   assert.ok(result.calls.some(args => args[0] === 'artifacts' && args[2] === 'add-iam-policy-binding' && args.includes('--role=roles/artifactregistry.writer')),
     'an existing repository still receives the scoped writer grant');
@@ -165,4 +166,51 @@ if (out > 0 && process.env.MOCK_SITE_FAIL !== '1') { mkdirSync(args[out + 1], { 
     assert.match(broken.stderr, /did not produce web\/site\/index.html/);
     assert.ok(!broken.calls.some(args => ['iam', 'builds', 'run'].includes(args[0])));
   } finally { rmSync(site, { recursive: true, force: true }); }
+});
+
+const KILL_SWITCHES = ['DUA_DISABLE_AGENT', 'DUA_DISABLE_IMAGINE', 'DUA_DISABLE_VOICE', 'DUA_MAINTENANCE', 'DUA_MAINTENANCE_MESSAGE'];
+const deployCall = result => result.calls.find(args => args[0] === 'run' && args[1] === 'deploy');
+const replacing = /^--(set|clear)-(env-vars|secrets)\b|^--clear-/;
+
+test('owner rule: the deploy script never replaces or clears env vars or secrets', () => {
+  const source = readFileSync(new URL('../deploy-cloudrun.sh', import.meta.url), 'utf8');
+  const code = source.split('\n').filter(line => !line.trim().startsWith('#')).join('\n');
+  assert.doesNotMatch(code, /--(set|clear)-(env-vars|secrets)|--clear-/);
+  for (const options of [{}, { resourcesExist: true }, { secrets: [...required, 'DUA_FILES', 'DUA_BUILD_PR'] }, { settings: { DUA_REMOVE_SECRETS: 'OLD_TOKEN' } }]) {
+    const result = deployment(options);
+    assert.equal(result.status, 0, result.stderr);
+    for (const args of result.calls) for (const arg of args) assert.doesNotMatch(arg, replacing, JSON.stringify(args));
+    const deploy = deployCall(result);
+    assert.ok(deploy.some(arg => arg.startsWith('--update-env-vars=')));
+    assert.ok(deploy.some(arg => arg.startsWith('--update-secrets=')));
+  }
+});
+
+test('kill switches are never passed by a deploy, so values set with gcloud run services update persist', () => {
+  const result = deployment({ secrets: [...required, ...KILL_SWITCHES], appendTemplate: 'DUA_DISABLE_AGENT=0\n# DUA_MAINTENANCE=0\nDUA_MAINTENANCE_MESSAGE=\nDUA_DISABLE_FUTURE_THING=0' });
+  assert.equal(result.status, 0, result.stderr);
+  const deploy = deployCall(result);
+  for (const arg of deploy) assert.doesNotMatch(arg, /DUA_DISABLE_|DUA_MAINTENANCE/, arg);
+  assert.ok(!result.calls.some(args => args[0] === 'secrets' && args[1] === 'add-iam-policy-binding' && /DUA_DISABLE_|DUA_MAINTENANCE/.test(args[2])));
+});
+
+test('a feature flag moved to Secret Manager drops only its old literal', () => {
+  const result = deployment({ secrets: [...required, 'DUA_FILES'] });
+  assert.equal(result.status, 0, result.stderr);
+  const deploy = deployCall(result);
+  assert.deepEqual(deploy.filter(arg => arg.startsWith('--remove-')), ['--remove-env-vars=DUA_FILES']);
+  assert.doesNotMatch(deploy.find(arg => arg.startsWith('--update-env-vars=')), /DUA_FILES=/);
+  // Without such a move nothing is removed at all.
+  assert.deepEqual(deployCall(deployment()).filter(arg => arg.startsWith('--remove-')), []);
+});
+
+test('DUA_REMOVE_SECRETS removes exactly the named bindings and protects kill switches', () => {
+  const result = deployment({ settings: { DUA_REMOVE_SECRETS: 'OLD_TOKEN,LEGACY_KEY' } });
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(deployCall(result).filter(arg => arg.startsWith('--remove-secrets')), ['--remove-secrets=OLD_TOKEN,LEGACY_KEY']);
+  for (const bad of ['DUA_MAINTENANCE', 'DUA_DISABLE_AGENT', 'lower', 'A,B C']) {
+    const refused = deployment({ settings: { DUA_REMOVE_SECRETS: bad } });
+    assert.notEqual(refused.status, 0, bad);
+    assert.ok(!refused.calls.some(args => args[0] === 'run'), bad);
+  }
 });

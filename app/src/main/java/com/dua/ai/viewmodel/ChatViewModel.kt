@@ -111,6 +111,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         if (_liveStart.value.busy || com.dua.ai.voice.live.LiveVoiceController.active) return
         val options = liveOptions()
         val reason = when {
+            _switches.value.voice -> com.dua.ai.setup.RemoteSwitches.VOICE_PAUSED
             projectUnavailable() != null -> projectUnavailable()
             _projectId.value != com.dua.ai.projects.ProjectCodec.PERSONAL || localSettings.value.projects.find { it.id == _projectId.value }?.instructions?.isNotBlank() == true -> "Use Voice mode for this project so its instructions apply. Live voice is available in Personal without custom instructions."
             options == null -> _integrations.value.voice?.live?.reason?.ifBlank { null } ?: "Live voice needs the latest Dua backend. Voice mode works now."
@@ -201,10 +202,44 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         null
     } catch (failure: Exception) { failure.message ?: "Memory could not be saved. Try again." }
     fun integrationNotice(text: String) { _integrations.value = _integrations.value.copy(notice = text) }
+    // Remote kill switches (/api/config › switches). Cached for the first frame; any failure falls back to "all off".
+    private val switchPrefs = application.getSharedPreferences("dua_remote_switches", 0)
+    private val _switches = MutableStateFlow(com.dua.ai.setup.RemoteSwitches.fromCache(
+        switchPrefs.getString("value", null), switchPrefs.getLong("savedAt", 0L), System.currentTimeMillis()))
+    val switches: StateFlow<com.dua.ai.setup.RemoteSwitches> = _switches.asStateFlow()
+    private val _switchesChecking = MutableStateFlow(false)
+    val switchesChecking: StateFlow<Boolean> = _switchesChecking.asStateFlow()
+    private var switchesCheckedAt = 0L
+    private fun applySwitches(next: com.dua.ai.setup.RemoteSwitches) {
+        _switches.value = next
+        switchPrefs.edit().putString("value", next.toJson()).putLong("savedAt", System.currentTimeMillis()).apply()
+        if (next.agent && _agent.value && !_isTyping.value) _agent.value = false
+        if (next.agent) _agentAvailable.value = false
+        if (next.imagine && _imagine.value && !_isTyping.value) _imagine.value = false
+    }
+    /** Start and resume: re-reads /api/config (5 s timeout, at most once a minute unless [force]). */
+    fun refreshRemoteSwitches(force: Boolean = false) {
+        val now = System.currentTimeMillis()
+        if (_switchesChecking.value || (!force && now - switchesCheckedAt < 60_000L)) return
+        switchesCheckedAt = now
+        _switchesChecking.value = true
+        viewModelScope.launch {
+            try {
+                val config = kotlinx.coroutines.withTimeout(5_000L) { setupApi.request("/api/config") }
+                applySwitches(com.dua.ai.setup.RemoteSwitches.fromConfig(config))
+            } catch (cancelled: kotlinx.coroutines.TimeoutCancellationException) { failOpenSwitches() }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { failOpenSwitches() }
+            finally { _switchesChecking.value = false }
+        }
+    }
+    /** Config unreachable: never trap the user on the paused screen or hide features because of a stale value. */
+    private fun failOpenSwitches() { _switches.value = com.dua.ai.setup.RemoteSwitches() }
     fun loadProviderConfiguration() = viewModelScope.launch {
         refreshEngineCapabilities(force = true)
         try {
             val config = setupApi.request("/api/config")
+            applySwitches(com.dua.ai.setup.RemoteSwitches.fromConfig(config))
             _integrations.value = api.chatConfiguration(com.dua.ai.setup.IntegrationCapabilities.configuration(config, _integrations.value))
             flushPendingFileDeletes()
         } catch (cancelled: CancellationException) { throw cancelled }
@@ -443,6 +478,44 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             } finally { _polishing.value = false }
         }
     }
+    private val _writing = MutableStateFlow<com.dua.ai.ondevice.WritingSession?>(null)
+    /** The open on-device Summarize / Rewrite sheet, if any. */
+    val writing = _writing.asStateFlow()
+    private var writingJob: Job? = null
+    /** Opens Summarize / Rewrite for [text]. A null [task] means "Rewrite" and the user picks a style first. */
+    fun openWriting(text: String, fromDraft: Boolean, task: com.dua.ai.ondevice.WritingTask?) {
+        if (text.isBlank()) return
+        writingJob?.cancel()
+        _writing.value = com.dua.ai.ondevice.WritingSession(text, fromDraft, task)
+        if (task != null) runWriting(task)
+    }
+    fun runWriting(task: com.dua.ai.ondevice.WritingTask) {
+        val session = _writing.value ?: return
+        writingJob?.cancel()
+        if (!onDeviceAiEnabled()) { _writing.value = session.copy(task = task, phase = com.dua.ai.ondevice.WritingSession.Phase.Unavailable); return }
+        _writing.value = session.copy(task = task, phase = com.dua.ai.ondevice.WritingSession.Phase.Working, result = "")
+        writingJob = viewModelScope.launch {
+            val result = onDeviceAi.write(task, session.text)
+            _writing.value = _writing.value?.takeIf { it.text == session.text && it.task == task }?.let {
+                if (result == null) it.copy(phase = com.dua.ai.ondevice.WritingSession.Phase.Failed)
+                else it.copy(phase = com.dua.ai.ondevice.WritingSession.Phase.Result, result = result)
+            }
+        }
+    }
+    /** Puts the on-device result in the message box (nothing is sent). */
+    fun useWritingResult() {
+        val session = _writing.value ?: return
+        if (session.phase == com.dua.ai.ondevice.WritingSession.Phase.Result) updateDraft(session.result)
+        closeWriting()
+    }
+    /** Server path: puts a "Summarize / Rewrite this" request in the message box for the normal Dua chat. Nothing is sent. */
+    fun askServerForWriting() {
+        val session = _writing.value ?: return
+        val task = session.task ?: return
+        updateDraft(com.dua.ai.ondevice.WritingPrompts.server(task, session.text))
+        closeWriting()
+    }
+    fun closeWriting() { writingJob?.cancel(); writingJob = null; _writing.value = null }
     private val backgroundRemover by lazy { com.dua.ai.ondevice.OnDeviceServices.backgroundRemover(application) }
     /** Google Play services is present, so the on-device background tool can run (or be downloaded once). */
     val backgroundRemovalAvailable: Boolean by lazy { backgroundRemover.available() }
@@ -472,7 +545,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     fun setForeground(value: Boolean) {
         foreground = value
         automaticSync.setForeground(value)
-        refreshSyncNetwork()
+        setNetwork(networkMonitor.currentlyOnline())
     }
     fun resetSettings() {
         try { localPreferences.reset() }
@@ -490,8 +563,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         try { localPreferences.update(value); _settingsStatus.value = "Saved on this device." }
         catch (error: Exception) { _settingsStatus.value = error.message ?: "Settings could not be saved." }
     }
-    fun shareChatText(chat: SavedChat): String = "Dua conversation\n\n" + chat.messages.filter { it.state == "complete" }
-        .joinToString("\n\n") { (if (it.isUser) "You" else "Dua") + ": " + it.text }
 
     private var generation = 0
     private val _error = MutableStateFlow<String?>(null)
@@ -631,7 +702,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         if ((!force && _agentAvailable.value) || engineCheck?.isActive == true) return
         engineCheck = viewModelScope.launch {
             val engine = try { api.engineCapabilities() } catch (cancelled: CancellationException) { throw cancelled } catch (_: Exception) { com.dua.ai.network.EngineCapabilities() }
-            val available = engine.agent
+            val available = engine.agent && !_switches.value.agent
             _enginePersonalityAvailable.value = engine.personality
             _freeModels.value = engine.freeModels
             _agentAvailable.value = available
@@ -640,6 +711,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     }
     fun setAgent(enabled: Boolean) {
         if (_isTyping.value) return
+        if (enabled && _switches.value.agent) { _error.value = com.dua.ai.setup.RemoteSwitches.AGENT_PAUSED; return }
         if (enabled && !_agentAvailable.value) { _error.value = "Agent mode needs the Google Cloud engine."; return }
         _agent.value = enabled
         if (enabled) { _reasoning.value = false; _xSearch.value = false; _imagine.value = false; _runCode.value = false; _webMode.value = null; leaveBuild() }
@@ -1811,22 +1883,21 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private fun syncBlocked() = account.state.value.busy || _dataBusy.value || _isTyping.value || liveProjectBusy() ||
         _cloudPreview.value != null || _importPreview.value != null || _buildPr.value.values.any { it.creating }
     private fun refreshSyncBusy() = automaticSync.setBusy(syncBlocked())
-    private val connectivity = application.getSystemService(android.net.ConnectivityManager::class.java)
-    private val networkObserver = object : android.net.ConnectivityManager.NetworkCallback() {
-        override fun onAvailable(network: android.net.Network) { viewModelScope.launch { refreshSyncNetwork() } }
-        override fun onLost(network: android.net.Network) { viewModelScope.launch { refreshSyncNetwork() } }
-        override fun onCapabilitiesChanged(network: android.net.Network, capabilities: android.net.NetworkCapabilities) {
-            viewModelScope.launch { refreshSyncNetwork() }
-        }
-    }
-    private var networkObserverRegistered = false
-    private fun refreshSyncNetwork() {
-        val online = runCatching {
-            connectivity.getNetworkCapabilities(connectivity.activeNetwork)
-                ?.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED) == true
-        }.getOrDefault(false)
+    private val networkMonitor: com.dua.ai.network.NetworkMonitor = com.dua.ai.network.ConnectivityManagerNetworkMonitor(application)
+    private val offlineRetry = com.dua.ai.network.OfflineRetry()
+    private val _offlineRetryPending = MutableStateFlow(false)
+    /** A message that failed while offline will be sent again once the connection returns. */
+    val offlineRetryPending: StateFlow<Boolean> = _offlineRetryPending.asStateFlow()
+    private var autoRetrying = false
+    private fun setNetwork(online: Boolean) {
         _online.value = online
         automaticSync.setOnline(online)
+        val resend = offlineRetry.onConnectivity(online, activeId, _draft.value, busy = _isTyping.value || _preparingFiles.value || _readingFiles.value)
+        _offlineRetryPending.value = offlineRetry.hasPending
+        if (resend != null) {
+            autoRetrying = true
+            try { sendMessage(resend) } finally { autoRetrying = false }
+        }
     }
 
     init {
@@ -1858,8 +1929,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
         refreshCloudImagine()
-        refreshSyncNetwork()
-        networkObserverRegistered = runCatching { connectivity.registerDefaultNetworkCallback(networkObserver); true }.getOrDefault(false)
+        setNetwork(networkMonitor.currentlyOnline())
+        viewModelScope.launch { networkMonitor.isOnline.collect { setNetwork(it) } }
         viewModelScope.launch {
             combine(account.state, _dataBusy, _isTyping, _cloudPreview, _importPreview) { state, dataBusy, typing, cloud, imported ->
                 state.busy || dataBusy || typing || cloud != null || imported != null
@@ -1887,7 +1958,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         recorder.cancel()
         pollJobs.values.forEach { it.cancel() }
         automaticSync.close()
-        if (networkObserverRegistered) runCatching { connectivity.unregisterNetworkCallback(networkObserver) }
         super.onCleared()
     }
 
@@ -2217,6 +2287,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     fun sendMessage(userText: String) {
         if (_preparingFiles.value) return
+        if (!autoRetrying) { offlineRetry.clear(); _offlineRetryPending.value = false }
         val requestProjectId = _projectId.value
         projectUnavailable()?.let { _error.value = it; return }
         if (_imagine.value && _editingId.value != null) { _error.value = "Turn off Imagine to resend an edited message."; return }
@@ -2315,6 +2386,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     clearAttachments()
                     val final = accumulator!!.snapshot(ended = true)
                     updateMessage(reply.id) { it.copy(text = final.text, thinking = final.thinking, thinkingSeconds = final.thinkingSeconds, notice = final.notice, codeRuns = final.codeRuns, build = final.build ?: it.build, proposal = final.proposal ?: it.proposal, approvals = final.approvals.ifEmpty { it.approvals }, state = "complete") }
+                    offlineRetry.delivered()
                     maybeAutoTitle(activeId)
                 }
             } catch (cancelled: CancellationException) {
@@ -2334,7 +2406,11 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                         replyWebModes.remove(reply.id); replyReasoning.remove(reply.id); replyAgent.remove(reply.id); replyCode.remove(reply.id); replyBuild.remove(reply.id)
                         _draft.value = userText
                         _failedPrompt.value = userText
-                        _error.value = failureText(failure)
+                        // Offline, text-only, not an edit: send it again once the phone reconnects (at most once).
+                        val queued = offlineRetry.sendFailed(activeId, userText,
+                            offline = !edited && files.isEmpty() && storedFiles.isEmpty() && (!_online.value || failure is java.io.IOException))
+                        _offlineRetryPending.value = queued
+                        _error.value = if (queued) "You're offline. Dua will send this message when you're back online." else failureText(failure)
                     }
                 }
             } finally {
@@ -2360,6 +2436,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     fun setImagine(enabled: Boolean) {
         if (_isTyping.value) return
         if (!enabled) { _imagine.value = false; return }
+        if (_switches.value.imagine) { _error.value = com.dua.ai.setup.RemoteSwitches.IMAGINE_PAUSED; return }
         refreshCloudImagine()
         _agent.value = false
         val config = imagineConfig()

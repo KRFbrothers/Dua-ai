@@ -71,6 +71,8 @@ object ChatSizes {
     val listPaddingTop = 20.dp
     val listPaddingBottom = 12.dp
     val messageSpacing = 14.dp
+    /** Between consecutive messages from the same author (Jetchat-style grouping). */
+    val groupedMessageSpacing = 6.dp
     val bubblePaddingH = 16.dp
     val bubblePaddingV = 10.dp
     val border = 1.dp
@@ -78,7 +80,6 @@ object ChatSizes {
     val searchSelectionBorder = 2.dp
     val fileChipNameMax = 160.dp
     val legacyFileChipNameMax = 140.dp
-    val sourceTextMax = 200.dp
     /** Citation cards stay compact while leaving a peek at the next source on a phone. */
     val sourceCardWidth = 240.dp
     val siteIcon = 20.dp

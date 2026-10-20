@@ -241,6 +241,9 @@ def test_tool_loop_uses_adk_when_flag_on(monkeypatch):
     monkeypatch.delenv("GITHUB_TOKEN", raising=False)
     monkeypatch.setattr(agent_notes, "for_owner", lambda owner, opener=None: None)
     monkeypatch.setattr(engine, "get_agent_model", lambda system: "ARGON")
+    # This dispatch test deliberately runs without the SDK in the minimal pass;
+    # actual multimodal context is exercised by the real-SDK integration test.
+    monkeypatch.setattr(engine, "build_contents", lambda messages, attachments: [])
     result = SimpleNamespace(sources=[{"id": 1, "title": "T", "url": "https://t.test"}], steps=[])
     monkeypatch.setattr(agent_adk, "run", lambda env, last, flash, agent, config: ("combined [1]", result))
     monkeypatch.setattr(agent_tools, "run", lambda *a, **k: (_ for _ in ()).throw(AssertionError("old loop used")))

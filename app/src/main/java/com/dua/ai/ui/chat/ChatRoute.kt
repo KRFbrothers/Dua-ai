@@ -65,6 +65,7 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
     val typing by viewModel.isTyping.collectAsState()
     val error by viewModel.error.collectAsState()
     val failedPrompt by viewModel.failedPrompt.collectAsState()
+    val online by viewModel.online.collectAsState()
     val account by viewModel.account.state.collectAsState()
     val speech by voice.speaker.state.collectAsState()
     val generatedSpeech by voice.generated.state.collectAsState()
@@ -77,6 +78,7 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
     val onDeviceStatus by viewModel.onDeviceAi.status.collectAsState()
     val polishing by viewModel.polishing.collectAsState()
     val polishNotice by viewModel.polishNotice.collectAsState()
+    val writing by viewModel.writing.collectAsState()
     val runCode by viewModel.runCode.collectAsState()
     val buildRepo by viewModel.buildRepo.collectAsState()
     val buildRepositories by viewModel.buildRepositories.collectAsState()
@@ -124,7 +126,7 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
         profileName = account.user?.displayName.orEmpty().ifBlank { account.user?.email.orEmpty() },
         profilePhotoUrl = account.user?.avatarUrl.orEmpty(),
         profileEmail = account.user?.email,
-        chatId = chatId, messages = messages, draft = draft, editingId = editingId?.takeIf { id -> messages.any { it.id == id } }, typing = typing, error = error, model = model,
+        chatId = chatId, messages = messages, draft = draft, editingId = editingId?.takeIf { id -> messages.any { it.id == id } }, typing = typing, error = error, offline = !online, model = model,
         feature = feature, homeTab = homeTab,
         providers = integrations.providers, webMode = webMode, reasoning = reasoning,
         webSearchConfigured = integrations.searchAvailable(model), pageReadingAvailable = integrations.pageReadingAvailable,
@@ -151,6 +153,7 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
         imagine = imagine, imagineOptions = imagineOptions, imagineConfig = imagineSettings, imagineUsage = imagineUsage,
         promptPolish = if (onDeviceStatus != null && viewModel.onDeviceAiEnabled() && preferences.onDeviceAi) PromptPolishState(polishing, polishNotice) else null,
         removeBackground = viewModel.backgroundRemovalAvailable,
+        writing = writing,
         runCode = runCode, codeConfig = integrations.codeExecution,
         codeSnippetUnavailableReason = viewModel.codeSnippetUnavailableReason(),
         buildRepo = buildRepo, buildConfig = integrations.build, buildRepositories = buildRepositories,
@@ -293,6 +296,9 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
             onRemoveAttachment = viewModel::removeAttachment,
             onRemoveAttachmentBackground = { index -> viewModel.attachmentImageBytes(index)?.let { bytes -> removeBackground { bytes } } },
             onPolishPrompt = viewModel::polishImaginePrompt,
+            onWriting = viewModel::openWriting,
+            writing = WritingActions(onStyle = { style -> viewModel.runWriting(com.dua.ai.ondevice.WritingTask.Rewrite(style)) },
+                onUse = viewModel::useWritingResult, onAskServer = viewModel::askServerForWriting, onDismiss = viewModel::closeWriting),
             onOpenSettings = onOpenSettings,
             // Drawer and Home use the same destination dispatch, including the existing Computer screen.
             onOpenDestination = { destination ->
@@ -356,16 +362,23 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
         if (!dispatch.ready) return@LaunchedEffect
         lifecycle.currentStateFlow.first { it.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED) }
         if (viewModel.dataBusy.value || viewModel.isTyping.value || viewModel.readingFiles.value || viewModel.preparingFiles.value) return@LaunchedEffect
+        // Direct Share to a chat: open that chat first (before attachments are accepted, since switching clears them).
+        val sharedChat = entry.chatId?.takeIf { entry.action == EntryAction.Share }
+        val missingChat = sharedChat != null && viewModel.savedChats.value.none { it.id == sharedChat }
+        if (sharedChat != null && !missingChat && viewModel.activeChatId.value != sharedChat) viewModel.openChat(sharedChat)
         if (entry.action == EntryAction.Share && entry.uris.isNotEmpty() && !viewModel.acceptSharedAttachments(entry.uris)) return@LaunchedEffect
         dispatch.consumed(entry.id)
         entryUiKey = entry.id
-        attachmentNotice = entry.notice
+        attachmentNotice = listOf(entry.notice, if (missingChat) "That chat is no longer on this phone, so the shared item was added here." else "")
+            .filter { it.isNotBlank() }.joinToString(" ")
         when (entry.action) {
             EntryAction.Share -> {
                 viewModel.updateDraft(ExternalEntry.mergedDraft(viewModel.draft.value, entry.text))
                 entryFocus = entry.id
             }
             EntryAction.Query -> entryFocus = entry.id
+            EntryAction.NewChat -> { voice.stopAll(); viewModel.startNewChat(); entryFocus = entry.id }
+            EntryAction.Imagine -> { voice.stopAll(); viewModel.startNewChat(); viewModel.setImagine(true); entryFocus = entry.id }
             EntryAction.Camera -> actions.onPickCamera()
             EntryAction.Photos -> actions.onPickPhotos()
             EntryAction.Files -> actions.onPickFiles()

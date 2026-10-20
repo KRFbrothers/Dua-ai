@@ -7,6 +7,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dua.ai.ui.navigation.DuaNavHost
 import com.dua.ai.ui.theme.DuaTheme
@@ -30,13 +31,27 @@ fun DuaApp(viewModel: ChatViewModel = viewModel(), notificationRoute: Pair<Strin
     DisposableEffect(lifecycle, viewModel) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_STOP) viewModel.flushHistory()
-            if (event == Lifecycle.Event.ON_RESUME) com.dua.ai.tasks.TaskReminders.refresh(context)
+            if (event == Lifecycle.Event.ON_RESUME) { com.dua.ai.tasks.TaskReminders.refresh(context); viewModel.refreshRemoteSwitches() }
         }
         lifecycle.addObserver(observer)
         onDispose { lifecycle.removeObserver(observer) }
     }
+    // Recent chats in Android's share sheet (Direct Share) and launcher long-press actions; deleted chats drop out.
+    val chats by viewModel.savedChats.collectAsState()
+    val shortcutTargets = remember(chats) { com.dua.ai.entry.ChatShortcuts.recent(chats) }
+    LaunchedEffect(shortcutTargets) {
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            runCatching { com.dua.ai.entry.ChatShortcuts.publish(context, shortcutTargets) }
+        }
+    }
     DuaTheme(preferences.copy(theme = appearance.theme), accent = appearance.accent) {
-        val voice = rememberReplyVoice(viewModel)
-        DuaNavHost(viewModel, voice, notificationRoute, externalEntry = externalEntry, onEntryConsumed = onEntryConsumed)
+        val switches by viewModel.switches.collectAsState()
+        val checking by viewModel.switchesChecking.collectAsState()
+        // DUA_MAINTENANCE=1 on dua-api: everything pauses behind one friendly screen (data stays on the phone).
+        if (switches.maintenance) com.dua.ai.ui.screens.AppPausedScreen(switches.message, checking, onRetry = { viewModel.refreshRemoteSwitches(force = true) })
+        else {
+            val voice = rememberReplyVoice(viewModel)
+            DuaNavHost(viewModel, voice, notificationRoute, externalEntry = externalEntry, onEntryConsumed = onEntryConsumed)
+        }
     }
 }

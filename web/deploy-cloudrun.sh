@@ -39,6 +39,23 @@ for required in SUPABASE_URL SUPABASE_ANON_KEY DUA_ALLOWED_EMAIL; do
   fi
 done
 
+# DUA_DISABLE_AGENT, DUA_DISABLE_IMAGINE, DUA_DISABLE_VOICE, DUA_MAINTENANCE, DUA_MAINTENANCE_MESSAGE (and future DUA_DISABLE_*).
+is_kill_switch() { [[ "$1" =~ ^DUA_(DISABLE_[A-Z0-9_]+|MAINTENANCE(_MESSAGE)?)$ ]]; }
+
+# Optional, explicit and narrow: DUA_REMOVE_SECRETS=NAME1,NAME2 detaches only those secret bindings
+# (for a setting removed from web/.env.example). Nothing else is ever removed.
+remove_secrets=()
+if [[ -n "${DUA_REMOVE_SECRETS:-}" ]]; then
+  IFS=, read -r -a requested_removals <<< "$DUA_REMOVE_SECRETS"
+  for name in "${requested_removals[@]}"; do
+    if [[ ! "$name" =~ ^[A-Z][A-Z0-9_]*$ ]] || is_kill_switch "$name"; then
+      echo "DUA_REMOVE_SECRETS: invalid or protected name '$name'." >&2
+      exit 1
+    fi
+    remove_secrets+=("$name")
+  done
+fi
+
 secret_refs=()
 for_settings=()
 declare -A attached_settings=()
@@ -46,6 +63,9 @@ while IFS= read -r line; do
   if [[ "$line" =~ ^#?[[:space:]]*([A-Z][A-Z0-9_]*)= ]]; then
     name="${BASH_REMATCH[1]}"
     case "$name" in PORT|DUA_REQUIRE_LOGIN|DUA_CHAT_DEADLINE_SECONDS) continue ;; esac
+    # Remote kill switches are owned by `gcloud run services update --update-env-vars` (docs/KILL_SWITCHES.md).
+    # The deployer never passes them, so they survive every deploy.
+    if is_kill_switch "$name"; then continue; fi
     if [[ -v "secret_names[$name]" ]]; then
       # Pin a version so instances of one revision cannot silently load different values.
       version="$(gcloud secrets versions list "$name" --project "$PROJECT_ID" --filter='state=ENABLED' --sort-by='~createTime' --limit=1 --format='value(name)')"
@@ -112,17 +132,27 @@ gcloud builds submit "$web_dir" --project "$PROJECT_ID" --region "$region" \
   --service-account="projects/${PROJECT_ID}/serviceAccounts/${build_account}" \
   --default-buckets-behavior=regional-user-owned-bucket --quiet
 
-# Keep optional write/file features off unless the matching Secret Manager flag enables them.
-# --set-* replaces this service's old settings, so removed secret bindings do not linger.
+# Owner rule: update only. --update-env-vars / --update-secrets merge into the running service, so every
+# other variable and secret (including kill switches set with `gcloud run services update`) is kept.
+# Never --set-env-vars, --set-secrets, --clear-env-vars or --clear-secrets here.
+# Optional write/file features stay off unless the matching Secret Manager flag enables them.
 settings=("NODE_ENV=production" "DUA_REQUIRE_LOGIN=1" "DUA_CHAT_DEADLINE_SECONDS=${deadline}")
+remove_env=()
 for flag in "${feature_flags[@]}"; do
-  [[ -v "attached_settings[$flag]" ]] || settings+=("${flag}=0")
+  if [[ -v "attached_settings[$flag]" ]]; then
+    # The flag now comes from Secret Manager: drop only its old literal value (narrow, explicit).
+    remove_env+=("$flag")
+  else
+    settings+=("${flag}=0")
+  fi
 done
 join_csv() { local IFS=,; printf '%s' "$*"; }
+deploy_args=(--update-env-vars="$(join_csv "${settings[@]}")" --update-secrets="$(join_csv "${secret_refs[@]}")")
+(( ${#remove_env[@]} )) && deploy_args+=(--remove-env-vars="$(join_csv "${remove_env[@]}")")
+(( ${#remove_secrets[@]} )) && deploy_args+=(--remove-secrets="$(join_csv "${remove_secrets[@]}")")
 echo "Deploying dua-api in us-central1; application owner authentication remains required..."
 gcloud run deploy "$service" --project "$PROJECT_ID" --region "$region" --image "$image" \
   --service-account "$runtime_account" --port=8080 --timeout=900s --min-instances=0 \
-  --allow-unauthenticated --set-env-vars="$(join_csv "${settings[@]}")" \
-  --set-secrets="$(join_csv "${secret_refs[@]}")" --quiet
+  --allow-unauthenticated "${deploy_args[@]}" --quiet
 echo "dua-api URL:"
 gcloud run services describe "$service" --project "$PROJECT_ID" --region "$region" --format='value(status.url)'

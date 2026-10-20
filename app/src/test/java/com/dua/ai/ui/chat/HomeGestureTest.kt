@@ -56,6 +56,7 @@ class HomeGestureTest {
     @Test fun voiceModeButtonOpensVoiceMode() {
         show()
         compose.onNodeWithContentDescription("Voice mode").performClick()
+        compose.waitForIdle() // the colour splash covers Home first, then voice mode opens
         assertEquals(listOf("haptic:Tap", "voice-mode"), events)
     }
 
@@ -63,6 +64,7 @@ class HomeGestureTest {
         show()
         compose.onNodeWithContentDescription("Send message").assertDoesNotExist()
         compose.onNodeWithContentDescription("Voice mode").performClick()
+        compose.waitForIdle() // the colour splash covers Home first, then voice mode opens
         assertEquals(listOf("haptic:Tap", "voice-mode"), events)
     }
 
