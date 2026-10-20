@@ -1,6 +1,7 @@
 package com.dua.ai.ui.chat
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -9,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
@@ -16,12 +18,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Brush
 import androidx.compose.material.icons.outlined.Build
-import androidx.compose.material.icons.outlined.GraphicEq
 import androidx.compose.material.icons.outlined.Link
-import androidx.compose.material.icons.outlined.PhotoCamera
-import androidx.compose.material.icons.outlined.PhotoLibrary
 import androidx.compose.material.icons.outlined.ToggleOff
-import androidx.compose.material.icons.outlined.UploadFile
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -35,10 +33,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import com.dua.ai.R
 import com.dua.ai.ui.theme.SheetButtonStyle
 import com.dua.ai.ui.theme.SheetDisabledAlpha
 import com.dua.ai.ui.theme.SheetNoteStyle
@@ -102,11 +102,12 @@ fun AttachmentSheetContent(
     Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = SheetSizes.paddingH).padding(bottom = SheetSizes.paddingBottom)
         .testTag("attachment-sheet"), verticalArrangement = Arrangement.spacedBy(SheetSizes.sectionGap)) {
         SheetTitle("Add to chat", Modifier.padding(bottom = 0.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(SheetSizes.tileGap)) {
-            SheetTile("Camera", Icons.Outlined.PhotoCamera, enabled, onCamera, Modifier.weight(1f))
-            SheetTile("Photos", Icons.Outlined.PhotoLibrary, enabled, onPhotos, Modifier.weight(1f))
-            SheetTile("Files", Icons.Outlined.UploadFile, enabled, onFiles, Modifier.weight(1f))
-            SheetTile("Audio", Icons.Outlined.GraphicEq, enabled, onAudio, Modifier.weight(1f))
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).testTag("attachment-sources"),
+            horizontalArrangement = Arrangement.spacedBy(SheetSizes.tileGap)) {
+            SheetTile("Photos", ImageVector.vectorResource(R.drawable.og_photo_library), enabled, onPhotos, Modifier.width(SheetSizes.attachmentTileWidth))
+            SheetTile("Camera", ImageVector.vectorResource(R.drawable.og_photo_camera), enabled, onCamera, Modifier.width(SheetSizes.attachmentTileWidth))
+            SheetTile("Files", ImageVector.vectorResource(R.drawable.og_upload), enabled, onFiles, Modifier.width(SheetSizes.attachmentTileWidth))
+            SheetTile("Audio", ImageVector.vectorResource(R.drawable.og_graphic_eq), enabled, onAudio, Modifier.width(SheetSizes.attachmentTileWidth))
         }
         if (inlineChatFiles) Text("Up to 3 files / 2 MB total — images, PDFs, CSV/text and audio — go directly with chat. Photos over the limit are resized. XLSX/ODS need conversion to CSV. Media stays available for follow-ups in this session; reselect it after restoring a chat.",
             style = SheetNoteStyle, color = c.subText)

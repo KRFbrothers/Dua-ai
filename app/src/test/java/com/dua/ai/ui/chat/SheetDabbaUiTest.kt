@@ -16,6 +16,14 @@ import com.dua.ai.ui.theme.SheetRowStyle
 import com.dua.ai.ui.theme.SheetSizes
 import com.dua.ai.ui.theme.SheetTheme
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.width
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
+import com.github.takahirom.roborazzi.captureRoboImage
+import java.io.File
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
@@ -34,6 +42,26 @@ class SheetDabbaUiTest(private val dark: Boolean) {
         fun modes() = listOf(arrayOf(false), arrayOf(true))
     }
     @get:Rule val compose = createComposeRule()
+
+    @Test fun attachmentSourcesScrollOnSmallScreensWithLargeText() {
+        var hits = 0
+        compose.setContent {
+            CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, 2f)) {
+                DuaTheme(LocalPreferences(theme = if (dark) "dark" else "light")) {
+                    Box(Modifier.width(320.dp)) {
+                        AttachmentSheetContent(null, true, true, {}, {}, {}, {}, onAudio = { hits++ })
+                    }
+                }
+            }
+        }
+        compose.onNodeWithText("Photos").assertIsDisplayed()
+        val file = File("build/approved-ui/og-attachment-sources-$dark.png")
+        file.parentFile!!.mkdirs()
+        compose.onNodeWithTag("attachment-sources").captureRoboImage(file.absolutePath)
+        compose.onNodeWithText("Audio").performScrollTo().assertIsDisplayed().performClick()
+        assertEquals(1, hits)
+        compose.onNodeWithText("Photos").performScrollTo().assertIsDisplayed()
+    }
 
     @Test fun attachmentSheetKeepsEveryActionWithDabbaTokens() {
         val hits = mutableListOf<String>()

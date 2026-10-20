@@ -166,6 +166,9 @@ fun ChatScreen(
     val focusManager = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
     fun dismissInput() { focusManager.clearFocus(); keyboard?.hide() }
+    // Once a request is accepted, release the keyboard for the response (as in the OG
+    // RikkaHub send flow). Validation failures keep their draft and focus.
+    LaunchedEffect(state.typing) { if (state.typing) dismissInput() }
     LaunchedEffect(sheet) {
         if (sheet != null) dismissInput()
     }
@@ -363,7 +366,8 @@ fun ChatScreen(
                 Column(Modifier.fillMaxSize().background(com.dua.ai.ui.theme.ChatTheme.colors.background)
                     .let { if (feature == null) it.windowInsetsPadding(
                         WindowInsets.ime.union(WindowInsets.navigationBars).only(WindowInsetsSides.Bottom)) else it }
-                    .then(if (feature == null && state.homeTab != HomeTab.Work) Modifier.homeBackdrop(taskHome && home, home) else Modifier)
+                    .then(if (feature == null && state.homeTab != HomeTab.Work) Modifier.homeBackdrop(taskHome && home, home,
+                        generating = state.typing || visibleState.messages.lastOrNull()?.streaming == true) else Modifier)
                     .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
                     .agentEdgeGlow(agentWorking(state), agentGlowColors())) {
                     if (topBar != null) topBar()

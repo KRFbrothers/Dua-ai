@@ -39,12 +39,12 @@ class HomeGradientUiTest(private val dark: Boolean, private val large: Boolean) 
     }
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
 
-    private fun show(state: androidx.compose.runtime.State<ChatUiState>) {
+    private fun show(state: androidx.compose.runtime.State<ChatUiState>, actions: ChatActions = ChatActions()) {
         WindowCompat.setDecorFitsSystemWindows(compose.activity.window, false)
         compose.setContent {
             CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, if (large) 2f else 1f)) {
                 DuaTheme(LocalPreferences(theme = if (dark) "dark" else "light")) {
-                    ChatScreen(state.value, ChatActions())
+                    ChatScreen(state.value, actions)
                 }
             }
         }
@@ -98,6 +98,23 @@ class HomeGradientUiTest(private val dark: Boolean, private val large: Boolean) 
         compose.onNodeWithTag("home-gradient").assertDoesNotExist()
         compose.onNodeWithTag("conversation-ambient").assertDoesNotExist()
         compose.onNodeWithText("Ask away!").assertDoesNotExist()
+    }
+
+    @Test fun acceptedGenerationReleasesInputButRejectedDraftKeepsFocus() {
+        val state = mutableStateOf(ChatUiState(draft = "Hi"))
+        var accept = false
+        show(state, ChatActions(onSend = {
+            if (accept) state.value = state.value.copy(draft = "", typing = true,
+                messages = listOf(ChatMessage(text = state.value.draft, isUser = true)))
+        }))
+        compose.onNodeWithContentDescription("Message").performClick().assertIsFocused()
+        compose.onNodeWithContentDescription("Message").performImeAction()
+        compose.onNodeWithContentDescription("Message").assertIsFocused().assertTextContains("Hi")
+        accept = true
+        compose.onNodeWithContentDescription("Message").performImeAction()
+        compose.onNodeWithContentDescription("Message").assertIsNotFocused()
+        compose.onNodeWithContentDescription("Stop response").assertIsDisplayed()
+        capture("generating")
     }
 
     @Test fun keyboardRaisesWholeHomeSurfaceAndTabsWithoutLosingFocusOrDraft() {
