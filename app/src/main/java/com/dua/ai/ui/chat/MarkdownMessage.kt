@@ -47,20 +47,21 @@ internal class SafeUriHandler(private val context: Context) : UriHandler {
  * loaded, and links open only after passing [IntegrationCapabilities.safeUrl].
  */
 @Composable
-fun MarkdownMessage(markdown: String, modifier: Modifier = Modifier) {
+fun MarkdownMessage(markdown: String, modifier: Modifier = Modifier,
+    bodyStyle: androidx.compose.ui.text.TextStyle? = null, textColor: androidx.compose.ui.graphics.Color? = null) {
     val context = LocalContext.current
     val uriHandler = remember(context) { SafeUriHandler(context) }
     val type = MaterialTheme.typography
     val scheme = MaterialTheme.colorScheme
     val colors = DuaTheme.colors
-    val body = markdownBodyStyle
+    val body = bodyStyle ?: markdownBodyStyle
     val inlineCode = markdownInlineCodeStyle
     CompositionLocalProvider(LocalUriHandler provides uriHandler) {
         Markdown(
             content = remember(markdown) { com.dua.ai.model.CitationMarkers.escape(markdown) },
             modifier = modifier.fillMaxWidth(),
             colors = markdownColor(
-                text = scheme.onSurface,
+                text = textColor ?: scheme.onSurface,
                 codeText = colors.onCode,
                 inlineCodeText = colors.onCode,
                 linkText = scheme.primary,
