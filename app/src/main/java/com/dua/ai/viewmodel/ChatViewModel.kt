@@ -51,6 +51,38 @@ import kotlinx.coroutines.flow.update
 
 class ChatViewModel(application: Application) : AndroidViewModel(application) {
     // Declared first: init-time collectors (e.g. resumeImagineJobs) may reach the Imagine feature during construction.
+    private val dataFeature: ChatDataControls by lazy { ChatDataControls(dataHost) }
+    private val dataHost: DataControlsHost by lazy { object : DataControlsHost {
+        override val viewModelScope get() = this@ChatViewModel.viewModelScope
+        override fun <T : Application> getApplication(): T = this@ChatViewModel.getApplication()
+        override val localSettings get() = this@ChatViewModel.localSettings
+        override val localPreferences get() = this@ChatViewModel.localPreferences
+        override val driveBackups get() = this@ChatViewModel.driveBackups
+        override val fullBackup get() = this@ChatViewModel.fullBackup
+        override val preferences get() = this@ChatViewModel.preferences
+        override val historyWriter get() = this@ChatViewModel.historyWriter
+        override val draftSaver get() = this@ChatViewModel.draftSaver
+        override val activeId get() = this@ChatViewModel.activeId
+        override var driveRestoreJob: Job?
+            get() = this@ChatViewModel.driveRestoreJob
+            set(value) { this@ChatViewModel.driveRestoreJob = value }
+        override var importProjects: List<com.dua.ai.projects.ChatProject>
+            get() = this@ChatViewModel.importProjects
+            set(value) { this@ChatViewModel.importProjects = value }
+        override val _driveRestoreBusy get() = this@ChatViewModel._driveRestoreBusy
+        override val _dataBusy get() = this@ChatViewModel._dataBusy
+        override val _dataStatus get() = this@ChatViewModel._dataStatus
+        override val _importPreview get() = this@ChatViewModel._importPreview
+        override val _buildPr get() = this@ChatViewModel._buildPr
+        override val _savedChats get() = this@ChatViewModel._savedChats
+        override val _isTyping get() = this@ChatViewModel._isTyping
+        override fun syncBlocked() = this@ChatViewModel.syncBlocked()
+        override fun refreshSyncBusy() { this@ChatViewModel.refreshSyncBusy() }
+        override fun liveProjectBusy() = this@ChatViewModel.liveProjectBusy()
+        override fun cancelReply() = this@ChatViewModel.cancelReply()
+        override fun flushHistory() = this@ChatViewModel.flushHistory()
+        override fun saveHistory() = this@ChatViewModel.saveHistory()
+    } }
     private val projectsFeature: ChatProjects by lazy { ChatProjects(projectsHost) }
     private val projectsHost: ProjectsHost by lazy { object : ProjectsHost {
         override val viewModelScope get() = this@ChatViewModel.viewModelScope
@@ -1423,152 +1455,21 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     val driveRestoreBusy = _driveRestoreBusy.asStateFlow()
     fun cancelBackupOperation() { driveRestoreJob?.cancel(); fullBackup.cancel() }
 
-    fun reviewDriveBackup(id: String, password: CharArray) {
-        if (syncBlocked()) { password.fill('\u0000'); fullBackup.notice("Finish the current app action before restoring a Drive backup."); return }
-        _dataBusy.value = true; refreshSyncBusy()
-        _driveRestoreBusy.value = true
-        driveRestoreJob = viewModelScope.launch {
-            var file: File? = null
-            var handedOff = false
-            try {
-                fullBackup.notice("Downloading encrypted Drive backup…")
-                file = driveBackups.downloadBackup(id)
-                _dataBusy.value = false
-                _driveRestoreBusy.value = false
-                fullBackup.review(Uri.fromFile(file), password)
-                handedOff = true
-                fullBackup.state.first { !it.busy }
-            } catch (cancelled: CancellationException) {
-                if (!handedOff) fullBackup.notice("Drive restore cancelled. Nothing was imported.")
-                throw cancelled
-            }
-            catch (failure: Exception) { fullBackup.notice(if (failure is com.dua.ai.backup.drive.DriveFailure) failure.message.orEmpty() else "Drive restore could not be prepared. Nothing was imported; reconnect Drive and retry.") }
-            finally {
-                if (!handedOff) password.fill('\u0000')
-                withContext(kotlinx.coroutines.NonCancellable) {
-                    withContext(Dispatchers.IO) { file?.delete() }
-                    _driveRestoreBusy.value = false
-                    _dataBusy.value = false; refreshSyncBusy()
-                    driveRestoreJob = null
-                }
-            }
-        }
-    }
+    fun reviewDriveBackup(id: String, password: CharArray) = dataFeature.reviewDriveBackup(id, password)
 
     private val _importPreview = MutableStateFlow<List<SavedChat>?>(null)
     private var importProjects = com.dua.ai.projects.ProjectCodec.defaults
     val importPreview: StateFlow<List<SavedChat>?> = _importPreview.asStateFlow()
     fun cancelImport() { if (!_dataBusy.value) { _importPreview.value = null; _dataStatus.value = "Import cancelled. Your chats are unchanged." } }
 
-    fun reviewImport(uri: Uri) {
-        if (_dataBusy.value) return
-        _importPreview.value = null
-        _dataBusy.value = true; refreshSyncBusy()
-        _dataStatus.value = "Checking export…"
-        viewModelScope.launch {
-            try {
-                val backup = withContext(Dispatchers.IO) {
-                    val input = getApplication<Application>().contentResolver.openInputStream(uri)
-                        ?: error("Selected file cannot be read.")
-                    input.use { ChatHistoryCodec.readBackup(it) }
-                }
-                importProjects = backup.projects
-                if (backup.chats.isEmpty() && backup.projects == com.dua.ai.projects.ProjectCodec.defaults) _dataStatus.value = "This export has no chats. Nothing was changed."
-                else { _importPreview.value = backup.chats; _dataStatus.value = "Export checked. Confirm to add chats and their project settings." }
-            } catch (cancelled: CancellationException) { throw cancelled }
-            catch (error: Exception) { _dataStatus.value = error.message ?: "Export could not be read. No chats were changed." }
-            finally { _dataBusy.value = false }
-        }
-    }
+    fun reviewImport(uri: Uri) = dataFeature.reviewImport(uri)
 
     fun confirmImport() { commitReviewedImport() }
 
-    private fun commitReviewedImport(importedMemory: List<String>? = null, completion: (Boolean) -> Unit = {}): Job? {
-        if (_dataBusy.value) return null
-        if (liveProjectBusy()) { _dataStatus.value = "End live voice before importing chats."; return null }
-        val imported = _importPreview.value ?: return null
-        if (_buildPr.value.values.any { it.creating }) { _dataStatus.value = "Wait for the pull request to finish before importing."; return null }
-        _dataBusy.value = true; refreshSyncBusy()
-        _dataStatus.value = "Saving imported chats…"
-        cancelReply()
-        flushHistory()
-        // Use the latest local records at confirmation, keeping the active draft/selection.
-        val original = _savedChats.value.toList()
-        val originalProjects = localSettings.value.projects.toList()
-        val originalMemory = localSettings.value.memory.toList()
-        val importedProjects = importProjects.toList()
-        val selectedId = activeId
-        return viewModelScope.launch {
-            var projectsWritten = false
-            var mergedMemory = originalMemory
-            var success = false
-            try {
-                if (importedMemory != null) mergedMemory = com.dua.ai.backup.FullBackupArchive.mergeMemory(originalMemory, importedMemory)
-                val (merged, encoded, mergedProjects) = withContext(Dispatchers.Default) {
-                    val adjusted = com.dua.ai.projects.ProjectImports.prepare(originalProjects, com.dua.ai.history.ChatBackup(imported, importedProjects))
-                    val chats = ChatHistoryCodec.importCopies(original, adjusted.chats, projects = adjusted.projects)
-                    Triple(chats, ChatHistoryCodec.encode(chats, selectedId), adjusted.projects)
-                }
-                fun cacheUnchanged() = activeId == selectedId && _savedChats.value == original && !draftSaver.pending &&
-                    (importedMemory == null || localSettings.value.memory == if (projectsWritten) mergedMemory else originalMemory) &&
-                    localSettings.value.projects == (if (projectsWritten) mergedProjects else originalProjects) && !_isTyping.value && _buildPr.value.values.none { it.creating }
-                val changed = "The phone cache changed while preparing the import. Review and retry. No chats were imported."
-                check(cacheUnchanged()) { changed }
-                localPreferences.update(localSettings.value.copy(projects = mergedProjects, memory = if (importedMemory == null) localSettings.value.memory else mergedMemory))
-                projectsWritten = true
-                val committed = withContext(Dispatchers.IO) { historyWriter.writeDirectly {
-                    val previous = preferences.getString("history", null)
-                    val success = preferences.edit().putString("history", encoded).commit()
-                    if (!success) preferences.edit().putString("history", previous).apply()
-                    success
-                } }
-                if (!cacheUnchanged()) {
-                    // Main remained responsive during the write. Retire the stale disk import by
-                    // queuing the latest live buffers (including pending typing), then flush off Main.
-                    saveHistory()
-                    withContext(Dispatchers.IO) { historyWriter.flush() }
-                    error(changed)
-                }
-                if (committed) {
-                    _savedChats.value = merged
-                    projectsWritten = false
-                    _importPreview.value = null
-                    _dataStatus.value = "${imported.size} chats imported into the phone cache. Sign in and sync to make them server-backed. Existing chats and drafts were kept."
-                    success = true
-                } else _dataStatus.value = "Import could not be saved. No chats were changed. Try again."
-            } catch (cancelled: CancellationException) { throw cancelled }
-            catch (failure: Exception) { _dataStatus.value = failure.message ?: "Import could not be saved. No chats were changed. Try again." }
-            finally {
-                if (projectsWritten) runCatching { localPreferences.update(localSettings.value.copy(projects = originalProjects,
-                    memory = if (importedMemory != null && localSettings.value.memory == mergedMemory) originalMemory else localSettings.value.memory)) }
-                _dataBusy.value = false
-                completion(success)
-            }
-        }
-    }
+    private fun commitReviewedImport(importedMemory: List<String>? = null, completion: (Boolean) -> Unit = {}): Job? =
+        dataFeature.commitReviewedImport(importedMemory, completion)
 
-    fun exportChats(uri: Uri) {
-        if (_dataBusy.value) return
-        draftSaver.runNow()
-        val records = _savedChats.value.toList()
-        val projects = localSettings.value.projects.toList()
-        _dataBusy.value = true; refreshSyncBusy()
-        _dataStatus.value = "Creating export…"
-        viewModelScope.launch {
-            try {
-                withContext(Dispatchers.IO) {
-                    val encoded = ChatHistoryCodec.exportBackup(records, projects = projects).toByteArray(Charsets.UTF_8)
-                    val output = getApplication<Application>().contentResolver.openOutputStream(uri, "wt")
-                        ?: error("Selected file cannot be written.")
-                    output.use { it.write(encoded) }
-                }
-                _dataStatus.value = "Export saved. Your chats are unchanged."
-            } catch (cancelled: CancellationException) { throw cancelled }
-            catch (failure: IllegalArgumentException) { _dataStatus.value = "Export exceeds backup limits or contains invalid metadata. No backup was written. ${failure.message.orEmpty()}" }
-            catch (_: Exception) { _dataStatus.value = "Export failed. The selected file may be incomplete; try again." }
-            finally { _dataBusy.value = false }
-        }
-    }
+    fun exportChats(uri: Uri) = dataFeature.exportChats(uri)
 
     fun clearAllChats() {
         replyAudioCache.clear()
