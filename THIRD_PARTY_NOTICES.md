@@ -46,7 +46,7 @@ other Google brand assets.
 
 | Dua file | Adapted from | What changed |
 | --- | --- | --- |
-| `app/src/main/java/com/dua/ai/ui/chat/JumpToLatest.kt` | `conversation/JumpToBottom.kt`, `conversation/Conversation.kt` (same-author grouping) | Dua colours, 48 dp target, new-replies count with a dot, no slide when animations are off, no backdrop magnifier |
+| `app/src/main/java/com/dua/ai/ui/chat/JumpToLatest.kt` | `conversation/JumpToBottom.kt`, `conversation/Conversation.kt` (same-author grouping) | Only the same-author grouping and new-replies count remain; the button is now Telegram's page-down (`TelegramPageDown.kt`) |
 | `app/src/main/java/com/dua/ai/ui/chat/WideLayout.kt` | `Reply/.../ui/ReplyApp.kt`, `Reply/.../ui/navigation/ReplyNavigationComponents.kt` (fork commit `0bc770fd`) | Width from `BoxWithConstraints` instead of the window-size-class library; only switches chat history between a permanent side panel and the existing modal drawer |
 | `benchmark/build.gradle.kts`, `benchmark/src/main/java/com/dua/ai/benchmark/*.kt` | `benchmarks/build.gradle.kts`, `benchmarks/.../startup/StartupBenchmark.kt`, `.../baselineprofile/StartupBaselineProfile.kt`, `.../GeneralActions.kt` | Dua journeys (onboarding skip, drawer, chat, scroll, send with airplane mode), connected phone only, no managed emulator |
 
@@ -119,6 +119,8 @@ terms; their bundled open-source licenses are listed by Google Play services at 
 | `app/src/main/java/com/dua/ai/ui/chat/TelegramInterpolators.kt` | `ui/Components/CubicBezierInterpolator.java`, `ui/recyclerview/ChatListItemAnimator.java` (`DEFAULT_INTERPOLATOR`, `DEFAULT_DURATION`) | Compose `Easing` instead of `Interpolator` |
 | `app/src/main/java/com/dua/ai/ui/chat/ChatSwipeReply.kt` | `ui/ChatActivity.java` (chat list swipe tracking: 0.4 cm start, `|dx|/3 > dy`, dp(80) clamp, dp(50) haptic/reply, 180 ms decelerate return, `drawReplyButton` progress), `ui/recyclerview/ChatListItemAnimator.java` (`animateAddImpl`) | Compose pointer input; mirrored to a right swipe; reply opens Dua's quote preview |
 | `app/src/main/java/com/dua/ai/ui/chat/TelegramMessagePopup.kt` | `ui/ActionBar/ActionBarPopupWindow.java` (`startAnimation`, `startChildAnimation`, `setBackScaleY`, `dismiss`) | Compose `Popup`; Dua colours and actions; "More" opens Dua's full actions sheet |
+| `app/src/main/java/com/dua/ai/ui/history/TelegramDialogSwipe.kt` | `ui/DialogsActivity.java` (`SwipeController`: 0.45 threshold, no fling, 200 ms cancel), `ui/Cells/DialogCell.java` (swipe background, reveal circle 300 ms accelerate, icon `BounceInterpolator` 170 ms, haptic on threshold change), `ui/Components/UndoView.java` (5 s undo countdown) | Compose draggable row; left = Delete (with Undo), mirrored right = Pin/Unpin; Dua colours and Material icons |
+| `app/src/main/java/com/dua/ai/ui/chat/TelegramPageDown.kt` | `ui/Components/chat/layouts/ChatActivitySideControlsButtonsLayout.java` (page-down visibility: alpha, scale 0.7→1, 80 dp rise, 280 ms decelerate, counter visibility), `ui/Components/chat/buttons/ChatActivityBlurredRoundPageDownButton.java` (56 dp round button, counter on top), `ui/ChatActivity.java` (`newUnreadMessageCount`) | Compose; no blur; counts Dua replies below the viewport; replaces the Jetchat "Latest reply" pill |
 
 Apache-2.0 and MIT dependencies remain compatible with GPL-3.0-or-later. Note: closed-source Google Play services /
 ML Kit binaries are not GPL-compatible "system libraries" in a strict reading; see the PR discussion.

@@ -1,5 +1,7 @@
 package com.dua.ai.ui.history
 
+import com.dua.ai.ui.theme.ChatTheme
+
 import com.dua.ai.ui.chat.DuaDialog
 import com.dua.ai.ui.chat.SheetTextButton
 import com.dua.ai.ui.theme.SheetShapes
@@ -129,9 +131,17 @@ fun HistoryDrawer(
     val browseScroll = rememberScrollState()
     val searchScroll = rememberScrollState()
     LaunchedEffect(query, pinnedOnly) { searchScroll.scrollTo(0) }
-    val visible = remember(chats, query, pinnedOnly) {
+    // Telegram-style swipe delete waits 5 s for Undo (UndoView) before the real delete runs.
+    var pendingDelete by remember { mutableStateOf<SavedChat?>(null) }
+    val commitDelete by androidx.compose.runtime.rememberUpdatedState { chat: SavedChat ->
+        if (serverDeletionEnabled) onDeleteServerChat(chat.id) else onDeleteChat(chat.id)
+    }
+    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { pendingDelete?.let { commitDelete(it) } } }
+    fun swipeDelete(chat: SavedChat) { pendingDelete?.let { commitDelete(it) }; pendingDelete = chat }
+    val visibleAll = remember(chats, query, pinnedOnly) {
         HistoryGrouping.filter(HistoryGrouping.recent(chats), query).filter { !pinnedOnly || it.pinned }.sortedWith(compareByDescending<SavedChat> { it.pinned }.thenByDescending { it.updatedAt })
     }
+    val visible = visibleAll.filter { it.id != pendingDelete?.id }
 
     HistorySheet(permanent, drawerState, colors.container, modifier.width(DrawerSizes.width).testTag("history-drawer")) {
         Column(Modifier.fillMaxSize().background(colors.container)
@@ -212,12 +222,25 @@ fun HistoryDrawer(
                         modifier = Modifier.padding(horizontal = DrawerSizes.actionPaddingH, vertical = DrawerSizes.chatPaddingV))
                     visible.forEach { chat ->
                         key(chat.id) {
-                            ChatRow(chat, chat.id == currentChatId, serverDeletionEnabled, pinEnabled, motionAllowed,
-                                onSelect = { onSelectChat(chat.id) }, onRename = { renaming = chat },
-                                onPin = { onPinChat(chat.id, !chat.pinned)?.let { notice = it } },
-                                onDelete = { if (serverDeletionEnabled) onDeleteServerChat(chat.id) else onDeleteChat(chat.id) })
+                            val c = ChatTheme.colors
+                            DialogSwipeRow(
+                                start = if (pinEnabled) DialogSwipeAction(if (chat.pinned) "Unpin" else "Pin", SwipePinIcon,
+                                    c.chipFill, c.accent, c.chipText, slideOut = false) { onPinChat(chat.id, !chat.pinned)?.let { notice = it } } else null,
+                                end = DialogSwipeAction("Delete", SwipeDeleteIcon, c.chipFill, androidx.compose.ui.graphics.Color(0xFFDD4B39),
+                                    c.chipText, slideOut = true) { swipeDelete(chat) },
+                            ) {
+                                ChatRow(chat, chat.id == currentChatId, serverDeletionEnabled, pinEnabled, motionAllowed,
+                                    onSelect = { onSelectChat(chat.id) }, onRename = { renaming = chat },
+                                    onPin = { onPinChat(chat.id, !chat.pinned)?.let { notice = it } },
+                                    onDelete = { if (serverDeletionEnabled) onDeleteServerChat(chat.id) else onDeleteChat(chat.id) })
+                            }
                         }
                     }
+                }
+                pendingDelete?.let { chat ->
+                    ChatUndoBar("Chat deleted", chat.id, onUndo = { pendingDelete = null },
+                        onTimeout = { if (pendingDelete?.id == chat.id) { pendingDelete = null; commitDelete(chat) } },
+                        modifier = Modifier.padding(vertical = DrawerSizes.chatPaddingV))
                 }
                 notice?.let { Text(it, style = DrawerChatStyle, color = colors.subText, modifier = Modifier.padding(vertical = DrawerSizes.chatPaddingV)) }
             }
