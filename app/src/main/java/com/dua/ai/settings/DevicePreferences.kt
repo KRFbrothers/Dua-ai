@@ -26,7 +26,11 @@ data class LocalPreferences(val theme: String = "dark", val font: String = "defa
     /** Chosen free OpenRouter model id ("" = none; the normal model answers). Used only when the engine still offers it. */
     val freeModel: String = "",
     /** Small on-device AI (chat titles, Imagine prompt polish). Used only on phones that support it; off = always the server. */
-    val onDeviceAi: Boolean = true)
+    val onDeviceAi: Boolean = true,
+    /** Offline voice typing (Vosk): "off", "fallback" (only when the phone's recognizer is missing) or "always". */
+    val offlineDictation: String = "off",
+    /** Downloaded Vosk model used for offline voice typing (id from OfflineModels.catalog). */
+    val offlineModel: String = "hi")
 
 object PreferencesCodec {
     fun validate(value: LocalPreferences): LocalPreferences {
@@ -36,6 +40,7 @@ object PreferencesCodec {
         require((value.voiceProvider.isEmpty() || value.voiceProvider in com.dua.ai.voice.VoiceCodec.PROVIDERS) && com.dua.ai.voice.VoiceCodec.validId(value.voiceName)
             && value.deviceVoice.length <= 200 && value.voiceSpeed in 0.5f..2f && com.dua.ai.voice.VoiceCodec.validLanguage(value.replyLanguage)
             && com.dua.ai.voice.VoiceCodec.validLanguage(value.inputLanguage) && com.dua.ai.voice.VoiceCodec.validId(value.liveVoice)) { "Invalid voice setting." }
+        require(value.offlineDictation in com.dua.ai.voice.offline.OfflineModels.MODES && com.dua.ai.voice.offline.OfflineModels.byId(value.offlineModel) != null) { "Invalid offline voice setting." }
         require(value.freeModel.isEmpty() || com.dua.ai.model.FreeModels.validId(value.freeModel)) { "Invalid free model." }
         require(value.memory.size <= 10 && value.memory.all { it.isNotBlank() && it.length <= 200 }) { "Save at most 10 memories, each up to 200 characters." }
         return value
@@ -49,6 +54,7 @@ object PreferencesCodec {
             .put("voiceProvider", value.voiceProvider).put("voiceName", value.voiceName).put("deviceVoice", value.deviceVoice)
             .put("voiceSpeed", value.voiceSpeed.toDouble()).put("replyLanguage", value.replyLanguage).put("inputLanguage", value.inputLanguage).put("liveVoice", value.liveVoice)
             .put("dictationAutoSend", value.dictationAutoSend).put("freeModel", value.freeModel).put("onDeviceAi", value.onDeviceAi)
+            .put("offlineDictation", value.offlineDictation).put("offlineModel", value.offlineModel)
             .put("projects", com.dua.ai.projects.ProjectCodec.toJson(value.projects)).toString()
     }
     fun decode(raw: String): LocalPreferences {
@@ -71,7 +77,9 @@ object PreferencesCodec {
             com.dua.ai.projects.ProjectCodec.fromJson(if (data.has("projects")) data.getJSONArray("projects") else null),
             dictationAutoSend = data.optBoolean("dictationAutoSend", false),
             freeModel = data.optString("freeModel").takeIf { it.isEmpty() || com.dua.ai.model.FreeModels.validId(it) } ?: "",
-            onDeviceAi = data.optBoolean("onDeviceAi", true)))
+            onDeviceAi = data.optBoolean("onDeviceAi", true),
+            offlineDictation = data.optString("offlineDictation", "off").takeIf { it in com.dua.ai.voice.offline.OfflineModels.MODES } ?: "off",
+            offlineModel = data.optString("offlineModel", "hi").takeIf { com.dua.ai.voice.offline.OfflineModels.byId(it) != null } ?: "hi"))
     }
     fun memoryText(value: LocalPreferences): String = if (value.memoryEnabled) value.memory.joinToString("\n") { "- $it" } else ""
 }

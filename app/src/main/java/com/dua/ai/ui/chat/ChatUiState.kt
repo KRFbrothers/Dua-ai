@@ -199,6 +199,8 @@ class ChatActions(
     val dictationLanguage: () -> String = { "auto" },
     val dictationAutoSend: () -> Boolean = { false },
     val onDictationNotice: (String) -> Unit = {},
+    /** Offline (Vosk) model folder for this dictation, given whether the phone's recognizer exists; null = phone recognizer. */
+    val dictationOfflineModel: (Boolean) -> java.io.File? = { null },
     val onOpenSetup: () -> Unit = {},
     val onImagine: (Boolean) -> Unit = {},
     val onImagineOptions: (com.dua.ai.imagine.ImagineOptions) -> Unit = {},

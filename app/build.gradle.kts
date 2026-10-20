@@ -167,6 +167,10 @@ android {
     testOptions {
         unitTests.isIncludeAndroidResources = true
     }
+    packaging {
+        // JNA (pulled in by Vosk) ships dead ABIs no Android 8+ phone uses; Dua has no other code for them.
+        jniLibs.excludes += listOf("lib/armeabi/**", "lib/mips/**", "lib/mips64/**")
+    }
 }
 
 baselineProfile {
@@ -211,6 +215,8 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     // Installs the bundled baseline profile (src/main/baseline-prof.txt) on sideloaded APKs too: faster cold start.
     implementation(libs.androidx.profileinstaller)
+    // Offline voice typing. Models are downloaded on demand in Settings > Voice, never bundled.
+    implementation(libs.vosk.android)
     // Generator only (not packaged): ./gradlew :app:generateBaselineProfile with a phone connected.
     baselineProfile(project(":benchmark"))
     implementation(libs.androidx.datastore.preferences)

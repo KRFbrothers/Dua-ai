@@ -53,6 +53,7 @@ import com.dua.ai.ui.theme.Sizes
 import com.dua.ai.ui.theme.Spacing
 import com.dua.ai.ui.theme.ComposerTextStyle
 import com.dua.ai.ui.theme.VoiceSizes
+import com.dua.ai.voice.DictationEngine
 import com.dua.ai.voice.NativeVoiceInput
 import com.dua.ai.voice.VoiceDraft
 import kotlinx.coroutines.delay
@@ -84,12 +85,19 @@ class ChatDictation internal constructor(
 
 @Composable
 fun rememberChatDictation(language: () -> String, autoSend: () -> Boolean, draft: () -> String,
-    onDraft: (String) -> Unit, onSend: () -> Unit, onNotice: (String) -> Unit = {}): ChatDictation {
+    onDraft: (String) -> Unit, onSend: () -> Unit, onNotice: (String) -> Unit = {},
+    /** Offline model folder to use for this session (given whether the phone's recognizer exists), or null for the phone's. */
+    offlineModel: (phoneRecognizerAvailable: Boolean) -> java.io.File? = { null }): ChatDictation {
     val context = LocalContext.current
     // Cheap: only flows. The SpeechRecognizer is created when the mic is tapped and destroyed when listening ends.
-    val input = remember(context) { NativeVoiceInput(context.applicationContext) }
+    val native = remember(context) { NativeVoiceInput(context.applicationContext) }
+    // Offline (Vosk) engine, created on first offline use and kept so the model stays loaded between taps.
+    val offline = remember { androidx.compose.runtime.mutableStateOf<Pair<java.io.File, DictationEngine>?>(null) }
+    val active = remember(native) { androidx.compose.runtime.mutableStateOf<DictationEngine>(native) }
+    val input = active.value
     val state = input.state.collectAsState()
     val level = input.level.collectAsState()
+    val currentOffline by rememberUpdatedState(offlineModel)
     val currentDraft by rememberUpdatedState(draft)
     val currentOnDraft by rememberUpdatedState(onDraft)
     val currentOnSend by rememberUpdatedState(onSend)
@@ -107,26 +115,34 @@ fun rememberChatDictation(language: () -> String, autoSend: () -> Boolean, draft
             }
         }
     }
+    val begin = remember(native) {
+        {
+            val dir = currentOffline(android.speech.SpeechRecognizer.isRecognitionAvailable(context))
+            val engine = if (dir == null) native else offline.value?.takeIf { it.first == dir }?.second
+                ?: com.dua.ai.voice.offline.VoskVoiceInput(dir).also { created -> offline.value?.second?.close(); offline.value = dir to created }
+            active.value = engine
+            engine.language = currentLanguage(); started.value = true; engine.start()
+        }
+    }
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) { input.language = currentLanguage(); started.value = true; input.start() }
-        else { input.permissionDenied(); currentNotice("Microphone permission denied. Allow it in app Settings.") }
+        if (granted) begin()
+        else { active.value.permissionDenied(); currentNotice("Microphone permission denied. Allow it in app Settings.") }
     }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
-    DisposableEffect(lifecycle, input) {
-        val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_STOP) { started.value = false; input.stop() } }
+    DisposableEffect(lifecycle, native) {
+        val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_STOP) { started.value = false; active.value.stop() } }
         lifecycle.addObserver(observer)
-        onDispose { lifecycle.removeObserver(observer); input.close() }
+        onDispose { lifecycle.removeObserver(observer); native.close(); offline.value?.second?.close() }
     }
-    return remember(input, permission) {
+    return remember(native, permission) {
         ChatDictation(
             listeningState = androidx.compose.runtime.derivedStateOf { state.value.busy }, level = level,
             start = {
-                if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
-                    input.language = currentLanguage(); started.value = true; input.start()
-                } else permission.launch(Manifest.permission.RECORD_AUDIO)
+                if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) begin()
+                else permission.launch(Manifest.permission.RECORD_AUDIO)
             },
-            cancel = { started.value = false; input.stop() },
-            confirm = { input.confirm() },
+            cancel = { started.value = false; active.value.stop() },
+            confirm = { active.value.confirm() },
         )
     }
 }

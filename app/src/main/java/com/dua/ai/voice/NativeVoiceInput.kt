@@ -24,12 +24,12 @@ data class VoiceInputState(
 )
 
 /** Owns one foreground, user-started speech recognition session; never sends an AI request. */
-class NativeVoiceInput(private val context: Context) {
+class NativeVoiceInput(private val context: Context) : DictationEngine {
     private val mutableState = MutableStateFlow(VoiceInputState())
-    val state = mutableState.asStateFlow()
+    override val state = mutableState.asStateFlow()
     private val mutableLevel = MutableStateFlow(0f)
     /** Microphone input level while listening, 0..1 (from onRmsChanged; drives the voice-mode glow). */
-    val level = mutableLevel.asStateFlow()
+    override val level = mutableLevel.asStateFlow()
     private var recognizer: SpeechRecognizer? = null
     private val handler = Handler(Looper.getMainLooper())
     private var generation = 0
@@ -37,15 +37,15 @@ class NativeVoiceInput(private val context: Context) {
     private var timeout: Runnable? = null
     private var confirming = false
     /** Recognition language from Voice settings: "auto" (device language) or a BCP-47 tag such as hi-IN or ur-PK. */
-    var language: String = "auto"
+    override var language: String = "auto"
 
-    fun permissionDenied() {
+    override fun permissionDenied() {
         if (closed) return
         stop()
         mutableState.value = mutableState.value.copy(status = "Microphone permission denied. Allow it in app Settings or retry.", permissionDenied = true)
     }
 
-    fun start() {
+    override fun start() {
         if (closed || mutableState.value.busy) return
         if (!SpeechRecognizer.isRecognitionAvailable(context)) {
             mutableState.value = mutableState.value.copy(status = "Speech recognition unavailable on this device. Type in Chat instead.")
@@ -109,7 +109,7 @@ class NativeVoiceInput(private val context: Context) {
      * Stop listening but keep the words: asks the recognizer for its final result (delivered to [state] as the
      * transcript). Falls back to the last partial when the recognizer is gone.
      */
-    fun confirm() {
+    override fun confirm() {
         val speech = recognizer
         if (!mutableState.value.busy || speech == null) return
         confirming = true
@@ -121,13 +121,13 @@ class NativeVoiceInput(private val context: Context) {
         }
     }
 
-    fun stop() {
+    override fun stop() {
         generation++
         release()
         mutableState.value = mutableState.value.copy(busy = false, partial = "", status = if (mutableState.value.transcript.isBlank()) "Stopped. Tap mic to retry." else "Review transcript, then use it in Chat.")
     }
 
-    fun close() { closed = true; stop() }
+    override fun close() { closed = true; stop() }
 
     private fun release() {
         mutableLevel.value = 0f

@@ -18,3 +18,10 @@
 -dontwarn org.bouncycastle.jsse.**
 -dontwarn org.conscrypt.**
 -dontwarn org.openjsse.**
+
+# Vosk offline speech (com.alphacephei:vosk-android) calls libvosk.so through JNA, which looks up
+# classes, fields and native methods by name. Rules from the official vosk-android-demo.
+-keep class com.sun.jna.** { *; }
+-keepclassmembers class * extends com.sun.jna.** { public *; }
+-keep class org.vosk.** { *; }
+-dontwarn java.awt.**

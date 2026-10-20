@@ -312,6 +312,13 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
             dictationLanguage = { viewModel.localSettings.value.inputLanguage },
             dictationAutoSend = { viewModel.localSettings.value.dictationAutoSend },
             onDictationNotice = { attachmentNotice = it },
+            dictationOfflineModel = { phoneAvailable ->
+                val settings = viewModel.localSettings.value
+                val models = com.dua.ai.voice.offline.OfflineModelManager.get(context)
+                models.ready(settings.offlineModel)?.takeIf {
+                    com.dua.ai.voice.offline.OfflineModels.useOffline(settings.offlineDictation, true, phoneAvailable)
+                }
+            },
             onOpenSetup = onOpenSetup,
             onImagine = viewModel::setImagine,
             onImagineOptions = viewModel::setImagineOptions,

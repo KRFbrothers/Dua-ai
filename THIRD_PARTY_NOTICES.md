@@ -82,6 +82,20 @@ other Google brand assets.
 | `app/src/main/java/com/dua/ai/entry/ChatShortcuts.kt` | `app/.../repository/NotificationHelper.kt` (`Contact.toShortcut`, `pushShortcut`) | Dua chats instead of contacts, no Person/LocusId/bubbles/notifications, Dua icon, max four chats, launcher actions, deleted chats removed |
 | `app/src/main/res/xml/sharing_shortcuts.xml` | `app/src/main/res/xml/sharing_shortcuts.xml` | Dua activity and share category |
 
+## Vosk offline speech recognition
+
+- Library: `com.alphacephei:vosk-android:0.3.75` from Maven Central (binary AAR with `libvosk.so`; not copied source).
+  Source: <https://github.com/alphacep/vosk-api>. Copyright Alpha Cephei Inc. License: Apache License, Version 2.0.
+- It depends on JNA `net.java.dev.jna:jna:5.18.1` (binary AAR), dual-licensed Apache License 2.0 or LGPL 2.1; Dua uses it under
+  Apache 2.0. <https://github.com/java-native-access/jna>
+- The integration (`voice/offline/VoskRecognizer.kt`) follows the usage in the official sample
+  <https://github.com/alphacep/vosk-android-demo> (Apache 2.0); no demo source was copied, and its ProGuard keep rules for JNA are
+  reused in `app/proguard-rules.pro`.
+- Speech models are **not bundled**. The user downloads one from <https://alphacephei.com/vosk/models> in Settings › Voice.
+  The models Dua offers are listed there as **Apache 2.0**: `vosk-model-small-hi-0.22` (Hindi),
+  `vosk-model-small-en-in-0.4` (Indian English), `vosk-model-small-en-us-0.15` (US English). Size and MD5 come from the
+  official `model-list.json`. Vosk publishes no small Urdu model, so Urdu is not offered.
+
 ## Google ML Kit and Google Play services libraries
 
 The Android app depends on `com.google.mlkit:genai-prompt` and
