@@ -119,6 +119,8 @@ fun ChatScreen(
     topBar: (@Composable () -> Unit)? = null,
     requestComposerFocus: String? = null,
     dismissOverlaysRequest: String? = null,
+    /** The supplied chat design shares this host's drawer, pickers and existing callbacks. */
+    useSuppliedChatUi: Boolean = false,
 ) {
     val drawerState = rememberDrawerState(initialDrawerValue)
     var lastDrawerValue by remember { mutableStateOf(drawerState.currentValue) }
@@ -362,7 +364,7 @@ fun ChatScreen(
                         modifier = Modifier.width(if (permanent) DrawerSizes.width else drawerWidth),
                     )
             }
-            val chatPane: @Composable () -> Unit = {
+            val legacyChatPane: @Composable () -> Unit = {
                 Column(Modifier.fillMaxSize().background(com.dua.ai.ui.theme.ChatTheme.colors.background)
                     .let { if (feature == null) it.windowInsetsPadding(
                         WindowInsets.ime.union(WindowInsets.navigationBars).only(WindowInsetsSides.Bottom)) else it }
@@ -508,6 +510,21 @@ fun ChatScreen(
                         }
                     }
                 }
+            }
+            val chatPane: @Composable () -> Unit = {
+                if (useSuppliedChatUi && feature == null && state.homeTab == HomeTab.Chat) {
+                    val dictation = if (actions.inlineDictation) rememberChatDictation(actions.dictationLanguage, actions.dictationAutoSend,
+                        draft = rememberUpdatedState(state.draft).let { d -> remember { { d.value } } },
+                        onDraft = actions.onDraftChange, onSend = sendFromComposer, onNotice = actions.onDictationNotice,
+                        offlineModel = actions.dictationOfflineModel) else null
+                    SuppliedChatScreen(visibleState, actions, listState, inputFocus, dictation,
+                        onMenu = { dismissInput(); if (wideHistory) historyPanelVisible = !historyPanelVisible else scope.launch { drawerState.open() } },
+                        onModel = { sheet = ChatSheet.Model }, onAttach = { sheet = ChatSheet.Attach },
+                        imagineActions = mediaActions,
+                        showLatest = !followTail && listState.canScrollForward,
+                        newReplies = MessageGrouping.newReplies(state.messages, seenMessages),
+                        onLatest = { scope.launch { followTail = true; goToLatest() } })
+                } else legacyChatPane()
             }
             if (wideHistory && historyPanelVisible) Row(Modifier.fillMaxSize()) {
                 historyPanel(true)
