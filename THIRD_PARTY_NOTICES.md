@@ -196,3 +196,27 @@ Bundled unchanged for offline use; full license texts ship inside the APK under 
 [GoogleSans-TRADEMARKS.md](app/src/main/assets/licenses/GoogleSans-TRADEMARKS.md)). The font is used only as a
 typeface; Dua does not use Google logos or brand assets, and the font is not modified or re-branded.
 
+## Dua OG Assets: generation backdrop and attachment icons
+
+Selected sources were reused from [KRFbrothers/Dua-OG-Assets-](https://github.com/KRFbrothers/Dua-OG-Assets-/tree/f11b3c4f2f998665377079cdb7517a456bd8d502), collection commit `f11b3c4f2f998665377079cdb7517a456bd8d502`.
+Each component retains its original license; the collection is not treated as having a blanket license.
+
+- `app/src/main/java/com/dua/ai/ui/og/BlobDrawable.java` adapts
+  `code/telegram/org/telegram/ui/Components/BlobDrawable.java` (source blob
+  `d2519fab2b7916e1cc3861fbdd4671dddde451f9`), originally
+  [Telegram for Android](https://github.com/DrKLO/Telegram/blob/f32ffeec763f0bdbf4bec25b52d654f77bff733d/TMessagesProj/src/main/java/org/telegram/ui/Components/BlobDrawable.java).
+  Telegram contributors; GPL-2.0-or-later, used under Dua's GPL-3.0-or-later.
+  Changes: package, deterministic random seed, removal of Telegram-specific LiteMode guards.
+  Original blob geometry and interpolation remain. Dua's Compose host supplies the palette,
+  drawing position, generation state, lifecycle and reduced-motion handling.
+  The original license ships as [DuaOG-Telegram-LICENSE.txt](app/src/main/assets/licenses/DuaOG-Telegram-LICENSE.txt).
+- `og_photo_camera.xml`, `og_photo_library.xml`, `og_upload.xml`, and `og_graphic_eq.xml`
+  under `app/src/main/res/drawable/` come from the collection's
+  `icons/material-symbols/symbols/android/{name}/materialsymbolsoutlined/{name}_24px.xml`.
+  Original Google Material Symbols, Apache-2.0; path data retained unchanged.
+  Removed only the root Android theme tint so Dua's existing light/dark icon colors apply.
+  License: [MaterialSymbols-LICENSE.txt](app/src/main/assets/licenses/MaterialSymbols-LICENSE.txt).
+
+The generation background is a Dua integration of Telegram's open-source geometry, not
+proprietary Google Gemini UI code. Existing Dua branding, fonts and Live icon are reused
+without adding duplicate copies. No RikkaHub/AGPL source module is bundled by this change.

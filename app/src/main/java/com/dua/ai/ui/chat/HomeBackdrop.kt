@@ -8,6 +8,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
@@ -15,7 +16,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.platform.testTag
 import com.dua.ai.ui.theme.AmbientDark
 import com.dua.ai.ui.theme.AmbientLight
@@ -28,11 +31,14 @@ import kotlin.math.sin
 
 /** Standard Home/chat decoration only; no layout, inset, account or feature ownership. */
 @Composable
-internal fun Modifier.homeBackdrop(task: Boolean, home: Boolean = true): Modifier {
+internal fun Modifier.homeBackdrop(task: Boolean, home: Boolean = true, generating: Boolean = false): Modifier {
     val dark = DuaTheme.colors.isDark
     val palette = if (dark) AmbientDark else AmbientLight
     val base = ChatTheme.colors.background
     val motion = rememberReplyMotionAllowed()
+    val generationBackdrop = remember(palette) {
+        OgGenerationBackdrop(listOf(palette.blue, palette.purple, palette.magenta, palette.orange))
+    }
     val transition = if (motion) rememberInfiniteTransition(label = "ambient-backdrop") else null
     val drift = transition?.animateFloat(0f, (2 * PI).toFloat(),
         infiniteRepeatable(tween(AmbientTokens.driftMs, easing = LinearEasing)), label = "ambient-drift")
@@ -49,6 +55,9 @@ internal fun Modifier.homeBackdrop(task: Boolean, home: Boolean = true): Modifie
         else rememberUpdatedState(intensityTarget)
     val washAlpha = if (motion) animateFloatAsState(washTarget, tween(AmbientTokens.modeMs), label = "ambient-wash")
         else rememberUpdatedState(washTarget)
+    val generationTarget = if (generating) 1f else 0f
+    val generationAlpha = if (motion) animateFloatAsState(generationTarget, tween(AmbientTokens.modeMs), label = "OG generation backdrop")
+        else rememberUpdatedState(generationTarget)
     return testTag(if (home) "home-gradient" else "conversation-ambient").drawWithCache {
         val w = size.width
         val h = size.height
@@ -85,6 +94,10 @@ internal fun Modifier.homeBackdrop(task: Boolean, home: Boolean = true): Modifie
                 }
                 drawRect(skyWash, alpha = washAlpha.value)
                 drawRect(taskWash, alpha = taskFraction.value * washAlpha.value)
+                if (generationAlpha.value > 0f) drawIntoCanvas { canvas ->
+                    generationBackdrop.draw(canvas.nativeCanvas, w, h, angle,
+                        generationAlpha.value * if (dark) .42f else .34f, motion)
+                }
             }
         }
     }
