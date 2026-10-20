@@ -1,6 +1,5 @@
-package com.dua.ai.ui.history
+package com.dua.ai.history
 
-import com.dua.ai.history.SavedChat
 import java.time.Instant
 import java.time.ZoneId
 import java.time.temporal.ChronoUnit

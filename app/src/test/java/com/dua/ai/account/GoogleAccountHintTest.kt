@@ -1,4 +1,4 @@
-package com.dua.ai.auth
+package com.dua.ai.account
 
 import org.junit.Assert.*
 import org.junit.Test

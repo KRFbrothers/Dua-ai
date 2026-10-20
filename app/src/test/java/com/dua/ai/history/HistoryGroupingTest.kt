@@ -1,6 +1,5 @@
-package com.dua.ai.ui.history
+package com.dua.ai.history
 
-import com.dua.ai.history.SavedChat
 import com.dua.ai.model.ChatMessage
 import org.junit.Assert.assertEquals
 import org.junit.Test

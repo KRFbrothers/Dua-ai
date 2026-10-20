@@ -1,6 +1,4 @@
-package com.dua.ai.ui.history
-
-import com.dua.ai.history.SavedChat
+package com.dua.ai.history
 
 data class HistoryMatch(val chat: SavedChat, val snippet: String? = null, val matchStart: Int = 0, val matchEnd: Int = 0)
 
