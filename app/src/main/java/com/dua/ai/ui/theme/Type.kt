@@ -99,8 +99,10 @@ val VoicePermissionHeadingStyle = VoiceGreetingStyle.copy(fontSize = 22.sp, line
 // Home screen + composer styles, taken from the "Dua AI Dabba" reference shell (Inter, standard chat sizes).
 /** Quick prompt rows on Home ("Create an image…"), Dabba bodyLarge. */
 val HomePromptStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Normal, fontSize = 16.sp)
-/** Brand and short model label share a single baseline in the Home header. */
+/** Primary brand in the Home header. */
 val HomeHeaderStyle = TextStyle(fontFamily = HomeFontFamily, fontWeight = FontWeight.Medium, fontSize = 19.sp, lineHeight = 26.sp)
+/** Smaller model choice, visually separate from the Dua AI brand. */
+val HomeHeaderModelStyle = HomeHeaderStyle.copy(fontSize = 14.sp, lineHeight = 20.sp)
 /** Home uses Google Sans; other screens retain their existing font preference. */
 val HomeTaskPromptStyle = HomePromptStyle.copy(fontFamily = HomeFontFamily)
 /** Composer input and its "Ask Dua AI" placeholder. */

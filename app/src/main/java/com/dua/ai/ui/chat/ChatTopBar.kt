@@ -1,6 +1,7 @@
 package com.dua.ai.ui.chat
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
@@ -29,6 +30,7 @@ import com.dua.ai.ui.components.AccountAvatar
 import com.dua.ai.ui.components.ReferenceIcons
 import com.dua.ai.ui.theme.ChatTheme
 import com.dua.ai.ui.theme.HomeHeaderStyle
+import com.dua.ai.ui.theme.HomeHeaderModelStyle
 import com.dua.ai.ui.theme.HomeSizes
 import com.dua.ai.ui.theme.HomeTheme
 import com.dua.ai.ui.theme.Sizes
@@ -54,8 +56,9 @@ fun ChatTopBar(
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
     val brandWidth = with(density) { measurer.measure(AnnotatedString("Dua AI"), HomeHeaderStyle).size.width.toDp() }
-    val modelWidth = with(density) { measurer.measure(AnnotatedString(shortName), HomeHeaderStyle).size.width.toDp() }
-    val pairWidth = brandWidth + Spacing.xs + maxOf(Sizes.touchTarget, modelWidth + Sizes.iconTiny + Spacing.xs * 2)
+    val modelWidth = with(density) { measurer.measure(AnnotatedString(shortName), HomeHeaderModelStyle).size.width.toDp() }
+    val pairWidth = brandWidth + Spacing.sm * 2 + HomeSizes.headerDividerWidth +
+        maxOf(Sizes.touchTarget, modelWidth + Sizes.iconTiny + Spacing.xs + HomeSizes.modelPillPaddingH * 2)
     BoxWithConstraints(Modifier.fillMaxWidth().statusBarsPadding()
         .padding(horizontal = HomeSizes.topBarPaddingH, vertical = HomeSizes.topBarPaddingV)) {
         val inline = pairWidth + Spacing.xs * 2 <= maxWidth - Sizes.touchTarget * if (task) 2 else 3
@@ -82,10 +85,12 @@ fun ChatTopBar(
 @Composable
 private fun HeaderLabels(name: String, onModel: () -> Unit, modifier: Modifier = Modifier) {
     Row(modifier.horizontalScroll(rememberScrollState()).testTag("home-header-labels"),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
         Text("Dua AI", style = HomeHeaderStyle, color = ChatTheme.colors.text,
-            maxLines = 1, modifier = Modifier.width(IntrinsicSize.Max).alignByBaseline())
-        ModelSelector(name, onModel, Modifier.alignByBaseline(), textStyle = HomeHeaderStyle)
+            maxLines = 1, modifier = Modifier.width(IntrinsicSize.Max))
+        Box(Modifier.size(HomeSizes.headerDividerWidth, HomeSizes.headerDividerHeight)
+            .background(HomeTheme.colors.barBorder).testTag("home-header-divider"))
+        ModelSelector(name, onModel)
     }
 }
 

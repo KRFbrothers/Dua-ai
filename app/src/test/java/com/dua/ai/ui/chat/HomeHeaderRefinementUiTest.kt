@@ -59,23 +59,28 @@ class HomeHeaderRefinementUiTest(private val dark: Boolean, private val large: B
         file.parentFile!!.mkdirs(); compose.onRoot().captureRoboImage(file.absolutePath)
     }
 
-    @Test fun headerLabelsAreNineteenMediumOnTheSameBaselineWithoutEllipsis() {
+    @Test fun brandIsProminentAndModelIsASeparateCompactPillWithoutEllipsis() {
         var model = 0; var menu = 0; var profile = 0; var newChat = 0
-        show { ChatTopBar(modelName = "gemini-2.5-flash", onModel = { model++ }, onMenu = { menu++ },
+        show { ChatTopBar(modelName = "Gemini", onModel = { model++ }, onMenu = { menu++ },
             onProfile = { profile++ }, onNewChat = { newChat++ }) }
-        for (text in listOf("Dua AI", "Flash")) {
+        for (text in listOf("Dua AI", "Gemini")) {
             val result = layout(text)
-            assertEquals(19.sp, result.layoutInput.style.fontSize)
+            assertEquals(if (text == "Dua AI") 19.sp else 14.sp, result.layoutInput.style.fontSize)
             assertEquals(FontWeight.Medium, result.layoutInput.style.fontWeight)
             assertFalse("$text: size=${result.size}, width=${result.didOverflowWidth}, height=${result.didOverflowHeight}, lines=${result.lineCount}, constraints=${result.layoutInput.constraints}, para=${result.multiParagraph.height}", result.hasVisualOverflow)
             compose.onNodeWithText(text, useUnmergedTree = true).assertIsDisplayed()
         }
         val brand = compose.onNodeWithText("Dua AI", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
-        val label = compose.onNodeWithText("Flash", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
-        assertEquals(brand.top + layout("Dua AI").firstBaseline, label.top + layout("Flash").firstBaseline, 1f)
-        assertTrue(brand.right <= label.left)
+        val label = compose.onNodeWithText("Gemini", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        val divider = compose.onNodeWithTag("home-header-divider", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        val pill = compose.onNodeWithTag("home-model-pill", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        assertEquals(brand.center.y, pill.center.y, 1f)
+        assertTrue(brand.right < divider.left && divider.right < pill.left)
+        assertTrue(pill.left < label.left && label.right < pill.right)
+        compose.onNodeWithContentDescription("Model, Gemini").assertWidthIsAtLeast(48.dp).assertHeightIsAtLeast(48.dp)
+        if (!large) compose.onNodeWithTag("home-model-pill", useUnmergedTree = true).assertHeightIsEqualTo(32.dp)
         val group = compose.onNodeWithTag("home-header-labels").fetchSemanticsNode().boundsInRoot
-        assertTrue(label.left + layout("Flash").size.width <= group.right + 1f)
+        assertTrue(label.left + layout("Gemini").size.width <= group.right + 1f)
         // Flat controls reveal the unchanged page color outside their glyphs.
         for (description in listOf("Open chat history", "New chat")) {
             val button = compose.onNodeWithContentDescription(description).assertWidthIsAtLeast(48.dp).assertHeightIsAtLeast(48.dp)
@@ -87,8 +92,8 @@ class HomeHeaderRefinementUiTest(private val dark: Boolean, private val large: B
             }
         }
         assertEquals("dua_circle_dashed_pen_nib", ReferenceIcons.TemporaryChat.name)
-        capture("flash")
-        compose.onNodeWithContentDescription("Model, Flash").performClick()
+        capture("gemini")
+        compose.onNodeWithContentDescription("Model, Gemini").performClick()
         compose.onNodeWithContentDescription("Open chat history").performClick()
         compose.onNodeWithContentDescription("Open profile and settings").performClick()
         compose.onNodeWithContentDescription("New chat").performClick()
