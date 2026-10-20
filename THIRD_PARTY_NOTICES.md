@@ -153,3 +153,30 @@ separate. No proprietary app code, logos or fonts are added by these integration
 |---|---|---|
 | `app/src/main/java/com/dua/ai/ui/components/AgentEdgeGlow.kt` | Androidify `core/theme/.../theme/components/AnimatingGradientBrush.kt` (https://github.com/android/androidify, commit a4be10f), Copyright 2025 The Android Open Source Project | Apache-2.0 |
 | `app/src/main/java/com/dua/ai/ui/chat/TelegramRadialProgress.kt` | Telegram `TMessagesProj/src/main/java/org/telegram/ui/Components/RadialProgressView.java` (commit 68c6775ac373f4bdb30ae9986282dd5ec0407756), Copyright Nikolai Kudashov 2013-2018 | GPL-2.0-or-later (used under GPL-3.0-or-later) |
+## Animation runtimes and assets
+
+Libraries (binary Maven dependencies, not vendored):
+
+| Library | Version | License | Use |
+| --- | --- | --- | --- |
+| [rive-android](https://github.com/rive-app/rive-android) (`app.rive:rive-android`) | 10.4.5 | MIT, Copyright (c) 2020-2024 Rive | Chat "thinking" loader |
+| [lottie-android](https://github.com/airbnb/lottie-android) (`com.airbnb.android:lottie-compose`) | 6.7.1 | Apache-2.0, Copyright Airbnb | Animated Settings row icons |
+
+Bundled animation files (no logos or brand art; each has a static fallback):
+
+| Dua file | Source | Author | License |
+| --- | --- | --- | --- |
+| `app/src/main/res/raw/rive_thinking_dots.riv` | [rive-android `app/src/main/res/raw/progress.riv`](https://github.com/rive-app/rive-android/blob/c8e596cd00550f3f7bc344f681a0f5fb7ac650c0/app/src/main/res/raw/progress.riv) (commit `c8e596cd`) | Rive (sample asset, added by Maxwell Talbot, 2021) | MIT (rive-android repository licence, Copyright (c) 2020-2024 Rive) |
+| `app/src/main/assets/lottie/settings.json`, `notification.json`, `microphone.json`, `shield.json`, `lock.json`, `database.json` | [useAnimations/react-useanimations `icons/`](https://github.com/useAnimations/react-useanimations/tree/035f164df779da512f06f1de4b0b59f7bf5624ba/icons) (commit `035f164d`) | useAnimations (https://useanimations.com) | MIT, Copyright (c) 2018-2026 useAnimations |
+
+MIT License text (applies to the Rive and useAnimations items above with their copyright lines):
+
+> Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
+> documentation files (the "Software"), to deal in the Software without restriction, including without limitation the
+> rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit
+> persons to whom the Software is furnished to do so, subject to the following conditions: The above copyright notice
+> and this permission notice shall be included in all copies or substantial portions of the Software.
+> THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE
+> WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+> COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+> OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
