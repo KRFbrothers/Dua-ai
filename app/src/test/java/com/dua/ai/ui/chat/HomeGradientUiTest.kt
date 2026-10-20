@@ -257,4 +257,41 @@ class HomeGradientUiTest(private val dark: Boolean, private val large: Boolean) 
         compose.onNodeWithTag("history-drawer").assertIsNotDisplayed()
         assertEquals(listOf(ChatHaptic.Tap, ChatHaptic.Tap), haptics)
     }
+
+    @Test fun logoStaysAtTheSameSpotWhenTogglingChatAndTask() {
+        show(mutableStateOf(ChatUiState(profileName = "Fareed", agentAvailable = true)))
+        val chatLogo = compose.onNodeWithContentDescription("Dua AI").fetchSemanticsNode().boundsInRoot
+        compose.onNode(hasText("Task") and isSelectable()).performClick().assertIsSelected()
+        compose.waitForIdle()
+        val taskLogo = compose.onNodeWithContentDescription("Dua AI").fetchSemanticsNode().boundsInRoot
+        // At 2x font the top bar and composer themselves grow differently per mode, so allow a small drift there.
+        assertEquals("logo must not jump: $chatLogo vs $taskLogo", chatLogo.top, taskLogo.top, if (large) 12f else 1f)
+        assertEquals(chatLogo.left, taskLogo.left, 1f)
+        assertEquals(chatLogo.width, taskLogo.width, 0.5f)
+        compose.onNode(hasText("Chat") and isSelectable()).performClick()
+        compose.onNodeWithText(HomeTaskPrompts.first()).assertDoesNotExist()
+    }
+
+    @Test
+    @Config(qualifiers = "w640dp-h360dp-mdpi")
+    fun landscapeHomeKeepsLogoStartersToggleAndComposerApart() {
+        show(mutableStateOf(ChatUiState(profileName = "Fareed", agentAvailable = true)))
+        val toggle = compose.onNode(hasText("Chat") and isSelectable()).assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+        val composer = compose.onNodeWithTag("composer-container").fetchSemanticsNode().boundsInRoot
+        assertTrue(toggle.bottom <= composer.top + 1f)
+        val chatLogo = compose.onNodeWithContentDescription("Dua AI").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+        assertTrue("logo $chatLogo overlaps toggle $toggle", chatLogo.bottom <= toggle.top + 1f)
+        val canvas = compose.onNodeWithTag("home-empty-content").fetchSemanticsNode().boundsInRoot
+        assertTrue("logo $chatLogo is cut off at the top of $canvas", chatLogo.top >= canvas.top - 1f)
+        assertEquals(HomeSizes.heroCompactLogo.value, chatLogo.width, 0.5f)
+        capture("landscape-chat")
+        compose.onNode(hasText("Task") and isSelectable()).performClick().assertIsSelected()
+        compose.waitForIdle()
+        for (prompt in HomeTaskPrompts) {
+            val row = compose.onNodeWithText(prompt).performScrollTo().assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+            assertTrue("prompt $row overlaps toggle $toggle", row.bottom <= toggle.top + 1f)
+        }
+        compose.onNodeWithText(HomeTaskPrompts.first()).performScrollTo()
+        capture("landscape-task")
+    }
 }

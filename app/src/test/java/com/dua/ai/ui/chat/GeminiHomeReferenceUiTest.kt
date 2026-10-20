@@ -77,7 +77,9 @@ class GeminiHomeReferenceUiTest(private val dark: Boolean, private val compact: 
         val content = compose.onNodeWithTag("home-empty-content").fetchSemanticsNode().boundsInRoot
         val hero = compose.onNodeWithTag("home-hero").fetchSemanticsNode().boundsInRoot
         if (!compact) {
-            assertEquals(content.center.y, hero.center.y, 1f)
+            // The hero shares one spot with Task (its starter area is reserved), so it sits in the upper half.
+            assertEquals(content.center.x, hero.center.x, 1f)
+            assertTrue(hero.top > content.top && hero.center.y < content.center.y)
             assertTrue("Hero should leave breathing space", hero.height < content.height)
         }
         compose.onNodeWithText("Dua always with you").performScrollTo().assertIsDisplayed()
