@@ -187,8 +187,4 @@ The dedicated **Projects** screen shows real user-created projects and chats, wi
 
 ## License and third-party code
 
-Dua AI is MIT-licensed ([LICENSE](LICENSE)). A few Android files adapt Apache-2.0 code from Androidify by The Android Open Source Project; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
-
-## Licence
-
-Dua AI is licensed under the GNU General Public License v3.0 or later ([LICENSE](LICENSE)). It includes code adapted from Telegram for Android (GPL v2 or later) and Apache-2.0 projects; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+Dua AI is licensed under GPL-3.0-or-later ([LICENSE](LICENSE)). Some Android files adapt GPL code from Telegram for Android (GPL v2 or later) and Apache-2.0 code from Androidify by The Android Open Source Project; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
