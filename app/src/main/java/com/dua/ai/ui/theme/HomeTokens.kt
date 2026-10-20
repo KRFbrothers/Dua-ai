@@ -84,6 +84,10 @@ object HomeSizes {
     /** Reference top bar padding 16/8 dp, less the 2 dp each 48 dp slot adds around a 44 dp button. */
     val topBarPaddingH = 14.dp
     val topBarPaddingV = 6.dp
+    val headerDividerWidth = 1.dp
+    val headerDividerHeight = 18.dp
+    val modelPillMinHeight = 32.dp
+    val modelPillPaddingH = 10.dp
 }
 
 /** Home empty-state motion durations (ms); callers snap to 0 when reduce-motion is on. */
