@@ -40,6 +40,16 @@ Inke object ka naam poore `.kt` codebase mein **kahin nahi** aata (sirf apni hi 
 | `app/src/main/java/com/dua/ai/ui/chat/TelegramImageReveal.kt` | `TelegramImageReveal` → apni file ke bahar **0 hits** |
 | `app/src/main/java/com/dua/ai/ui/history/TelegramDialogSwipe.kt` | `TelegramDialogSwipe` → apni file ke bahar **0 hits** |
 
+### ⚠️ Par ek problem hai — ye teen notices mein bhi hain
+
+Teeno files `THIRD_PARTY_NOTICES.md` ke **Telegram for Android** section mein row ke saath listed hain (us section mein total **7 rows**). Aur teeno ke header mein likha hai:
+
+> Adapted from Telegram ... Original: Telegram for Android, Copyright Nikolai Kudashov, 2013-2018 ... licensed under GNU GPL v. 2 or later
+
+Matlab: code dead hai, par **attribution dead nahi hai**. Delete karo to notice file mein dangling row reh jaayega — jo license hygiene kharab karta hai.
+
+**Sahi tareeka:** delete wale commit mein hi `THIRD_PARTY_NOTICES.md` ki woh 3 rows bhi hatao. Pehle us file ka header dekho jo inhe adapt kiya tha.
+
 Phir bhi **seedha delete mat karo** — neeche wala process follow karo. Grep se "0 hits" milna proof nahi hai (neeche wajah likhi hai).
 
 ---
@@ -52,7 +62,7 @@ Pichhli audit ne kaha tha "`third_party/androidify/` mein sirf ek LICENSE hai, d
 | --- | --- |
 | Folder mein kya hai | Sirf `third_party/androidify/LICENSE` — 1 file, koi code nahi. Yeh baat sahi thi |
 | Par woh file kisi kaam ki hai | `THIRD_PARTY_NOTICES.md:12` usi file ko link karta hai: `License: Apache License, Version 2.0. Full text: third_party/androidify/LICENSE` |
-| Aur bhi | **8 Dua source files** ke header mein likha hai ki woh Androidify se adapted hain aur Apache-2.0 ke under hain. Jaise `attachments/DroppedFiles.kt:3`, `diagnostics/DuaLog.kt:2`, `ondevice/GeminiNanoTextModel.kt:3`, `ui/chat/ChatDropTarget.kt:3` |
+| Aur bhi | `THIRD_PARTY_NOTICES.md` ke **Androidify** section mein **10 Dua files** ki entry hai. Poore notice file mein aise **30 rows** hain (Androidify, Telegram, Now in Android, SociaLite, Jetchat waghairah). Jaise `attachments/DroppedFiles.kt:3`, `diagnostics/DuaLog.kt:2`, `ondevice/GeminiNanoTextModel.kt:3`, `ui/chat/ChatDropTarget.kt:3` |
 | Delete karne par | Apache-2.0 ka **attribution requirement toot jaayega** — code toh chalega, par license compliance par sawaal uthega. Yeh legal risk hai, build risk nahi |
 
 **Sahi tareeka (agar kabhi hatana ho):** pehle `THIRD_PARTY_NOTICES.md` mein us license ka poora text ya authoritative URL (`https://www.apache.org/licenses/LICENSE-2.0`) daalo, phir folder delete karo.
@@ -68,7 +78,8 @@ Grep akela kaafi nahi. Yeh order follow karo:
 3. **Wildcard import ka dhyaan rakho** — `import com.dua.ai.ui.theme.*` jaisi line 19 theme files ko "dead" dikha sakti hai. Isliye symbol-level check karo.
 4. **File delete karo, phir build** — `./gradlew assembleDebug && ./gradlew lint`. Dono pass hone chahiye.
 5. **Runtime par test karo** — build pass hona kaafi nahi. WorkManager, reflection, aur manifest-declared cheezein sirf app chala kar hi pakdi jaati hain. Backup, widget, notification wale hisse zaroor test karo.
-6. **Tab jaake delete commit karo** — aur PR mein likho ki build + app test dono pass hue.
+6. **`THIRD_PARTY_NOTICES.md` check karo** — deleted file ka naam wahan hai kya? Hai to usi commit mein row hatao, warna license trail toot jaayega.
+7. **Tab jaake delete commit karo** — aur PR mein likho ki build + app test dono pass hue.
 
 ---
 
