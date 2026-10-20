@@ -1,4 +1,8 @@
 steps:
   - name: gcr.io/cloud-builders/docker
+    # The Dockerfile uses an optional BuildKit secret mount (proxy_ca) for
+    # managed build proxies. Cloud Build's default classic builder rejects
+    # --mount, so enable BuildKit explicitly. No secret is passed here.
+    env: ['DOCKER_BUILDKIT=1']
     args: ['build', '--build-arg', 'DUA_BUILD_SHA=${_SOURCE_SHA}', '-t', '${_IMAGE}', '.']
 images: ['${_IMAGE}']

@@ -22,7 +22,7 @@ trap 'adk_cleanup_dir "$adk_work"' EXIT
 adk_source="$adk_work/source"
 git init -q "$adk_source"
 git -C "$adk_source" remote add origin https://github.com/KRFbrothers/Dua-ai.git
-git -C "$adk_source" fetch --depth=1 origin 9a7b4d79cdca297cddc7fc2aaebf1aab26d987ad
+git -C "$adk_source" fetch --depth=1 origin cea9b6df188b8bd926bbf549419ef62e8e08643b
 git -C "$adk_source" sparse-checkout init --cone
 git -C "$adk_source" sparse-checkout set google-cloud-backend
 git -C "$adk_source" checkout -q -b main FETCH_HEAD
