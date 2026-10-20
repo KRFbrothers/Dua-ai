@@ -451,6 +451,11 @@ fun ChatScreen(
                                 offlineModel = actions.dictationOfflineModel) else null
                             Composer(
                                 homeLayout = feature == null,
+                                glass = feature == null && !home,
+                                suggestions = if (feature == null && !home && !taskHome) ConversationSuggestions else emptyList(),
+                                onSuggestion = { prompt -> actions.onDraftChange(prompt); runCatching { inputFocus.requestFocus() } },
+                                onImage = if (feature == null && !home) ({ onImagine(!state.imagine) }) else null,
+                                imageSelected = state.imagine,
                                 dictation = dictation,
                                 // Only what the composer needs, so streamed tokens do not recompose it.
                                 controlled = true,
