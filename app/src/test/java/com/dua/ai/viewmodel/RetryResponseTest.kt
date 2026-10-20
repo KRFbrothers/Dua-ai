@@ -12,18 +12,16 @@ import com.dua.ai.history.ChatHistoryCodec
 import com.dua.ai.model.BuildInfo
 import com.dua.ai.model.ChatMessage
 import com.dua.ai.network.DuaApiClient
+import com.dua.ai.network.OfflineRetry
 import com.dua.ai.settings.AppearanceStore
 import com.dua.ai.settings.DevicePreferences
 import com.dua.ai.settings.LocalPreferences
-import com.dua.ai.setup.BuildModeConfig
-import com.dua.ai.setup.IntegrationState
-import com.dua.ai.setup.ProviderCapability
-import java.util.UUID
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.runBlocking
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Protocol
@@ -46,9 +44,11 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.LooperMode
 
 /**
- * retryResponse (ChatLifecycle.kt) driven through the real ViewModel and a real streaming client,
- * with HTTP intercepted before the network. Five behaviours the split plan called out:
- * a normal retry, Stop during a retry, a retry that fails, a Build reply, and a stale generation.
+ * retryResponse (ChatLifecycle.kt) through the real ViewModel and the real streaming client,
+ * with HTTP intercepted before the network — the same harness as PersonalityPromptingTest.
+ *
+ * These are the five behaviours the split report listed as unasserted: a normal retry, Stop
+ * mid-retry, a retry that fails, a Build reply, and a retry left stale by a chat switch.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class)
@@ -58,18 +58,28 @@ class RetryResponseTest {
     private lateinit var model: ChatViewModel
     private lateinit var client: OkHttpClient
     private val store = ViewModelStore()
-    /** Chat request bodies, in order. Only /api/chat is recorded; anything else is answered empty. */
+    /** Every /api/chat body, in order. The interceptor fails on any other URL, so nothing escapes. */
     private val requests = CopyOnWriteArrayList<JSONObject>()
     private val prompt = ChatMessage(id = "prompt", text = "Explain coroutines", isUser = true, model = "Gemini")
+
+    private fun field(name: String) = ChatViewModel::class.java.getDeclaredField(name).apply { isAccessible = true }
+    @Suppress("UNCHECKED_CAST") private fun <T> flow(name: String) = field(name).get(model) as MutableStateFlow<T>
 
     @Before fun setup() {
         application = RuntimeEnvironment.getApplication()
         for (name in listOf("dua_chat_history", "dua_files", "dua_auto_sync", "dua_account_session", "dua_preferences"))
             application.getSharedPreferences(name, 0).edit().clear().commit()
+        runBlocking { AppearanceStore(application).reset() }
         DevicePreferences(application).update(LocalPreferences(memoryEnabled = false))
-        runCatching { kotlinx.coroutines.runBlocking { AppearanceStore(application).reset() } }
         model = ChatViewModel(application).also { store.put("chat", it) }
         for (name in listOf("engineCheck", "cloudImagineCheck")) (field(name).get(model) as? Job)?.cancel()
+        // Signed in, but the replies-owner flag stays off, so a retry goes up as a plain chat.
+        field("account").set(model, AccountRepository(AccountApi("https://account.test", rejectingClient()), object : SessionPersistence {
+            override fun read() = AccountSession(AccountUser("11111111-1111-1111-1111-111111111111",
+                "owner@example.com", "Owner"), "token_abc", "refresh_abc", System.currentTimeMillis() / 1000 + 3600)
+            override fun write(value: AccountSession?) = Unit
+        }))
+        await("preferences loaded") { field("appearanceLoaded").getBoolean(model) }
     }
 
     @After fun teardown() {
@@ -83,62 +93,67 @@ class RetryResponseTest {
 
     // ---- harness ----
 
-    private fun field(name: String) = ChatViewModel::class.java.getDeclaredField(name).apply { isAccessible = true }
-    @Suppress("UNCHECKED_CAST") private fun <T> flow(name: String) = field(name).get(model) as MutableStateFlow<T>
-    private fun setField(name: String, value: Any?) { field(name).set(model, value) }
-
-    /** Points the ViewModel at an intercepted client; [handler] answers each /api/chat request. */
-    private fun intercept(handler: (JSONObject, okhttp3.Request) -> Response) {
+    /** Answers each /api/chat request with [handler]; any other host or path is a test bug. */
+    private fun intercept(handler: (okhttp3.Request) -> Response) {
         client = OkHttpClient.Builder().addInterceptor { chain ->
             val request = chain.request()
-            if (request.url.encodedPath != "/api/chat") {
-                return@addInterceptor Response.Builder().request(request).protocol(Protocol.HTTP_1_1).code(200).message("OK")
-                    .header("Content-Type", "application/json").body("{}".toResponseBody("application/json".toMediaType())).build()
-            }
-            val body = JSONObject(Buffer().also { request.body!!.writeTo(it) }.readUtf8())
-            requests += body
-            handler(body, request)
+            check(request.url.host == "chat.test" && request.url.encodedPath == "/api/chat") { "Unexpected test HTTP request: ${request.url}" }
+            requests += JSONObject(Buffer().also { request.body!!.writeTo(it) }.readUtf8())
+            handler(request)
         }.build()
-        setField("api", DuaApiClient("https://chat.test", client, apiBaseUrl = "https://chat.test"))
-        setField("separateChatEngine", false)
-        flow<IntegrationState>("_integrations").value = IntegrationState(personalityEnabled = false)
+        field("api").set(model, DuaApiClient("https://chat.test", client, apiBaseUrl = "https://chat.test"))
         flow<Boolean>("_agentAvailable").value = false
     }
 
     private fun sse(text: String) = "data: {\"type\":\"text\",\"delta\":\"$text\"}\n\ndata: {\"type\":\"done\",\"truncated\":false}\n\n"
 
+    private fun stream(text: String, request: okhttp3.Request) = Response.Builder().request(request).protocol(Protocol.HTTP_1_1)
+        .code(200).message("OK").header("Content-Type", "text/event-stream")
+        .body(sse(text).toResponseBody("text/event-stream".toMediaType())).build()
+
     private fun reply(text: String, state: String = "complete", id: String = "reply") =
         ChatMessage(id = id, text = text, isUser = false, model = "Gemini", state = state)
 
-    /** Seeds the retryable state: one finished turn, exactly what Retry accepts. */
+    /** Seeds one finished turn — exactly the state Retry accepts. */
     private fun seed(original: ChatMessage = reply("Original answer")) {
         flow<List<ChatMessage>>("_messages").value = listOf(prompt, original)
         flow<Boolean>("_isTyping").value = false
-        await("preferences loaded") { field("appearanceLoaded").getBoolean(model) }
     }
 
+    /**
+     * Advances Robolectric's paused clock AND yields the JVM thread. Both are required: streaming
+     * paces on Main (virtual time) while the SSE body is read on an OkHttp thread (real time).
+     */
     private fun await(description: String, condition: () -> Boolean) {
         val until = System.nanoTime() + 10_000_000_000L
         while (!condition() && System.nanoTime() < until) {
-            shadowOf(Looper.getMainLooper()).idleFor(25, TimeUnit.MILLISECONDS)
+            shadowOf(Looper.getMainLooper()).idleFor(20, TimeUnit.MILLISECONDS)
+            Thread.sleep(2)
         }
         assertTrue("Timed out: $description; requests=${requests.size}, typing=${model.isTyping.value}, " +
-            "error=${model.error.value}, messages=${model.messages.value.map { it.state }}", condition())
+            "error=${model.error.value}, messages=${model.messages.value.map { "${it.text}/${it.state}" }}", condition())
     }
 
-    /** Bounded idle: lets anything already queued run, without asserting a timing-dependent outcome. */
+    /** Bounded idle for "nothing should have happened" assertions. */
     private fun settle(milliseconds: Long) {
         val until = System.nanoTime() + milliseconds * 1_000_000L
-        while (System.nanoTime() < until) shadowOf(Looper.getMainLooper()).idleFor(25, TimeUnit.MILLISECONDS)
+        while (System.nanoTime() < until) {
+            shadowOf(Looper.getMainLooper()).idleFor(20, TimeUnit.MILLISECONDS)
+            Thread.sleep(2)
+        }
     }
 
     private fun finished() = await("retry finished") { !model.isTyping.value && model.messages.value.lastOrNull()?.streaming != true }
 
+    /** The account API is never used by these tests; refusing loudly keeps a stray call visible. */
+    private fun rejectingClient() = OkHttpClient.Builder().addInterceptor { chain ->
+        throw AssertionError("Unexpected account request: ${chain.request().url}")
+    }.build()
+
     // ---- 1. normal retry ----
 
     @Test fun aNormalRetryReplacesTheOldReplyAndSavesHistory() {
-        intercept { _, request -> Response.Builder().request(request).protocol(Protocol.HTTP_1_1).code(200).message("OK")
-            .header("Content-Type", "text/event-stream").body(sse("Retried answer").toResponseBody("text/event-stream".toMediaType())).build() }
+        intercept { request -> stream("Retried answer", request) }
         seed()
 
         model.retryResponse("reply")
@@ -146,9 +161,9 @@ class RetryResponseTest {
 
         assertEquals(listOf("Explain coroutines", "Retried answer"), model.messages.value.map { it.text })
         assertEquals(2, model.messages.value.size)
-        val reply = model.messages.value.last()
-        assertEquals("reply", reply.id)
-        assertEquals("complete", reply.state)
+        val retried = model.messages.value.last()
+        assertEquals("reply", retried.id)
+        assertEquals("complete", retried.state)
         assertNull(model.error.value)
         assertNull(field("retryOriginal").get(model))
         // The old reply is not resent: only the original prompt goes up, under the reply's own model.
@@ -156,9 +171,10 @@ class RetryResponseTest {
         assertEquals("Gemini", requests[0].getString("model"))
         assertEquals(1, requests[0].getJSONArray("messages").length())
         assertEquals("Explain coroutines", requests[0].getJSONArray("messages").getJSONObject(0).getString("text"))
-        // History is written, not just the in-memory list.
+        // History reached disk, not just the in-memory list.
         model.flushHistory()
-        val saved = ChatHistoryCodec.decode(application.getSharedPreferences("dua_chat_history", 0).getString("history", null)!!).second.single()
+        val saved = ChatHistoryCodec.decode(application.getSharedPreferences("dua_chat_history", 0)
+            .getString("history", null)!!).second.single()
         assertEquals(listOf("Explain coroutines", "Retried answer"), saved.messages.map { it.text })
         assertEquals(listOf("complete", "complete"), saved.messages.map { it.state })
     }
@@ -167,11 +183,7 @@ class RetryResponseTest {
 
     @Test fun stoppingARetryBeforeTextRestoresTheOriginalReply() {
         val gate = CountDownLatch(1)
-        intercept { _, request ->
-            gate.await(10, TimeUnit.SECONDS) // hold the stream open with no text
-            Response.Builder().request(request).protocol(Protocol.HTTP_1_1).code(200).message("OK")
-                .header("Content-Type", "text/event-stream").body(sse("Too late").toResponseBody("text/event-stream".toMediaType())).build()
-        }
+        intercept { request -> gate.await(10, TimeUnit.SECONDS); stream("Too late", request) }
         val original = reply("Original answer")
         seed(original)
 
@@ -182,7 +194,7 @@ class RetryResponseTest {
 
             model.stopReply()
 
-            // No text ever arrived, so the turn is exactly what it was before the retry.
+            // No text arrived, so the turn is byte-for-byte what it was before the retry.
             assertEquals(listOf(prompt, original), model.messages.value)
             assertEquals("Response stopped.", model.error.value)
             assertNull(field("retryOriginal").get(model))
@@ -190,7 +202,7 @@ class RetryResponseTest {
         } finally {
             gate.countDown()
         }
-        settle(100)
+        settle(150)
         assertEquals(listOf(prompt, original), model.messages.value)
         assertFalse(model.isTyping.value)
     }
@@ -198,8 +210,9 @@ class RetryResponseTest {
     // ---- 3. retry fails before any text ----
 
     @Test fun aRetryThatFailsBeforeTextRestoresTheOriginalAndDoesNotQueue() {
-        intercept { _, request -> Response.Builder().request(request).protocol(Protocol.HTTP_1_1).code(500).message("Server Error")
-            .header("Content-Type", "application/json").body("{\"error\":\"Provider down\"}".toResponseBody("application/json".toMediaType())).build() }
+        intercept { request -> Response.Builder().request(request).protocol(Protocol.HTTP_1_1).code(500).message("Server Error")
+            .header("Content-Type", "application/json")
+            .body("{\"error\":\"Provider down\"}".toResponseBody("application/json".toMediaType())).build() }
         val original = reply("Original answer")
         seed(original)
 
@@ -210,25 +223,15 @@ class RetryResponseTest {
         assertEquals("Retry failed. Original response kept.", model.error.value)
         assertNull(field("retryOriginal").get(model))
         assertFalse(model.isTyping.value)
-        // Documents the current behaviour: only sendMessage queues offline; Retry does not.
-        assertFalse((field("offlineRetry").get(model) as com.dua.ai.network.OfflineRetry).hasPending)
+        // Documents today's behaviour: only sendMessage queues offline; Retry does not.
+        assertFalse((field("offlineRetry").get(model) as OfflineRetry).hasPending)
     }
 
-    // ---- 4. a Build reply keeps Build mode and its repository ----
+    // ---- 4. a Build reply retries in Build mode, against the same repository ----
 
     @Test fun aBuildReplyRetriesInBuildModeAgainstTheSameRepository() {
         val repository = "KRFbrothers/Dua-ai"
-        setField("account", AccountRepository(AccountApi("https://account.test", signInClient()), object : SessionPersistence {
-            override fun read() = AccountSession(AccountUser(UUID.randomUUID().toString(), "owner@example.com"),
-                "token_abc", "refresh_abc", System.currentTimeMillis() / 1000 + 3600)
-            override fun write(value: AccountSession?) = Unit
-        }))
-        intercept { _, request -> Response.Builder().request(request).protocol(Protocol.HTTP_1_1).code(200).message("OK")
-            .header("Content-Type", "text/event-stream").body(sse("Repository answer").toResponseBody("text/event-stream".toMediaType())).build() }
-        val current = flow<IntegrationState>("_integrations").value
-        flow<IntegrationState>("_integrations").value = current.copy(
-            providers = listOf(ProviderCapability("Gemini", true, "Gemini", true)),
-            build = BuildModeConfig(true, providers = setOf("Gemini")))
+        intercept { request -> stream("Repository answer", request) }
         seed(reply("Old repository answer").copy(build = BuildInfo(repository)))
 
         model.retryResponse("reply")
@@ -237,34 +240,32 @@ class RetryResponseTest {
         assertEquals(1, requests.size)
         assertEquals("build", requests[0].getString("mode"))
         assertEquals(repository, requests[0].getString("repository"))
-        val reply = model.messages.value.last()
-        assertEquals("Repository answer", reply.text)
-        assertEquals(repository, reply.build?.repository)
+        val retried = model.messages.value.last()
+        assertEquals("Repository answer", retried.text)
+        assertEquals(repository, retried.build?.repository)
         assertNull(model.error.value)
     }
 
-    // ---- 5. a stale retry after the chat was switched away ----
+    // ---- 5. a retry left stale by a chat switch writes nothing ----
 
     @Test fun aRetryThatFinishesAfterTheChatWasLeftWritesNothing() {
         val gate = CountDownLatch(1)
-        intercept { _, request ->
-            gate.await(10, TimeUnit.SECONDS)
-            Response.Builder().request(request).protocol(Protocol.HTTP_1_1).code(200).message("OK")
-                .header("Content-Type", "text/event-stream").body(sse("Stale answer").toResponseBody("text/event-stream".toMediaType())).build()
-        }
+        intercept { request -> gate.await(10, TimeUnit.SECONDS); stream("Stale answer", request) }
         seed()
+        val startedIn = model.activeChatId.value
+        val generationBefore = field("generation").getInt(model)
 
         try {
             model.retryResponse("reply")
             await("retry started") { requests.size == 1 }
-            val startedIn = model.activeChatId.value
 
-            model.startNewChat() // bumps the generation and cancels the retry job
-            assertTrue("the retry must not survive the switch", !model.isTyping.value)
+            model.startNewChat() // cancels the retry job and bumps the generation
+            assertFalse("the retry must not survive the switch", model.isTyping.value)
             assertTrue(model.messages.value.isEmpty())
+            assertTrue("startNewChat must bump the generation", field("generation").getInt(model) > generationBefore)
 
             gate.countDown()
-            settle(400) // let the old stream finish late
+            settle(400) // let the old response land late
 
             assertTrue("a stale retry must not write into the new chat", model.messages.value.isEmpty())
             assertFalse(model.isTyping.value)
@@ -274,10 +275,4 @@ class RetryResponseTest {
             gate.countDown()
         }
     }
-
-    /** The account calls in this test never reach HTTP; a plain client keeps the repository constructible. */
-    private fun signInClient() = OkHttpClient.Builder().addInterceptor { chain ->
-        Response.Builder().request(chain.request()).protocol(Protocol.HTTP_1_1).code(200).message("OK")
-            .header("Content-Type", "application/json").body("{}".toResponseBody("application/json".toMediaType())).build()
-    }.build()
 }

@@ -1212,7 +1212,9 @@ Base: `main` @ `c7afa0d` (PR #314 / Step 6 merge ke baad). Yeh Step 6 ke report 
 
 ### File
 
-`app/src/test/java/com/dua/ai/viewmodel/RetryResponseTest.kt` — **283 lines, 5 `@Test`**. Koi naya dependency nahi — wahi stack jo baaki `viewmodel/` tests use karte hain: **JUnit4 + Robolectric (`sdk 34`, `LooperMode.PAUSED`) + OkHttp interceptor** (network se pehle intercept, `PersonalityPromptingTest` ka pattern).
+`app/src/test/java/com/dua/ai/viewmodel/RetryResponseTest.kt` — **278 lines, 5 `@Test`**. Koi naya dependency nahi — wahi stack jo baaki `viewmodel/` tests use karte hain: **JUnit4 + Robolectric (`sdk 34`, `LooperMode.PAUSED`) + OkHttp interceptor** (network se pehle intercept, `PersonalityPromptingTest` ka pattern).
+
+Harness note: test ka `await()` **dono** karta hai — Robolectric ka paused clock aage badhata hai (`idleFor`) **aur** JVM thread yield karta hai (`Thread.sleep(2)`). Sirf `idleFor` se hang ho jaata hai, kyunki SSE body OkHttp thread par (real time) padhi jaati hai aur us thread ko bandh karne ka koi tareeka nahi hai. `PersonalityPromptingTest` bhi yahi karta hai.
 
 ### 5 cases
 
