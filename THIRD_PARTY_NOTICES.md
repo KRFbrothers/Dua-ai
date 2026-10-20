@@ -22,7 +22,7 @@ copyright and the license. Only code was reused: no logos, brand art, images or 
 | `app/src/main/java/com/dua/ai/ui/components/Shimmer.kt` | `core/theme/.../transitions/LoadingShimmerOverlay.kt` | Dua colours, combined with Dua's pulse, follows reduce-motion |
 | `app/src/main/java/com/dua/ai/ondevice/GeminiNanoTextModel.kt` | `data/.../GeminiNanoDownloaderImpl.kt`, `data/.../GeminiNanoGenerationDataSource.kt` | No Remote Config or Hilt, AICore presence check, failures become "unsupported"/null, no logging of prompts |
 | `app/src/main/java/com/dua/ai/ondevice/MlKitBackgroundRemover.kt` | `core/network/.../ondevice/LocalSegmentationDataSource.kt` | No Hilt or Timber, Play services check, download timeout, segmenter closed after use, Dua error messages |
-| `app/src/main/java/com/dua/ai/ui/screens/AppPausedScreen.kt` | `feature/home/.../AppInactiveScreen.kt` | Dua calligraphy logo (no Android robot), server message, Try again button, no top bar |
+| `app/src/main/java/com/dua/ai/ui/AppPausedScreen.kt` | `feature/home/.../AppInactiveScreen.kt` | Dua calligraphy logo (no Android robot), server message, Try again button, no top bar |
 | `app/src/main/java/com/dua/ai/ui/components/ColorSplash.kt` | `core/theme/.../transitions/ColorSplashTransition.kt` | Circle grows from the tap point over Home for Voice mode / Imagine, Dua colours, instant when animations are off |
 | `app/src/main/java/com/dua/ai/ui/chat/ComposerGlass.kt` | `core/theme/.../components/AnimatingGradientBrush.kt` (reused through `AgentEdgeGlow.kt`) | Faint blue-purple-pink-orange gradient behind the chat composer; animates only while resumed, with animations on and battery saver off |
 
@@ -201,7 +201,7 @@ typeface; Dua does not use Google logos or brand assets, and the font is not mod
 Selected sources were reused from [KRFbrothers/Dua-OG-Assets-](https://github.com/KRFbrothers/Dua-OG-Assets-/tree/f11b3c4f2f998665377079cdb7517a456bd8d502), collection commit `f11b3c4f2f998665377079cdb7517a456bd8d502`.
 Each component retains its original license; the collection is not treated as having a blanket license.
 
-- `app/src/main/java/com/dua/ai/ui/og/BlobDrawable.java` adapts
+- `app/src/main/java/com/dua/ai/ui/chat/BlobDrawable.java` adapts
   `code/telegram/org/telegram/ui/Components/BlobDrawable.java` (source blob
   `d2519fab2b7916e1cc3861fbdd4671dddde451f9`), originally
   [Telegram for Android](https://github.com/DrKLO/Telegram/blob/f32ffeec763f0bdbf4bec25b52d654f77bff733d/TMessagesProj/src/main/java/org/telegram/ui/Components/BlobDrawable.java).
