@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import com.dua.ai.R
 import com.dua.ai.ui.theme.DuaTheme
 
@@ -16,7 +17,7 @@ fun DuaCalligraphyLogo(modifier: Modifier = Modifier) {
             if (DuaTheme.colors.isDark) R.drawable.ic_dua_logo_option1_dark
             else R.drawable.ic_dua_logo_option1_light,
         ),
-        contentDescription = "Dua AI",
+        contentDescription = stringResource(R.string.dua_logo_description),
         modifier = modifier.aspectRatio(610f / 1024f),
     )
 }
