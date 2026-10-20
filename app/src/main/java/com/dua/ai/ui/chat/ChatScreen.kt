@@ -409,7 +409,7 @@ fun ChatScreen(
                             JumpToLatest(visible = !searchOpen && !followTail && listState.canScrollForward,
                                 newReplies = MessageGrouping.newReplies(state.messages, seenMessages),
                                 onClick = { scope.launch { followTail = true; goToLatest() } },
-                                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = Spacing.md))
+                                modifier = Modifier.align(Alignment.BottomEnd).padding(end = Spacing.md, bottom = Spacing.md))
                         }
                     }
                     if (feature != null || state.homeTab != HomeTab.Work) Column(Modifier.fillMaxWidth()

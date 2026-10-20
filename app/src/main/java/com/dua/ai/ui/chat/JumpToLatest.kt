@@ -1,8 +1,8 @@
 /*
  * Adapted from Jetchat's JumpToBottom.kt and Conversation.kt (https://github.com/android/compose-samples),
  * Copyright 2020 The Android Open Source Project, licensed under the Apache License, Version 2.0.
- * See THIRD_PARTY_NOTICES.md. Changes: Dua colours and 48 dp target, a "new replies" count with a dot, the slide-in is
- * skipped when animations are off, no backdrop magnifier, and Dua's own same-author spacing rule.
+ * See THIRD_PARTY_NOTICES.md. Changes: Dua's own same-author spacing rule and new-replies count. The button itself is now
+ * Telegram's page-down button (TelegramPageDown.kt, GPL v2 or later).
  */
 package com.dua.ai.ui.chat
 
@@ -55,23 +55,9 @@ object MessageGrouping {
     fun label(newReplies: Int): String = when (newReplies) { 0 -> "Latest reply"; 1 -> "1 new reply"; else -> "$newReplies new replies" }
 }
 
-/** "Latest reply" pill. It slides in like Jetchat's Jump to bottom (no slide when animations are off) and leaves at once. */
+/** Scroll-to-latest control: Telegram's page-down button with the new-replies counter (see TelegramPageDown.kt). */
 @Composable
 fun JumpToLatest(visible: Boolean, newReplies: Int, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    val motion = com.dua.ai.ui.theme.rememberMotionAllowed()
-    AnimatedVisibility(visible, modifier = modifier,
-        enter = if (motion) slideInVertically { it / 2 } + fadeIn() else EnterTransition.None, exit = ExitTransition.None) {
-        FilledTonalButton(onClick = onClick,
-            modifier = Modifier.heightIn(min = Sizes.touchTarget).semantics {
-                contentDescription = "Go to latest reply"
-                if (newReplies > 0) stateDescription = MessageGrouping.label(newReplies)
-            },
-            colors = ButtonDefaults.filledTonalButtonColors(containerColor = PageTheme.colors.card, contentColor = PageTheme.colors.text),
-            border = BorderStroke(SettingsSizes.border, PageTheme.colors.cardBorder),
-        ) {
-            Icon(Icons.Outlined.ArrowDownward, contentDescription = null, modifier = Modifier.size(Sizes.iconSmall))
-            Text(MessageGrouping.label(newReplies), modifier = Modifier.padding(start = Spacing.xs))
-            if (newReplies > 0) Box(Modifier.padding(start = Spacing.xs).size(8.dp).background(ChatTheme.colors.accent, CircleShape))
-        }
-    }
+    TelegramPageDownButton(visible, newReplies, onClick, modifier,
+        stateDescription = if (newReplies > 0) MessageGrouping.label(newReplies) else null)
 }

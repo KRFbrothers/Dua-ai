@@ -118,6 +118,8 @@ class WritingAndJetchatUiTest {
         compose.onNodeWithContentDescription("Go to latest reply").assertHeightIsAtLeast(Sizes.touchTarget).performClick()
         assertEquals(1, clicks)
         count = 2
-        compose.onNodeWithText("2 new replies").assertExists()
+        compose.onNodeWithTag("page-down-counter", useUnmergedTree = true).assertExists()
+        compose.onNodeWithText("2", useUnmergedTree = true).assertExists()
+        compose.onNodeWithContentDescription("Go to latest reply").assert(androidx.compose.ui.test.SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.StateDescription, "2 new replies"))
     }
 }
