@@ -22,7 +22,7 @@ trap 'adk_cleanup_dir "$adk_work"' EXIT
 adk_source="$adk_work/source"
 git init -q "$adk_source"
 git -C "$adk_source" remote add origin https://github.com/KRFbrothers/Dua-ai.git
-git -C "$adk_source" fetch --depth=1 origin b94bf4d4000a47f605b1d5961a81ce23fc272126
+git -C "$adk_source" fetch --depth=1 origin 9a7b4d79cdca297cddc7fc2aaebf1aab26d987ad
 git -C "$adk_source" sparse-checkout init --cone
 git -C "$adk_source" sparse-checkout set google-cloud-backend
 git -C "$adk_source" checkout -q -b main FETCH_HEAD
@@ -229,25 +229,27 @@ def runtime_connect(url,ca_file):
 
 
 def ensure_search_path(url,ca_file,hidden=()):
-    """Supabase's session pooler ignores libpq '-csearch_path' startup options,
-    so the ADK tables landed in 'public' (permission denied). A role-level
-    default applies to every new session regardless of what the pooler forwards."""
-    import time
+    """Best-effort role default. Supabase's pooler overrides it, so the pinned
+    app sets search_path on every connection; verify_app_schema() checks that."""
     try:
         with runtime_connect(url,ca_file) as con:
             con.execute('ALTER ROLE CURRENT_USER SET search_path = '+SEARCH_PATH)
-            # Pooled idle sessions of this dedicated role still carry the old
-            # path; recycle only those (nothing serves with this role yet).
-            con.execute('SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE usename=current_user AND pid<>pg_backend_pid()')
-        for _ in range(5):
-            with runtime_connect(url,ca_file) as con:
-                schema=con.execute('SELECT current_schema()').fetchone()[0]
-            if schema=='dua_adk':return
-            time.sleep(2)
     except Exception as error:
-        if type(error) in (ValueError,RuntimeError):raise
+        print('Note: role search_path default not set ('+database_failure(error,hidden)+'); the app sets it per connection.',file=sys.stderr)
+
+
+def verify_app_schema(agent_store,hidden=()):
+    """Check the mechanism Cloud Run uses: the app engine must land in dua_adk."""
+    from sqlalchemy import text
+    db=agent_store.engine()
+    try:
+        with db.connect() as con:
+            schema=con.execute(text('SELECT current_schema()')).scalar_one()
+    except Exception as error:
         raise ValueError(database_failure(error,hidden)) from None
-    raise ValueError('The database role search_path is not active through the pooler (current schema: '+str(schema)+'). Rerun in a few minutes.')
+    finally:db.dispose()
+    if schema!='dua_adk':
+        raise ValueError('App database sessions use schema '+str(schema)+' instead of dua_adk. Stop; no tables were created.')
 
 
 def admin_repair(psycopg,sql,host,runtime_password,ca_file,save_url=None):
@@ -388,6 +390,8 @@ def database_setup(source,account,reset_credential=False):
     os.environ.pop('ADK_DB_LOCAL',None)
     sys.path.insert(0,str(source/'google-cloud-backend'))
     import agent_store
+    step('checking app database schema')
+    verify_app_schema(agent_store,hidden)
     def prepare_storage(label):
         step('initializing ADK tables'+label)
         initialize_tables(source)
