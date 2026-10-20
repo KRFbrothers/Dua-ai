@@ -122,3 +122,23 @@ terms; their bundled open-source licenses are listed by Google Play services at 
 
 Apache-2.0 and MIT dependencies remain compatible with GPL-3.0-or-later. Note: closed-source Google Play services /
 ML Kit binaries are not GPL-compatible "system libraries" in a strict reading; see the PR discussion.
+
+## ADK engine dependencies
+
+The Python engine imports these open-source libraries as packages; their source
+is not vendored into Dua. Their licenses remain applicable to distributed
+packages/images; see the installed distributions for full license texts.
+
+| Component | Source / license | Use |
+| --- | --- | --- |
+| Google ADK Python v2.12.0 | [google/adk-python](https://github.com/google/adk-python/tree/v2.12.0), Apache-2.0 | Runtime, sessions, typed tools and model adapters |
+| Google Gen AI Python | [googleapis/python-genai](https://github.com/googleapis/python-genai), Apache-2.0 | Vertex model/embedding API client |
+| SQLAlchemy | [sqlalchemy/sqlalchemy](https://github.com/sqlalchemy/sqlalchemy), MIT | SQL persistence |
+| asyncpg | [MagicStack/asyncpg](https://github.com/MagicStack/asyncpg), Apache-2.0 | Async PostgreSQL driver |
+| Psycopg | [psycopg/psycopg](https://github.com/psycopg/psycopg), LGPL-3.0 | Sync PostgreSQL driver; binary wheel includes separate libpq notices |
+| pgvector / pgvector-python | [pgvector](https://github.com/pgvector/pgvector), PostgreSQL License; [Python client](https://github.com/pgvector/pgvector-python), MIT | Vector storage and SQLAlchemy integration |
+| LiteLLM open-source Python SDK | [BerriAI/litellm](https://github.com/BerriAI/litellm), MIT | Official ADK adapter's multi-provider client |
+
+Exact Python dependency closures are recorded in the engine lock files. The
+Docker PostgreSQL image is a disposable CI fixture; production database setup is
+separate. No proprietary app code, logos or fonts are added by these integrations.

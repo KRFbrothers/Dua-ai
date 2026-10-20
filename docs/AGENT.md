@@ -2,6 +2,11 @@
 
 The Agent is the tool-using mode of the Cloud Run engine (`google-cloud-backend/`). This page summarises how it runs and which settings control it. Implementation details and setup steps live in the [engine README](../google-cloud-backend/README.md#dua-agent-tools-general-tool-loop). Change settings only with `--update-env-vars` ([OPERATIONS.md](OPERATIONS.md#changing-settings-safely)).
 
+The approved ADK target is recorded in [ADK_SCOPE.md](ADK_SCOPE.md): Fareed's
+unchanged six-part checklist, current integration gaps and official GitHub sources.
+The integration and live-configuration boundaries are documented in
+[ADK_IMPLEMENTATION.md](ADK_IMPLEMENTATION.md).
+
 ## Two ways to run: tool loop vs ADK
 
 | Mode | When | How |
@@ -9,7 +14,36 @@ The Agent is the tool-using mode of the Cloud Run engine (`google-cloud-backend/
 | Tool loop (default) | `AGENT_ENGINE` unset | [`agent_tools.py`](../google-cloud-backend/agent_tools.py): one model (`AGENT_MODEL`) calls tools step by step (search, code, notes, image, GitHub proposals) within step/time/tool caps. |
 | ADK parallel mode | `AGENT_ENGINE=adk` | [`agent_adk.py`](../google-cloud-backend/agent_adk.py) (Google ADK, imported only when on): a controller plans 2–3 independent parts, helpers on `VERTEX_MODEL` run in parallel through the same tools, a merger on `AGENT_MODEL` writes the answer. |
 
-**Rollback to the loop:** if the request does not split, or ADK fails before any tool ran, the normal tool loop answers. Coding-mode requests always use the loop. To turn ADK off, remove the flag:
+The Python SDK is already included in the engine requirements (`google-adk==2.12.0`),
+from the official [Google ADK source](https://github.com/google/adk-python/tree/v2.12.0).
+[CI verifies the real SDK offline](TESTING.md#agent--adk-sdk-checks), including
+parallel helpers, multipart answers, approvals and disconnect handling. This is
+integration verification; it does not establish which path a deployed revision
+currently enables or how well its live model answers.
+
+ADK runs through the official production `run_async` API. Planning uses an ephemeral session. The helper/merger pipeline uses the official
+SQL session service when `ADK_SESSION_DB_URL` is configured, and supports owned
+resume through `resumeRun`; otherwise it uses an in-memory session. Each run closes its event stream, and awaits
+`Runner.close()` in the same asyncio task/event loop, including failure paths. Thought events
+reach the existing progress stream as they arrive. Cancellation is checked while
+waiting for an event (about once per second), and a deadline also signals the
+worker to stop before further model/tool calls. An HTTP call already executing
+inside a synchronous tool thread still depends on its existing bounded timeout;
+this does not promise that a remote provider stopped processing or billing it.
+
+The controller starts helpers only for a real JSON `true` with a list of valid,
+available helper kinds and non-empty string tasks. Invalid plans use the normal
+loop. Each helper's `AGENT_SUB_STEPS` limit is enforced before model calls, in
+addition to the run-wide SDK limit. A capped helper returns an explicit incomplete
+result and retains that status in progress, so the merger can finish honestly
+with the available results. Other helpers keep their own call allowance.
+
+Code proposals require matching, non-empty path/content lists of strings. A
+mismatch returns a repairable tool error before creating any approval; no file
+is silently dropped. Complete proposals still use the existing owner approval
+and repository validation rules.
+
+**Fallback to the loop:** ordinary unsplit requests can use the existing loop. Configured provider routes, custom tools and indexed documents can use a single ADK helper. After streaming/actions, on resume, or with explicit provider routes, failures stop without replay or silent provider changes. Coding-mode requests use the existing coding loop. To turn ADK off, remove the flag:
 
 ```bash
 gcloud run services update dua-ai-engine --region us-central1 --project global-healer-m6shk --remove-env-vars AGENT_ENGINE
@@ -19,6 +53,9 @@ After either path, optional add-ons run:
 
 - **Self-check** (`AGENT_VERIFY=1`, [`agent_verify.py`](../google-cloud-backend/agent_verify.py)): a cheap critic call compares the draft with the request and sources; only if it finds issues, one revision. Failures keep the draft; a revision that drops a PR link is rejected. Casual replies and coding mode skip it.
 - **Tested PRs** (`AGENT_TEST_CODE=1`, [`pr_flow.py`](../google-cloud-backend/pr_flow.py)): proposed Python files are byte-compiled and JSON parsed before a PR opens; after the PR opens, the engine polls GitHub CI and allows **one** fix commit on the same `dua-agent/` branch (never main, never force, never merge). The `check_pr_ci` tool reads the agent's own PR status.
+
+See the [new ADK configuration and operations guide](ADK_IMPLEMENTATION.md) for
+SQL persistence, embeddings, provider routes, tools, telemetry and CLI settings.
 
 ## Settings (verified from code)
 

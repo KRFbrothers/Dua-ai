@@ -27,7 +27,7 @@ MAX_STORED = 50
 WRITE_TOOLS = ("propose_changes", "create_issue", "comment_on_issue", "save_note", "delete_note")
 # Tools whose output carries text written by someone else (web, repository, issues, CI, earlier notes).
 UNTRUSTED_TOOLS = ("google_search", "fetch_url", "run_python", "list_files", "read_file", "search_code",
-                   "list_issues", "read_issue", "search_issues", "search_notes", "check_pr_ci")
+                   "list_issues", "read_issue", "search_issues", "search_notes", "check_pr_ci", "search_documents")
 # The main text field of a tool result; kept as raw text inside the fence (easier for the model than JSON escapes).
 TEXT_FIELDS = {"fetch_url": "text", "read_file": "content", "google_search": "notes"}
 
@@ -60,9 +60,9 @@ def strip_markers(text):
     return _MARKER.sub("[marker removed]", str(text))
 
 
-def fence(name, result):
+def fence(name, result, untrusted=False):
     """Wraps untrusted tool output for the model. Errors (written by this server) and trusted tools pass through."""
-    if name not in UNTRUSTED_TOOLS or not isinstance(result, dict) or "error" in result:
+    if (name not in UNTRUSTED_TOOLS and not untrusted) or not isinstance(result, dict) or "error" in result:
         return result
     field = TEXT_FIELDS.get(name)
     rest = {k: v for k, v in result.items() if k != field}
@@ -168,14 +168,18 @@ class PendingStore:
         while len(self._items) >= MAX_STORED:
             del self._items[min(self._items, key=lambda k: self._items[k]["created"])]
 
-    def create(self, owner, name, args, request_text=""):
+    def create(self, owner, name, args, request_text="", request_key=None):
         now = self.clock()
         title, details = describe(name, args)
         action = {"id": secrets.token_urlsafe(18), "owner": owner, "tool": name, "args": args, "title": title,
                   "details": details, "request_text": str(request_text or "")[:2000], "created": now,
-                  "expires": now + self.ttl()}
+                  "expires": now + self.ttl(), "request_key": request_key}
         with self._lock:
             self._evict(now)
+            if request_key:
+                for old in self._items.values():
+                    if old.get("request_key") == request_key and old["owner"] == owner:
+                        return old
             self._items[action["id"]] = action
         return action
 
@@ -216,6 +220,17 @@ def execute(action, env):
     import agent_tools
     import coding_agent
     name, args = action["tool"], action["args"]
+    registry = env.get("custom_tools")
+    spec = registry.tools.get(name) if registry else None
+    if spec:
+        clean = dict(args)
+        revision = clean.pop("__dua_tool_revision", None)
+        if not spec.write or revision != spec.identity:
+            return False, "Custom tool changed since approval. Nothing was executed."
+        spec.run(clean)
+        return True, "Approved custom action completed."
+    if name not in WRITE_TOOLS:
+        return False, "This approved tool is no longer installed. Nothing was executed."
     if name == "propose_changes":
         github = env.get("github")
         if github is None:
@@ -234,5 +249,5 @@ def execute(action, env):
     if name == "comment_on_issue":
         return True, f"Comment added: {result.get('url')}"
     if name == "save_note":
-        return True, "Note saved." if result.get("saved", True) else "Note was not saved (duplicate or not allowed)."
-    return True, "Note deleted."
+        return True, result.get("note") or ("Note saved." if result.get("saved", True) else "Note was not saved (duplicate or not allowed).")
+    return result.get("semanticIndexDeleted") is not False, result.get("note") or "Note deleted."

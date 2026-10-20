@@ -8,12 +8,45 @@ Every pull request and push to `main` runs four jobs:
 
 | Job | What runs | Local command |
 | --- | --- | --- |
-| Google Cloud engine tests | Mocked Python tests in `google-cloud-backend/tests` (Flask + pytest only; no Vertex, Supabase or GitHub calls) | `python -m pytest -q google-cloud-backend/tests` (repo root) |
+| Google Cloud engine tests | Python tests in `google-cloud-backend/tests` run twice: minimal Flask + pytest, then production ADK/GenAI dependencies with scripted offline models; no live provider, Supabase or GitHub calls | `python -m pytest -q google-cloud-backend/tests` (repo root) |
 | Backend tests | Node tests in `web/test` (`npm run test:ci`, needs Node 24) | `cd web && npm ci && npm test` |
 | Website build | `website/`: `npm ci`, type-check and Vite build into `web/site`, then checks `index.html` and the logo exist | `cd website && npm ci && npm run build` |
 | Android build and tests | `./gradlew :app:testDebugUnitTest -Pdua.ui-record` (JVM, Compose and Robolectric tests) | see below |
 
 The [personal APK workflow](../.github/workflows/personal-apk.yml) is a separate, manually started signing/build path ([SIGNING.md](../SIGNING.md)). Tests use mocked integrations; passing them does not verify deployed Auth, provider billing, live RLS or physical-device behavior.
+
+## Agent / ADK SDK checks
+
+The engine CI job keeps the minimal dependency run to verify lazy imports and the
+normal-loop fallback. It then installs `google-cloud-backend/requirements.txt`
+into a separate environment and reruns the suite with the **real pinned ADK**.
+An explicit SDK import fails the job if installation/import is broken, rather
+than silently skipping the real-SDK tests. Both JUnit reports are retained.
+
+To run that second pass locally, in a dedicated virtual environment:
+
+```sh
+python -m pip install -r google-cloud-backend/requirements.txt pytest==8.3.5
+python -c "import google.adk, google.genai"
+python -m pytest -q google-cloud-backend/tests
+```
+
+`test_agent_adk.py` drives the real `ParallelAgent` / `SequentialAgent` with a
+scripted `BaseLlm`: tools use fake search/notes, writes remain pending approval,
+and disconnect prevents subsequent model calls. The final-answer case returns
+multiple GenAI text Parts so losing paragraphs/citations fails the SDK test too.
+Runner tests also cover thought delivery before generation finishes, cleanup on
+session/model/callback failures, disconnect while the real SDK awaits a model
+response, and deadline cleanup before the merger can run. Cleanup probes use the
+SDK's `App` plugin configuration, and all model responses are scripted locally.
+Planner/proposal cases reject invalid JSON field types and unmatched file pairs;
+empty file contents remain valid. A real-SDK looping model proves each helper
+stops at its own call allowance and the merger still runs with incomplete-result
+markers. Another scripted model repairs an invalid two-file proposal, yielding
+exactly one complete pending approval and no repository write. Callback cases
+also verify cancellation priority and independent helper/request call budgets.
+These tests do not measure a deployed model's quality, latency or billing, and do
+not enable `AGENT_ENGINE=adk` in production.
 
 ## Android test commands
 
@@ -61,3 +94,19 @@ These automated checks do not certify physical microphone echo cancellation, Blu
 - Storage/backups: [STORAGE_BACKUP.md](STORAGE_BACKUP.md#archive-implementation-and-verification)
 - GitHub policy and logs: [GITHUB_VALIDATION.md](GITHUB_VALIDATION.md#verification), [GITHUB_LOGGING.md](GITHUB_LOGGING.md#verify)
 - Design tokens: [ui/design-system-tokens.md](ui/design-system-tokens.md#checks)
+
+### ADK completion integration checks
+
+The production SDK pass installs `requirements-adapters-lock.txt` and explicitly
+imports SDK/database/provider adapters. A disposable pgvector/PostgreSQL CI
+service exercises native vectors, least-privilege schema setup and official SDK
+resume, in addition to SQLite/mock tests. Tests never call paid providers.
+The new `test_adk_capabilities.py` covers context/streaming, usage, retries,
+custom tools, persistence, CLI/evaluation and rollback commands.
+
+Locally, set `ADK_TEST_POSTGRES_URL` only for a disposable loopback test database
+administrator. `test_adk_postgres.py` creates its own random database/role and
+cleans only those; it refuses non-local hosts. Without that opt-in, the native
+PostgreSQL case skips and cannot establish PostgreSQL verification. Quality
+scoring is separate from regression counts; see `evals/adk-v1.json` and
+`python google-cloud-backend/adk_cli.py evaluate --help`.
