@@ -11,10 +11,10 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import com.dua.ai.model.ChatMessage
 import com.dua.ai.settings.LocalPreferences
-import com.dua.ai.ui.screens.ImagesContent
-import com.dua.ai.ui.screens.LibraryContent
-import com.dua.ai.ui.screens.PluginsContent
-import com.dua.ai.ui.screens.ProjectsFeaturePage
+import com.dua.ai.ui.features.ImagesContent
+import com.dua.ai.ui.features.LibraryContent
+import com.dua.ai.ui.features.PluginsContent
+import com.dua.ai.ui.features.ProjectsFeaturePage
 import com.dua.ai.ui.theme.DuaTheme
 import com.github.takahirom.roborazzi.captureRoboImage
 import java.io.File

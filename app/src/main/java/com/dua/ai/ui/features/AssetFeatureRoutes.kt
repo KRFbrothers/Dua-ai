@@ -1,4 +1,4 @@
-package com.dua.ai.ui.screens
+package com.dua.ai.ui.features
 
 import android.Manifest
 import android.content.Intent

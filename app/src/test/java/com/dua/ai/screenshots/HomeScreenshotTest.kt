@@ -17,7 +17,7 @@ import androidx.compose.ui.unit.dp
 import com.dua.ai.model.ChatMessage
 import com.dua.ai.setup.ProviderCapability
 import com.dua.ai.ui.chat.ChatSheet
-import com.dua.ai.ui.screens.ComputerScreen
+import com.dua.ai.ui.features.ComputerScreen
 import com.github.takahirom.roborazzi.captureScreenRoboImage
 import com.dua.ai.imagine.ImagineConfig
 import com.dua.ai.settings.LocalPreferences
@@ -141,4 +141,3 @@ class HomeScreenshotTest(private val dark: Boolean) {
     @Config(qualifiers = "w320dp-h568dp-xhdpi")
     @Test fun homeSmall() = shot("home_small") { ChatScreen(home, ChatActions()) }
 }
-

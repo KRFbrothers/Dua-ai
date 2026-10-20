@@ -224,23 +224,23 @@ fun DuaNavHost(viewModel: ChatViewModel, voice: ReplyVoice, notificationRoute: P
             val back = { if (!viewModel.dataBusy.value) { viewModel.setImagine(false); navigator.toChat() }; Unit }
             BackHandler { back() }
             BusyBackGuard(viewModel)
-            com.dua.ai.ui.screens.ImagesScreen(viewModel, back, onSetup = { navigator.open(DuaDestination.FeatureSetup) })
+            com.dua.ai.ui.features.ImagesScreen(viewModel, back, onSetup = { navigator.open(DuaDestination.FeatureSetup) })
         }, library = {
             BackHandler { navigator.toChat() }
             BusyBackGuard(viewModel)
-            com.dua.ai.ui.screens.LibraryScreen(viewModel, navigator::toChat,
+            com.dua.ai.ui.features.LibraryScreen(viewModel, navigator::toChat,
                 onSetup = { navigator.open(DuaDestination.FeatureSetup) }, onChat = navigator::toChat,
                 onProject = { id -> navigator.open(DuaDestination.Projects); nav.currentBackStackEntry?.savedStateHandle?.set("open_project", id) })
         }, plugins = {
             BackHandler { navigator.toChat() }
             BusyBackGuard(viewModel)
-            com.dua.ai.ui.screens.PluginsScreen(viewModel, navigator::toChat,
+            com.dua.ai.ui.features.PluginsScreen(viewModel, navigator::toChat,
                 onSetup = { navigator.open(DuaDestination.FeatureSetup) }, onCloud = { navigator.open(DuaDestination.CloudSync) }, onAgent = { navigator.open(DuaDestination.Agent) })
         })
         composable(DuaDestination.Computer.route) {
             BackHandler { exitFeature() }
             BusyBackGuard(viewModel)
-            com.dua.ai.ui.screens.ComputerScreen(onBack = exitFeature)
+            com.dua.ai.ui.features.ComputerScreen(onBack = exitFeature)
         }
         composable(DuaDestination.Agent.route) {
             BackHandler { exitFeature() }

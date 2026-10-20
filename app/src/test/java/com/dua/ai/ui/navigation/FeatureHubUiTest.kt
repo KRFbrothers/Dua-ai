@@ -22,7 +22,7 @@ import com.dua.ai.setup.*
 import com.dua.ai.ui.chat.LocalMediaLoader
 import com.dua.ai.ui.chat.MediaViewer
 import com.dua.ai.ui.chat.ImagineActions
-import com.dua.ai.ui.screens.*
+import com.dua.ai.ui.features.*
 import com.dua.ai.ui.theme.*
 import com.github.takahirom.roborazzi.captureRoboImage
 import java.io.File
