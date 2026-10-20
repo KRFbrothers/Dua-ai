@@ -18,7 +18,7 @@ import com.dua.ai.setup.IntegrationState
 import com.dua.ai.setup.RepositoryResult
 import com.dua.ai.setup.SearchResult
 import com.dua.ai.ui.account.OnboardingContent
-import com.dua.ai.ui.screens.*
+import com.dua.ai.ui.features.*
 import com.dua.ai.ui.settings.*
 import com.dua.ai.ui.theme.DuaTheme
 import com.dua.ai.ui.theme.PageDarkColors
