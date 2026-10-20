@@ -115,7 +115,7 @@ class HomeGradientUiTest(private val dark: Boolean, private val large: Boolean) 
         val closedSurface = compose.onNodeWithTag("home-gradient").fetchSemanticsNode().boundsInRoot
         val closedBar = compose.onNodeWithTag("composer-container").fetchSemanticsNode().boundsInRoot
         val inputId = compose.onNodeWithContentDescription("Message").fetchSemanticsNode().id
-        compose.onNodeWithContentDescription("Dua AI").assertWidthIsEqualTo(48.dp)
+        compose.onNodeWithContentDescription("Dua AI").assertWidthIsEqualTo(HomeSizes.heroLogo)
         compose.onNodeWithContentDescription("Message").performClick().assertIsFocused()
         dispatchKeyboard(280)
         val surface = compose.onNodeWithTag("home-gradient").fetchSemanticsNode().boundsInRoot
@@ -127,7 +127,7 @@ class HomeGradientUiTest(private val dark: Boolean, private val large: Boolean) 
         assertEquals("The wider composer remains centered", closedBar.center.x, bar.center.x, 1f)
         if (!large) assertTrue("The inline keyboard composer leaves more room for content", bar.height < closedBar.height)
         assertEquals("Keyboard changes must not recreate the input", inputId, compose.onNodeWithContentDescription("Message").fetchSemanticsNode().id)
-        compose.onNodeWithContentDescription("Dua AI").assertWidthIsEqualTo(36.dp)
+        compose.onNodeWithContentDescription("Dua AI").assertWidthIsEqualTo(HomeSizes.heroCompactLogo)
         val tabs = compose.onNode(hasText("Chat") and isSelectable()).assertIsDisplayed().fetchSemanticsNode().boundsInRoot
         assertTrue(tabs.bottom <= bar.top)
         compose.onNodeWithContentDescription("Voice mode").assertIsDisplayed()
@@ -159,7 +159,7 @@ class HomeGradientUiTest(private val dark: Boolean, private val large: Boolean) 
         compose.onNodeWithContentDescription("Message").assertIsFocused().assertTextContains("Another draft")
         compose.onNodeWithContentDescription("Message").performTextClearance()
         compose.onNodeWithTag("home-hero").assertExists(); compose.onNodeWithContentDescription("Dua AI").assertExists()
-        compose.onNodeWithContentDescription("Dua AI").assertWidthIsEqualTo(48.dp)
+        compose.onNodeWithContentDescription("Dua AI").assertWidthIsEqualTo(HomeSizes.heroLogo)
         compose.onNodeWithContentDescription("Message").assertIsFocused()
     }
 
