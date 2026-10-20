@@ -51,6 +51,37 @@ import kotlinx.coroutines.flow.update
 
 class ChatViewModel(application: Application) : AndroidViewModel(application) {
     // Declared first: init-time collectors (e.g. resumeImagineJobs) may reach the Imagine feature during construction.
+    private val accountFeature: ChatAccount by lazy { ChatAccount(accountHost) }
+    private val accountHost: AccountHost by lazy { object : AccountHost {
+        override val viewModelScope get() = this@ChatViewModel.viewModelScope
+        override val account get() = this@ChatViewModel.account
+        override val automaticSync get() = this@ChatViewModel.automaticSync
+        override val localSettings get() = this@ChatViewModel.localSettings
+        override val localPreferences get() = this@ChatViewModel.localPreferences
+        override val preferences get() = this@ChatViewModel.preferences
+        override val historyWriter get() = this@ChatViewModel.historyWriter
+        override val draftSaver get() = this@ChatViewModel.draftSaver
+        override val activeId get() = this@ChatViewModel.activeId
+        override var emailAuthJob: Job?
+            get() = this@ChatViewModel.emailAuthJob
+            set(value) { this@ChatViewModel.emailAuthJob = value }
+        override val _cloudPreview get() = this@ChatViewModel._cloudPreview
+        override val _googleSignIn get() = this@ChatViewModel._googleSignIn
+        override val _emailAuth get() = this@ChatViewModel._emailAuth
+        override val _dataBusy get() = this@ChatViewModel._dataBusy
+        override val _isTyping get() = this@ChatViewModel._isTyping
+        override val _buildPr get() = this@ChatViewModel._buildPr
+        override val _savedChats get() = this@ChatViewModel._savedChats
+        override val _webMode get() = this@ChatViewModel._webMode
+        override val _xSearch get() = this@ChatViewModel._xSearch
+        override fun refreshSyncBusy() { this@ChatViewModel.refreshSyncBusy() }
+        override fun syncBlocked() = this@ChatViewModel.syncBlocked()
+        override fun liveProjectBusy() = this@ChatViewModel.liveProjectBusy()
+        override fun flushHistory() = this@ChatViewModel.flushHistory()
+        override fun currentDeletionIds() = this@ChatViewModel.currentDeletionIds()
+        override fun bindCloudHistory(chats: List<SavedChat>, deleted: List<String>) = this@ChatViewModel.bindCloudHistory(chats, deleted)
+        override fun googleSignInFailed(message: String?) = this@ChatViewModel.googleSignInFailed(message)
+    } }
     private val dataFeature: ChatDataControls by lazy { ChatDataControls(dataHost) }
     private val dataHost: DataControlsHost by lazy { object : DataControlsHost {
         override val viewModelScope get() = this@ChatViewModel.viewModelScope
@@ -395,16 +426,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     data class CloudPreview(val kind: String, val userId: String, val review: com.dua.ai.account.CloudReview)
     private val _cloudPreview = MutableStateFlow<CloudPreview?>(null)
     val cloudPreview = _cloudPreview.asStateFlow()
-    fun accountAction(action: suspend () -> Unit) {
-        if (account.state.value.busy || _dataBusy.value) return
-        account.busy(true)
-        automaticSync.setBusy(true)
-        viewModelScope.launch {
-            try { action() } catch (cancelled: CancellationException) { throw cancelled }
-            catch (failure: Exception) { account.notice(failure.message ?: "Account request failed. Local data was kept.") }
-            finally { account.busy(false); refreshSyncBusy() }
-        }
-    }
+    fun accountAction(action: suspend () -> Unit) = accountFeature.accountAction(action)
     fun loadAccount() = accountAction { account.load(); account.loadFeatures(); flushPendingFileDeletes() }
     /** Google sign-in progress for the welcome screen and Profile: busy while the account picker or token exchange runs, plus the last error. */
     data class GoogleSignInState(val busy: Boolean = false, val error: String? = null)
@@ -417,21 +439,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     /** The account picker needs an Activity, so the UI runs it ([com.dua.ai.auth.GoogleSignIn]) and reports here. */
     fun googleSignInStarted() { _googleSignIn.value = GoogleSignInState(busy = true) }
     fun googleSignInFailed(message: String?) { _googleSignIn.value = GoogleSignInState(error = message) }
-    fun signInWithGoogle(idToken: String, nonce: String, photoUrl: String = "", expectedEmail: String? = null) {
-        if (_dataBusy.value) { googleSignInFailed("Wait for the current data operation to finish, then try again."); return }
-        _googleSignIn.value = GoogleSignInState(busy = true)
-        account.busy(true)
-        automaticSync.setBusy(true)
-        viewModelScope.launch {
-            try {
-                _cloudPreview.value = null
-                account.signInWithGoogle(idToken, nonce, photoUrl, expectedEmail)
-                _googleSignIn.value = GoogleSignInState()
-            } catch (cancelled: CancellationException) { _googleSignIn.value = GoogleSignInState(); throw cancelled }
-            catch (failure: Exception) { googleSignInFailed(failure.message ?: "Google sign-in failed. Try again.") }
-            finally { account.busy(false); refreshSyncBusy() }
-        }
-    }
+    fun signInWithGoogle(idToken: String, nonce: String, photoUrl: String = "", expectedEmail: String? = null) =
+        accountFeature.signInWithGoogle(idToken, nonce, photoUrl, expectedEmail)
     /** Email-only navigation prefill. No password and no disk persistence; generic email entry clears it. */
     var emailSignInHint: String = ""
         private set
@@ -446,96 +455,17 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         if (emailAuthJob?.isActive == true) { account.cancelAuthentication(); emailAuthJob?.cancel() }
         _emailAuth.value = EmailAuthState()
     }
-    fun submitEmailAuth(email: String, password: String, signup: Boolean, expectedAccountId: String? = null) {
-        if (_emailAuth.value.busy) return
-        if (account.state.value.busy || _googleSignIn.value.busy || syncBlocked()) {
-            _emailAuth.value = EmailAuthState(error = "Finish the current account, reply or sync action, then try again."); return
-        }
-        if (!account.state.value.emailAuthConfigured) {
-            _emailAuth.value = EmailAuthState(error = "Refresh Account after updating the owner backend to enable email authentication."); return
-        }
-        _emailAuth.value = EmailAuthState(busy = true); account.busy(true); automaticSync.setBusy(true)
-        emailAuthJob = viewModelScope.launch {
-            try {
-                _cloudPreview.value = null
-                val completed = if (expectedAccountId != null) { account.setEmailPassword(password, expectedAccountId); true }
-                    else account.signInWithEmail(email, password, signup)
-                _emailAuth.value = EmailAuthState(completed = completed, confirmation = if (completed) "" else account.state.value.notice)
-            } catch (cancelled: CancellationException) { throw cancelled }
-            catch (failure: Exception) { _emailAuth.value = EmailAuthState(error = failure.message ?: "Email authentication failed. Try again.") }
-            finally { account.busy(false); refreshSyncBusy() }
-        }
-    }
+    fun submitEmailAuth(email: String, password: String, signup: Boolean, expectedAccountId: String? = null) =
+        accountFeature.submitEmailAuth(email, password, signup, expectedAccountId)
     /** Runs in the Account dialog's scope; cancellation cancels the request and leaves the last confirmed profile intact. */
-    suspend fun setAccountPhoneNumber(value: String, expectedAccountId: String) {
-        check(!account.state.value.busy && !_googleSignIn.value.busy && !syncBlocked()) { "Finish the current account, reply or sync action, then try again." }
-        account.busy(true); automaticSync.setBusy(true)
-        try { account.setPhoneNumber(value, expectedAccountId) }
-        finally { account.busy(false); refreshSyncBusy() }
-    }
+    suspend fun setAccountPhoneNumber(value: String, expectedAccountId: String) = accountFeature.setAccountPhoneNumber(value, expectedAccountId)
     fun logOut() { driveBackups.accountChanged(null); automaticSync.disable(); accountAction { _cloudPreview.value = null; account.logout() } }
     fun cancelCloudReview() { _cloudPreview.value = null; account.notice("Cancelled. Data was not changed.") }
-    fun reviewCloud(kind: String) = accountAction {
-        val remote = account.cloud()
-        draftSaver.runNow()
-        val snapshot = if (kind == "upload") com.dua.ai.account.CloudSnapshot(_savedChats.value.toList(), localSettings.value.memory.toList(), localSettings.value.projects.toList(), currentDeletionIds()) else remote.snapshot
-        com.dua.ai.account.CloudSnapshotCodec.encode(snapshot)
-        _cloudPreview.value = CloudPreview(kind, account.state.value.user?.id ?: error("Sign in again."), remote.copy(snapshot = snapshot))
-    }
-    fun confirmCloud() = accountAction {
-        _dataBusy.value = true; refreshSyncBusy()
-        try {
-        val preview = _cloudPreview.value ?: return@accountAction
-        account.load()
-        check(account.state.value.user?.id == preview.userId) { "Account changed. Review again." }
-        when (preview.kind) {
-            "upload" -> account.notice("Uploaded cloud revision ${account.upload(preview.review)}. Local data stays unchanged.")
-            "delete" -> { account.upload(preview.review, clear = true); account.notice("Cloud chat and note contents cleared. Deletion IDs are kept to block stale uploads; the phone cache stays unchanged.") }
-            "download" -> downloadCloudSnapshot(preview.review.snapshot)
-        }
-        _cloudPreview.value = null
-        } finally { _dataBusy.value = false }
-    }
+    fun reviewCloud(kind: String) = accountFeature.reviewCloud(kind)
+    fun confirmCloud() = accountFeature.confirmCloud()
 
     /** Prepare off Main, then commit without suspension after checking that the cache is still current. */
-    private suspend fun downloadCloudSnapshot(remote: com.dua.ai.account.CloudSnapshot) {
-        check(!_isTyping.value && !liveProjectBusy() && _buildPr.value.values.none { it.creating }) { "Wait for the reply, live voice or pull request to finish before downloading." }
-        flushHistory()
-        val oldSettings = localSettings.value
-        val local = com.dua.ai.account.CloudSnapshot(_savedChats.value.toList(), oldSettings.memory.toList(), oldSettings.projects.toList(), currentDeletionIds())
-        val selectedId = activeId
-        val (result, encoded) = withContext(Dispatchers.Default) {
-            val merged = com.dua.ai.account.CloudSnapshotCodec.mergeDownload(local, remote)
-            merged to ChatHistoryCodec.encode(merged.snapshot.chats, selectedId)
-        }
-        check(activeId == selectedId && _savedChats.value == local.chats && localSettings.value == oldSettings &&
-            !_isTyping.value && _buildPr.value.values.none { it.creating } && !draftSaver.pending) {
-            "The phone cache changed while preparing the download. Review and retry. No downloaded data was applied."
-        }
-        val chats = result.snapshot.chats
-        val previous = preferences.getString("history", null)
-        localPreferences.update(oldSettings.copy(memory = result.snapshot.memory, projects = result.snapshot.projects))
-        try {
-            val committed = historyWriter.writeDirectly {
-                val previousDeleted = preferences.getString("deleted_chat_ids", null)
-                val previousOwner = preferences.getString("deleted_chat_owner", null)
-                preferences.edit().putString("history", encoded).putString("deleted_chat_ids", org.json.JSONArray(result.snapshot.deletedChatIds).toString())
-                    .putString("deleted_chat_owner", account.state.value.user?.id).commit().also { ok ->
-                    if (!ok) preferences.edit().putString("history", previous).putString("deleted_chat_ids", previousDeleted).putString("deleted_chat_owner", previousOwner).apply()
-                }
-            }
-            check(committed) { "Cloud chats could not be saved. Retry." }
-        } catch (failure: Exception) {
-            try { localPreferences.update(oldSettings) } catch (_: Exception) {
-                throw IllegalStateException("Download interrupted and settings rollback failed. Inspect cached memories and projects before retrying.", failure)
-            }
-            throw failure
-        }
-        bindCloudHistory(chats, result.snapshot.deletedChatIds)
-        _webMode.value = null
-        _xSearch.value = false
-        account.notice("${result.added} server chats added; ${result.conflicts} phone versions kept as unsynced copies. Server memories and project settings restored.")
-    }
+    private suspend fun downloadCloudSnapshot(remote: com.dua.ai.account.CloudSnapshot) = accountFeature.downloadCloudSnapshot(remote)
     /** Chat goes to DUA_CHAT_BASE_URL with the owner session; separate-engine server saving remains disabled. */
     private val separateChatEngine = com.dua.ai.BuildConfig.DUA_CHAT_BASE_URL.trimEnd('/') != com.dua.ai.BuildConfig.DUA_API_BASE_URL.trimEnd('/')
     private val api = DuaApiClient(com.dua.ai.BuildConfig.DUA_CHAT_BASE_URL, appToken = com.dua.ai.BuildConfig.DUA_APP_TOKEN,
