@@ -173,7 +173,7 @@ fun TypingIndicator(modifier: Modifier = Modifier) {
     Row(modifier.clearAndSetSemantics {
         contentDescription = "Dua is thinking"; liveRegion = LiveRegionMode.Polite
     }, verticalAlignment = Alignment.CenterVertically) {
-        ThinkingOrb()
+        com.dua.ai.ui.components.RiveOrFallback(com.dua.ai.R.raw.rive_thinking_dots, Modifier.size(com.dua.ai.ui.theme.AmbientTokens.orbSize)) { ThinkingOrb() }
         Spacer(Modifier.width(Spacing.md))
         Text("Thinking", style = MaterialTheme.typography.bodyMedium, color = c.mutedText)
     }
