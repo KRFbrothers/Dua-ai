@@ -1,4 +1,5 @@
-package com.dua.ai.ui.screens
+package com.dua.ai.ui
+
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled

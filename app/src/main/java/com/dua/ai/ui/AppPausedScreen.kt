@@ -4,7 +4,7 @@
  * licensed under the Apache License, Version 2.0. See THIRD_PARTY_NOTICES.md. Changes: Dua's own
  * calligraphy logo (no Android robot art), server-provided message, Try again button, no top bar.
  */
-package com.dua.ai.ui.screens
+package com.dua.ai.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement

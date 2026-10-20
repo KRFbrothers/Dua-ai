@@ -7,7 +7,7 @@
  * rendering, and removal of Telegram LiteMode guards; Dua owns lifecycle/reduced-motion gating.
  * GPL-2.0-or-later, distributed as part of Dua under GPL-3.0-or-later. See THIRD_PARTY_NOTICES.md.
  */
-package com.dua.ai.ui.og;
+package com.dua.ai.ui.chat;
 
 import android.graphics.Canvas;
 import android.graphics.Matrix;

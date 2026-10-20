@@ -6,7 +6,6 @@ import android.graphics.RadialGradient
 import android.graphics.Shader
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
-import com.dua.ai.ui.og.BlobDrawable
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
