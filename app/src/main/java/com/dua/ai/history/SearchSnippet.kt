@@ -1,4 +1,4 @@
-package com.dua.ai.ui.history
+package com.dua.ai.history
 
 data class SearchSnippet(val text: String, val matchStart: Int, val matchEnd: Int)
 

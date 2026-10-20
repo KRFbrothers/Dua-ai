@@ -1,4 +1,4 @@
-package com.dua.ai.auth
+package com.dua.ai.account
 
 import android.content.Context
 import android.util.Base64

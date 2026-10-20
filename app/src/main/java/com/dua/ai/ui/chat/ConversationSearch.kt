@@ -1,8 +1,8 @@
 package com.dua.ai.ui.chat
 
 import com.dua.ai.model.ChatMessage
-import com.dua.ai.ui.history.SearchSnippet
-import com.dua.ai.ui.history.searchSnippet
+import com.dua.ai.history.SearchSnippet
+import com.dua.ai.history.searchSnippet
 
 data class ConversationMatch(val messageId: String, val messageIndex: Int, val snippet: SearchSnippet)
 

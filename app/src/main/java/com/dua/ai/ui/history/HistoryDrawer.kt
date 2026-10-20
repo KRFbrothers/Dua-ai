@@ -50,6 +50,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.input.ImeAction
+import com.dua.ai.history.HistoryGrouping
+import com.dua.ai.history.HistorySearch
 import com.dua.ai.history.SavedChat
 import com.dua.ai.ui.navigation.DuaDestination
 import com.dua.ai.ui.components.ReferenceIcons

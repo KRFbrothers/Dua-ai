@@ -7,8 +7,8 @@ import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialResponse
 import androidx.credentials.exceptions.GetCredentialCancellationException
 import androidx.credentials.exceptions.NoCredentialException
-import com.dua.ai.auth.GoogleIdentity
-import com.dua.ai.auth.GoogleSignIn
+import com.dua.ai.account.GoogleIdentity
+import com.dua.ai.account.GoogleSignIn
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import kotlinx.coroutines.CancellationException

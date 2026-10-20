@@ -3,8 +3,8 @@ package com.dua.ai.ui.auth
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalContext
-import com.dua.ai.auth.GoogleSignIn
-import com.dua.ai.auth.GoogleIdentity
+import com.dua.ai.account.GoogleSignIn
+import com.dua.ai.account.GoogleIdentity
 import com.dua.ai.viewmodel.ChatViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
