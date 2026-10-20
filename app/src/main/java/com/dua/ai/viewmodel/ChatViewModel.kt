@@ -1400,22 +1400,53 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun sendMessage(userText: String) {
-        if (_preparingFiles.value) return
+        val plan = _prepareSend(userText) ?: return
+        _streamReply(plan, userText)
+    }
+
+    /** One outgoing turn, frozen before any file work or project loading starts. */
+    private data class SendPlan(
+        val files: List<ChatAttachment>,
+        val convert: (ChatAttachment) -> Boolean,
+        val storedFiles: List<FileRef>,
+        val edited: Boolean,
+        val sentPaths: Set<String>,
+        val userMessage: ChatMessage,
+        val reply: ChatMessage,
+        val request: RequestTurns,
+        val persistenceBase: List<ChatMessage>,
+        val persistenceOwner: String?,
+        val currentGeneration: Int,
+        val startedAt: Long,
+        val requestProjectId: String,
+        val responseModel: String,
+        val requestWebMode: String?,
+        val requestReasoning: Boolean,
+        val requestXSearch: Boolean,
+        val requestCode: Boolean,
+        val requestBuild: String?,
+        val requestAgent: Boolean,
+        val requestPersonality: String?
+    )
+
+    /** Guards, request snapshot, and the user/reply pair. Null means the turn was rejected (or handled elsewhere). */
+    private fun _prepareSend(userText: String): SendPlan? {
+        if (_preparingFiles.value) return null
         if (!autoRetrying) offlineRetry.clear()
         val requestProjectId = _projectId.value
-        projectUnavailable()?.let { _error.value = it; return }
-        if (_imagine.value && _editingId.value != null) { _error.value = "Turn off Imagine to resend an edited message."; return }
-        if (_imagine.value) { imagineFeature.sendImagine(userText); return }
+        projectUnavailable()?.let { _error.value = it; return null }
+        if (_imagine.value && _editingId.value != null) { _error.value = "Turn off Imagine to resend an edited message."; return null }
+        if (_imagine.value) { imagineFeature.sendImagine(userText); return null }
         val storedFiles = _uploads.value.filter { it.state == PendingUpload.DONE }.mapNotNull { it.ref }
-        if (_editingId.value != null && (_attachments.value.isNotEmpty() || storedFiles.isNotEmpty())) { _error.value = "Edited messages are text only. Remove the attachments or cancel editing."; return }
-        if ((userText.isBlank() && _attachments.value.isEmpty() && storedFiles.isEmpty()) || _isTyping.value || _readingFiles.value) return
-        if (_uploads.value.any { it.uploading } || _recordingSince.value != null) { _error.value = "Wait for uploads to finish, or remove them."; return }
+        if (_editingId.value != null && (_attachments.value.isNotEmpty() || storedFiles.isNotEmpty())) { _error.value = "Edited messages are text only. Remove the attachments or cancel editing."; return null }
+        if ((userText.isBlank() && _attachments.value.isEmpty() && storedFiles.isEmpty()) || _isTyping.value || _readingFiles.value) return null
+        if (_uploads.value.any { it.uploading } || _recordingSince.value != null) { _error.value = "Wait for uploads to finish, or remove them."; return null }
         _error.value = null
         if (userText.length > 8000) {
             _error.value = "Message 8000 characters se chhota rakhein."
-            return
+            return null
         }
-        personalityUnavailable()?.let { _error.value = it; return }
+        personalityUnavailable()?.let { _error.value = it; return null }
         // Freeze this request's style before file preparation or asynchronous project loading.
         val requestPersonality = appearance.value.personality?.instruction
         val requestWebMode = _webMode.value
@@ -1426,14 +1457,14 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         val requestCode = _runCode.value && codeUsable(responseModel)
         val requestBuild = _buildRepo.value
         if (requestBuild != null) {
-            (buildUnavailableReason() ?: if (!buildUsable(responseModel)) "Build mode works with Dua or Gemini. Choose one of them or turn Build off." else null)?.let { _error.value = it; return }
-            if (_attachments.value.isNotEmpty() || storedFiles.isNotEmpty()) { _error.value = "Build mode reads the repository, not attachments. Remove them or turn Build off."; return }
+            (buildUnavailableReason() ?: if (!buildUsable(responseModel)) "Build mode works with Dua or Gemini. Choose one of them or turn Build off." else null)?.let { _error.value = it; return null }
+            if (_attachments.value.isNotEmpty() || storedFiles.isNotEmpty()) { _error.value = "Build mode reads the repository, not attachments. Remove them or turn Build off."; return null }
         }
-        webModeError(requestWebMode, responseModel)?.let { _error.value = it; return }
+        webModeError(requestWebMode, responseModel)?.let { _error.value = it; return null }
         val provider = api.chatProvider(responseModel, _integrations.value.providers)
         if (provider == null) {
             _error.value = "This provider needs backend setup. Choose a configured model."
-            return
+            return null
         }
         val files = _attachments.value
         val convert = { file: com.dua.ai.attachments.ChatAttachment -> com.dua.ai.attachments.AttachmentConversion.needsJpeg(provider.attachmentTypes, file) }
@@ -1441,7 +1472,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         val attachmentError = com.dua.ai.setup.IntegrationCapabilities.attachmentError(provider, files.map { if (convert(it)) "image/jpeg" else it.mimeType })
         if (attachmentError != null) {
             _error.value = attachmentError
-            return
+            return null
         }
         val prompt = userText.trim().ifBlank { "Describe these files." }
         val names = files.map { it.name } + storedFiles.map { it.name }
@@ -1449,7 +1480,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         val fileText = com.dua.ai.attachments.TextFiles.contextText(files, ChatMessage.MAX_ATTACHMENT_TEXT_CHARS)
         if (api.usesInlineChatFiles(false) && storedFiles.any { it.transcript.isNullOrBlank() }) {
             _error.value = "Cloud Run cannot read stored file references. Remove these files and select them again for inline chat (2 MB total); use CSV for spreadsheets."
-            return
+            return null
         }
         // An edit replaces the edited message and later turns; the server copy is refreshed by the normal chat sync.
         val edited = applyEdit()
@@ -1475,31 +1506,38 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         saveHistory()
         _isTyping.value = true; refreshSyncBusy()
         _failedPrompt.value = null
+        return SendPlan(files = files, convert = convert, storedFiles = storedFiles, edited = edited, sentPaths = sentPaths,
+            userMessage = userMessage, reply = reply, request = request, persistenceBase = persistenceBase,
+            persistenceOwner = persistenceOwner, currentGeneration = currentGeneration, startedAt = startedAt,
+            requestProjectId = requestProjectId, responseModel = responseModel, requestWebMode = requestWebMode,
+            requestReasoning = requestReasoning, requestXSearch = requestXSearch, requestCode = requestCode,
+            requestBuild = requestBuild, requestAgent = requestAgent, requestPersonality = requestPersonality)
+    }
+
+    /** Opens the stream and hands every outcome back to [_persistResult], [_failedReply] and [_finishReply]. */
+    private fun _streamReply(plan: SendPlan, userText: String) {
         replyJob = viewModelScope.launch {
             var accumulator: com.dua.ai.network.StreamAccumulator? = null
             try {
-                val ownFiles = if (files.any(convert)) withContext(Dispatchers.Default) { PhotoAttachmentReader.convertToJpeg(files, convert) } else files
-                val projectContext = engineProjectContext(requestProjectId)
+                val ownFiles = if (plan.files.any(plan.convert)) withContext(Dispatchers.Default) { PhotoAttachmentReader.convertToJpeg(plan.files, plan.convert) } else plan.files
+                val projectContext = engineProjectContext(plan.requestProjectId)
                 val prepared = ownFiles + projectContext.attachments
                 check(prepared.size <= 3 || !separateChatEngine) { "Use at most 3 files across project sources and this message." }
                 if (separateChatEngine) check(prepared.sumOf { java.util.Base64.getDecoder().decode(it.data).size.toLong() } <= com.dua.ai.attachments.AttachmentReader.MAX_BYTES) { "Project sources and message attachments must fit within 2 MB total." }
-                val persistence = persistenceOwner?.let { owner -> withContext(Dispatchers.Default) {
-                    com.dua.ai.account.ReplyPersistenceCodec.create(activeId, owner, persistenceBase, userMessage, reply.id,
-                        request.turns.filter { it.state == "complete" }.takeLast(if (request.context != null) 400 else 39), userText)
+                val persistence = plan.persistenceOwner?.let { owner -> withContext(Dispatchers.Default) {
+                    com.dua.ai.account.ReplyPersistenceCodec.create(activeId, owner, plan.persistenceBase, plan.userMessage, plan.reply.id,
+                        plan.request.turns.filter { it.state == "complete" }.takeLast(if (plan.request.context != null) 400 else 39), userText)
                 } }
                 account.withToken { token ->
-                    val attempt = com.dua.ai.network.StreamAccumulator(startedAt).also { accumulator = it }
+                    val attempt = com.dua.ai.network.StreamAccumulator(plan.startedAt).also { accumulator = it }
                     check(projectContext.ownerId == null || account.state.value.user?.id == projectContext.ownerId) { "Account changed. Retry the project chat." }
-                    collectReply(reply.id, attempt, api.streamReply(responseModel, request.turns, prepared,
-                        projectContext.memory, token, requestWebMode.takeIf { requestBuild == null }, requestReasoning && requestBuild == null,
-                        request.historyBytes, request.context, requestXSearch && requestBuild == null, requestCode && requestBuild == null, requestBuild, persistence, agent = requestAgent && requestBuild == null, freeModel = requestFreeModel(), personality = requestPersonality), request)
+                    collectReply(plan.reply.id, attempt, api.streamReply(plan.responseModel, plan.request.turns, prepared,
+                        projectContext.memory, token, plan.requestWebMode.takeIf { plan.requestBuild == null }, plan.requestReasoning && plan.requestBuild == null,
+                        plan.request.historyBytes, plan.request.context, plan.requestXSearch && plan.requestBuild == null, plan.requestCode && plan.requestBuild == null, plan.requestBuild, persistence, agent = plan.requestAgent && plan.requestBuild == null, freeModel = requestFreeModel(), personality = plan.requestPersonality), plan.request)
                 }
                 if (accumulator?.snapshot()?.text.isNullOrBlank()) throw DuaApiException(EMPTY_REPLY)
-                if (generation == currentGeneration) {
-                    _uploads.update { list -> list.filterNot { it.ref?.path in sentPaths } }
-                    clearAttachments()
-                    val final = accumulator!!.snapshot(ended = true)
-                    updateMessage(reply.id) { it.copy(text = final.text, thinking = final.thinking, thinkingSeconds = final.thinkingSeconds, notice = final.notice, codeRuns = final.codeRuns, build = final.build ?: it.build, proposal = final.proposal ?: it.proposal, approvals = final.approvals.ifEmpty { it.approvals }, state = "complete") }
+                if (generation == plan.currentGeneration) {
+                    _persistResult(plan, "complete") { accumulator!!.snapshot(ended = true) }
                     offlineRetry.delivered()
                     maybeAutoTitle(activeId)
                 }
@@ -1507,32 +1545,48 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 throw cancelled
             } catch (failure: Exception) {
                 com.dua.ai.diagnostics.DuaLog.soft(com.dua.ai.diagnostics.SoftErrorArea.ChatReply, failure)
-                if (generation == currentGeneration) {
+                if (generation == plan.currentGeneration) {
                     val partial = accumulator?.snapshot(ended = true)
                     if (partial != null && partial.text.isNotBlank()) {
                         // The request reached the model: keep the turn and its partial reply; Retry regenerates it.
-                        _uploads.update { list -> list.filterNot { it.ref?.path in sentPaths } }
-                        clearAttachments()
-                        updateMessage(reply.id) { it.copy(text = partial.text, thinking = partial.thinking, thinkingSeconds = partial.thinkingSeconds, notice = partial.notice, codeRuns = partial.codeRuns, build = partial.build ?: it.build, proposal = partial.proposal ?: it.proposal, approvals = partial.approvals.ifEmpty { it.approvals }, state = "stopped") }
+                        _persistResult(plan, "stopped") { partial }
                         _error.value = "Reply interrupted: ${failureText(failure)} Partial reply kept; tap retry."
                     } else {
-                        _messages.value = _messages.value.filterNot { it.id == userMessage.id || it.id == reply.id }
-                        replyWebModes.remove(reply.id); replyReasoning.remove(reply.id); replyAgent.remove(reply.id); replyCode.remove(reply.id); replyBuild.remove(reply.id)
-                        _draft.value = userText
-                        _failedPrompt.value = userText
-                        // Offline, text-only, not an edit: send it again once the phone reconnects (at most once).
-                        val queued = offlineRetry.sendFailed(activeId, userText,
-                            offline = !edited && files.isEmpty() && storedFiles.isEmpty() && (!_online.value || failure is java.io.IOException))
-                        _error.value = if (queued) "You're offline. Dua will send this message when you're back online." else failureText(failure)
+                        _failedReply(plan, userText, failure)
                     }
                 }
             } finally {
-                if (generation == currentGeneration) {
-                    _isTyping.value = false; saveHistory()
-                    if (!foreground && _error.value == null && localSettings.value.notifications && _messages.value.lastOrNull()?.isUser == false)
-                        com.dua.ai.settings.LocalReplyNotifications.show(getApplication(), activeId)
-                }
+                _finishReply(plan.currentGeneration)
             }
+        }
+    }
+
+    /** Landing the reply: drop the delivered uploads, clear the composer files, and store the final text. */
+    private fun _persistResult(plan: SendPlan, state: String, final: () -> com.dua.ai.network.StreamSnapshot) {
+        _uploads.update { list -> list.filterNot { it.ref?.path in plan.sentPaths } }
+        clearAttachments()
+        val result = final()
+        updateMessage(plan.reply.id) { it.copy(text = result.text, thinking = result.thinking, thinkingSeconds = result.thinkingSeconds, notice = result.notice, codeRuns = result.codeRuns, build = result.build ?: it.build, proposal = result.proposal ?: it.proposal, approvals = result.approvals.ifEmpty { it.approvals }, state = state) }
+    }
+
+    /** Nothing reached the model: take the turn back out and, when it was a plain text send, queue it for reconnect. */
+    private fun _failedReply(plan: SendPlan, userText: String, failure: Exception) {
+        _messages.value = _messages.value.filterNot { it.id == plan.userMessage.id || it.id == plan.reply.id }
+        replyWebModes.remove(plan.reply.id); replyReasoning.remove(plan.reply.id); replyAgent.remove(plan.reply.id); replyCode.remove(plan.reply.id); replyBuild.remove(plan.reply.id)
+        _draft.value = userText
+        _failedPrompt.value = userText
+        // Offline, text-only, not an edit: send it again once the phone reconnects (at most once).
+        val queued = offlineRetry.sendFailed(activeId, userText,
+            offline = !plan.edited && plan.files.isEmpty() && plan.storedFiles.isEmpty() && (!_online.value || failure is java.io.IOException))
+        _error.value = if (queued) "You're offline. Dua will send this message when you're back online." else failureText(failure)
+    }
+
+    /** The one tail that always runs: clear the typing flag, save, and notify if the user is elsewhere. */
+    private fun _finishReply(currentGeneration: Int) {
+        if (generation == currentGeneration) {
+            _isTyping.value = false; saveHistory()
+            if (!foreground && _error.value == null && localSettings.value.notifications && _messages.value.lastOrNull()?.isUser == false)
+                com.dua.ai.settings.LocalReplyNotifications.show(getApplication(), activeId)
         }
     }
 
