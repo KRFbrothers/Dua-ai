@@ -1038,3 +1038,159 @@ Phir app mein yeh **6 jagah**:
 
 - **Step 6:** `startNewChat` (71) / `retryResponse` (69) / `deleteChat` (34) / `deleteServerChat` (38) → `viewmodel/ChatLifecycle.kt`. **High risk** — yahan galti user-facing hai (chat loss / duplicate chat). Alag PR, aur pehle `sendMessage` + history ka test coverage dekh lein.
 - Steps 1–5 ke baad `ChatViewModel.kt` = **1,628 lines**, 11 features alag. Step 6 ke bina bhi file reviewable hai.
+
+---
+
+## 🔁 Chat split — Step 6: reply lifecycle → `ChatLifecycle.kt` (20 Oct 2026)
+
+Base: `main` @ `5eb7a37` (PR #313 / Step 5 merge ke baad). Yeh `ChatViewModel.kt` split plan ka **aakhri step** hai (Pass 6 section ki table, row 6).
+
+**Sabse pehle ek finding — plan galat tha.** Split plan kehta tha chaar function nikalne hain: `startNewChat` (71), `retryResponse` (69), `deleteChat` (34), `deleteServerChat` (38). Code kholne par pata chala **teen pehle se nikal chuke hain**:
+
+| Function | Kahan hai | `ChatViewModel` mein kya hai |
+| --- | --- | --- |
+| `startNewChat()` | `ChatHistory.kt:273` — **poora body** | 1 line forwarder (`historyFeature.startNewChat()`) |
+| `deleteChat(id)` | `ChatHistory.kt:250` — **poora body** | 1 line forwarder |
+| `deleteServerChat(id)` | `ChatHistory.kt:198` — **poora body** | 1 line forwarder |
+| `retryResponse(messageId)` | `ChatViewModel.kt` — **poora body (69 lines)** | asli logic |
+
+Yaani Step 6 ka asli kaam **ek hi function** tha. Teen ko chhua nahi — unka ghar pehle se sahi tha.
+
+### Line count — before → after
+
+| File | Pehle | Ab | Farq |
+| --- | --- | --- | --- |
+| `viewmodel/ChatViewModel.kt` | **1,628** | **1,606** | **−22** |
+| `viewmodel/ChatLifecycle.kt` | — | **133** (naya) | +133 |
+| `viewmodel/ChatReplyHelpers.kt` | 26 | **28** | +2 |
+| `viewmodel/` total | 3,803 | 3,916 | +113 |
+
+`git diff --shortstat` = **3 files changed, 184 insertions(+), 70 deletions(-)** (+ yeh README section).
+
+Shape wahi jo Step 1–4 mein tha — `LifecycleHost` interface (39 members) + `ChatLifecycle : LifecycleHost by host` + `by lazy` delegate (`lifecycleFeature`). `retryResponse` ka poora body **jaisa tha waisa** naye file mein, aur `ChatViewModel` par 1-line forwarder.
+
+**Yeh bhi akela step hai jahan file chhoti hoti hai par `viewmodel/` package bada hota hai** — wajah: 39-member host block (46 lines) + 69-line body ka naya file. Fayda line count nahi, **isolation** hai: retry ka poora cancellation/generation logic ab ek jagah padha ja sakta hai.
+
+### Public API bilkul same — `ui/` ki ek bhi file nahi badli
+
+`fun retryResponse(messageId: String)` — signature wahi. **2 call-sites** unchanged: `ui/chat/ChatRoute.kt:221` aur `test/PersonalityPromptingTest.kt:112`. Diff mein `ui/`, test, trap files — kuch nahi.
+
+### Kya `ChatViewModel` mein hi rehna hi tha (aur kyun)
+
+| Member | Kyun move nahi hui |
+| --- | --- |
+| `generation` (`:668`) | `_streamReply` (`sendMessage` path) aur `ChatImagine` dono isi counter se guard karte hain |
+| `replyJob` (`:674`) | `_streamReply` ise assign karta hai; `ChatImagine` host se padhta hai |
+| `retryOriginal` (`:676`) | `finalizeStreaming()` ise padhta hai — aur woh `cancelReply()` ka hissa hai |
+| `cancelReply` / `finalizeStreaming` / `stopReply` | `cancelReply` ko `HistoryHost`, `DataControlsHost` aur `stopReply` teeno call karte hain; `ChatImagine` `stopAll` ke through `stopReply` tak aata hai. Hile to teen host contracts badalne padte |
+
+**Sabse important constraint — reflection.** `test/StoppedReplyRecoveryTest.kt:56-57` seedha field naam se likhta hai:
+
+```kotlin
+setField("retryOriginal", original)
+return Job().also { setField("replyJob", it) }
+```
+
+`ChatViewModel::class.java.getDeclaredField(...)` — yaani **field `ChatViewModel` par declared honi chahiye**. Agar `replyJob` / `retryOriginal` `ChatLifecycle` mein chali jaayein to woh 3 test methods `NoSuchFieldException` se fail hote. Isliye dono fields wahin rahein, aur `LifecycleHost` sirf **get/set forward** karta hai — koi copy nahi, koi duplicate state nahi.
+
+### `EMPTY_REPLY` ka chhota move
+
+`private companion object` ka `EMPTY_REPLY` `ChatLifecycle` se reach nahi hota (companion `private` hai). Usko `ChatReplyHelpers.kt` mein **top-level `internal const val`** bana diya — ek hi declaration, dono files wahin se padhti hain. `ChatViewModel` ki companion se line hatai gayi, value **bilkul same** (`"Model ne text reply nahi diya. Dobara try karein."`) aur `_streamReply` ka use `:1517` par unchanged hai.
+
+### Verify — jo actually chalaya
+
+| Check | Result |
+| --- | --- |
+| **Byte-compare** — purana body (`1332–1399`) vs naya `retryResponse` body, whitespace-normalised | **65/65 non-empty lines identical, 0 mismatches** ✅ |
+| Line count of body — old vs new | **68 → 65**; 3 line ka farq = ek import-shortening (`ChatViewModel.EMPTY_REPLY` → `EMPTY_REPLY`) + naye file ka `package`/`import`/header, body ka ek line nahi hata ✅ |
+| **Statement order** guard → plan → personality → mode freeze → request → persistence → generation → typing → retryOriginal → updateMessage → launch → try/catch/finally | **bilkul same** ✅ |
+| `retryOriginal = original` **`replyJob = ...` se pehle** (original order) | same ✅ |
+| `catch (cancelled) { throw cancelled }` **`finally` se pehle** | same ✅ |
+| `finally` mein `if (generation == currentGeneration) { _isTyping = false; saveHistory() }` | same ✅ |
+| `Host` interface vs host overrides | **39 = 39**, missing 0, extra 0 ✅ |
+| **Reflection fields** `generation`/`replyJob`/`retryOriginal` | **abhi bhi `ChatViewModel` par declared** (`668`, `674`, `676`) ✅ |
+| Brace balance | `ChatViewModel` **324/324**, `ChatLifecycle` **36/36** ✅ |
+| Naam clash (`ChatLifecycle`, `LifecycleHost`, `lifecycleFeature`) | pehle **0 hits**, ab sirf apne file mein ✅ |
+| `retryResponse` call-sites | **2** — signature nahi badla ✅ |
+| Changed files | **3** — `ui/`, tests, trap files, `THIRD_PARTY_NOTICES.md` sab untouched ✅ |
+| README purane **1,040** line | **md5 `5edbaef9…` identical** (sirf yeh section juda) ✅ |
+
+### ⚠️ Test coverage — jo user ko pata hona chahiye
+
+`retryResponse` ka **dedicated test nahi hai**. Jo hai woh sirf itna:
+
+| Function | Existing coverage |
+| --- | --- |
+| `retryResponse` | **1 indirect call** — `PersonalityPromptingTest.kt:112` (personality prompt bhejta hai, retry ke error paths nahi) |
+| `startNewChat` | 6 test files (`StoppedReplyRecoveryTest`, `ProjectSwitchingTest`, `ChatRenameTest`, `ChatPinTest`, `CacheFileRetentionTest`, +1) |
+| `deleteChat` | 3 test files |
+| `deleteServerChat` | 1 test file (`ServerChatDeletionCacheTest`) |
+
+Yaani **normal retry (complete reply), partial-failure retry, Stopped-then-retry, Build-mode retry, project chat retry** — inme se kisi ka bhi assertion nahi hai. Step 5/6 ke liye dedicated test likhna baaki kaam hai (neeche "Aage kya").
+
+### Left alone and why (jaan-boojh kar nahi chhua)
+
+- `startNewChat` / `deleteChat` / `deleteServerChat` — **pehle se `ChatHistory` mein**. Upar table dekho. Unka forwarder hi rehne diya.
+- `cancelReply` / `finalizeStreaming` / `stopReply` — teen host contracts inhe call karte hain; hilane se `LifecycleHost` + `HistoryHost` + `DataControlsHost` teeno badalne padte.
+- `_messages` ka `updateMessage(...)` — `ChatImagine` host se bhi use hota hai, isliye `ChatViewModel` mein hi.
+- `collectReply` — `_streamReply` (Step 5) aur `retryResponse` dono isse chalte hain; host ke through dispatch.
+- `ChatViewModel.kt` ka purana stale comment (`com.dua.ai.auth.GoogleSignIn`) — **jaan-boojh kar**. Comment compile nahi hota; 1,606-line file uske liye dobara likhna galat trade hai.
+
+### Merge checklist
+
+```bash
+./gradlew assembleDebug
+./gradlew testDebugUnitTest
+./gradlew lint
+```
+
+Phir app mein yeh **5 jagah** — retry ke paanch raaste:
+
+1. **Normal retry** — reply pe Retry; wahi reply regenerate ho, purana text replace ho
+2. **Retry ke beech Stop** — partial reply rahe, `"Retry interrupted: … Partial reply kept; tap retry."` aaye
+3. **Retry fail (koi text nahi)** — **original reply wapas** aaye, `"Retry failed. Original response kept."` aaye
+4. **Build reply pe Retry** — wahi repository uthaye, Build mode on rahe
+5. **Chat switch karke wapas** — purani generation ka late reply naye chat ko na chhue (generation guard)
+
+**Build yahan nahi chala** — sandbox mein Java/Android SDK nahi hai. Jo kiya woh byte-compare + host parity + brace balance + call-site check hai. Asli confirmation CI se.
+
+---
+
+## 📊 ChatViewModel split — final summary (Steps 1–6)
+
+**`ChatViewModel.kt`: 1,748 → 1,606 lines (−142, −8.1%)** · **12 features alag**
+
+| # | Step | File | Lines | Pattern |
+| --- | --- | --- | --- | --- |
+| 1 | Voice/TTS | `ChatVoice.kt` | 136 | `ChatVoiceHost` |
+| 2 | Attachments | `ChatAttachments.kt` | 93 | `AttachmentsHost` |
+| 3 | Settings/Appearance/Writing | `ChatSettings.kt` | 118 | `SettingsHost` |
+| 4 | Memory notes | `ChatMemory.kt` | 69 | `MemoryHost` |
+| 5 | `sendMessage` split | *(same file)* | — | 5 private helpers + `SendPlan` |
+| 6 | Reply lifecycle | `ChatLifecycle.kt` | 133 | `LifecycleHost` |
+| — | History | `ChatHistory.kt` | 288 | `HistoryHost` |
+| — | Agent controls | `ChatAgentControls.kt` | — | `AgentHost` |
+| — | Uploads | `ChatUploads.kt` | — | `UploadsHost` |
+| — | Account | `ChatAccount.kt` | — | `AccountHost` |
+| — | Data controls | `ChatDataControls.kt` | — | `DataControlsHost` |
+| — | Projects | `ChatProjects.kt` | — | `ProjectsHost` |
+| — | Imagine | `ChatImagine.kt` | — | `ImagineHost` |
+
+(Step 5 ne file **+54** ki thi — woh akela step hai jisme line count badhta hai. Steps 1–4, 6 ne milkar **−196** diya.)
+
+### Jo bacha — jaan-boojh kar
+
+`ChatViewModel` ke ~1,606 lines mein asli bacha hua kaam:
+
+- **Message core** — `_messages`, `updateMessage`, `collectReply` (35), `finalizeStreaming`, generation/replyJob ka control
+- **Model + mode selection** — `setModel`, `setAgent`, `setReasoning`, `setWebMode`, `selectFreeModel`, `setRunCode`, `setBuildRepository`, `setXSearch` — pehle se saaf, chhote functions
+- **Composer state** — draft, edit, attachments ke flows
+- **Wiring** — 12 host blocks (~450 lines)
+
+Aage toda ja sakta hai (`ChatModes.kt` for model/mode selection ~200 lines), **par zaroorat nahi**. File ab reviewable hai.
+
+### Aage kya karna chahiye
+
+1. **Dedicated tests likho `retryResponse` ke liye** — abhi coverage almost zero hai (upar table). Paanch cases: normal, partial-fail, no-text-fail, Build-reply, stale generation.
+2. **`startNewChat` / `deleteChat` ke tests** add karo — delete ke 3 test files hain par `deleteChat` ka idempotency/cancel-reply path assert nahi hota.
+3. **Uske baad** hi naya split (`ChatModes.kt`) socho. Pehle test, phir move — ulta karne par regression chhup jaata hai.
