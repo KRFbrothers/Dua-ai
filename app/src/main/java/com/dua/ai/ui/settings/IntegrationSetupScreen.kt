@@ -1,4 +1,4 @@
-package com.dua.ai.ui.screens
+package com.dua.ai.ui.settings
 
 import android.content.Intent
 import android.net.Uri

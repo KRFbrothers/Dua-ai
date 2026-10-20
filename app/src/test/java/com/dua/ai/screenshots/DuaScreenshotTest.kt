@@ -35,9 +35,9 @@ import com.dua.ai.ui.chat.ChatScreen
 import com.dua.ai.ui.chat.ChatSheet
 import com.dua.ai.ui.chat.ChatUiState
 import com.dua.ai.ui.chat.AudioSheetContent
-import com.dua.ai.ui.screens.StoredFilesSection
 import com.dua.ai.ui.settings.SettingsContent
 import com.dua.ai.ui.settings.SettingsUiState
+import com.dua.ai.ui.settings.StoredFilesSection
 import com.dua.ai.ui.theme.DuaTheme
 import com.github.takahirom.roborazzi.ExperimentalRoborazziApi
 import com.github.takahirom.roborazzi.RobolectricDeviceQualifiers

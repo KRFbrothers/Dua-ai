@@ -39,10 +39,10 @@ import com.dua.ai.ui.chat.HomeTab
 import com.dua.ai.ui.projects.ProjectsFeatureFlow
 import com.dua.ai.ui.projects.ProjectChatRoute
 import com.dua.ai.ui.onboarding.OnboardingScreen
-import com.dua.ai.ui.screens.CloudSyncScreen
-import com.dua.ai.ui.screens.DataControlsScreen
-import com.dua.ai.ui.screens.IntegrationSetupScreen
-import com.dua.ai.ui.screens.ProfileScreen
+import com.dua.ai.ui.settings.CloudSyncScreen
+import com.dua.ai.ui.settings.DataControlsScreen
+import com.dua.ai.ui.settings.IntegrationSetupScreen
+import com.dua.ai.ui.settings.ProfileScreen
 import com.dua.ai.ui.settings.SettingsScreen
 import com.dua.ai.ui.settings.StorageScreen
 import com.dua.ai.ui.settings.GeneralScreen
@@ -372,7 +372,7 @@ fun DuaNavHost(viewModel: ChatViewModel, voice: ReplyVoice, notificationRoute: P
         }
         composable(DuaDestination.Imagine.route) {
             BusyBackGuard(viewModel)
-            com.dua.ai.ui.screens.ImagineSettingsScreen(viewModel, onBack = navigator::back)
+            com.dua.ai.ui.settings.ImagineSettingsScreen(viewModel, onBack = navigator::back)
         }
         composable(DuaDestination.VoiceSettings.route) {
             BusyBackGuard(viewModel)

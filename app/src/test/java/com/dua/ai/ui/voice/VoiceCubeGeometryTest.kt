@@ -1,4 +1,4 @@
-package com.dua.ai.ui.screens
+package com.dua.ai.ui.voice
 
 import org.junit.Assert.*
 import org.junit.Test

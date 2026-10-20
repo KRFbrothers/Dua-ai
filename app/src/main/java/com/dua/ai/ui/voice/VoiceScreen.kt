@@ -54,7 +54,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.dua.ai.ui.components.DuaPageScaffold
-import com.dua.ai.ui.screens.AnimatedVoiceCube
+import com.dua.ai.ui.voice.AnimatedVoiceCube
 import com.dua.ai.ui.theme.DuaTheme
 import com.dua.ai.ui.theme.Spacing
 import com.dua.ai.ui.theme.VoiceSizes

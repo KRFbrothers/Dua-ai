@@ -18,9 +18,6 @@ import com.dua.ai.settings.LocalPreferences
 import com.dua.ai.ui.components.AccountAvatar
 import com.dua.ai.ui.navigation.DuaDestination
 import com.dua.ai.ui.onboarding.OnboardingContent
-import com.dua.ai.ui.screens.ProfileActions
-import com.dua.ai.ui.screens.ProfileContent
-import com.dua.ai.ui.screens.ProfileUiState
 import com.dua.ai.ui.theme.*
 import com.github.takahirom.roborazzi.captureRoboImage
 import java.io.File

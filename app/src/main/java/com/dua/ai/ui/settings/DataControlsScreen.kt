@@ -1,4 +1,4 @@
-package com.dua.ai.ui.screens
+package com.dua.ai.ui.settings
 
 import com.dua.ai.ui.theme.SheetSubStyle
 import com.dua.ai.ui.theme.SheetBodyStyle

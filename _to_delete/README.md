@@ -205,3 +205,90 @@ Yeh ek **comment** hai — code nahi. Iska purana path `com.dua.ai.auth.GoogleSi
 ```
 
 Teeno pass hone chahiye. Uske baad app kholke check karo: **history drawer khulta hai**, **drawer mein search chalta hai** (`HistorySearch`), **Google sign-in button kaam karta hai** (`GoogleSignIn`), aur **chat ke andar ka search** (`ConversationSearch`). Yeh chaar jagah hi is move se touch hoti hain.
+
+---
+
+## 🔁 Pass 4 — `ui/screens/` ko feature packages mein todna (20 Oct 2026)
+
+**Base:** `main` @ `9f98656` (PR #305 merge ke baad).
+**Is PR mein kuch delete nahi hua** — sirf 9 files move hui hain aur unke import paths update hue hain. `_to_delete/` folder mein is pass mein kuch nahi daala gaya. **7 trap files ko haath nahi lagaya.**
+
+### Kya move hua — 9 files
+
+| Purana path | Naya path | Kyun |
+| --- | --- | --- |
+| `ui/screens/CloudSyncScreen.kt` | `ui/settings/CloudSyncScreen.kt` | Cloud sync ka **Settings → Cloud sync** page hai. `ui/settings/` mein `AccountContent`, `StorageScreen`, `HistoryDataScreen` pehle se hain — yeh bhi wahi kaam karta hai |
+| `ui/screens/DataControlsScreen.kt` | `ui/settings/DataControlsScreen.kt` | **Settings → Data controls** page (stored files, chat count). Feature hub ka page nahi |
+| `ui/screens/ImagineSettingsScreen.kt` | `ui/settings/ImagineSettingsScreen.kt` | Naam mein hi "Settings" hai. `DuaDestination.ImagineSettings` se khulta hai |
+| `ui/screens/IntegrationSetupScreen.kt` | `ui/settings/IntegrationSetupScreen.kt` | **Settings → Feature setup** page (search, GitHub, voice providers). Sirf `DuaNavHost` se khulta hai |
+| `ui/screens/ProfileScreen.kt` | `ui/settings/ProfileScreen.kt` | `ProfileScreen` pehle se **`ui/settings/AccountContent`** ko wrap karta hai — yeh account/settings ka page hai, feature screen nahi |
+| `ui/screens/AnimatedVoiceCube.kt` | `ui/voice/AnimatedVoiceCube.kt` | Sirf `ui/voice/VoiceScreen.kt` use karta hai. Voice ka UI voice package mein rehna chahiye |
+| `ui/screens/VoiceCubeGeometry.kt` | `ui/voice/VoiceCubeGeometry.kt` | `AnimatedVoiceCube` ka geometry helper — pure math, koi Compose UI nahi |
+| `test/.../ui/screens/VoiceCubeGeometryTest.kt` | `test/.../ui/voice/VoiceCubeGeometryTest.kt` | Test apne subject ke saath |
+| `ui/icons/DuaIcons.kt` | `ui/components/DuaIcons.kt` | `ui/icons/` mein **sirf 1 file** thi. `ui/components/` mein baaki shared UI bits (`Shimmer`, `PressScale`, `AccountAvatar`, `FeatureTopBar`) hain |
+
+**Package changes:** `com.dua.ai.ui.screens` → `com.dua.ai.ui.settings` (5 files), `→ com.dua.ai.ui.voice` (3, test included), `com.dua.ai.ui.icons` → `com.dua.ai.ui.components` (1 file). Khaali `ui/icons/` dir hat gayi.
+
+**`ui/screens/` ab 15 se 8 files par aa gaya:** `AssetFeatureRoutes.kt`, `FeatureScreens.kt`, `PluginsRoute.kt`, `AppPausedScreen.kt`, `ImagesScreen.kt`, `LibraryScreen.kt`, `PluginsScreen.kt`, `ComputerScreen.kt`.
+
+### Import updates — 12 imports, 8 files (+3 fully-qualified uses)
+
+| File | Kya badla |
+| --- | --- |
+| `ui/navigation/DuaNavHost.kt` | 4 imports (`CloudSyncScreen`, `DataControlsScreen`, `IntegrationSetupScreen`, `ProfileScreen`) + 1 fully-qualified `ImagineSettingsScreen` call |
+| `ui/voice/VoiceScreen.kt` | `ui.screens.AnimatedVoiceCube` → `ui.voice.AnimatedVoiceCube` |
+| `ui/screens/ComputerScreen.kt` | `ui.icons.DuaIcons` → `ui.components.DuaIcons` |
+| `ui/settings/AccountContent.kt` | 2 same-package imports hata diye (`ProfileActions`, `ProfileUiState` ab same package mein hain) |
+| `test/screenshots/ImagineScreenshotTest.kt` | `ui.screens.ImagineSettingsContent` → `ui.settings.*` |
+| `test/screenshots/LoginScreenshotTest.kt` | 4 imports (`ProfileActions`, `ProfileContent`, `ProfileDialog`, `ProfileUiState`) |
+| `test/ui/ApprovedNavigationUiTest.kt` | 2 fully-qualified uses (`ProfileContent`, `ProfileUiState`, `ProfileActions` → `ui.settings`) — `ui.settings.*` pehle se imported tha |
+| `test/ui/pages/RemainingPagesTokensTest.kt` | `import com.dua.ai.ui.settings.*` add kiya (wildcard = covered) |
+| `test/ui/settings/AccountReferenceUiTest.kt` | 3 imports hataye — `ui.settings.*` wildcard se already covered |
+| `test/ui/settings/InnerSettingsRowsTest.kt` | `ui.screens.ImagineSettingsContent` → `ui.settings.*` |
+
+### Verify kaise kiya
+
+| Check | Result |
+| --- | --- |
+| Purane paths (`ui.icons`, `ui.screens.CloudSync/DataControls/ImagineSettings/IntegrationSetup/Profile*/AnimatedVoiceCube/VoiceCubeGeometry`) — `*.kt *.java *.xml *.pro *.kts *.md` mein | **0 hits** ✅ |
+| `AndroidManifest.xml` / `res/` XML / `proguard-rules.pro` / `build.gradle.kts` mein in classes ka zikr | **0** |
+| `THIRD_PARTY_NOTICES.md` mein in 9 files ka row | **0** — license trail chhua nahi |
+| Extension function/property sweep (jaise pass 3 mein `HistoryDrawer` ka bug tha) | **0 misses** — in 9 files mein koi `fun X.y` / `val X.y` extension nahi hai; har consumer ka import ya wildcard match karta hai |
+| Wildcard collision (ek file `ui.screens.*` + `ui.settings.*` dono import kare aur naam takra jaaye) | **0** — `VoiceOrb` `ui/voice` ke andar hi pehle se 2 overloads hai (pre-existing), yeh move usse touch nahi karta |
+
+**Build nahi chala paaya — imaandaari se.** Is sandbox mein Java aur Android SDK dono nahi hain (`java: command not found`, `ANDROID_HOME` khaali). `./gradlew assembleDebug` **verify nahi kiya**. Merge se pehle chalana hoga.
+
+### Left alone and why (jaan-boojh kar nahi chhua)
+
+| Cheez | Kyun nahi chhui |
+| --- | --- |
+| `ui/screens/AssetFeatureRoutes.kt`, `FeatureScreens.kt`, `PluginsRoute.kt` | **Trap files** (upar table mein). `DuaNavHost.kt:227,231,237` aur `ChatScreen.kt:102` se zinda |
+| `ui/screens/ComputerScreen.kt` | Abhi bhi `ui/screens` mein hai. "Computer" feature hub ka page hai (Home top bar se), settings page nahi. `ui/screens/ComputerScreen.kt` + 2 tests use karte hain |
+| `ui/screens/AppPausedScreen.kt` | `ui/DuaApp.kt:52` se seedha fully-qualified call. Saath hi `THIRD_PARTY_NOTICES.md:25` mein **Androidify attribution row** hai (file header mein bhi Apache-2.0 notice) — move karne se notice path stale ho jaata. **Alag PR ka kaam** |
+| `ui/screens/ImagesScreen.kt`, `LibraryScreen.kt`, `PluginsScreen.kt` | Yeh asli feature screens hain, settings nahi. Aur `AssetFeatureRoutes.kt` inke `Content` composables ko call karta hai — ek saath hilana zaroori hota, jo trap file ko chhune ke barabar hai |
+| `ui/agent/AgentScreen.kt` (1-file package) | `ChatRoute.kt`, `ChatScreen.kt`, `ChatUiState.kt` aur `DuaNavHost.kt:248` use karte hain. Naam `chat` se milta hai par yeh **alag feature** hai (Research/GitHub/Briefing). Merge karna `ChatViewModel` PR ke saath karna behtar |
+| `ui/onboarding/OnboardingScreen.kt` (1-file package) | `OnboardingScreen` full-screen flow hai, `OnboardingContent` shared UI. `ui/auth` ke saath merge karne par `ProfileScreen`/`EmailAuthScreen` ka blast radius badhta hai. Risk zyada, fayda kam |
+| `ui/og/BlobDrawable.java` (1-file package) | **Telegram GPL-2.0 header** + `THIRD_PARTY_NOTICES.md:204-207` mein row. Move karne se license trail ka path stale ho jaata. `ui/chat/OgGenerationBackdrop.kt` use karta hai |
+| `ui/auth/EmailAuthScreen.kt`, `GoogleSignInButton.kt` | 2 files hain, 1 nahi — "obvious single-file merge" nahi. Auth flow ka apna package theek hai |
+| `web/`, `website/` | Aapke nirdesh ke mutabiq — rename nahi kiya |
+| `ChatViewModel.kt` (todna) | Alag PR ka kaam |
+| `viewmodel/ChatHistory.kt` | `ChatViewModel.kt:54,55` se banti hai — chhuna = `ChatViewModel` chhuna |
+
+### Merge checklist
+
+```bash
+./gradlew assembleDebug
+./gradlew testDebugUnitTest
+./gradlew lint
+```
+
+Teeno pass hone chahiye. Uske baad app mein yeh 6 jagah check karo:
+
+1. **Settings → Cloud sync** khulta hai (`CloudSyncScreen`)
+2. **Settings → Data controls** khulta hai, stored files list dikhti hai (`StoredFilesSection`)
+3. **Settings → Imagine** (imagine settings) khulta hai, provider/aspect badalte hain
+4. **Settings → Feature setup** khulta hai (`IntegrationSetupScreen`)
+5. **Profile / Account** screen khulti hai, log out dialog dikhta hai (`ProfileScreen` + `AccountContent`)
+6. **Voice screen** — cube animation chalti hai (`AnimatedVoiceCube` + `VoiceCubeGeometry`)
+
+Aur icons: koi bhi screen kholo — `DuaIcons.Sparkle` wala sparkle dikhna chahiye (Computer screen par bhi).

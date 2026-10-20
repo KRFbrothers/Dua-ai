@@ -1,4 +1,4 @@
-package com.dua.ai.ui.icons
+package com.dua.ai.ui.components
 
 import com.dua.ai.ui.theme.DuaVectorStroke
 

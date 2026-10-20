@@ -82,8 +82,8 @@ class ApprovedNavigationUiTest(private val dark: Boolean, private val small: Boo
     }
     @Test fun accountRetainsExistingDeleteActionWithoutASecondLogoutEntry() {
         content {
-            com.dua.ai.ui.screens.ProfileContent(com.dua.ai.ui.screens.ProfileUiState(email = "fareed@example.com", displayName = "Fareed", deletionConfigured = true),
-                com.dua.ai.ui.screens.ProfileActions(), showLogout = false)
+            com.dua.ai.ui.settings.ProfileContent(com.dua.ai.ui.settings.ProfileUiState(email = "fareed@example.com", displayName = "Fareed", deletionConfigured = true),
+                com.dua.ai.ui.settings.ProfileActions(), showLogout = false)
         }
         compose.onNodeWithText("Account", substring = false).assertExists()
         compose.onNodeWithText("Log out", substring = false).assertDoesNotExist()

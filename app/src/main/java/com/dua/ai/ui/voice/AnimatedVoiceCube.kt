@@ -1,4 +1,4 @@
-package com.dua.ai.ui.screens
+package com.dua.ai.ui.voice
 
 import com.dua.ai.ui.theme.DuaTheme
 import com.dua.ai.ui.theme.voiceCubeFaceColor

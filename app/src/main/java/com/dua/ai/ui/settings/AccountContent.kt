@@ -17,8 +17,6 @@ import androidx.compose.ui.semantics.semantics
 import com.dua.ai.ui.chat.DuaDialog
 import com.dua.ai.ui.chat.SheetTextButton
 import com.dua.ai.ui.components.ReferenceIcons
-import com.dua.ai.ui.screens.ProfileActions
-import com.dua.ai.ui.screens.ProfileUiState
 import com.dua.ai.ui.theme.*
 
 /** Account details use existing password, sync and logout actions; unsupported phone/Pro changes are explicit. */
