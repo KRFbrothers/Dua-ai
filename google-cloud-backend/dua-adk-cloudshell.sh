@@ -567,6 +567,12 @@ def supabase_sign_in(base,key,owner):
 
 SMOKE_CHAT_PROMPT='Smoke test: reply with one short friendly sentence confirming you are working.'
 SMOKE_AGENT_PROMPT='Smoke test: what is 17 multiplied by 23? Answer in one short sentence.'
+# Durable ADK sessions (runId) exist only when the Agent planner splits a request
+# into 2+ independent helper parts; single questions use the direct, non-durable
+# path by design. This read-only prompt has two independent parts on purpose.
+SMOKE_DURABLE_PROMPT=('Smoke test with two independent parts, read-only, do not save or change anything: '
+    '(1) research: look up the latest stable Python version on python.org; '
+    '(2) notes: say whether you have any private notes about my preferences. Answer in two short lines.')
 
 
 def smoke_request(text,agent=False):
@@ -610,11 +616,12 @@ def chat_stream(url,token,payload,timeout=300,extra=None):
 
 
 def smoke(service):
-    """Owner-authenticated chat + Agent + durable-session check against the 0% candidate. Changes nothing."""
+    """Owner-authenticated chat + Agent + durable-session check against the tagged candidate. Changes nothing."""
     step('finding tagged candidate')
     candidate=next((row for row in service['status'].get('traffic',[]) if row.get('tag')=='adk-candidate'),None)
     if not candidate or not candidate.get('url'):raise ValueError('No adk-candidate tag found. Run stage first.')
-    if candidate.get('percent',0):raise ValueError('adk-candidate already serves traffic; this check is only for an unpromoted candidate.')
+    # Read-only: the tag URL always reaches this revision, also during a canary.
+    percent=sum(row.get('percent',0) for row in service['status'].get('traffic',[]) if row.get('revisionName')==candidate.get('revisionName'))
     url=candidate['url'].rstrip('/')
     if urlsplit(url).scheme!='https' or not urlsplit(url).hostname.endswith('.run.app'):raise ValueError('Unexpected candidate URL.')
     step('reading public auth configuration')
@@ -626,20 +633,24 @@ def smoke(service):
     extra={'X-Dua-App-Token':app_token} if app_token else {}
     step('owner sign-in')
     token=supabase_sign_in(base,key,owner)
-    result={'candidate':url,'revision':candidate.get('revisionName'),'servingTrafficChanged':False}
+    result={'candidate':url,'revision':candidate.get('revisionName'),'candidateTrafficPercent':percent,'servingTrafficChanged':False}
     try:
         step('chat check')
         chat=chat_stream(url,token,smoke_request(SMOKE_CHAT_PROMPT),extra=extra)
         step('Agent check')
         agent=chat_stream(url,token,smoke_request(SMOKE_AGENT_PROMPT,agent=True),extra=extra)
-        run_id=next((e[6:] for e in agent['events'] if e.startswith('runId:')),None)
-        persisted='no_run_id'
+        step('durable session check')
+        durable=chat_stream(url,token,smoke_request(SMOKE_DURABLE_PROMPT,agent=True),extra=extra)
+        run_id=next((e[6:] for e in agent['events']+durable['events'] if e.startswith('runId:')),None)
         if run_id:
-            step('durable session check')
             status,body=http_json(url+'/api/chat',{'resumeRun':run_id},{'Authorization':'Bearer '+token,'x-dua-native':'1',**extra},timeout=60)
             # 409 = the completed run was loaded back from the Supabase dua_adk schema.
             persisted={409:'loaded_from_database',404:'not_found',503:'storage_unavailable'}.get(status,'http_'+str(status))
-        for name,item in (('chat',chat),('agent',agent)):
+        elif durable['errors']:persisted='durable_request_failed'
+        else:
+            # Planner answered without splitting: no durable run was started, nothing failed.
+            persisted='not_exercised'
+        for name,item in (('chat',chat),('agent',agent),('durableProbe',durable)):
             result[name]={'ok':bool(item['reply']) and not item['errors'],'reply':item['reply'][:200],
                 'firstTextSeconds':item['firstTextSeconds'],'totalSeconds':item['totalSeconds'],'errors':item['errors'][:3]}
         result['agentRunId']=run_id;result['durableSession']=persisted
@@ -649,8 +660,12 @@ def smoke(service):
         except Exception:pass
         del token
     print(json.dumps(result,indent=2,ensure_ascii=False))
-    ok=result['chat']['ok'] and result['agent']['ok'] and result['durableSession']=='loaded_from_database'
-    print('SMOKE '+('PASSED' if ok else 'NEEDS REVIEW')+'. No traffic or configuration was changed. Share this output; it contains no credentials.')
+    answered=result['chat']['ok'] and result['agent']['ok']
+    durable=result['durableSession']
+    if answered and durable=='loaded_from_database':verdict='PASSED (chat, Agent and durable Supabase session verified)'
+    elif answered and durable=='not_exercised':verdict='PASSED for chat and Agent; durable session not exercised (the planner did not split the probe, so no run was saved). Rerun smoke to retry'
+    else:verdict='NEEDS REVIEW'
+    print('SMOKE '+verdict+'. No traffic or configuration was changed. Share this output; it contains no credentials.')
 
 
 def main():
