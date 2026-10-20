@@ -17,10 +17,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.height
+import androidx.compose.ui.unit.dp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.outlined.Schedule
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -56,6 +58,7 @@ fun AgentProgressView(steps: List<AgentStep>, modifier: Modifier = Modifier) {
     val active = steps.lastOrNull { !it.done }
     val done = steps.filter { it.done }
     Column(modifier.fillMaxWidth().animateContentSize(animationSpec = if (motion) DuaMotion.gentle() else snap()).testTag("agent-progress")) {
+        if (steps.size > 1) AgentStepTracker(steps, Modifier.padding(bottom = Spacing.xs))
         if (done.isNotEmpty()) FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.xs), verticalArrangement = Arrangement.spacedBy(Spacing.xs),
             modifier = Modifier.padding(bottom = Spacing.xs)) {
             done.forEach { step ->
@@ -77,12 +80,35 @@ fun AgentProgressView(steps: List<AgentStep>, modifier: Modifier = Modifier) {
                 val pulse = com.dua.ai.ui.components.rememberShimmerAlpha(enabled = motion)
                 Row(Modifier.heightIn(min = Sizes.touchTarget).semantics { contentDescription = step.label; liveRegion = LiveRegionMode.Polite },
                     verticalAlignment = Alignment.CenterVertically) {
-                    if (motion) CircularProgressIndicator(Modifier.size(AgentSizes.stepIcon).clearAndSetSemantics { }, color = c.chipIcon, strokeWidth = AgentSizes.stepStroke)
+                    if (motion) TelegramRadialProgress(c.chipIcon, Modifier.size(AgentSizes.stepIcon), strokeWidth = AgentSizes.stepStroke)
                     else Icon(Icons.Outlined.Schedule, null, tint = c.chipIcon, modifier = Modifier.size(AgentSizes.stepIcon))
                     Text(step.label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(start = Spacing.sm).graphicsLayer { alpha = pulse() }.clearAndSetSemantics { })
                 }
             }
+        }
+    }
+}
+
+/** Step n of m, counting the active step; null when there is nothing to track. */
+internal fun agentStepPosition(steps: List<AgentStep>): Pair<Int, Int>? {
+    if (steps.isEmpty()) return null
+    val done = steps.count { it.done }
+    return (if (done < steps.size) done + 1 else steps.size) to steps.size
+}
+
+/** Dua glue: segmented step tracker (done = filled, active = half, pending = track). */
+@Composable
+internal fun AgentStepTracker(steps: List<AgentStep>, modifier: Modifier = Modifier) {
+    val c = ChatTheme.colors
+    val (n, m) = agentStepPosition(steps) ?: return
+    val firstActive = steps.indexOfFirst { !it.done }
+    Row(modifier.fillMaxWidth().testTag("agent-step-tracker").semantics(mergeDescendants = true) { contentDescription = "Step $n of $m" },
+        horizontalArrangement = Arrangement.spacedBy(Spacing.xs), verticalAlignment = Alignment.CenterVertically) {
+        steps.forEachIndexed { i, step ->
+            val a = when { step.done -> 1f; i == firstActive -> 0.5f; else -> 0.15f }
+            androidx.compose.foundation.layout.Box(Modifier.weight(1f).height(3.dp)
+                .background(c.chipIcon.copy(alpha = a), DuaShape.chip).testTag("agent-step-seg-$i"))
         }
     }
 }

@@ -1,5 +1,7 @@
 package com.dua.ai.ui.chat
 
+import com.dua.ai.ui.components.agentEdgeGlow
+
 import com.dua.ai.ui.components.predictiveBack
 
 import com.dua.ai.ui.theme.SheetBodyStyle
@@ -362,7 +364,8 @@ fun ChatScreen(
                     .let { if (feature == null) it.windowInsetsPadding(
                         WindowInsets.ime.union(WindowInsets.navigationBars).only(WindowInsetsSides.Bottom)) else it }
                     .then(if (feature == null && state.homeTab != HomeTab.Work) Modifier.homeBackdrop(taskHome && home, home) else Modifier)
-                    .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))) {
+                    .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
+                    .agentEdgeGlow(agentWorking(state), agentGlowColors())) {
                     if (topBar != null) topBar()
                     else if (feature != null) FeatureTopBar(feature.title, actions.onExitFeature, actions.onNewFeatureSession,
                         newSessionEnabled = !state.typing && (feature != ChatFeature.Agent || state.agentAvailable))
@@ -613,3 +616,12 @@ private fun modeToggles(
 
 /** Scrolls to the end of the growing reply; LazyColumn clamps at the content end. */
 private const val STREAM_FOLLOW_PX = 100_000f
+
+/** Agent edge glow: on while the agent is streaming a reply. */
+internal fun agentWorking(state: ChatUiState): Boolean = state.agent && state.typing
+
+@Composable
+private fun agentGlowColors(): List<androidx.compose.ui.graphics.Color> {
+    val cs = MaterialTheme.colorScheme
+    return remember(cs.primary, cs.tertiary) { listOf(cs.primary, cs.tertiary, cs.primary.copy(alpha = 0.3f)) }
+}
