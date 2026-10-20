@@ -29,7 +29,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
-import com.dua.ai.ui.icons.DuaIcons
+import com.dua.ai.ui.components.DuaIcons
 import com.dua.ai.ui.theme.DuaTheme
 import com.dua.ai.ui.theme.Sizes
 import com.dua.ai.ui.theme.DuaPageTheme
