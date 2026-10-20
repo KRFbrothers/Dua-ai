@@ -120,12 +120,13 @@ class HomeHeaderRefinementUiTest(private val dark: Boolean, private val large: B
         var chosen = ""
         show { ChatContent(task.value, onTask = { chosen = it }) }
         compose.onNodeWithContentDescription("Dua AI").assertWidthIsEqualTo(HomeSizes.heroLogo)
-        compose.onNodeWithText("Dua always with you").assertIsDisplayed()
+        compose.onNodeWithText("Your AI, always with you").assertIsDisplayed()
+        if (!large) assertEquals(1, layout("Your AI, always with you").lineCount)
         compose.onNodeWithText("What can I take off\nyour plate?").assertDoesNotExist()
         capture("chat-hero")
         compose.runOnIdle { task.value = true }
         compose.onNodeWithContentDescription("Dua AI").assertExists()
-        compose.onNodeWithText("Dua always with you").assertDoesNotExist()
+        compose.onNodeWithText("Your AI, always with you").assertDoesNotExist()
         compose.onNodeWithTag("home-hero").assertExists(); compose.onNodeWithContentDescription("Dua AI").assertExists()
         for (prompt in HomeTaskPrompts) {
             compose.onNodeWithText(prompt).performScrollTo().performClick()

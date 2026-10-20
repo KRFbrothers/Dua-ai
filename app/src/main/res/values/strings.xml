@@ -2,7 +2,7 @@
 <resources>
     <string name="app_name">Dua AI</string>
     <string name="dua_logo_description">Dua AI</string>
-    <string name="home_tagline">Dua always with you</string>
+    <string name="home_tagline">Your AI, always with you</string>
     <string name="home_task_prompt_backup">Nudge me to backup my photos</string>
     <string name="home_task_prompt_react">Learn React by building an app</string>
     <string name="home_task_prompt_compare">Compare views on a topic I follow</string>
