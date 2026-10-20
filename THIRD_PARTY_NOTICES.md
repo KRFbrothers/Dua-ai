@@ -48,7 +48,7 @@ other Google brand assets.
 | Dua file | Adapted from | What changed |
 | --- | --- | --- |
 | `app/src/main/java/com/dua/ai/ui/chat/JumpToLatest.kt` | `conversation/JumpToBottom.kt`, `conversation/Conversation.kt` (same-author grouping) | Only the same-author grouping and new-replies count remain; the button is now Telegram's page-down (`TelegramPageDown.kt`) |
-| `app/src/main/java/com/dua/ai/ui/chat/ComposerGlass.kt` (used by `ChatComposer.kt`) | `Jetchat/.../conversation/UserInput.kt` (fork commit `0bc770fd`: focus scale pop, translucent rounded input card) | Smaller pop (1.02), Dua colours, no mesh glow or drop shadow, instant when animations are off |
+| `app/src/main/java/com/dua/ai/ui/chat/ComposerGlass.kt` (used by `ChatComposer.kt`) | `Jetchat/.../conversation/UserInput.kt` (fork commit `0bc770fd`: focus scale pop, translucent rounded input card) | Smaller pop (1.02), Dua colours, opaque elevated backing with faint gradient tint, no mesh glow, instant when animations are off |
 | `app/src/main/java/com/dua/ai/ui/chat/WideLayout.kt` | `Reply/.../ui/ReplyApp.kt`, `Reply/.../ui/navigation/ReplyNavigationComponents.kt` (fork commit `0bc770fd`) | Width from `BoxWithConstraints` instead of the window-size-class library; only switches chat history between a permanent side panel and the existing modal drawer |
 | `benchmark/build.gradle.kts`, `benchmark/src/main/java/com/dua/ai/benchmark/*.kt` | `benchmarks/build.gradle.kts`, `benchmarks/.../startup/StartupBenchmark.kt`, `.../baselineprofile/StartupBaselineProfile.kt`, `.../GeneralActions.kt` | Dua journeys (onboarding skip, drawer, chat, scroll, send with airplane mode), connected phone only, no managed emulator |
 

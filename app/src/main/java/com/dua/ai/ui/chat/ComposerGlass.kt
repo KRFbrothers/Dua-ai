@@ -19,8 +19,9 @@
  * over 120 ms FastOutSlowIn, then a medium-bouncy spring back to 1) and the translucent rounded input card.
  * The background uses Androidify's AnimatingGradientBrush via Brush.infinitelyAnimatingLinearGradient
  * (ui/components/AgentEdgeGlow.kt, https://github.com/android/androidify, commit a4be10fe).
- * Changes (Dua, GPL-3.0-or-later as part of Dua): smaller pop (1.02), Dua colours, no mesh glow, the gradient is
- * faint and only animates while the screen is resumed, animations are on and battery saver is off.
+ * Changes (Dua, GPL-3.0-or-later as part of Dua): smaller pop (1.02), Dua colours, opaque elevated backing
+ * to prevent shadow/layer bands, no mesh glow. The faint tint only animates while the screen is resumed,
+ * animations are on and battery saver is off.
  * See THIRD_PARTY_NOTICES.md.
  */
 package com.dua.ai.ui.chat
@@ -72,7 +73,7 @@ object ComposerGlass {
     val AuroraColors = listOf(Color(0xFF3B82F6), Color(0xFF8B5CF6), Color(0xFFEC4899), Color(0xFFF97316))
     const val AURORA_ALPHA = 0.22f
     const val AURORA_CYCLE_MILLIS = 9000
-    /** Glass fill: the bar colour, partly see-through. */
+    /** Translucent chip fill; also retains the original effective aurora tint strength. */
     const val GLASS_ALPHA = 0.82f
     const val FOCUS_POP = 1.02f
     /** Larger, raised glass input: more padding, deeper soft shadow, rounder corners. */
@@ -118,7 +119,9 @@ internal fun Modifier.composerAurora(enabled: Boolean): Modifier {
     if (!enabled) return this
     val brush = Brush.infinitelyAnimatingLinearGradient(ComposerGlass.AuroraColors,
         tween(ComposerGlass.AURORA_CYCLE_MILLIS, easing = LinearEasing), animate = rememberAuroraAnimating())
-    return background(brush, alpha = ComposerGlass.AURORA_ALPHA)
+    // Previously a 22% aurora was behind an 82% bar: only 3.96% of that tint showed.
+    // Preserve that tint over an opaque backing so the shadow cannot show through the input.
+    return background(brush, alpha = ComposerGlass.AURORA_ALPHA * (1f - ComposerGlass.GLASS_ALPHA))
 }
 
 /** One prompt chip: label plus its Material Symbols icon. */
