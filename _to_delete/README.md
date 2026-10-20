@@ -1194,3 +1194,48 @@ Aage toda ja sakta hai (`ChatModes.kt` for model/mode selection ~200 lines), **p
 1. **Dedicated tests likho `retryResponse` ke liye** — abhi coverage almost zero hai (upar table). Paanch cases: normal, partial-fail, no-text-fail, Build-reply, stale generation.
 2. **`startNewChat` / `deleteChat` ke tests** add karo — delete ke 3 test files hain par `deleteChat` ka idempotency/cancel-reply path assert nahi hota.
 3. **Uske baad** hi naya split (`ChatModes.kt`) socho. Pehle test, phir move — ulta karne par regression chhup jaata hai.
+
+---
+
+## 🧪 Chat split — tests: `retryResponse` (20 Oct 2026)
+
+Base: `main` @ `c7afa0d` (PR #314 / Step 6 merge ke baad). Yeh Step 6 ke report mein mila gap bharta hai — **`retryResponse` ka koi dedicated test nahi tha**.
+
+### Coverage — before → after
+
+| | Pehle | Ab |
+| --- | --- | --- |
+| Dedicated tests | **0** | **5** |
+| Indirect calls | 1 (`PersonalityPromptingTest:112` — sirf personality payload assert karta hai, retry ke error paths nahi) | wahi 1 + 5 naye |
+| Error paths asserted | 0 | **2** (fail-before-text, Stop-before-text) |
+| State-restore asserted | 0 | **3** (original reply, `retryOriginal`, stale generation) |
+
+### File
+
+`app/src/test/java/com/dua/ai/viewmodel/RetryResponseTest.kt` — **283 lines, 5 `@Test`**. Koi naya dependency nahi — wahi stack jo baaki `viewmodel/` tests use karte hain: **JUnit4 + Robolectric (`sdk 34`, `LooperMode.PAUSED`) + OkHttp interceptor** (network se pehle intercept, `PersonalityPromptingTest` ka pattern).
+
+### 5 cases
+
+| # | Test | Kya prove karta hai |
+| --- | --- | --- |
+| 1 | `aNormalRetryReplacesTheOldReplyAndSavesHistory` | Purana reply replace hua, `state="complete"`, `retryOriginal` clear, **history disk par likhi gayi** (`ChatHistoryCodec.decode` se verify). Request mein **sirf original prompt** jaata hai — purana reply dobara nahi bhejta. |
+| 2 | `stoppingARetryBeforeTextRestoresTheOriginalReply` | Stream khola par text nahi aaya → `stopReply()` → **original reply wapas**, `retryOriginal` null, `isTyping` false, error `"Response stopped."` |
+| 3 | `aRetryThatFailsBeforeTextRestoresTheOriginalAndDoesNotQueue` | 500 + JSON error → original wapas, error `"Retry failed. Original response kept."`. Saath mein **current behaviour document** kiya: `OfflineRetry.hasPending == false` — sirf `sendMessage` offline queue karta hai, `Retry` nahi. |
+| 4 | `aBuildReplyRetriesInBuildModeAgainstTheSameRepository` | Build reply (`build.repository` set) retry hone par request mein `mode="build"` **aur wahi `repository`** jaata hai; reply par build info bani rehti hai |
+| 5 | `aRetryThatFinishesAfterTheChatWasLeftWritesNothing` | `startNewChat()` se generation badla → der se aaya stream **kuch nahi likhta**: naye chat mein koi message leak nahi, `isTyping` false, fresh chat fresh rehti hai |
+
+Deterministic: koi `Thread.sleep` nahi, koi real network nahi. Streaming ko aage badhane ke liye Robolectric ka paused clock (`idleFor`) — wahi jo `PersonalityPromptingTest` karta hai. Negative assertion wale tests mein **bounded idle** (`settle`) hai, taaki "kuch nahi hua" ko bhi time mile.
+
+### ❗ Production code bilkul nahi chhua
+
+`git diff --name-only` = **2 paths** — naya test file + yeh README section. Koi `.kt` main-source file nahi.
+
+### ⚠️ Ek behaviour jo test ne pakda (bug nahi, design)
+
+**Retry fail hone par woh offline queue mein nahi jaata.** `_failedReply` (Step 5) `offlineRetry.sendFailed(...)` call karta hai — par `retryResponse` apna alag path hai aur woh queue **nahi** karta. Test 3 isi ko explicit assert karta hai.
+
+Yeh jaan-boojh kar hai ya nahi, code se pata nahi chalta — comment kahin nahi hai. **Product decision aapka:** agar Retry ko bhi reconnect par auto-resend karna chahiye to woh alag change hai (aur naya behaviour hai, isliye is PR mein nahi kiya). Agar nahi chahiye, to ek comment add karna chahiye taaki koi ise bug samajh kar "fix" na kare.
+
+### Aage kya
+
+Step 6 ke report ki baaki do sifarishein abhi bhi khuli hain: `deleteChat` ke missing tests (idempotency, cancel-reply path) aur uske baad hi `ChatModes.kt`.
