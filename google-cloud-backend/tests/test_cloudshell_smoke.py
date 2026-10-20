@@ -129,3 +129,80 @@ def test_smoke_resume_probe_shape_is_accepted(smoke, monkeypatch):
                                    {"Authorization": "Bearer " + TOKEN, "x-dua-native": "1"})
     # Not a shape error: without durable storage configured the handler says so explicitly.
     assert status == 503 and "Durable ADK sessions" in body["error"]
+
+
+# ---------------------------------------------------------------- why the first real smoke had no runId
+def _adk_env(events):
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from test_agent_adk import make_env
+    env = make_env([])
+    env.update({"owner_id": "verified-owner", "adk_run_id": "11111111-2222-4333-8444-555555555555",
+                "adk_request": {"messages": []}, "enqueue": lambda kind, chunk=None: events.append((kind, chunk)) or True})
+    return env
+
+
+@pytest.mark.parametrize("split,expect_run_id", [(True, True), (False, False)])
+def test_durable_run_id_only_for_split_agent_plans(monkeypatch, split, expect_run_id):
+    import agent_adk
+    from test_agent_adk import PLAN, cfg, fake_adk
+    monkeypatch.setenv("ADK_SESSION_DB_URL", "postgresql://runtime@db.invalid/postgres")
+    original = agent_adk.run_agent
+    # The fake runner is in-memory; drop session_options so no database is touched.
+    monkeypatch.setattr(agent_adk, "run_agent", lambda *a, session_options=None, **k: original(*a, **k))
+    adk, _ = fake_adk(json.dumps(PLAN) if split else '{"split": false}', {"research": ["r"], "notes": ["n"]})
+    events = []
+    result = agent_adk.run(_adk_env(events), "request", "flash", "argon", cfg, adk=adk, log=lambda m: None)
+    sessions = [chunk for kind, chunk in events if kind == "event" and chunk.get("type") == "agent_session"]
+    if expect_run_id:
+        assert result is not None and sessions == [{"type": "agent_session", "runId": "11111111-2222-4333-8444-555555555555", "resumable": True}]
+    else:
+        # One-part questions (like 17 x 23) use the plain loop: no durable run, no runId, by design.
+        assert result is None and sessions == []
+
+
+@pytest.mark.parametrize("emit_run_id", [False, True])
+def test_smoke_end_to_end_reports_durable_state_honestly(smoke, monkeypatch, capsys, emit_run_id):
+    import agent_store
+    produced = []
+
+    def agent_producer(messages, attachments, system, owner, cancelled=None):
+        produced.append(messages[-1]["text"])
+        def run(enqueue):
+            if emit_run_id and messages[-1]["text"] == smoke.SMOKE_DURABLE_PROMPT:
+                enqueue("event", {"type": "agent_session", "runId": "11111111-2222-4333-8444-555555555555", "resumable": True})
+            enqueue("event", {"type": "text", "delta": "Agent answer."})
+            enqueue("done")
+        return run
+
+    monkeypatch.setattr(engine, "agent_producer", agent_producer)
+    monkeypatch.setenv("ADK_SESSION_DB_URL", "postgresql://runtime@db.invalid/postgres")
+    monkeypatch.setenv("AGENT_ENGINE", "adk")
+    async def get_task(owner, run_id):
+        return SimpleNamespace(state={"dua_schema": 1, "dua_request": {"messages": []}, "dua_answer": "done"})
+    monkeypatch.setattr(agent_store, "get_task", get_task)
+    monkeypatch.setattr(smoke, "supabase_sign_in", lambda base, key, owner: TOKEN)
+    monkeypatch.setattr(smoke, "http_json", _wrap_logout(smoke.http_json))
+    service = {"spec": {"template": {"spec": {"containers": [{"env": [
+        {"name": "SUPABASE_URL", "value": "https://project.supabase.co"},
+        {"name": "SUPABASE_PUBLISHABLE_KEY", "value": "publishable"},
+        {"name": "DUA_ALLOWED_EMAIL", "value": "owner@example.com"}]}]}}},
+        "status": {"traffic": [{"revisionName": "old", "percent": 90},
+                               {"revisionName": "cand", "percent": 10, "tag": "adk-candidate", "url": "https://adk-candidate---svc.run.app"}]}}
+    smoke.smoke(service)
+    out = capsys.readouterr().out
+    report = json.loads(out[:out.rindex("}") + 1])
+    assert produced == [smoke.SMOKE_AGENT_PROMPT, smoke.SMOKE_DURABLE_PROMPT]
+    assert report["candidateTrafficPercent"] == 10 and report["chat"]["ok"] and report["agent"]["ok"]
+    if emit_run_id:
+        assert report["durableSession"] == "loaded_from_database" and "durable Supabase session verified" in out
+    else:
+        assert report["durableSession"] == "not_exercised" and "PASSED for chat and Agent" in out
+    assert TOKEN not in out
+
+
+def _wrap_logout(http_json):
+    def call(url, payload=None, headers=None, timeout=30):
+        if "/auth/v1/logout" in url:
+            return 200, {}
+        return http_json(url, payload, headers, timeout)
+    return call
