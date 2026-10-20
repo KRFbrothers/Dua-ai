@@ -1,4 +1,4 @@
-package com.dua.ai.ui.screens
+package com.dua.ai.ui.features
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -56,7 +56,7 @@ fun ImagesContent(items: List<LibraryItem>, draft: String, aspect: String, aspec
             }
         }
         if (generating) Row(Modifier.fillMaxWidth().padding(horizontal = Spacing.lg), verticalAlignment = Alignment.CenterVertically) {
-            CircularProgressIndicator(Modifier.size(Sizes.icon)); Text("Creating image…", Modifier.weight(1f).padding(Spacing.sm), style = MaterialTheme.typography.bodyMedium)
+            CircularProgressIndicator(Modifier.size(Sizes.icon)); Text("Creating image\u2026", Modifier.weight(1f).padding(Spacing.sm), style = MaterialTheme.typography.bodyMedium)
             TextButton(onClick = onStop, modifier = Modifier.heightIn(min = Sizes.touchTarget)) { Text("Stop") }
         }
         if (notice.isNotBlank()) Text(notice, Modifier.padding(horizontal = Spacing.lg), style = MaterialTheme.typography.bodySmall)
