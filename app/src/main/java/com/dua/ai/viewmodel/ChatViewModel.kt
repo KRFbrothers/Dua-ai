@@ -51,6 +51,43 @@ import kotlinx.coroutines.flow.update
 
 class ChatViewModel(application: Application) : AndroidViewModel(application) {
     // Declared first: init-time collectors (e.g. resumeImagineJobs) may reach the Imagine feature during construction.
+    private val agentFeature: ChatAgentControls by lazy { ChatAgentControls(agentHost) }
+    private val agentHost: AgentControlsHost by lazy { object : AgentControlsHost {
+        override val viewModelScope get() = this@ChatViewModel.viewModelScope
+        override val account get() = this@ChatViewModel.account
+        override val api get() = this@ChatViewModel.api
+        override val _isTyping get() = this@ChatViewModel._isTyping
+        override val _switches get() = this@ChatViewModel._switches
+        override val _error get() = this@ChatViewModel._error
+        override val _agentAvailable get() = this@ChatViewModel._agentAvailable
+        override val _agent get() = this@ChatViewModel._agent
+        override val _reasoning get() = this@ChatViewModel._reasoning
+        override val _xSearch get() = this@ChatViewModel._xSearch
+        override val _imagine get() = this@ChatViewModel._imagine
+        override val _runCode get() = this@ChatViewModel._runCode
+        override val _webMode get() = this@ChatViewModel._webMode
+        override val _integrations get() = this@ChatViewModel._integrations
+        override val _online get() = this@ChatViewModel._online
+        override val _readingFiles get() = this@ChatViewModel._readingFiles
+        override val _preparingFiles get() = this@ChatViewModel._preparingFiles
+        override val _draft get() = this@ChatViewModel._draft
+        override val _attachments get() = this@ChatViewModel._attachments
+        override val _uploads get() = this@ChatViewModel._uploads
+        override val _editingId get() = this@ChatViewModel._editingId
+        override val _selectedModel get() = this@ChatViewModel._selectedModel
+        override val _buildRepositories get() = this@ChatViewModel._buildRepositories
+        override val _buildRepo get() = this@ChatViewModel._buildRepo
+        override val _buildPr get() = this@ChatViewModel._buildPr
+        override val _messages get() = this@ChatViewModel._messages
+        override val _savedChats get() = this@ChatViewModel._savedChats
+        override fun leaveBuild() = this@ChatViewModel.leaveBuild()
+        override fun selectAuto() = this@ChatViewModel.selectAuto()
+        override fun sendMessage(userText: String) = this@ChatViewModel.sendMessage(userText)
+        override fun saveHistory() = this@ChatViewModel.saveHistory()
+        override fun codeUsable() = this@ChatViewModel.codeUsable()
+        override fun buildUsable() = this@ChatViewModel.buildUsable()
+        override fun xSearchUsable() = this@ChatViewModel.xSearchUsable()
+    } }
     private val uploadsFeature: ChatUploads by lazy { ChatUploads(uploadsHost) }
     private val uploadsHost: UploadsHost by lazy { object : UploadsHost {
         override val viewModelScope get() = this@ChatViewModel.viewModelScope
@@ -795,14 +832,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             if (!available) _agent.value = false
         }
     }
-    fun setAgent(enabled: Boolean) {
-        if (_isTyping.value) return
-        if (enabled && _switches.value.agent) { _error.value = com.dua.ai.setup.RemoteSwitches.AGENT_PAUSED; return }
-        if (enabled && !_agentAvailable.value) { _error.value = "Agent mode needs the Google Cloud engine."; return }
-        _agent.value = enabled
-        if (enabled) { _reasoning.value = false; _xSearch.value = false; _imagine.value = false; _runCode.value = false; _webMode.value = null; leaveBuild() }
-        _error.value = null
-    }
+    fun setAgent(enabled: Boolean) = agentFeature.setAgent(enabled)
     /** Auto chip: plain chat, no web and no Reasoning. */
     fun selectAuto() { if (_isTyping.value) return; _reasoning.value = false; _agent.value = false; _xSearch.value = false; _imagine.value = false; _runCode.value = false; leaveBuild(); setWebMode(null) }
 
@@ -812,43 +842,10 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val replyCode = mutableMapOf<String, Boolean>()
     private fun codeUsable(model: String = _selectedModel.value) = _integrations.value.codeExecution?.available(model) == true
     /** Only advertise the existing provider sandbox on the engine that actually supports it. */
-    fun codeSnippetUnavailableReason(): String? = when {
-        api.separateChatEngine -> "Run code is not supported by the active Cloud Run chat engine. Local artifact previews are available."
-        !codeUsable() -> _integrations.value.codeExecution?.reason?.takeIf { it.isNotBlank() }
-            ?: "The selected model has no configured code sandbox. Check Plugins or choose a supported model."
-        !_online.value -> "Reconnect before running code."
-        _isTyping.value || _readingFiles.value || _preparingFiles.value -> "Wait for the current reply or file preparation to finish."
-        _draft.value.isNotBlank() || _attachments.value.isNotEmpty() || _uploads.value.isNotEmpty() || _editingId.value != null -> "Send or clear the current draft and attachments before running a snippet."
-        else -> null
-    }
+    fun codeSnippetUnavailableReason(): String? = agentFeature.codeSnippetUnavailableReason()
 
-    fun runCodeSnippet(code: String): Boolean {
-        codeSnippetUnavailableReason()?.let { _error.value = it; return false }
-        val prompt = com.dua.ai.model.CodeSnippet.prompt(code)
-        if (code.isBlank() || prompt.length > 8000) { _error.value = "Use a non-empty Python snippet shorter than 7,800 characters."; return false }
-        selectAuto()
-        setRunCode(true)
-        sendMessage(prompt)
-        return _isTyping.value
-    }
-    fun setRunCode(enabled: Boolean) {
-        if (_isTyping.value) return
-        if (enabled) _agent.value = false
-        if (enabled) {
-            val config = _integrations.value.codeExecution
-            val reason = when {
-                config == null -> "Run code needs the latest Dua backend. Deploy it, then refresh Feature setup."
-                !config.enabled -> config.reason.ifBlank { "Run code is turned off on the server." }
-                !config.available(_selectedModel.value) -> "Run code works with ${config.providers.sorted().joinToString(" or ")}. Choose one of them first."
-                else -> null
-            }
-            if (reason != null) { _error.value = reason; return }
-            _imagine.value = false
-            leaveBuild()
-        }
-        _runCode.value = enabled
-        _error.value = null
-    }
+    fun runCodeSnippet(code: String): Boolean = agentFeature.runCodeSnippet(code)
+    fun setRunCode(enabled: Boolean) = agentFeature.setRunCode(enabled)
 
     // Build mode (Phase 5B): STRICTLY READ-ONLY chat about one GitHub repository. The repository is tied to the chat
     // (saved with it on this device); the server reads files with its own token and never writes to GitHub.
@@ -859,46 +856,11 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     val buildRepositories = _buildRepositories.asStateFlow()
     private fun buildUsable(model: String = _selectedModel.value) = _integrations.value.build?.available(model) == true
     /** Why Build mode cannot be used right now (shown in the Build sheet instead of hiding the mode); null when it can. */
-    fun buildUnavailableReason(): String? {
-        val config = _integrations.value.build
-        return when {
-            config == null -> "Build mode needs the latest Dua backend. Deploy it, then refresh Feature setup."
-            !config.enabled -> config.reason.ifBlank { "Build mode is turned off on the server." }
-            account.state.value.user == null -> "Sign in from Profile to use Build mode. Only the owner account can read repositories."
-            _integrations.value.providers.none { it.configured && it.name in config.providers } -> "Build mode works with ${config.providers.sorted().joinToString(" or ")}, and none is configured."
-            else -> null
-        }
-    }
+    fun buildUnavailableReason(): String? = agentFeature.buildUnavailableReason()
     /** Loads the owner's repositories (read-only list) for the Build picker; kept until [force]d (connector calls share the chat burst limit). */
-    fun loadBuildRepositories(force: Boolean = false) {
-        if (_buildRepositories.value.loading || (!force && _buildRepositories.value.repositories.isNotEmpty())) return
-        buildUnavailableReason()?.let { _buildRepositories.value = com.dua.ai.setup.BuildRepositories(error = it); return }
-        _buildRepositories.value = _buildRepositories.value.copy(loading = true, error = "")
-        viewModelScope.launch {
-            try {
-                val response = account.request("/api/connectors/github", "POST", org.json.JSONObject().put("action", "list-repositories"), authenticated = true)
-                val repositories = com.dua.ai.setup.IntegrationCapabilities.repositories(response).filter { com.dua.ai.model.BuildInfos.validRepository(it.fullName) }
-                _buildRepositories.value = com.dua.ai.setup.BuildRepositories(repositories = repositories,
-                    error = if (repositories.isEmpty()) "No repositories returned. Check which repositories the connector token can read." else "")
-            } catch (cancelled: CancellationException) { throw cancelled }
-            catch (failure: Exception) { _buildRepositories.value = com.dua.ai.setup.BuildRepositories(error = failure.message ?: "Repositories could not be loaded. Retry.") }
-        }
-    }
+    fun loadBuildRepositories(force: Boolean = false) = agentFeature.loadBuildRepositories(force)
     /** Ties this chat to [repository] (owner/name), or leaves Build mode with null. Other modes turn off. */
-    fun setBuildRepository(repository: String?) {
-        if (_isTyping.value) return
-        if (repository == null) { leaveBuild(); return }
-        if (!com.dua.ai.model.BuildInfos.validRepository(repository)) return
-        buildUnavailableReason()?.let { _error.value = it; return }
-        if (!buildUsable()) {
-            val config = _integrations.value.build!!
-            _selectedModel.value = listOf("Dua", "Gemini").first { name -> name in config.providers && _integrations.value.providers.any { it.name == name && it.configured } }
-        }
-        _reasoning.value = false; _webMode.value = null; _xSearch.value = false; _runCode.value = false; _imagine.value = false; _agent.value = false
-        _buildRepo.value = repository
-        _error.value = null
-        saveHistory()
-    }
+    fun setBuildRepository(repository: String?) = agentFeature.setBuildRepository(repository)
     private fun leaveBuild() { if (_buildRepo.value != null) { _buildRepo.value = null; saveHistory() } }
 
     // Build pull requests (Phase 5C): the model only proposes; this is the single place that asks the server to write,
@@ -906,93 +868,21 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val _buildPr = MutableStateFlow<Map<String, com.dua.ai.ui.chat.BuildPrUiState>>(emptyMap())
     val buildPr = _buildPr.asStateFlow()
     /** Why the Create PR button is unavailable (shown on the review card), or null when it can be used. */
-    fun buildPrUnavailableReason(): String? {
-        val pr = _integrations.value.build?.pr
-        return when {
-            pr == null -> "Creating pull requests needs the latest Dua backend. Deploy it, then refresh Feature setup."
-            !pr.enabled -> pr.reason.ifBlank { "Creating pull requests is turned off on the server." }
-            account.state.value.user == null -> "Sign in from Profile to create pull requests. Only the owner account can."
-            else -> null
-        }
-    }
+    fun buildPrUnavailableReason(): String? = agentFeature.buildPrUnavailableReason()
     /** Sends the approved proposal of [messageId] (with the confirmed [title]) to POST /api/build/pr and saves the PR link. */
-    fun createPullRequest(messageId: String, title: String) {
-        val message = _messages.value.firstOrNull { it.id == messageId } ?: return
-        val proposal = message.proposal ?: return
-        if (proposal.pullRequest != null || _buildPr.value[messageId]?.creating == true) return
-        val setState = { state: com.dua.ai.ui.chat.BuildPrUiState? -> _buildPr.update { if (state == null) it - messageId else it + (messageId to state) } }
-        buildPrUnavailableReason()?.let { setState(com.dua.ai.ui.chat.BuildPrUiState(error = it)); return }
-        val body = try { com.dua.ai.model.BuildProposals.createRequest(proposal, title) }
-            catch (invalid: IllegalArgumentException) { setState(com.dua.ai.ui.chat.BuildPrUiState(error = invalid.message ?: "This proposal cannot be sent.")); return }
-        setState(com.dua.ai.ui.chat.BuildPrUiState(creating = true))
-        viewModelScope.launch {
-            try {
-                val response = account.request("/api/build/pr", "POST", body, authenticated = true)
-                val pr = com.dua.ai.model.BuildProposals.pullRequest(response, proposal.repository)
-                    ?: throw IllegalStateException("The server did not return a pull request link. Check GitHub before retrying.")
-                val withPr = { item: ChatMessage -> if (item.id == messageId) item.copy(proposal = item.proposal?.copy(title = body.getString("title"), pullRequest = pr)) else item }
-                // The owner may have switched chats while GitHub was working: store the link wherever the message is now.
-                if (_messages.value.any { it.id == messageId }) _messages.value = _messages.value.map(withPr)
-                else _savedChats.value = _savedChats.value.map { chat -> if (chat.messages.any { it.id == messageId }) chat.copy(messages = chat.messages.map(withPr)) else chat }
-                setState(null)
-                saveHistory()
-            } catch (cancelled: CancellationException) { setState(null); throw cancelled }
-            catch (failure: Exception) {
-                setState(com.dua.ai.ui.chat.BuildPrUiState(error = failure.message?.take(300)?.takeIf { it.isNotBlank() } ?: "Creating the pull request failed. Retry."))
-            }
-        }
-    }
+    fun createPullRequest(messageId: String, title: String) = agentFeature.createPullRequest(messageId, title)
 
     // Dua Agent approvals: the engine never runs a write tool by itself. This is the single place that asks it to run (or
     // drop) one stored action, and only from the approval card's Approve / Reject buttons. Only the id is sent.
-    private fun updateApproval(messageId: String, approval: com.dua.ai.model.AgentApproval, outcome: Boolean = false) {
-        val change = { item: ChatMessage ->
-            if (item.id != messageId) item else item.copy(approvals = item.approvals.map { if (it.id == approval.id) approval else it },
-                text = if (outcome) com.dua.ai.model.AgentApprovals.appendOutcome(item.text, com.dua.ai.model.AgentApprovals.transcriptLine(approval)) else item.text)
-        }
-        // The owner may have switched chats meanwhile: update the message wherever it is now.
-        if (_messages.value.any { it.id == messageId }) _messages.value = _messages.value.map(change)
-        else _savedChats.value = _savedChats.value.map { chat -> if (chat.messages.any { it.id == messageId }) chat.copy(messages = chat.messages.map(change)) else chat }
-        if (outcome) saveHistory()
-    }
 
-    fun decideAgentApproval(messageId: String, approvalId: String, approve: Boolean) {
-        val approval = _messages.value.firstOrNull { it.id == messageId }?.approvals?.firstOrNull { it.id == approvalId } ?: return
-        if (approval.status != com.dua.ai.model.AgentApproval.Status.Pending) return
-        if (approval.expired(System.currentTimeMillis())) {
-            updateApproval(messageId, approval.copy(status = com.dua.ai.model.AgentApproval.Status.Expired), outcome = true); return
-        }
-        updateApproval(messageId, approval.copy(status = com.dua.ai.model.AgentApproval.Status.Working))
-        viewModelScope.launch {
-            try {
-                val (status, text) = account.withToken { token -> api.agentAction(approvalId, approve, token) }
-                updateApproval(messageId, approval.copy(status = status, result = text), outcome = true)
-            } catch (cancelled: CancellationException) { updateApproval(messageId, approval); throw cancelled }
-            catch (failure: DuaApiException) {
-                // 404/410: the server no longer has it (used, expired or restarted); nothing can run twice.
-                if (failure.status == 404 || failure.status == 410)
-                    updateApproval(messageId, approval.copy(status = com.dua.ai.model.AgentApproval.Status.Expired, result = failure.message), outcome = true)
-                else { updateApproval(messageId, approval); _error.value = failure.message ?: "Action nahi ho saka. Dobara try karein." }
-            } catch (failure: Exception) {
-                // Safe to try again: the server runs each approval at most once.
-                updateApproval(messageId, approval)
-                _error.value = "${failureText(failure)} The action was not confirmed; tap Approve or Reject again."
-            }
-        }
-    }
+    fun decideAgentApproval(messageId: String, approvalId: String, approve: Boolean) = agentFeature.decideAgentApproval(messageId, approvalId, approve)
 
     // X search (Grok only, billed per post by xAI) is off by default and, like the web mode, never saved.
     private val _xSearch = MutableStateFlow(false)
     val xSearch = _xSearch.asStateFlow()
     private val replyXSearch = mutableMapOf<String, Boolean>()
     private fun xSearchUsable(model: String = _selectedModel.value) = model == "Grok" && _integrations.value.xSearchAvailable
-    fun setXSearch(enabled: Boolean) {
-        if (_isTyping.value) return
-        if (enabled && !xSearchUsable()) { _error.value = "X search works with Grok when the server offers it."; return }
-        _xSearch.value = enabled
-        if (enabled) _agent.value = false
-        _error.value = null
-    }
+    fun setXSearch(enabled: Boolean) = agentFeature.setXSearch(enabled)
 
     // Long context: the server's summary of this chat's older turns (saved with the chat on this device).
     private val _summary = MutableStateFlow<com.dua.ai.model.ChatSummary?>(null)
