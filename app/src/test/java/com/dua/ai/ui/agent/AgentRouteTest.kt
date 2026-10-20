@@ -99,7 +99,7 @@ class AgentRouteTest {
             .get(model) as MutableStateFlow<List<ChatAttachment>>
         selectedFiles.value = listOf(file)
         show(home = true)
-        compose.onNodeWithContentDescription("Add photos and files").performClick()
+        compose.onNodeWithContentDescription("Add").performClick()
         compose.onNodeWithText("Agent", substring = false).performScrollTo().performClick()
         assertTrue("Agent available=${model.agentAvailable.value}, typing=${model.isTyping.value}", model.agent.value)
         assertEquals(previous.id, model.activeChatId.value)
@@ -120,8 +120,9 @@ class AgentRouteTest {
         compose.onNodeWithText("AI Agent").assertIsDisplayed()
         compose.onNodeWithContentDescription("Back").performClick()
         assertFalse(model.agent.value)
-        compose.onNode(hasText("Chat") and isSelectable()).assertIsDisplayed()
-        compose.onNodeWithContentDescription("Open profile and settings").assertIsDisplayed()
+        compose.onNodeWithTag("supplied-chat").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Dua AI, chats and settings").performClick()
+        compose.onNodeWithContentDescription("Open drawer profile and settings").assertIsDisplayed()
         assertEquals(previous.messages, model.savedChats.value.single { it.id == previous.id }.messages)
         assertEquals("Unsent agent prompt", model.savedChats.value.single { it.id == previous.id }.draft)
     }
@@ -142,20 +143,27 @@ class AgentRouteTest {
         }
     }
 
-    @Test fun homeTaskTabUsesRealAgentStateWithoutReplacingTheCurrentChat() {
+    @Test fun suppliedChatEntersAgentAndRestoresThePreviousConversationFromHistory() {
         show(home = true)
-        compose.onNode(hasText("Task") and isSelectable()).performClick()
+        compose.onNodeWithContentDescription("Add").performClick()
+        compose.onNodeWithText("Agent", substring = false).performScrollTo().performClick()
         assertTrue(model.agent.value)
         assertEquals(previous.id, model.activeChatId.value)
         assertEquals(previous.messages, model.messages.value)
         assertEquals(previous.draft, model.draft.value)
-        compose.onNodeWithTag("message-previous").assertIsDisplayed()
-        compose.onNodeWithTag("feature-top-bar").assertDoesNotExist()
-        compose.onNodeWithContentDescription("New chat").assertDoesNotExist()
-        compose.onNode(hasText("Chat") and isSelectable()).performClick()
+        compose.onNodeWithTag("feature-top-bar").assertIsDisplayed()
+        compose.onNodeWithTag("supplied-chat").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Back").performClick()
         assertFalse(model.agent.value)
+        // The existing feature exit starts a fresh chat; the preceding conversation remains restorable.
+        compose.onNodeWithTag("supplied-chat").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Dua AI, chats and settings").performClick()
+        compose.onNodeWithText(previous.title).performScrollTo().performClick()
+        compose.onNodeWithTag("message-previous").assertIsDisplayed()
         assertEquals(previous.id, model.activeChatId.value)
-        compose.onNodeWithContentDescription("New chat").assertIsDisplayed()
+        assertEquals(previous.messages, model.messages.value)
+        assertEquals(previous.draft, model.draft.value)
+        compose.onNodeWithContentDescription("Message").assertTextContains(previous.draft)
     }
 
 }
