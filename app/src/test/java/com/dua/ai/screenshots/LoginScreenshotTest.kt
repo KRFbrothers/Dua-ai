@@ -10,10 +10,10 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
 import com.dua.ai.settings.LocalPreferences
 import com.dua.ai.ui.onboarding.OnboardingContent
-import com.dua.ai.ui.screens.ProfileActions
-import com.dua.ai.ui.screens.ProfileContent
-import com.dua.ai.ui.screens.ProfileDialog
-import com.dua.ai.ui.screens.ProfileUiState
+import com.dua.ai.ui.settings.ProfileActions
+import com.dua.ai.ui.settings.ProfileContent
+import com.dua.ai.ui.settings.ProfileDialog
+import com.dua.ai.ui.settings.ProfileUiState
 import com.dua.ai.ui.theme.DuaTheme
 import com.github.takahirom.roborazzi.ExperimentalRoborazziApi
 import com.github.takahirom.roborazzi.RobolectricDeviceQualifiers
