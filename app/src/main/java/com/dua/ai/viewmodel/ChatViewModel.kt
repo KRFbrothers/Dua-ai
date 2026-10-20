@@ -600,9 +600,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
         return true
     }
-    private fun elapsedThinking(message: ChatMessage): Int? =
-        if (message.thinking.isNullOrBlank() || message.startedAt <= 0) null
-        else (((System.currentTimeMillis() - message.startedAt) + 500) / 1000).toInt().coerceIn(1, 86400)
 
     private fun updateMessage(id: String, transform: (ChatMessage) -> ChatMessage) {
         _messages.value = _messages.value.map { if (it.id == id) transform(it) else it }
@@ -649,11 +646,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private fun failureText(failure: Throwable): String = when (failure) {
-        is DuaApiException, is IllegalArgumentException -> failure.message ?: "Reply nahi aa saka. Dobara try karein."
-        is java.net.SocketTimeoutException -> "Dua response timeout hua. Dobara try karein."
-        else -> "Connection fail hua. Dobara try karein."
-    }
 
     private val _messages = MutableStateFlow<List<ChatMessage>>(emptyList())
     val messages: StateFlow<List<ChatMessage>> = _messages.asStateFlow()
@@ -1049,7 +1041,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         account.state.value.user == null -> "Sign in from Profile to attach audio, spreadsheets and large files (up to ${StoredFileTypes.sizeLabel(maxStoredBytes())} each). Without signing in, up to 3 small files (2 MB total) still work."
         else -> ""
     }
-    private data class PickedFile(val uri: Uri, val name: String, val type: String, val size: Long?)
 
     private fun updateUpload(id: String, transform: (PendingUpload) -> PendingUpload) = _uploads.update { list -> list.map { if (it.id == id) transform(it) else it } }
 
@@ -1091,16 +1082,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         deleteStoredPaths(current.filterNot { it.shared }.mapNotNull { it.ref?.path })
     }
 
-    private fun describe(uris: List<Uri>): List<PickedFile> {
-        val resolver = getApplication<Application>().contentResolver
-        return uris.map { uri ->
-            var name = "Selected file"; var size: Long? = null
-            resolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME, android.provider.OpenableColumns.SIZE), null, null, null)?.use {
-                if (it.moveToFirst()) { name = it.getString(0) ?: name; if (!it.isNull(1)) size = it.getLong(1) }
-            }
-            PickedFile(uri, name.take(200), resolver.getType(uri).orEmpty(), size?.takeIf { it >= 0 })
-        }
-    }
 
     /** Uploads picked files that storage accepts; returns the rest for the small inline path. */
     private suspend fun uploadPicked(files: List<PickedFile>): List<Uri> {
@@ -1133,17 +1114,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         return inline
     }
 
-    private fun copyCapped(uri: Uri, limit: Long): File? {
-        val dir = File(getApplication<Application>().cacheDir, "upload-staging").apply { mkdirs() }
-        val target = File(dir, UUID.randomUUID().toString())
-        val input = getApplication<Application>().contentResolver.openInputStream(uri) ?: return null
-        var total = 0L
-        input.use { source -> target.outputStream().use { out ->
-            val buffer = ByteArray(64 * 1024)
-            while (true) { val count = source.read(buffer); if (count < 0) break; total += count; if (total > limit) { target.delete(); return null }; out.write(buffer, 0, count) }
-        } }
-        return target
-    }
 
     /** Deletes storage objects now (or later, if offline / signed out). */
     private fun deleteStoredPaths(paths: Collection<String>) {
@@ -1170,7 +1140,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             if (again) flushPendingFileDeletes()
         }
     }
-    private fun pathsOf(messages: List<ChatMessage>) = messages.flatMap { message -> message.files.map { it.path } + message.media.mapNotNull { it.path } }
 
     /** Opens a stored file with a short-lived signed link (the server checks the owner). */
     suspend fun storedFileUrl(ref: FileRef): String = storedFileUrl(ref.path)
@@ -2477,12 +2446,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         return _isTyping.value
     }
 
-    private fun imagineFailure(failure: Throwable): String = when (failure) {
-        is com.dua.ai.account.AccountException -> failure.message ?: "Imagine request failed."
-        is IllegalArgumentException, is IllegalStateException -> failure.message ?: "Imagine request failed."
-        is java.net.SocketTimeoutException -> "Imagine took too long to answer. Check your daily usage in Settings before trying again."
-        else -> "Connection fail hua. Dobara try karein."
-    }
 
     private fun sendImagine(userText: String) {
         if (_isTyping.value || _readingFiles.value) return
