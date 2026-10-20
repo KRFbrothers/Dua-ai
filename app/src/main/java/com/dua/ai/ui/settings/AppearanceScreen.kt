@@ -1,5 +1,12 @@
 package com.dua.ai.ui.settings
 
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.foundation.layout.Box
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -45,12 +52,16 @@ fun AppearanceContent(appearance: AppearancePreferences, settings: LocalPreferen
     onTheme: (String) -> Unit, onFont: (String) -> Unit, onHaptic: (Boolean) -> Unit, notice: String = "",
     onPersonality: (DuaPersonality) -> Unit = {}) {
     DuaPageScaffold("Appearance", onBack) {
+        val switcher = com.dua.ai.ui.components.LocalThemeSwitcher.current
         Text("Choose your appearance", style = MaterialTheme.typography.titleLarge)
         Text("Accent color is a separate preference.", color = MaterialTheme.colorScheme.onSurfaceVariant)
         SettingsGroup(null, Modifier.selectableGroup()) {
             listOf("system" to "System default", "light" to "Light", "dark" to "Dark").forEachIndexed { i, (key, title) ->
                 if (i > 0) SettingsRowDivider()
-                PreferenceChoice(title, appearance.theme == key) { onTheme(key) }
+                var rowCenter by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
+                Box(Modifier.onGloballyPositioned { rowCenter = it.boundsInRoot().center }) {
+                    PreferenceChoice(title, appearance.theme == key) { if (appearance.theme != key) switcher.switch(rowCenter) { onTheme(key) } }
+                }
             }
         }
         Text("System default follows your device.", color = MaterialTheme.colorScheme.onSurfaceVariant)

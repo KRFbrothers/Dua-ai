@@ -76,6 +76,9 @@ fun MediaBitmap(media: GeneratedMedia, modifier: Modifier = Modifier, maxPx: Int
     val loader = LocalMediaLoader.current
     var bitmap by remember(media.key, maxPx, poster) { mutableStateOf<Bitmap?>(if (poster) loader.cachedPoster(media, maxPx) else loader.cached(media, maxPx)) }
     var failed by remember(media.key, maxPx, poster) { mutableStateOf(false) }
+    // Telegram ImageReceiver: crossfade only when the bitmap was not already in the memory cache.
+    val fromCache = remember(media.key, maxPx, poster) { bitmap != null }
+    val reveal = TelegramImageCrossfade.shouldAnimate(fromCache, com.dua.ai.ui.theme.rememberMotionAllowed())
     LaunchedEffect(media.key, maxPx, poster) {
         if (bitmap == null) try { bitmap = if (poster) loader.poster(media, maxPx) else loader.image(media, maxPx); failed = bitmap == null && !poster }
             catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled } catch (_: Exception) { failed = true }
@@ -84,7 +87,7 @@ fun MediaBitmap(media: GeneratedMedia, modifier: Modifier = Modifier, maxPx: Int
     Box(modifier.background(background), contentAlignment = Alignment.Center) {
         val current = bitmap
         when {
-            current != null -> Image(current.asImageBitmap(), contentDescription = imageDescription, contentScale = contentScale, modifier = Modifier.fillMaxSize())
+            current != null -> Image(current.asImageBitmap(), contentDescription = imageDescription, contentScale = contentScale, modifier = Modifier.fillMaxSize().imageReveal(reveal))
             failed -> Icon(Icons.Outlined.BrokenImage, contentDescription = "Image unavailable", tint = ChatTheme.colors.mutedText)
             poster -> Icon(Icons.Outlined.Movie, contentDescription = null, tint = ChatTheme.colors.mutedText)
             else -> ShimmerBox(Modifier.fillMaxSize())

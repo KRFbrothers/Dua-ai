@@ -45,6 +45,7 @@ fun DuaApp(viewModel: ChatViewModel = viewModel(), notificationRoute: Pair<Strin
         }
     }
     DuaTheme(preferences.copy(theme = appearance.theme), accent = appearance.accent) {
+        com.dua.ai.ui.components.TelegramThemeSwitchHost(com.dua.ai.ui.theme.DuaTheme.colors.isDark, com.dua.ai.ui.theme.rememberMotionAllowed()) {
         val switches by viewModel.switches.collectAsState()
         val checking by viewModel.switchesChecking.collectAsState()
         // DUA_MAINTENANCE=1 on dua-api: everything pauses behind one friendly screen (data stays on the phone).
@@ -52,6 +53,7 @@ fun DuaApp(viewModel: ChatViewModel = viewModel(), notificationRoute: Pair<Strin
         else {
             val voice = rememberReplyVoice(viewModel)
             DuaNavHost(viewModel, voice, notificationRoute, externalEntry = externalEntry, onEntryConsumed = onEntryConsumed)
+        }
         }
     }
 }
