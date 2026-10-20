@@ -4,10 +4,10 @@ set -euo pipefail
 set +x
 umask 077
 adk_action="${1:-plan}"
-case "$adk_action" in plan|stage) ;; *) echo 'Usage: bash dua-adk-cloudshell.sh plan|stage [--reset-db-credential]' >&2; exit 2;; esac
+case "$adk_action" in plan|stage|smoke) ;; *) echo 'Usage: bash dua-adk-cloudshell.sh plan|stage [--reset-db-credential]|smoke' >&2; exit 2;; esac
 adk_extra=()
 for adk_arg in "${@:2}"; do
-  case "$adk_arg" in --reset-db-credential) adk_extra+=("$adk_arg");; *) echo "Unknown option: $adk_arg" >&2; exit 2;; esac
+  case "$adk_arg" in --reset-db-credential) [ "$adk_action" = stage ] || { echo '--reset-db-credential is only for stage' >&2; exit 2; }; adk_extra+=("$adk_arg");; *) echo "Unknown option: $adk_arg" >&2; exit 2;; esac
 done
 for adk_bin in gcloud git python3 openssl; do command -v "$adk_bin" >/dev/null || { echo "Missing $adk_bin; open Google Cloud Shell." >&2; exit 2; }; done
 # Earlier runs left large work dirs (venv) in $HOME. Keep only rollback
@@ -512,9 +512,138 @@ def stage(source,service,reset_credential=False):
     print('No traffic promotion or paid model/embedding call was performed. Share only this result, never credentials.')
 
 
+def service_env(service,name):
+    """Plain env value or Secret Manager reference from the Cloud Run template. Never printed."""
+    for item in service['spec']['template']['spec']['containers'][0].get('env',[]):
+        if item.get('name')!=name:continue
+        if 'value' in item:return item['value'].strip()
+        ref=(item.get('valueFrom') or {}).get('secretKeyRef') or {}
+        if ref.get('name'):
+            return gcloud('secrets','versions','access',str(ref.get('key') or 'latest'),'--secret',ref['name']).strip()
+    return ''
+
+
+def http_json(url,payload=None,headers=None,timeout=30):
+    from urllib.request import Request
+    from urllib.error import HTTPError
+    body=json.dumps(payload).encode() if payload is not None else None
+    req=Request(url,data=body,headers={'Content-Type':'application/json','Accept':'application/json',**(headers or {})},method='POST' if body is not None else 'GET')
+    try:
+        with urlopen(req,timeout=timeout) as response:
+            raw=response.read(1_000_000);return response.status,(json.loads(raw) if raw else {})
+    except HTTPError as error:
+        raw=error.read(100_000);error.close()
+        try:return error.code,json.loads(raw)
+        except ValueError:return error.code,{}
+
+
+def supabase_sign_in(base,key,owner):
+    """Owner signs in with their own account; the token stays in memory only."""
+    headers={'apikey':key}
+    choice=prompt('Sign in as the Dua owner ('+owner[:2]+'***'+owner[owner.find('@'):]+'): [1] email password  [2] one-time email link/code (works for Google accounts) [1/2]: ').strip()
+    if choice=='2':
+        status,_=http_json(base+'/auth/v1/otp',{'email':owner,'create_user':False},headers)
+        if status!=200:raise ValueError('Supabase did not send a sign-in email (HTTP '+str(status)+'). Use option 1 or check Auth > Providers > Email.')
+        print('A sign-in email was sent to the owner address. Do NOT open the link; copy it (or the 6-digit code) and paste it here.')
+        pasted=getpass.getpass('Paste the sign-in link or code (hidden): ').strip()
+        if re.fullmatch(r'[0-9]{6,10}',pasted):
+            status,body=http_json(base+'/auth/v1/verify',{'type':'email','email':owner,'token':pasted},headers)
+        else:
+            from urllib.parse import parse_qs
+            query=parse_qs(urlsplit(pasted).query)
+            token=(query.get('token') or query.get('token_hash') or [''])[0]
+            kind=(query.get('type') or ['magiclink'])[0]
+            if not token:raise ValueError('That does not look like the Supabase sign-in link. Copy the full link from the email.')
+            status,body=http_json(base+'/auth/v1/verify',{'type':kind,'token_hash':token},headers)
+    else:
+        password=getpass.getpass('Dua account password (hidden): ')
+        status,body=http_json(base+'/auth/v1/token?grant_type=password',{'email':owner,'password':password},headers)
+        del password
+    token=body.get('access_token') if isinstance(body,dict) else None
+    if status!=200 or not token:raise ValueError('Sign-in failed (HTTP '+str(status)+'). Nothing was changed.')
+    if str((body.get('user') or {}).get('email','')).lower()!=owner:raise ValueError('Signed-in account is not the configured owner.')
+    return token
+
+
+def chat_stream(url,token,payload,timeout=300,extra=None):
+    """POST /api/chat and read SSE. Returns reply text, events, latency figures."""
+    import time
+    from urllib.request import Request
+    from urllib.error import HTTPError
+    req=Request(url+'/api/chat',data=json.dumps(payload).encode(),method='POST',
+        headers={'Content-Type':'application/json','Accept':'text/event-stream','Authorization':'Bearer '+token,**(extra or {})})
+    started=time.monotonic();first=None;text=[];events=[];errors=[]
+    try:
+        with urlopen(req,timeout=timeout) as response:
+            kind=None
+            for raw in response:
+                line=raw.decode('utf-8','replace').rstrip('\n')
+                if line.startswith('event:'):kind=line[6:].strip()
+                elif line.startswith('data:'):
+                    try:data=json.loads(line[5:].strip())
+                    except ValueError:continue
+                    kind=data.get('type',kind)
+                    events.append(kind)
+                    if kind=='text' and data.get('delta'):
+                        first=first or time.monotonic()-started;text.append(data['delta'])
+                    elif kind=='error':errors.append(sanitize(data.get('message','error'),(token,)))
+                    elif kind=='agent_session':events.append('runId:'+str(data.get('runId')))
+    except HTTPError as error:
+        try:message=json.loads(error.read(20000)).get('error','')
+        except ValueError:message=''
+        error.close()
+        errors.append('HTTP '+str(error.code)+(': '+sanitize(message,(token,)) if message else ''))
+    total=time.monotonic()-started
+    return {'reply':''.join(text).strip(),'firstTextSeconds':round(first,2) if first else None,'totalSeconds':round(total,2),'errors':errors,'events':events}
+
+
+def smoke(service):
+    """Owner-authenticated chat + Agent + durable-session check against the 0% candidate. Changes nothing."""
+    step('finding tagged candidate')
+    candidate=next((row for row in service['status'].get('traffic',[]) if row.get('tag')=='adk-candidate'),None)
+    if not candidate or not candidate.get('url'):raise ValueError('No adk-candidate tag found. Run stage first.')
+    if candidate.get('percent',0):raise ValueError('adk-candidate already serves traffic; this check is only for an unpromoted candidate.')
+    url=candidate['url'].rstrip('/')
+    if urlsplit(url).scheme!='https' or not urlsplit(url).hostname.endswith('.run.app'):raise ValueError('Unexpected candidate URL.')
+    step('reading public auth configuration')
+    base=service_env(service,'SUPABASE_URL').rstrip('/')
+    key=service_env(service,'SUPABASE_PUBLISHABLE_KEY') or service_env(service,'SUPABASE_ANON_KEY')
+    owner=service_env(service,'DUA_ALLOWED_EMAIL').lower()
+    if not base.startswith('https://') or not key or '@' not in owner:raise ValueError('Owner auth settings are missing on the service; nothing was changed.')
+    app_token=service_env(service,'DUA_APP_TOKEN')
+    extra={'X-Dua-App-Token':app_token} if app_token else {}
+    step('owner sign-in')
+    token=supabase_sign_in(base,key,owner)
+    result={'candidate':url,'revision':candidate.get('revisionName'),'servingTrafficChanged':False}
+    try:
+        step('chat check')
+        chat=chat_stream(url,token,{'stream':True,'messages':[{'role':'user','content':'Smoke test: reply with one short friendly sentence confirming you are working.'}]},extra=extra)
+        step('Agent check')
+        agent=chat_stream(url,token,{'mode':'agent','stream':True,'messages':[{'role':'user','content':'Smoke test: what is 17 multiplied by 23? Answer in one short sentence.'}]},extra=extra)
+        run_id=next((e[6:] for e in agent['events'] if e.startswith('runId:')),None)
+        persisted='no_run_id'
+        if run_id:
+            step('durable session check')
+            status,body=http_json(url+'/api/chat',{'resumeRun':run_id},{'Authorization':'Bearer '+token,**extra},timeout=60)
+            # 409 = the completed run was loaded back from the Supabase dua_adk schema.
+            persisted={409:'loaded_from_database',404:'not_found',503:'storage_unavailable'}.get(status,'http_'+str(status))
+        for name,item in (('chat',chat),('agent',agent)):
+            result[name]={'ok':bool(item['reply']) and not item['errors'],'reply':item['reply'][:200],
+                'firstTextSeconds':item['firstTextSeconds'],'totalSeconds':item['totalSeconds'],'errors':item['errors'][:3]}
+        result['agentRunId']=run_id;result['durableSession']=persisted
+    finally:
+        step('signing out')
+        try:http_json(base+'/auth/v1/logout?scope=local',{},{'apikey':key,'Authorization':'Bearer '+token},timeout=15)
+        except Exception:pass
+        del token
+    print(json.dumps(result,indent=2,ensure_ascii=False))
+    ok=result['chat']['ok'] and result['agent']['ok'] and result['durableSession']=='loaded_from_database'
+    print('SMOKE '+('PASSED' if ok else 'NEEDS REVIEW')+'. No traffic or configuration was changed. Share this output; it contains no credentials.')
+
+
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action',choices=('plan','stage'))
+    parser.add_argument('action',choices=('plan','stage','smoke'))
     parser.add_argument('--source',type=Path,required=True)
     parser.add_argument('--reset-db-credential',action='store_true',help='Generate a new ADK database password (needs the Supabase admin password).')
     args=parser.parse_args()
@@ -529,6 +658,7 @@ def main():
                 'Store/reuse version-pinned DB credential and optional CA in Secret Manager (adds a version if the secret exists)','Grant only the existing runtime service account access to those secrets',
                 'Build merged source in the existing registry','Create a tagged candidate with serving traffic unchanged'],
                 'noAutomaticPromotion':True,'noAutomaticHostedModelCalls':True},indent=2))
+        elif args.action=='smoke':smoke(service)
         else:stage(args.source,service,args.reset_db_credential)
         return 0
     except Exception as error:
@@ -552,5 +682,5 @@ if [ "$adk_action" = stage ]; then
   "$adk_work/venv/bin/python" -m pip check
   "$adk_work/venv/bin/python" "$adk_work/cloudshell_setup.py" stage --source "$adk_source" "${adk_extra[@]}"
 else
-  python3 "$adk_work/cloudshell_setup.py" plan --source "$adk_source"
+  python3 "$adk_work/cloudshell_setup.py" "$adk_action" --source "$adk_source"
 fi
