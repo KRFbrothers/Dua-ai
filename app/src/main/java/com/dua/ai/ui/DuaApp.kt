@@ -49,7 +49,7 @@ fun DuaApp(viewModel: ChatViewModel = viewModel(), notificationRoute: Pair<Strin
         val switches by viewModel.switches.collectAsState()
         val checking by viewModel.switchesChecking.collectAsState()
         // DUA_MAINTENANCE=1 on dua-api: everything pauses behind one friendly screen (data stays on the phone).
-        if (switches.maintenance) com.dua.ai.ui.screens.AppPausedScreen(switches.message, checking, onRetry = { viewModel.refreshRemoteSwitches(force = true) })
+        if (switches.maintenance) AppPausedScreen(switches.message, checking, onRetry = { viewModel.refreshRemoteSwitches(force = true) })
         else {
             val voice = rememberReplyVoice(viewModel)
             DuaNavHost(viewModel, voice, notificationRoute, externalEntry = externalEntry, onEntryConsumed = onEntryConsumed)

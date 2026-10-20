@@ -17,12 +17,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import com.dua.ai.ui.auth.rememberGoogleSignIn
+import com.dua.ai.ui.account.rememberGoogleSignIn
 import com.dua.ai.ui.components.pageTextFieldColors
 import com.dua.ai.ui.theme.Spacing
 import com.dua.ai.viewmodel.ChatViewModel
 import com.dua.ai.ui.settings.AccountContent
-import com.dua.ai.ui.onboarding.OnboardingContent
+import com.dua.ai.ui.account.OnboardingContent
 import com.dua.ai.account.AccountProvider
 
 @Immutable

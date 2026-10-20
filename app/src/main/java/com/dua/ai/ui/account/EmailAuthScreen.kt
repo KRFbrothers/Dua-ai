@@ -1,4 +1,4 @@
-package com.dua.ai.ui.auth
+package com.dua.ai.ui.account
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*

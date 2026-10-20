@@ -292,3 +292,95 @@ Teeno pass hone chahiye. Uske baad app mein yeh 6 jagah check karo:
 6. **Voice screen** — cube animation chalti hai (`AnimatedVoiceCube` + `VoiceCubeGeometry`)
 
 Aur icons: koi bhi screen kholo — `DuaIcons.Sparkle` wala sparkle dikhna chahiye (Computer screen par bhi).
+
+---
+
+## 🔂 Pass 5 — `ui/auth`, `ui/onboarding`, `ui/og` merge + `AppPausedScreen` move (20 Oct 2026)
+
+**Base:** `main` @ `4439a1a` (PR #306 merge ke baad).
+**Is PR mein kuch delete nahi hua** — sirf files move hui hain aur unke package/import update hue hain. `_to_delete/` folder mein is pass mein kuch nahi daala gaya. **7 trap files ko haath nahi lagaya.**
+
+### Kya move hua — 8 files (5 main + 3 test)
+
+| Purana path | Naya path | Kyun |
+| --- | --- | --- |
+| `ui/auth/EmailAuthScreen.kt` | `ui/account/EmailAuthScreen.kt` | Pass 3 mein data side `auth/` → `account/` merge ho gaya tha, par **UI side ka `ui/auth/` reh gaya tha**. `ui/settings/AccountContent` + `ProfileScreen` already account ka UI hain — ab dono taraf ek hi naam |
+| `ui/auth/GoogleSignInButton.kt` | `ui/account/GoogleSignInButton.kt` | `rememberGoogleSignIn` sirf account screens (`OnboardingScreen`, `ProfileScreen`) use karte hain. `account/GoogleSignIn.kt` (data) ke saath hi rehna chahiye |
+| `ui/onboarding/OnboardingScreen.kt` | `ui/account/OnboardingScreen.kt` | **1-file package tha.** `OnboardingContent` ko `ui/settings/ProfileScreen.kt` aur `test/ui/settings/AccountReferenceUiTest.kt` call karte hain — yaani yeh already account screens ka hissa hai, sirf alag folder mein pada tha |
+| `test/.../ui/auth/EmailAuthInteractionTest.kt` | `test/.../ui/account/EmailAuthInteractionTest.kt` | Test apne subject ke saath |
+| `test/.../ui/auth/GoogleSignInFlowTest.kt` | `test/.../ui/account/GoogleSignInFlowTest.kt` | Test apne subject ke saath |
+| `ui/og/BlobDrawable.java` | `ui/chat/BlobDrawable.java` | **1-file package tha** aur uska **ek hi consumer** `ui/chat/OgGenerationBackdrop.kt` hai (jo ab same package mein hai, isliye import hata diya). **Notice row same commit mein update ki** — neeche dekho |
+| `ui/screens/AppPausedScreen.kt` | `ui/AppPausedScreen.kt` | **1-file page, ek hi consumer** `ui/DuaApp.kt` (jo `ui` package mein hai). Pass 4 mein "alag PR" likha tha — woh yahi PR hai |
+| `test/.../ui/screens/AppPausedScreenTest.kt` | `test/.../ui/AppPausedScreenTest.kt` | Test subject ke saath |
+
+**Package changes:** `com.dua.ai.ui.auth` → `com.dua.ai.ui.account` (2 files), `com.dua.ai.ui.onboarding` → `com.dua.ai.ui.account` (1 file), `com.dua.ai.ui.og` → `com.dua.ai.ui.chat` (1 file), `com.dua.ai.ui.screens` → `com.dua.ai.ui` (1 file + test).
+
+**Khaali dirs hat gaye:** `ui/auth/` (main + test), `ui/onboarding/`, `ui/og/`.
+
+**`ui/` ab:** `DuaApp.kt` + `AppPausedScreen.kt` root par, aur 11 subpackages (`account`, `agent`, `chat`, `components`, `history`, `navigation`, `projects`, `screens`, `settings`, `theme`, `voice`). `og`, `auth`, `onboarding` gaye.
+
+### Import updates — 5 moves, 13 line changes, 10 files
+
+| Move | Files touched | Lines |
+| --- | --- | --- |
+| `ui/auth` + `ui/onboarding` → `ui/account` | `DuaNavHost.kt` (2), `ProfileScreen.kt` (2), `OnboardingScreen.kt` (1 hataya — same package), `UiPreviewActivity.kt` (1), `LoginScreenshotTest.kt` (1), `RemainingPagesTokensTest.kt` (1), `AccountReferenceUiTest.kt` (1) | **9** |
+| `ui/og` → `ui/chat` | `OgGenerationBackdrop.kt` (1 import hataya — same package) | **1** |
+| `AppPausedScreen` → `ui/` | `DuaApp.kt` (1 fully-qualified → bare call), `AppPausedScreenTest.kt` (1 package line) | **2** |
+| `docs/ui/ANDROID_UI.md` | Welcome row ka path | **1** |
+
+### License trail — notice row same commit mein update
+
+`THIRD_PARTY_NOTICES.md` mein **2 rows** update hui (koi row hatayi nahi gayi — attribution intact hai):
+
+| Line (purana) | Purana path | Naya path |
+| --- | --- | --- |
+| 25 | `app/src/main/java/com/dua/ai/ui/screens/AppPausedScreen.kt` (Androidify / Apache-2.0) | `app/src/main/java/com/dua/ai/ui/AppPausedScreen.kt` |
+| 204 | `app/src/main/java/com/dua/ai/ui/og/BlobDrawable.java` (Telegram / GPL-2.0-or-later) | `app/src/main/java/com/dua/ai/ui/chat/BlobDrawable.java` |
+
+Dono files ke andar ka license header bhi waise hi hai — kuch hataya nahi gaya.
+
+### Verify kaise kiya
+
+| Check | Result |
+| --- | --- |
+| `com.dua.ai.ui.auth` (kt/java/xml/pro/kts/gradle) | **0 hits** ✅ |
+| `com.dua.ai.ui.onboarding` | **0 hits** ✅ |
+| `com.dua.ai.ui.og` | **0 hits** ✅ |
+| Filesystem paths `com/dua/ai/ui/{auth,onboarding,og}` (xml/pro/kts) | **0 hits** ✅ |
+| `ui.screens.AppPausedScreen` (koi bhi purana call) | **0 hits** ✅ |
+| `AndroidManifest.xml` / `res/` XML / `proguard-rules.pro` / `build.gradle.kts` | **0** — koi component ya keep-rule in classes ko naam se nahi bulata |
+| Extension function/property sweep (pass 3 ka `HistoryDrawer` bug, pass 4 ka `StoredFilesSection` bug) | **0 misses** — teeno moved files mein **koi `fun X.y` / `val X.y` extension nahi** hai; sweep ne 19 consumer-symbol pairs check kiye, sab import/wildcard/same-package se covered |
+| `rememberGoogleSignIn` ke consumers | `ProfileScreen.kt` + `OnboardingScreen.kt` — dono same package, import hata diya |
+| `OnboardingContent` ke consumers (7 files incl. `debug/`) | sab `com.dua.ai.ui.account.OnboardingContent` import karte hain |
+| Duplicate declarations | **0** — har symbol ka 1 hi declaration |
+| `_to_delete/README.md` purane sections | **chhue nahi** — sirf yeh naya section juda |
+
+**Build nahi chala paaya — imaandaari se.** Is sandbox mein Java aur Android SDK dono nahi hain (`java: command not found`, `ANDROID_HOME` khaali, `/usr/lib/jvm` maujood nahi). `./gradlew assembleDebug` **verify nahi kiya**. Jo kar liya woh hai compile-level path checking + har moved symbol ka declaration/consumer import match.
+
+### Left alone and why (jaan-boojh kar nahi chhua)
+
+| Cheez | Kyun nahi chhui |
+| --- | --- |
+| `ui/screens/ComputerScreen.kt` | Abhi `ui/screens` mein hai. `ui/screens/FeatureScreens.kt` (trap) ke saath ek hi package share karta hai; akele hilane par trap file ka import todna padta. `DuaNavHost.kt` + 3 tests use karte hain |
+| `ui/screens/ImagesScreen.kt`, `LibraryScreen.kt`, `PluginsScreen.kt` | Teeno `ui/screens/AssetFeatureRoutes.kt` (**trap**) se same-package call hote hain. **Yeh ek saath hi hil sakte hain**, aur trap file chhune ke bina nahi — isliye alag PR mein trap file ke saath |
+| `ui/agent/AgentScreen.kt` (1-file package) | `ui/chat` ka natural sibling lagta hai par **`ChatRoute.kt`, `ChatScreen.kt`, `ChatUiState.kt` teeno se 7 imports** aate hain aur apne 2 dedicated tests (`AgentRouteTest`, `AgentScreenUiTest`) usi package mein hain. `ChatViewModel` split ke saath karna behtar — **risk zyada, fayda kam** |
+| `web/`, `website/` | Aapke nirdesh ke mutabiq — rename nahi kiya |
+| `ChatViewModel.kt` (todna) | Alag PR ka kaam. Comment `com.dua.ai.auth.GoogleSignIn` (line ~581) abhi bhi purana path kehta hai — comment compile nahi hota, 1,748-line file sirf uske liye dobara nahi likhi |
+| 7 trap files | `_to_delete/README.md` ka pehla section — `AssetFeatureRoutes.kt`, `FeatureScreens.kt`, `PluginsRoute.kt`, `ChatStream.kt`, `MarkdownStyles.kt`, `ProjectTokens.kt`, `DriveBackupWorker.kt`. **Kisi ko touch nahi kiya** |
+
+### Merge checklist
+
+```bash
+./gradlew assembleDebug
+./gradlew testDebugUnitTest
+./gradlew lint
+```
+
+Teeno pass hone chahiye. Uske baad app mein yeh 6 jagah check karo:
+
+1. **Welcome / onboarding** screen — Dua logo, Google button, Skip (ab `ui/account/OnboardingScreen.kt`)
+2. **Email sign-in** screen khulti hai (Account → Email) — `EmailAuthScreen`
+3. **Account → Profile** — Google sign-in button kaam karta hai (`rememberGoogleSignIn`)
+4. **Maintenance screen** — `DUA_MAINTENANCE=1` par "App paused" page + Try again (`AppPausedScreen`)
+5. **Chat mein OG generation backdrop** — blob animation chalti hai (`BlobDrawable` ab `ui/chat`)
+6. **Settings → Account** — logout dialog aur account rows (`ProfileScreen` + `AccountContent`)

@@ -9,7 +9,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
 import com.dua.ai.settings.LocalPreferences
-import com.dua.ai.ui.onboarding.OnboardingContent
+import com.dua.ai.ui.account.OnboardingContent
 import com.dua.ai.ui.settings.ProfileActions
 import com.dua.ai.ui.settings.ProfileContent
 import com.dua.ai.ui.settings.ProfileDialog

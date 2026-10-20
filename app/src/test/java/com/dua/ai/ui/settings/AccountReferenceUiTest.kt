@@ -17,7 +17,7 @@ import com.dua.ai.account.AccountProvider
 import com.dua.ai.settings.LocalPreferences
 import com.dua.ai.ui.components.AccountAvatar
 import com.dua.ai.ui.navigation.DuaDestination
-import com.dua.ai.ui.onboarding.OnboardingContent
+import com.dua.ai.ui.account.OnboardingContent
 import com.dua.ai.ui.theme.*
 import com.github.takahirom.roborazzi.captureRoboImage
 import java.io.File

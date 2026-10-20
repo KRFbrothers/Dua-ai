@@ -1,4 +1,4 @@
-package com.dua.ai.ui.auth
+package com.dua.ai.ui.account
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.rememberCoroutineScope

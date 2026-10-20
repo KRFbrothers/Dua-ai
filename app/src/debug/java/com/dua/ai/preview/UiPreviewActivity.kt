@@ -16,7 +16,7 @@ import com.dua.ai.model.PromptSuggestion
 import com.dua.ai.settings.LocalPreferences
 import com.dua.ai.setup.CodeExecutionConfig
 import com.dua.ai.ui.chat.*
-import com.dua.ai.ui.onboarding.OnboardingContent
+import com.dua.ai.ui.account.OnboardingContent
 import com.dua.ai.ui.theme.DuaTheme
 
 /** Runs production UI against synthetic fixtures, without creating a ViewModel or contacting a server. */

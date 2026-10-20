@@ -1,4 +1,4 @@
-package com.dua.ai.ui.auth
+package com.dua.ai.ui.account
 
 import android.app.Application
 import android.net.Uri
