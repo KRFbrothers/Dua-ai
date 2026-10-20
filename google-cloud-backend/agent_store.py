@@ -15,6 +15,35 @@ def database_url():
     return os.environ.get('ADK_SESSION_DB_URL', '').strip()
 
 
+SEARCH_PATH_SQL = 'SET SESSION search_path TO dua_adk, extensions'
+
+
+def _pin_search_path(dbapi_connection, _record):
+    """Set the private schema on every new PostgreSQL connection.
+
+    Supabase's pooler starts backend sessions with its own search_path and
+    drops client startup options, so neither '-csearch_path', asyncpg
+    server_settings nor ALTER ROLE ... SET reach the session. A session-level
+    SET after connect does (session-mode pooling keeps it for the session).
+    Autocommit keeps a later rollback from reverting it.
+    """
+    previous = dbapi_connection.autocommit
+    dbapi_connection.autocommit = True
+    cursor = dbapi_connection.cursor()
+    try:
+        cursor.execute(SEARCH_PATH_SQL)
+    finally:
+        cursor.close()
+        dbapi_connection.autocommit = previous
+
+
+def _attach_search_path(sync_engine):
+    from sqlalchemy import event
+    if sync_engine.dialect.name == 'postgresql' and not event.contains(sync_engine, 'connect', _pin_search_path):
+        event.listen(sync_engine, 'connect', _pin_search_path, insert=True)
+    return sync_engine
+
+
 def service():
     from google.adk.sessions import DatabaseSessionService
     from sqlalchemy.pool import NullPool
@@ -29,7 +58,9 @@ def service():
         local = url.host in ('localhost','127.0.0.1','::1') and os.environ.get('ADK_DB_LOCAL') == '1'
         options['connect_args'] = {'server_settings':{'search_path':'dua_adk,extensions'},
                                    'ssl':False if local else ssl.create_default_context(), 'timeout':10}
-    return DatabaseSessionService(db_url=url.render_as_string(hide_password=False), **options)
+    sessions = DatabaseSessionService(db_url=url.render_as_string(hide_password=False), **options)
+    _attach_search_path(sessions.db_engine.sync_engine)
+    return sessions
 
 
 def engine():
@@ -47,7 +78,7 @@ def engine():
     if url.get_backend_name() == 'postgresql':
         local = url.host in ('localhost','127.0.0.1','::1') and os.environ.get('ADK_DB_LOCAL') == '1'
         options['connect_args'] = {'options':'-csearch_path=dua_adk,extensions', 'sslmode':'disable' if local else 'verify-full', 'connect_timeout':5}
-    return create_engine(url, poolclass=NullPool, hide_parameters=True, **options)
+    return _attach_search_path(create_engine(url, poolclass=NullPool, hide_parameters=True, **options))
 
 
 def tables():
