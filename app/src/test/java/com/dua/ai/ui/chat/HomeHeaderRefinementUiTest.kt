@@ -110,7 +110,7 @@ class HomeHeaderRefinementUiTest(private val dark: Boolean, private val large: B
         capture("task-pro")
     }
 
-    @Test fun chatKeepsOriginalLogoAndTaskHasOnlyItsHeadingAndRealPromptHandlers() {
+    @Test fun chatAndTaskShareTheDuaLogoWithoutHeadlineAndKeepRealPromptHandlers() {
         val task = mutableStateOf(false)
         var chosen = ""
         show { ChatContent(task.value, onTask = { chosen = it }) }
@@ -119,13 +119,37 @@ class HomeHeaderRefinementUiTest(private val dark: Boolean, private val large: B
         compose.onNodeWithText("What can I take off\nyour plate?").assertDoesNotExist()
         capture("chat-hero")
         compose.runOnIdle { task.value = true }
-        compose.onNodeWithContentDescription("Dua AI").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Dua AI").assertExists()
         compose.onNodeWithText("Dua always with you").assertDoesNotExist()
-        compose.onNodeWithText("What can I take off\nyour plate?").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("home-hero").assertExists(); compose.onNodeWithContentDescription("Dua AI").assertExists()
         for (prompt in HomeTaskPrompts) {
             compose.onNodeWithText(prompt).performScrollTo().performClick()
             assertEquals(prompt, chosen)
         }
         capture("task-hero")
+    }
+
+    @Test fun biggerLogoMatchesInBothModesAndNeverOverlapsTaskStartersOnSmallScreens() {
+        val task = mutableStateOf(false)
+        val boxHeight = mutableStateOf(568.dp)
+        compose.setContent {
+                CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, if (large) 2f else 1f)) {
+                    DuaTheme(LocalPreferences(theme = if (dark) "dark" else "light")) {
+                        Box(Modifier.requiredSize(320.dp, boxHeight.value)) { ChatContent(task.value, onTask = {}) }
+                    }
+                }
+            }
+        for (height in listOf(568.dp, 330.dp)) {
+            compose.runOnIdle { task.value = false; boxHeight.value = height }
+            val logo = compose.onNodeWithContentDescription("Dua AI").assertWidthIsEqualTo(HomeSizes.heroLogo)
+                .fetchSemanticsNode().boundsInRoot
+            compose.runOnIdle { task.value = true }
+            compose.waitForIdle()
+            val taskLogo = compose.onNodeWithContentDescription("Dua AI").assertWidthIsEqualTo(HomeSizes.heroLogo)
+                .fetchSemanticsNode().boundsInRoot
+            assertEquals(logo.width, taskLogo.width, 0.5f)
+            val firstPrompt = compose.onNodeWithText(HomeTaskPrompts.first()).fetchSemanticsNode().boundsInRoot
+            assertTrue("logo $taskLogo overlaps prompt $firstPrompt at $height", taskLogo.bottom <= firstPrompt.top + 0.5f)
+        }
     }
 }

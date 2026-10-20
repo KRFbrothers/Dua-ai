@@ -64,7 +64,7 @@ class HomeChatTaskUiTest(private val dark: Boolean, private val compact: Boolean
         var profile = 0; var newChat = 0
         show { ChatScreen(state.value, ChatActions(onOpenSettings = { profile++ }, onNewChat = { newChat++ })) }
         compose.onNodeWithText("Dua always with you").assertExists()
-        compose.onNodeWithContentDescription("Dua AI").assertWidthIsEqualTo(HomeSizes.heroLogo)
+        compose.onNodeWithContentDescription("Dua AI").assertWidthIsEqualTo(if (compact) HomeSizes.heroCompactLogo else HomeSizes.heroLogo)
         compose.onNodeWithContentDescription("Model, Flash").assertIsDisplayed().performClick()
         compose.onNodeWithTag("model-picker-sheet").assertExists()
         compose.onNodeWithText("Done").performClick()
@@ -97,8 +97,8 @@ class HomeChatTaskUiTest(private val dark: Boolean, private val compact: Boolean
                 state.value = state.value.copy(draft = "", messages = listOf(ChatMessage(text = "Task output", isUser = false)))
             })) }
         compose.onNode(hasText("Task") and isSelectable()).performClick().assertIsSelected()
-        compose.onNodeWithText("What can I take off\nyour plate?").assertExists()
-        compose.onNodeWithContentDescription("Dua AI").assertDoesNotExist()
+        compose.onNodeWithTag("home-hero").assertExists(); compose.onNodeWithContentDescription("Dua AI").assertExists()
+        compose.onNodeWithContentDescription("Dua AI").assertExists()
         compose.onNodeWithText("Describe...").assertIsDisplayed()
         compose.onNodeWithContentDescription("New chat").assertDoesNotExist()
         compose.onNodeWithText("AI Agent").assertIsNotDisplayed() // The closed drawer retains its destination label.

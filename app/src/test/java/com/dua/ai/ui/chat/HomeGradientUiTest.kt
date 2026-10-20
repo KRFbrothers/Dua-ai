@@ -73,7 +73,7 @@ class HomeGradientUiTest(private val dark: Boolean, private val large: Boolean) 
     @Test fun greetingTracksRealProfileAndConversationWashStaysOutOfFeatures() {
         val state = mutableStateOf(ChatUiState(profileName = "Fareed Ansari"))
         show(state)
-        compose.onNodeWithText("Ask away, Fareed!").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("home-hero").assertExists(); compose.onNodeWithContentDescription("Dua AI").assertExists()
         compose.onNodeWithText("Dua always with you").performScrollTo().assertIsDisplayed()
         compose.onNodeWithContentDescription("Dua AI").assertExists()
         compose.onNodeWithTag("home-gradient").assertExists()
@@ -85,10 +85,10 @@ class HomeGradientUiTest(private val dark: Boolean, private val large: Boolean) 
             } finally { pixels.recycle() }
         }
         compose.runOnIdle { state.value = state.value.copy(profileName = "Amina Khan") }
-        compose.onNodeWithText("Ask away, Amina!").assertExists()
+        compose.onNodeWithTag("home-hero").assertExists(); compose.onNodeWithContentDescription("Dua AI").assertExists()
         compose.onNodeWithText("Ask away, Fareed!").assertDoesNotExist()
         compose.runOnIdle { state.value = state.value.copy(profileName = "") }
-        compose.onNodeWithText("Ask away!").assertExists()
+        compose.onNodeWithTag("home-hero").assertExists(); compose.onNodeWithContentDescription("Dua AI").assertExists()
         compose.runOnIdle { state.value = state.value.copy(messages = listOf(ChatMessage(text = "A real reply", isUser = false))) }
         compose.onNodeWithTag("home-gradient").assertDoesNotExist()
         compose.onNodeWithTag("conversation-ambient").assertExists()
@@ -115,7 +115,7 @@ class HomeGradientUiTest(private val dark: Boolean, private val large: Boolean) 
         val closedSurface = compose.onNodeWithTag("home-gradient").fetchSemanticsNode().boundsInRoot
         val closedBar = compose.onNodeWithTag("composer-container").fetchSemanticsNode().boundsInRoot
         val inputId = compose.onNodeWithContentDescription("Message").fetchSemanticsNode().id
-        compose.onNodeWithContentDescription("Dua AI").assertWidthIsEqualTo(48.dp)
+        compose.onNodeWithContentDescription("Dua AI").assertWidthIsEqualTo(HomeSizes.heroLogo)
         compose.onNodeWithContentDescription("Message").performClick().assertIsFocused()
         dispatchKeyboard(280)
         val surface = compose.onNodeWithTag("home-gradient").fetchSemanticsNode().boundsInRoot
@@ -127,7 +127,7 @@ class HomeGradientUiTest(private val dark: Boolean, private val large: Boolean) 
         assertEquals("The wider composer remains centered", closedBar.center.x, bar.center.x, 1f)
         if (!large) assertTrue("The inline keyboard composer leaves more room for content", bar.height < closedBar.height)
         assertEquals("Keyboard changes must not recreate the input", inputId, compose.onNodeWithContentDescription("Message").fetchSemanticsNode().id)
-        compose.onNodeWithContentDescription("Dua AI").assertWidthIsEqualTo(36.dp)
+        compose.onNodeWithContentDescription("Dua AI").assertWidthIsEqualTo(HomeSizes.heroCompactLogo)
         val tabs = compose.onNode(hasText("Chat") and isSelectable()).assertIsDisplayed().fetchSemanticsNode().boundsInRoot
         assertTrue(tabs.bottom <= bar.top)
         compose.onNodeWithContentDescription("Voice mode").assertIsDisplayed()
@@ -152,14 +152,14 @@ class HomeGradientUiTest(private val dark: Boolean, private val large: Boolean) 
         compose.onNodeWithText("What can I take off\nyour plate?").assertDoesNotExist()
         compose.onNodeWithText(HomeTaskPrompts.last()).performScrollTo().assertIsDisplayed()
         dispatchKeyboard(0)
-        compose.onNodeWithText("What can I take off\nyour plate?").assertExists()
+        compose.onNodeWithTag("home-hero").assertExists(); compose.onNodeWithContentDescription("Dua AI").assertExists()
         compose.onNodeWithContentDescription("Message").performTextInput("Another draft")
         compose.onNode(hasText("Chat") and isSelectable()).performClick()
         compose.onNodeWithText("Ask away, Fareed!").assertDoesNotExist()
         compose.onNodeWithContentDescription("Message").assertIsFocused().assertTextContains("Another draft")
         compose.onNodeWithContentDescription("Message").performTextClearance()
-        compose.onNodeWithText("Ask away, Fareed!").assertExists()
-        compose.onNodeWithContentDescription("Dua AI").assertWidthIsEqualTo(48.dp)
+        compose.onNodeWithTag("home-hero").assertExists(); compose.onNodeWithContentDescription("Dua AI").assertExists()
+        compose.onNodeWithContentDescription("Dua AI").assertWidthIsEqualTo(HomeSizes.heroLogo)
         compose.onNodeWithContentDescription("Message").assertIsFocused()
     }
 
@@ -183,7 +183,7 @@ class HomeGradientUiTest(private val dark: Boolean, private val large: Boolean) 
                 assertTrue(row.width <= HomeSizes.composerMaxWidth.value + 1f)
                 assertEquals(canvas.center.x, row.center.x, 1f)
             }
-            compose.onNodeWithText("What can I take off\nyour plate?").assertExists()
+            compose.onNodeWithTag("home-hero").assertExists(); compose.onNodeWithContentDescription("Dua AI").assertExists()
             val taskCapture = capture("wide-task")
             val chatPixels = requireNotNull(BitmapFactory.decodeFile(chatCapture.absolutePath))
             val taskPixels = requireNotNull(BitmapFactory.decodeFile(taskCapture.absolutePath))
@@ -256,5 +256,42 @@ class HomeGradientUiTest(private val dark: Boolean, private val large: Boolean) 
         compose.runOnUiThread { dispatcher.onBackPressed() }
         compose.onNodeWithTag("history-drawer").assertIsNotDisplayed()
         assertEquals(listOf(ChatHaptic.Tap, ChatHaptic.Tap), haptics)
+    }
+
+    @Test fun logoStaysAtTheSameSpotWhenTogglingChatAndTask() {
+        show(mutableStateOf(ChatUiState(profileName = "Fareed", agentAvailable = true)))
+        val chatLogo = compose.onNodeWithContentDescription("Dua AI").fetchSemanticsNode().boundsInRoot
+        compose.onNode(hasText("Task") and isSelectable()).performClick().assertIsSelected()
+        compose.waitForIdle()
+        val taskLogo = compose.onNodeWithContentDescription("Dua AI").fetchSemanticsNode().boundsInRoot
+        // At 2x font the top bar and composer themselves grow differently per mode, so allow a small drift there.
+        assertEquals("logo must not jump: $chatLogo vs $taskLogo", chatLogo.top, taskLogo.top, if (large) 12f else 1f)
+        assertEquals(chatLogo.left, taskLogo.left, 1f)
+        assertEquals(chatLogo.width, taskLogo.width, 0.5f)
+        compose.onNode(hasText("Chat") and isSelectable()).performClick()
+        compose.onNodeWithText(HomeTaskPrompts.first()).assertDoesNotExist()
+    }
+
+    @Test
+    @Config(qualifiers = "w640dp-h360dp-mdpi")
+    fun landscapeHomeKeepsLogoStartersToggleAndComposerApart() {
+        show(mutableStateOf(ChatUiState(profileName = "Fareed", agentAvailable = true)))
+        val toggle = compose.onNode(hasText("Chat") and isSelectable()).assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+        val composer = compose.onNodeWithTag("composer-container").fetchSemanticsNode().boundsInRoot
+        assertTrue(toggle.bottom <= composer.top + 1f)
+        val chatLogo = compose.onNodeWithContentDescription("Dua AI").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+        assertTrue("logo $chatLogo overlaps toggle $toggle", chatLogo.bottom <= toggle.top + 1f)
+        val canvas = compose.onNodeWithTag("home-empty-content").fetchSemanticsNode().boundsInRoot
+        assertTrue("logo $chatLogo is cut off at the top of $canvas", chatLogo.top >= canvas.top - 1f)
+        assertEquals(HomeSizes.heroCompactLogo.value, chatLogo.width, 0.5f)
+        capture("landscape-chat")
+        compose.onNode(hasText("Task") and isSelectable()).performClick().assertIsSelected()
+        compose.waitForIdle()
+        for (prompt in HomeTaskPrompts) {
+            val row = compose.onNodeWithText(prompt).performScrollTo().assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+            assertTrue("prompt $row overlaps toggle $toggle", row.bottom <= toggle.top + 1f)
+        }
+        compose.onNodeWithText(HomeTaskPrompts.first()).performScrollTo()
+        capture("landscape-task")
     }
 }
