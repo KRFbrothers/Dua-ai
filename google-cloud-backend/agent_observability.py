@@ -94,8 +94,19 @@ class Trace:
                 priced = False
                 continue
             cached = min(row['cached_input'] or 0, row['input'] or 0)
+            # Gemini reports thinking separately from visible candidates; the
+            # LiteLlm adapter can include reasoning inside completion tokens.
+            # Reconcile against the reported total instead of charging twice.
+            base=(row['input'] or 0)+(row['output'] or 0)
+            if row['total']==base:
+                charged_output=row['output'] or 0
+            elif row['total']==base+(row['thinking'] or 0):
+                charged_output=(row['output'] or 0)+(row['thinking'] or 0)
+            else:
+                priced=False
+                continue
             cost += (((row['input'] or 0) - cached) * price['input'] + cached * price['cached_input'] +
-                     ((row['output'] or 0) + (row['thinking'] or 0)) * price['output']) / 1_000_000
+                     charged_output * price['output']) / 1_000_000
         return {'requestId': self.id, 'calls': len(calls), 'usageComplete': complete, 'tokens': totals,
                 'estimatedUsd': round(cost, 8) if priced else None, 'costIsEstimate': True,
                 'models': sorted({r['model'] for r in calls}), 'scope': 'agent_request_including_router_tools_and_postprocessing'}

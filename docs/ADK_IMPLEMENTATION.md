@@ -186,7 +186,9 @@ per run and in the container defaults. Existing user-facing thought/progress
 behavior is separate from persistent content-free traces.
 
 Every actual SDK delegate attempt is metered, including failed fallback models.
-Streaming usage snapshots count once; nested search/code calls, router and optional
+Streaming usage snapshots count once; reported totals reconcile providers that
+include reasoning in output tokens versus report it separately, preventing double
+charging in estimates. Inconsistent totals leave cost unknown. Nested search/code calls, router and optional
 critic/learning calls are wrapped too. The SSE `usage` event reports observed
 usage and completeness. Missing metadata and failed attempts remain unknown.
 `ADK_MODEL_PRICES_JSON` can supply operator-verified USD/million-token rates with

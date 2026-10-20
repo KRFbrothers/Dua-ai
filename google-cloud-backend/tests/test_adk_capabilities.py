@@ -22,6 +22,12 @@ def test_usage_deduplicates_reports_and_never_invents_unknown_cost():
     report=trace.summary()
     assert report['calls']==1 and report['tokens']['total']==125
     assert report['estimatedUsd']==pytest.approx(0.000145)
+    inclusive=Trace(sink=lambda row:None,prices={'offline':{'input':1,'output':2,'cached_input':0.5}})
+    inclusive.usage('inclusive-reasoning','offline',{**usage,'total_token_count':120})
+    assert inclusive.summary()['estimatedUsd']==pytest.approx(0.000135)
+    inconsistent=Trace(sink=lambda row:None,prices=inclusive.prices)
+    inconsistent.usage('inconsistent-total','offline',{**usage,'total_token_count':123})
+    assert inconsistent.summary()['estimatedUsd'] is None
     trace.usage('call-b','offline',None)
     assert trace.summary()['estimatedUsd'] is None and trace.summary()['tokens']['input'] is None
     assert 'prompt' not in json.dumps(rows)
