@@ -31,7 +31,7 @@ import com.dua.ai.ui.chat.ChatUiState
 import com.dua.ai.ui.chat.ImagineActions
 import com.dua.ai.ui.chat.LocalMediaLoader
 import com.dua.ai.ui.chat.MediaViewerContent
-import com.dua.ai.ui.screens.ImagineSettingsContent
+import com.dua.ai.ui.settings.ImagineSettingsContent
 import com.dua.ai.ui.theme.DuaTheme
 import com.github.takahirom.roborazzi.ExperimentalRoborazziApi
 import com.github.takahirom.roborazzi.RobolectricDeviceQualifiers
