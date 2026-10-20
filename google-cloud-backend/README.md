@@ -302,7 +302,7 @@ Since the approval guard, only step 1 runs during the agent request (before the 
 by `POST /api/agent/action` after you approve, without the CI wait / auto-fix below.
 [`pr_flow.py`](pr_flow.py) handles `propose_changes` in both paths:
 1. **Pre-check:** Python files are byte-compiled in a temp dir (20 s timeout) and JSON files are parsed. A failure goes back to the model; after 2 failures, no PR is opened.
-2. **CI wait:** after the PR opens, the engine polls GitHub CI (check runs, falling back to Actions runs; the Vercel check is ignored). The total wait per request is `AGENT_CI_SECONDS` (default 420).
+2. **CI wait:** after the PR opens, the engine polls GitHub CI (check runs, falling back to Actions runs). The total wait per request is `AGENT_CI_SECONDS` (default 420).
 3. **One fix:** if CI fails, the model gets one fix attempt. The fix is a fast-forward commit on the same `dua-agent/` branch (never force, never main, never merge), and CI is polled again.
 4. **`check_pr_ci` tool:** reads the status of the agent's own PR.
 
