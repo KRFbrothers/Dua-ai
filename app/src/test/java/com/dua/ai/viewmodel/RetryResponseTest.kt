@@ -144,6 +144,16 @@ class RetryResponseTest {
 
     private fun finished() = await("retry finished") { !model.isTyping.value && model.messages.value.lastOrNull()?.streaming != true }
 
+    /** Same pump as [await], but returns the outcome instead of throwing. */
+    private fun awaitBounded(condition: () -> Boolean): Boolean {
+        val until = System.nanoTime() + 5_000_000_000L
+        while (!condition() && System.nanoTime() < until) {
+            shadowOf(Looper.getMainLooper()).idleFor(20, TimeUnit.MILLISECONDS)
+            Thread.sleep(2)
+        }
+        return condition()
+    }
+
     /** The account API is never used by these tests; refusing loudly keeps a stray call visible. */
     private fun rejectingClient() = OkHttpClient.Builder().addInterceptor { chain ->
         throw AssertionError("Unexpected account request: ${chain.request().url}")
@@ -166,7 +176,7 @@ class RetryResponseTest {
         assertNull(model.error.value)
         assertNull(field("retryOriginal").get(model))
         // The old reply is not resent: only the original prompt goes up, under the reply's own model.
-        assertEquals(1, requests.size)
+        assertTrue("a retry must reach the network", awaitBounded { requests.size == 1 })
         assertEquals("Gemini", requests[0].getString("model"))
         assertEquals(1, requests[0].getJSONArray("messages").length())
         assertEquals("Explain coroutines", requests[0].getJSONArray("messages").getJSONObject(0).getString("text"))
