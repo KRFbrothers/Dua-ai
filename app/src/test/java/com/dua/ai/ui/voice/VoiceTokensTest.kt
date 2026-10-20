@@ -16,7 +16,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
 import com.dua.ai.settings.LocalPreferences
-import com.dua.ai.ui.screens.ComputerScreen
+import com.dua.ai.ui.features.ComputerScreen
 import com.dua.ai.ui.settings.SettingsContent
 import com.dua.ai.ui.settings.SettingsUiState
 import com.dua.ai.ui.theme.DuaTheme
