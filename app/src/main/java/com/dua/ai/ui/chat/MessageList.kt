@@ -59,7 +59,9 @@ import com.dua.ai.ui.theme.Spacing
 @Composable
 fun MessageList(state: ChatUiState, actions: ChatActions, listState: LazyListState, modifier: Modifier = Modifier,
     imagineActions: ImagineActions = actions.imagine, searchMessageId: String? = null,
-    onReply: ((com.dua.ai.model.ChatMessage) -> Unit)? = null) {
+    onReply: ((com.dua.ai.model.ChatMessage) -> Unit)? = null,
+    /** Extra bottom room so the last message can scroll clear of an overlay (floating Chat/Task toggle). */
+    bottomOverlay: androidx.compose.ui.unit.Dp = androidx.compose.ui.unit.Dp(0f)) {
     // Ids present on first show (history) do not animate in; only bubbles that arrive later do.
     val initialIds = remember(state.chatId) { state.messages.map { it.id }.toHashSet() }
     val motion = rememberReplyMotionAllowed()
@@ -77,7 +79,7 @@ fun MessageList(state: ChatUiState, actions: ChatActions, listState: LazyListSta
     LazyColumn(
         state = listState,
         modifier = modifier.fillMaxSize().testTag("chat-messages"),
-        contentPadding = PaddingValues(start = ChatSizes.listPaddingH, end = ChatSizes.listPaddingH, top = ChatSizes.listPaddingTop, bottom = ChatSizes.listPaddingBottom),
+        contentPadding = PaddingValues(start = ChatSizes.listPaddingH, end = ChatSizes.listPaddingH, top = ChatSizes.listPaddingTop, bottom = ChatSizes.listPaddingBottom + bottomOverlay),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         itemsIndexed(state.messages, key = { _, message -> message.id }, contentType = { _, message -> if (message.isUser) "user" else "assistant" }) { index, message ->
