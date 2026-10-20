@@ -594,64 +594,33 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     init { onDeviceAi.refresh() }
     /** True only when this phone supports it and the "On-device AI" setting is on. */
     fun onDeviceAiEnabled(): Boolean = onDeviceAi.supported && localSettings.value.onDeviceAi
-    private val _polishing = MutableStateFlow(false)
-    val polishing = _polishing.asStateFlow()
-    private val _polishNotice = MutableStateFlow("")
-    val polishNotice = _polishNotice.asStateFlow()
-    /** Rewrites the composer draft as a richer Imagine prompt, on the phone. The draft is left alone if it changed meanwhile. */
-    fun polishImaginePrompt() {
-        val original = _draft.value
-        if (_polishing.value || original.isBlank() || !onDeviceAiEnabled()) return
-        _polishing.value = true; _polishNotice.value = ""
-        viewModelScope.launch {
-            try {
-                val polished = onDeviceAi.polish(original)
-                _polishNotice.value = when {
-                    polished == null -> "On-device polish is not ready on this phone right now. Your prompt was not changed."
-                    _draft.value != original -> "Your prompt changed while polishing, so it was kept as is."
-                    else -> { updateDraft(polished); "Prompt polished on this phone." }
-                }
-            } finally { _polishing.value = false }
-        }
-    }
-    private val _writing = MutableStateFlow<com.dua.ai.ondevice.WritingSession?>(null)
-    /** The open on-device Summarize / Rewrite sheet, if any. */
-    val writing = _writing.asStateFlow()
-    private var writingJob: Job? = null
-    /** Opens Summarize / Rewrite for [text]. A null [task] means "Rewrite" and the user picks a style first. */
-    fun openWriting(text: String, fromDraft: Boolean, task: com.dua.ai.ondevice.WritingTask?) {
-        if (text.isBlank()) return
-        writingJob?.cancel()
-        _writing.value = com.dua.ai.ondevice.WritingSession(text, fromDraft, task)
-        if (task != null) runWriting(task)
-    }
-    fun runWriting(task: com.dua.ai.ondevice.WritingTask) {
-        val session = _writing.value ?: return
-        writingJob?.cancel()
-        if (!onDeviceAiEnabled()) { _writing.value = session.copy(task = task, phase = com.dua.ai.ondevice.WritingSession.Phase.Unavailable); return }
-        _writing.value = session.copy(task = task, phase = com.dua.ai.ondevice.WritingSession.Phase.Working, result = "")
-        writingJob = viewModelScope.launch {
-            val result = onDeviceAi.write(task, session.text)
-            _writing.value = _writing.value?.takeIf { it.text == session.text && it.task == task }?.let {
-                if (result == null) it.copy(phase = com.dua.ai.ondevice.WritingSession.Phase.Failed)
-                else it.copy(phase = com.dua.ai.ondevice.WritingSession.Phase.Result, result = result)
-            }
-        }
-    }
-    /** Puts the on-device result in the message box (nothing is sent). */
-    fun useWritingResult() {
-        val session = _writing.value ?: return
-        if (session.phase == com.dua.ai.ondevice.WritingSession.Phase.Result) updateDraft(session.result)
-        closeWriting()
-    }
-    /** Server path: puts a "Summarize / Rewrite this" request in the message box for the normal Dua chat. Nothing is sent. */
-    fun askServerForWriting() {
-        val session = _writing.value ?: return
-        val task = session.task ?: return
-        updateDraft(com.dua.ai.ondevice.WritingPrompts.server(task, session.text))
-        closeWriting()
-    }
-    fun closeWriting() { writingJob?.cancel(); writingJob = null; _writing.value = null }
+    // Settings / appearance / writing (moved to ChatSettings.kt; public API unchanged).
+    private val settingsFeature: ChatSettings by lazy { ChatSettings(settingsHost) }
+    private val settingsHost: SettingsHost by lazy { object : SettingsHost {
+        override val viewModelScope get() = this@ChatViewModel.viewModelScope
+        override val localPreferences get() = this@ChatViewModel.localPreferences
+        override val appearanceStore get() = this@ChatViewModel.appearanceStore
+        override val onDeviceAi get() = this@ChatViewModel.onDeviceAi
+        override fun onDeviceAiEnabled() = this@ChatViewModel.onDeviceAiEnabled()
+        override val _draft get() = this@ChatViewModel._draft
+        override fun updateDraft(value: String) = this@ChatViewModel.updateDraft(value)
+    } }
+    val polishing: StateFlow<Boolean> get() = settingsFeature.polishing
+    val polishNotice: StateFlow<String> get() = settingsFeature.polishNotice
+    fun polishImaginePrompt() = settingsFeature.polishImaginePrompt()
+    val writing: StateFlow<com.dua.ai.ondevice.WritingSession?> get() = settingsFeature.writing
+    fun openWriting(text: String, fromDraft: Boolean, task: com.dua.ai.ondevice.WritingTask?) = settingsFeature.openWriting(text, fromDraft, task)
+    fun runWriting(task: com.dua.ai.ondevice.WritingTask) = settingsFeature.runWriting(task)
+    fun useWritingResult() = settingsFeature.useWritingResult()
+    fun askServerForWriting() = settingsFeature.askServerForWriting()
+    fun closeWriting() = settingsFeature.closeWriting()
+    val settingsStatus: StateFlow<String> get() = settingsFeature.settingsStatus
+    fun setPersonality(value: com.dua.ai.settings.DuaPersonality) = settingsFeature.setPersonality(value)
+    fun setAppearance(value: String) = settingsFeature.setAppearance(value)
+    fun setAccent(value: com.dua.ai.settings.AccentPreset?) = settingsFeature.setAccent(value)
+    fun resetSettings() = settingsFeature.resetSettings()
+    fun settingsNotice(text: String) = settingsFeature.settingsNotice(text)
+    fun updateSettings(value: com.dua.ai.settings.LocalPreferences) = settingsFeature.updateSettings(value)
     private val backgroundRemover by lazy { com.dua.ai.ondevice.OnDeviceServices.backgroundRemover(application) }
     /** Google Play services is present, so the on-device background tool can run (or be downloaded once). */
     val backgroundRemovalAvailable: Boolean by lazy { backgroundRemover.available() }
@@ -664,38 +633,12 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private var appearanceLoaded = false
     val appearance = appearanceStore.data.onEach { appearanceLoaded = true }.stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, appearanceStore.initial)
     val appearanceNotice = appearanceStore.notice
-    fun setPersonality(value: com.dua.ai.settings.DuaPersonality) = saveAppearance { appearanceStore.setPersonality(value) }
-    fun setAppearance(value: String) = saveAppearance { appearanceStore.setTheme(value) }
-    fun setAccent(value: com.dua.ai.settings.AccentPreset?) = saveAppearance { appearanceStore.setAccent(value) }
-    private fun saveAppearance(write: suspend () -> Unit) = viewModelScope.launch {
-        try { write(); _settingsStatus.value = "Saved on this device." }
-        catch (cancelled: CancellationException) { throw cancelled }
-        catch (_: java.io.IOException) { _settingsStatus.value = "Appearance could not be saved. Check device storage and retry." }
-    }
-    private val _settingsStatus = MutableStateFlow("")
-    val settingsStatus = _settingsStatus.asStateFlow()
     var foreground = false
         private set
     fun setForeground(value: Boolean) {
         foreground = value
         automaticSync.setForeground(value)
         setNetwork(networkMonitor.currentlyOnline())
-    }
-    fun resetSettings() {
-        try { localPreferences.reset() }
-        catch (failure: Exception) { _settingsStatus.value = failure.message ?: "Reset failed."; return }
-        viewModelScope.launch {
-            try {
-                appearanceStore.reset()
-                _settingsStatus.value = "Device settings and Personal memory reset. Project settings and memory kept."
-            } catch (cancelled: CancellationException) { throw cancelled }
-            catch (_: java.io.IOException) { _settingsStatus.value = "Other device settings reset; appearance could not be reset. Check storage and retry." }
-        }
-    }
-    fun settingsNotice(text: String) { _settingsStatus.value = text }
-    fun updateSettings(value: com.dua.ai.settings.LocalPreferences) {
-        try { localPreferences.update(value); _settingsStatus.value = "Saved on this device." }
-        catch (error: Exception) { _settingsStatus.value = error.message ?: "Settings could not be saved." }
     }
 
     private var generation = 0
