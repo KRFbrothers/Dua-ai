@@ -432,7 +432,8 @@ fun ChatScreen(
                                 }
                             }
                             val dictation = if (actions.inlineDictation) rememberChatDictation(actions.dictationLanguage, actions.dictationAutoSend,
-                                draft = rememberUpdatedState(state.draft).let { d -> remember { { d.value } } }, onDraft = actions.onDraftChange, onSend = sendFromComposer, onNotice = actions.onDictationNotice) else null
+                                draft = rememberUpdatedState(state.draft).let { d -> remember { { d.value } } }, onDraft = actions.onDraftChange, onSend = sendFromComposer, onNotice = actions.onDictationNotice,
+                                offlineModel = actions.dictationOfflineModel) else null
                             Composer(
                                 homeLayout = feature == null,
                                 dictation = dictation,

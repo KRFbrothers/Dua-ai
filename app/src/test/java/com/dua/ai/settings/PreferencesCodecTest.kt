@@ -37,6 +37,17 @@ class PreferencesCodecTest {
             try { PreferencesCodec.encode(value); fail("Invalid voice setting accepted") } catch (_: IllegalArgumentException) { }
         }
     }
+    @Test fun offlineDictationDefaultsOffRoundTripsAndRejectsUnknown() {
+        val old = org.json.JSONObject(PreferencesCodec.encode(LocalPreferences())).apply { remove("offlineDictation"); remove("offlineModel") }.toString()
+        assertEquals("off", PreferencesCodec.decode(old).offlineDictation)
+        assertEquals("hi", PreferencesCodec.decode(old).offlineModel)
+        val saved = PreferencesCodec.decode(PreferencesCodec.encode(LocalPreferences(offlineDictation = "always", offlineModel = "en-in")))
+        assertEquals("always", saved.offlineDictation); assertEquals("en-in", saved.offlineModel)
+        val bad = org.json.JSONObject(PreferencesCodec.encode(LocalPreferences())).put("offlineDictation", "cloud").put("offlineModel", "ur").toString()
+        assertEquals("off", PreferencesCodec.decode(bad).offlineDictation); assertEquals("hi", PreferencesCodec.decode(bad).offlineModel)
+        assertThrows(IllegalArgumentException::class.java) { PreferencesCodec.encode(LocalPreferences(offlineDictation = "cloud")) }
+    }
+
     @Test fun onDeviceAiDefaultsOnForOldSettingsAndRoundTripsOff() {
         val old = org.json.JSONObject(PreferencesCodec.encode(LocalPreferences())).apply { remove("onDeviceAi") }.toString()
         assertTrue(PreferencesCodec.decode(old).onDeviceAi)

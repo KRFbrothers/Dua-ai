@@ -100,7 +100,8 @@ fun VoiceSettingsScreen(viewModel: ChatViewModel, voice: ReplyVoice, onBack: () 
         onSpeed = { value -> viewModel.updateSettings(viewModel.localSettings.value.copy(voiceSpeed = (Math.round(value * 20) / 20f).coerceIn(0.5f, 2f))) },
         onPreview = { previewSelected(viewModel, voice) }, onOpen = onOpen,
         onGeneratedVoice = { enabled -> voice.stopAll(); viewModel.updateSettings(viewModel.localSettings.value.copy(generatedVoice = enabled)) },
-        onAutoSend = { enabled -> viewModel.updateSettings(viewModel.localSettings.value.copy(dictationAutoSend = enabled)) })
+        onAutoSend = { enabled -> viewModel.updateSettings(viewModel.localSettings.value.copy(dictationAutoSend = enabled)) },
+        offlineTyping = { OfflineVoiceTypingSection(viewModel) })
 }
 
 @Composable
@@ -137,7 +138,7 @@ internal fun previewSelected(viewModel: ChatViewModel, voice: ReplyVoice) {
 @Composable
 fun VoiceSettingsContent(state: VoiceSettingsUiState, onBack: () -> Unit, onPicker: (String) -> Unit, onProvider: (String) -> Unit,
     onSpeed: (Float) -> Unit, onPreview: () -> Unit, onOpen: (DuaDestination) -> Unit = {}, onGeneratedVoice: (Boolean) -> Unit = {},
-    onAutoSend: (Boolean) -> Unit = {}) {
+    onAutoSend: (Boolean) -> Unit = {}, offlineTyping: (@Composable () -> Unit)? = null) {
     val config = state.config
     val provider = state.provider
     DuaPageScaffold(title = "Voice", onBack = onBack) {
@@ -208,6 +209,7 @@ fun VoiceSettingsContent(state: VoiceSettingsUiState, onBack: () -> Unit, onPick
                 onPicker(VoicePickerKind.INPUT_LANGUAGE)
             }
         }
+        offlineTyping?.invoke()
         Text(if (provider != null) "${provider.name} receives only the text of the reply you play. Audio is kept in memory for replays and never saved."
             else "The device voice runs on your phone. Install more voices in Android Settings › Text-to-speech.",
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
