@@ -417,7 +417,7 @@ def last_user_text(messages):
     return ""
 
 
-def route_agent(messages, attachments, system):
+def route_agent(messages, attachments, system, observer=None):
     """Returns "chat" (direct reply, no Search) or "agent" (full pipeline).
 
     Free checks first (greetings / clear task words), then one cheap model call (low thinking, small output,
@@ -431,7 +431,11 @@ def route_agent(messages, attachments, system):
         return "agent"
     fallback = "agent" if len(text.split()) > 12 else "chat"
     try:
-        response = get_model(system).generate_content(
+        model = get_model(system)
+        if observer is not None:
+            from agent_observability import ObservedModel
+            model = ObservedModel(model, observer)
+        response = model.generate_content(
             build_contents(with_last_user_suffix(messages[-AGENT_ROUTER_TURNS:], AGENT_ROUTER_PROMPT), attachments),
             generation_config={"max_output_tokens": AGENT_ROUTER_TOKENS, "temperature": 0.0, "thinking_level": "low",
                                "response_mime_type": "application/json",
@@ -511,12 +515,14 @@ def tool_loop(messages, attachments, system, enqueue, owner, coding=False, cance
         prompt += "\n\n" + coding_agent.CODING_PROMPT.format(repo=repo, max_files=coding_agent.MAX_FILES_CHANGED)
     last = last_user_text(messages)
     notes = agent_notes.for_owner(owner)
+    notes_context = agent_notes.load_prompt(notes, last) if notes is not None else ""
     if notes is not None:
-        prompt += agent_tools.NOTES_HINT + agent_notes.load_prompt(notes, last)
+        prompt += agent_tools.NOTES_HINT + notes_context
     prompt += agent_safety.SAFETY_PROMPT
     model = get_agent_model(system + "\n\n" + prompt)
     if not enqueue("event", progress_event("plan", "Planning\u2026")):
         return
+    import agent_store
     env = {
         "model": model, "enqueue": enqueue, "chunk_text": chunk_text, "grounding_sources": grounding_sources,
         "search_tool": google_search_tool, "code_tool": agent_tools.code_tool, "fetch": agent_tools.fetch_page,
@@ -525,11 +531,31 @@ def tool_loop(messages, attachments, system, enqueue, owner, coding=False, cance
         "progress": lambda step, label, state="active": enqueue("event", progress_event(step, label, state)),
         "thinking": lambda delta: enqueue("event", {"type": "thinking", "delta": delta}),
         # Write tools wait for the owner's approval (agent_safety); a disconnect stops the loop.
-        "owner_id": owner.get("id"), "approvals": agent_safety.STORE, "cancelled": cancelled,
+        "owner_id": owner.get("id"), "approvals": agent_store.approvals(), "cancelled": cancelled,
+        "adk_run_id": owner.get("adk_run_id"), "adk_resume": owner.get("adk_resume", False),
+        "adk_request": owner.get("adk_request", {}),
+        "adk_system": system + "\n\n" + agent_safety.SAFETY_PROMPT + "\n\n" +
+                      agent_safety.fence("search_notes", {"notes": notes_context}).get("untrusted_data", ""),
     }
     adk_result = None
     import agent_adk
     if agent_adk.enabled() and not coding:
+        from agent_observability import Trace, ObservedModel
+        import agent_toolkit
+        env["custom_tools"] = agent_toolkit.configured()
+        env["trace"] = owner.get("trace") or Trace()
+        if agent_store.database_url():
+            import uuid
+            env["adk_run_id"] = env.get("adk_run_id") or str(uuid.uuid4())
+        env["model"] = ObservedModel(model, env["trace"])
+        import agent_documents
+        if agent_documents.enabled():
+            env["documents"] = agent_documents.Documents(owner.get("id"),
+                agent_documents.VertexEmbeddings(get_client(), env["trace"]))
+            if notes is not None:
+                notes.semantic = env["documents"]
+        env["adk_contents"] = build_contents(messages, attachments)
+        env["stream_text"] = (lambda delta: enqueue("event", {"type": "text", "delta": delta}))
         os.environ.setdefault("GOOGLE_GENAI_USE_VERTEXAI", "TRUE")
         os.environ.setdefault("GOOGLE_GENAI_USE_ENTERPRISE", "TRUE")
         os.environ.setdefault("GOOGLE_CLOUD_LOCATION", LOCATION)
@@ -551,50 +577,75 @@ def tool_loop(messages, attachments, system, enqueue, owner, coding=False, cance
     import agent_verify
     if agent_verify.enabled() and not coding and run is not None and not getattr(run, "pending", None):
         text = agent_verify.check(last, text, getattr(run, "evidence", None) or getattr(run, "steps", []), sources,
-                                  get_model(VERIFY_SYSTEM), model, chunk_text,
+                                  (ObservedModel(get_model(VERIFY_SYSTEM), env["trace"]) if env.get("trace") else get_model(VERIFY_SYSTEM)),
+                                  env["model"], chunk_text,
                                   lambda step, label, state="active": enqueue("event", progress_event(step, label, state)))
     if sources and not enqueue("event", {"type": "sources", "sources": sources}):
         return
     if not enqueue("event", progress_event("answer", "Writing the answer\u2026")):
         return
-    if not enqueue("chunk", _Text(text)):
+    if not getattr(run, "streamed", False) and not enqueue("chunk", _Text(text)):
         return
     footer = sources_footer(sources)
     if footer and not enqueue("event", {"type": "text", "delta": footer}):
         return
+    if notes is not None and run is not None:
+        learner = get_model(NOTES_SYSTEM)
+        if env.get("trace"):
+            learner = ObservedModel(learner, env["trace"])
+        agent_notes.learn(notes, learner, last, "".join(run.steps), text)
+    if env.get("trace"):
+        summary = env["trace"].summary()
+        env["trace"].emit("request.end", status=getattr(run,"status","ok"), calls=summary["calls"], usage_complete=summary["usageComplete"])
+        enqueue("event", {"type": "usage", **summary})
     enqueue("done")
-    if notes is not None and run is not None:  # after the reply: one cheap Flash call on VERTEX_MODEL
-        agent_notes.learn(notes, get_model(NOTES_SYSTEM), last, "".join(run.steps), text)
 
 
 def agent_producer(messages, attachments, system, owner=None, cancelled=None):
     """Dua Agent: route -> (direct reply) or one general tool-calling loop (agent_tools).
     [cancelled]() turns true when the app disconnected; the loop then stops calling the model and tools."""
     def produce(enqueue):
+        import agent_adk, agent_models
+        current_owner = dict(owner or {})
+        trace = current_owner.get("trace")
+        if agent_adk.enabled():
+            from agent_observability import Trace, ObservedModel
+            trace = trace or Trace()
+            current_owner["trace"] = trace
         model = get_model(system)
-        route = route_agent(messages, attachments, system)
+        if current_owner.get("adk_resume") or (agent_adk.enabled() and agent_models.routes()):
+            route = "agent"
+        else:
+            route = route_agent(messages, attachments, system, observer=trace) if trace else route_agent(messages, attachments, system)
         app.logger.info("agent route: %s", route)
         if route == "chat":
             # Casual message: one streamed reply with full history, no Search/tools. The owner's notes (cheap, capped)
             # are still loaded, and lessons are learned after the reply.
             import agent_notes
-            notes = agent_notes.for_owner(owner or {})
+            notes = agent_notes.for_owner(current_owner)
             last = last_user_text(messages)
             block = agent_notes.load_prompt(notes, last)
             casual = get_model(system + block) if block else model
+            if trace:
+                casual = ObservedModel(casual, trace)
             parts = []
             for chunk in casual.generate_content(build_contents(messages, attachments),
                                                  generation_config={"max_output_tokens": AGENT_ANSWER_TOKENS}, stream=True):
                 parts.append(chunk_text(chunk))
                 if not enqueue("chunk", chunk):
                     return
-            enqueue("done")
             if notes is not None:
-                agent_notes.learn(notes, get_model(NOTES_SYSTEM), last, "", "".join(parts))
+                learner = ObservedModel(get_model(NOTES_SYSTEM), trace) if trace else get_model(NOTES_SYSTEM)
+                agent_notes.learn(notes, learner, last, "", "".join(parts))
+            if trace:
+                summary = trace.summary()
+                trace.emit("request.end",status="ok",calls=summary["calls"],usage_complete=summary["usageComplete"])
+                enqueue("event",{"type":"usage",**summary})
+            enqueue("done")
             return
         if cancelled is not None and cancelled():
             return
-        tool_loop(messages, attachments, system, enqueue, owner or {}, coding=route == "code", cancelled=cancelled)
+        tool_loop(messages, attachments, system, enqueue, current_owner, coding=route == "code", cancelled=cancelled)
     return produce
 
 
@@ -631,6 +682,70 @@ def home():
     return jsonify(info)
 
 
+@app.route("/api/agent/capabilities", methods=["GET"])
+def agent_capabilities():
+    denied = owner_access_error()
+    if denied is not None:
+        return denied
+    import agent_adk, agent_store, agent_documents, agent_models, agent_toolkit
+    try:
+        routes = agent_models.routes()
+        agent_models.check_adapters()
+        tools = agent_toolkit.configured()
+        return no_store(jsonify({"adkEnabled": agent_adk.enabled(), "storage": agent_store.status(),
+            "embeddingConfigured": agent_documents.enabled(), "providerRoutes": routes,
+            "customTools": sorted(tools.tools), "answerStreaming": True,
+            "liveProvidersVerified": False, "build": os.environ.get("DUA_BUILD_SHA","unknown")}))
+    except Exception:
+        return no_store(jsonify({"error": "ADK configuration is invalid or an optional adapter is missing."}), 503)
+
+
+@app.route("/api/agent/documents", methods=["GET", "POST", "DELETE"])
+def agent_documents_api():
+    denied = owner_access_error()
+    if denied is not None:
+        return denied
+    import agent_documents
+    if not agent_documents.enabled():
+        return no_store(jsonify({"error": "ADK document storage/embeddings are not configured."}), 503)
+    try:
+        store = agent_documents.Documents(g.owner_id, agent_documents.VertexEmbeddings(get_client()))
+        if request.method == "GET":
+            return no_store(jsonify({"documents": store.list()}))
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict):
+            raise ValueError("Invalid document request")
+        if request.method == "DELETE":
+            return no_store(jsonify(store.delete(data.get("id"))))
+        if "query" in data:
+            return no_store(jsonify({"matches": store.search(data["query"])}))
+        return no_store(jsonify(store.add(data.get("name"), data.get("text"), data.get("id"))))
+    except (ValueError, TypeError):
+        return no_store(jsonify({"error": "Invalid document ID, text, name or query."}), 400)
+    except Exception:
+        return no_store(jsonify({"error": "Document storage or embeddings are unavailable."}), 503)
+
+
+@app.route("/api/agent/notes/reindex", methods=["POST"])
+def agent_notes_reindex():
+    denied=owner_access_error()
+    if denied is not None:return denied
+    import agent_notes,agent_documents
+    if not agent_documents.enabled():
+        return no_store(jsonify({"error":"Semantic memory is not configured."}),503)
+    try:
+        store=agent_notes.for_owner({"id":g.owner_id,"token":g.owner_token})
+        if store is None:return no_store(jsonify({"error":"Notes are not configured."}),503)
+        store.semantic=agent_documents.Documents(g.owner_id,agent_documents.VertexEmbeddings(get_client()))
+        data=request.get_json(silent=True)
+        if not isinstance(data,dict):raise ValueError()
+        return no_store(jsonify(store.reindex(data.get("offset",0),data.get("limit",20))))
+    except (ValueError,TypeError):
+        return no_store(jsonify({"error":"Invalid reindex batch."}),400)
+    except Exception:
+        return no_store(jsonify({"error":"Reindex stopped; retry the same explicit batch after checking storage/provider readiness."}),503)
+
+
 @app.route("/api/agent/notes/status", methods=["GET"])
 def agent_notes_status():
     """Owner-only: whether the Agent's notes table is reachable. Never returns note data or counts."""
@@ -653,6 +768,26 @@ def api_chat():
     data = request.get_json(silent=True)
     if not isinstance(data, dict):
         return jsonify({"error": "Invalid request."}), 400
+    resume_id = data.get("resumeRun")
+    if resume_id is not None:
+        import agent_store
+        import agent_adk
+        import asyncio
+        if not agent_store.database_url() or not agent_adk.enabled():
+            return no_store(jsonify({"error": "Durable ADK sessions are not configured."}), 503)
+        try:
+            if not isinstance(resume_id, str):
+                raise ValueError()
+            saved = asyncio.run(agent_store.get_task(g.owner_id, resume_id))
+            if saved is None or saved.state.get("dua_schema") != 1 or not saved.state.get("dua_request"):
+                return no_store(jsonify({"error": "Owned task not found."}), 404)
+            if saved.state.get("dua_answer"):
+                return no_store(jsonify({"error": "This task already completed. No work was repeated."}), 409)
+            data = {**saved.state["dua_request"], "mode": "agent", "stream": True}
+        except (ValueError, TypeError):
+            return no_store(jsonify({"error": "Invalid task ID."}), 400)
+        except Exception:
+            return no_store(jsonify({"error": "Task storage is unavailable."}), 503)
     if data.get("persistence") is not None:
         return jsonify({"error": "Server reply saving is not available on the Google Cloud engine."}), 400
     if data.get("model") is not None and data.get("model") not in APP_MODELS:
@@ -697,7 +832,9 @@ def api_chat():
         notice = "Free models read text only; attached images and audio were not sent." if has_files else None
 
     owner = {"id": getattr(g, "owner_id", None), "token": getattr(g, "owner_token", ""),
-             "memory": data.get("memory") if isinstance(data.get("memory"), str) else ""}
+             "memory": data.get("memory") if isinstance(data.get("memory"), str) else "",
+             "adk_run_id": resume_id, "adk_resume": resume_id is not None,
+             "adk_request": {k: data[k] for k in ("messages", "attachments", "memory", "personality", "model") if k in data}}
 
     def events():
         chunks = queue.Queue(maxsize=16)
@@ -804,7 +941,11 @@ def approval_env(owner_id, owner_token):
             github = coding_agent.GitHubClient(token, coding_agent.repo_name())
         except coding_agent.CodingError:
             github = None
-    return {"github": github, "notes": agent_notes.for_owner({"id": owner_id, "token": owner_token}),
+    import agent_toolkit, agent_documents
+    notes=agent_notes.for_owner({"id":owner_id,"token":owner_token})
+    if notes is not None and agent_documents.enabled():
+        notes.semantic=agent_documents.Documents(owner_id,agent_documents.VertexEmbeddings(get_client()))
+    return {"custom_tools": agent_toolkit.configured(), "github": github, "notes": notes,
             "memory": "", "imagine": None, "request_text": ""}
 
 
@@ -825,17 +966,20 @@ def agent_action():
     if not isinstance(action_id, str) or not APPROVAL_ID.fullmatch(action_id) or decision not in ("approve", "reject"):
         return no_store(jsonify({"error": "Invalid request."}), 400)
     try:
-        action = agent_safety.STORE.take(action_id, getattr(g, "owner_id", None))
+        import agent_store
+        action = agent_store.approvals().take(action_id, getattr(g, "owner_id", None))
     except agent_safety.ApprovalError as error:
         return no_store(jsonify({"error": error.message}), error.status)
+    except Exception:
+        return no_store(jsonify({"error":"Approval storage is unavailable. No action was executed."}),503)
     if decision == "reject":
         app.logger.info("agent action rejected: %s", action["tool"])
         return no_store(jsonify({"status": "rejected", "tool": action["tool"],
                                  "text": f"You declined: {action['title']}. Nothing was changed."}))
     try:
         ok, text = agent_safety.execute(action, approval_env(getattr(g, "owner_id", None), getattr(g, "owner_token", "")))
-    except Exception:
-        app.logger.exception("agent action failed")
+    except Exception as error:
+        app.logger.error("agent action failed (%s)",type(error).__name__)
         ok, text = False, f"{action['title']} failed. Nothing more will be retried; ask the agent again if needed."
     app.logger.info("agent action approved: %s (%s)", action["tool"], "done" if ok else "failed")
     return no_store(jsonify({"status": "done" if ok else "failed", "tool": action["tool"], "text": text}))

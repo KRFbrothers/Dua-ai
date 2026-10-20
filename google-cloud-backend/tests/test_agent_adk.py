@@ -1,4 +1,4 @@
-"""ADK parallel mode. Fake-ADK tests always run (CI has no ADK); a real-ADK test runs when google-adk is installed,
+"""ADK parallel mode. Fake-ADK tests always run; real-SDK tests also run in CI with production dependencies,
 driving the real ParallelAgent/SequentialAgent with a scripted offline model (no network)."""
 import asyncio
 import json
@@ -52,15 +52,22 @@ def fake_adk(plan_text, scripts, merge_text="MERGED [1]", fail=None, slow=None):
     class Runner:
         def __init__(self, agent, app_name):
             self.agent = agent
-            self.session_service = SimpleNamespace(create_session_sync=lambda **k: SimpleNamespace(id="s"))
+            self.session_service = SimpleNamespace(create_session=self.create_session)
 
-        def run(self, user_id, session_id, new_message, run_config):
+        async def create_session(self, **kwargs):
+            return SimpleNamespace(id="s")
+
+        async def close(self):
+            pass
+
+        async def run_async(self, user_id, session_id, new_message, run_config):
             if fail:
                 raise fail
             agent = self.agent
             if agent.name == "controller":
                 assert "controller" in agent.instruction(None)
-                return [SimpleNamespace(author="controller", content=SimpleNamespace(parts=[SimpleNamespace(text=plan_text)]))]
+                yield SimpleNamespace(author="controller", content=SimpleNamespace(parts=[SimpleNamespace(text=plan_text)]))
+                return
             parallel, merger = agent.sub_agents
             state = {}
 
@@ -73,14 +80,13 @@ def fake_adk(plan_text, scripts, merge_text="MERGED [1]", fail=None, slow=None):
                     await asyncio.sleep(5)
                 state[sub.output_key] = scripts[kind][-1]
 
-            async def all_helpers():
-                await asyncio.gather(*(helper(s) for s in parallel.sub_agents))
-            asyncio.run(all_helpers())
+            await asyncio.gather(*(helper(s) for s in parallel.sub_agents))
             prompt = merger.instruction(SimpleNamespace(state=state))
             Runner.merge_prompt = prompt
-            return [SimpleNamespace(author="merger", content=SimpleNamespace(parts=[SimpleNamespace(text=merge_text)]))]
+            yield SimpleNamespace(author="merger", content=SimpleNamespace(parts=[SimpleNamespace(text=merge_text)]))
 
-    return SimpleNamespace(LlmAgent=FakeAgent, ParallelAgent=FakeAgent, SequentialAgent=FakeAgent,
+    return SimpleNamespace(LlmResponse=lambda **kwargs: SimpleNamespace(**kwargs),
+                           LlmAgent=FakeAgent, ParallelAgent=FakeAgent, SequentialAgent=FakeAgent,
                            RunConfig=lambda **k: k, InMemoryRunner=Runner,
                            types=SimpleNamespace(Content=lambda **k: k, Part=lambda **k: k)), Runner
 
@@ -235,6 +241,9 @@ def test_tool_loop_uses_adk_when_flag_on(monkeypatch):
     monkeypatch.delenv("GITHUB_TOKEN", raising=False)
     monkeypatch.setattr(agent_notes, "for_owner", lambda owner, opener=None: None)
     monkeypatch.setattr(engine, "get_agent_model", lambda system: "ARGON")
+    # This dispatch test deliberately runs without the SDK in the minimal pass;
+    # actual multimodal context is exercised by the real-SDK integration test.
+    monkeypatch.setattr(engine, "build_contents", lambda messages, attachments: [])
     result = SimpleNamespace(sources=[{"id": 1, "title": "T", "url": "https://t.test"}], steps=[])
     monkeypatch.setattr(agent_adk, "run", lambda env, last, flash, agent, config: ("combined [1]", result))
     monkeypatch.setattr(agent_tools, "run", lambda *a, **k: (_ for _ in ()).throw(AssertionError("old loop used")))
@@ -278,7 +287,9 @@ def test_real_adk_parallel_pipeline_offline():
                 part = types.Part(function_call=types.FunctionCall(name="search_notes", args={"query": "pref"}))
             elif "Helper results" in system:
                 assert "Gemini 4 launched" in system or "found" in system
-                part = types.Part(text="FINAL [1]")
+                yield LlmResponse(content=types.Content(role="model", parts=[
+                    types.Part(text="FINAL "), types.Part(text="[1]")]))
+                return
             else:
                 part = types.Part(text="found [1]")
             yield LlmResponse(content=types.Content(role="model", parts=[part]))
@@ -377,3 +388,408 @@ def test_real_adk_write_tool_waits_for_approval_and_disconnect_skips_model_calls
     planner = Plan(model="scripted")
     text2, result2 = agent_adk.run(env2, "news and my preference", planner, planner, config, log=lambda m: None)
     assert result2.cancelled and text2 == agent_tools.STOPPED_TEXT and model_calls == [1]
+
+
+@pytest.mark.parametrize("parts,expected", [
+    (["First paragraph.\n\n", "Second paragraph [1]."], "First paragraph.\n\nSecond paragraph [1]."),
+    (["Use", " ", "this code:\n```python\n", "print(1)\n```"], "Use this code:\n```python\nprint(1)\n```"),
+    (['{"split":true,', '"subtasks":[]}'], '{"split":true,"subtasks":[]}'),
+])
+def test_final_text_keeps_all_text_parts_in_the_last_author_response(parts, expected):
+    def event(author, pieces):
+        return SimpleNamespace(author=author, content=SimpleNamespace(parts=pieces))
+
+    thoughts = []
+    events = [
+        event("merger", [SimpleNamespace(text="Earlier answer")]),
+        event("research_agent", [SimpleNamespace(text="Helper answer")]),
+        event("merger", [
+            SimpleNamespace(text="private reasoning", thought=True),
+            *[SimpleNamespace(text=text) for text in parts],
+            SimpleNamespace(function_call={"name": "calculator"}),
+        ]),
+        event("merger", [SimpleNamespace(text="", thought=False)]),
+    ]
+    assert agent_adk.final_text(events, "merger", on_thought=thoughts.append) == expected
+    assert thoughts == ["private reasoning"]
+
+
+def test_run_agent_delivers_thoughts_before_requesting_the_next_event():
+    delivered, cleanup = [], []
+
+    class Runner:
+        def __init__(self, **kwargs):
+            self.session_service = SimpleNamespace(create_session=self.session)
+
+        async def session(self, **kwargs):
+            return SimpleNamespace(id="ephemeral")
+
+        async def run_async(self, **kwargs):
+            try:
+                yield SimpleNamespace(author="controller", content=SimpleNamespace(parts=[
+                    SimpleNamespace(thought=True, text="Planning now")]))
+                assert delivered == ["Planning now"]  # must arrive while generation is still active
+                yield SimpleNamespace(author="controller", content=SimpleNamespace(parts=[
+                    SimpleNamespace(text="complete")]))
+            finally:
+                cleanup.append("stream")
+
+        async def close(self):
+            cleanup.append("runner")
+
+    adk = SimpleNamespace(InMemoryRunner=Runner, RunConfig=lambda **kwargs: kwargs,
+                          types=SimpleNamespace(Content=lambda **kwargs: kwargs, Part=lambda **kwargs: kwargs))
+    events = agent_adk.run_agent(adk, "agent", "hello", 2, on_thought=delivered.append)
+    assert agent_adk.final_text(events, "controller") == "complete"
+    assert cleanup == ["stream", "runner"]
+
+
+@pytest.mark.parametrize("failure", ["session", "model", "callback", "cancelled", "sdk_cancel"])
+def test_run_agent_closes_resources_on_failure(failure):
+    closed, gone = [], {"v": failure == "cancelled"}
+
+    class Runner:
+        def __init__(self, **kwargs):
+            self.session_service = SimpleNamespace(create_session=self.session)
+
+        async def session(self, **kwargs):
+            if failure == "session":
+                raise ValueError("session failed")
+            return SimpleNamespace(id="ephemeral")
+
+        async def run_async(self, **kwargs):
+            try:
+                if failure == "model":
+                    raise ValueError("model failed")
+                if failure == "sdk_cancel":
+                    raise asyncio.CancelledError()
+                yield SimpleNamespace(author="controller", content=SimpleNamespace(parts=[
+                    SimpleNamespace(thought=True, text="thought")]))
+            finally:
+                closed.append("stream")
+
+        async def close(self):
+            closed.append("runner")
+
+    def on_thought(text):
+        raise ValueError("callback failed")
+
+    adk = SimpleNamespace(InMemoryRunner=Runner, RunConfig=lambda **kwargs: kwargs,
+                          types=SimpleNamespace(Content=lambda **kwargs: kwargs, Part=lambda **kwargs: kwargs))
+    error = (agent_tools.Cancelled if failure == "cancelled" else
+             RuntimeError if failure == "sdk_cancel" else ValueError)
+    with pytest.raises(error):
+        agent_adk.run_agent(adk, "agent", "hello", 2, on_thought=on_thought, cancelled=lambda: gone["v"])
+    assert closed == (["runner"] if failure in ("session", "cancelled") else ["stream", "runner"])
+
+
+def test_total_deadline_closes_worker_before_merger_can_run(monkeypatch):
+    monkeypatch.setattr(agent_tools, "CANCEL_POLL_SECONDS", 0.01)
+    adk, original = fake_adk(json.dumps(PLAN), {"research": ["r"], "notes": ["n"]}, slow="notes")
+    entered, closed = threading.Event(), threading.Event()
+    workers, failures = [], []
+
+    class Runner(original):
+        async def run_async(self, **kwargs):
+            if self.agent.name == "dua_root":
+                entered.set()
+            async for event in super().run_async(**kwargs):
+                yield event
+
+        async def close(self):
+            await super().close()
+            if self.agent.name == "dua_root":
+                closed.set()
+
+    def deadline_after_helpers_start(fn, seconds, **kwargs):
+        # The existing deadline test verifies the real timer. This test controls
+        # its expiry boundary so machine speed cannot time out the planner first.
+        def work():
+            try:
+                fn()
+            except agent_tools.Cancelled:
+                pass
+            except BaseException as error:
+                failures.append(error)
+
+        worker = threading.Thread(target=work, daemon=True)
+        workers.append(worker)
+        worker.start()
+        assert entered.wait(3)
+        raise agent_tools.DeadlineExceeded()
+
+    monkeypatch.setattr(agent_tools, "call_with_deadline", deadline_after_helpers_start)
+    adk.InMemoryRunner = Runner
+    text, result = agent_adk.run(make_env([]), "news and notes", "f", "a", cfg, adk=adk, log=lambda m: None)
+    assert "time limit" in text and not result.cancelled
+    assert closed.wait(3), "The timed-out ADK worker must close, not continue in the background"
+    for worker in workers:
+        worker.join(3)
+        assert not worker.is_alive()
+    assert failures == []
+    assert not hasattr(original, "merge_prompt"), "Do not start a merger after the deadline"
+
+
+@pytest.mark.parametrize('failure', [None, 'model', 'callback'])
+def test_real_adk_runner_emits_live_thoughts_and_closes_on_success_or_error(failure):
+    pytest.importorskip('google.adk')
+    from google.adk.models import BaseLlm, LlmResponse
+    from google.adk.plugins.base_plugin import BasePlugin
+    from google.adk.apps import App
+    from google.genai import types
+
+    thoughts, order, loops = [], [], []
+
+    class Cleanup(BasePlugin):
+        async def close(self):
+            order.append('runner closed')
+            loops.append((asyncio.get_running_loop(), asyncio.current_task()))
+
+    class Scripted(BaseLlm):
+        async def generate_content_async(self, llm_request, stream=False):
+            try:
+                yield LlmResponse(content=types.Content(role='model', parts=[types.Part(text='Planning', thought=True)]))
+                assert thoughts == ['Planning'], 'Thoughts must arrive before the model continues'
+                if failure == 'model':
+                    raise ValueError('scripted model failed')
+                yield LlmResponse(content=types.Content(role='model', parts=[types.Part(text='Done')]))
+            finally:
+                order.append('model closed')
+
+    adk = agent_adk.load_adk()
+    original = adk.InMemoryRunner
+    def runner_with_cleanup(agent, app_name):
+        loops.append((asyncio.get_running_loop(), asyncio.current_task()))
+        return original(app=App(name=app_name, root_agent=agent, plugins=[Cleanup(name='cleanup_probe')]))
+
+    adk.InMemoryRunner = runner_with_cleanup
+    agent = adk.LlmAgent(name='probe', model=Scripted(model='offline'), instruction='Respond with the scripted answer')
+    def on_thought(text):
+        thoughts.append(text)
+        if failure == 'callback':
+            raise ValueError('callback failed')
+
+    if failure:
+        with pytest.raises(ValueError, match='scripted model failed' if failure == 'model' else 'callback failed'):
+            agent_adk.run_agent(adk, agent, 'hello', 2, on_thought=on_thought)
+    else:
+        events = agent_adk.run_agent(adk, agent, 'hello', 2, on_thought=on_thought)
+        assert agent_adk.final_text(events, 'probe') == 'Done'
+    assert order == ['model closed', 'runner closed']
+    assert len(loops) == 2 and loops[0] == loops[1]
+
+
+def test_real_adk_disconnect_cancels_waiting_model_and_closes_runner(monkeypatch):
+    pytest.importorskip('google.adk')
+    from google.adk.models import BaseLlm, LlmResponse
+    from google.adk.plugins.base_plugin import BasePlugin
+    from google.adk.apps import App
+    from google.genai import types
+    monkeypatch.setattr(agent_tools, 'CANCEL_POLL_SECONDS', 0.01)
+    started, gone, release, finished = (threading.Event() for _ in range(4))
+    closed, outcome = [], {}
+
+    class Cleanup(BasePlugin):
+        async def close(self):
+            closed.append('runner')
+
+    class Waiting(BaseLlm):
+        async def generate_content_async(self, llm_request, stream=False):
+            started.set()
+            try:
+                # No response events yet. The user can still stop this call.
+                while not release.is_set():
+                    await asyncio.sleep(0.01)
+                yield LlmResponse(content=types.Content(role='model', parts=[types.Part(text='too late')]))
+            finally:
+                closed.append('model')
+
+    adk = agent_adk.load_adk()
+    original = adk.InMemoryRunner
+    def runner_with_cleanup(agent, app_name):
+        return original(app=App(name=app_name, root_agent=agent, plugins=[Cleanup(name='cleanup_probe')]))
+
+    adk.InMemoryRunner = runner_with_cleanup
+    agent = adk.LlmAgent(name='probe', model=Waiting(model='offline'), instruction='Wait for the scripted answer')
+
+    def invoke():
+        try:
+            outcome['events'] = agent_adk.run_agent(adk, agent, 'hello', 2, cancelled=gone.is_set)
+        except BaseException as error:
+            outcome['error'] = error
+        finally:
+            finished.set()
+
+    worker = threading.Thread(target=invoke, daemon=True)
+    worker.start()
+    try:
+        assert started.wait(3)
+        gone.set()
+        assert finished.wait(3), 'Stopping must not wait for a model response event'
+        assert isinstance(outcome.get('error'), agent_tools.Cancelled)
+        assert 'events' not in outcome and closed == ['model', 'runner']
+    finally:
+        gone.set()
+        release.set()
+        worker.join(3)
+    assert not worker.is_alive()
+
+
+@pytest.mark.parametrize('plan', [
+    {'split': 'false', 'subtasks': PLAN['subtasks']},
+    {'split': 1, 'subtasks': PLAN['subtasks']},
+    {'split': True, 'subtasks': 42},
+    {'split': True, 'subtasks': {'kind': 'research', 'task': 'news'}},
+    {'split': True, 'subtasks': [{'kind': 'research', 'task': None}, {'kind': 'notes', 'task': 'pref'}]},
+    {'split': True, 'subtasks': [{'kind': 'research', 'task': ['news']}, {'kind': 'notes', 'task': 'pref'}]},
+])
+def test_invalid_planner_shapes_do_not_launch_helpers(plan):
+    assert agent_adk.parse_plan(json.dumps(plan), ['research', 'notes']) == []
+
+
+@pytest.mark.parametrize('paths,contents', [
+    (['a.txt', 'b.txt'], ['one']),
+    (['a.txt'], ['one', 'two']),
+    ([], []),
+    ('a.txt', ['one']),
+    (['a.txt'], 'one'),
+    (['a.txt'], [None]),
+])
+def test_proposal_rejects_unmatched_file_pairs_before_requesting_approval(paths, contents):
+    calls = []
+
+    async def call(name, args):
+        calls.append((name, args))
+        return {'pending': True}
+
+    propose = agent_adk.make_tools(['propose_changes'], call)[0]
+    result = asyncio.run(propose('Title', 'Description', paths, contents))
+    assert result.get('error') and calls == []
+
+
+def test_proposal_keeps_every_complete_file_including_empty_content():
+    calls = []
+
+    async def call(name, args):
+        calls.append((name, args))
+        return {'pending': True}
+
+    propose = agent_adk.make_tools(['propose_changes'], call)[0]
+    result = asyncio.run(propose('Title', 'Description', ['a.txt', 'b.txt'], ['', 'two']))
+    assert result == {'pending': True}
+    assert calls == [('propose_changes', {'title': 'Title', 'description': 'Description',
+                                         'files': [{'path': 'a.txt', 'content': ''}, {'path': 'b.txt', 'content': 'two'}]})]
+
+
+def test_real_adk_caps_each_helper_and_still_merges_partial_results(monkeypatch):
+    pytest.importorskip('google.adk')
+    from google.adk.models import BaseLlm, LlmResponse
+    from google.genai import types
+    monkeypatch.setattr(agent_adk, 'SUB_STEPS', 2)
+    calls = {'controller': 0, 'research': 0, 'notes': 0, 'merger': 0}
+
+    class Loopy(BaseLlm):
+        async def generate_content_async(self, llm_request, stream=False):
+            system = str(llm_request.config.system_instruction or '')
+            if 'controller of the Dua Agent' in system:
+                calls['controller'] += 1
+                part = types.Part(text=json.dumps(PLAN))
+            elif 'You research' in system:
+                calls['research'] += 1
+                part = types.Part(function_call=types.FunctionCall(name='calculator', args={'expression': '2+2'}))
+            elif 'Helper results' in system:
+                calls['merger'] += 1
+                assert system.count('This part is incomplete') == 2
+                part = types.Part(text='Some work is incomplete because both helpers reached their call limits.')
+            else:
+                calls['notes'] += 1
+                part = types.Part(function_call=types.FunctionCall(name='search_notes', args={'query': 'preference'}))
+            yield LlmResponse(content=types.Content(role='model', parts=[part]))
+
+    model, events = Loopy(model='offline'), []
+    text, result = agent_adk.run(make_env(events), 'news and notes', model, model,
+                                 lambda m, t, json_out=False: types.GenerateContentConfig(max_output_tokens=t),
+                                 log=lambda m: None)
+    assert text == 'Some work is incomplete because both helpers reached their call limits.'
+    assert calls == {'controller': 1, 'research': 2, 'notes': 2, 'merger': 1}
+    assert len(result.steps) == 4
+    assert ('sub_a', 'Research: model call limit reached', 'done') in events
+    assert ('sub_b', 'Notes: model call limit reached', 'done') in events
+    assert ('sub_a', 'Research: done', 'done') not in events
+
+
+def callback_sdk():
+    return SimpleNamespace(LlmResponse=lambda **kwargs: SimpleNamespace(**kwargs),
+                           types=SimpleNamespace(Content=lambda **kwargs: SimpleNamespace(**kwargs),
+                                                 Part=lambda **kwargs: SimpleNamespace(**kwargs)))
+
+
+def test_helper_call_limits_are_independent_and_report_once():
+    limited = []
+    adk = callback_sdk()
+    first = agent_adk.helper_model_callback(adk, lambda: False, 1, lambda: limited.append('first'))
+    second = agent_adk.helper_model_callback(adk, lambda: False, 1, lambda: limited.append('second'))
+    assert first() is None
+    assert 'This part is incomplete' in first().content.parts[0].text
+    first()
+    assert limited == ['first']
+    assert second() is None  # another helper/request retains its own budget
+    second()
+    assert limited == ['first', 'second']
+
+
+def test_helper_cancellation_takes_priority_and_does_not_spend_call_budget():
+    gone, limited = {'v': True}, []
+    callback = agent_adk.helper_model_callback(callback_sdk(), lambda: gone['v'], 1, lambda: limited.append(1))
+    assert callback().content.parts[0].text == 'Stopped.'
+    assert limited == []
+    gone['v'] = False
+    assert callback() is None
+    gone['v'] = True
+    assert callback().content.parts[0].text == 'Stopped.'
+    assert limited == []
+
+
+def test_real_adk_repairs_unmatched_file_pairs_before_one_complete_approval():
+    pytest.importorskip('google.adk')
+    import agent_safety
+    from google.adk.models import BaseLlm, LlmResponse
+    from google.genai import types
+    plan = {'split': True, 'subtasks': [{'kind': 'code', 'task': 'Propose two text files'},
+                                       {'kind': 'notes', 'task': 'Check my preference'}]}
+    code_calls, approvals = [], []
+
+    class Repair(BaseLlm):
+        async def generate_content_async(self, llm_request, stream=False):
+            system = str(llm_request.config.system_instruction or '')
+            if 'controller of the Dua Agent' in system:
+                part = types.Part(text=json.dumps(plan))
+            elif 'You work on' in system:
+                responses = [p.function_response for c in llm_request.contents for p in (c.parts or [])
+                             if p.function_response is not None]
+                code_calls.append(1)
+                if not responses:
+                    args = {'title': 'Two files', 'description': 'Propose both', 'paths': ['a.txt', 'b.txt'], 'contents': ['one']}
+                    part = types.Part(function_call=types.FunctionCall(name='propose_changes', args=args))
+                elif len(responses) == 1:
+                    assert responses[-1].response.get('error')
+                    args = {'title': 'Two files', 'description': 'Propose both', 'paths': ['a.txt', 'b.txt'], 'contents': ['one', 'two']}
+                    part = types.Part(function_call=types.FunctionCall(name='propose_changes', args=args))
+                else:
+                    part = types.Part(text='Both files await approval.')
+            elif 'Helper results' in system:
+                part = types.Part(text='Waiting for your approval.')
+            else:
+                part = types.Part(text='No preference found.')
+            yield LlmResponse(content=types.Content(role='model', parts=[part]))
+
+    store, model = agent_safety.PendingStore(), Repair(model='offline')
+    env = dict(make_env([], github=object()), owner_id='test-owner', approvals=store,
+               enqueue=lambda kind, event=None: approvals.append(event) or True)
+    text, result = agent_adk.run(env, 'Propose two files and check notes', model, model,
+                                 lambda m, t, json_out=False: types.GenerateContentConfig(max_output_tokens=t),
+                                 log=lambda m: None)
+    assert 'Approval needed' in text and len(code_calls) == 3
+    assert len(result.pending) == 1 and len(store) == 1
+    assert result.pending[0]['args']['files'] == [{'path': 'a.txt', 'content': 'one'}, {'path': 'b.txt', 'content': 'two'}]
+    assert sum(bool(e and e.get('type') == 'approval') for e in approvals) == 1

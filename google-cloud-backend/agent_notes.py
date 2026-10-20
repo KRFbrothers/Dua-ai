@@ -109,6 +109,7 @@ class NotesStore:
         self.opener = opener or auth_opener
         self._cache = None
         self.unavailable = None
+        self.semantic = None
 
     def _request(self, path, method="GET", body=None, prefer=None):
         headers = {"apikey": self.key, "Authorization": "Bearer " + self.token, "Accept": "application/json"}
@@ -140,12 +141,41 @@ class NotesStore:
         rows = self._request("", "POST", {"note": note, "kind": kind, "source": source}, "return=representation")
         row = rows[0] if isinstance(rows, list) and rows else {"note": note, "kind": kind}
         self._cache.insert(0, row)
-        return {"saved": True, "id": row.get("id")}
+        semantic_status = {}
+        if self.semantic is not None and row.get("id"):
+            try:
+                self.semantic.add("Agent note", note, row["id"], kind="note")
+                semantic_status["semanticIndexed"] = True
+            except Exception:
+                semantic_status.update(semanticIndexed=False, note="Note saved; semantic indexing failed. Lexical retrieval remains available.")
+        return {"saved": True, "id": row.get("id"), **semantic_status}
 
     def search(self, query):
-        found = relevant(self.list(), query, limit=10, max_chars=4000)
+        notes = self.list()
+        found = relevant(notes, query, limit=10, max_chars=4000)
+        if self.semantic is not None:
+            try:
+                ids = [m["id"] for m in self.semantic.search(query, kind="note", limit=10)]
+                live = {n.get("id"): n for n in notes}
+                semantic = [live[i] for i in ids if i in live]
+                found = semantic + [n for n in found if n.get("id") not in ids]
+                found = found[:10]
+            except Exception:
+                pass
         return [{"id": n.get("id"), "note": n["note"], "kind": n.get("kind"), "created_at": n.get("created_at")}
                 for n in found]
+
+    def reindex(self, offset=0, limit=20):
+        if self.semantic is None:
+            raise ValueError("Semantic memory is not configured")
+        if type(offset) is not int or type(limit) is not int or not 0 <= offset <= MAX_NOTES or not 1 <= limit <= 20:
+            raise ValueError("Choose an offset within 200 notes and a batch of 1–20")
+        rows=self.list()[offset:offset+limit]
+        done=0
+        for row in rows:
+            self.semantic.add("Agent note",row["note"],row["id"],kind="note")
+            done+=1
+        return {"indexed":done,"nextOffset":offset+done,"more":len(self.list())>offset+done}
 
     def delete(self, note_id):
         try:
@@ -155,7 +185,14 @@ class NotesStore:
         rows = self._request(f"?id=eq.{quote(note_id)}", "DELETE", prefer="return=representation")
         if self._cache is not None:
             self._cache = [n for n in self._cache if n.get("id") != note_id]
-        return {"deleted": bool(rows)} if rows else {"error": "No such note."}
+        semantic_status = {}
+        if self.semantic is not None:
+            try:
+                self.semantic.delete(note_id)
+                semantic_status["semanticIndexDeleted"] = True
+            except Exception:
+                semantic_status.update(semanticIndexDeleted=False, note="Note deleted; semantic index cleanup is incomplete.")
+        return {"deleted": bool(rows), **semantic_status} if rows else {"error": "No such note."}
 
 
 def for_owner(owner, opener=None):

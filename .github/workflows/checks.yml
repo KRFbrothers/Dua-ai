@@ -17,7 +17,17 @@ jobs:
   google-cloud:
     name: Google Cloud engine tests
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
+    services:
+      adk-postgres:
+        image: pgvector/pgvector:pg17@sha256:ac08538c6f8b9904c33c8224c5e5706dbe760aca29db1d096972b4052c22a75d
+        env:
+          POSTGRES_PASSWORD: adk-ci-disposable-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 12
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Install isolated test dependencies
@@ -26,12 +36,24 @@ jobs:
           /tmp/dua-gcb-tests/bin/python -m pip install Flask==3.0.3 pytest==8.3.5
       - name: Run mocked Vertex engine tests
         run: /tmp/dua-gcb-tests/bin/python -m pytest -q google-cloud-backend/tests --junitxml=google-cloud-backend/pytest-results.xml
+      - name: Install production SDK test dependencies
+        run: |
+          python3 -m venv /tmp/dua-gcb-adk-tests
+          /tmp/dua-gcb-adk-tests/bin/python -m pip install -r google-cloud-backend/requirements-adapters-lock.txt pytest==8.3.5
+      - name: Run engine tests with the real ADK SDK and offline models
+        env:
+          ADK_TEST_POSTGRES_URL: postgresql://postgres:adk-ci-disposable-only@127.0.0.1:5432/postgres
+        run: |
+          /tmp/dua-gcb-adk-tests/bin/python -c "import google.adk, google.genai, asyncpg, psycopg, pgvector, litellm"
+          /tmp/dua-gcb-adk-tests/bin/python -m pytest -q google-cloud-backend/tests --junitxml=google-cloud-backend/pytest-sdk-results.xml
       - name: Preserve engine test report
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: google-cloud-engine-test-report
-          path: google-cloud-backend/pytest-results.xml
+          path: |
+            google-cloud-backend/pytest-results.xml
+            google-cloud-backend/pytest-sdk-results.xml
           if-no-files-found: ignore
 
   backend:

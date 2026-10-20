@@ -154,7 +154,7 @@ then run the `--update-secrets` line again. To switch free models off: `gcloud r
 pip install -r requirements.txt pytest && python -m pytest -q tests
 ```
 
-For mocked unit tests only, Vertex credentials/SDK are unnecessary: install `Flask==3.0.3 pytest==8.3.5` and run `python -m pytest -q tests`. GitHub's Google Cloud engine check uses this isolated setup.
+For mocked unit tests only, Vertex credentials/SDK are unnecessary: install `Flask==3.0.3 pytest==8.3.5` and run `python -m pytest -q tests`. GitHub's Google Cloud engine check runs this minimal setup first, then reruns with the production SDK dependencies and scripted offline models (see [ADK SDK checks](../docs/TESTING.md#agent--adk-sdk-checks)).
 
 Separate-engine Android builds treat Dua/Gemini chat as configured independently of the base backend's provider keys. Chat file selection uses the existing bounded inline path (up to 3 files / 2 MB total; oversized photos are resized). Audio can also be sent inline. Use CSV/UTF-8 text for spreadsheets; XLSX/ODS and documents over the inline limit are rejected rather than uploaded as inaccessible storage references. Imagine retains the base-backend storage path.
 
@@ -260,7 +260,7 @@ result is thrown away and no further calls are made.)
 
 ## Parallel multi-agent mode on Google ADK (optional, `AGENT_ENGINE=adk`)
 
-[`agent_adk.py`](agent_adk.py) uses Google Agent Development Kit 2.0 (`google-adk==2.12.0`, upstream / fork: [KRFbrothers/adk-python](https://github.com/KRFbrothers/adk-python)), imported only when the flag is on.
+[`agent_adk.py`](agent_adk.py) uses Google Agent Development Kit (`google-adk==2.12.0`, official source: [google/adk-python](https://github.com/google/adk-python/tree/v2.12.0); owner fork: [KRFbrothers/adk-python](https://github.com/KRFbrothers/adk-python)), imported only when the flag is on.
 1. **Plan:** an ADK controller agent on `AGENT_MODEL` decides whether the request has 2–3 independent parts (research / code / notes). Uses robust JSON plan parsing that handles both raw JSON and markdown codeblock responses.
 2. **Parallel helpers:** an ADK `SequentialAgent[ParallelAgent(helpers on VERTEX_MODEL), merger on AGENT_MODEL]` runs them.
    - Helpers call the existing tools through one shared `AgentRun`, so the same per-tool caps, #214 timeouts and global source numbers apply.
@@ -269,7 +269,24 @@ result is thrown away and no further calls are made.)
 3. **Progress & Chain-of-Thought (CoT):** goes out as the existing chips (`sub_a`/`sub_b`/`sub_c`, `merge`) and live thinking events (`part.thought` extraction) streamed directly to Dua AI's Android `ThinkingBlock` UI.
 4. **Artifacts Canvas formatting:** The merger formats diagrams, SVG, React, and code snippets with explicit language identifiers for interactive preview in Dua AI's Claude-style Artifacts Canvas.
 
-**Fallback:** if the request doesn't split, or ADK fails before any tool ran, the normal loop answers. Coding-mode requests always use the normal loop. Notes learning runs after the reply as before.
+**Plans, helper limits and proposals:** the planner must return an actual JSON
+`true` and valid available helper tasks. Malformed plans fall back to the normal
+loop. A per-helper before-model callback enforces `AGENT_SUB_STEPS`, while
+`RunConfig.max_llm_calls` separately caps the whole parallel run. Hitting a
+helper's cap produces an incomplete result and a matching progress label; it
+preserves the other helpers' budgets and lets the merger use partial results.
+`propose_changes` rejects mismatched path/content lists before approval, returning
+a tool error so the model can repair its arguments instead of silently omitting
+files. Existing file validation and owner approvals still apply.
+
+**Runner lifecycle:** the request thread uses ADK's production `run_async`
+interface with async session creation. Thought updates are forwarded during the
+run. The stream and runner close on the same event loop on success, failure or
+cancellation; the total deadline also signals background ADK work to stop.
+Already-started synchronous tool calls retain their existing HTTP timeouts.
+See [ADK SDK checks](../docs/TESTING.md#agent--adk-sdk-checks) for offline regression coverage.
+
+**Fallback:** ordinary unsplit requests can use the existing loop. Explicit provider routes and extension tools use ADK even for one part. Failures after streaming/actions, during resume, or with explicit routes stop without replay or silent provider changes. Coding-mode requests use the existing coding loop. Optional notes learning is included in request usage reporting.
 
 ## Self-check (`AGENT_VERIFY=1`)
 
@@ -290,3 +307,12 @@ by `POST /api/agent/action` after you approve, without the CI wait / auto-fix be
 4. **`check_pr_ci` tool:** reads the status of the agent's own PR.
 
 **Token:** reading CI needs 'Actions: Read-only' (or 'Checks') on the fine-grained token; without it the answer says so.
+
+## Complete ADK integrations
+
+See [ADK implementation and operations](../docs/ADK_IMPLEMENTATION.md) for the
+unchanged 25-requirement scope, durable SQL sessions/resume and approvals, native
+pgvector document/note retrieval, provider routing/fallback, custom typed tools,
+streaming, safe tracing/usage, evaluations, CLI and staged deployment/rollback.
+Use `python adk_cli.py --help` for actual commands. Configuration/live provider
+readiness is separate from code and offline tests.
