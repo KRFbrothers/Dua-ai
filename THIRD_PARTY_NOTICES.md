@@ -146,3 +146,10 @@ packages/images; see the installed distributions for full license texts.
 Exact Python dependency closures are recorded in the engine lock files. The
 Docker PostgreSQL image is a disposable CI fixture; production database setup is
 separate. No proprietary app code, logos or fonts are added by these integrations.
+
+## Agent edge glow + step spinner
+
+| Dua file | Adapted from | Licence |
+|---|---|---|
+| `app/src/main/java/com/dua/ai/ui/components/AgentEdgeGlow.kt` | Androidify `core/theme/.../theme/components/AnimatingGradientBrush.kt` (https://github.com/android/androidify, commit a4be10f), Copyright 2025 The Android Open Source Project | Apache-2.0 |
+| `app/src/main/java/com/dua/ai/ui/chat/TelegramRadialProgress.kt` | Telegram `TMessagesProj/src/main/java/org/telegram/ui/Components/RadialProgressView.java` (commit 68c6775ac373f4bdb30ae9986282dd5ec0407756), Copyright Nikolai Kudashov 2013-2018 | GPL-2.0-or-later (used under GPL-3.0-or-later) |
