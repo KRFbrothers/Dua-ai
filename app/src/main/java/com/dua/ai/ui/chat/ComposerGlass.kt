@@ -39,6 +39,12 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.unit.dp
+import androidx.compose.material.icons.outlined.Explore
+import androidx.compose.material.icons.outlined.FormatListBulleted
+import androidx.compose.material.icons.outlined.Lightbulb
+import androidx.compose.material.icons.outlined.ShortText
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.SuggestionChipDefaults
@@ -69,6 +75,11 @@ object ComposerGlass {
     /** Glass fill: the bar colour, partly see-through. */
     const val GLASS_ALPHA = 0.82f
     const val FOCUS_POP = 1.02f
+    /** Larger, raised glass input: more padding, deeper soft shadow, rounder corners. */
+    val Elevation = 6.dp
+    val PaddingV = 10.dp
+    val MarginH = 20.dp
+    val Shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp)
 }
 
 /** Jetchat: brief scale pop when the field gains focus, spring back when it settles. Instant when motion is off. */
@@ -110,20 +121,39 @@ internal fun Modifier.composerAurora(enabled: Boolean): Modifier {
     return background(brush, alpha = ComposerGlass.AURORA_ALPHA)
 }
 
+/** One prompt chip: label plus its Material Symbols icon. */
+data class ComposerSuggestion(val text: String, val icon: androidx.compose.ui.graphics.vector.ImageVector)
+
+/** Dua glue: soft tint per chip, derived from the current theme palette (never new brand colours). */
+@Composable
+private fun suggestionTint(index: Int): Color {
+    val scheme = androidx.compose.material3.MaterialTheme.colorScheme
+    val base = HomeTheme.colors.bar
+    val accent = when (index % 4) { 0 -> scheme.primary; 1 -> scheme.secondary; 2 -> scheme.tertiary; else -> HomeTheme.colors.voice }
+    return androidx.compose.ui.graphics.lerp(base, accent, 0.10f).copy(alpha = ComposerGlass.GLASS_ALPHA)
+}
+
 /** Dua glue: one-tap prompt chips above the composer; tapping fills the draft (nothing is sent). */
 @Composable
-internal fun ComposerSuggestionChips(suggestions: List<String>, onPick: (String) -> Unit, modifier: Modifier = Modifier) {
+internal fun ComposerSuggestionChips(suggestions: List<ComposerSuggestion>, onPick: (String) -> Unit, modifier: Modifier = Modifier) {
     if (suggestions.isEmpty()) return
     val c = HomeTheme.colors
-    Row(modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = Spacing.md).testTag("composer-suggestions"),
+    Row(modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = Spacing.sm, vertical = Spacing.xs).testTag("composer-suggestions"),
         horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-        suggestions.forEach { text ->
-            SuggestionChip(onClick = { onPick(text) }, label = { Text(text, maxLines = 1) },
-                colors = SuggestionChipDefaults.suggestionChipColors(containerColor = c.bar.copy(alpha = ComposerGlass.GLASS_ALPHA), labelColor = c.input),
+        suggestions.forEachIndexed { index, item ->
+            SuggestionChip(onClick = { onPick(item.text) }, label = { Text(item.text, maxLines = 1) },
+                icon = { androidx.compose.material3.Icon(item.icon, null, tint = c.barIcon, modifier = Modifier.size(SuggestionChipDefaults.IconSize)) },
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+                colors = SuggestionChipDefaults.suggestionChipColors(containerColor = suggestionTint(index), labelColor = c.input),
                 border = SuggestionChipDefaults.suggestionChipBorder(enabled = true, borderColor = c.barBorder))
         }
     }
 }
 
 /** Default follow-up chips for an open conversation. */
-internal val ConversationSuggestions = listOf("Explain more simply", "Give an example", "Summarize this", "What should I do next?")
+internal val ConversationSuggestions = listOf(
+    ComposerSuggestion("Explain more simply", androidx.compose.material.icons.Icons.Outlined.Lightbulb),
+    ComposerSuggestion("Give an example", androidx.compose.material.icons.Icons.Outlined.FormatListBulleted),
+    ComposerSuggestion("Summarize this", androidx.compose.material.icons.Icons.Outlined.ShortText),
+    ComposerSuggestion("What should I do next?", androidx.compose.material.icons.Icons.Outlined.Explore),
+)

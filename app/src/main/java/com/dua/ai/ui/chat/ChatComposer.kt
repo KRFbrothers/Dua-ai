@@ -149,7 +149,7 @@ fun Composer(
     /** Conversation look: translucent glass bar, faint animated gradient behind it, focus pop (ComposerGlass.kt). */
     glass: Boolean = false,
     /** Prompt chips shown above an empty glass composer; tapping one calls [onSuggestion]. */
-    suggestions: List<String> = emptyList(),
+    suggestions: List<ComposerSuggestion> = emptyList(),
     onSuggestion: (String) -> Unit = {},
     /** Image button next to the mic (glass composer); null hides it. */
     onImage: (() -> Unit)? = null,
@@ -185,7 +185,8 @@ fun Composer(
     // Keep the input spacious on regular phones and leave room for controls on narrow windows.
     BoxWithConstraints(modifier.let { if (homeLayout) it.widthIn(max = HomeSizes.composerMaxWidth) else it }.fillMaxWidth()) {
         val keyboardOpen = homeLayout && WindowInsets.ime.getBottom(LocalDensity.current) > 0
-        val margin = if (homeLayout && !keyboardOpen) HomeSizes.composerHorizontalMargin(maxWidth) else HomeSizes.composerCompactMarginH
+        val margin = (if (homeLayout && !keyboardOpen) HomeSizes.composerHorizontalMargin(maxWidth) else HomeSizes.composerCompactMarginH)
+            .let { if (glass) maxOf(it, ComposerGlass.MarginH) else it }
         // Large text gets its own input row before the placeholder loses space to the controls.
         // Keep the field in the same Layout slot so resizing never discards focus or the draft.
         val inlineTextWidth = maxWidth - margin * 2 - HomeSizes.barPaddingH * 2 - Sizes.touchTarget * (if (onImage != null) 4 else 3) - Spacing.sm * 2
@@ -222,14 +223,15 @@ fun Composer(
                 Box(Modifier.align(Alignment.CenterHorizontally)) { aboveInput() }
                 Spacer(Modifier.height(Spacing.md))
             }
-            val shape = if (stacked) ComposerSizes.expandedShape else if (homeLayout) HomeShapes.homeBar else HomeShapes.bar
+            val shape = if (glass) ComposerGlass.Shape else if (stacked) ComposerSizes.expandedShape else if (homeLayout) HomeShapes.homeBar else HomeShapes.bar
             Column(Modifier.fillMaxWidth()
                 .let { if (homeLayout) it.animateContentSize(animationSpec = if (motion) DuaMotion.gentle() else snap()) else it.animateContentSize() }
                 .testTag("composer-container")
                 .composerFocusPop(inputFocused, glass)
-                .shadow(if (homeLayout) HomeSizes.composerElevation else HomeSizes.noElevation, shape)
+                .shadow(if (glass) ComposerGlass.Elevation else if (homeLayout) HomeSizes.composerElevation else HomeSizes.noElevation, shape)
                 .clip(shape).composerAurora(glass).background(if (glass) c.bar.copy(alpha = ComposerGlass.GLASS_ALPHA) else c.bar).border(HomeSizes.barBorder, border, shape)
                 .padding(horizontal = HomeSizes.barPaddingH, vertical = when {
+                    glass -> ComposerGlass.PaddingV
                     homeLayout && !stacked && !keyboardOpen -> HomeSizes.composerIdlePaddingV
                     homeLayout && !stacked -> HomeSizes.composerKeyboardPaddingV
                     else -> Spacing.sm
