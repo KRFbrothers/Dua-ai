@@ -24,4 +24,16 @@ class HomeContrastTest {
             assertTrue("starter icon ${ratio(home.promptIcon, row)}", ratio(home.promptIcon, row) >= 3f)
         }
     }
+
+    @Test fun floatingTogglePillTextMeetsAaOverConversationBackgrounds() {
+        val cases = listOf(HomeLightColors to ChatLightColors.background, HomeLightColors to Color(0xFF111827),
+            HomeDarkColors to ChatDarkColors.background, HomeDarkColors to Color(0xFFF9FAFB))
+        for ((home, under) in cases) {
+            val pill = home.segmentFloatSelected.compositeOver(under)
+            // Worst case: the pill sits over a solid stroke of message text (light text in dark, dark text in light).
+            assertTrue("pill text ${ratio(home.segmentSelectedText, pill)} over $under", ratio(home.segmentSelectedText, pill) >= 4.5f)
+        }
+        for ((home, bg) in listOf(HomeLightColors to ChatLightColors.background, HomeDarkColors to ChatDarkColors.background))
+            assertTrue(ratio(home.segmentText, bg) >= 4.5f)
+    }
 }

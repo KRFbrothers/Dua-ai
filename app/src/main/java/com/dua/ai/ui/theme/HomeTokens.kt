@@ -20,6 +20,8 @@ import androidx.compose.ui.unit.sp
 data class HomeColors(
     val roundButton: Color, val roundButtonIcon: Color,
     val segmentTrack: Color, val segmentSelected: Color, val segmentSelectedText: Color, val segmentText: Color,
+    /** Translucent selected pill when the Chat/Task toggle floats over a conversation. */
+    val segmentFloatSelected: Color,
     val promptIcon: Color, val promptText: Color, val promptRow: Color, val tagline: Color,
     val bar: Color, val barBorder: Color, val barIcon: Color, val input: Color, val placeholder: Color,
     val voice: Color, val onVoice: Color, val modelLabel: Color,
@@ -28,6 +30,7 @@ data class HomeColors(
 val HomeLightColors = HomeColors(
     roundButton = Color(0xFFF3F4F6), roundButtonIcon = Color(0xFF1F2937),
     segmentTrack = Color(0xFFE5E7EB), segmentSelected = Color(0xFFFFFFFF), segmentSelectedText = Color(0xFF111827), segmentText = Color(0xFF374151),
+    segmentFloatSelected = Color(0xB3FFFFFF),
     promptIcon = Color(0xFF374151), promptText = Color(0xFF1F2937), promptRow = Color(0xB3FFFFFF), tagline = Color(0xFF4B5563),
     bar = Color(0xFFF9FAFB), barBorder = Color(0xFFE5E7EB), barIcon = Color(0xFF374151), input = Color(0xFF111827), placeholder = Color(0xFF6B7280),
     voice = Color(0xFF8B5CF6), onVoice = Color(0xFFFFFFFF), modelLabel = Color(0xFF6B7280),
@@ -36,6 +39,7 @@ val HomeLightColors = HomeColors(
 val HomeDarkColors = HomeColors(
     roundButton = Color(0xFF1F2937), roundButtonIcon = Color(0xFFE5E7EB),
     segmentTrack = Color(0xFF1F2937), segmentSelected = Color(0xFF4B5563), segmentSelectedText = Color(0xFFF9FAFB), segmentText = Color(0xFFD1D5DB),
+    segmentFloatSelected = Color(0xB31F2937),
     promptIcon = Color(0xFFD1D5DB), promptText = Color(0xFFF3F4F6), promptRow = Color(0x1FFFFFFF), tagline = Color(0xFFD1D5DB),
     bar = Color(0xFF111827), barBorder = Color(0xFF374151), barIcon = Color(0xFFD1D5DB), input = Color(0xFFF9FAFB), placeholder = Color(0xFF9CA3AF),
     voice = Color(0xFF8B5CF6), onVoice = Color(0xFFFFFFFF), modelLabel = Color(0xFF9CA3AF),

@@ -294,4 +294,21 @@ class HomeGradientUiTest(private val dark: Boolean, private val large: Boolean) 
         compose.onNodeWithText(HomeTaskPrompts.first()).performScrollTo()
         capture("landscape-task")
     }
+
+    @Test fun conversationToggleFloatsTransparentlyOverMessagesAndStillSwitches() {
+        val messages = (1..30).map { ChatMessage(text = "Message number $it with some longer text to fill the row", isUser = it % 2 == 0) }
+        val state = mutableStateOf(ChatUiState(profileName = "Fareed", agentAvailable = true, messages = messages))
+        show(state)
+        val list = compose.onNodeWithTag("chat-messages").fetchSemanticsNode().boundsInRoot
+        val toggle = compose.onNodeWithTag("home-mode-switcher").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+        assertTrue("toggle $toggle must sit over the message list $list", toggle.top >= list.top && toggle.bottom <= list.bottom + 1f)
+        val composer = compose.onNodeWithTag("composer-container").fetchSemanticsNode().boundsInRoot
+        assertTrue(toggle.bottom <= composer.top + 1f)
+        for (tab in listOf("Chat", "Task")) compose.onNode(hasText(tab) and isSelectable())
+            .assertWidthIsAtLeast(48.dp).assertHeightIsAtLeast(48.dp)
+        capture("conversation-toggle")
+        compose.onNode(hasText("Task") and isSelectable()).performClick().assertIsSelected()
+        val colors = if (dark) com.dua.ai.ui.theme.HomeDarkColors else com.dua.ai.ui.theme.HomeLightColors
+        assertTrue("floating pill must be translucent", colors.segmentFloatSelected.alpha < 1f)
+    }
 }
