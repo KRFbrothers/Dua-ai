@@ -18,7 +18,10 @@ val InterFont: FontFamily = FontFamily(
     Font(R.font.krfbrothers_regular, FontWeight.Bold)
 )
 
-/** Current, offline Google Fonts original. Home only; see licenses/GoogleSans-NOTICE.txt. */
+/**
+ * Google Sans (SIL OFL 1.1), byte-identical to google/fonts ofl/googlesans/GoogleSans[GRAD,opsz,wght].ttf.
+ * Home only; see app/src/main/assets/licenses/GoogleSans-NOTICE.txt, GoogleSans-OFL.txt and THIRD_PARTY_NOTICES.md.
+ */
 @OptIn(ExperimentalTextApi::class)
 val HomeFontFamily = FontFamily(
     Font(R.font.home_google_sans_variable, FontWeight.Normal,
@@ -85,6 +88,8 @@ fun duaTypography(family: FontFamily = InterFont): Typography {
 val CodeTextStyle = TextStyle(fontFamily = LegacyCodeFont, fontSize = 13.5.sp)
 val HomeTaglineStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Medium, fontSize = 20.sp)
 val HomeTaglineCompactStyle = HomeTaglineStyle.copy(fontSize = 18.sp)
+/** Quiet Home tagline under the logo: smaller and regular weight. */
+val HomeTaglineQuietStyle = HomeTaglineStyle.copy(fontSize = 16.sp, fontWeight = FontWeight.Normal, lineHeight = 22.sp)
 val VoiceGreetingStyle = HomeTaglineStyle.copy(fontSize = 26.sp, lineHeight = 34.sp)
 
 fun voiceTranscriptStyle(type: Typography): TextStyle = type.bodyLarge.copy(lineHeight = 22.sp)

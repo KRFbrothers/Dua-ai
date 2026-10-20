@@ -406,13 +406,21 @@ fun ChatScreen(
                                     state.codeSnippetUnavailableReason, actions.onRunCodeSnippet)) {
                                     MessageList(state = visibleState, actions = actions, listState = listState, imagineActions = mediaActions,
                                         onReply = if (feature != null) null else { m -> replyTo = ReplyQuote.of(m.id, m.text, m.isUser); runCatching { inputFocus.requestFocus() } },
-                                        searchMessageId = selectedMatch?.messageId)
+                                        searchMessageId = selectedMatch?.messageId,
+                                        bottomOverlay = if (feature == null) Sizes.touchTarget + Spacing.md else 0.dp)
                                 }
                             }
                             JumpToLatest(visible = !searchOpen && !followTail && listState.canScrollForward,
                                 newReplies = MessageGrouping.newReplies(state.messages, seenMessages),
                                 onClick = { scope.launch { followTail = true; goToLatest() } },
-                                modifier = Modifier.align(Alignment.BottomEnd).padding(end = Spacing.md, bottom = Spacing.md))
+                                modifier = Modifier.align(Alignment.BottomEnd).padding(end = Spacing.md, bottom = Spacing.md +
+                                    if (feature == null) Sizes.touchTarget + Spacing.md else 0.dp))
+                            // In a conversation the Chat/Task toggle floats transparently over the messages.
+                            if (feature == null) Box(Modifier.align(Alignment.BottomCenter).padding(bottom = Spacing.sm)) {
+                                HomeModeSwitcher(if (taskHome) HomeMode.Task else HomeMode.Chat,
+                                    onSelect = { mode -> if (!state.typing) { tap(); taskHome = mode == HomeMode.Task; actions.onAgent(taskHome) } },
+                                    enabled = !state.typing, floating = true)
+                            }
                         }
                     }
                     if (feature != null || state.homeTab != HomeTab.Work) Column(Modifier.fillMaxWidth()
@@ -473,10 +481,11 @@ fun ChatScreen(
                                 onRemoveAttachmentBackground = if (state.removeBackground) actions.onRemoveAttachmentBackground else null,
                                 writingTools = { task -> actions.onWriting(state.draft, true, task) },
                                 onRemoveUpload = actions.onCancelUpload,
-                                aboveInput = if (feature != null) null else { {
+                                aboveInput = if (feature != null || (!home && replyTo == null)) null else { {
                                     androidx.compose.foundation.layout.Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                     replyTo?.let { quote -> ReplyPreview(quote, onCancel = { replyTo = null }) }
-                                    HomeModeSwitcher(if (taskHome) HomeMode.Task else HomeMode.Chat,
+                                    // Home only: in a conversation the toggle floats over the message list instead.
+                                    if (home) HomeModeSwitcher(if (taskHome) HomeMode.Task else HomeMode.Chat,
                                         onSelect = { mode ->
                                             if (!state.typing) { tap(); taskHome = mode == HomeMode.Task; actions.onAgent(taskHome) }
                                         }, enabled = !state.typing)

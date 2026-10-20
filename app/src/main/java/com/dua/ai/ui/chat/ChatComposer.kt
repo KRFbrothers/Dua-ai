@@ -75,13 +75,13 @@ internal enum class HomeMode { Chat, Task }
 
 /** Compact visual pills retain full 48 dp selectable touch targets. */
 @Composable
-internal fun HomeModeSwitcher(mode: HomeMode, onSelect: (HomeMode) -> Unit, enabled: Boolean) {
+internal fun HomeModeSwitcher(mode: HomeMode, onSelect: (HomeMode) -> Unit, enabled: Boolean, floating: Boolean = false) {
     val c = HomeTheme.colors
     val duration = if (rememberMotionAllowed()) DuaMotion.DurationFast else 0
-    Row(Modifier.heightIn(min = Sizes.touchTarget).selectableGroup(), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.heightIn(min = Sizes.touchTarget).selectableGroup().testTag("home-mode-switcher"), verticalAlignment = Alignment.CenterVertically) {
         HomeMode.entries.forEach { tab ->
             val selected = mode == tab
-            val fill by animateColorAsState(if (selected) c.segmentSelected else Color.Transparent,
+            val fill by animateColorAsState(if (selected) (if (floating) c.segmentFloatSelected else c.segmentSelected) else Color.Transparent,
                 tween(duration), label = "Home tab fill")
             val text by animateColorAsState(if (selected) c.segmentSelectedText else c.segmentText,
                 tween(duration), label = "Home tab text")
