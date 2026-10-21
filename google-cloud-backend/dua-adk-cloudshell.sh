@@ -530,7 +530,10 @@ def http_json(url,payload=None,headers=None,timeout=30):
     req=Request(url,data=body,headers={'Content-Type':'application/json','Accept':'application/json',**(headers or {})},method='POST' if body is not None else 'GET')
     try:
         with urlopen(req,timeout=timeout) as response:
-            raw=response.read(1_000_000);return response.status,(json.loads(raw) if raw else {})
+            raw=response.read(1_000_000)
+            # 204 (logout) is empty; a resumed run answers 200 as an SSE stream, not JSON.
+            try:return response.status,(json.loads(raw) if raw else {})
+            except ValueError:return response.status,{}
     except HTTPError as error:
         raw=error.read(100_000);error.close()
         try:return error.code,json.loads(raw)
@@ -645,7 +648,8 @@ def smoke(service):
         if run_id:
             status,body=http_json(url+'/api/chat',{'resumeRun':run_id},{'Authorization':'Bearer '+token,'x-dua-native':'1',**extra},timeout=60)
             # 409 = the completed run was loaded back from the Supabase dua_adk schema.
-            persisted={409:'loaded_from_database',404:'not_found',503:'storage_unavailable'}.get(status,'http_'+str(status))
+            # 200 = an unfinished run was loaded from the database and resumed (SSE stream).
+            persisted={409:'loaded_from_database',200:'resumed_from_database',404:'not_found',503:'storage_unavailable'}.get(status,'http_'+str(status))
         elif durable['errors']:persisted='durable_request_failed'
         else:
             # Planner answered without splitting: no durable run was started, nothing failed.
@@ -655,14 +659,14 @@ def smoke(service):
                 'firstTextSeconds':item['firstTextSeconds'],'totalSeconds':item['totalSeconds'],'errors':item['errors'][:3]}
         result['agentRunId']=run_id;result['durableSession']=persisted
     finally:
-        step('signing out')
+        # No step() here: it would relabel an error raised above as 'signing out'.
         try:http_json(base+'/auth/v1/logout?scope=local',{},{'apikey':key,'Authorization':'Bearer '+token},timeout=15)
         except Exception:pass
         del token
     print(json.dumps(result,indent=2,ensure_ascii=False))
     answered=result['chat']['ok'] and result['agent']['ok']
     durable=result['durableSession']
-    if answered and durable=='loaded_from_database':verdict='PASSED (chat, Agent and durable Supabase session verified)'
+    if answered and durable in ('loaded_from_database','resumed_from_database'):verdict='PASSED (chat, Agent and durable Supabase session verified)'
     elif answered and durable=='not_exercised':verdict='PASSED for chat and Agent; durable session not exercised (the planner did not split the probe, so no run was saved). Rerun smoke to retry'
     else:verdict='NEEDS REVIEW'
     print('SMOKE '+verdict+'. No traffic or configuration was changed. Share this output; it contains no credentials.')

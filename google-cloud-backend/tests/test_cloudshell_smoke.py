@@ -206,3 +206,55 @@ def _wrap_logout(http_json):
             return 200, {}
         return http_json(url, payload, headers, timeout)
     return call
+
+
+# ---------------------------------------------------------------- empty / non-JSON replies (204 logout, SSE resume)
+class _Raw:
+    def __init__(self, status, raw):
+        self.status, self.raw = status, raw
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def read(self, limit=-1):
+        return self.raw
+
+
+@pytest.mark.parametrize("status,raw", [(204, b""), (200, b'event: text\ndata: {"type":"text","delta":"hi"}\n\n'), (200, b"<html>ok</html>")])
+def test_http_json_tolerates_empty_and_non_json_bodies(smoke, monkeypatch, status, raw):
+    monkeypatch.setattr(smoke, "urlopen", lambda req, timeout=30: _Raw(status, raw))
+    assert smoke.http_json("https://project.supabase.co/auth/v1/logout?scope=local", {}, {"Authorization": "Bearer " + TOKEN}) == (status, {})
+
+
+def test_smoke_resumed_unfinished_run_is_not_a_crash(smoke, monkeypatch, capsys):
+    """An unfinished saved run makes /api/chat resume and stream SSE (HTTP 200); this used to raise JSONDecodeError."""
+    import agent_store
+
+    def agent_producer(messages, attachments, system, owner, cancelled=None):
+        def run(enqueue):
+            if messages[-1]["text"] == smoke.SMOKE_DURABLE_PROMPT:
+                enqueue("event", {"type": "agent_session", "runId": "11111111-2222-4333-8444-555555555555", "resumable": True})
+            enqueue("event", {"type": "text", "delta": "Agent answer."})
+            enqueue("done")
+        return run
+
+    monkeypatch.setattr(engine, "agent_producer", agent_producer)
+    monkeypatch.setenv("ADK_SESSION_DB_URL", "postgresql://runtime@db.invalid/postgres")
+    monkeypatch.setenv("AGENT_ENGINE", "adk")
+    async def get_task(owner, run_id):
+        return SimpleNamespace(state={"dua_schema": 1, "dua_request": {"messages": [{"role": "user", "text": "resume me"}]}})
+    monkeypatch.setattr(agent_store, "get_task", get_task)
+    monkeypatch.setattr(smoke, "supabase_sign_in", lambda base, key, owner: TOKEN)
+    monkeypatch.setattr(smoke, "http_json", _wrap_logout(smoke.http_json))
+    service = {"spec": {"template": {"spec": {"containers": [{"env": [
+        {"name": "SUPABASE_URL", "value": "https://project.supabase.co"},
+        {"name": "SUPABASE_PUBLISHABLE_KEY", "value": "publishable"},
+        {"name": "DUA_ALLOWED_EMAIL", "value": "owner@example.com"}]}]}}},
+        "status": {"traffic": [{"revisionName": "cand", "percent": 0, "tag": "adk-candidate", "url": "https://adk-candidate---svc.run.app"}]}}
+    smoke.smoke(service)
+    out = capsys.readouterr().out
+    assert '"durableSession": "resumed_from_database"' in out and "durable Supabase session verified" in out
+    assert TOKEN not in out
