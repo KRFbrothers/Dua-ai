@@ -31,6 +31,7 @@ import threading
 import time
 
 from flask import Flask, Response, g, jsonify, request, stream_with_context
+import agent_models
 from owner_auth import OwnerAuthError, verify_owner
 
 app = Flask(__name__)
@@ -77,6 +78,7 @@ SSE_HEADERS = {
 }
 
 _client = None
+_adc_client = None
 _models = {}
 
 
@@ -87,10 +89,30 @@ class BadRequest(Exception):
         self.status = status
 
 
+def get_adc_client():
+    """google-genai client on Vertex AI with ADC (Imagine and embeddings always use this)."""
+    if not agent_models.key_mode():
+        return get_client()
+    global _adc_client
+    if _adc_client is None:
+        if not PROJECT_ID:
+            raise RuntimeError("GOOGLE_CLOUD_PROJECT is not set")
+        from google import genai
+        _adc_client = genai.Client(vertexai=True, project=PROJECT_ID, location=LOCATION)
+    return _adc_client
+
+
 def get_client():
-    """google-genai client on Vertex AI. Location "global" uses https://aiplatform.googleapis.com."""
+    """google-genai client on Vertex AI. Location "global" uses https://aiplatform.googleapis.com.
+
+    GEMINI_AUTH=apikey uses Vertex AI express mode with GOOGLE_API_KEY (no project/location);
+    default "adc" (also the rollback) uses the service account for GOOGLE_CLOUD_PROJECT.
+    """
     global _client
     if _client is None:
+        if agent_models.key_mode():
+            _client = agent_models.key_client()
+            return _client
         if not PROJECT_ID:
             raise RuntimeError("GOOGLE_CLOUD_PROJECT is not set")
         from google import genai
@@ -499,7 +521,7 @@ def imagine_for_agent(owner):
     import imagine
     if not imagine.enabled() or not owner.get("id") or not owner.get("token"):
         return None
-    return lambda body: imagine.handle(body, owner["token"], owner["id"], get_client())
+    return lambda body: imagine.handle(body, owner["token"], owner["id"], get_adc_client())
 
 
 VERIFY_SYSTEM = "You are a careful fact-checker for an AI assistant's answers."
@@ -580,14 +602,15 @@ def tool_loop(messages, attachments, system, enqueue, owner, coding=False, cance
         import agent_documents
         if agent_documents.enabled():
             env["documents"] = agent_documents.Documents(owner.get("id"),
-                agent_documents.VertexEmbeddings(get_client(), env["trace"]))
+                agent_documents.VertexEmbeddings(get_adc_client(), env["trace"]))
             if notes is not None:
                 notes.semantic = env["documents"]
         env["adk_contents"] = build_contents(messages, attachments)
         env["stream_text"] = (lambda delta: enqueue("event", {"type": "text", "delta": delta}))
         os.environ.setdefault("GOOGLE_GENAI_USE_VERTEXAI", "TRUE")
-        os.environ.setdefault("GOOGLE_GENAI_USE_ENTERPRISE", "TRUE")
-        os.environ.setdefault("GOOGLE_CLOUD_LOCATION", LOCATION)
+        if not agent_models.key_mode():  # key mode: ADK Gemini models get the key client explicitly
+            os.environ.setdefault("GOOGLE_GENAI_USE_ENTERPRISE", "TRUE")
+            os.environ.setdefault("GOOGLE_CLOUD_LOCATION", LOCATION)
         adk_result = agent_adk.run(env, last, MODEL_NAME, AGENT_MODEL, adk_config)
     if adk_result is not None:
         text, run = adk_result
@@ -738,7 +761,7 @@ def agent_documents_api():
     if not agent_documents.enabled():
         return no_store(jsonify({"error": "ADK document storage/embeddings are not configured."}), 503)
     try:
-        store = agent_documents.Documents(g.owner_id, agent_documents.VertexEmbeddings(get_client()))
+        store = agent_documents.Documents(g.owner_id, agent_documents.VertexEmbeddings(get_adc_client()))
         if request.method == "GET":
             return no_store(jsonify({"documents": store.list()}))
         data = request.get_json(silent=True)
@@ -765,7 +788,7 @@ def agent_notes_reindex():
     try:
         store=agent_notes.for_owner({"id":g.owner_id,"token":g.owner_token})
         if store is None:return no_store(jsonify({"error":"Notes are not configured."}),503)
-        store.semantic=agent_documents.Documents(g.owner_id,agent_documents.VertexEmbeddings(get_client()))
+        store.semantic=agent_documents.Documents(g.owner_id,agent_documents.VertexEmbeddings(get_adc_client()))
         data=request.get_json(silent=True)
         if not isinstance(data,dict):raise ValueError()
         return no_store(jsonify(store.reindex(data.get("offset",0),data.get("limit",20))))
@@ -995,7 +1018,7 @@ def approval_env(owner_id, owner_token):
     import agent_toolkit, agent_documents
     notes=agent_notes.for_owner({"id":owner_id,"token":owner_token})
     if notes is not None and agent_documents.enabled():
-        notes.semantic=agent_documents.Documents(owner_id,agent_documents.VertexEmbeddings(get_client()))
+        notes.semantic=agent_documents.Documents(owner_id,agent_documents.VertexEmbeddings(get_adc_client()))
     return {"custom_tools": agent_toolkit.configured(), "github": github, "notes": notes,
             "memory": "", "imagine": None, "request_text": ""}
 
@@ -1071,7 +1094,7 @@ def api_imagine_image():
         return jsonify({"error": "Imagine is turned off on the Google Cloud engine."}), 503
     token = request.headers.get("Authorization", "").split(" ", 1)[1]
     try:
-        result = imagine.handle(request.get_json(silent=True), token, user_id, get_client())
+        result = imagine.handle(request.get_json(silent=True), token, user_id, get_adc_client())
     except imagine.ImagineError as error:
         return jsonify({"error": error.message}), error.status
     except Exception:

@@ -5,6 +5,7 @@ Non-Gemini routes use ADK's LiteLlm adapter (optional requirements-adapters.txt)
 FallbackModel preserves the SDK's no-fallback-after-first-stream-event rule.
 """
 import json
+import logging
 import os
 import re
 
@@ -111,3 +112,61 @@ def check_adapters():
         if importlib.util.find_spec('litellm') is None:
             raise ValueError('Install requirements-adapters-lock.txt for configured non-Gemini routes')
     return True
+
+
+# --- GEMINI_AUTH=apikey: Vertex AI express mode with GOOGLE_API_KEY (default "adc" is the rollback) ---
+_warned = []
+_key_client = None
+
+
+def key_mode():
+    """True only for GEMINI_AUTH=apikey with GOOGLE_API_KEY set.
+
+    A missing key logs one warning and keeps ADC; the key itself is never logged.
+    """
+    if os.environ.get('GEMINI_AUTH', 'adc').strip().lower() != 'apikey':
+        return False
+    if os.environ.get('GOOGLE_API_KEY', '').strip():
+        return True
+    if not _warned:
+        _warned.append(1)
+        logging.getLogger('dua').warning('[dua-engine] GEMINI_AUTH=apikey but GOOGLE_API_KEY is not set; using ADC')
+    return False
+
+
+def key_client_kwargs():
+    return {'vertexai': True, 'api_key': os.environ['GOOGLE_API_KEY'].strip(), 'project': None, 'location': None}
+
+
+def key_client():
+    """One shared google-genai client in express mode (API key, no project/location) for chat/helpers/search."""
+    global _key_client
+    if _key_client is None:
+        from google import genai
+        _key_client = genai.Client(**key_client_kwargs())
+    return _key_client
+
+
+def with_key(model):
+    """Key mode: make every ADK Gemini model build its client from the API key, never ADC.
+
+    Uses ADK's own Gemini.client_kwargs (keeps its retry options and per-event-loop client cache).
+    Plain "gemini-*" names become Gemini objects; FallbackModel members are updated in place.
+    """
+    if not key_mode():
+        return model
+    from google.adk.models import Gemini
+    if isinstance(model, str):
+        return Gemini(model=model, client_kwargs=key_client_kwargs()) if model.startswith('gemini-') else model
+    if isinstance(model, Gemini):
+        model.client_kwargs = {**(model.client_kwargs or {}), **key_client_kwargs()}
+    for member in getattr(model, 'models', None) or ():
+        with_key(member)
+    return model
+
+
+_resolve_routes = resolve
+
+
+def resolve(role, default):  # noqa: F811 (same contract; adds the key client in key mode)
+    return with_key(_resolve_routes(role, default))
