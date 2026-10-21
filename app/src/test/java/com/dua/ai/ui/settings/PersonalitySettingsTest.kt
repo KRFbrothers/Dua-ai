@@ -49,7 +49,7 @@ class PersonalitySettingsTest(private val dark: Boolean, private val large: Bool
             onPersonality = { appearance.value = appearance.value.copy(personality = it) })
     }
 
-    @Test fun fourAccessiblePresetsSelectExactlyOneAndKeepOtherPreferences() {
+    @Test fun allAccessiblePresetsSelectExactlyOneAndKeepOtherPreferences() {
         showPersonalization()
         compose.onNodeWithText("Dua AI Personality").assertExists()
         for (preset in DuaPersonality.entries) {

@@ -101,8 +101,16 @@ class AppearancePreferencesTest {
         assertNull(AppearanceStore.decode(preferencesOf(AppearanceStore.PERSONALITY to "retired")).personality)
         val existing = preferencesOf(AppearanceStore.PERSONALITY to DuaPersonality.SeniorArchitect.id)
         assertEquals(DuaPersonality.SeniorArchitect, AppearanceStore.decode(AppearanceMigration { "{}" }.migrate(existing)).personality)
-        assertEquals(4, DuaPersonality.entries.size)
-        assertEquals(4, DuaPersonality.entries.map { it.id }.toSet().size)
+        assertEquals(5, DuaPersonality.entries.size)
+        assertEquals(5, DuaPersonality.entries.map { it.id }.toSet().size)
         DuaPersonality.entries.forEach { assertTrue(it.instruction.isNotBlank() && it.instruction.length <= 1000) }
+    }
+    @Test fun bulBulIsSelectableOptInAndDoesNotChangeDefault() = runBlocking {
+        assertEquals(DuaPersonality.BulBul, DuaPersonality.fromId("bulbul"))
+        assertEquals(DuaPersonality.BulBul, AppearanceStore.decode(preferencesOf(AppearanceStore.PERSONALITY to "bulbul")).personality)
+        assertNull(AppearancePreferences().personality)
+        assertNull(AppearanceStore.decode(preferencesOf()).personality)
+        val text = DuaPersonality.BulBul.instruction
+        assertTrue(text.contains("Hinglish") && text.contains("never rude") && text.contains("Lead with the answer") && text.contains("honest when unsure"))
     }
 }
