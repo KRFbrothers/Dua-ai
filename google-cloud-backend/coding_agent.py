@@ -5,7 +5,7 @@ Safety is enforced here on the server, not by the model:
 - GitHubClient only sends requests that match an explicit (method, path) allowlist: reads, creating
   blobs/trees/commits, creating a NEW `refs/heads/dua-agent/...` branch and opening a pull request
   against main. Merging, deleting, force updates and any write to main are impossible.
-- The model gets read tools, request-local draft editing and `propose_changes`;
+- The model gets read tools, request-local main/PR draft editing and approval proposals;
   the server performs external writes only after owner approval.
 - Caps on tool steps, files read/changed, bytes and total time.
 """
@@ -45,22 +45,26 @@ REPO_RULES = """Repository rules (must follow):
 
 CODING_PROMPT = (
     "You are the Dua Agent coding step for the GitHub repository {repo}. "
-    "Start with workspace_status to pin the task to one commit. Read scoped AGENTS.md guidance with "
+    "For a new PR start workspace_status to pin main; for an existing agent PR fix start open_pr_workspace(number). "
+    "Read scoped AGENTS.md guidance with "
     "workspace_status(path) or read_file before editing each file. Use edit_file for exact draft replacements "
-    "(empty old_text creates a new file only), inspect workspace_diff, then propose_changes with files=[] "
+    "(empty old_text creates a new file only), inspect workspace_diff, then choose the workspace's approval tool "
     "to submit every staged edit for approval. Unsaved drafts are request-local. When workspace_status reports "
     "execution.configured, run_command can check a source snapshot in a separate network-disabled sandbox; "
     "use export_paths for changed text files, then import_command_changes and inspect the diff. Unexported changes "
     "are discarded. When checkpoints are enabled, edits autosave; list_workspaces/restore_workspace resume a "
     "saved draft in a fresh task. Never claim commands ran when execution is unconfigured or failed. "
     "Use inspect_pr_ci(number) to diagnose a PR using its observed commit; this read-only tool does not restore "
-    "that PR into the main-based workspace or authorize fixes. Never claim all required checks passed. "
+    "that PR into a workspace or authorize fixes. For repair of an open dua-agent/ PR, open_pr_workspace(number), "
+    "read its files/scoped guidance, edit_file, workspace_diff, then propose_pr_fix(title). A separate owner approval "
+    "commits those staged files to that existing branch. Do not use propose_changes on a PR workspace. "
+    "Never claim all required checks passed. "
     "Use the tools to look at the tree, "
     "search and read the files you need (read before you change). Keep changes small and focused. When ready, "
-    "call propose_changes ONCE with files=[] for staged drafts, or FULL new content when there are no drafts "
+    "for a new PR call propose_changes ONCE with files=[] for staged drafts, or FULL new content when there are no drafts "
     "(max {max_files} files), a "
     "short PR title and a simple-language description (Hinglish-friendly) of what changed and how to test it. "
-    "If the request is unclear or too big, call propose_changes with no files and explain why in description.\n\n"
+    "If the request is unclear or too big, explain the limitation without proposing a write.\n\n"
     + REPO_RULES
 )
 
@@ -370,7 +374,7 @@ class GitHubClient:
         item = self.request("POST", f"/repos/{self.repo}/issues/{number}/comments", {"body": text + COMMENT_FOOTER})
         return {"url": item.get("html_url")}
 
-    # --- the only write sequence: new branch + one commit + PR into main ---
+    # --- new-PR write sequence: new branch + one commit + PR into main ---
     def open_pull_request(self, files, title, description, branch, base_sha=None):
         if not valid_agent_branch(branch):
             raise BlockedRequest("Use a new dua-agent/ branch with 1 to 80 lowercase letters, digits or dashes; start and end with a letter or digit.")
@@ -471,6 +475,8 @@ def validate_changes(files):
 TOOLS = [
     {"name": "workspace_status", "description": "Start a workspace on one commit; read scoped AGENTS.md, report runner/checkpoint configuration and retained command changes. Unsaved state is request-local.",
      "parameters": {"type": "OBJECT", "properties": {"path": {"type": "STRING"}}}},
+    {"name": "open_pr_workspace", "description": "Open an existing open same-repository dua-agent/ PR targeting main at its current head. Use a fresh task; does not write GitHub. Read files/scoped guidance before staging a fix.",
+     "parameters": {"type": "OBJECT", "properties": {"number": {"type": "INTEGER"}}, "required": ["number"]}},
     {"name": "edit_file", "description": "Edit a request-local draft. old_text must match exactly once; empty old_text creates a new file only. Read scoped AGENTS.md first. Does not write to GitHub.",
      "parameters": {"type": "OBJECT", "properties": {"path": {"type": "STRING"}, "old_text": {"type": "STRING"}, "new_text": {"type": "STRING"}},
                     "required": ["path", "old_text", "new_text"]}},
@@ -494,6 +500,8 @@ TOOLS = [
      "parameters": {"type": "OBJECT", "properties": {"query": {"type": "STRING"}}, "required": ["query"]}},
     {"name": "inspect_pr_ci", "description": "Read CI checks, failed steps and annotations for a PR number in this repository at its observed head commit. No rerun, logs download, workspace restore or writes. Required/merge checks are not evaluated.",
      "parameters": {"type": "OBJECT", "properties": {"number": {"type": "INTEGER"}}, "required": ["number"]}},
+    {"name": "propose_pr_fix", "description": "Request separate owner approval to commit all staged PR-workspace edits to that same dua-agent/ PR branch. Target and files come from the server; no write occurs before approval.",
+     "parameters": {"type": "OBJECT", "properties": {"title": {"type": "STRING"}}, "required": ["title"]}},
     {"name": "propose_changes", "description": "Propose a PR for owner approval: title, description and full file contents. After edit_file, use files=[] to submit all staged edits.",
      "parameters": {"type": "OBJECT", "properties": {
          "title": {"type": "STRING"}, "description": {"type": "STRING"},
@@ -547,11 +555,24 @@ class CodingSession:
 
     def prepare_proposal(self, args):
         # Snapshot metadata comes from the server, never from model arguments.
-        clean = {k: v for k, v in args.items() if k not in ("base_sha", "repository", "preview_diff", "preview_diff_truncated")}
+        clean = {k: v for k, v in args.items() if k not in ("base_sha", "repository", "pr_target", "preview_diff", "preview_diff_truncated")}
         with self.lock:
             if self.workspace is not None:
                 return self.workspace.proposal(clean)
             return clean
+
+    def prepare_pr_fix(self, args):
+        import coding_pr
+        title = args.get("title")
+        if not isinstance(title, str) or not title.strip():
+            raise CodingError("Provide a commit title for the staged fix.")
+        with self.lock:
+            if self.workspace is None:
+                raise CodingError("Open a PR workspace before proposing its fix.")
+            with self.workspace.lock:
+                result = self.workspace.proposal({"title": " ".join(title.split())[:120], "files": []}, repair=True)
+                coding_pr.current_target(self.github, result["pr_target"]["number"], expected=result["pr_target"])
+                return result
 
     def preview_proposal(self, proposal):
         from agent_policy import filter_text
@@ -560,7 +581,7 @@ class CodingSession:
             if workspace is None:
                 return {}
             with workspace.lock:
-                if proposal.get("base_sha") != workspace.base_sha or proposal.get("repository") != self.github.repo:
+                if proposal.get("base_sha") != workspace.base_sha or proposal.get("repository") != self.github.repo or proposal.get("pr_target") != workspace.pr_target:
                     return {}
                 preview = workspace.diff(proposal["files"])
                 text = filter_text(preview["diff"])
@@ -586,12 +607,35 @@ class CodingSession:
             finally:
                 with workspace.lock:
                     workspace.active_commands -= 1
+        # Include lock contention in the inner budget. A timed-out read must
+        # not later replace the task's workspace after the caller continued.
+        deadline = self.clock() + 75 if name == "open_pr_workspace" else None
         with self.lock:
-            return self._run_tool(name, args)
+            return self._run_tool(name, args, deadline=deadline)
 
-    def _run_tool(self, name, args):
+    def _run_tool(self, name, args, deadline=None):
         try:
             import coding_workspace
+            if name == "open_pr_workspace":
+                import coding_pr
+                expires = deadline if deadline is not None else self.clock() + 75
+                def check_open():
+                    if (self.cancelled and self.cancelled()) or self.clock() >= expires:
+                        raise CodingError("PR workspace opening stopped or timed out; the previous workspace was kept.")
+                check_open()
+                current = self.workspace
+                if current is not None and (current.staged or current.command_results or current.active_commands or current.checkpoint_id):
+                    raise CodingError("Open the PR in a fresh task; the current draft, checkpoint or command state must not be discarded.")
+                target = coding_pr.current_target(self.github, args.get("number"))
+                check_open()
+                opened = coding_workspace.Workspace(self.github)
+                opened.start(target["head_sha"])
+                check_open()
+                opened.pr_target = target
+                result = opened.run("workspace_status", {})
+                check_open()
+                self.workspace = opened
+                return result
             if name == "list_workspaces":
                 import coding_checkpoints
                 return coding_checkpoints.list_owned(self.owner_id, self.github.repo)
@@ -641,6 +685,8 @@ class CodingSession:
 
 
 def finish(github, emit, args, request_text, flow=None):
+    if args.get("pr_target") is not None:
+        raise CodingError("Existing PR repairs require propose_pr_fix approval.")
     files = validate_changes(args.get("files") or [])
     title = " ".join(str(args.get("title") or "Dua Agent change").split())[:120]
     description = str(args.get("description") or "").strip()[:6000]

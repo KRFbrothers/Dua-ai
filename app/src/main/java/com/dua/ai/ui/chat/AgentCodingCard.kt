@@ -46,6 +46,12 @@ internal fun AgentCodingCard(coding: AgentCoding, onOpenWorkspaces: () -> Unit) 
             Text(if (coding.workspace == null && coding.ci.isNotEmpty()) "Pull request checks" else "Coding workspace", style = MaterialTheme.typography.titleSmall)
             coding.workspace?.let { w ->
                 Text("${w.repository} · ${w.base.take(8)}", style = MaterialTheme.typography.bodySmall)
+                w.prTarget?.let { target ->
+                    Text("PR #${target.number} repair draft", style = MaterialTheme.typography.labelLarge)
+                    Text(target.branch, style = MaterialTheme.typography.bodySmall)
+                    Text("A separate approval is needed to commit this fix to the existing PR.",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
                 Text(if (w.paths.isEmpty()) "No draft changes" else "${w.paths.size} changed files", style = MaterialTheme.typography.bodyMedium)
                 w.paths.forEach { Text(it, style = MaterialTheme.typography.bodySmall) }
                 Text(if (w.saved) "Draft saved · revision ${w.revision}" else "Draft kept in this task · not saved",

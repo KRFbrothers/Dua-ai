@@ -74,7 +74,7 @@ fun AgentApprovalCard(
                 Text(line, style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant, modifier = Modifier.padding(top = Spacing.xxs))
             }
             approval.diff?.let { AgentTextPreview("proposal diff", it, approval.diffTruncated) }
-            if (approval.tool == "propose_changes" && approval.diff == null) {
+            if (approval.tool in setOf("propose_changes", "propose_pr_fix") && approval.diff == null) {
                 Text("Diff preview unavailable. Ask Agent to show workspace_diff before approving.",
                     style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
             }
@@ -86,7 +86,7 @@ fun AgentApprovalCard(
                     Row(Modifier.fillMaxWidth().padding(top = Spacing.sm), horizontalArrangement = Arrangement.spacedBy(Spacing.sm, Alignment.End)) {
                         OutlinedButton(onClick = { onDecide(false) }, modifier = Modifier.heightIn(min = Sizes.touchTarget)
                             .semantics { contentDescription = "Reject: ${approval.title}" }) { Text("Reject") }
-                        Button(onClick = { onDecide(true) }, modifier = Modifier.heightIn(min = Sizes.touchTarget)
+                        Button(onClick = { onDecide(true) }, enabled = approval.tool != "propose_pr_fix" || approval.diff != null, modifier = Modifier.heightIn(min = Sizes.touchTarget)
                             .semantics { contentDescription = "Approve: ${approval.title}" }) { Text("Approve") }
                     }
                 }

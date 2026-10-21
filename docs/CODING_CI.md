@@ -40,9 +40,9 @@ Agent to inspect the PR again for updated evidence.
 The existing legacy `check_pr_ci` / `PrFlow` polling behavior is unchanged. The
 new inspection tool can diagnose a PR in a later task, unlike that request-local
 legacy polling tool. It does not restore the PR into a coding workspace:
-`workspace_status` still starts from `main`. Repairing an existing PR branch is
-not implemented by this read-only feature; external writes retain their existing
-separate owner-approval flow.
+`workspace_status` still starts from `main`. The separate [reviewed PR repair flow](CODING_PR_REPAIR.md) can explicitly open
+an eligible PR workspace and request fix approval. Inspection alone does not
+start that flow or approve any write.
 
 ## Limits and permissions
 

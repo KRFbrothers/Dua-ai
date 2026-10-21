@@ -5,8 +5,9 @@ import org.json.JSONObject
 /** Ephemeral UI data: not a source of approval arguments or persisted chat content. */
 data class AgentTerminal(val id: String, val command: String = "Command", val state: String,
     val output: String = "", val exitCode: Int? = null, val truncated: Boolean = false)
+data class AgentPrTarget(val number: Int, val branch: String)
 data class AgentWorkspace(val repository: String, val base: String, val paths: List<String>,
-    val checkpointId: String?, val revision: Int, val saved: Boolean)
+    val checkpointId: String?, val revision: Int, val saved: Boolean, val prTarget: AgentPrTarget? = null)
 data class AgentCoding(val workspace: AgentWorkspace? = null, val terminals: List<AgentTerminal> = emptyList(),
     val diff: String? = null, val diffTruncated: Boolean = false, val ci: List<AgentCi> = emptyList()) {
     fun ended() = copy(terminals = terminals.map { if (it.state == "preparing") it.copy(state = "interrupted") else it })
@@ -39,7 +40,15 @@ data class AgentCodingUpdate(val workspace: AgentWorkspace?, val terminal: Agent
                 val checkpoint = (w.opt("checkpointId") as? String)?.also { if (!id.matches(it)) return null }
                 val revision = w.optInt("revision", 0)
                 if (revision < 0 || (checkpoint != null && revision < 1)) return null
-                AgentWorkspace(repo, base, names, checkpoint, revision, w.optBoolean("saved") && checkpoint != null)
+                val target = if (w.has("prTarget") && !w.isNull("prTarget")) {
+                    val t = w.optJSONObject("prTarget") ?: return null
+                    val number = t.opt("number") as? Number ?: return null
+                    val branch = t.opt("branch") as? String ?: return null
+                    if (number.toDouble() != number.toInt().toDouble() || number.toInt() !in 1..999_999_999 ||
+                        !Regex("dua-agent/[a-z0-9](?:[a-z0-9-]{0,78}[a-z0-9])?").matches(branch) || t.optString("head_sha") != base) return null
+                    AgentPrTarget(number.toInt(), branch)
+                } else null
+                AgentWorkspace(repo, base, names, checkpoint, revision, w.optBoolean("saved") && checkpoint != null, target)
             }
             val terminal = json.optJSONObject("terminal")?.let { t ->
                 val key = t.optString("id"); val state = t.optString("state")

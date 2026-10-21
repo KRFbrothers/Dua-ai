@@ -5,7 +5,7 @@ import shlex
 from agent_policy import filter_text
 
 TOOLS = frozenset(("workspace_status", "edit_file", "workspace_diff", "run_command",
-                   "import_command_changes", "checkpoint_workspace", "restore_workspace"))
+                   "import_command_changes", "checkpoint_workspace", "restore_workspace", "open_pr_workspace"))
 
 
 def started(agent, name, args):
@@ -44,7 +44,7 @@ def completed(agent, name, result, activity):
                         current_fingerprint = workspace.fingerprint()
                         event["workspace"] = {"repository": workspace.github.repo, "base": workspace.base_sha,
                             "paths": sorted(workspace.staged)[:10], "checkpointId": workspace.checkpoint_id,
-                            "revision": workspace.checkpoint_revision,
+                            "revision": workspace.checkpoint_revision, "prTarget": workspace.pr_target,
                             "saved": workspace.saved_fingerprint == current_fingerprint and
                                 result.get("checkpoint", {}).get("saved") is not False}
                         _finish(agent, name, result, event, current_fingerprint)
@@ -63,7 +63,7 @@ def _finish(agent, name, result, event, current_fingerprint):
     # Emit while holding the draft locks, so a later edit/reset cannot be
     # followed by an older diff event from a concurrently finishing call.
     if "error" not in result:
-        if name in ("edit_file", "import_command_changes", "restore_workspace"):
+        if name in ("edit_file", "import_command_changes", "restore_workspace", "open_pr_workspace"):
             event["resetDiff"] = True
         if name == "workspace_diff" and current_fingerprint == result.get("draft_fingerprint"):
             text = filter_text(str(result.get("diff", "")))
