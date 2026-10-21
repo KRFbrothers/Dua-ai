@@ -87,23 +87,34 @@ def test_with_key_is_noop_in_adc_mode(fake_genai):
     assert agent_models.with_key("gemini-4-argon") == "gemini-4-argon"
 
 
-def test_adk_model_gets_key_client(fake_genai):
+@pytest.mark.parametrize("retry_flag", [None, "1", "0"], ids=["default-retry", "retry-on", "retry-off"])
+def test_adk_model_gets_key_client(monkeypatch, retry_flag):
     pytest.importorskip("google.adk")
-    fake_genai.undo()  # real google-genai for ADK
-    agent_models._warned.clear()
-    os.environ.pop("ADK_MODELS_JSON", None)
-    mp = pytest.MonkeyPatch()
-    try:
-        mp.setenv("GEMINI_AUTH", "apikey")
-        mp.setenv("GOOGLE_API_KEY", KEY)
-        mp.setenv("GOOGLE_CLOUD_PROJECT", "proj-test")
-        mp.delenv("ADK_MODELS_JSON", raising=False)
-        from google.adk.models import Gemini
-        model = agent_models.resolve("controller", "gemini-4-argon")
-        assert isinstance(model, Gemini) and model.model == "gemini-4-argon"
-        api = model.api_client._api_client
-        assert api.vertexai and api.api_key == KEY and api.project is None
-        mp.setenv("GEMINI_AUTH", "adc")
-        assert agent_models.resolve("controller", "gemini-4-argon") == "gemini-4-argon"
-    finally:
-        mp.undo()
+    from google.adk.models import Gemini
+
+    # Keep the real SDK installed throughout this test, including isolated runs.
+    monkeypatch.setenv("GEMINI_AUTH", "apikey")
+    monkeypatch.setenv("GOOGLE_API_KEY", KEY)
+    monkeypatch.setenv("GOOGLE_CLOUD_PROJECT", "proj-test")
+    monkeypatch.delenv("ADK_MODELS_JSON", raising=False)
+    if retry_flag is None:
+        monkeypatch.delenv("ADK_GEMINI_RETRY", raising=False)
+    else:
+        monkeypatch.setenv("ADK_GEMINI_RETRY", retry_flag)
+
+    model = agent_models.resolve("controller", "gemini-4-argon")
+    assert isinstance(model, Gemini) and model.model == "gemini-4-argon"
+    api = model.api_client._api_client
+    assert api.vertexai and api.api_key == KEY and api.project is None
+    if retry_flag != "0":
+        assert model.retry_options.attempts == 4
+
+    monkeypatch.setenv("GEMINI_AUTH", "adc")
+    adc_model = agent_models.resolve("controller", "gemini-4-argon")
+    if retry_flag == "0":
+        assert adc_model == "gemini-4-argon"
+    else:
+        assert isinstance(adc_model, Gemini) and adc_model.model == "gemini-4-argon"
+        assert adc_model.retry_options.attempts == 4
+        # Inspect configuration only: initializing an ADC client would need cloud credentials.
+        assert "api_key" not in (adc_model.client_kwargs or {})
