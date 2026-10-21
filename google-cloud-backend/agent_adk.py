@@ -576,8 +576,10 @@ def run(env, request_text, flash_model, agent_model, config_for, adk=None, log=p
         elif len(allowed) < 2:
             subtasks = []
         else:
+            plan_started = time.monotonic()
             subtasks = parse_plan(final_text(run_agent(adk, planner, request_text, 2,
                 on_thought=lambda t: thinking(f"[Plan] {t}"), cancelled=cancelled, observer=shared.trace), "controller"), allowed)
+            log(f"[dua-agent] adk plan {time.monotonic() - plan_started:.1f}s")
         if not subtasks and extensions:
             subtasks = [{"kind": "research", "task": request_text, "title": "Research"}]
         if not subtasks:
@@ -604,7 +606,12 @@ def run(env, request_text, flash_model, agent_model, config_for, adk=None, log=p
                 before_model_callback=context(helper_model_callback(adk, cancelled, SUB_STEPS, on_limit)),
                 **({"after_model_callback":shared.trace.end_model} if shared.trace else {}), tools=tools))
 
+        stage_marks = {}
+
         def merge_instruction(ctx):
+            if "merge" not in stage_marks and "helpers" in stage_marks:
+                stage_marks["merge"] = time.monotonic()
+                log(f"[dua-agent] adk helpers {stage_marks['merge'] - stage_marks['helpers']:.1f}s")
             for i, sub in enumerate(subtasks):
                 status = "model call limit reached" if sub["kind"] in limited else "done"
                 progress(CHIPS[i], f"{sub['title']}: {status}", "done")
@@ -674,9 +681,12 @@ def run(env, request_text, flash_model, agent_model, config_for, adk=None, log=p
             session_options = {"id": env["adk_run_id"], "owner": env["owner_id"], "resume": saved is not None,
                                "state": {"dua_schema": 1, "dua_plan": subtasks, "dua_request": env.get("adk_request", {})}}
             env["enqueue"]("event", {"type": "agent_session", "runId": env["adk_run_id"], "resumable": True})
+        stage_marks["helpers"] = time.monotonic()
         events = run_agent(adk, root, request_text, SUB_STEPS * len(helpers) + 2 + (2 if review else 0),
                            on_thought=lambda t: thinking(f"[Merge] {t}"), cancelled=cancelled,
                            on_text=live, stream_author="merger", observer=shared.trace, session_options=session_options)
+        if "merge" in stage_marks:
+            log(f"[dua-agent] adk merge {time.monotonic() - stage_marks['merge']:.1f}s")
         draft = final_text(events, "merger")
         if not review:
             return draft
@@ -689,10 +699,15 @@ def run(env, request_text, flash_model, agent_model, config_for, adk=None, log=p
         links = set(re.findall(r"https://github\.com/\S+/pull/\d+", draft))
         return revised if revised and all(link in revised for link in links) else draft
 
-    try:
+    def deadline_seconds():
+        # The CI wait budget is added only once this request really uses the PR flow
+        # (shared.prflow is created the first time a PR/CI tool runs), not for every request.
         import pr_flow
-        answer = agent_tools.call_with_deadline(pipeline, TOTAL_SECONDS + (pr_flow.CI_SECONDS if pr_flow.enabled() else 0),
-                                                cancel=cancelled)
+        uses_pr = pr_flow.enabled() and shared.prflow is not None
+        return TOTAL_SECONDS + (pr_flow.CI_SECONDS if uses_pr else 0)
+
+    try:
+        answer = agent_tools.call_with_deadline(pipeline, deadline_seconds, cancel=cancelled)
     except agent_tools.Cancelled:
         shared.cancelled = True
         shared.status = "cancelled"
@@ -700,7 +715,7 @@ def run(env, request_text, flash_model, agent_model, config_for, adk=None, log=p
         return agent_tools.STOPPED_TEXT, Result(shared)
     except agent_tools.DeadlineExceeded:
         shared.status = "deadline"
-        log(f"[dua-agent] adk deadline {TOTAL_SECONDS}s reached")
+        log(f"[dua-agent] adk deadline {deadline_seconds()}s reached")
         answer = "Agent stopped: the parallel helpers took longer than the time limit. Please try a smaller request."
         if pr_text:
             answer += "\n\n" + pr_text[0]
