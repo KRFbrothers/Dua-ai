@@ -101,6 +101,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         override fun clearAttachments() = this@ChatViewModel.clearAttachments()
         override fun refreshSyncBusy() { this@ChatViewModel.refreshSyncBusy() }
         override fun syncBlocked() = this@ChatViewModel.syncBlocked()
+        override fun cacheBlocked() = this@ChatViewModel.cacheBlocked()
         override fun currentDeletionIds() = this@ChatViewModel.currentDeletionIds()
         override fun onDeviceAiEnabled() = this@ChatViewModel.onDeviceAiEnabled()
     } }
@@ -1208,7 +1209,13 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private fun liveProjectBusy() = voiceFeature._liveStart.value.busy || com.dua.ai.voice.live.LiveVoiceController.active
     // File preparation/reading is a reply-shaped action: the picker that started it owns the draft
     // and the message list until it finishes, so anything gated by syncBlocked() must wait too.
-    private fun syncBlocked() = account.state.value.busy || _dataBusy.value || _isTyping.value || liveProjectBusy() ||
+    private fun syncBlocked() = cacheBlocked() || _isTyping.value
+    /**
+     * The half of [syncBlocked] that guards the *stored* state rather than a reply. A local delete
+     * rewrites that same state, so it must honour these conditions too — but not `_isTyping`, because
+     * deleting the open chat is exactly how a streaming reply is cancelled.
+     */
+    private fun cacheBlocked() = account.state.value.busy || _dataBusy.value || liveProjectBusy() ||
         _preparingFiles.value || _readingFiles.value ||
         _cloudPreview.value != null || _importPreview.value != null || _buildPr.value.values.any { it.creating }
     private fun refreshSyncBusy() = automaticSync.setBusy(syncBlocked())
