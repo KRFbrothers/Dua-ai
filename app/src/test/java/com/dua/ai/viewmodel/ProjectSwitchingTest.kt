@@ -37,6 +37,21 @@ class ProjectSwitchingTest {
         model = ChatViewModel(app).also { store.put("chat", it) }
     }
     @After fun teardown() { store.clear() }
+    /**
+     * resetSettings() writes the process-wide appearance DataStore from viewModelScope on the paused
+     * main Looper. Left unpumped, that write parks DataStore's single writer on Main for good, and the
+     * next class in this Robolectric sandbox that edits appearance (RetryResponseTest) hangs the worker.
+     */
+    private fun resetSettings() {
+        model.settingsNotice("")
+        model.resetSettings()
+        val until = System.nanoTime() + 10_000_000_000L
+        while ("reset" !in model.settingsStatus.value && System.nanoTime() < until) {
+            org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idleFor(20, java.util.concurrent.TimeUnit.MILLISECONDS)
+            Thread.sleep(2)
+        }
+        assertTrue("Timed out: appearance reset; status=${model.settingsStatus.value}", "reset" in model.settingsStatus.value)
+    }
     private fun persisted() = ChatHistoryCodec.decode(app.getSharedPreferences("dua_chat_history", 0).getString("history", null)!!).second
     @Suppress("UNCHECKED_CAST")
     private fun enableTasks(dueDates: Boolean = false) {
@@ -51,7 +66,7 @@ class ProjectSwitchingTest {
         assertTrue(model.saveTask("coding", null, "Dated", at))
         val task = model.localSettings.value.projects[1].tasks.single()
         assertTrue(model.toggleTask("coding", task.id))
-        model.resetSettings()
+        resetSettings()
         assertEquals(at, DevicePreferences(app).state.value.projects[1].tasks.single().dueAt)
     }
     @Test fun tasksStayWithProjectAndSurviveSettingsEditsResetAndViewModelRestart() {
@@ -64,7 +79,7 @@ class ProjectSwitchingTest {
         task = model.localSettings.value.projects.single { it.id == "coding" }.tasks.single()
         assertTrue(task.completed)
         assertTrue(model.saveProject("coding", "Code work", "Use Kotlin", false))
-        model.resetSettings()
+        resetSettings()
         val reopened = ChatViewModel(app).also { store.put("reopened", it) }
         assertEquals(listOf(task), reopened.localSettings.value.projects.single { it.id == "coding" }.tasks)
         assertTrue(reopened.localSettings.value.projects.single { it.id == "business" }.tasks.isEmpty())
@@ -143,7 +158,7 @@ class ProjectSwitchingTest {
         assertTrue(model.saveTask("coding", null, "Review"))
         assertTrue(model.saveProject("coding", "Coding", "Use Kotlin", false))
         assertEquals(listOf("Private note"), model.localSettings.value.memory)
-        model.resetSettings()
+        resetSettings()
         val reopened = ChatViewModel(app).also { store.put("reopened", it) }
         val coding = reopened.localSettings.value.projects[1]
         assertEquals(com.dua.ai.projects.ProjectMemory(true, listOf("Prefer Compose")), coding.memory)
@@ -178,7 +193,7 @@ class ProjectSwitchingTest {
         assertTrue(model.saveProject("coding", "Coding", "Use Kotlin", false))
         model.selectProject("coding"); model.updateDraft("Keep draft"); model.flushHistory()
         val projects = model.localSettings.value.projects
-        model.resetSettings()
+        resetSettings()
         assertEquals(projects, model.localSettings.value.projects)
         assertTrue(model.localSettings.value.memory.isEmpty())
         assertEquals("coding", persisted().first().projectId)

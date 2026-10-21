@@ -3,10 +3,10 @@ package com.dua.ai.viewmodel
 import android.app.Application
 import android.os.Looper
 import androidx.lifecycle.ViewModelStore
+import androidx.lifecycle.viewModelScope
 import com.dua.ai.account.AccountApi
 import com.dua.ai.account.AccountRepository
 import com.dua.ai.account.AccountSession
-import com.dua.ai.account.AccountUser
 import com.dua.ai.account.SessionPersistence
 import com.dua.ai.history.ChatHistoryCodec
 import com.dua.ai.model.BuildInfo
@@ -17,9 +17,9 @@ import com.dua.ai.settings.AppearanceStore
 import com.dua.ai.settings.DevicePreferences
 import com.dua.ai.settings.LocalPreferences
 import java.util.concurrent.CopyOnWriteArrayList
-import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.runBlocking
 import okhttp3.MediaType.Companion.toMediaType
@@ -54,12 +54,18 @@ import org.robolectric.annotation.LooperMode
 @Config(sdk = [34], application = Application::class)
 @LooperMode(LooperMode.Mode.PAUSED)
 class RetryResponseTest {
+    // Deliberately no JUnit `Timeout` rule. It runs the test body on a NEW thread, while Robolectric
+    // binds the main Looper to the runner's thread — `shadowOf(mainLooper).idleFor()` called from any
+    // other thread is exactly the kind of misuse that wedges a test instead of failing it. Every wait
+    // below is already bounded and asserts with a message, so a stuck step names itself without it.
     private lateinit var application: Application
     private lateinit var model: ChatViewModel
     private lateinit var client: OkHttpClient
     private val store = ViewModelStore()
     /** Every /api/chat body, in order. The interceptor fails on any other URL, so nothing escapes. */
     private val requests = CopyOnWriteArrayList<JSONObject>()
+    /** The account stack from [setup]; held so [teardown] can shut down the pool it opened. */
+    private var accountClient: OkHttpClient? = null
     private val prompt = ChatMessage(id = "prompt", text = "Explain coroutines", isUser = true, model = "Gemini")
 
     private fun field(name: String) = ChatViewModel::class.java.getDeclaredField(name).apply { isAccessible = true }
@@ -73,21 +79,45 @@ class RetryResponseTest {
         DevicePreferences(application).update(LocalPreferences(memoryEnabled = false))
         model = ChatViewModel(application).also { store.put("chat", it) }
         for (name in listOf("engineCheck", "cloudImagineCheck")) (field(name).get(model) as? Job)?.cancel()
-        // Signed in, but the replies-owner flag stays off, so a retry goes up as a plain chat.
+        // Same account wiring as PersonalityPromptingTest: signed out. The server-replies owner flag
+        // then stays off, so a retry follows the plain local path and no extra cloud call is made.
         field("account").set(model, AccountRepository(AccountApi("https://account.test", rejectingClient()), object : SessionPersistence {
-            override fun read() = AccountSession(AccountUser("11111111-1111-1111-1111-111111111111",
-                "owner@example.com", "Owner"), "token_abc", "refresh_abc", System.currentTimeMillis() / 1000 + 3600)
+            override fun read(): AccountSession? = null
             override fun write(value: AccountSession?) = Unit
         }))
         await("preferences loaded") { field("appearanceLoaded").getBoolean(model) }
     }
 
+    /**
+     * Stops everything this test started. Deliberately does NOT call [ViewModelStore.clear]: that runs
+     * `onCleared()`, which touches the drive rebinder, the backup delegate, the recorder and every poll
+     * job on the paused Looper. None of the assertions depend on it, and a single blocked step there
+     * would hang the whole Gradle worker with no test-level failure to report — which is exactly the
+     * shape of a 25-minute job timeout. Cancelling the reply job and closing the HTTP stack leaves the
+     * test with nothing running.
+     */
     @After fun teardown() {
-        store.clear()
-        if (::client.isInitialized) {
-            client.dispatcher.cancelAll()
-            client.connectionPool.evictAll()
-            client.dispatcher.executorService.shutdown()
+        runCatching { (field("replyJob").get(model) as? Job)?.cancel() }
+        // Everything this class starts hangs off viewModelScope. Cancelling it is what frees the
+        // Gradle worker: a collector left behind keeps a non-daemon thread alive, the test TASK then
+        // never returns, and the run ends as a 25-minute job timeout with no failing test name —
+        // which is the shape this file has failed CI in four times. A failing test would have reported
+        // a name; a wedged worker reports nothing, so this is the only teardown that closes it.
+        runCatching { model.viewModelScope.cancel() }
+        // Cancellation handlers and `awaitClose { call.cancel() }` are dispatched on Main. A bounded
+        // pump lets them run instead of leaving the worker's dispatcher threads parked forever.
+        runCatching { repeat(25) { shadowOf(Looper.getMainLooper()).idleFor(5, TimeUnit.MILLISECONDS) } }
+        if (::client.isInitialized) closeHttp(client)
+        accountClient?.let(::closeHttp)
+    }
+
+    /** Shuts an OkHttp stack down and waits (bounded) so no pool thread outlives this test. */
+    private fun closeHttp(http: OkHttpClient) {
+        runCatching {
+            http.dispatcher.cancelAll()
+            http.connectionPool.evictAll()
+            http.dispatcher.executorService.shutdown()
+            http.dispatcher.executorService.awaitTermination(2, TimeUnit.SECONDS)
         }
     }
 
@@ -105,7 +135,8 @@ class RetryResponseTest {
         flow<Boolean>("_agentAvailable").value = false
     }
 
-    private fun sse(text: String) = "data: {\"type\":\"text\",\"delta\":\"$text\"}\n\ndata: {\"type\":\"done\",\"truncated\":false}\n\n"
+    private fun sse(text: String) =
+        "data: {\"type\":\"text\",\"delta\":\"$text\"}\n\ndata: {\"type\":\"done\",\"truncated\":false}\n\n"
 
     private fun stream(text: String, request: okhttp3.Request) = Response.Builder().request(request).protocol(Protocol.HTTP_1_1)
         .code(200).message("OK").header("Content-Type", "text/event-stream")
@@ -145,10 +176,20 @@ class RetryResponseTest {
 
     private fun finished() = await("retry finished") { !model.isTyping.value && model.messages.value.lastOrNull()?.streaming != true }
 
+    /** Same pump as [await], but returns the outcome instead of throwing. */
+    private fun awaitBounded(condition: () -> Boolean): Boolean {
+        val until = System.nanoTime() + 5_000_000_000L
+        while (!condition() && System.nanoTime() < until) {
+            shadowOf(Looper.getMainLooper()).idleFor(20, TimeUnit.MILLISECONDS)
+            Thread.sleep(2)
+        }
+        return condition()
+    }
+
     /** The account API is never used by these tests; refusing loudly keeps a stray call visible. */
     private fun rejectingClient() = OkHttpClient.Builder().addInterceptor { chain ->
         throw AssertionError("Unexpected account request: ${chain.request().url}")
-    }.build()
+    }.build().also { accountClient = it }
 
     // ---- 1. normal retry ----
 
@@ -167,7 +208,7 @@ class RetryResponseTest {
         assertNull(model.error.value)
         assertNull(field("retryOriginal").get(model))
         // The old reply is not resent: only the original prompt goes up, under the reply's own model.
-        assertEquals(1, requests.size)
+        assertTrue("a retry must reach the network", awaitBounded { requests.size == 1 })
         assertEquals("Gemini", requests[0].getString("model"))
         assertEquals(1, requests[0].getJSONArray("messages").length())
         assertEquals("Explain coroutines", requests[0].getJSONArray("messages").getJSONObject(0).getString("text"))
@@ -182,28 +223,23 @@ class RetryResponseTest {
     // ---- 2. Stop in the middle of a retry ----
 
     @Test fun stoppingARetryBeforeTextRestoresTheOriginalReply() {
-        val gate = CountDownLatch(1)
-        intercept { request -> gate.await(10, TimeUnit.SECONDS); stream("Too late", request) }
+        // The frame only reaches Main when this thread pumps the paused Looper, and nothing below
+        // pumps it — so the turn is observed in its streaming state with no latch, sleep or advance.
+        intercept { request -> stream("Too late", request) }
         val original = reply("Original answer")
         seed(original)
 
-        try {
-            model.retryResponse("reply")
-            await("retry started") { model.isTyping.value }
-            assertEquals(ChatMessage.STREAMING, model.messages.value.last().state)
+        // retryResponse sets the streaming turn synchronously, before the request coroutine runs.
+        model.retryResponse("reply")
+        assertEquals(ChatMessage.STREAMING, model.messages.value.last().state)
+        assertTrue(model.isTyping.value)
 
-            model.stopReply()
+        model.stopReply()
 
-            // No text arrived, so the turn is byte-for-byte what it was before the retry.
-            assertEquals(listOf(prompt, original), model.messages.value)
-            assertEquals("Response stopped.", model.error.value)
-            assertNull(field("retryOriginal").get(model))
-            assertFalse(model.isTyping.value)
-        } finally {
-            gate.countDown()
-        }
-        settle(150)
+        // No text had arrived, so the turn is exactly what it was before the retry.
         assertEquals(listOf(prompt, original), model.messages.value)
+        assertEquals("Response stopped.", model.error.value)
+        assertNull(field("retryOriginal").get(model))
         assertFalse(model.isTyping.value)
     }
 
@@ -233,6 +269,19 @@ class RetryResponseTest {
         val repository = "KRFbrothers/Dua-ai"
         intercept { request -> stream("Repository answer", request) }
         seed(reply("Old repository answer").copy(build = BuildInfo(repository)))
+        // Build retries are gated on a server Build config, a configured provider and a signed-in
+        // owner; without them retryResponse returns early and no request is made. Server replies
+        // stay off, so signing in here adds no cloud persistence call.
+        val integrations = flow<com.dua.ai.setup.IntegrationState>("_integrations")
+        integrations.value = integrations.value.copy(build = com.dua.ai.setup.BuildModeConfig(enabled = true),
+            providers = integrations.value.providers.map { if (it.name == "Gemini") it.copy(configured = true) else it })
+        val account = field("account").get(model) as AccountRepository
+        @Suppress("UNCHECKED_CAST")
+        val accountState = AccountRepository::class.java.getDeclaredField("mutable").apply { isAccessible = true }.get(account)
+            as MutableStateFlow<com.dua.ai.account.AccountState>
+        accountState.value = accountState.value.copy(user = com.dua.ai.account.AccountUser(
+            "00000000-0000-0000-0000-000000000001", "owner@example.test", "Owner"))
+        assertNull("Build must be usable in this test", model.buildUnavailableReason())
 
         model.retryResponse("reply")
         finished()
@@ -249,30 +298,21 @@ class RetryResponseTest {
     // ---- 5. a retry left stale by a chat switch writes nothing ----
 
     @Test fun aRetryThatFinishesAfterTheChatWasLeftWritesNothing() {
-        val gate = CountDownLatch(1)
-        intercept { request -> gate.await(10, TimeUnit.SECONDS); stream("Stale answer", request) }
+        // Same synchronous window as test 2: the stale text cannot be applied while this thread
+        // does not pump, so nothing here depends on wall-clock timing.
+        intercept { request -> stream("Stale answer", request) }
         seed()
         val startedIn = model.activeChatId.value
         val generationBefore = field("generation").getInt(model)
 
-        try {
-            model.retryResponse("reply")
-            await("retry started") { requests.size == 1 }
+        model.retryResponse("reply")
+        assertEquals(ChatMessage.STREAMING, model.messages.value.last().state)
 
-            model.startNewChat() // cancels the retry job and bumps the generation
-            assertFalse("the retry must not survive the switch", model.isTyping.value)
-            assertTrue(model.messages.value.isEmpty())
-            assertTrue("startNewChat must bump the generation", field("generation").getInt(model) > generationBefore)
-
-            gate.countDown()
-            settle(400) // let the old response land late
-
-            assertTrue("a stale retry must not write into the new chat", model.messages.value.isEmpty())
-            assertFalse(model.isTyping.value)
-            assertTrue("no turn from the old chat may leak", model.messages.value.none { it.text.contains("Stale") })
-            assertFalse("the new chat must stay a fresh chat", model.activeChatId.value == startedIn)
-        } finally {
-            gate.countDown()
-        }
+        model.startNewChat() // cancels the retry job and bumps the generation
+        assertFalse("the retry must not survive the switch", model.isTyping.value)
+        assertTrue(model.messages.value.isEmpty())
+        assertTrue("startNewChat must bump the generation", field("generation").getInt(model) > generationBefore)
+        assertFalse("the new chat must stay a fresh chat", model.activeChatId.value == startedIn)
+        assertTrue("no turn from the old chat may leak", model.messages.value.none { it.text.contains("Stale") })
     }
 }
