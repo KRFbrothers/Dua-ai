@@ -33,7 +33,9 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.Timeout
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
@@ -52,6 +54,15 @@ import org.robolectric.annotation.LooperMode
 @Config(sdk = [34], application = Application::class)
 @LooperMode(LooperMode.Mode.PAUSED)
 class RetryResponseTest {
+    /**
+     * A hang in this class must name itself. Without this rule a stuck test blocks the Gradle
+     * worker until the workflow's 25-minute job timeout kills it, and the run reports
+     * `conclusion: cancelled` with no test name and no log line explaining where it stopped —
+     * which is exactly how this file has failed three times. With it, the offending method fails
+     * in seconds and the report says which one.
+     */
+    @get:Rule val noHang: Timeout = Timeout.seconds(60)
+
     private lateinit var application: Application
     private lateinit var model: ChatViewModel
     private lateinit var client: OkHttpClient
