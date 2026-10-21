@@ -250,6 +250,17 @@ fun DuaNavHost(viewModel: ChatViewModel, voice: ReplyVoice, notificationRoute: P
                 onOpenVoice = { navigator.open(DuaDestination.Voice) }, onOpenSetup = { navigator.open(DuaDestination.FeatureSetup) },
                 onOpenVoiceMode = { navigator.open(if (viewModel.liveVoiceAvailable()) DuaDestination.LiveVoice else DuaDestination.HandsFree, haptic = false) })
         }
+        composable(DuaDestination.AgentWorkspaces.route) {
+            BackHandler { navigator.back() }
+            BusyBackGuard(viewModel)
+            com.dua.ai.ui.agent.AgentWorkspacesScreen(viewModel.account, busy = typing || dataBusy,
+                onBack = navigator::back, onContinue = { id ->
+                    if (viewModel.resumeCodingCheckpoint(id)) {
+                        navigator.open(DuaDestination.Agent)
+                        true
+                    } else false
+                })
+        }
         composable(DuaDestination.Projects.route) {
             BackHandler { exitFeature() }
             BusyBackGuard(viewModel)

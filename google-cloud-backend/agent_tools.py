@@ -457,6 +457,8 @@ class AgentRun:
             if name == "propose_changes" and self.coding is not None:
                 args = self.coding.prepare_proposal(args)
             stored = agent_safety.prepare(name, args)
+            if name == "propose_changes" and self.coding is not None:
+                stored.update(self.coding.preview_proposal(stored))
             if spec:
                 revision = stored.pop("__dua_tool_revision", None)
                 if not spec.write or revision != spec.identity:
@@ -511,6 +513,8 @@ class AgentRun:
         """run_tool with a hard deadline; a slow tool returns an error to the model instead of hanging."""
         seconds = search_seconds() if name == "google_search" else SLOW_TOOL_SECONDS.get(name, TOOL_SECONDS)
         started = time.monotonic()
+        import coding_ui
+        activity = coding_ui.started(self, name, args)
         trace = self.env.get("trace")
         if trace:
             trace.emit("tool.start", tool=name)
@@ -524,6 +528,7 @@ class AgentRun:
             result = {"error": "Stopped: the app disconnected."}
         except DeadlineExceeded:
             result = {"error": f"{name} timed out after {seconds}s. Continue without it."}
+        coding_ui.completed(self, name, result, activity)
         if sum(len(e) for e in self.evidence) < 12000:
             try:
                 self.evidence.append(f"{name}: {json.dumps(result, ensure_ascii=False, default=str)[:1500]}")

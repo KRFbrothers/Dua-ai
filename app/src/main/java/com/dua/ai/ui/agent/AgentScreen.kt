@@ -70,13 +70,14 @@ fun AgentScreen(viewModel: ChatViewModel, onBack: () -> Unit, voice: ReplyVoice?
             AgentTask.Research -> openTask()
             AgentTask.GitHub -> openTask(GITHUB_AGENT_PROMPT)
             AgentTask.Briefing -> openTask(briefingPrompt(), send = true)
-        } }, onSend = { openTask(it, send = true) }, onOpenFiles = { showFiles = true })
+        } }, onSend = { openTask(it, send = true) }, onOpenFiles = { showFiles = true },
+        onOpenWorkspaces = { onOpenDestination(DuaDestination.AgentWorkspaces) })
 }
 
 @Composable
 internal fun AgentContent(available: Boolean, busy: Boolean = false, onBack: () -> Unit,
     onNewTask: () -> Unit, onRefresh: () -> Unit = {}, onTask: (AgentTask) -> Unit, onSend: (String) -> Unit,
-    showChrome: Boolean = true, onOpenFiles: (() -> Unit)? = null) {
+    showChrome: Boolean = true, onOpenFiles: (() -> Unit)? = null, onOpenWorkspaces: (() -> Unit)? = null) {
     var draft by rememberSaveable { mutableStateOf("") }
     val c = PageTheme.colors
     val enabled = available && !busy
@@ -104,6 +105,10 @@ internal fun AgentContent(available: Boolean, busy: Boolean = false, onBack: () 
                     onOpenFiles?.let { open ->
                         Spacer(Modifier.height(AgentSizes.cardGap))
                         AgentTaskCard("Files", "Text", taskSurface, enabled = !busy, hint = "Documents Agent can search") { open() }
+                    }
+                    onOpenWorkspaces?.let { open ->
+                        Spacer(Modifier.height(AgentSizes.cardGap))
+                        AgentTaskCard("Saved drafts", "Coding", taskSurface, enabled = !busy, hint = "Continue a saved coding workspace") { open() }
                     }
                     if (!available) {
                         Spacer(Modifier.height(Spacing.md))

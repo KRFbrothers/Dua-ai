@@ -29,7 +29,7 @@ enum class DuaDestination(val route: String) {
     Account("settings/account"),
     EmailAccount("settings/account/email"),
     Accent("settings/accent"),
-    Images("images"), Library("library"), Agent("agent"), Work("work"), Plugins("plugins"),
+    Images("images"), Library("library"), Agent("agent"), AgentWorkspaces("agent/workspaces"), Work("work"), Plugins("plugins"),
     General("settings/general"), UsageLimits("settings/usage-limits"), Safety("settings/safety"),
     SecurityLogin("settings/security-login"), Storage("settings/storage"), HistoryData("settings/history-data"),
     SettingsSearch("settings/search"), AvatarEdit("settings/avatar"), Projects("projects"), ProjectChat("projects/chat");
