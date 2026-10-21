@@ -1664,3 +1664,131 @@ Har test apna `ChatViewModel` + apna `OkHttpClient` + saaf prefs. Koī test doos
 1. **`deleteChat` `clearAttachments()` nahi bulata** — attachment agle chat mein chala jaata hai (`startNewChat`/`clearAllChats` clear karte hain, `deleteChat` nahi).
 2. **`deleteChat` par `syncBlocked()` hi nahi** — woh sirf `if (_dataBusy.value) return` karta hai. Is fix ne `deleteServerChat` theek kiya; **local delete ka guard abhi bhi `_isTyping`/pick miss karta hai**. Yeh jaan-boojh kar alag rakha (scope: `deleteServerChat`).
 3. **`liveProjectBusy()`, `_cloudPreview`, `_importPreview`, `buildPr.creating`** — teeno untested hain.
+
+---
+
+## 🧷 `deleteChat` (local path) guard gap — ab shared guard par (21 Oct 2026)
+
+PR **[#323](https://github.com/KRFbrothers/Dua-ai/pull/323)** · branch `fix/delete-chat-guard` · HEAD `d215d23` · base `main` @ `3a31dd8` · **merge nahi kiya** (aapka decision)
+
+### 🐞 Bug — kya galat tha
+
+`deleteServerChat` PR #322 ke baad `syncBlocked()` par gated hai. **`deleteChat` (local path) abhi bhi ek hi flag dekhta tha:**
+
+```kotlin
+// pehle — ChatHistory.kt:250
+fun deleteChat(id: String) {
+    if (_dataBusy.value) return
+```
+
+Operation wahi 4 buffers rewrite karta hai jo server path karta hai — `_messages`, `_draft`, `_savedChats`, aur history file (`saveHistory()`). Aur `_dataBusy` sirf **delete/clear chhap** ke dauraan true hota hai. Attachment picker, cloud review, import preview, build PR aur live voice usse set hi nahi karte — isliye local delete unn sab ke beech mein aa sakta tha aur **active chat unke neeche se swap** ho jaata.
+
+**Expected:** jo bhi flow draft/history ka owner hai, uske chalte waqt delete refuse ho.
+**Actual:** delete chalti thi — `activeId` rotate, `_messages` khaali, history rewrite, jabki woh flow abhi usi state par kaam kar raha tha.
+
+### 📊 Gap — `syncBlocked()` ke 9 conditions vs local delete
+
+| # | Condition | `deleteServerChat` (pehle) | `deleteChat` (pehle) | Ab |
+|---|---|---|---|---|
+| 1 | `account.state.value.busy` | ✅ | ❌ **leak** | ✅ |
+| 2 | `_dataBusy` | ✅ | ✅ | ✅ |
+| 3 | `_isTyping` | ✅ | ❌ **jaan-boojh** | ❌ **jaan-boojh** |
+| 4 | `liveProjectBusy()` (live voice) | ✅ | ❌ **leak** | ✅ |
+| 5 | `_preparingFiles` | ✅ (#322) | ❌ **leak** | ✅ |
+| 6 | `_readingFiles` | ✅ (#322) | ❌ **leak** | ✅ |
+| 7 | `_cloudPreview != null` | ✅ | ❌ **leak** | ✅ |
+| 8 | `_importPreview != null` | ✅ | ❌ **leak** | ✅ |
+| 9 | `_buildPr.values.any { it.creating }` | ✅ | ❌ **leak** | ✅ |
+
+**9 mein se 6 conditions local delete par missing thi.** Sirf `_dataBusy` common tha.
+
+**`_isTyping` jaan-boojh kar bahar:** open chat ko delete karna **hi** streaming reply ko cancel karne ka tareeka hai. `DeleteChatTest` test 3 ("deleting while a retry streams cancels it") aur test 4 ("a cancelled stream never writes again") isi par depend karte hain. Guard ko `syncBlocked()` ka poora copy banane se woh dono toot jaate aur streaming reply **orphan** ho jaata. Isliye fix ne sirf **stored-state half** liya.
+
+### 🔧 Fix — 13 insertions, 2 deletions
+
+```kotlin
+// ChatViewModel.kt — syncBlocked() ab usi predicate se compose hota hai (duplicate guard nahi)
+private fun syncBlocked() = cacheBlocked() || _isTyping.value
+/** The half of syncBlocked that guards the *stored* state rather than a reply. */
+private fun cacheBlocked() = account.state.value.busy || _dataBusy.value || liveProjectBusy() ||
+    _preparingFiles.value || _readingFiles.value ||
+    _cloudPreview.value != null || _importPreview.value != null || _buildPr.value.values.any { it.creating }
+```
+
+```kotlin
+// ChatHistory.kt
+fun deleteChat(id: String) {
+    if (cacheBlocked()) return
+```
+
+- **Ek hi source of truth.** `syncBlocked()` ka behaviour byte-identical (wahi 9 conditions, wahi order) — sirf uske terms `cacheBlocked()` mein nikal gaye.
+- `HistoryHost` interface mein `fun cacheBlocked(): Boolean` (internal), `ChatViewModel` ke **5 host overrides** mein `override fun cacheBlocked() = this@ChatViewModel.cacheBlocked()`, aur ek `private fun cacheBlocked()`.
+- **Public API zero change** — `syncBlocked()`/`deleteChat()` ke naam, signature, return type same. Sirf predicate ka body.
+
+### 🧪 Naya test file — `DeleteChatGuardTest.kt` (10 tests)
+
+| # | Case | Kya assert hota hai |
+|---|---|---|
+| 1 | **`_preparingFiles` → refuse** (regression) | poora refusal contract; **fix se pehle FAIL hota hai** |
+| 2 | `_readingFiles` → refuse | wahi contract |
+| 3 | `_cloudPreview` → refuse, `_importPreview` → refuse | dono previews, dono alag alag |
+| 4 | `_buildPr[reply].creating` → refuse; `creating=false` + error → allow | guard **narrow** hai, sirf live hit block karta hai |
+| 5 | `account.busy` → refuse; clear → allow | guard live hai, sticky nahi |
+| 6 | live voice starting → refuse; clear → allow | wahi |
+| 7 | refusal **side-effect free**, picker khatam par accept | disk string **byte-identical** + `savedChats`/`activeChatId`/`messages`/`draft` unchanged |
+| 8 | teen blockers ek saath = **ek** refusal | ek-ek clear karne par bhi sahi; dono clear → accept |
+| 9 | **`_isTyping` guard mein nahi** | streaming retry delete se **cancel** hota hai, block nahi; `replyJob` inactive + null |
+| 10 | background delete bhi gated | picker draft ka owner hai, sirf open chat ka nahi |
+
+Har refusal par assert: stored history string unchanged, `savedChats` ids unchanged, `activeChatId` unchanged, `messages` unchanged, `draft` unchanged.
+
+### 📈 Coverage — pehle vs ab
+
+| Kya | Pehle | Ab |
+|---|---|---|
+| `deleteChat` ke guards | **1/9** (sirf `_dataBusy`) | **8/9** (`_isTyping` jaan-boojh kar out) |
+| File preparation par local-delete assertions | **0** | **4 tests** |
+| Refusal ke side-effect-free proof | **0** | har guard test mein |
+| "Guard narrow hai" (`_isTyping` allow) lock | implicit | **explicit test 9** |
+| Background-delete guard | **0** | **1 test** |
+
+### ⏱ Determinism — PR #316 ka hang dobara nahi
+
+| Cheez | Status |
+|---|---|
+| `Thread.sleep` | ❌ nahi — 0 |
+| `CountDownLatch` | ❌ nahi — 0 |
+| Blocking interceptor | ❌ nahi — `/api/chat` interceptor turant poora SSE turn deta hai, kabhi block nahi karta |
+| Real network | ❌ nahi — account interceptor har request par `AssertionError` throw karta hai |
+| Paused looper test body mein pump | ❌ nahi — sirf `@After` ka bounded drain (25×5 ms) |
+| JUnit `@Rule Timeout` | jaan-boojh kar nahi (body dusre thread par, `idleFor()` wedge) |
+| Kis cheez par assert | refusal ka koi bhi side effect nahi hota; accepted path `activeId` rotate + `saveHistory()` — **sab synchronous** |
+| Naya framework/dependency | ❌ koi nahi |
+
+Har test apna `ChatViewModel` + apna `OkHttpClient` + saaf prefs.
+
+### 🔍 Jo test likhte waqt confirm hua (bug nahi, design)
+
+**`syncBlocked()` ko as-is copy karna galat hota.** Uske 9 conditions ka ek (`_isTyping`) reply-lifecycle se hai, stored state se nahi. Local delete ke liye wahi ek condition **ulta** kaam karti hai — delete hi reply ko cancel karta hai. Isliye fix ne predicate ko do hisson mein baanta: `cacheBlocked()` (stored state, 8 conditions) aur `_isTyping` (reply). Test 9 isi asymmetry ko lock karta hai, taaki koi future refactor galti se `deleteChat` ko `syncBlocked()` par shift na kar de.
+
+### 📋 Merge checklist
+
+```bash
+./gradlew assembleDebug
+./gradlew testDebugUnitTest
+./gradlew lint
+```
+
+> Sandbox note: cgroup **2 GiB** — local Gradle possible nahi. Confirmation CI se.
+
+### ⚠️ Jo abhi bhi khula hai (fix nahi kiya)
+
+1. **`deleteChat` `clearAttachments()` nahi bulata** — composer ka draft attachment agle chat mein chala jaata hai. `startNewChat`/`clearAllChats` clear karte hain, `deleteChat` nahi.
+2. **`deleteChat` (active branch) `cancelReply()` ke baad `clearAttachments()` nahi** — upar wala hi gap, active path par.
+3. **`_isTyping` ki jagah koi explicit "reply is cancellable" concept nahi** — local delete abhi bhi `cancelReply()` par depend karta hai, guard par nahi. Yeh sahi hai, par ek comment/naam se document hona chahiye.
+4. **`syncBlocked()` ke 3 conditions abhi bhi untested** — `liveProjectBusy()` (server path), `_cloudPreview`, `_importPreview` (server path). Is PR ne inhe **local** path par cover kiya, server path par nahi.
+
+### Aage kya
+
+`deleteChat` ka `clearAttachments()` decision (aapka call), phir `ChatModes.kt` split — mode-freeze test pehle se green hai (7 tests), splitting ke waqt "pehle test, phir move".
+
