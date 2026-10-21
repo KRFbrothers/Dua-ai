@@ -103,8 +103,9 @@ protected-path, hostile-link, output-limit and collector-failure regression
 coverage. Then verify real containers and engine → edit → command → import → save
 → restart → restore → approved PR end to end. None of those checks ran here.
 
-App terminal/diff/checkpoint views, persistent terminals, full Git checkout/rebase,
-binary/deletion/mode import, richer CI evidence and larger workers remain future
-work.
+Persistent terminals, full Git checkout/rebase, binary/deletion/mode import,
+existing-PR repair and larger workers remain future work.
+
+Read-only CI evidence is described in [CODING_CI.md](CODING_CI.md).
 
 Android activity and saved-draft controls are described in [CODING_ACTIVITY.md](CODING_ACTIVITY.md).

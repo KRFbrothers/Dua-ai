@@ -53,3 +53,5 @@ APK release is performed by this change. Merge the parent workspace/runner/
 checkpoint phases before this UI phase, deploy the matching engine separately,
 and verify authentication, cancellation, diff/approval identity and restore on a
 device before treating the feature as ready.
+
+Read-only PR CI snapshots are described in [CODING_CI.md](CODING_CI.md).
