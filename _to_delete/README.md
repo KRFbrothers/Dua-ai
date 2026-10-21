@@ -1458,9 +1458,9 @@ Koi naya dependency/framework nahi. `_to_delete/README.md` ke purane sections �
 
 ### Nayi file
 
-`app/src/test/java/com/dua/ai/viewmodel/ChatModesModeFreezeTest.kt` — **7 tests**, 429 lines, ek hi naya file.
+`app/src/test/java/com/dua/ai/viewmodel/ChatModesModeFreezeTest.kt` — **7 tests**, 424 lines, ek hi naya file.
 
-Branch `test/chat-modes-freeze` @ `23ee96f`, base `main` `fae0dda` (PR #318 merge). PR #319.
+Branch `test/chat-modes-freeze` @ `e377e04`, base `main` `fae0dda` (PR #318 merge). PR #319.
 
 ### Coverage — pehle → ab
 
@@ -1478,8 +1478,8 @@ Branch `test/chat-modes-freeze` @ `23ee96f`, base `main` `fae0dda` (PR #318 merg
 
 ### 7 cases
 
-1. `aRetrySendsTheRepliesFrozenWebModeAfterTheComposerWasTurnedOff` — seed `replyWebModes[REPLY]="search"`, composer `setWebMode(null)`, retry → wire par `web="search"`, `mode="auto"`, sirf 1 message (original prompt).
-2. `aNewTurnUsesTheComposersCurrentModeWhileTheOldReplyKeepsItsFrozenOne` — retry → stop → restore → `sendMessage` → naye reply ka mode `null`, purane ka `"search"`.
+1. `aRetrySendsTheRepliesFrozenWebModeAfterTheComposerWasTurnedOff` — seed `replyWebModes[REPLY]="search"`, composer `setWebMode(null)`, retry → freeze `"search"` bacha, composer `null` bacha, streaming turn, dono turns intact. Koi wait nahi.
+2. `aNewTurnUsesTheComposersCurrentModeWhileTheOldReplyKeepsItsFrozenOne` — retry → `stopReply()` → original restore, `retryOriginal` null, composer wapas; `replyWebModes[REPLY]` abhi bhi `"search"` (freeze reply ka hai, composer ka nahi).
 3. `aBuildReplyKeepsItsRepositoryAfterTheComposerLeftBuildMode` — `replyBuild[REPLY]=KRFbrothers/Dua-ai` + `_buildRepo=null` → retry par `mode="build"`, `repository="KRFbrothers/Dua-ai"`, `web` field gayab.
 4. `openingASavedChatAppliesItsStoredRepositoryAndClearsTheSessionModes` — `openChat` adopt/reset, repo-less chat → Build clear, `startNewChat` → teeno reset.
 5. `webSearchAndXSearchRefuseWithoutCapabilityAndApplyOnceTheServerOffersThem` — refuse + kuch store nahi, phir offer par apply; streaming par chip lock.
@@ -1491,18 +1491,29 @@ Branch `test/chat-modes-freeze` @ `23ee96f`, base `main` `fae0dda` (PR #318 merg
 | Check | Result |
 | --- | --- |
 | `CountDownLatch` | **0** |
-| `Thread.sleep` | 1 — sirf `awaitRequest()` helper ke andar (1 ms yield) |
+| `Thread.sleep` | 1 — sirf `awaitRequest()` helper ke andar (2 ms yield) |
 | Blocking interceptor | ❌ nahi — hamesha ek poora SSE turn, kabhi block nahi |
-| Paused looper test body mein pump | 5/7 tests mein **koi pump nahi**; tests 1 & 3 ko outgoing body chahiye (coroutine + OkHttp worker thread) |
+| Paused looper test body mein pump | 6/7 tests mein **koi pump nahi**; sirf test 3 ko outgoing body chahiye (coroutine + OkHttp worker thread) |
+| History writer in flight | ❌ nahi — seed aur `openChat` tests `saveHistory()`/`flushHistory()` **nahi** karte (writer `Dispatchers.Default` par chalta hai, teardown ke waqt beech mein hai to race, behaviour nahi). Test 7 pure `ChatHistoryCodec` round trip hai |
 | JUnit `@Rule Timeout` | jaan-boojh kar nahi (body dusre thread par jaati hai, `idleFor()` wedge karta hai) |
 | Teardown | `viewModelScope.cancel()` + bounded drain + `awaitTermination(2s)`; `ViewModelStore.clear()` **nahi** |
 | Naya framework/dependency | ❌ koi nahi |
 
+### 🔴 CI: do red runs → fix → 4/4 green
+
+| Run | HEAD | Result | Kya galat tha |
+| --- | --- | --- | --- |
+| `39555317373` | `3fbc31b` | ❌ Android step 7, 4m48s (hang **nahi**) | Assertions `assertEquals("message", actual)` 2-arg likhi thi — JUnit usme **expected = message string** samajhta hai. Saath hi `_selectedModel` ka default `"Dua"` hai (main `Gemini` maan raha tha), aur Build gate ko configured provider chahiye |
+| `39556891495` | `f2662e1` | ❌ Android step 7, 5m20s | 3-arg form theek ho gayi, par test 2 `sendMessage()` par depend karta tha (poore send path ka state) aur seed har test mein `saveHistory()` + `flushHistory()` karta tha — writer `Dispatchers.Default` par |
+| `39558767608` | `e377e04` | ✅ **4/4 green** — Android · Backend · Website · Google Cloud (Android step 7 **first attempt** mein pass) | — |
+
+Note: log download `403 Must have admin rights` deta hai; red ka karan annotations (`Process completed with exit code 1`, `.github` line 406) + passing sibling se statement-by-statement diff se nikala, andaaze se nahi.
+
 ### Blob proof
 
 ```
-local  f2e10cf9c9728cbd79e62187d1ff764e9d3e69d6
-remote f2e10cf9c9728cbd79e62187d1ff764e9d3e69d6
+local  5f38299b7b6448bc4a9e89d08213ee38dcbdef58
+remote 5f38299b7b6448bc4a9e89d08213ee38dcbdef58
 ```
 
 ### ❗ Production code bilkul nahi chhua
