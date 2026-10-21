@@ -38,7 +38,9 @@ addition to the run-wide SDK limit. A capped helper returns an explicit incomple
 result and retains that status in progress, so the merger can finish honestly
 with the available results. Other helpers keep their own call allowance.
 
-Code proposals require matching, non-empty path/content lists of strings. A
+Code proposals require matching path/content lists of strings. Empty lists submit
+all staged edits from an active workspace; without staged edits they are rejected
+by the server before approval. A
 mismatch returns a repairable tool error before creating any approval; no file
 is silently dropped. Complete proposals still use the existing owner approval
 and repository validation rules.
@@ -57,6 +59,55 @@ After either path, optional add-ons run:
 
 See the [new ADK configuration and operations guide](ADK_IMPLEMENTATION.md) for
 SQL persistence, embeddings, provider routes, tools, telemetry and CLI settings.
+
+## Coding workspace: first implementation phase
+
+Coding tools now support a request-local text workspace on a fixed `main` commit.
+Both the normal tool loop and the ADK Code helper use the same implementation in
+[`coding_workspace.py`](../google-cloud-backend/coding_workspace.py), the existing
+allowlisted GitHub REST client, and Python's standard-library `difflib`. Google
+ADK remains the runtime; no additional agent framework or copied vendor source
+is introduced. No new secret, dependency or deployment setting is required.
+
+1. `workspace_status` pins the current commit and returns root `AGENTS.md`, if
+   present. With `path="app/.../File.kt"`, it returns applicable root-to-leaf
+   `AGENTS.md` guidance. Repository guidance supplies project conventions only;
+   it cannot change permissions, request secrets or authorize external actions.
+2. `list_files` and `read_file` then use that immutable tree, including staged
+   text. Read responses also carry scoped guidance. UTF-8 file contents are
+   bounded; a clipped read never replaces the full original stored server-side.
+   `search_code` remains a live GitHub index hint: candidates must be read at the
+   pinned commit, and newly staged content is not indexed.
+3. `edit_file(path, old_text, new_text)` requires one exact match in the current
+   draft. For a new file only, empty `old_text` uses `new_text` as full content.
+   Scoped guidance must have been returned before editing. File/byte caps and
+   protected paths apply; symlinks, submodules and directory replacement are
+   rejected. Existing executable file modes are preserved when creating the PR.
+4. `workspace_diff` shows a bounded unified diff. `propose_changes` with
+   `files=[]` (ADK: empty `paths`/`contents`) materializes **all** staged files
+   into the existing approval record, with server-selected repository/base SHA.
+   The model cannot choose the stored base SHA. A proposal using full file
+   contents remains supported when no staged edits exist.
+5. Approval executes those stored contents even after the original request has
+   ended. If `main` or the configured repository changed, the action is refused
+   before GitHub writes and the owner must request a fresh proposal. Otherwise,
+   it creates the usual new `dua-agent/` branch and PR from the pinned commit.
+   If `main` advances after the preflight check, the PR still uses the original
+   commit; GitHub review/merge checks remain necessary.
+
+Drafts themselves are held in bounded per-request memory, serialized with a
+lock. They are not a durable checkout and do not survive cancellation, process
+restart or a resumed ADK invocation. Completed approval records use the existing
+approval storage and expiration rules. Existing callers that do not start a
+workspace retain the previous read/full-content proposal flow.
+
+**Remaining phases:** an isolated checkout/container runner with terminal,
+dependency installation, resource/network limits and cancellation; durable
+workspace checkpoints/resume; app-facing diff review; richer CI failure evidence
+and end-to-end coding-task evaluation. The existing provider `run_python` tool
+is not a repository terminal. This phase does not run repository code, enable a
+runner, deploy the engine, or establish live readiness. Local tests were deferred
+at the owner's request; the new workspace behavior still requires verification.
 
 ## Settings (verified from code)
 
