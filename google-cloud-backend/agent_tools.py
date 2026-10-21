@@ -38,7 +38,18 @@ MAX_SECONDS = int(os.environ.get("AGENT_MAX_SECONDS", "600"))
 # Hard per-call deadlines so one slow model step or tool can never freeze the reply.
 STEP_SECONDS = int(os.environ.get("AGENT_STEP_SECONDS", "150"))
 TOOL_SECONDS = int(os.environ.get("AGENT_TOOL_SECONDS", "45"))
-SLOW_TOOL_SECONDS = {"google_search": 90, "run_python": 90, "generate_image": 120}
+
+
+def search_seconds():
+    """google_search deadline from AGENT_SEARCH_SECONDS (default 90, clamped to 10..300)."""
+    try:
+        value = int(os.environ.get("AGENT_SEARCH_SECONDS", "90"))
+    except ValueError:
+        return 90
+    return max(10, min(value, 300))
+
+
+SLOW_TOOL_SECONDS = {"google_search": search_seconds(), "run_python": 90, "generate_image": 120}
 TICK_SECONDS = 15
 LIMITS = {"google_search": 3, "fetch_url": 5, "run_python": 2, "generate_image": 1, "remember": 3,
           "calculator": 20, "current_time": 5, "recall": 3,
@@ -475,7 +486,7 @@ class AgentRun:
 
     def run_tool_timed(self, name, args):
         """run_tool with a hard deadline; a slow tool returns an error to the model instead of hanging."""
-        seconds = SLOW_TOOL_SECONDS.get(name, TOOL_SECONDS)
+        seconds = search_seconds() if name == "google_search" else SLOW_TOOL_SECONDS.get(name, TOOL_SECONDS)
         started = time.monotonic()
         trace = self.env.get("trace")
         if trace:
@@ -621,6 +632,7 @@ CANCEL_POLL_SECONDS = 1.0
 
 def call_with_deadline(fn, seconds, tick=None, every=TICK_SECONDS, cancel=None):
     """Runs fn() in a daemon thread; raises DeadlineExceeded after [seconds]. tick(elapsed) every [every] s.
+    [seconds] may be a callable; it is re-read on every wait so a run can extend its own limit mid-run.
     With [cancel], checks it about once a second and raises Cancelled as soon as it returns true.
 
     A timed-out call keeps running in the background until its own HTTP timeout ends it, but the loop moves on."""
@@ -639,12 +651,14 @@ def call_with_deadline(fn, seconds, tick=None, every=TICK_SECONDS, cancel=None):
     threading.Thread(target=work, name="dua-agent-call", daemon=True).start()
     started = time.monotonic()
     next_tick = every
+    limit = seconds if callable(seconds) else (lambda: seconds)
     while True:
         elapsed = time.monotonic() - started
-        left = seconds - elapsed
+        seconds_now = limit()
+        left = seconds_now - elapsed
         if left <= 0:
             raise DeadlineExceeded()
-        wait = min(next_tick - elapsed, left)
+        wait = min(next_tick - elapsed, left, 1.0 if callable(seconds) else left)
         if cancel is not None:
             wait = min(wait, CANCEL_POLL_SECONDS)
         if done.wait(max(wait, 0)):
@@ -652,7 +666,7 @@ def call_with_deadline(fn, seconds, tick=None, every=TICK_SECONDS, cancel=None):
         if cancel is not None and cancel():
             raise Cancelled()
         # Same ticks as before: after each full [every] wait, and once more when the deadline arrives.
-        if tick is not None and time.monotonic() - started >= min(next_tick, seconds):
+        if tick is not None and time.monotonic() - started >= min(next_tick, seconds_now):
             next_tick += every
             tick(int(time.monotonic() - started))
     if "error" in box:

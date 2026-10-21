@@ -66,7 +66,9 @@ SQL persistence, embeddings, provider routes, tools, telemetry and CLI settings.
 | `AGENT_THINKING_LEVEL` | `low` when `AGENT_MODEL` differs from `VERTEX_MODEL`, else `VERTEX_THINKING_LEVEL` | `low`, `medium` or `high` for the Agent model. |
 | `AGENT_ENGINE` | unset (tool loop) | `adk` turns on ADK parallel mode. |
 | `AGENT_SUB_STEPS` | `5` | Model calls per ADK helper. |
-| `AGENT_ADK_SECONDS` | `300` | Total time limit for the ADK path. |
+| `AGENT_ADK_SECONDS` | `300` | Total time limit for the ADK path. `AGENT_CI_SECONDS` is added on top only when the request actually uses the PR flow (`AGENT_TEST_CODE=1` and a PR/CI tool ran); the limit grows at that moment, mid-run. The deadline log line prints the real limit. Logs also show `adk plan Xs`, `adk helpers Xs`, `adk merge Xs`. |
+| `AGENT_SEARCH_SECONDS` | `90` | Deadline for one `google_search` call (clamped 10–300; invalid value = 90). |
+| `ADK_GEMINI_RETRY` | `0` | `1` gives the default Gemini model a short retry (2 attempts, 0.5–2 s backoff, on 429/5xx), same as `ADK_MODELS_JSON` Gemini routes. Off = plain model name (rollback: unset). |
 | `AGENT_VERIFY` | `0` | `1` turns on the self-check. |
 | `AGENT_VERIFY_SECONDS` | `45` | Critic time limit. |
 | `DUA_AGENT_REVIEW` | `0` | `1` adds the ADK reviewer step (one review, at most one revision). |

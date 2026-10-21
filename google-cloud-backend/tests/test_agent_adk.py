@@ -2,6 +2,7 @@
 driving the real ParallelAgent/SequentialAgent with a scripted offline model (no network)."""
 import asyncio
 import json
+import re
 import os
 import sys
 import threading
@@ -793,3 +794,45 @@ def test_real_adk_repairs_unmatched_file_pairs_before_one_complete_approval():
     assert len(result.pending) == 1 and len(store) == 1
     assert result.pending[0]['args']['files'] == [{'path': 'a.txt', 'content': 'one'}, {'path': 'b.txt', 'content': 'two'}]
     assert sum(bool(e and e.get('type') == 'approval') for e in approvals) == 1
+
+
+@pytest.mark.parametrize("test_code", ["0", "1"])
+def test_deadline_adds_ci_budget_only_when_pr_flow_is_used(monkeypatch, test_code):
+    import pr_flow
+    monkeypatch.setenv("AGENT_TEST_CODE", test_code)
+    monkeypatch.setattr(agent_adk, "TOTAL_SECONDS", 300)
+    monkeypatch.setattr(pr_flow, "CI_SECONDS", 420)
+    runs, seen, logs = [], [], []
+
+    class Run(agent_tools.AgentRun):
+        def __init__(self, env):
+            super().__init__(env)
+            runs.append(self)
+    monkeypatch.setattr(agent_tools, "AgentRun", Run)
+
+    def fake_deadline(fn, seconds, **kwargs):
+        seen.append(seconds())          # no PR flow yet
+        runs[0].prflow = SimpleNamespace(pr=None)  # a PR/CI tool started the PR flow mid-run
+        seen.append(seconds())
+        raise agent_tools.DeadlineExceeded()
+    monkeypatch.setattr(agent_tools, "call_with_deadline", fake_deadline)
+    adk, _ = fake_adk(json.dumps(PLAN), {"research": ["r"], "notes": ["n"]})
+    text, _ = agent_adk.run(make_env([]), "x", "f", "a", cfg, adk=adk, log=logs.append)
+    expected = 720 if test_code == "1" else 300
+    assert seen == [300, expected] and "time limit" in text
+    assert f"[dua-agent] adk deadline {expected}s reached" in logs
+
+
+def test_stage_timing_lines_are_logged():
+    logs = []
+    adk, _ = fake_adk(json.dumps(PLAN), {"research": ["r"], "notes": ["n"]})
+    agent_adk.run(make_env([]), "x", "f", "a", cfg, adk=adk, log=logs.append)
+    for stage in ("plan", "helpers", "merge"):
+        assert any(re.fullmatch(rf"\[dua-agent\] adk {stage} \d+\.\ds", m) for m in logs), (stage, logs)
+
+
+def test_call_with_deadline_rereads_a_callable_limit():
+    limit = {"s": 0.0}
+    with pytest.raises(agent_tools.DeadlineExceeded):
+        agent_tools.call_with_deadline(lambda: threading.Event().wait(1), lambda: limit["s"])
+    assert agent_tools.call_with_deadline(lambda: "ok", lambda: 5) == "ok"

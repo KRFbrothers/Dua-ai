@@ -26,18 +26,31 @@ def routes():
     return data
 
 
+def gemini_retry_enabled():
+    """ADK_GEMINI_RETRY=1 gives the default Gemini model the same short retry as routed ones (default off)."""
+    return os.environ.get('ADK_GEMINI_RETRY', '0').strip() == '1'
+
+
+def gemini_with_retry(name):
+    from google.adk.models import Gemini
+    from google.genai import types
+    return Gemini(model=name, retry_options=types.HttpRetryOptions(
+        attempts=2, initial_delay=0.5, max_delay=2.0,
+        http_status_codes=[429, 500, 502, 503, 504]))
+
+
 def resolve(role, default):
     names = routes().get(role)
     if names is None:
+        if gemini_retry_enabled() and isinstance(default, str) and default.startswith('gemini-'):
+            return gemini_with_retry(default)
         return default
     from google.adk.models import Gemini, FallbackModel
     from google.genai import types
     models = []
     for name in names:
         if name.startswith('gemini-'):
-            models.append(Gemini(model=name, retry_options=types.HttpRetryOptions(
-                attempts=2, initial_delay=0.5, max_delay=2.0,
-                http_status_codes=[429, 500, 502, 503, 504])))
+            models.append(gemini_with_retry(name))
         else:
             from google.adk.models.lite_llm import LiteLlm
             # SDK adapters read their provider credentials/endpoints from server env.

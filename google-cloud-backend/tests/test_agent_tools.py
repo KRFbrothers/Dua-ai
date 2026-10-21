@@ -420,3 +420,53 @@ def test_genai_config_sets_http_timeout():
     pytest.importorskip("google.genai")
     config = engine.GenaiModel("sys").config({"max_output_tokens": 5, "timeout_seconds": 150})
     assert config.http_options.timeout == 150000
+
+
+def test_agent_search_seconds_override(monkeypatch):
+    import agent_tools as at
+    monkeypatch.delenv("AGENT_SEARCH_SECONDS", raising=False)
+    assert at.search_seconds() == 90
+    monkeypatch.setenv("AGENT_SEARCH_SECONDS", "30")
+    assert at.search_seconds() == 30
+    monkeypatch.setenv("AGENT_SEARCH_SECONDS", "99999")
+    assert at.search_seconds() == 300
+    monkeypatch.setenv("AGENT_SEARCH_SECONDS", "1")
+    assert at.search_seconds() == 10
+    monkeypatch.setenv("AGENT_SEARCH_SECONDS", "abc")
+    assert at.search_seconds() == 90
+    seen = {}
+    monkeypatch.setenv("AGENT_SEARCH_SECONDS", "42")
+
+    def fake_deadline(fn, seconds, **kwargs):
+        seen["seconds"] = seconds
+        return {"ok": True}
+    monkeypatch.setattr(at, "call_with_deadline", fake_deadline)
+    run = at.AgentRun.__new__(at.AgentRun)
+    run.env = {}
+    try:
+        run.run_tool_timed("google_search", {"query": "x"})
+    except Exception:
+        pass
+    assert seen["seconds"] == 42
+
+
+def test_adk_gemini_retry_flag(monkeypatch):
+    import agent_models
+    monkeypatch.delenv("ADK_MODELS_JSON", raising=False)
+    monkeypatch.delenv("ADK_GEMINI_RETRY", raising=False)
+    assert agent_models.resolve("helper", "gemini-x") == "gemini-x"
+    monkeypatch.setenv("ADK_GEMINI_RETRY", "1")
+    made = []
+    monkeypatch.setattr(agent_models, "gemini_with_retry", lambda name: made.append(name) or ("retry", name))
+    assert agent_models.resolve("helper", "gemini-x") == ("retry", "gemini-x")
+    assert agent_models.resolve("helper", "openai/x") == "openai/x"
+
+
+def test_gemini_with_retry_options():
+    import pytest
+    pytest.importorskip("google.adk")
+    import agent_models
+    model = agent_models.gemini_with_retry("gemini-x")
+    assert model.model == "gemini-x"
+    assert model.retry_options.attempts == 2
+    assert 429 in model.retry_options.http_status_codes
