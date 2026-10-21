@@ -7,12 +7,16 @@ import androidx.lifecycle.viewModelScope
 import com.dua.ai.account.AccountApi
 import com.dua.ai.account.AccountRepository
 import com.dua.ai.account.AccountSession
+import com.dua.ai.account.AccountState
+import com.dua.ai.account.AccountUser
 import com.dua.ai.account.SessionPersistence
 import com.dua.ai.network.DuaApiClient
 import com.dua.ai.settings.AppearanceStore
 import com.dua.ai.settings.DevicePreferences
 import com.dua.ai.settings.LocalPreferences
 import com.dua.ai.setup.IntegrationState
+import com.dua.ai.setup.BuildModeConfig
+import com.dua.ai.setup.CodeExecutionConfig
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
@@ -217,6 +221,83 @@ class ChatModesCoverageTest {
         model.setWebMode("bogus")
         assertEquals("page", model.webMode.value)
         assertNull(model.error.value)
+    }
+
+    // ---- 5–7. Agent controls must not mutate a streaming reply's composer ----
+
+    private fun modeSnapshot(): Map<String, Any?> = listOf(
+        "_selectedModel", "_reasoning", "_agent", "_xSearch", "_imagine", "_runCode", "_webMode", "_buildRepo", "_error",
+    ).associateWith { (field(it).get(model) as MutableStateFlow<*>).value }
+
+    @Test fun runCodeCannotBeEnabledOrDisabledWhileAReplyStreams() {
+        val config = CodeExecutionConfig(enabled = true, providers = setOf("Dua"))
+        applyIntegrations(IntegrationState(codeExecution = config))
+        assertTrue("the typing lock, not a missing capability, must reject this change", config.available(model.selectedModel.value))
+        flow<Boolean>("_agent").value = true
+        flow<Boolean>("_imagine").value = true
+        flow<String?>("_buildRepo").value = REPO
+        flow<String?>("_error").value = "Existing notice"
+        flow<Boolean>("_isTyping").value = true
+        val off = modeSnapshot()
+
+        model.setRunCode(true)
+        assertEquals("enabling code must not turn Agent/Imagine/Build off or clear the notice", off, modeSnapshot())
+
+        flow<Boolean>("_runCode").value = true
+        val on = modeSnapshot()
+        model.setRunCode(false)
+        assertEquals("disabling code is locked too", on, modeSnapshot())
+    }
+
+    @Test fun xSearchCannotBeEnabledOrDisabledWhileAReplyStreams() {
+        flow<String>("_selectedModel").value = "Grok"
+        applyIntegrations(IntegrationState(xSearchAvailable = true))
+        flow<Boolean>("_agent").value = true
+        flow<String?>("_error").value = "Existing notice"
+        flow<Boolean>("_isTyping").value = true
+        val off = modeSnapshot()
+
+        model.setXSearch(true)
+        assertEquals("a supported X search change must still respect the typing lock", off, modeSnapshot())
+
+        flow<Boolean>("_xSearch").value = true
+        val on = modeSnapshot()
+        model.setXSearch(false)
+        assertEquals("disabling X search must not clear its state or notice mid-reply", on, modeSnapshot())
+    }
+
+    @Test fun buildRepositoryCannotBeChangedOrClearedWhileAReplyStreams() {
+        val base = IntegrationState(build = BuildModeConfig(enabled = true, providers = setOf("Gemini")))
+        applyIntegrations(base.copy(providers = base.providers.map {
+            if (it.name == "Gemini") it.copy(configured = true) else it
+        }))
+        val account = field("account").get(model) as AccountRepository
+        @Suppress("UNCHECKED_CAST")
+        val accountState = AccountRepository::class.java.getDeclaredField("mutable").apply { isAccessible = true }
+            .get(account) as MutableStateFlow<AccountState>
+        accountState.value = accountState.value.copy(user = AccountUser(
+            "00000000-0000-0000-0000-000000000001", "owner@example.test", "Owner"))
+        assertNull("Build must be available so its capability guard cannot hide a missing typing lock", model.buildUnavailableReason())
+        // Without the lock, selecting Build would switch Grok to Gemini and clear these modes.
+        flow<String>("_selectedModel").value = "Grok"
+        flow<Boolean>("_reasoning").value = true
+        flow<Boolean>("_agent").value = true
+        flow<Boolean>("_xSearch").value = true
+        flow<Boolean>("_imagine").value = true
+        flow<Boolean>("_runCode").value = true
+        flow<String?>("_webMode").value = "search"
+        flow<String?>("_buildRepo").value = REPO
+        flow<String?>("_error").value = "Existing notice"
+        flow<Boolean>("_isTyping").value = true
+        val before = modeSnapshot()
+        val history = model.savedChats.value.toList()
+
+        model.setBuildRepository("owner/another-repo")
+        assertEquals("changing repository must not switch models, clear modes or clear the notice", before, modeSnapshot())
+        assertEquals(history, model.savedChats.value)
+        model.setBuildRepository(null)
+        assertEquals("clearing Build must not leave the frozen repository mid-reply", before, modeSnapshot())
+        assertEquals(history, model.savedChats.value)
     }
 
     private companion object {
