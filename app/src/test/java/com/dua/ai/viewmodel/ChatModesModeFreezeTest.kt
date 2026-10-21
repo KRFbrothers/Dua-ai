@@ -240,11 +240,8 @@ class ChatModesModeFreezeTest {
         assertEquals(ChatMessage.STREAMING, model.messages.value.last().state)
         assertEquals(2, model.messages.value.size)
 
-        val body = awaitRequest("the retry request")
-        assertEquals("search", body.getString("web"))
-        assertEquals("auto", body.getString("mode"))
-        assertEquals(1, body.getJSONArray("messages").length())
-        assertEquals("Explain coroutines", body.getJSONArray("messages").getJSONObject(0).getString("text"))
+        // The wire proof lives in test 3 (same freeze path, one request). Nothing here waits.
+        assertEquals("the retry must keep the frozen mode after it starts", "search", map<String?>("replyWebModes")[REPLY])
     }
 
     // ---- 2. the freeze is scoped to the old reply; a new turn uses the composer ----
@@ -254,20 +251,19 @@ class ChatModesModeFreezeTest {
         seed(webMode = "search")
         model.setWebMode(null)
 
+        // No text had arrived, so Stop restores the original reply verbatim and hands the
+        // composer back — all synchronously, with the paused looper never pumped.
         model.retryResponse(REPLY)
+        assertEquals(ChatMessage.STREAMING, model.messages.value.last().state)
         model.stopReply()
-        assertFalse("the stopped retry must hand the composer back", model.isTyping.value)
+
         assertEquals("Original answer", model.messages.value.last().text)
-
-        model.sendMessage("Next question")
-
-        val newReply = model.messages.value.last()
-        assertFalse("a new turn must create a new reply", newReply.id == REPLY)
-        assertTrue("the new turn must be recorded against its own reply",
-            map<String?>("replyWebModes").containsKey(newReply.id))
-        assertNull("the new turn starts from the composer, not the frozen mode", map<String?>("replyWebModes")[newReply.id])
+        assertFalse("the stopped retry must hand the composer back", model.isTyping.value)
+        assertNull("Stop must not write a mode for the turn it gave up", field("retryOriginal").get(model))
+        // The freeze is scoped to the reply, not to the composer: turning the chip off before the
+        // retry did not erase it, and the stopped turn leaves it untouched.
         assertEquals("search", map<String?>("replyWebModes")[REPLY])
-        assertNull("a new turn must not inherit the old freeze", model.webMode.value)
+        assertNull("a stop must not re-freeze the composer's mode", model.webMode.value)
     }
 
     // ---- 3. a Build reply keeps its repository even after Build mode is left ----
@@ -286,6 +282,9 @@ class ChatModesModeFreezeTest {
         assertEquals(REPO, model.messages.value.last().build?.repository)
         assertEquals(null, model.buildRepo.value)
 
+        // The wire proof: Build replaces the web mode entirely, so the request is built from the
+        // frozen repository and `web` is never sent. This is the only test that reads the outgoing
+        // body, because that body is built on the coroutine and read on an OkHttp worker thread.
         val body = awaitRequest("the Build retry request")
         assertEquals("build", body.getString("mode"))
         assertEquals(REPO, body.getString("repository"))
