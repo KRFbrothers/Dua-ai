@@ -187,10 +187,19 @@ class DeleteChatGuardTest {
 
     private fun savedOnDisk(): List<SavedChat> = ChatHistoryCodec.decode(rawHistory()).second
 
-    /** Sets the live-voice start flag, which lives on the ChatVoice feature, not on the ViewModel. */
+    /**
+     * Sets the live-voice start flag, which lives on the ChatVoice feature, not on the ViewModel.
+     *
+     * `voiceFeature` is a `by lazy` property, so Kotlin backs it with a `Lazy` in a field named
+     * `voiceFeature$delegate` rather than with the feature itself. Both the name and the wrapper are
+     * resolved here so the helper cannot silently degrade into a `NoSuchFieldException`.
+     */
     private fun setLiveVoiceStarting(starting: Boolean) {
         model.liveStart // Force the lazy feature to initialise before reaching into it.
-        val voice = field("voiceFeature").get(model)!!
+        val holder = ChatViewModel::class.java.declaredFields.first { it.name.startsWith("voiceFeature") }
+            .apply { isAccessible = true }
+        val stored = holder.get(model)!!
+        val voice = if (stored is Lazy<*>) stored.value!! else stored
         @Suppress("UNCHECKED_CAST")
         val live = voice.javaClass.getDeclaredField("_liveStart").apply { isAccessible = true }
             .get(voice) as MutableStateFlow<LiveStartState>
