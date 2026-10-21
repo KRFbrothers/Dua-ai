@@ -16,6 +16,7 @@ from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 import coding_agent as coding
 import coding_snapshot
+import coding_profiles
 
 MAX_OUTPUT_BYTES = 32_000
 MAX_COMMAND_SECONDS = 120
@@ -47,7 +48,8 @@ def status():
         ready = configuration() is not None
     except (ValueError, coding.CodingError):
         return {"configured": False, "reason": "invalid_configuration", "liveVerified": False}
-    return {"configured": ready, "network": "none", "persistence": "ephemeral", "liveVerified": False}
+    return {"configured": ready, "network": "none", "persistence": "ephemeral", "profileDiscoveryTool": "list_runner_profiles",
+            "defaultProfile": "python", "liveVerified": False}
 
 
 def validate_command(args):
@@ -71,7 +73,7 @@ class Client:
                                    {"redirect_request": lambda *a, **k: None}))
 
     def request(self, method, path, payload=None):
-        if not (path == "/v1/runs" and method == "POST") and not (
+        if not (path == "/v1/capabilities" and method == "GET") and not (path == "/v1/runs" and method == "POST") and not (
                 method in ("GET", "DELETE") and re.fullmatch(r"/v1/runs/[0-9a-f]{32}", path)):
             raise coding.CodingError("Invalid runner operation.")
         data = json.dumps(payload, separators=(",", ":")).encode("utf-8") if payload is not None else None
@@ -95,9 +97,19 @@ class Client:
             raise coding.CodingError("Coding runner could not be reached or returned invalid data.") from None
 
 
+def list_profiles():
+    config = configuration()
+    if config is None:
+        return {"configured": False, "profiles": [], "liveVerified": False,
+                "note": "Set up the separate runner first. No toolchain readiness has been verified."}
+    result = coding_profiles.validate_catalog(Client(*config).request("GET", "/v1/capabilities"))
+    return dict(result, configured=True, note="Configured image contracts only, not live verification. Dependencies must be preinstalled; networking stays disabled.")
+
+
 def run(workspace, args, cancelled=None):
     import coding_artifacts
     argv, cwd, seconds = validate_command(args)
+    profile = coding_profiles.name(args.get("profile", "python"))
     exports = coding_artifacts.export_paths(args)
     config = configuration()
     if config is None:
@@ -106,6 +118,16 @@ def run(workspace, args, cancelled=None):
     # Leave time for runner cancellation before the outer tool deadline expires.
     deadline = started + TERMINAL_TOOL_SECONDS - 40
     stop = lambda: (cancelled is not None and cancelled()) or time.monotonic() >= deadline
+    client = Client(*config)
+    expected_digest = None
+    if profile != "python":
+        catalog = coding_profiles.validate_catalog(client.request("GET", "/v1/capabilities"))
+        selected = next((row for row in catalog["profiles"] if row["id"] == profile), None)
+        if selected is None:
+            raise coding.CodingError("Requested toolchain profile is not configured. Use list_runner_profiles; no command was submitted.")
+        expected_digest = selected["imageDigest"]
+    if stop():
+        raise coding.CodingError("Command cancelled before source preparation.")
     with workspace.lock:
         workspace.start()
         target = (cwd + "/" if cwd else "") + "__command__"
@@ -119,21 +141,31 @@ def run(workspace, args, cancelled=None):
     digest = hashlib.sha256(source).hexdigest()
     if stop():
         raise coding.CodingError("Command cancelled before runner submission.")
-    client = Client(*config)
     # The client-generated ID lets cancellation target the job even if the POST
     # response is lost after the runner accepted it. POST is never retried.
     job_id, completed = secrets.token_hex(16), False
     path = "/v1/runs/" + job_id
     try:
-        result = client.request("POST", "/v1/runs", {"id": job_id, "archive": base64.b64encode(source).decode("ascii"),
+        payload = {"id": job_id, "archive": base64.b64encode(source).decode("ascii"),
             "snapshot_sha256": digest, "base_sha": workspace.base_sha, "argv": argv, "cwd": cwd,
-            "timeout_seconds": seconds, "export_paths": exports})
+            "timeout_seconds": seconds, "export_paths": exports}
+        # Keep default Python requests compatible with the original controller.
+        # Non-Python requests always require explicit discovery/profile binding.
+        if profile != "python":
+            payload["profile"] = profile
+        result = client.request("POST", "/v1/runs", payload)
         while True:
             if stop():
                 raise coding.CodingError("Command stopped. Runner cancellation was requested.")
             if (result.get("id") != job_id or result.get("snapshot_sha256") != digest or
                     result.get("base_sha") != workspace.base_sha):
                 raise coding.CodingError("Runner result did not match the submitted snapshot.")
+            if result.get("profile", "python") != profile:
+                raise coding.CodingError("Runner returned a different toolchain profile.")
+            image_digest = result.get("image_digest")
+            if (image_digest is not None and (not isinstance(image_digest, str) or not coding_profiles.DIGEST.fullmatch(image_digest))) or (
+                    expected_digest is not None and image_digest != expected_digest):
+                raise coding.CodingError("Runner image changed or its identity could not be verified. Rediscover profiles before trying again.")
             state = result.get("state")
             if state in FINAL_STATES:
                 code = result.get("exit_code")
@@ -149,10 +181,10 @@ def run(workspace, args, cancelled=None):
                 if exports and state == "succeeded" and not artifact_error:
                     exported = coding_artifacts.validate(result.get("artifacts"), exports, workspace)
                     with workspace.lock:
-                        workspace.command_results[job_id] = {"fingerprint": fingerprint, "files": exported, "imported": False}
+                        workspace.command_results[job_id] = {"fingerprint": fingerprint, "files": exported, "imported": False, "profile": profile, "image_digest": image_digest}
                 completed = True
                 raw = output.encode("utf-8")
-                return {"state": state, "exit_code": result.get("exit_code"),
+                return {"state": state, "exit_code": result.get("exit_code"), "profile": profile, "image_digest": image_digest,
                         "output": filter_text(raw[:MAX_OUTPUT_BYTES].decode("utf-8", errors="ignore")),
                         "truncated": result.get("truncated") is True or len(raw) > MAX_OUTPUT_BYTES,
                         "base_sha": workspace.base_sha, "snapshot_sha256": digest,

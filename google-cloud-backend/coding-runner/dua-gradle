@@ -1,0 +1,4 @@
+#!/bin/sh
+# Runs only inside the prepared job image. Networking is separately disabled.
+exec /opt/gradle/bin/gradle --offline --no-daemon --max-workers=2 \
+  -Dorg.gradle.java.installations.auto-download=false "$@"

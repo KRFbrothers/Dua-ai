@@ -14,8 +14,11 @@ def started(agent, name, args):
     activity = secrets.token_hex(8)
     argv = args.get("argv") if isinstance(args, dict) else None
     label = shlex.join(argv) if isinstance(argv, list) and len(argv) <= 64 and all(isinstance(a, str) and len(a) <= 4096 for a in argv) else "Command"
-    agent.emit({"type": "coding", "terminal": {"id": activity, "command": filter_text(label)[:600],
-                                                 "state": "preparing"}})
+    terminal = {"id": activity, "command": filter_text(label)[:600], "state": "preparing"}
+    profile = args.get("profile", "python") if isinstance(args, dict) else None
+    if isinstance(profile, str) and profile in ("python", "jvm", "android"):
+        terminal["profile"] = profile
+    agent.emit({"type": "coding", "terminal": terminal})
     return activity
 
 
@@ -27,6 +30,8 @@ def completed(agent, name, result, activity):
         event["terminal"] = {"id": activity, "state": result.get("state", "error"),
                              "output": filter_text(str(result.get("output", result.get("error", ""))))[:32_000],
                              "exitCode": result.get("exit_code"), "truncated": bool(result.get("truncated"))}
+        if result.get("profile") in ("python", "jvm", "android"):
+            event["terminal"]["profile"] = result["profile"]
         if result.get("artifact_error"):
             combined = event["terminal"]["output"] + "\nText export unavailable: " + filter_text(str(result["artifact_error"]))[:300]
             event["terminal"]["output"] = combined[:32_000]

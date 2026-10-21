@@ -50,7 +50,9 @@ CODING_PROMPT = (
     "workspace_status(path) or read_file before editing each file. Use edit_file for exact draft replacements "
     "(empty old_text creates a new file only), inspect workspace_diff, then choose the workspace's approval tool "
     "to submit every staged edit for approval. Unsaved drafts are request-local. When workspace_status reports "
-    "execution.configured, run_command can check a source snapshot in a separate network-disabled sandbox; "
+    "execution.configured, list_runner_profiles reports configured toolchain contracts (not live readiness). "
+    "run_command(profile=python/jvm/android) checks a source snapshot in the selected configured, network-disabled sandbox; "
+    "never infer Java/Android dependencies are available or fall back to another profile. "
     "use export_paths for changed text files, then import_command_changes and inspect the diff. Unexported changes "
     "are discarded. When checkpoints are enabled, edits autosave; list_workspaces/restore_workspace resume a "
     "saved draft in a fresh task. Never claim commands ran when execution is unconfigured or failed. "
@@ -482,10 +484,11 @@ TOOLS = [
                     "required": ["path", "old_text", "new_text"]}},
     {"name": "workspace_diff", "description": "Preview staged workspace changes as a bounded unified diff before proposing a PR.",
      "parameters": {"type": "OBJECT", "properties": {}}},
-    {"name": "run_command", "description": "Run argv on pinned/staged source in the configured sandbox. Optional export_paths retains selected text files for explicit draft import. Read scoped AGENTS.md first; never auto-retry.",
+    {"name": "list_runner_profiles", "description": "Discover configured python/jvm/android image contracts and fixed limits on the separate runner. Metadata is not proof of working dependencies. No command runs."},
+    {"name": "run_command", "description": "Run argv on pinned/staged source in a configured profile (default python). Discover profiles before JVM/Android; dependencies must be preinstalled, runtime networking is disabled. Optional export_paths retains selected text files for explicit draft import. Read scoped AGENTS.md first; never auto-retry.",
      "parameters": {"type": "OBJECT", "properties": {
          "argv": {"type": "ARRAY", "items": {"type": "STRING"}}, "cwd": {"type": "STRING"},
-         "timeout_seconds": {"type": "INTEGER"}, "export_paths": {"type": "ARRAY", "items": {"type": "STRING"}}}, "required": ["argv"]}},
+         "timeout_seconds": {"type": "INTEGER"}, "profile": {"type": "STRING", "enum": ["python", "jvm", "android"]}, "export_paths": {"type": "ARRAY", "items": {"type": "STRING"}}}, "required": ["argv"]}},
     {"name": "import_command_changes", "description": "Atomically import selected text exports from a successful command into the unchanged draft. Inspect workspace_diff afterwards; no GitHub write.",
      "parameters": {"type": "OBJECT", "properties": {"command_id": {"type": "STRING"}}, "required": ["command_id"]}},
     {"name": "checkpoint_workspace", "description": "Save the pinned draft to private owner-scoped SQL if checkpoints are enabled. No process, command output or credentials are saved."},

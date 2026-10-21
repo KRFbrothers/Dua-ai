@@ -23,6 +23,7 @@ from flask import Flask, jsonify, request
 import coding_agent as coding
 import coding_snapshot
 import coding_artifacts
+import coding_profiles
 from coding_terminal import FINAL_STATES, JOB_ID, MAX_OUTPUT_BYTES, validate_command
 
 app = Flask(__name__)
@@ -38,15 +39,16 @@ def settings():
     image = os.environ.get("DUA_SANDBOX_IMAGE", "").strip()
     runtime = os.environ.get("DUA_SANDBOX_RUNTIME", "").strip()
     if (len(token) < 32 or not token.isascii() or any(c.isspace() for c in token) or
-            not re.fullmatch(r"[a-z0-9][a-z0-9._/:\-]*@sha256:[0-9a-f]{64}", image) or
             runtime not in ("", "runsc")):
         raise coding.CodingError("Runner requires a dedicated token, locally installed digest-pinned image and optional runsc runtime.")
-    return {"token": token, "image": image, "runtime": runtime}
+    configured = coding_profiles.images(image, os.environ.get("DUA_SANDBOX_IMAGES_JSON", "").strip())
+    return {"token": token, "images": configured, "runtime": runtime}
 
 
 class Job:
-    def __init__(self, job_id, scope, digest, base_sha):
+    def __init__(self, job_id, scope, digest, base_sha, profile="python", image_digest=None):
         self.id, self.scope, self.digest, self.base_sha = job_id, scope, digest, base_sha
+        self.profile, self.image_digest = profile, image_digest
         self.state, self.output, self.exit_code = "queued", bytearray(), None
         self.truncated, self.finished = False, None
         self.cancel, self.lock = threading.Event(), threading.RLock()
@@ -65,7 +67,7 @@ class Job:
     def view(self):
         with self.lock:
             return {"id": self.id, "state": self.state, "snapshot_sha256": self.digest,
-                    "base_sha": self.base_sha, "exit_code": self.exit_code,
+                    "base_sha": self.base_sha, "profile": self.profile, "image_digest": self.image_digest, "exit_code": self.exit_code,
                     "output": self.output.decode("utf-8", errors="replace"), "truncated": self.truncated,
                     "artifacts": self.artifacts, "artifact_error": self.artifact_error}
 
@@ -114,6 +116,9 @@ def collect_exports(client_config, name, paths, files, job):
 
 
 def execute(job, files, argv, cwd, seconds, config, export_paths):
+    profile = coding_profiles.name(job.profile)
+    limits = coding_profiles.PRESETS[profile]["limits"]
+    image = config["images"][profile]
     name = "dua-sandbox-" + job.id
     created, process = False, None
     # This directory must exist at the same absolute path on the Docker host.
@@ -143,28 +148,37 @@ def execute(job, files, argv, cwd, seconds, config, export_paths):
             options = ["create", "--name", name, "--label", LABEL + "=1", "--pull=never",
                        "--network=none", "--ipc=none", "--read-only", "--user=10001:10001", "--init",
                        "--cap-drop=ALL", "--security-opt=no-new-privileges:true", "--cgroupns=private",
-                       "--cpus=1", "--memory=512m", "--memory-swap=512m", "--pids-limit=128",
-                       "--ulimit=nofile=1024:1024", "--ulimit=fsize=67108864:67108864", "--ulimit=core=0:0",
+                       f"--cpus={limits['cpus']}", f"--memory={limits['memoryMiB']}m",
+                       f"--memory-swap={limits['memoryMiB']}m", f"--pids-limit={limits['pids']}",
+                       "--ulimit=nofile=1024:1024", f"--ulimit=fsize={limits['fileMiB'] * 1048576}:{limits['fileMiB'] * 1048576}", "--ulimit=core=0:0",
                        "--log-driver=none", "--no-healthcheck", "--stop-timeout=2", "--hostname=dua-sandbox",
                        "--mount", f"type=bind,source={source},target=/input,readonly",
-                       "--tmpfs", "/workspace:rw,exec,nosuid,nodev,size=268435456,uid=10001,gid=10001,mode=0700",
-                       "--tmpfs", "/tmp:rw,exec,nosuid,nodev,size=67108864,uid=10001,gid=10001,mode=0700",
-                       "--workdir=/workspace", "--env=HOME=/tmp/home", "--env=XDG_CACHE_HOME=/tmp/cache",
-                       "--entrypoint=/usr/bin/timeout"]
+                       "--tmpfs", f"/workspace:rw,exec,nosuid,nodev,size={limits['workspaceMiB'] * 1048576},uid=10001,gid=10001,mode=0700",
+                       "--tmpfs", f"/tmp:rw,exec,nosuid,nodev,size={limits['tempMiB'] * 1048576},uid=10001,gid=10001,mode=0700",
+                       "--workdir=/workspace", "--entrypoint=/usr/bin/timeout"]
+            if limits["cacheMiB"]:
+                options += ["--tmpfs", f"/cache:rw,exec,nosuid,nodev,size={limits['cacheMiB'] * 1048576},uid=10001,gid=10001,mode=0700"]
+            for key, value in coding_profiles.environment(profile).items():
+                options += ["--env", key + "=" + value]
             if config["runtime"]:
                 options += ["--runtime", config["runtime"]]
             # Keep tmpfs alive briefly for collection after docker exec exits.
             # The independent lifetime still stops all processes on host crash.
-            bootstrap = ('mkdir -p /tmp/home /tmp/cache && cp -R /input/. /workspace/ && '
-                         'touch /tmp/.dua-ready && exec sleep 3600')
-            options += [config["image"], "--signal=KILL", str(seconds + 25), "/bin/sh", "-c", bootstrap]
+            bootstrap = coding_profiles.bootstrap(profile)
+            options += [image, "--signal=KILL", str(seconds + limits["setupSeconds"] + 15), "/bin/sh", "-c", bootstrap]
             try:
                 if job.cancel.is_set():
                     job.finish("cancelled")
                     return
-                image_info = docker(client_config, "image", "inspect", "--format", "{{json .Config.Volumes}}", config["image"])
-                if image_info.returncode or json.loads(image_info.stdout) not in (None, {}):
+                image_info = docker(client_config, "image", "inspect", "--format",
+                    '{"volumes":{{json .Config.Volumes}},"labels":{{json .Config.Labels}}}', image)
+                metadata = json.loads(image_info.stdout) if not image_info.returncode else {}
+                if image_info.returncode or not isinstance(metadata, dict) or metadata.get("volumes") not in (None, {}):
                     raise coding.CodingError("Sandbox image is unavailable or declares unsupported persistent volumes.")
+                labels = metadata.get("labels") or {}
+                declared = labels.get("dev.dua.coding.profile") if isinstance(labels, dict) else None
+                if declared != profile and not (profile == "python" and declared is None):
+                    raise coding.CodingError("Installed sandbox image does not declare the selected toolchain profile.")
                 # Mark for name-scoped cleanup even if Docker creates the
                 # container but its CLI response is lost or times out.
                 created = True
@@ -177,7 +191,7 @@ def execute(job, files, argv, cwd, seconds, config, export_paths):
                     raise coding.CodingError("Sandbox container could not start.")
                 preparing = time.monotonic()
                 while docker(client_config, "exec", name, "/usr/bin/test", "-f", "/tmp/.dua-ready", timeout=3).returncode:
-                    if job.cancel.is_set() or time.monotonic() - preparing > 10:
+                    if job.cancel.is_set() or time.monotonic() - preparing > limits["setupSeconds"]:
                         raise coding.CodingError("Sandbox source preparation stopped or timed out.")
                     time.sleep(0.1)
                 if job.cancel.is_set():
@@ -249,9 +263,12 @@ class Jobs:
         if not self.slots.acquire(blocking=False):
             return None
         try:
-            if not isinstance(payload, dict) or set(payload) != {
+            if not isinstance(payload, dict) or set(payload) - {"profile"} != {
                     "id", "archive", "snapshot_sha256", "base_sha", "argv", "cwd", "timeout_seconds", "export_paths"}:
                 raise coding.CodingError("Invalid runner request fields.")
+            profile = coding_profiles.name(payload.get("profile", "python"))
+            if profile not in config["images"]:
+                raise coding.CodingError("Requested runner profile is not configured.")
             argv, cwd, seconds = validate_command(payload)
             exports = coding_artifacts.export_paths(payload)
             job_id, digest, base = payload["id"], payload["snapshot_sha256"], payload["base_sha"]
@@ -269,7 +286,7 @@ class Jobs:
             if hashlib.sha256(archive).hexdigest() != digest:
                 raise coding.CodingError("Source snapshot digest did not match.")
             files = coding_snapshot.unpack(archive)
-            job = Job(job_id, scope, digest, base)
+            job = Job(job_id, scope, digest, base, profile, config["images"][profile].rsplit("@", 1)[1])
             with self.lock:
                 now = time.monotonic()
                 self.items = {key: old for key, old in self.items.items()
@@ -344,6 +361,12 @@ def private_response(response):
 @app.get("/healthz")
 def health():
     return jsonify({"service": "dua-coding-runner", "liveVerified": False})
+
+
+@app.get("/v1/capabilities")
+def capabilities():
+    # Authenticated configuration metadata only; no Docker call/readiness claim.
+    return jsonify(coding_profiles.catalog(settings()["images"]))
 
 
 @app.post("/v1/runs")

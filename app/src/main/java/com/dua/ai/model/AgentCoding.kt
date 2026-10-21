@@ -4,7 +4,7 @@ import org.json.JSONObject
 
 /** Ephemeral UI data: not a source of approval arguments or persisted chat content. */
 data class AgentTerminal(val id: String, val command: String = "Command", val state: String,
-    val output: String = "", val exitCode: Int? = null, val truncated: Boolean = false)
+    val output: String = "", val exitCode: Int? = null, val truncated: Boolean = false, val profile: String? = null)
 data class AgentPrTarget(val number: Int, val branch: String)
 data class AgentWorkspace(val repository: String, val base: String, val paths: List<String>,
     val checkpointId: String?, val revision: Int, val saved: Boolean, val prTarget: AgentPrTarget? = null)
@@ -18,7 +18,7 @@ data class AgentCodingUpdate(val workspace: AgentWorkspace?, val terminal: Agent
         val before = previous ?: AgentCoding()
         val runs = terminal?.let { next ->
             val old = before.terminals.find { it.id == next.id }
-            val merged = if (!hasCommand && old != null) next.copy(command = old.command) else next
+            val merged = if (!hasCommand && old != null) next.copy(command = old.command, profile = next.profile ?: old.profile) else next
             (before.terminals.filterNot { it.id == next.id } + merged).takeLast(4)
         } ?: before.terminals
         return AgentCoding(workspace ?: before.workspace, runs,
@@ -53,9 +53,12 @@ data class AgentCodingUpdate(val workspace: AgentWorkspace?, val terminal: Agent
             val terminal = json.optJSONObject("terminal")?.let { t ->
                 val key = t.optString("id"); val state = t.optString("state")
                 if (!Regex("[0-9a-f]{16}").matches(key) || state !in setOf("preparing", "succeeded", "failed", "timed_out", "cancelled", "error")) return null
+                val profile = if (t.has("profile")) {
+                    (t.opt("profile") as? String)?.takeIf { it in setOf("python", "jvm", "android") } ?: return null
+                } else null
                 val output = t.optString("output")
                 AgentTerminal(key, t.optString("command", "Command").take(600), state, output.take(32_000),
-                    (t.opt("exitCode") as? Number)?.toInt(), t.optBoolean("truncated") || output.length > 32_000)
+                    (t.opt("exitCode") as? Number)?.toInt(), t.optBoolean("truncated") || output.length > 32_000, profile)
             }
             val ci = json.optJSONObject("ci")?.let { AgentCi.fromJson(it) ?: return null }
             val diff = (json.opt("diff") as? String)
