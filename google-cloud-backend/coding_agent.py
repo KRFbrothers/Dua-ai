@@ -15,7 +15,7 @@ import os
 import re
 import time
 from urllib.error import HTTPError
-from urllib.parse import quote, urlencode
+from urllib.parse import quote, urlencode, urlsplit
 from urllib.request import Request, build_opener, HTTPRedirectHandler
 
 API = "https://api.github.com"
@@ -48,7 +48,9 @@ CODING_PROMPT = (
     "Start with workspace_status to pin the task to one commit. Read scoped AGENTS.md guidance with "
     "workspace_status(path) or read_file before editing each file. Use edit_file for exact draft replacements "
     "(empty old_text creates a new file only), inspect workspace_diff, then propose_changes with files=[] "
-    "to submit every staged edit for approval. Drafts last only for this request; no terminal is available. "
+    "to submit every staged edit for approval. Drafts last only for this request. When workspace_status reports "
+    "execution.configured, run_command can check a source snapshot in a separate network-disabled sandbox; "
+    "its file changes are discarded. Never claim commands ran when execution is unconfigured or failed. "
     "Use the tools to look at the tree, "
     "search and read the files you need (read before you change). Keep changes small and focused. When ready, "
     "call propose_changes ONCE with files=[] for staged drafts, or FULL new content when there are no drafts "
@@ -142,6 +144,7 @@ def allowed(method, path, body, repo):
     base = f"/repos/{r}"
     rules = {
         "GET": [rf"^{base}$", rf"^{base}/git/trees/[A-Za-z0-9._\-/]+$", rf"^{base}/contents/[^?]*$",
+                rf"^{base}/tarball/[0-9a-f]{{40}}$",
                 rf"^{base}/git/ref/heads/[A-Za-z0-9._\-/]+$", r"^/search/code$",
                 # CI results for the agent's own PRs (read-only).
                 rf"^{base}/commits/[0-9a-f]{{40}}/check-runs$", rf"^{base}/actions/runs$"],
@@ -224,6 +227,44 @@ class GitHubClient:
             raise CodingError(f"GitHub request failed ({status}).")
 
     # --- read helpers used by model tools ---
+    def archive(self, sha):
+        """Bounded archive at one commit; allow only GitHub's exact codeload redirect.
+
+        The token stays in this engine. Neither source bundles nor the runner
+        receive it. This binary endpoint is separate from request()'s JSON API.
+        """
+        from coding_snapshot import MAX_ARCHIVE_BYTES
+        if not isinstance(sha, str) or not re.fullmatch(r"[0-9a-f]{40}", sha):
+            raise CodingError("Invalid source snapshot commit.")
+        path = f"/repos/{self.repo}/tarball/{sha}"
+        if allowed("GET", path, None, self.repo):
+            raise BlockedRequest("Source archive request is not allowed.")
+        headers = {"Authorization": f"Bearer {self.token}", "User-Agent": "dua-agent",
+                   "Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"}
+        try:
+            try:
+                response = self.opener.open(Request(API + path, headers=headers), timeout=20)
+            except HTTPError as redirect:
+                if redirect.code != 302:
+                    raise
+                location = redirect.headers.get("Location", "")
+                redirect.close()
+                target = urlsplit(location)
+                expected = f"/{self.repo}/legacy.tar.gz/{sha}"
+                if (target.scheme != "https" or target.netloc != "codeload.github.com" or
+                        target.path.casefold() != expected.casefold() or target.query or target.fragment):
+                    raise CodingError("GitHub returned an unexpected archive destination.")
+                response = self.opener.open(Request(location, headers=headers), timeout=20)
+            with response:
+                data = response.read(MAX_ARCHIVE_BYTES + 1)
+        except HTTPError:
+            raise CodingError("GitHub source archive is unavailable. Check repository access.") from None
+        except OSError:
+            raise CodingError("GitHub source archive download failed.") from None
+        if not data or len(data) > MAX_ARCHIVE_BYTES:
+            raise CodingError("Source archive exceeds the runner download limit.")
+        return data
+
     def tree(self):
         data = self.request("GET", f"/repos/{self.repo}/git/trees/{BASE_BRANCH}", query={"recursive": "1"})
         return [item["path"] for item in data.get("tree", []) if item.get("type") == "blob"]
@@ -421,13 +462,17 @@ def validate_changes(files):
 
 
 TOOLS = [
-    {"name": "workspace_status", "description": "Start a workspace on one commit; read AGENTS.md for an optional file path. Call first for coding tasks. Drafts last only this request; no terminal.",
+    {"name": "workspace_status", "description": "Start a workspace on one commit; read AGENTS.md for an optional file path and report separate runner configuration. Call first for coding tasks. Drafts last only this request.",
      "parameters": {"type": "OBJECT", "properties": {"path": {"type": "STRING"}}}},
     {"name": "edit_file", "description": "Edit a request-local draft. old_text must match exactly once; empty old_text creates a new file only. Read scoped AGENTS.md first. Does not write to GitHub.",
      "parameters": {"type": "OBJECT", "properties": {"path": {"type": "STRING"}, "old_text": {"type": "STRING"}, "new_text": {"type": "STRING"}},
                     "required": ["path", "old_text", "new_text"]}},
     {"name": "workspace_diff", "description": "Preview staged workspace changes as a bounded unified diff before proposing a PR.",
      "parameters": {"type": "OBJECT", "properties": {}}},
+    {"name": "run_command", "description": "Run argv in a separate, configured sandbox using the pinned source plus staged edits. No network/secrets; command file changes are discarded. Read cwd's AGENTS.md first. Never auto-retry.",
+     "parameters": {"type": "OBJECT", "properties": {
+         "argv": {"type": "ARRAY", "items": {"type": "STRING"}}, "cwd": {"type": "STRING"},
+         "timeout_seconds": {"type": "INTEGER"}}, "required": ["argv"]}},
     {"name": "list_files", "description": "List repository file paths, using the pinned commit after workspace_status. Optional prefix filter.",
      "parameters": {"type": "OBJECT", "properties": {"prefix": {"type": "STRING"}}}},
     {"name": "read_file", "description": "Read a text file; after workspace_status returns pinned/staged text and scoped AGENTS.md.",
@@ -463,6 +508,7 @@ class CodingSession:
         self.github, self.emit, self.clock = github, emit, clock
         self.files_read, self.bytes_read, self.tree_cache = 0, 0, None
         self.workspace = None
+        self.cancelled = None
 
     def prepare_proposal(self, args):
         # Snapshot metadata comes from the server, never from model arguments.
@@ -474,8 +520,11 @@ class CodingSession:
     def run_tool(self, name, args):
         try:
             import coding_workspace
-            if name in coding_workspace.TOOLS and self.workspace is None:
+            if name in (*coding_workspace.TOOLS, "run_command") and self.workspace is None:
                 self.workspace = coding_workspace.Workspace(self.github)
+            if name == "run_command":
+                import coding_terminal
+                return coding_terminal.run(self.workspace, args, cancelled=self.cancelled)
             if self.workspace is not None and name != "search_code":
                 return self.workspace.run(name, args)
             if name == "list_files":

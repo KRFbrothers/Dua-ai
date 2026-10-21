@@ -1,0 +1,27 @@
+[Unit]
+Description=Dua coding sandbox controller (dedicated Docker host)
+After=docker.service network.target
+Requires=docker.service
+
+[Service]
+Type=simple
+User=dua-runner
+Group=dua-runner
+SupplementaryGroups=docker
+WorkingDirectory=/opt/dua/google-cloud-backend
+EnvironmentFile=/etc/dua-coding-runner.env
+Environment=DUA_RUNNER_DATA_DIR=/var/lib/dua-coding-runner
+ExecStart=/opt/dua-runner-venv/bin/gunicorn --bind 127.0.0.1:8091 --workers 1 --threads 8 --timeout 180 coding_runner_server:app
+Restart=on-failure
+RestartSec=3
+StateDirectory=dua-coding-runner
+StateDirectoryMode=0700
+UMask=0077
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectSystem=strict
+TimeoutStopSec=20
+
+[Install]
+WantedBy=multi-user.target

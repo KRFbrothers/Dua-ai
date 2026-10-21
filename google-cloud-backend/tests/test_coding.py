@@ -394,7 +394,7 @@ def test_real_genai_tool_declarations():
     pytest.importorskip("google.genai")
     tools = ca.default_tools()
     assert [f.name for f in tools[0].function_declarations] == [
-        "workspace_status", "edit_file", "workspace_diff", "list_files", "read_file", "search_code", "propose_changes"]
+        "workspace_status", "edit_file", "workspace_diff", "run_command", "list_files", "read_file", "search_code", "propose_changes"]
     content = ca.default_tool_response([("read_file", {"content": "x"})])
     assert content.role == "user" and content.parts[0].function_response.name == "read_file"
 

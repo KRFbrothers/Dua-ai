@@ -100,12 +100,13 @@ class Workspace:
         return result
 
     def status(self, path=""):
+        import coding_terminal
         instructions = self.instructions(path)
         self.instructions_seen.update(item["path"] for item in instructions)
         return {"repository": self.github.repo, "base_sha": self.base_sha,
                 "instructions": instructions, "changed_files": sorted(self.staged),
                 "files_read": len(self.originals), "bytes_read": self.bytes_read,
-                "storage": "request_memory", "execution": "not_available",
+                "storage": "request_memory", "execution": coding_terminal.status(),
                 "note": "Edits are local drafts. No branch, commit or PR exists until the owner approves a proposal."}
 
     def read(self, path):
