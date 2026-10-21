@@ -3,6 +3,7 @@ package com.dua.ai.viewmodel
 import android.app.Application
 import android.os.Looper
 import androidx.lifecycle.ViewModelStore
+import androidx.lifecycle.viewModelScope
 import com.dua.ai.account.AccountApi
 import com.dua.ai.account.AccountRepository
 import com.dua.ai.account.AccountSession
@@ -18,6 +19,7 @@ import com.dua.ai.settings.LocalPreferences
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.runBlocking
 import okhttp3.MediaType.Companion.toMediaType
@@ -33,9 +35,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
-import org.junit.Rule
 import org.junit.Test
-import org.junit.rules.Timeout
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
@@ -54,21 +54,18 @@ import org.robolectric.annotation.LooperMode
 @Config(sdk = [34], application = Application::class)
 @LooperMode(LooperMode.Mode.PAUSED)
 class RetryResponseTest {
-    /**
-     * A hang in this class must name itself. Without this rule a stuck test blocks the Gradle
-     * worker until the workflow's 25-minute job timeout kills it, and the run reports
-     * `conclusion: cancelled` with no test name and no log line explaining where it stopped —
-     * which is exactly how this file has failed three times. With it, the offending method fails
-     * in seconds and the report says which one.
-     */
-    @get:Rule val noHang: Timeout = Timeout.seconds(60)
-
+    // Deliberately no JUnit `Timeout` rule. It runs the test body on a NEW thread, while Robolectric
+    // binds the main Looper to the runner's thread — `shadowOf(mainLooper).idleFor()` called from any
+    // other thread is exactly the kind of misuse that wedges a test instead of failing it. Every wait
+    // below is already bounded and asserts with a message, so a stuck step names itself without it.
     private lateinit var application: Application
     private lateinit var model: ChatViewModel
     private lateinit var client: OkHttpClient
     private val store = ViewModelStore()
     /** Every /api/chat body, in order. The interceptor fails on any other URL, so nothing escapes. */
     private val requests = CopyOnWriteArrayList<JSONObject>()
+    /** The account stack from [setup]; held so [teardown] can shut down the pool it opened. */
+    private var accountClient: OkHttpClient? = null
     private val prompt = ChatMessage(id = "prompt", text = "Explain coroutines", isUser = true, model = "Gemini")
 
     private fun field(name: String) = ChatViewModel::class.java.getDeclaredField(name).apply { isAccessible = true }
@@ -101,13 +98,26 @@ class RetryResponseTest {
      */
     @After fun teardown() {
         runCatching { (field("replyJob").get(model) as? Job)?.cancel() }
+        // Everything this class starts hangs off viewModelScope. Cancelling it is what frees the
+        // Gradle worker: a collector left behind keeps a non-daemon thread alive, the test TASK then
+        // never returns, and the run ends as a 25-minute job timeout with no failing test name —
+        // which is the shape this file has failed CI in four times. A failing test would have reported
+        // a name; a wedged worker reports nothing, so this is the only teardown that closes it.
+        runCatching { model.viewModelScope.cancel() }
         // Cancellation handlers and `awaitClose { call.cancel() }` are dispatched on Main. A bounded
         // pump lets them run instead of leaving the worker's dispatcher threads parked forever.
         runCatching { repeat(25) { shadowOf(Looper.getMainLooper()).idleFor(5, TimeUnit.MILLISECONDS) } }
-        if (::client.isInitialized) {
-            client.dispatcher.cancelAll()
-            client.connectionPool.evictAll()
-            client.dispatcher.executorService.shutdown()
+        if (::client.isInitialized) closeHttp(client)
+        accountClient?.let(::closeHttp)
+    }
+
+    /** Shuts an OkHttp stack down and waits (bounded) so no pool thread outlives this test. */
+    private fun closeHttp(http: OkHttpClient) {
+        runCatching {
+            http.dispatcher.cancelAll()
+            http.connectionPool.evictAll()
+            http.dispatcher.executorService.shutdown()
+            http.dispatcher.executorService.awaitTermination(2, TimeUnit.SECONDS)
         }
     }
 
@@ -179,7 +189,7 @@ class RetryResponseTest {
     /** The account API is never used by these tests; refusing loudly keeps a stray call visible. */
     private fun rejectingClient() = OkHttpClient.Builder().addInterceptor { chain ->
         throw AssertionError("Unexpected account request: ${chain.request().url}")
-    }.build()
+    }.build().also { accountClient = it }
 
     // ---- 1. normal retry ----
 
