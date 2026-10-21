@@ -118,7 +118,10 @@ controls](CODING_ACTIVITY.md).
 **Fifth phase:** [read-only PR CI evidence](CODING_CI.md), including observed-head
 checks, bounded failure annotations/steps and an Android snapshot card.
 
-**Remaining work:** end-to-end coding evaluation, existing-PR repair and richer
+**Sixth phase:** [reviewed repairs to an existing agent PR](CODING_PR_REPAIR.md),
+with a pinned PR workspace, separate fix approval and non-forced branch update.
+
+**Remaining work:** end-to-end coding evaluation, interactive sessions and richer
 execution profiles. No runner has been enabled or engine deployed by these implementation
 phases. Local tests were deferred at the owner's request; both workspace and
 runner behavior still require verification before activation.

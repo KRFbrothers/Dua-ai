@@ -45,7 +45,11 @@ def save(workspace, owner):
     require_owner(owner)
     from sqlalchemy import delete, insert, select, update, func
     files = coding.validate_changes([{"path": p, "content": c} for p, c in sorted(workspace.staged.items())])
-    payload = {"version": 1, "files": files}
+    target = workspace.pr_target
+    if target is not None:
+        import coding_pr
+        target = coding_pr.clean_target(target, workspace.base_sha)
+    payload = {"version": 2, "files": files, "pr_target": target}
     # JSON escaping can expand source. The file/byte caps are authoritative;
     # this independent cap also bounds the serialized database document.
     if len(json.dumps(payload).encode("utf-8")) > coding.MAX_TOTAL_CHANGE_BYTES * 6 + 16_000:
@@ -97,14 +101,21 @@ def load(owner, checkpoint_id, repository):
         if row is None:
             raise coding.CodingError("Workspace checkpoint not found or expired for this owner/repository.")
         payload = row["payload"]
-        if not isinstance(payload, dict) or payload.get("version") != 1:
+        if (not isinstance(payload, dict) or type(payload.get("version")) is not int or
+                payload["version"] not in (1, 2) or
+                (payload["version"] == 2 and "pr_target" not in payload) or
+                (payload["version"] == 1 and payload.get("pr_target") is not None)):
             raise coding.CodingError("Unsupported workspace checkpoint version.")
         files = coding.validate_changes(payload.get("files"))
         if not re.fullmatch(r"[0-9a-f]{40}", row["base_sha"]):
             raise coding.CodingError("Invalid workspace checkpoint base.")
         if isinstance(row["revision"], bool) or not isinstance(row["revision"], int) or row["revision"] < 1:
             raise coding.CodingError("Invalid workspace checkpoint revision.")
-        return {"id": row["id"], "revision": row["revision"], "base_sha": row["base_sha"], "files": files}
+        target = payload.get("pr_target") if payload["version"] == 2 else None
+        if target is not None:
+            import coding_pr
+            target = coding_pr.clean_target(target, row["base_sha"])
+        return {"id": row["id"], "revision": row["revision"], "base_sha": row["base_sha"], "files": files, "pr_target": target}
     except coding.CodingError:
         raise
     except Exception:

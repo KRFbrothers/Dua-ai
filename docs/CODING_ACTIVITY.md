@@ -55,3 +55,7 @@ and verify authentication, cancellation, diff/approval identity and restore on a
 device before treating the feature as ready.
 
 Read-only PR CI snapshots are described in [CODING_CI.md](CODING_CI.md).
+
+[Reviewed PR repair](CODING_PR_REPAIR.md) adds the PR/branch label to repair drafts
+and a separate stored-diff fix approval. Its approval is disabled in the new UI
+when the required diff preview is absent.

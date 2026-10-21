@@ -104,8 +104,13 @@ coverage. Then verify real containers and engine → edit → command → import
 → restart → restore → approved PR end to end. None of those checks ran here.
 
 Persistent terminals, full Git checkout/rebase, binary/deletion/mode import,
-existing-PR repair and larger workers remain future work.
+interactive workflows and larger workers remain future work.
 
 Read-only CI evidence is described in [CODING_CI.md](CODING_CI.md).
 
 Android activity and saved-draft controls are described in [CODING_ACTIVITY.md](CODING_ACTIVITY.md).
+
+Repair target identity and version 2 payload compatibility are described in
+[CODING_PR_REPAIR.md](CODING_PR_REPAIR.md). Version 1 drafts remain readable;
+version 2 retains the PR number/branch/reviewed head and is refused by older engines.
+No schema migration is introduced by that payload change.
