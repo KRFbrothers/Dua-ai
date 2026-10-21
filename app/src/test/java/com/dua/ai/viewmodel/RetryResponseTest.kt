@@ -80,8 +80,19 @@ class RetryResponseTest {
         await("preferences loaded") { field("appearanceLoaded").getBoolean(model) }
     }
 
+    /**
+     * Stops everything this test started. Deliberately does NOT call [ViewModelStore.clear]: that runs
+     * `onCleared()`, which touches the drive rebinder, the backup delegate, the recorder and every poll
+     * job on the paused Looper. None of the assertions depend on it, and a single blocked step there
+     * would hang the whole Gradle worker with no test-level failure to report — which is exactly the
+     * shape of a 25-minute job timeout. Cancelling the reply job and closing the HTTP stack leaves the
+     * test with nothing running.
+     */
     @After fun teardown() {
-        store.clear()
+        runCatching { (field("replyJob").get(model) as? Job)?.cancel() }
+        // Cancellation handlers and `awaitClose { call.cancel() }` are dispatched on Main. A bounded
+        // pump lets them run instead of leaving the worker's dispatcher threads parked forever.
+        runCatching { repeat(25) { shadowOf(Looper.getMainLooper()).idleFor(5, TimeUnit.MILLISECONDS) } }
         if (::client.isInitialized) {
             client.dispatcher.cancelAll()
             client.connectionPool.evictAll()
@@ -103,12 +114,12 @@ class RetryResponseTest {
         flow<Boolean>("_agentAvailable").value = false
     }
 
-    private fun sse(text: String, delayMs: Long = 0) =
-        "data: {\"type\":\"text\",\"delta\":\"$text\",\"delayMs\":$delayMs}\n\ndata: {\"type\":\"done\",\"truncated\":false}\n\n"
+    private fun sse(text: String) =
+        "data: {\"type\":\"text\",\"delta\":\"$text\"}\n\ndata: {\"type\":\"done\",\"truncated\":false}\n\n"
 
-    private fun stream(text: String, request: okhttp3.Request, delayMs: Long = 0) = Response.Builder().request(request).protocol(Protocol.HTTP_1_1)
+    private fun stream(text: String, request: okhttp3.Request) = Response.Builder().request(request).protocol(Protocol.HTTP_1_1)
         .code(200).message("OK").header("Content-Type", "text/event-stream")
-        .body(sse(text, delayMs).toResponseBody("text/event-stream".toMediaType())).build()
+        .body(sse(text).toResponseBody("text/event-stream".toMediaType())).build()
 
     private fun reply(text: String, state: String = "complete", id: String = "reply") =
         ChatMessage(id = id, text = text, isUser = false, model = "Gemini", state = state)
@@ -191,9 +202,9 @@ class RetryResponseTest {
     // ---- 2. Stop in the middle of a retry ----
 
     @Test fun stoppingARetryBeforeTextRestoresTheOriginalReply() {
-        // A 30 s server-side delay keeps the text chunk away for the whole test, so this needs no
-        // clock advance, no sleep and no latch: everything asserted below happens synchronously.
-        intercept { request -> stream("Too late", request, delayMs = 30_000) }
+        // The frame only reaches Main when this thread pumps the paused Looper, and nothing below
+        // pumps it — so the turn is observed in its streaming state with no latch, sleep or advance.
+        intercept { request -> stream("Too late", request) }
         val original = reply("Original answer")
         seed(original)
 
@@ -253,9 +264,9 @@ class RetryResponseTest {
     // ---- 5. a retry left stale by a chat switch writes nothing ----
 
     @Test fun aRetryThatFinishesAfterTheChatWasLeftWritesNothing() {
-        // Same 30 s server-side delay: the stale response cannot arrive mid-test, so no thread is
-        // blocked and nothing depends on wall-clock timing.
-        intercept { request -> stream("Stale answer", request, delayMs = 30_000) }
+        // Same synchronous window as test 2: the stale text cannot be applied while this thread
+        // does not pump, so nothing here depends on wall-clock timing.
+        intercept { request -> stream("Stale answer", request) }
         seed()
         val startedIn = model.activeChatId.value
         val generationBefore = field("generation").getInt(model)

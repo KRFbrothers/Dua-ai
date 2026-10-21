@@ -1212,12 +1212,14 @@ Base: `main` @ `c7afa0d` (PR #314 / Step 6 merge ke baad). Yeh Step 6 ke report 
 
 ### File
 
-`app/src/test/java/com/dua/ai/viewmodel/RetryResponseTest.kt` — **263 lines, 5 `@Test`**. Koi naya dependency nahi — wahi stack jo baaki `viewmodel/` tests use karte hain: **JUnit4 + Robolectric (`sdk 34`, `LooperMode.PAUSED`) + OkHttp interceptor** (network se pehle intercept, `PersonalityPromptingTest` ka pattern).
+`app/src/test/java/com/dua/ai/viewmodel/RetryResponseTest.kt` — **281 lines, 5 `@Test`**. Koi naya dependency nahi — wahi stack jo baaki `viewmodel/` tests use karte hain: **JUnit4 + Robolectric (`sdk 34`, `LooperMode.PAUSED`) + OkHttp interceptor** (network se pehle intercept, `PersonalityPromptingTest` ka pattern).
 
-Harness note — **two hangs the first version had**, dono CI par pakde gaye (gradle 25-min timeout, `conclusion: cancelled`):
+Harness note — **teen hangs, teen alag theories**, teesri wali sach nikli:
 
-1. **Blocking interceptor gate.** `CountDownLatch.await()` OkHttp interceptor ke andar chal raha tha, aur woh interceptor **Main thread** par invoke hota hai. Main block → Robolectric ka `idleFor()` bhi Main par hai → deadlock. **Fix:** koi blocking gate nahi. `retryResponse()` streaming turn **synchronously** set karta hai (coroutine launch se pehle), aur "text abhi nahi aana chahiye" wala window SSE payload ke **`delayMs: 30000`** field se banta hai — server-side delay, koi thread block nahi, koi clock advance nahi.
-2. **Signed-in account path.** Pehle test signed-in session seed karta tha, jisse retry ek extra cloud path le raha tha. **Fix:** `read() = null` — wahi jo `PersonalityPromptingTest` karta hai — matlab test sirf local retry path chalata hai.
+1. **Blocking interceptor gate.** `CountDownLatch.await()` OkHttp interceptor ke andar chal raha tha, aur woh interceptor **Main thread** par invoke hota hai. Main block → Robolectric ka `idleFor()` bhi Main par hai → deadlock. **Fix:** koi blocking gate nahi.
+2. **`delayMs` — galat theory.** Uske baad SSE payload mein `delayMs: 30000` daala gaya yeh soch kar ki server-side delay banega. **Production client us field ko padhta hi nahi** (`grep delayMs app/src/main` mein sirf `ChatHistoryWriter` ka `Debouncer` milta hai), matlab woh ignore hua aur delay kabhi bana hi nahi. Field hata diya.
+3. **Asli mechanism.** Test 2 aur 5 ko delay ki zaroorat hi nahi: `retryResponse()` streaming turn **synchronously** set karta hai (coroutine launch se pehle), aur SSE frame Main par tabhi apply hoti hai jab **yeh thread** paused Looper ko pump kare. Test 2/5 pump nahi karte — isliye turn streaming state mein hi observable hai: na latch, na sleep, na clock advance.
+4. **Teardown.** Pehle `store.clear()` tha jo `onCleared()` chalata hai — drive rebinder, backup delegate, recorder, poll jobs, sab paused Looper par. Ab `onCleared()` nahi chalta: sirf `replyJob` cancel, Main ka bounded pump (25 × 5 ms) cancellation handlers ke liye, phir HTTP stack band. Koi assertion isse depend nahi karti.
 
 Test 2 aur 5 **poori tarah synchronous** hain: na `await()`, na `settle()`, na `sleep`. Sirf tests 1/3/4 response ka intezaar karte hain (`PersonalityPromptingTest` wala `idleFor` + `Thread.sleep`), kyunki wahan SSE body OkHttp thread par real time mein padhi jaati hai.
 
