@@ -48,9 +48,11 @@ CODING_PROMPT = (
     "Start with workspace_status to pin the task to one commit. Read scoped AGENTS.md guidance with "
     "workspace_status(path) or read_file before editing each file. Use edit_file for exact draft replacements "
     "(empty old_text creates a new file only), inspect workspace_diff, then propose_changes with files=[] "
-    "to submit every staged edit for approval. Drafts last only for this request. When workspace_status reports "
+    "to submit every staged edit for approval. Unsaved drafts are request-local. When workspace_status reports "
     "execution.configured, run_command can check a source snapshot in a separate network-disabled sandbox; "
-    "its file changes are discarded. Never claim commands ran when execution is unconfigured or failed. "
+    "use export_paths for changed text files, then import_command_changes and inspect the diff. Unexported changes "
+    "are discarded. When checkpoints are enabled, edits autosave; list_workspaces/restore_workspace resume a "
+    "saved draft in a fresh task. Never claim commands ran when execution is unconfigured or failed. "
     "Use the tools to look at the tree, "
     "search and read the files you need (read before you change). Keep changes small and focused. When ready, "
     "call propose_changes ONCE with files=[] for staged drafts, or FULL new content when there are no drafts "
@@ -462,17 +464,23 @@ def validate_changes(files):
 
 
 TOOLS = [
-    {"name": "workspace_status", "description": "Start a workspace on one commit; read AGENTS.md for an optional file path and report separate runner configuration. Call first for coding tasks. Drafts last only this request.",
+    {"name": "workspace_status", "description": "Start a workspace on one commit; read scoped AGENTS.md, report runner/checkpoint configuration and retained command changes. Unsaved state is request-local.",
      "parameters": {"type": "OBJECT", "properties": {"path": {"type": "STRING"}}}},
     {"name": "edit_file", "description": "Edit a request-local draft. old_text must match exactly once; empty old_text creates a new file only. Read scoped AGENTS.md first. Does not write to GitHub.",
      "parameters": {"type": "OBJECT", "properties": {"path": {"type": "STRING"}, "old_text": {"type": "STRING"}, "new_text": {"type": "STRING"}},
                     "required": ["path", "old_text", "new_text"]}},
     {"name": "workspace_diff", "description": "Preview staged workspace changes as a bounded unified diff before proposing a PR.",
      "parameters": {"type": "OBJECT", "properties": {}}},
-    {"name": "run_command", "description": "Run argv in a separate, configured sandbox using the pinned source plus staged edits. No network/secrets; command file changes are discarded. Read cwd's AGENTS.md first. Never auto-retry.",
+    {"name": "run_command", "description": "Run argv on pinned/staged source in the configured sandbox. Optional export_paths retains selected text files for explicit draft import. Read scoped AGENTS.md first; never auto-retry.",
      "parameters": {"type": "OBJECT", "properties": {
          "argv": {"type": "ARRAY", "items": {"type": "STRING"}}, "cwd": {"type": "STRING"},
-         "timeout_seconds": {"type": "INTEGER"}}, "required": ["argv"]}},
+         "timeout_seconds": {"type": "INTEGER"}, "export_paths": {"type": "ARRAY", "items": {"type": "STRING"}}}, "required": ["argv"]}},
+    {"name": "import_command_changes", "description": "Atomically import selected text exports from a successful command into the unchanged draft. Inspect workspace_diff afterwards; no GitHub write.",
+     "parameters": {"type": "OBJECT", "properties": {"command_id": {"type": "STRING"}}, "required": ["command_id"]}},
+    {"name": "checkpoint_workspace", "description": "Save the pinned draft to private owner-scoped SQL if checkpoints are enabled. No process, command output or credentials are saved."},
+    {"name": "list_workspaces", "description": "List this authenticated owner's unexpired workspace checkpoint IDs for the configured repository."},
+    {"name": "restore_workspace", "description": "Restore this owner's checkpoint into a fresh task at its original commit. Reread changed files/scoped AGENTS.md before editing or proposing.",
+     "parameters": {"type": "OBJECT", "properties": {"checkpoint_id": {"type": "STRING"}}, "required": ["checkpoint_id"]}},
     {"name": "list_files", "description": "List repository file paths, using the pinned commit after workspace_status. Optional prefix filter.",
      "parameters": {"type": "OBJECT", "properties": {"prefix": {"type": "STRING"}}}},
     {"name": "read_file", "description": "Read a text file; after workspace_status returns pinned/staged text and scoped AGENTS.md.",
@@ -505,28 +513,85 @@ def function_calls(response):
 
 class CodingSession:
     def __init__(self, github, emit, clock=time.monotonic):
+        import threading
+        self.lock = threading.RLock()
         self.github, self.emit, self.clock = github, emit, clock
         self.files_read, self.bytes_read, self.tree_cache = 0, 0, None
         self.workspace = None
         self.cancelled = None
+        self.owner_id = None
+
+    def save_checkpoint(self, result, explicit=False):
+        import coding_checkpoints
+        if not explicit and not coding_checkpoints.enabled():
+            return dict(result, checkpoint={"saved": False, "configured": False})
+        try:
+            workspace = self.workspace
+            with workspace.lock:
+                workspace.start()
+                saved = coding_checkpoints.save(workspace, self.owner_id)
+            return dict(result, checkpoint=saved)
+        except Exception as error:
+            message = str(error) if isinstance(error, CodingError) else "Workspace checkpoint storage is unavailable."
+            if explicit:
+                raise CodingError(message) from None
+            return dict(result, checkpoint={"saved": False, "error": message},
+                        checkpoint_note="The current draft changed, but was not durably saved. Keep this task open or resolve checkpoint storage before stopping.")
 
     def prepare_proposal(self, args):
         # Snapshot metadata comes from the server, never from model arguments.
         clean = {k: v for k, v in args.items() if k not in ("base_sha", "repository")}
-        if self.workspace is not None:
-            return self.workspace.proposal(clean)
-        return clean
+        with self.lock:
+            if self.workspace is not None:
+                return self.workspace.proposal(clean)
+            return clean
 
     def run_tool(self, name, args):
+        # Draft/restore transitions are serialized. Long-running commands release
+        # the session lock; their fingerprint prevents stale-result imports.
+        if name == "run_command":
+            import coding_workspace
+            import coding_terminal
+            with self.lock:
+                if self.workspace is None:
+                    self.workspace = coding_workspace.Workspace(self.github)
+                workspace = self.workspace
+                with workspace.lock:
+                    workspace.active_commands += 1
+            try:
+                return coding_terminal.run(workspace, args, cancelled=self.cancelled)
+            except CodingError as error:
+                return {"error": str(error)[:300]}
+            finally:
+                with workspace.lock:
+                    workspace.active_commands -= 1
+        with self.lock:
+            return self._run_tool(name, args)
+
+    def _run_tool(self, name, args):
         try:
             import coding_workspace
-            if name in (*coding_workspace.TOOLS, "run_command") and self.workspace is None:
+            if name == "list_workspaces":
+                import coding_checkpoints
+                return coding_checkpoints.list_owned(self.owner_id, self.github.repo)
+            if name == "restore_workspace":
+                import coding_checkpoints
+                if self.workspace is not None and (self.workspace.staged or self.workspace.command_results or self.workspace.active_commands):
+                    raise CodingError("Restore into a fresh task; the current draft/command exports must not be discarded.")
+                record = coding_checkpoints.load(self.owner_id, args.get("checkpoint_id"), self.github.repo)
+                restored = coding_workspace.Workspace.restore(self.github, record)
+                result = restored.run("workspace_status", {})
+                self.workspace = restored
+                return dict(result, restored=True, note="Original commit and draft restored. Reread changed files and scoped AGENTS.md; no command was replayed.")
+            if name in (*coding_workspace.TOOLS, "run_command", "checkpoint_workspace", "import_command_changes") and self.workspace is None:
                 self.workspace = coding_workspace.Workspace(self.github)
-            if name == "run_command":
-                import coding_terminal
-                return coding_terminal.run(self.workspace, args, cancelled=self.cancelled)
+            if name == "checkpoint_workspace":
+                return self.save_checkpoint({}, explicit=True)
+            if name == "import_command_changes":
+                return self.save_checkpoint(self.workspace.import_command(args.get("command_id")))
             if self.workspace is not None and name != "search_code":
-                return self.workspace.run(name, args)
+                result = self.workspace.run(name, args)
+                return self.save_checkpoint(result) if name == "edit_file" else result
             if name == "list_files":
                 if self.tree_cache is None:
                     self.tree_cache = self.github.tree()

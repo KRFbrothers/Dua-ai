@@ -716,7 +716,7 @@ def agent_capabilities():
     denied = owner_access_error()
     if denied is not None:
         return denied
-    import agent_adk, agent_store, agent_documents, agent_models, agent_toolkit, coding_terminal
+    import agent_adk, agent_store, agent_documents, agent_models, agent_toolkit, coding_terminal, coding_checkpoints
     try:
         routes = agent_models.routes()
         agent_models.check_adapters()
@@ -725,6 +725,7 @@ def agent_capabilities():
             "embeddingConfigured": agent_documents.enabled(), "providerRoutes": routes,
             "customTools": sorted(tools.tools), "answerStreaming": True,
             "codingExecution": coding_terminal.status(),
+            "codingCheckpoints": {"configured": coding_checkpoints.enabled(), "liveVerified": False},
             "liveProvidersVerified": False, "build": os.environ.get("DUA_BUILD_SHA","unknown")}))
     except Exception:
         return no_store(jsonify({"error": "ADK configuration is invalid or an optional adapter is missing."}), 503)

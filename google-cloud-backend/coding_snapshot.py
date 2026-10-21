@@ -108,4 +108,4 @@ def from_workspace(workspace, cancelled):
             files[name] = (text.encode("utf-8"), mode)
         if cancelled():
             raise coding.CodingError("Command cancelled before sending its snapshot.")
-        return pack(files)
+        return pack(files), workspace.fingerprint()
