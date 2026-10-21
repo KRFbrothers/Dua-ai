@@ -27,23 +27,34 @@ def routes():
 
 
 def gemini_retry_enabled():
-    """ADK_GEMINI_RETRY=1 gives the default Gemini model the same short retry as routed ones (default off)."""
-    return os.environ.get('ADK_GEMINI_RETRY', '0').strip() == '1'
+    """ADK_GEMINI_RETRY=1 (default) retries the default Gemini model on 429 RESOURCE_EXHAUSTED/5xx
+    with exponential backoff + jitter (about 2s, 4s, 8s; 3 retries). 0 = plain model name (rollback)."""
+    return os.environ.get('ADK_GEMINI_RETRY', '1').strip() != '0'
 
 
-def gemini_with_retry(name):
+def gemini_with_retry(name, backoff=False):
+    """backoff=False: short retry for ADK_MODELS_JSON routes (2 attempts, 0.5-2s).
+    backoff=True: quota backoff for the default model (1 call + 3 retries, 2s/4s/8s with jitter, ~15s worst
+    case), well inside the AGENT_ADK_SECONDS deadline that still wraps the whole run."""
     from google.adk.models import Gemini
     from google.genai import types
-    return Gemini(model=name, retry_options=types.HttpRetryOptions(
-        attempts=2, initial_delay=0.5, max_delay=2.0,
-        http_status_codes=[429, 500, 502, 503, 504]))
+    if backoff:
+        options = types.HttpRetryOptions(attempts=4, initial_delay=2.0, max_delay=8.0, exp_base=2.0, jitter=1.0,
+                                         http_status_codes=[429, 500, 502, 503, 504])
+    else:
+        options = types.HttpRetryOptions(attempts=2, initial_delay=0.5, max_delay=2.0,
+                                         http_status_codes=[429, 500, 502, 503, 504])
+    return Gemini(model=name, retry_options=options)
 
 
 def resolve(role, default):
     names = routes().get(role)
     if names is None:
         if gemini_retry_enabled() and isinstance(default, str) and default.startswith('gemini-'):
-            return gemini_with_retry(default)
+            try:
+                return gemini_with_retry(default, backoff=True)
+            except ImportError:  # no ADK/genai installed: keep the plain name
+                return default
         return default
     from google.adk.models import Gemini, FallbackModel
     from google.genai import types

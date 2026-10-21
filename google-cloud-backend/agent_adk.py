@@ -81,6 +81,12 @@ REVISE_PROMPT = (
 )
 
 
+def helpers_sequential():
+    """ADK_HELPERS_SEQUENTIAL=1 (default) runs helpers one after another so they do not burst the shared
+    per-minute Vertex quota (429 RESOURCE_EXHAUSTED). 0 = old parallel helpers (rollback)."""
+    return os.environ.get("ADK_HELPERS_SEQUENTIAL", "1").strip() != "0"
+
+
 def review_enabled():
     return os.environ.get("DUA_AGENT_REVIEW", "0").strip() == "1"
 
@@ -623,7 +629,8 @@ def run(env, request_text, flash_model, agent_model, config_for, adk=None, log=p
         merger = adk.LlmAgent(name="merger", model=model_for("merger", agent_model), include_contents="none",
                               generate_content_config=config_for(agent_model, MERGE_TOKENS), output_key="dua_answer",
                               instruction=merge_instruction, **extra)
-        stages = [adk.ParallelAgent(name="helpers", sub_agents=helpers), merger]
+        helper_stage = adk.SequentialAgent if helpers_sequential() else adk.ParallelAgent
+        stages = [helper_stage(name="helpers", sub_agents=helpers), merger]
         review = review_enabled()
         if review:
             review_model = os.environ.get("DUA_AGENT_REVIEW_MODEL", "").strip() or flash_model
