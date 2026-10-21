@@ -1271,3 +1271,81 @@ Yeh jaan-boojh kar hai ya nahi, code se pata nahi chalta — comment kahin nahi 
 ### Aage kya
 
 Step 6 ke report ki baaki do sifarishein abhi bhi khuli hain: `deleteChat` ke missing tests (idempotency, cancel-reply path) aur uske baad hi `ChatModes.kt`.
+
+---
+
+## 🧪 Chat split — tests: `deleteChat` (21 Oct 2026)
+
+`retryResponse` ke tests merge hone ke baad (PR #316, `main` `9375784`), Step 6 report ki doosri sifarish poori ki: `deleteChat` ke dedicated tests. **Sirf test file** — production code ek line bhi nahi chhua.
+
+### Coverage — before → after
+
+| | Before | After |
+| --- | --- | --- |
+| `retryResponse` | Step 6 tak 0 dedicated test; ab `RetryResponseTest.kt` ke 5 | unchanged (yahi PR nahi chhua) |
+| `deleteChat` (active branch — messages/draft/summary/mode reset + `saveHistory`) | **0** — koi test nahi | **3** assertions-heavy tests (1, 2, 5) |
+| `deleteChat` (cancel-reply path — `replyJob` cancel, `isTyping`, `retryOriginal`, `generation`) | **0** | **2** tests (3, 4) |
+| `deleteChat` (non-active chat — bacha hua chat + uska draft) | **0** | **1** test (6) |
+| Total naye tests | — | **6** |
+
+`deleteChat` code 24 line ka hai par uske **6 alag side-effect** hain, aur pehle inme se ek bhi assert nahi hota tha: `cancelReply()`, `activeId` rotate, `_messages`/`_draft`/`_summary`/`_webMode`/`_xSearch`/`_buildRepo` reset, `_savedChats` filter, `saveHistory()`, aur per-reply metadata maps + `pollJobs` cleanup.
+
+### File
+
+`app/src/test/java/com/dua/ai/viewmodel/DeleteChatTest.kt` — **6 tests**, 283 line.
+
+Wahi harness jo `RetryResponseTest` / `PersonalityPromptingTest` / `ChatPinTest` use karte hain: `RobolectricTestRunner`, `@Config(sdk = [34])`, `LooperMode.PAUSED`, real `ChatViewModel`, real `ChatHistoryWriter`, real SharedPreferences-backed history, network sirf OkHttp interceptor tak. **Koi naya framework ya dependency nahi.**
+
+### 6 cases
+
+| # | Test | Kya prove karta hai |
+| --- | --- | --- |
+| 1 | `deletingTheActiveChatClearsMessagesDraftCachesAndDisk` | `messages` khaali, `draft` khaali, `_summary`/`_webMode`/`_buildRepo` null, `_xSearch` false, `_savedChats` se gayab, `activeChatId` naya, aur **disk par bhi** sirf bacha chat (`ChatHistoryCodec.decode`) |
+| 2 | `deletingTheSameChatTwiceChangesNothingTheSecondTime` | **Idempotency** — doosri baar stored history string **byte-identical**, `_savedChats` same, `activeChatId` dobara rotate nahi |
+| 3 | `deletingTheActiveChatWhileARetryStreamsCancelsItAndResetsTypingAndRetryOriginal` | **Cancel-reply path** — `retryResponse()` ke baad `state=STREAMING` + `isTyping` true → delete → `replyJob` inactive **aur null**, `retryOriginal` null, `isTyping` false, `generation` badha (koi orphan coroutine nahi) |
+| 4 | `aCancelledStreamFromADeletedChatNeverWritesAgain` | Delete ke baad looper pump karne par bhi stale turn wapas nahi likhta; `error` null, typing false, `_savedChats` sirf bacha chat |
+| 5 | `deletingAChatThatDoesNotExistIsSafeAndChangesNothing` | Unknown id → disk, `_savedChats`, `activeChatId`, `messages`, `draft` sab **unchanged** |
+| 6 | `deletingABackgroundChatKeepsTheActiveConversationAndItsDraft` | Non-active chat delete → khula chat + uska draft bilkul untouched, sirf target chat disk se gaya |
+
+### ⏱️ Determinism — #316 wala hang dobara nahi ho sakta
+
+| Rule | Kaise |
+| --- | --- |
+| Koi `Thread.sleep` / `settle()` / `CountDownLatch` | **Zero.** Saare 6 tests synchronous hain. |
+| Koi paused looper pump nahi | `LooperMode.PAUSED` par looper **test body mein kabhi pump nahi hota** — sirf teardown mein bounded drain. Isliye do assertions ke beech koi dispatched continuation nahi chalta. |
+| Streaming turn kaise dekha | `retryResponse()` streaming state **coroutine launch se pehle synchronously** set karta hai — wahi observation jo `RetryResponseTest` ke test 2/5 use karte hain. Koi wait nahi. |
+| Interceptor kabhi block nahi karta | Jo request aaye use turant ek complete SSE turn milta hai. Koi latch `await()` interceptor ke andar nahi (yahi #316 ka root cause tha). |
+| Har test independent | Apna `ChatViewModel` + saaf SharedPreferences; koi order dependency nahi. |
+| Teardown | `replyJob?.cancel()` + `viewModelScope.cancel()` + dono OkHttp pools `shutdown` + `awaitTermination(2s)`. |
+
+### ❗ Production code bilkul nahi chhua
+
+```
+git diff --name-only origin/main...HEAD
+app/src/test/java/com/dua/ai/viewmodel/DeleteChatTest.kt
+```
+
+`git status -- app/src/main` = **0 paths**.
+
+Blob proof: remote `c1ab6133725305700b6fa065a2d75ee1cebf9cc9` = local `git hash-object` ✅
+Branch `test/delete-chat-coverage`, HEAD `324b101`, base `main` `9375784`. PR: #317.
+
+### ⚠️ Ek behaviour jo test likhte waqt mila (bug nahi, design — aapka decision)
+
+**`deleteChat()` `clearAttachments()` nahi bulata.** Active branch mein sirf `cancelReply()` + message/state reset hai; `clearAttachments()` `startNewChat()` aur `clearAllChats()` mein hai. Matlab composer mein pada draft attachment us chat se **agle chat mein chala jaata hai** — jabki `startNewChat` use saaf kar deta hai.
+
+Yeh asymmetry jaan-boojh kar hai ya nahi, code se pata nahi chalta (koi comment nahi). Isliye test 1 mein attachment assertion jaan-boojh kar **nahi** rakha — warna test current behaviour lock kar deta ya red ho jaata. Agar delete par attachments clear hone chahiye to woh alag production PR hai, phir yahan ek assertion add ho jaayega.
+
+### Merge checklist
+
+```bash
+./gradlew assembleDebug
+./gradlew testDebugUnitTest
+./gradlew lint
+```
+
+> Sandbox note: is environment ka cgroup memory limit **2 GiB** hai (`/sys/fs/cgroup/memory.max`; `memory.events` → `oom_kill 2`). `compileDebugKotlin` daemon har koshish mein OOM se mar gaya — `-Xmx4g`, `--no-daemon`, `--max-workers=1`, `-Xmx1100m` + in-process Kotlin, sab same. Isliye local run possible nahi tha; CI hi sach hai. Code manually review kiya: imports (koi unused nahi, `CopyOnWriteArrayList` hata diya jab use khatam hua), brace/paren balance (35/35, 221/221), 6 `@Test`.
+
+### Aage kya
+
+`deleteChat` ke baaki missing tests (`deleteServerChat` ki tarah `_dataBusy` guard, `draftSaver.pending` wala path, aur `pollJobs`/`replyBuild` map cleanup ka direct assertion) — phir `ChatModes.kt` split. **Pehle test, phir move.**
