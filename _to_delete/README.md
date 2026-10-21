@@ -2027,3 +2027,40 @@ Merge-point `main` run `39571483986` bhi 4/4 success.
 ### Aage kya
 
 Baaki untested mode paths: `setBuildRepository`/`setXSearch`/`setRunCode` ke typing-lock branches, aur `_agentAvailable` false hone par `retryResponse` ka `requestAgent` drop. Uske baad agla slice — `ChatHistory.kt` (295 lines) sabse bada bacha hua feature file hai.
+
+## 🧪 Chat split — remaining mode / Retry guards (21 Oct 2026)
+
+Base: `main@f7450a2`. Step 7 / PR #326 ab merge ho chuka hai. Upar ke final "Aage kya" ke mode aur Retry gaps yahan cover hue: **6 naye tests**, do existing test files mein. Purane README ka har byte prefix ke roop mein bacha hai; koi source file move/delete nahi hui.
+
+### Coverage
+
+| Path | Naya regression check |
+|---|---|
+| `setRunCode` typing lock | Enable **aur** disable dono refused; supported provider ke saath Agent/Imagine/Build aur existing notice unchanged. |
+| `setXSearch` typing lock | Grok + advertised X search ke saath enable **aur** disable refused; Agent aur notice unchanged. |
+| `setBuildRepository` typing lock | Signed-in owner + configured Gemini ke saath repository change **aur** clear refused; Grok selection, other modes, notice aur saved history unchanged. |
+| Frozen Agent reply, capability unavailable | Real retry request ka `mode="auto"`; original frozen Agent flag aur composer choices preserved. |
+| Frozen Agent + Reasoning, capability unavailable | Real retry request ka `mode="reasoning"`; composer ki current choice se replace nahi hota. |
+| Frozen Agent + Reasoning, capability available | Real retry request ka `mode="agent"`; Agent Reasoning ko suppress karta hai. Yeh positive control always-off fallback ko pakadta hai. |
+
+`ChatModesCoverageTest.kt`: **4 → 7** tests. `RetryResponseTest.kt`: **5 → 8** tests. `ChatModesModeFreezeTest.kt` ke **7 tests untouched**.
+
+### Harness
+
+Real `ChatViewModel` + existing real streaming client; HTTP interceptor network se pehle complete SSE reply deta hai. Mode-lock tests synchronous hain. Retry cases existing bounded wait/teardown reuse karte hain. Koi naya latch, blocking interceptor, sleep loop ya JUnit `Timeout` rule nahi. Production APIs, reflection-pinned fields aur UI same hain.
+
+### Verification
+
+| Check | Result |
+|---|---|
+| Focused mode / freeze / Retry suite | **22 passed**, 0 failed/skipped |
+| Full `:app:testDebugUnitTest -Pdua.ui-record` | **1,672 passed**, 0 failures/errors/skips |
+| `:app:assembleDebug` | **pass** |
+| `:app:lintDebug` | **fail: 2 existing errors, 60 warnings** — details below |
+
+Lint errors dono unchanged production files mein hain:
+
+- `ui/navigation/DuaNavHost.kt:298`, `StateFlowValueCalledInComposition`: Voice route composition `viewModel.projectId.value` padhti hai instead of collecting it as state.
+- `res/layout/dua_toolbar_widget.xml:21`, `UseAppTint`: live widget `ImageButton` ka `android:tint`. Yeh **RemoteViews** layout hai; `app:tint` se blindly replace nahi karna, kyunki launcher AppCompat inflater use nahi karta.
+
+Test/build pass ko lint pass nahi maana gaya. Is change ka scope two test files + yeh append-only report hai. Agla refactor candidate `ChatHistory.kt` hai; lint ke dono existing blockers bhi ab explicitly recorded hain.

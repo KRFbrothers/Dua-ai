@@ -47,8 +47,8 @@ import org.robolectric.annotation.LooperMode
  * retryResponse (ChatLifecycle.kt) through the real ViewModel and the real streaming client,
  * with HTTP intercepted before the network — the same harness as PersonalityPromptingTest.
  *
- * These are the five behaviours the split report listed as unasserted: a normal retry, Stop
- * mid-retry, a retry that fails, a Build reply, and a retry left stale by a chat switch.
+ * Covers normal retry, Stop mid-retry, failure, Build, stale chat switches, and the frozen
+ * Agent/Reasoning choice when engine capability changes before Retry.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class)
@@ -70,6 +70,7 @@ class RetryResponseTest {
 
     private fun field(name: String) = ChatViewModel::class.java.getDeclaredField(name).apply { isAccessible = true }
     @Suppress("UNCHECKED_CAST") private fun <T> flow(name: String) = field(name).get(model) as MutableStateFlow<T>
+    @Suppress("UNCHECKED_CAST") private fun <T> map(name: String) = field(name).get(model) as MutableMap<String, T>
 
     @Before fun setup() {
         application = RuntimeEnvironment.getApplication()
@@ -314,5 +315,45 @@ class RetryResponseTest {
         assertTrue("startNewChat must bump the generation", field("generation").getInt(model) > generationBefore)
         assertFalse("the new chat must stay a fresh chat", model.activeChatId.value == startedIn)
         assertTrue("no turn from the old chat may leak", model.messages.value.none { it.text.contains("Stale") })
+    }
+
+    // ---- 6–8. frozen Agent mode is gated by the engine's current capability ----
+
+    private fun retryFrozenAgent(available: Boolean, reasoning: Boolean): JSONObject {
+        intercept { request -> stream("Retried answer", request) }
+        seed()
+        map<Boolean>("replyAgent")["reply"] = true
+        map<Boolean>("replyReasoning")["reply"] = reasoning
+        flow<Boolean>("_agentAvailable").value = available
+        // The composer differs from the old reply, so the request must use the frozen choice.
+        assertFalse(model.agent.value)
+        assertFalse(model.reasoning.value)
+
+        model.retryResponse("reply")
+        finished()
+
+        assertEquals(1, requests.size)
+        assertEquals("Gemini", requests.single().getString("model"))
+        assertEquals("Explain coroutines", requests.single().getJSONArray("messages").getJSONObject(0).getString("text"))
+        assertEquals(listOf("prompt", "reply"), model.messages.value.map { it.id })
+        assertEquals("Retried answer", model.messages.value.last().text)
+        assertEquals("complete", model.messages.value.last().state)
+        assertNull(model.error.value)
+        assertTrue("capability loss must not overwrite the original reply's frozen choice", map<Boolean>("replyAgent")["reply"] == true)
+        assertFalse("Retry must not change the composer's Agent choice", model.agent.value)
+        assertFalse("Retry must not change the composer's Reasoning choice", model.reasoning.value)
+        return requests.single()
+    }
+
+    @Test fun aFrozenAgentRetryFallsBackToAutoWhenTheEngineNoLongerOffersAgent() {
+        assertEquals("auto", retryFrozenAgent(available = false, reasoning = false).getString("mode"))
+    }
+
+    @Test fun aFrozenAgentRetryFallsBackToFrozenReasoningWhenAgentIsUnavailable() {
+        assertEquals("reasoning", retryFrozenAgent(available = false, reasoning = true).getString("mode"))
+    }
+
+    @Test fun aFrozenAgentRetryStillUsesAgentAndSuppressesReasoningWhenAvailable() {
+        assertEquals("agent", retryFrozenAgent(available = true, reasoning = true).getString("mode"))
     }
 }
