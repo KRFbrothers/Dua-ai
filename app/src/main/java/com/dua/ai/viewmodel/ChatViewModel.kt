@@ -1206,7 +1206,10 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     fun retryAutomaticSync() { refreshSyncBusy(); automaticSync.retry() }
     fun resumeAutomaticSyncAfterReview() { refreshSyncBusy(); automaticSync.resumeAfterReview() }
     private fun liveProjectBusy() = voiceFeature._liveStart.value.busy || com.dua.ai.voice.live.LiveVoiceController.active
+    // File preparation/reading is a reply-shaped action: the picker that started it owns the draft
+    // and the message list until it finishes, so anything gated by syncBlocked() must wait too.
     private fun syncBlocked() = account.state.value.busy || _dataBusy.value || _isTyping.value || liveProjectBusy() ||
+        _preparingFiles.value || _readingFiles.value ||
         _cloudPreview.value != null || _importPreview.value != null || _buildPr.value.values.any { it.creating }
     private fun refreshSyncBusy() = automaticSync.setBusy(syncBlocked())
     private val networkMonitor: com.dua.ai.network.NetworkMonitor = com.dua.ai.network.ConnectivityManagerNetworkMonitor(application)

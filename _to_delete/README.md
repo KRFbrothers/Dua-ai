@@ -1547,3 +1547,120 @@ git diff --name-only origin/main...HEAD  → sirf ChatModesModeFreezeTest.kt (+ 
 ### Aage kya
 
 Ab `ChatModes.kt` (~200 line) extract kar sakte hain — mode toggles, compatibility guards aur yeh freeze contract tests ke saamne safe hain. Move ke waqt public API byte-identical rakhna, aur `reply*` maps ko `ChatModesHost` ke peeche se waisa hi forward karna.
+
+---
+
+## 🔒 `syncBlocked()` guard fix — file preparation ab delete ko rokta hai (21 Oct 2026)
+
+**Pehla production-code change** is poore test streak mein. Baaki sab PRs (`#316`–`#319`) sirf test + docs the. Yahan ek real bug tha jo teen reports se flag ho raha tha, aur fix **ek hi jagah** hua.
+
+### 🐞 Bug — kya galat tha
+
+`deleteServerChat` apne guard ke liye `syncBlocked()` par depend karta hai (`ChatHistory.kt:201`), lekin `syncBlocked()` attachment picker ki state **dekhta hi nahi tha**:
+
+```kotlin
+// pehle — ChatViewModel.kt:1209
+private fun syncBlocked() = account.state.value.busy || _dataBusy.value || _isTyping.value || liveProjectBusy() ||
+    _cloudPreview.value != null || _importPreview.value != null || _buildPr.value.values.any { it.creating }
+```
+
+`_preparingFiles` aur `_readingFiles` missing the. Dono lifecycle:
+
+| Flag | Kahan set hota hai | Kya karta hai |
+| --- | --- | --- |
+| `_preparingFiles` | `ChatUploads.selectAttachments` (`preparingSelections++`) | picker se aaye URIs ko describe/upload karta hai |
+| `_readingFiles` | `ChatUploads.loadFiles` (`version`-guarded) | worker par base64/limits ke saath files padhta hai |
+
+**Expected:** jab tak pick chal raha ho, `deleteServerChat` refuse kare — "Finish the current reply or sync action, then try again."
+**Actual:** delete aage badh jaata tha → `_chatDeletion.busy = true`, `_dataBusy = true`, `account.cloud()` → `account.deleteChat()` → `applyConfirmedChatDeletion()` → `bindCloudHistory()`, jo **active chat ke saath-saath `messages`/`draft`/`_attachments` badal deta hai** — bilkul us waqt jab picker apna result `_attachments`/`_draft` mein likhne wala ho. Do writers, ek hi state: delete jeet jaati hai to user ka selection gayab, pick jeet jaata hai to delete ke baad wapas aa jaata hai.
+
+**Intent pehle se clear tha** (isliye yeh "design choice" nahi, incomplete guard hai):
+
+- `ChatLifecycle.kt:67` — `retryResponse` khud `_isTyping || _preparingFiles || _readingFiles || _dataBusy` par return karta hai
+- `ChatViewModel.kt:1025` — data-controls action `!syncBlocked() && !_readingFiles.value && !_preparingFiles.value` **explicitly** check karta hai, yaani author ko pata tha ki `syncBlocked()` in dono ko cover nahi karta
+- `ChatViewModel.kt:1218` — offline resend busy ko `_isTyping || _preparingFiles || _readingFiles` maanta hai
+- `ChatAgentControls.kt:67`, `ChatAttachments.kt:39`, `ChatImagine.kt:104` — sab in dono ko reply-shaped state maante hain
+
+`syncBlocked()` hi akela jagah tha jahan yeh chhoot gaya.
+
+### 🔧 Fix — 2 line, ek jagah
+
+```kotlin
+// ab — ChatViewModel.kt:1209
+// File preparation/reading is a reply-shaped action: the picker that started it owns the draft
+// and the message list until it finishes, so anything gated by syncBlocked() must wait too.
+private fun syncBlocked() = account.state.value.busy || _dataBusy.value || _isTyping.value || liveProjectBusy() ||
+    _preparingFiles.value || _readingFiles.value ||
+    _cloudPreview.value != null || _importPreview.value != null || _buildPr.value.values.any { it.creating }
+```
+
+`syncBlocked()` **private** hai — public API zero change. Signature, return type, naam sab same. Sirf predicate ka body.
+
+### 🔀 Blast radius — kaun-kaun se caller ab badle
+
+`syncBlocked()` ke saare callers (audit kiya, 11 jagah):
+
+| Caller | Pehle | Ab | Theek? |
+| --- | --- | --- | --- |
+| `deleteServerChat` | pick ke dauraan allowed ❌ | refused ✅ | **yahi bug tha** |
+| `renameChat` | pick ke dauraan allowed ❌ | refused ✅ | ✅ pick draft ke upar likh raha hota hai |
+| `setChatPinned` | pick ke dauraan allowed ❌ | refused ✅ | ✅ wahi |
+| `saveMemoryNote` | allowed | refused | ✅ aisa lagta hai ki yeh pehle se `check()` se crash karta hoga |
+| `restoreDriveBackup` | allowed | refused | ✅ restore pick ke beech mein nahi hona chahiye |
+| `applyConfirmedChatDeletion` | allowed | refused | ⚠️ **side effect**: pehle khula path, ab band. `_dataBusy` already true hota hai jab yeh chalta hai, isliye practically dead branch; par tight hai |
+| `AutomaticCloudSync.LocalPort.read/commit` | allowed | refused | `check()` ab pick ke dauraan fail karega. Pehle bhi yahi hota tha kyunki `read()` `flushHistory()` karta hai aur `commit()` `!draftSaver.pending` maangta hai — pick ke dauraan dono hi tootte the. Ab **fail-fast, silent** |
+| `retryResponse` (`ChatLifecycle.kt:67`) | apna alag check | unchanged | ✅ apna check pehle se tha, ab consistent |
+
+**Behaviour change ka asar:** server delete, rename, pin, memory note, Drive restore — in sab par ab pick ke dauraan 1-line error aata hai ("Finish the current reply or sync action…"). Koi naya crash nahi, koi naya path nahi.
+
+### 🧪 Naya test file — `DeleteServerChatGuardTest.kt` (5 tests)
+
+`app/src/test/java/com/dua/ai/viewmodel/DeleteServerChatGuardTest.kt` · 281 lines · 5 `@Test`
+
+| # | Case | Test | Assertions |
+| --- | --- | --- | --- |
+| 1 | **Regression** — preparing state | `aServerDeleteIsRefusedWhileTheAttachmentPickerIsStillPreparingFiles` | error = exact `"Finish the current reply or sync action, then try again."` · `busy == false` · `_dataBusy == false` · `id == OTHER` · `completed == false` **Yeh fix se pehle FAIL hota hai** |
+| 2 | Reading state | `aServerDeleteIsRefusedWhileAttachmentsAreStillBeingRead` | wahi teen assertions `_readingFiles = true` par |
+| 3 | Refusal side-effect free + guard live | `aRefusedServerDeleteLeavesTheChatsOnDiskUntouchedAndProceedsOnceThePickFinishes` | disk string **byte-identical** · `savedChats`/`messages`/`_activeChatId` unchanged · 2 chats intact · **phir flag clear** → `error == null`, `busy == true`, `_dataBusy == true` |
+| 4 | Dono flags ek saath | `preparationAndReadingTogetherAreStillASingleLiveRefusal` | dono par refuse · dobara refuse (no double-fail) · sirf ek clear → **abhi bhi refuse** · dono clear → accept · disk par 2 chats |
+| 5 | Shared guard | `renamingAndPinningWaitForFilePreparationTooBecauseTheyShareTheGuard` | `renameChat`/`setChatPinned` dono flags par refuse; refusal ne title/pin **nahi** likha; clear hone par accept + title/pin **sach mein** set |
+
+**Coverage pehle kya thi → ab kya hai:**
+
+| | Pehle | Ab |
+| --- | --- | --- |
+| `syncBlocked()` ke 9 conditions | 3 tested (`_dataBusy`, `_isTyping`, `account.busy` indirectly) | **5/9** (`_preparingFiles`, `_readingFiles` add) |
+| `deleteServerChat` ke guards | 1/5 (`_isTyping`) — `DeleteChatCleanupTest` test 6 | **3/5** (`_isTyping`, `_preparingFiles`, `_readingFiles`) |
+| Pick-in-flight ke dauraan destructive actions | **0 tested** | **2** (delete + rename/pin) |
+| File preparation par koi bhi assertion | **0** | **5 tests** |
+
+### ⏱ Determinism — PR #316 ka hang dobara nahi
+
+| Risk | Status |
+| --- | --- |
+| `Thread.sleep` | ❌ nahi — 0 occurrence (comment mein bhi nahi) |
+| `CountDownLatch` | ❌ nahi — 0 |
+| Blocking interceptor | ❌ nahi — account interceptor **turant** `IOException` throw karta hai, `/api/chat` interceptor is file mein hai hi nahi |
+| Real network | ❌ nahi — account call transport par hi mar jaata hai |
+| Paused looper test body mein pump | ❌ nahi — sirf `@After` ka bounded drain (25×5 ms) |
+| JUnit `@Rule Timeout` | jaan-boojh kar nahi (body dusre thread par jaati hai, `idleFor()` wedge karta hai) |
+| Kis cheez par assert karte hain | guard refusals + accepted-state, dono **`viewModelScope.launch` se PEHLE** synchronously likhe jaate hain — koi coroutine schedule nahi, koi `advanceUntilIdle` ki zaroorat nahi |
+| Naya framework/dependency | ❌ koi nahi |
+
+Har test apna `ChatViewModel` + apna `OkHttpClient` + saaf prefs. Koī test doosre par depend nahi karta.
+
+### 📋 Merge checklist
+
+```bash
+./gradlew assembleDebug
+./gradlew testDebugUnitTest
+./gradlew lint
+```
+
+> Sandbox note: cgroup **2 GiB** (`oom_kill 2`) — local Gradle possible nahi. Confirmation CI se.
+
+### ⚠️ Jo abhi bhi khula hai (fix nahi kiya)
+
+1. **`deleteChat` `clearAttachments()` nahi bulata** — attachment agle chat mein chala jaata hai (`startNewChat`/`clearAllChats` clear karte hain, `deleteChat` nahi).
+2. **`deleteChat` par `syncBlocked()` hi nahi** — woh sirf `if (_dataBusy.value) return` karta hai. Is fix ne `deleteServerChat` theek kiya; **local delete ka guard abhi bhi `_isTyping`/pick miss karta hai**. Yeh jaan-boojh kar alag rakha (scope: `deleteServerChat`).
+3. **`liveProjectBusy()`, `_cloudPreview`, `_importPreview`, `buildPr.creating`** — teeno untested hain.
