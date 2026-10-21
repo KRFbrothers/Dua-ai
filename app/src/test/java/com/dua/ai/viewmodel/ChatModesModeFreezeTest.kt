@@ -59,12 +59,11 @@ import org.robolectric.annotation.LooperMode
  * Harness: the same one as [RetryResponseTest] / [DeleteChatCleanupTest] — real ViewModel, real
  * streaming client, HTTP intercepted before the network, `@LooperMode(PAUSED)`.
  *
- * Waits: every behavioural assertion in this file reads state that the call under test set
- * synchronously, and the paused looper is never pumped for those. The only wait is
- * [awaitRequest], used by the two tests that must see the outgoing wire payload: that body is
- * built on the coroutine and read on an OkHttp worker thread, so the virtual clock alone cannot
- * advance it. It is the same bounded pump the merged [RetryResponseTest] uses, and it fails with
- * a message instead of hanging.
+ * Waits: every behavioural assertion here reads state that the call under test set synchronously,
+ * and the paused looper is never pumped for those. The only wait is [awaitRequest], used by the two
+ * tests that must see the outgoing wire payload: that body is built on the coroutine and read on an
+ * OkHttp worker thread, so the virtual clock alone cannot advance it. It is the same bounded pump
+ * the merged [RetryResponseTest] uses, and it fails with a message instead of hanging.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class)
@@ -79,10 +78,11 @@ class ChatModesModeFreezeTest {
     private val store = ViewModelStore()
     /** Every /api/chat body, in order. The interceptor fails on any other host, so nothing escapes. */
     private val requests = CopyOnWriteArrayList<JSONObject>()
+    /** The account stack from [setup]; held so [teardown] can shut down the pool it opened. */
     private var accountClient: OkHttpClient? = null
 
-    private val prompt = ChatMessage(id = PROMPT, text = "Explain coroutines", isUser = true, model = "Gemini")
-    private val original = ChatMessage(id = REPLY, text = "Original answer", isUser = false, model = "Gemini", state = "complete")
+    private val prompt = ChatMessage(id = PROMPT, text = "Explain coroutines", isUser = true, model = MODEL)
+    private val original = ChatMessage(id = REPLY, text = "Original answer", isUser = false, model = MODEL, state = "complete")
 
     private fun field(name: String) = ChatViewModel::class.java.getDeclaredField(name).apply { isAccessible = true }
     @Suppress("UNCHECKED_CAST") private fun <T> flow(name: String) = field(name).get(model) as MutableStateFlow<T>
@@ -105,6 +105,7 @@ class ChatModesModeFreezeTest {
         // "loaded with defaults" — `retryResponse` needs it and nothing here waits for an emission.
         field("appearanceLoaded").set(model, true)
         intercept()
+        applyIntegrations(IntegrationState())
     }
 
     /**
@@ -148,7 +149,20 @@ class ChatModesModeFreezeTest {
                     .toResponseBody("text/event-stream".toMediaType())).build()
         }.build()
         field("api").set(model, DuaApiClient("https://chat.test", client, apiBaseUrl = "https://chat.test"))
+        // Signed out and off the cloud engine: a retry then takes the plain local path.
         flow<Boolean>("_agentAvailable").value = false
+        flow<Boolean>("_online").value = true
+    }
+
+    private fun applyIntegrations(state: IntegrationState) { flow<IntegrationState>("_integrations").value = state }
+
+    /**
+     * Build is gated on a server Build config AND at least one of its providers being configured;
+     * the fallback list has none configured, so enable Gemini exactly like [RetryResponseTest] does.
+     */
+    private fun buildIntegrations(): IntegrationState {
+        val base = IntegrationState(build = BuildModeConfig(enabled = true))
+        return base.copy(providers = base.providers.map { if (it.name == "Gemini") it.copy(configured = true) else it })
     }
 
     /** The account API is never used here; refusing loudly keeps a stray call visible. */
@@ -160,7 +174,7 @@ class ChatModesModeFreezeTest {
     private fun seed(webMode: String? = null, build: String? = null) {
         flow<String>("_activeChatId").value = CHAT
         flow<List<ChatMessage>>("_messages").value = listOf(prompt, if (build == null) original else original.copy(build = BuildInfo(build)))
-        flow<List<SavedChat>>("_savedChats").value = listOf(SavedChat(id = CHAT, model = "Gemini", draft = "",
+        flow<List<SavedChat>>("_savedChats").value = listOf(SavedChat(id = CHAT, model = MODEL, draft = "",
             messages = model.messages.value, updatedAt = 1_000L, buildRepository = build))
         flow<String>("_draft").value = ""
         flow<Boolean>("_isTyping").value = false
@@ -168,20 +182,13 @@ class ChatModesModeFreezeTest {
         build?.let { map<String>("replyBuild")[REPLY] = it }
         saveHistory()
         model.flushHistory()
+        // The seed must be on disk before the action, so a broken seed fails loudly instead of
+        // looking like a pass when the assertion below compares against the same empty cache.
+        val (activeId, chats) = ChatHistoryCodec.decode(rawHistory())
+        assertEquals(CHAT, activeId)
+        assertEquals(listOf("Explain coroutines", "Original answer"), chats.single().messages.map { it.text })
+        assertEquals(build, chats.single().buildRepository)
     }
-
-    private fun seedChats(open: SavedChat) {
-        flow<String>("_activeChatId").value = open.id
-        flow<List<SavedChat>>("_savedChats").value = listOf(open)
-        flow<List<ChatMessage>>("_messages").value = open.messages
-        flow<String>("_draft").value = open.draft
-        saveHistory()
-        model.flushHistory()
-    }
-
-    private fun chat(id: String, buildRepository: String? = null) =
-        SavedChat(id = id, model = "Gemini", draft = "", updatedAt = 1_000L, buildRepository = buildRepository,
-            messages = listOf(prompt.copy(id = "$id-prompt"), original.copy(id = "$id-reply")))
 
     private fun saveHistory() = ChatViewModel::class.java.getDeclaredMethod("saveHistory").apply { isAccessible = true }.invoke(model)
 
@@ -207,8 +214,8 @@ class ChatModesModeFreezeTest {
     private fun awaitRequest(description: String): JSONObject {
         val until = System.nanoTime() + 10_000_000_000L
         while (requests.isEmpty() && System.nanoTime() < until) {
-            shadowOf(Looper.getMainLooper()).idleFor(10, TimeUnit.MILLISECONDS)
-            Thread.sleep(1)
+            shadowOf(Looper.getMainLooper()).idleFor(20, TimeUnit.MILLISECONDS)
+            Thread.sleep(2)
         }
         assertTrue("Timed out waiting for $description; error=${model.error.value}, typing=${model.isTyping.value}",
             requests.isNotEmpty())
@@ -218,9 +225,8 @@ class ChatModesModeFreezeTest {
     // ---- 1. a retry keeps the reply's frozen web mode ----
 
     @Test fun aRetrySendsTheRepliesFrozenWebModeAfterTheComposerWasTurnedOff() {
+        applyIntegrations(IntegrationState(webSearchConfigured = true))
         seed(webMode = "search")
-        val integrations = flow<IntegrationState>("_integrations")
-        integrations.value = integrations.value.copy(webSearchConfigured = true)
         // The user turned the chip off after the original answer arrived.
         model.setWebMode(null)
         assertNull("the seed must start with the composer's mode off", model.webMode.value)
@@ -229,61 +235,60 @@ class ChatModesModeFreezeTest {
 
         // The retry freezes the ORIGINAL request's choice, and it does so synchronously — before
         // its coroutine is dispatched — so this needs no wait and cannot see a half-applied frame.
-        assertEquals("the retry must replay the reply's own web mode", "search", map<String?>("replyWebModes")[REPLY])
-        assertNull("the composer's chip must stay where the user left it", model.webMode.value)
-        assertEquals("the retry must take the reply over", ChatMessage.STREAMING, model.messages.value.last().state)
-        assertEquals("the chat must keep exactly one turn pair", 2, model.messages.value.size)
+        assertEquals("search", map<String?>("replyWebModes")[REPLY])
+        assertEquals(null, model.webMode.value)
+        assertEquals(ChatMessage.STREAMING, model.messages.value.last().state)
+        assertEquals(2, model.messages.value.size)
 
         val body = awaitRequest("the retry request")
-        assertEquals("the wire must carry the frozen mode, not the composer's", "search", body.getString("web"))
-        assertEquals("a plain retry stays on the auto mode", "auto", body.getString("mode"))
-        assertEquals("the retry must resend only the original prompt", 1, body.getJSONArray("messages").length())
+        assertEquals("search", body.getString("web"))
+        assertEquals("auto", body.getString("mode"))
+        assertEquals(1, body.getJSONArray("messages").length())
         assertEquals("Explain coroutines", body.getJSONArray("messages").getJSONObject(0).getString("text"))
     }
 
     // ---- 2. the freeze is scoped to the old reply; a new turn uses the composer ----
 
     @Test fun aNewTurnUsesTheComposersCurrentModeWhileTheOldReplyKeepsItsFrozenOne() {
+        applyIntegrations(IntegrationState(webSearchConfigured = true))
         seed(webMode = "search")
-        flow<IntegrationState>("_integrations").value = flow<IntegrationState>("_integrations").value.copy(webSearchConfigured = true)
         model.setWebMode(null)
 
         model.retryResponse(REPLY)
         model.stopReply()
         assertFalse("the stopped retry must hand the composer back", model.isTyping.value)
-        assertEquals("the original answer must be restored", "Original answer", model.messages.value.last().text)
+        assertEquals("Original answer", model.messages.value.last().text)
 
         model.sendMessage("Next question")
 
         val newReply = model.messages.value.last()
         assertFalse("a new turn must create a new reply", newReply.id == REPLY)
-        assertNull("the new turn starts from the composer, not the frozen mode", map<String?>("replyWebModes")[newReply.id])
         assertTrue("the new turn must be recorded against its own reply",
             map<String?>("replyWebModes").containsKey(newReply.id))
-        assertEquals("the old reply's freeze must survive a new turn", "search", map<String?>("replyWebModes")[REPLY])
+        assertNull("the new turn starts from the composer, not the frozen mode", map<String?>("replyWebModes")[newReply.id])
+        assertEquals("search", map<String?>("replyWebModes")[REPLY])
         assertNull("a new turn must not inherit the old freeze", model.webMode.value)
     }
 
     // ---- 3. a Build reply keeps its repository even after Build mode is left ----
 
     @Test fun aBuildReplyKeepsItsRepositoryAfterTheComposerLeftBuildMode() {
-        seed(build = REPO)
         signIn()
-        flow<IntegrationState>("_integrations").value = flow<IntegrationState>("_integrations").value
-            .copy(build = BuildModeConfig(enabled = true))
+        applyIntegrations(buildIntegrations())
+        seed(build = REPO)
         assertNull("Build must be usable in this test", model.buildUnavailableReason())
         // The user left Build mode after the answer arrived.
         flow<String?>("_buildRepo").value = null
 
         model.retryResponse(REPLY)
 
-        assertEquals("the retry must replay the reply's repository", REPO, map<String>("replyBuild")[REPLY])
-        assertEquals("the streaming turn must show the same repository", REPO, model.messages.value.last().build?.repository)
-        assertNull("the composer must stay where the user left it", model.buildRepo.value)
+        assertEquals(REPO, map<String>("replyBuild")[REPLY])
+        assertEquals(REPO, model.messages.value.last().build?.repository)
+        assertEquals(null, model.buildRepo.value)
 
         val body = awaitRequest("the Build retry request")
-        assertEquals("a Build retry must stay in Build mode", "build", body.getString("mode"))
-        assertEquals("the wire must name the frozen repository", REPO, body.getString("repository"))
+        assertEquals("build", body.getString("mode"))
+        assertEquals(REPO, body.getString("repository"))
         assertFalse("Build replaces the web mode entirely", body.has("web"))
     }
 
@@ -291,21 +296,26 @@ class ChatModesModeFreezeTest {
 
     @Test fun openingASavedChatAppliesItsStoredRepositoryAndClearsTheSessionModes() {
         val plain = chat(id = PLAIN)
-        seedChats(open = plain)
-        flow<List<SavedChat>>("_savedChats").value = listOf(plain, chat(id = BUILT, buildRepository = REPO))
+        val built = chat(id = BUILT, buildRepository = REPO)
+        flow<String>("_activeChatId").value = PLAIN
+        flow<List<SavedChat>>("_savedChats").value = listOf(plain, built)
+        flow<List<ChatMessage>>("_messages").value = plain.messages
+        flow<String>("_draft").value = ""
         flow<Boolean>("_isTyping").value = false
+        saveHistory()
+        model.flushHistory()
 
         flow<String?>("_webMode").value = "search"
         flow<Boolean>("_xSearch").value = true
         flow<String?>("_buildRepo").value = REPO
         model.openChat(BUILT)
 
-        assertEquals("opening a chat must adopt its saved repository", REPO, model.buildRepo.value)
-        assertNull("the web mode is a session choice, never carried across chats", model.webMode.value)
+        assertEquals(REPO, model.buildRepo.value)
+        assertEquals(null, model.webMode.value)
         assertFalse("X search is a session choice, never carried across chats", model.xSearch.value)
 
         model.openChat(PLAIN)
-        assertNull("a chat with no repository must clear Build mode", model.buildRepo.value)
+        assertEquals(null, model.buildRepo.value)
 
         flow<String?>("_webMode").value = "search"
         flow<Boolean>("_xSearch").value = true
@@ -323,13 +333,14 @@ class ChatModesModeFreezeTest {
 
     @Test fun webSearchAndXSearchRefuseWithoutCapabilityAndApplyOnceTheServerOffersThem() {
         // Direction 1: the server does not offer search, so the chip refuses and stores nothing.
+        // The engine's default model is "Dua", which is why the message names it.
         model.setWebMode("search")
         assertTrue("a refused mode must say why: ${model.error.value}",
-            model.error.value.orEmpty().startsWith("Web search needs setup for"))
+            model.error.value.orEmpty().startsWith("Web search needs setup for $MODEL"))
         assertNull("a refused mode must not be stored", model.webMode.value)
 
         // Direction 2: the same call once the server offers it.
-        flow<IntegrationState>("_integrations").value = flow<IntegrationState>("_integrations").value.copy(webSearchConfigured = true)
+        applyIntegrations(IntegrationState(webSearchConfigured = true))
         model.setWebMode("search")
         assertEquals("search", model.webMode.value)
         assertNull(model.error.value)
@@ -337,18 +348,16 @@ class ChatModesModeFreezeTest {
         // The composer is locked while a reply streams.
         flow<Boolean>("_isTyping").value = true
         model.setWebMode(null)
-        assertEquals("a streaming reply must not let the mode change", "search", model.webMode.value)
+        assertEquals("search", model.webMode.value)
         flow<Boolean>("_isTyping").value = false
 
-        // X search is Grok-only and server-gated; both directions.
-        // The engine's default model is not in the X-capable set.
-        flow<String>("_selectedModel").value = "Gemini"
+        // X search is Grok-only and server-gated; both directions. A non-Grok model refuses first.
         model.setXSearch(true)
         assertEquals("X search works with Grok when the server offers it.", model.error.value)
         assertFalse("X search must stay off for a non-Grok model", model.xSearch.value)
 
         flow<String>("_selectedModel").value = "Grok"
-        flow<IntegrationState>("_integrations").value = flow<IntegrationState>("_integrations").value.copy(xSearchAvailable = true)
+        applyIntegrations(IntegrationState(xSearchAvailable = true))
         model.setXSearch(true)
         assertTrue("X search must apply for Grok once the server offers it", model.xSearch.value)
         assertNull(model.error.value)
@@ -363,8 +372,7 @@ class ChatModesModeFreezeTest {
         assertFalse("a refused Run code must stay off", model.runCode.value)
 
         // Run code: offered for this model -> applies.
-        flow<IntegrationState>("_integrations").value = flow<IntegrationState>("_integrations").value
-            .copy(codeExecution = CodeExecutionConfig(enabled = true, providers = setOf("Gemini")))
+        applyIntegrations(IntegrationState(codeExecution = CodeExecutionConfig(enabled = true, providers = setOf(MODEL))))
         model.setRunCode(true)
         assertTrue("Run code must apply once the server offers it", model.runCode.value)
         assertNull(model.error.value)
@@ -377,17 +385,16 @@ class ChatModesModeFreezeTest {
 
         // Build: offered, with an owner signed in -> applies and takes over every other mode.
         signIn()
-        flow<IntegrationState>("_integrations").value = flow<IntegrationState>("_integrations").value
-            .copy(build = BuildModeConfig(enabled = true))
+        applyIntegrations(buildIntegrations())
         assertNull("Build must be usable in this test", model.buildUnavailableReason())
         flow<String?>("_webMode").value = "search"
         flow<Boolean>("_xSearch").value = true
         flow<Boolean>("_reasoning").value = true
         model.setBuildRepository(REPO)
 
-        assertEquals("Build must adopt the repository", REPO, model.buildRepo.value)
+        assertEquals(REPO, model.buildRepo.value)
         assertNull(model.error.value)
-        assertNull("Build is exclusive: the web mode must drop", model.webMode.value)
+        assertEquals(null, model.webMode.value)
         assertFalse("Build is exclusive: X search must drop", model.xSearch.value)
         assertFalse("Build is exclusive: reasoning must drop", model.reasoning.value)
         assertFalse("Build is exclusive: Run code must drop", model.runCode.value)
@@ -396,7 +403,11 @@ class ChatModesModeFreezeTest {
     // ---- 7. the modes are session-only; the repository is the chat's ----
 
     @Test fun theModesAreSessionOnlyWhileTheBuildRepositorySurvivesTheDiskRoundTrip() {
-        seedChats(open = chat(id = CHAT, buildRepository = REPO))
+        flow<String>("_activeChatId").value = CHAT
+        flow<List<ChatMessage>>("_messages").value = listOf(prompt, original)
+        flow<List<SavedChat>>("_savedChats").value = listOf(chat(id = CHAT, buildRepository = REPO))
+        flow<String>("_draft").value = ""
+        flow<Boolean>("_isTyping").value = false
         flow<String?>("_webMode").value = "search"
         flow<Boolean>("_xSearch").value = true
         flow<String?>("_buildRepo").value = REPO
@@ -408,16 +419,19 @@ class ChatModesModeFreezeTest {
         val (activeId, chats) = ChatHistoryCodec.decode(raw)
         val stored = chats.single()
 
-        assertEquals("the open chat must be the one on disk", CHAT, activeId)
+        assertEquals(CHAT, activeId)
         assertEquals("the repository tied to the chat is saved with it", REPO, stored.buildRepository)
-        assertEquals("the saved turns must round-trip", listOf("Explain coroutines", "Original answer"),
-            stored.messages.map { it.text })
+        assertEquals(listOf("Explain coroutines", "Original answer"), stored.messages.map { it.text })
 
         val json = JSONObject(raw).getJSONArray("chats").getJSONObject(0)
         assertFalse("the web mode is a session choice and must never reach disk", json.has("webMode"))
         assertFalse("X search is a session choice and must never reach disk", json.has("xSearch"))
         assertFalse("the composer's repository is not a per-chat key of its own", json.has("buildRepo"))
     }
+
+    private fun chat(id: String, buildRepository: String? = null) =
+        SavedChat(id = id, model = MODEL, draft = "", updatedAt = 1_000L, buildRepository = buildRepository,
+            messages = listOf(prompt.copy(id = "$id-prompt"), original.copy(id = "$id-reply")))
 
     private companion object {
         const val CHAT = "chat-current"
@@ -426,6 +440,7 @@ class ChatModesModeFreezeTest {
         const val PROMPT = "prompt"
         const val REPLY = "reply"
         const val REPO = "KRFbrothers/Dua-ai"
+        const val MODEL = "Dua"
         const val OWNER = "00000000-0000-0000-0000-000000000001"
     }
 }
