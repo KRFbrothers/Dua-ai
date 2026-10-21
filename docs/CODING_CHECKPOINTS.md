@@ -106,3 +106,5 @@ coverage. Then verify real containers and engine → edit → command → import
 App terminal/diff/checkpoint views, persistent terminals, full Git checkout/rebase,
 binary/deletion/mode import, richer CI evidence and larger workers remain future
 work.
+
+Android activity and saved-draft controls are described in [CODING_ACTIVITY.md](CODING_ACTIVITY.md).

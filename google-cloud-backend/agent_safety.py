@@ -132,6 +132,8 @@ def prepare(name, args):
     Returns the args to store. Raises ValueError with a short message for the model."""
     args = dict(args or {})
     if name == "propose_changes":
+        args.pop("preview_diff", None)
+        args.pop("preview_diff_truncated", None)
         import coding_agent
         import pr_flow
         files = args.get("files") or []
@@ -218,9 +220,13 @@ STORE = PendingStore()
 
 
 def event(action):
-    """SSE event for the app's approval card (no file contents, no owner id)."""
-    return {"type": "approval", "id": action["id"], "tool": action["tool"], "title": action["title"],
+    """SSE approval summary plus bounded, redacted proposal diff; never an owner id."""
+    result = {"type": "approval", "id": action["id"], "tool": action["tool"], "title": action["title"],
             "details": action["details"][:12], "expiresIn": max(int(action["expires"] - action["created"]), 0)}
+    if action["tool"] == "propose_changes" and isinstance(action.get("args", {}).get("preview_diff"), str):
+        result.update(diff=action["args"]["preview_diff"][:24_000],
+                      diffTruncated=bool(action["args"].get("preview_diff_truncated")))
+    return result
 
 
 def pending_text(actions):

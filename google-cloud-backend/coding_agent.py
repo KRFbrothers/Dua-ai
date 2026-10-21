@@ -540,11 +540,25 @@ class CodingSession:
 
     def prepare_proposal(self, args):
         # Snapshot metadata comes from the server, never from model arguments.
-        clean = {k: v for k, v in args.items() if k not in ("base_sha", "repository")}
+        clean = {k: v for k, v in args.items() if k not in ("base_sha", "repository", "preview_diff", "preview_diff_truncated")}
         with self.lock:
             if self.workspace is not None:
                 return self.workspace.proposal(clean)
             return clean
+
+    def preview_proposal(self, proposal):
+        from agent_policy import filter_text
+        with self.lock:
+            workspace = self.workspace
+            if workspace is None:
+                return {}
+            with workspace.lock:
+                if proposal.get("base_sha") != workspace.base_sha or proposal.get("repository") != self.github.repo:
+                    return {}
+                preview = workspace.diff(proposal["files"])
+                text = filter_text(preview["diff"])
+                return {"preview_diff": text[:24_000],
+                        "preview_diff_truncated": preview["truncated"] or len(text) > 24_000}
 
     def run_tool(self, name, args):
         # Draft/restore transitions are serialized. Long-running commands release

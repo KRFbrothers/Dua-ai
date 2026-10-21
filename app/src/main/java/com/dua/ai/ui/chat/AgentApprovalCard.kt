@@ -73,6 +73,11 @@ fun AgentApprovalCard(
             approval.details.forEach { line ->
                 Text(line, style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant, modifier = Modifier.padding(top = Spacing.xxs))
             }
+            approval.diff?.let { AgentTextPreview("proposal diff", it, approval.diffTruncated) }
+            if (approval.tool == "propose_changes" && approval.diff == null) {
+                Text("Diff preview unavailable. Ask Agent to show workspace_diff before approving.",
+                    style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
+            }
             val statusModifier = Modifier.padding(top = Spacing.md).semantics { liveRegion = LiveRegionMode.Polite }
             when (stage) {
                 ApprovalStage.Ask -> {

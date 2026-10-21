@@ -182,10 +182,12 @@ class Workspace:
         return {"path": path, "staged": path in self.staged, "changed_files": sorted(self.staged),
                 "note": "Draft updated; nothing was written to GitHub. Persistence is reported separately."}
 
-    def diff(self):
+    def diff(self, files=None):
+        # Explicit files are an immutable proposal, never the current mutable draft.
+        staged = self.staged if files is None else {f["path"]: f["content"] for f in files}
         chunks, remaining = [], MAX_DIFF_CHARS
         truncated = False
-        for path, content in sorted(self.staged.items()):
+        for path, content in sorted(staged.items()):
             original = self.original(path)
             lines = difflib.unified_diff((original or "").splitlines(keepends=True), content.splitlines(keepends=True),
                                          fromfile="a/" + path if original is not None else "/dev/null", tofile="b/" + path)
@@ -203,8 +205,8 @@ class Workspace:
                 remaining -= len(line)
             if truncated:
                 break
-        return {"base_sha": self.base_sha, "paths": sorted(self.staged),
-                "diff": "".join(chunks), "truncated": truncated}
+        return {"base_sha": self.base_sha, "paths": sorted(staged),
+                "diff": "".join(chunks), "truncated": truncated, "draft_fingerprint": self.fingerprint()}
 
     def import_command(self, command_id):
         with self.lock:
