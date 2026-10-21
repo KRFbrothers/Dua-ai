@@ -1344,7 +1344,34 @@ Yeh asymmetry jaan-boojh kar hai ya nahi, code se pata nahi chalta (koi comment 
 ./gradlew lint
 ```
 
-> Sandbox note: is environment ka cgroup memory limit **2 GiB** hai (`/sys/fs/cgroup/memory.max`; `memory.events` → `oom_kill 2`). `compileDebugKotlin` daemon har koshish mein OOM se mar gaya — `-Xmx4g`, `--no-daemon`, `--max-workers=1`, `-Xmx1100m` + in-process Kotlin, sab same. Isliye local run possible nahi tha; CI hi sach hai. Code manually review kiya: imports (koi unused nahi, `CopyOnWriteArrayList` hata diya jab use khatam hua), brace/paren balance (35/35, 221/221), 6 `@Test`.
+> Sandbox note: is environment ka cgroup memory limit **2 GiB** hai (`/sys/fs/cgroup/memory.max`; `memory.events` → `oom_kill 2`). `compileDebugKotlin` daemon har koshish mein OOM se mar gaya — `-Xmx4g`, `--no-daemon`, `--max-workers=1`, `-Xmx1100m` + in-process Kotlin, sab same. Isliye local run possible nahi tha; CI hi sach hai.
+
+### 🔴 CI: pehla run fail (step 7) → fix → 4/4 green
+
+**Run 1 — `39548085533`** (HEAD `edc8eda`): 3/4 green, **`Android build and tests` failed** — Step 7 `Compile Android sources and run unit tests`, exit code 1, 05:11:05 → 05:16:31 (≈5.4 min). Yeh **hang nahi tha** — pichhle attempt 21+ minute par atka tha, ab 5 minute mein fail hua. Yaani test-structure theek thi, compile/assertion galat thi.
+
+Log download (`/repos/.../actions/runs/{id}/logs`) is account par **403 "Must have admin rights"** deta hai, isliye exact compiler line nahi mili. Iske bajaye failing file ko passing file ke against line-by-line verify kiya — **`RetryResponseTest.kt` (jo `main` par pass hota hai) hi ground truth thi**. Usse 3 real mismatches nikle:
+
+| # | Galti | Fix |
+| --- | --- | --- |
+| 1 | `openChat(ACTIVE)` seed ke liye call kiya — woh `openChat` dialog/summary flows chhedta hai; seed uske bagair hi pura ho jaata hai | seed `_savedChats` + `_activeChatId` + `_messages` + `_draft` + toggles, phir **`saveHistory()` reflection se** (private hai), phir `flushHistory()` |
+| 2 | Disk assert `flushHistory()` par depend thi, jo sirf pending write likhta hai — pehle `saveHistory()` hi call nahi hui thi (test ke hisaab se disk khaali/adhoora) | seed ke andar `saveHistory()` → `flushHistory()`, isliye disk par seed **guaranteed** hai (assert se pehle `savedOnDisk()` se verify bhi karte hain) |
+| 3 | `requests` bookkeeping (har HTTP URL collect karna) — koi test uspar assert nahi karta tha, sirf dead state + unused import | poora hata diya; interceptor bas ek complete SSE turn deta hai aur non-`chat.test` host par fail karta hai |
+
+Saath hi: `ChatHistoryCodec` ka import sahi hai (woh `ChatHistory.kt` mein hai, alag file nahi) — verify kiya. Public `StateFlow`s (`savedChats`, `activeChatId`, `draft`, `messages`) use kiye jahan available hain, reflection sirf private (`_savedChats`, `_messages`, `_draft`, `_summary`, `_webMode`, `_xSearch`, `_buildRepo`, `replyJob`, `retryOriginal`, `generation`, `appearanceLoaded`) ke liye.
+
+**Run 2 — `39549094082`** (HEAD `d9ecb55`): **4/4 green** ✅
+
+| Job | Conclusion |
+| --- | --- |
+| Android build and tests | **success** (step 7 `Compile Android sources and run unit tests` → success) |
+| Backend tests | success |
+| Website build | success |
+| Google Cloud engine tests | success |
+
+Run URL: `https://github.com/KRFbrothers/Dua-ai/actions/runs/39549094082`
+
+> Note: `appearanceLoaded` reflection se `true` set kiya jaata hai (`appearance` store ke **initial** value par start hota hai, aur setup mein `AppearanceStore.reset()` chal chuka hai). `retryResponse` test 3 ke liye yeh flag zaroori hai; koi assertion kisi later appearance emission par depend nahi karti. `openChat` par ID rotate hone ka jhanjhat bhi isi liye nahi uthaya.
 
 ### Aage kya
 
