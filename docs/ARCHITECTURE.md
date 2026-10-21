@@ -1,5 +1,7 @@
 # Dua AI architecture and contributor map
 
+For the whole project as navigable mind maps, open [PROJECT_MIND_MAP.md](PROJECT_MIND_MAP.md). It expands the overview into Android, the ViewModel modules, website/API, ADK, data, integrations, delivery and pending work.
+
 This describes the current implementation, not a proposed redesign. Start with the runtime map, follow one chat request, then use the change/test map below. [README](../README.md#local-setup) covers installation and configuration; [ROADMAP](ROADMAP.md) tracks future improvements.
 
 ## Runtime map

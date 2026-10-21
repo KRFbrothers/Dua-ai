@@ -1,11 +1,14 @@
 # Dua AI documentation index
 
+For a visual tour of the whole project, open the [complete project mind map](PROJECT_MIND_MAP.md): overview, subsystem maps, all six ADK categories/25 requirements, source links and pending work.
+
 Start with [ARCHITECTURE.md](ARCHITECTURE.md) for how the pieces fit, and [OPERATIONS.md](OPERATIONS.md) for deploying and running them. Root guides ([README](../README.md), [SUPABASE](../SUPABASE.md), [SIGNING](../SIGNING.md), [SECURITY](../SECURITY.md)) cover setup and stay at the repository root because app/backend messages or the build point to them; the [engine README](../google-cloud-backend/README.md), [web/README](../web/README.md) and [website/README](../website/README.md) cover each service.
 
 ## Docs in this folder
 
 | Doc | What it covers |
 | --- | --- |
+| [PROJECT_MIND_MAP.md](PROJECT_MIND_MAP.md) | Whole-project mind maps, source locations, all top-level folders and implemented/configured/pending boundaries |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Runtime map, request flow, data ownership, where to change what |
 | [OPERATIONS.md](OPERATIONS.md) | Project/region, redeploy commands, safe settings changes, secrets, `dua-backup`, monitoring, logs, credit expiry |
 | [AGENT.md](AGENT.md) | Agent tool loop vs ADK, Agent flags, Agent notes vs phone Memory, GitHub token permissions |
