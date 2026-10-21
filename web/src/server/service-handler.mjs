@@ -29,6 +29,7 @@ async function routeService(request,{env=process.env,fetcher=fetch}={}) {
  // Remote kill switches (DUA_MAINTENANCE, DUA_DISABLE_IMAGINE, DUA_DISABLE_VOICE): refused before any provider work.
  const paused=switchResponse(path,env);
  if(paused)return paused;
+ if(path==='/api/web/chat')return handleWebChat(request,{env,fetcher});
  if(path==='/api/setup')return handleSetup(request,{env});
  if(path==='/api/config')return handleChat(request,{env,fetcher});
  // Account and cloud routes: owner-locked by DUA_ALLOWED_EMAIL inside handleAccount (session, features and logout stay open).
@@ -55,4 +56,46 @@ async function routeService(request,{env=process.env,fetcher=fetch}={}) {
   return response;
  }
  return Response.json({error:'Not found.'},{status:404,headers:{'Cache-Control':'no-store'}});
+}
+
+// Website chat proxy (docs/WEBSITE.md roadmap item 2). The website's owner session lives in HttpOnly
+// cookies the page cannot read, so dua-api forwards a same-origin browser request to dua-ai-engine
+// /api/chat with that session as the bearer token and streams the SSE reply back unbuffered.
+// DUA_ENGINE_URL overrides the engine origin; DUA_APP_TOKEN (optional) is added server-side only.
+export const DEFAULT_ENGINE_URL='https://dua-ai-engine-228305912525.us-central1.run.app';
+const WEB_CHAT_MAX_BYTES=4*1024*1024;
+const noStore=(error,status)=>Response.json({error},{status,headers:{'Cache-Control':'no-store'}});
+function engineUrl(env){
+ try{const url=new URL(String(env.DUA_ENGINE_URL||DEFAULT_ENGINE_URL));
+  if(url.protocol!=='https:'||url.username||url.password||url.search||url.hash||!['','/'].includes(url.pathname))return null;
+  return new URL('/api/chat',url.origin);}catch{return null;}
+}
+export async function handleWebChat(request,{env=process.env,fetcher=fetch}={}){
+ if(request.method!=='POST')return noStore('Method not allowed.',405);
+ const url=new URL(request.url);
+ if(request.headers.get('origin')!==url.origin||!['','same-origin'].includes(request.headers.get('sec-fetch-site')||''))return noStore('Request origin is not allowed.',403);
+ const cookie=Object.fromEntries((request.headers.get('cookie')||'').split(';').map(v=>v.trim().split('=')).filter(p=>p.length===2));
+ const token=cookie.dua_access;
+ if(!token||token.length>10000||!/^[A-Za-z0-9._-]+$/.test(token))return noStore('Sign in to chat.',401);
+ const target=engineUrl(env);
+ if(!target)return noStore('Chat engine is not configured.',503);
+ const body=await request.text();
+ if(body.length>WEB_CHAT_MAX_BYTES)return noStore('Conversation too large. Start a new chat.',413);
+ let data;try{data=JSON.parse(body);}catch{return noStore('Invalid request.',400);}
+ if(!data||typeof data!=='object'||Array.isArray(data)||!Array.isArray(data.messages))return noStore('Invalid request.',400);
+ // Plain chat or Agent only from the website; Build/persistence stay Android-only.
+ const mode=data.mode==='agent'?'agent':data.mode==='reasoning'?'reasoning':'auto';
+ const payload={model:typeof data.model==='string'?data.model:'Dua',messages:data.messages,attachments:[],memory:typeof data.memory==='string'?data.memory:'',stream:true,mode};
+ const headers={'Content-Type':'application/json','Accept':'text/event-stream, application/json','Authorization':'Bearer '+token,'x-dua-native':'1'};
+ if(env.DUA_APP_TOKEN)headers['X-Dua-App-Token']=env.DUA_APP_TOKEN;
+ let upstream;
+ try{upstream=await fetcher(target,{method:'POST',headers,body:JSON.stringify(payload),signal:request.signal});}
+ catch{return noStore('Chat engine is not reachable. Try again.',502);}
+ const type=upstream.headers.get('content-type')||'';
+ if(type.includes('text/event-stream')&&upstream.body)
+  return new Response(upstream.body,{status:upstream.status,headers:{'Content-Type':'text/event-stream; charset=utf-8','Cache-Control':'no-store','X-Accel-Buffering':'no','X-Content-Type-Options':'nosniff'}});
+ // Non-stream answers (errors): pass a short JSON error only, never upstream details beyond `error`.
+ let message='Reply failed. Try again.';
+ try{const json=await upstream.json();if(typeof json?.error==='string')message=json.error.slice(0,300);}catch{}
+ return noStore(message,upstream.ok?502:upstream.status);
 }

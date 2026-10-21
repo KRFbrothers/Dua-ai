@@ -29,9 +29,16 @@ URL: `https://dua-api-228305912525.us-central1.run.app/`
 
 Streaming (SSE) replies pass through unbuffered; requests without `Origin` (Android) are unchanged.
 
+## Chat (PR 2)
+
+- The page calls dua-api `POST /api/web/chat` ([`service-handler.mjs`](../web/src/server/service-handler.mjs)). It accepts only a same-origin browser request (`Origin` equals the dua-api origin, `Sec-Fetch-Site` absent or `same-origin`) with the `dua_access` HttpOnly cookie; otherwise 403 / 401 before any engine call.
+- dua-api forwards `{model, messages, mode, stream: true}` to dua-ai-engine `/api/chat` with the cookie session as the owner `Authorization: Bearer` token (plus `X-Dua-App-Token` from `DUA_APP_TOKEN` when set) and streams the SSE reply back unbuffered. Tokens never reach page scripts.
+- Engine URL: `DUA_ENGINE_URL` (optional) or the default `https://dua-ai-engine-228305912525.us-central1.run.app`. No deploy change is needed.
+- Website: streamed replies with simple markdown (code blocks, inline code, bold), Agent progress label, Stop button, Chat/Agent toggle, model picker. A 401 refreshes the session once and retries.
+
 ## Roadmap
 
 1. **PR 1 (#224, #226):** layout, same-origin serving, email sign-in, engine CORS — done.
-2. **PR 2 — chat:** streamed chat with the engine. The website's session lives in HttpOnly cookies the page cannot read, so the plan is a small dua-api **engine proxy** route (cookie session → owner bearer token → dua-ai-engine `/api/chat`, streamed back). Markdown, code blocks, model/mode picker, Agent progress chips, sources, stop/regenerate.
+2. **PR 2 — chat:** done (basic streamed chat, Agent toggle, stop). Still to do: sources, regenerate, thinking view. Original plan: streamed chat with the engine. The website's session lives in HttpOnly cookies the page cannot read, so the plan is a small dua-api **engine proxy** route (cookie session → owner bearer token → dua-ai-engine `/api/chat`, streamed back). Markdown, code blocks, model/mode picker, Agent progress chips, sources, stop/regenerate.
 3. **PR 3 — history:** read/write the same chats as the phone through `/api/cloud`.
 4. **PR 4 — extras:** attachments, Imagine, notes view, voice.
