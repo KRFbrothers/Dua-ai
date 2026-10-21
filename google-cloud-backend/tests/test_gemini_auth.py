@@ -87,23 +87,29 @@ def test_with_key_is_noop_in_adc_mode(fake_genai):
     assert agent_models.with_key("gemini-4-argon") == "gemini-4-argon"
 
 
-def test_adk_model_gets_key_client(fake_genai):
+@pytest.mark.parametrize("retry", ["1", "0"])
+def test_adk_model_gets_key_client(monkeypatch, retry):
     pytest.importorskip("google.adk")
-    fake_genai.undo()  # real google-genai for ADK
-    agent_models._warned.clear()
-    os.environ.pop("ADK_MODELS_JSON", None)
-    mp = pytest.MonkeyPatch()
-    try:
-        mp.setenv("GEMINI_AUTH", "apikey")
-        mp.setenv("GOOGLE_API_KEY", KEY)
-        mp.setenv("GOOGLE_CLOUD_PROJECT", "proj-test")
-        mp.delenv("ADK_MODELS_JSON", raising=False)
-        from google.adk.models import Gemini
-        model = agent_models.resolve("controller", "gemini-4-argon")
-        assert isinstance(model, Gemini) and model.model == "gemini-4-argon"
-        api = model.api_client._api_client
-        assert api.vertexai and api.api_key == KEY and api.project is None
-        mp.setenv("GEMINI_AUTH", "adc")
-        assert agent_models.resolve("controller", "gemini-4-argon") == "gemini-4-argon"
-    finally:
-        mp.undo()
+    from google.adk.models import Gemini
+    monkeypatch.setattr(agent_models, "_warned", [])
+    monkeypatch.delenv("ADK_MODELS_JSON", raising=False)
+    monkeypatch.setenv("ADK_GEMINI_RETRY", retry)
+    monkeypatch.setenv("GOOGLE_CLOUD_PROJECT", "proj-test")
+    monkeypatch.setenv("GEMINI_AUTH", "apikey")
+    monkeypatch.setenv("GOOGLE_API_KEY", KEY)
+    model = agent_models.resolve("controller", "gemini-4-argon")
+    assert isinstance(model, Gemini) and model.model == "gemini-4-argon"
+    api = model.api_client._api_client
+    assert api.vertexai and api.api_key == KEY and api.project is None  # key client, not ADC
+    assert (model.retry_options is not None) == (retry == "1")  # ADK_GEMINI_RETRY kept
+
+
+def test_adk_model_stays_adc_by_default(monkeypatch):
+    pytest.importorskip("google.adk")
+    monkeypatch.delenv("ADK_MODELS_JSON", raising=False)
+    monkeypatch.delenv("GEMINI_AUTH", raising=False)
+    monkeypatch.setenv("ADK_GEMINI_RETRY", "1")
+    model = agent_models.resolve("controller", "gemini-4-argon")
+    assert getattr(model, "client_kwargs", None) is None or "api_key" not in model.client_kwargs
+    monkeypatch.setenv("ADK_GEMINI_RETRY", "0")
+    assert agent_models.resolve("controller", "gemini-4-argon") == "gemini-4-argon"
