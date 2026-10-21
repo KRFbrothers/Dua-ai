@@ -1271,3 +1271,108 @@ Yeh jaan-boojh kar hai ya nahi, code se pata nahi chalta — comment kahin nahi 
 ### Aage kya
 
 Step 6 ke report ki baaki do sifarishein abhi bhi khuli hain: `deleteChat` ke missing tests (idempotency, cancel-reply path) aur uske baad hi `ChatModes.kt`.
+
+---
+
+## 🧪 Chat split — tests: `deleteChat` (21 Oct 2026)
+
+`retryResponse` ke tests merge hone ke baad (PR #316, `main` `9375784`), Step 6 report ki doosri sifarish poori ki: `deleteChat` ke dedicated tests. **Sirf test file** — production code ek line bhi nahi chhua.
+
+### Coverage — before → after
+
+| | Before | After |
+| --- | --- | --- |
+| `retryResponse` | Step 6 tak 0 dedicated test; ab `RetryResponseTest.kt` ke 5 | unchanged (yahi PR nahi chhua) |
+| `deleteChat` (active branch — messages/draft/summary/mode reset + `saveHistory`) | **0** — koi test nahi | **3** assertions-heavy tests (1, 2, 5) |
+| `deleteChat` (cancel-reply path — `replyJob` cancel, `isTyping`, `retryOriginal`, `generation`) | **0** | **2** tests (3, 4) |
+| `deleteChat` (non-active chat — bacha hua chat + uska draft) | **0** | **1** test (6) |
+| Total naye tests | — | **6** |
+
+`deleteChat` code 24 line ka hai par uske **6 alag side-effect** hain, aur pehle inme se ek bhi assert nahi hota tha: `cancelReply()`, `activeId` rotate, `_messages`/`_draft`/`_summary`/`_webMode`/`_xSearch`/`_buildRepo` reset, `_savedChats` filter, `saveHistory()`, aur per-reply metadata maps + `pollJobs` cleanup.
+
+### File
+
+`app/src/test/java/com/dua/ai/viewmodel/DeleteChatTest.kt` — **6 tests**, 283 line.
+
+Wahi harness jo `RetryResponseTest` / `PersonalityPromptingTest` / `ChatPinTest` use karte hain: `RobolectricTestRunner`, `@Config(sdk = [34])`, `LooperMode.PAUSED`, real `ChatViewModel`, real `ChatHistoryWriter`, real SharedPreferences-backed history, network sirf OkHttp interceptor tak. **Koi naya framework ya dependency nahi.**
+
+### 6 cases
+
+| # | Test | Kya prove karta hai |
+| --- | --- | --- |
+| 1 | `deletingTheActiveChatClearsMessagesDraftCachesAndDisk` | `messages` khaali, `draft` khaali, `_summary`/`_webMode`/`_buildRepo` null, `_xSearch` false, `_savedChats` se gayab, `activeChatId` naya, aur **disk par bhi** sirf bacha chat (`ChatHistoryCodec.decode`) |
+| 2 | `deletingTheSameChatTwiceChangesNothingTheSecondTime` | **Idempotency** — doosri baar stored history string **byte-identical**, `_savedChats` same, `activeChatId` dobara rotate nahi |
+| 3 | `deletingTheActiveChatWhileARetryStreamsCancelsItAndResetsTypingAndRetryOriginal` | **Cancel-reply path** — `retryResponse()` ke baad `state=STREAMING` + `isTyping` true → delete → `replyJob` inactive **aur null**, `retryOriginal` null, `isTyping` false, `generation` badha (koi orphan coroutine nahi) |
+| 4 | `aCancelledStreamFromADeletedChatNeverWritesAgain` | Delete ke baad looper pump karne par bhi stale turn wapas nahi likhta; `error` null, typing false, `_savedChats` sirf bacha chat |
+| 5 | `deletingAChatThatDoesNotExistIsSafeAndChangesNothing` | Unknown id → disk, `_savedChats`, `activeChatId`, `messages`, `draft` sab **unchanged** |
+| 6 | `deletingABackgroundChatKeepsTheActiveConversationAndItsDraft` | Non-active chat delete → khula chat + uska draft bilkul untouched, sirf target chat disk se gaya |
+
+### ⏱️ Determinism — #316 wala hang dobara nahi ho sakta
+
+| Rule | Kaise |
+| --- | --- |
+| Koi `Thread.sleep` / `settle()` / `CountDownLatch` | **Zero.** Saare 6 tests synchronous hain. |
+| Koi paused looper pump nahi | `LooperMode.PAUSED` par looper **test body mein kabhi pump nahi hota** — sirf teardown mein bounded drain. Isliye do assertions ke beech koi dispatched continuation nahi chalta. |
+| Streaming turn kaise dekha | `retryResponse()` streaming state **coroutine launch se pehle synchronously** set karta hai — wahi observation jo `RetryResponseTest` ke test 2/5 use karte hain. Koi wait nahi. |
+| Interceptor kabhi block nahi karta | Jo request aaye use turant ek complete SSE turn milta hai. Koi latch `await()` interceptor ke andar nahi (yahi #316 ka root cause tha). |
+| Har test independent | Apna `ChatViewModel` + saaf SharedPreferences; koi order dependency nahi. |
+| Teardown | `replyJob?.cancel()` + `viewModelScope.cancel()` + dono OkHttp pools `shutdown` + `awaitTermination(2s)`. |
+
+### ❗ Production code bilkul nahi chhua
+
+```
+git diff --name-only origin/main...HEAD
+app/src/test/java/com/dua/ai/viewmodel/DeleteChatTest.kt
+```
+
+`git status -- app/src/main` = **0 paths**.
+
+Blob proof: remote `c1ab6133725305700b6fa065a2d75ee1cebf9cc9` = local `git hash-object` ✅
+Branch `test/delete-chat-coverage`, HEAD `324b101`, base `main` `9375784`. PR: #317.
+
+### ⚠️ Ek behaviour jo test likhte waqt mila (bug nahi, design — aapka decision)
+
+**`deleteChat()` `clearAttachments()` nahi bulata.** Active branch mein sirf `cancelReply()` + message/state reset hai; `clearAttachments()` `startNewChat()` aur `clearAllChats()` mein hai. Matlab composer mein pada draft attachment us chat se **agle chat mein chala jaata hai** — jabki `startNewChat` use saaf kar deta hai.
+
+Yeh asymmetry jaan-boojh kar hai ya nahi, code se pata nahi chalta (koi comment nahi). Isliye test 1 mein attachment assertion jaan-boojh kar **nahi** rakha — warna test current behaviour lock kar deta ya red ho jaata. Agar delete par attachments clear hone chahiye to woh alag production PR hai, phir yahan ek assertion add ho jaayega.
+
+### Merge checklist
+
+```bash
+./gradlew assembleDebug
+./gradlew testDebugUnitTest
+./gradlew lint
+```
+
+> Sandbox note: is environment ka cgroup memory limit **2 GiB** hai (`/sys/fs/cgroup/memory.max`; `memory.events` → `oom_kill 2`). `compileDebugKotlin` daemon har koshish mein OOM se mar gaya — `-Xmx4g`, `--no-daemon`, `--max-workers=1`, `-Xmx1100m` + in-process Kotlin, sab same. Isliye local run possible nahi tha; CI hi sach hai.
+
+### 🔴 CI: pehla run fail (step 7) → fix → 4/4 green
+
+**Run 1 — `39548085533`** (HEAD `edc8eda`): 3/4 green, **`Android build and tests` failed** — Step 7 `Compile Android sources and run unit tests`, exit code 1, 05:11:05 → 05:16:31 (≈5.4 min). Yeh **hang nahi tha** — pichhle attempt 21+ minute par atka tha, ab 5 minute mein fail hua. Yaani test-structure theek thi, compile/assertion galat thi.
+
+Log download (`/repos/.../actions/runs/{id}/logs`) is account par **403 "Must have admin rights"** deta hai, isliye exact compiler line nahi mili. Iske bajaye failing file ko passing file ke against line-by-line verify kiya — **`RetryResponseTest.kt` (jo `main` par pass hota hai) hi ground truth thi**. Usse 3 real mismatches nikle:
+
+| # | Galti | Fix |
+| --- | --- | --- |
+| 1 | `openChat(ACTIVE)` seed ke liye call kiya — woh `openChat` dialog/summary flows chhedta hai; seed uske bagair hi pura ho jaata hai | seed `_savedChats` + `_activeChatId` + `_messages` + `_draft` + toggles, phir **`saveHistory()` reflection se** (private hai), phir `flushHistory()` |
+| 2 | Disk assert `flushHistory()` par depend thi, jo sirf pending write likhta hai — pehle `saveHistory()` hi call nahi hui thi (test ke hisaab se disk khaali/adhoora) | seed ke andar `saveHistory()` → `flushHistory()`, isliye disk par seed **guaranteed** hai (assert se pehle `savedOnDisk()` se verify bhi karte hain) |
+| 3 | `requests` bookkeeping (har HTTP URL collect karna) — koi test uspar assert nahi karta tha, sirf dead state + unused import | poora hata diya; interceptor bas ek complete SSE turn deta hai aur non-`chat.test` host par fail karta hai |
+
+Saath hi: `ChatHistoryCodec` ka import sahi hai (woh `ChatHistory.kt` mein hai, alag file nahi) — verify kiya. Public `StateFlow`s (`savedChats`, `activeChatId`, `draft`, `messages`) use kiye jahan available hain, reflection sirf private (`_savedChats`, `_messages`, `_draft`, `_summary`, `_webMode`, `_xSearch`, `_buildRepo`, `replyJob`, `retryOriginal`, `generation`, `appearanceLoaded`) ke liye.
+
+**Run 2 — `39549094082`** (HEAD `d9ecb55`): **4/4 green** ✅
+
+| Job | Conclusion |
+| --- | --- |
+| Android build and tests | **success** (step 7 `Compile Android sources and run unit tests` → success) |
+| Backend tests | success |
+| Website build | success |
+| Google Cloud engine tests | success |
+
+Run URL: `https://github.com/KRFbrothers/Dua-ai/actions/runs/39549094082`
+
+> Note: `appearanceLoaded` reflection se `true` set kiya jaata hai (`appearance` store ke **initial** value par start hota hai, aur setup mein `AppearanceStore.reset()` chal chuka hai). `retryResponse` test 3 ke liye yeh flag zaroori hai; koi assertion kisi later appearance emission par depend nahi karti. `openChat` par ID rotate hone ka jhanjhat bhi isi liye nahi uthaya.
+
+### Aage kya
+
+`deleteChat` ke baaki missing tests (`deleteServerChat` ki tarah `_dataBusy` guard, `draftSaver.pending` wala path, aur `pollJobs`/`replyBuild` map cleanup ka direct assertion) — phir `ChatModes.kt` split. **Pehle test, phir move.**
