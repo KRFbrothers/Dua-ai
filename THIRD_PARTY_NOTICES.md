@@ -39,6 +39,16 @@ other Google brand assets.
 | --- | --- | --- |
 | `app/src/main/java/com/dua/ai/ondevice/WritingTools.kt` | `samples/genai-summarization/.../GenAISummarizationViewModel.kt`, `samples/genai-writing-assistance/.../GenAIWritingAssistanceViewModel.kt` | Same check → download → run → result/error flow, but on Dua's existing ML Kit GenAI Prompt client (no extra Summarization/Rewriting libraries), Dua prompts, output clean-up, visible server fallback |
 
+## ADK samples (llm-auditor)
+
+- Source: <https://github.com/google/adk-samples> at commit `be63596f7eaeae0858c6a0746f48ed22429d1124`
+- Copyright 2026 Google LLC
+- License: Apache License, Version 2.0
+
+| Dua file | Adapted from | What changed |
+| --- | --- | --- |
+| `google-cloud-backend/agent_adk.py` (reviewer step) | `contrib/kotlin/llm-auditor/.../LlmAuditorAgent.kt` (critic then reviser in a SequentialAgent) | Python, Dua prompts, JSON verdict, reviser runs at most once and only on `needs_fix`, behind `DUA_AGENT_REVIEW` |
+
 ## Jetchat and Reply (Compose samples)
 
 - Source: <https://github.com/android/compose-samples> (fork <https://github.com/KRFbrothers/compose-samples>), `Jetchat/` and `Reply/`

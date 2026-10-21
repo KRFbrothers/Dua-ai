@@ -52,6 +52,7 @@ gcloud run services update dua-ai-engine --region us-central1 --project global-h
 After either path, optional add-ons run:
 
 - **Self-check** (`AGENT_VERIFY=1`, [`agent_verify.py`](../google-cloud-backend/agent_verify.py)): a cheap critic call compares the draft with the request and sources; only if it finds issues, one revision. Failures keep the draft; a revision that drops a PR link is rejected. Casual replies and coding mode skip it.
+- **ADK reviewer** (`DUA_AGENT_REVIEW=1`, ADK path only, [`agent_adk.py`](../google-cloud-backend/agent_adk.py)): after the merger, a `reviewer` LlmAgent (cheap Flash model) returns a JSON verdict (`ok`, `needs_fix`, `needs_approval`). Only `needs_fix` runs the `reviser` agent, at most once. Live streaming waits for the review; any bad verdict, or a revision that drops a PR link, keeps the draft. Pattern adapted from google/adk-samples llm-auditor.
 - **Tested PRs** (`AGENT_TEST_CODE=1`, [`pr_flow.py`](../google-cloud-backend/pr_flow.py)): proposed Python files are byte-compiled and JSON parsed before a PR opens; after the PR opens, the engine polls GitHub CI and allows **one** fix commit on the same `dua-agent/` branch (never main, never force, never merge). The `check_pr_ci` tool reads the agent's own PR status.
 
 See the [new ADK configuration and operations guide](ADK_IMPLEMENTATION.md) for
@@ -68,6 +69,8 @@ SQL persistence, embeddings, provider routes, tools, telemetry and CLI settings.
 | `AGENT_ADK_SECONDS` | `300` | Total time limit for the ADK path. |
 | `AGENT_VERIFY` | `0` | `1` turns on the self-check. |
 | `AGENT_VERIFY_SECONDS` | `45` | Critic time limit. |
+| `DUA_AGENT_REVIEW` | `0` | `1` adds the ADK reviewer step (one review, at most one revision). |
+| `DUA_AGENT_REVIEW_MODEL` | same as `VERTEX_MODEL` | Model for the reviewer and reviser. |
 | `AGENT_TEST_CODE` | `0` | `1` turns on pre-checks + CI wait + one fix. |
 | `AGENT_CI_SECONDS` | `420` | Total CI wait per request. |
 | `AGENT_NOTES` | `1` | `0` turns Agent notes off. |
