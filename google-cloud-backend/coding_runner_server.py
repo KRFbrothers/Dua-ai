@@ -16,11 +16,13 @@ import subprocess
 import tempfile
 import threading
 import time
+from types import SimpleNamespace
 
 from flask import Flask, jsonify, request
 
 import coding_agent as coding
 import coding_snapshot
+import coding_artifacts
 from coding_terminal import FINAL_STATES, JOB_ID, MAX_OUTPUT_BYTES, validate_command
 
 app = Flask(__name__)
@@ -48,6 +50,7 @@ class Job:
         self.state, self.output, self.exit_code = "queued", bytearray(), None
         self.truncated, self.finished = False, None
         self.cancel, self.lock = threading.Event(), threading.RLock()
+        self.artifacts, self.artifact_error = [], None
 
     def append(self, data):
         with self.lock:
@@ -63,7 +66,8 @@ class Job:
         with self.lock:
             return {"id": self.id, "state": self.state, "snapshot_sha256": self.digest,
                     "base_sha": self.base_sha, "exit_code": self.exit_code,
-                    "output": self.output.decode("utf-8", errors="replace"), "truncated": self.truncated}
+                    "output": self.output.decode("utf-8", errors="replace"), "truncated": self.truncated,
+                    "artifacts": self.artifacts, "artifact_error": self.artifact_error}
 
 
 def docker(config_dir, *args, timeout=15):
@@ -74,7 +78,42 @@ def docker(config_dir, *args, timeout=15):
                           env={"PATH": "/usr/local/bin:/usr/bin:/bin", "LANG": "C.UTF-8"}, timeout=timeout, check=False)
 
 
-def execute(job, files, argv, cwd, seconds, config):
+def collect_exports(client_config, name, paths, files, job):
+    """Read bounded collector output while the container's tmpfs still exists."""
+    process = subprocess.Popen(["docker", "--host=unix:///var/run/docker.sock", "--config", str(client_config),
+        "exec", name, "/usr/local/bin/python", "-I", "-S", "-c", coding_artifacts.COLLECTOR, json.dumps(paths)],
+        stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        env={"PATH": "/usr/local/bin:/usr/bin:/bin", "LANG": "C.UTF-8"})
+    selector, output, started = selectors.DefaultSelector(), bytearray(), time.monotonic()
+    try:
+        selector.register(process.stdout, selectors.EVENT_READ)
+        while process.poll() is None or selector.get_map():
+            if job.cancel.is_set() or time.monotonic() - started > 8:
+                raise coding.CodingError("Command file collection stopped or timed out.")
+            for key, _ in selector.select(timeout=0.2):
+                chunk = os.read(key.fileobj.fileno(), 4096)
+                if not chunk:
+                    selector.unregister(key.fileobj)
+                    continue
+                if len(output) + len(chunk) > coding_artifacts.MAX_ARTIFACT_OUTPUT:
+                    raise coding.CodingError("Command file exports exceed the response limit.")
+                output.extend(chunk)
+        if process.wait(timeout=2) != 0:
+            raise coding.CodingError("Requested exports must be existing bounded UTF-8 regular files without links.")
+        result = json.loads(output)
+        exports = result.get("files") if isinstance(result, dict) else None
+        expected = SimpleNamespace(entries={p: {"mode": mode} for p, (_raw, mode) in files.items()})
+        coding_artifacts.validate(exports, paths, expected)
+        return exports
+    finally:
+        selector.close()
+        if process.poll() is None:
+            process.kill()
+        process.wait(timeout=3)
+        process.stdout.close()
+
+
+def execute(job, files, argv, cwd, seconds, config, export_paths):
     name = "dua-sandbox-" + job.id
     created, process = False, None
     # This directory must exist at the same absolute path on the Docker host.
@@ -114,12 +153,11 @@ def execute(job, files, argv, cwd, seconds, config):
                        "--entrypoint=/usr/bin/timeout"]
             if config["runtime"]:
                 options += ["--runtime", config["runtime"]]
-            # argv/cwd are positional parameters, never interpolated shell text.
-            # Even shell commands explicitly requested in argv stay in Docker.
+            # Keep tmpfs alive briefly for collection after docker exec exits.
+            # The independent lifetime still stops all processes on host crash.
             bootstrap = ('mkdir -p /tmp/home /tmp/cache && cp -R /input/. /workspace/ && '
-                         'cd "/workspace/$1" && shift && exec "$@"')
-            options += [config["image"], "--signal=KILL", str(seconds), "/bin/sh", "-c", bootstrap,
-                        "dua-command", cwd, *argv]
+                         'touch /tmp/.dua-ready && exec sleep 3600')
+            options += [config["image"], "--signal=KILL", str(seconds + 25), "/bin/sh", "-c", bootstrap]
             try:
                 if job.cancel.is_set():
                     job.finish("cancelled")
@@ -135,11 +173,19 @@ def execute(job, files, argv, cwd, seconds, config):
                     raise coding.CodingError("Sandbox could not be created. Check Docker, image and resource-limit support.")
                 with job.lock:
                     job.state = "running"
+                if docker(client_config, "start", name).returncode:
+                    raise coding.CodingError("Sandbox container could not start.")
+                preparing = time.monotonic()
+                while docker(client_config, "exec", name, "/usr/bin/test", "-f", "/tmp/.dua-ready", timeout=3).returncode:
+                    if job.cancel.is_set() or time.monotonic() - preparing > 10:
+                        raise coding.CodingError("Sandbox source preparation stopped or timed out.")
+                    time.sleep(0.1)
                 if job.cancel.is_set():
                     job.finish("cancelled")
                     return
                 process = subprocess.Popen(["docker", "--host=unix:///var/run/docker.sock", "--config", str(client_config),
-                    "start", "--attach", name], stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                    "exec", "--workdir", "/workspace/" + cwd, name, "/usr/bin/timeout", "--signal=KILL", str(seconds),
+                    *argv], stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                     env={"PATH": "/usr/local/bin:/usr/bin:/bin", "LANG": "C.UTF-8"})
                 started = time.monotonic()
                 selector = selectors.DefaultSelector()
@@ -161,13 +207,17 @@ def execute(job, files, argv, cwd, seconds, config):
                     process.wait(timeout=3)
                 finally:
                     selector.close()
-                state = docker(client_config, "inspect", "--format", "{{json .State}}", name)
-                if state.returncode:
-                    raise coding.CodingError("Sandbox exit status is unavailable.")
-                inspected = json.loads(state.stdout)
-                code = inspected.get("ExitCode")
-                if inspected.get("Running") or isinstance(code, bool) or not isinstance(code, int):
+                code = process.returncode
+                if isinstance(code, bool) or not isinstance(code, int):
                     raise coding.CodingError("Sandbox did not return a completed exit status.")
+                if export_paths:
+                    if code == 0 and not job.cancel.is_set():
+                        try:
+                            job.artifacts = collect_exports(client_config, name, export_paths, files, job)
+                        except Exception:
+                            job.artifact_error = "Command ran, but file export failed validation or timed out. Nothing is available to import."
+                    else:
+                        job.artifact_error = "Files are exported only after a successful command."
                 timed_out = code == 137 and time.monotonic() - started >= seconds - 0.5
                 job.finish("timed_out" if timed_out else ("succeeded" if code == 0 else "failed"), code)
             finally:
@@ -200,9 +250,10 @@ class Jobs:
             return None
         try:
             if not isinstance(payload, dict) or set(payload) != {
-                    "id", "archive", "snapshot_sha256", "base_sha", "argv", "cwd", "timeout_seconds"}:
+                    "id", "archive", "snapshot_sha256", "base_sha", "argv", "cwd", "timeout_seconds", "export_paths"}:
                 raise coding.CodingError("Invalid runner request fields.")
             argv, cwd, seconds = validate_command(payload)
+            exports = coding_artifacts.export_paths(payload)
             job_id, digest, base = payload["id"], payload["snapshot_sha256"], payload["base_sha"]
             if (not isinstance(job_id, str) or not JOB_ID.fullmatch(job_id) or
                     not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest) or
@@ -231,7 +282,7 @@ class Jobs:
                 self.items[job_id] = job
             def work():
                 try:
-                    execute(job, files, argv, cwd, seconds, config)
+                    execute(job, files, argv, cwd, seconds, config, exports)
                 finally:
                     self.slots.release()
             threading.Thread(target=work, name="dua-command-" + job_id, daemon=True).start()

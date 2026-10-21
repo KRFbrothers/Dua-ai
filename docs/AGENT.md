@@ -96,21 +96,24 @@ setting; optional terminal execution has separate configuration below.
    If `main` advances after the preflight check, the PR still uses the original
    commit; GitHub review/merge checks remain necessary.
 
-Drafts themselves are held in bounded per-request memory, serialized with a
-lock. They are not a durable checkout and do not survive cancellation, process
-restart or a resumed ADK invocation. Completed approval records use the existing
+Active drafts/caches are held in bounded per-request memory, serialized with a
+lock. Saved staged text can be restored through the third phase below; terminal
+processes and caches do not survive cancellation/restart. Approval records use the existing
 approval storage and expiration rules. Existing callers that do not start a
 workspace retain the previous read/full-content proposal flow.
 
 **Second phase:** [`run_command` and the separate container runner](CODING_RUNNER.md)
 execute a pinned source snapshot plus staged edits when explicitly configured.
 The runner has bounded resources, no network/engine credentials and cancellation
-wiring. Its command edits are temporary; it does not import them into the draft.
+wiring. Selected text edits can be explicitly imported through the third phase.
 The existing provider `run_python` tool remains separate from this repo terminal.
 
-**Remaining phases:** durable workspace checkpoints/resume, command-edit import,
-app-facing terminal/diff review, richer CI failure evidence and end-to-end coding
-evaluation. No runner has been enabled or engine deployed by these implementation
+**Third phase:** [private SQL draft checkpoints/resume and selected command-file
+import](CODING_CHECKPOINTS.md), with opt-in owner/revision checks and atomic,
+single-use imports that reject a changed draft.
+
+**Remaining phases:** app terminal/diff/checkpoint review, richer CI failure
+evidence and end-to-end coding evaluation. No runner has been enabled or engine deployed by these implementation
 phases. Local tests were deferred at the owner's request; both workspace and
 runner behavior still require verification before activation.
 
@@ -140,6 +143,7 @@ runner behavior still require verification before activation.
 | `AGENT_SUB_TOKENS`, `AGENT_ANSWER_TOKENS`, `AGENT_ROUTER_TOKENS` | `3072`, `4096`, `256` | Output caps for sub-calls, the final answer and the router. |
 | `GITHUB_TOKEN`, `DUA_REPO` | unset, `KRFbrothers/Dua-ai` | Optional coding agent token and its single target repository. |
 | `DUA_CODING_RUNNER_URL`, `DUA_CODING_RUNNER_TOKEN` | unset | Optional separate HTTPS coding runner origin and dedicated secret. No engine host-shell fallback. See [setup and limits](CODING_RUNNER.md). |
+| `DUA_CODING_CHECKPOINTS` | `0` | `1` enables private SQL draft autosave/list/restore after the explicit init-db step. No command replay. See [checkpoints](CODING_CHECKPOINTS.md). |
 
 ## Agent notes vs phone Memory
 

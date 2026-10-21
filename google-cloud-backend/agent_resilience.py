@@ -2,7 +2,7 @@
 import time
 
 READ_TOOLS = frozenset(('fetch_url', 'list_files', 'read_file', 'search_code', 'search_notes',
-                        'list_issues', 'read_issue', 'search_issues', 'check_pr_ci', 'workspace_status', 'workspace_diff'))
+                        'list_issues', 'read_issue', 'search_issues', 'check_pr_ci', 'workspace_status', 'workspace_diff', 'list_workspaces'))
 TRANSIENT = frozenset((429, 500, 502, 503, 504))
 
 

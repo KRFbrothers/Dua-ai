@@ -41,8 +41,9 @@ at the owner's request. A configured endpoint does not mean live readiness.
    snapshot digest are polled by the engine. Output is fenced as untrusted tool
    data and passes the existing secret filter before returning to the model.
 7. Completion/cancellation removes only that run's generated container name and
-   temporary input. No command-generated file is imported back into the Agent's
-   draft. Use `edit_file` and `propose_changes` for reviewable PR edits.
+   temporary input. Explicit `export_paths` retain selected text files for
+   `import_command_changes`, followed by diff review and normal PR approval.
+   Other command edits disappear. See [checkpoints and import](CODING_CHECKPOINTS.md).
 
 The source is an exported tree, **not a Git clone**: `.git` metadata, credentials,
 Git LFS object downloads and submodule checkouts are absent. Links/submodules,
@@ -55,20 +56,23 @@ regular source assets are supported within the bundle limits.
 {
   "argv": ["python", "-m", "unittest", "discover", "-s", "tests"],
   "cwd": "google-cloud-backend",
-  "timeout_seconds": 60
+  "timeout_seconds": 60,
+  "export_paths": []
 }
 ```
 
 `argv` is passed as arguments, not interpolated into a host command. A shell
 explicitly requested as part of `argv` still executes only inside the container.
-The command's exit status is read from Docker's container state; successful
-container creation is never reported as command success. Results identify the
+The command's exit status comes from `docker exec`; successful container startup
+is never reported as command success. Results identify the
 exact source snapshot; later draft edits are not covered by earlier results.
 
 The reference image is **Python-only**, with standard-library tools. It does not
 provide pytest, Node, the Android SDK, Java or project dependencies. Bake reviewed
 dependencies/toolchains into a suitable image before selecting it on the runner.
 Runtime package downloads cannot succeed because network access is disabled.
+Images used for text exports must also provide `/usr/local/bin/python` with
+isolated-mode support (`-I -S`), plus the reference image's coreutils/shell tools.
 Large/long Android builds exceed this first runner's limits and still belong in
 the existing GitHub CI flow.
 
@@ -83,7 +87,7 @@ the existing GitHub CI flow.
 | CPU / memory / swap | 1 CPU, 512 MiB memory, memory+swap capped at 512 MiB |
 | Processes / descriptors | 128 PIDs, 1,024 open files, core dumps disabled |
 | File size | 64 MiB per generated file |
-| Command duration | 1–120 seconds; independent in-container `timeout`, plus controller watchdog |
+| Command duration | 1–120 seconds; independent in-container `timeout`, plus controller watchdog; container lifetime adds 25 seconds for setup/export |
 | Output | First 32,000 bytes retained; remaining output drained/discarded, truncation reported |
 | Source bundle | 16 MiB compressed, 64 MiB expanded tar, 32 MiB source, 8 MiB per source file, 25,000 archive members |
 | Concurrency | At most 2 commands per controller process; excess work returns busy |
@@ -159,8 +163,9 @@ cancellation, cleanup, no-network/no-secret isolation, unavailable Docker/image
 failure and the full engine → runner → result flow. Add mocked regression
 coverage and isolated real-container checks, then run the existing suites.
 
-Durable checkouts/checkpoints, importing command edits into a reviewed diff,
-interactive/background terminals, package-network policy, multiple toolchain
-profiles, app-facing terminal/diff views and larger build workers remain future
-work. Existing workspace approvals still control GitHub changes; this runner
+Private SQL draft checkpoints and selected text-file import are implemented in
+[the third phase](CODING_CHECKPOINTS.md), with setup/verification still pending.
+Durable Git checkouts, interactive/background terminals, package-network policy,
+multiple toolchain profiles, app terminal/diff views and larger workers remain
+future work. Existing workspace approvals still control GitHub changes; this runner
 does not commit, push, open/merge PRs, deploy or modify cloud settings.

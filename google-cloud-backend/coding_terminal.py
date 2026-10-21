@@ -20,7 +20,7 @@ import coding_snapshot
 MAX_OUTPUT_BYTES = 32_000
 MAX_COMMAND_SECONDS = 120
 TERMINAL_TOOL_SECONDS = 240
-MAX_RESPONSE_BYTES = 256_000
+MAX_RESPONSE_BYTES = 1_100_000
 JOB_ID = re.compile(r"[0-9a-f]{32}")
 FINAL_STATES = frozenset(("succeeded", "failed", "timed_out", "cancelled", "error"))
 
@@ -96,7 +96,9 @@ class Client:
 
 
 def run(workspace, args, cancelled=None):
+    import coding_artifacts
     argv, cwd, seconds = validate_command(args)
+    exports = coding_artifacts.export_paths(args)
     config = configuration()
     if config is None:
         raise coding.CodingError("Repository terminal is not configured. Set up the separate coding runner first.")
@@ -109,7 +111,11 @@ def run(workspace, args, cancelled=None):
         target = (cwd + "/" if cwd else "") + "__command__"
         if any(p not in workspace.instructions_seen for p in workspace.instruction_paths(target)):
             raise coding.CodingError("Read scoped AGENTS.md first: workspace_status with a file path inside cwd.")
-    source = coding_snapshot.from_workspace(workspace, stop)
+        for path in exports:
+            workspace.check_path(path, write=True)
+            if any(p not in workspace.instructions_seen for p in workspace.instruction_paths(path)):
+                raise coding.CodingError("Read scoped AGENTS.md for every export path before running a modifying command.")
+    source, fingerprint = coding_snapshot.from_workspace(workspace, stop)
     digest = hashlib.sha256(source).hexdigest()
     if stop():
         raise coding.CodingError("Command cancelled before runner submission.")
@@ -121,7 +127,7 @@ def run(workspace, args, cancelled=None):
     try:
         result = client.request("POST", "/v1/runs", {"id": job_id, "archive": base64.b64encode(source).decode("ascii"),
             "snapshot_sha256": digest, "base_sha": workspace.base_sha, "argv": argv, "cwd": cwd,
-            "timeout_seconds": seconds})
+            "timeout_seconds": seconds, "export_paths": exports})
         while True:
             if stop():
                 raise coding.CodingError("Command stopped. Runner cancellation was requested.")
@@ -138,14 +144,22 @@ def run(workspace, args, cancelled=None):
                 output = result.get("output", "")
                 if not isinstance(output, str):
                     raise coding.CodingError("Invalid runner output.")
+                exported = []
+                artifact_error = result.get("artifact_error")
+                if exports and state == "succeeded" and not artifact_error:
+                    exported = coding_artifacts.validate(result.get("artifacts"), exports, workspace)
+                    with workspace.lock:
+                        workspace.command_results[job_id] = {"fingerprint": fingerprint, "files": exported, "imported": False}
                 completed = True
                 raw = output.encode("utf-8")
                 return {"state": state, "exit_code": result.get("exit_code"),
                         "output": filter_text(raw[:MAX_OUTPUT_BYTES].decode("utf-8", errors="ignore")),
                         "truncated": result.get("truncated") is True or len(raw) > MAX_OUTPUT_BYTES,
                         "base_sha": workspace.base_sha, "snapshot_sha256": digest,
+                        "command_id": job_id, "exported_paths": [item["path"] for item in exported],
+                        "artifact_error": str(artifact_error)[:300] if artifact_error else None,
                         "duration_ms": round((time.monotonic() - started) * 1000),
-                        "note": "Executed in an ephemeral, network-disabled container. Command file changes were discarded; use edit_file for PR changes."}
+                        "note": "Container is ephemeral. Requested text exports are request-local until import_command_changes; review workspace_diff before PR approval."}
             if state not in ("queued", "running"):
                 raise coding.CodingError("Invalid runner job state.")
             for _ in range(5):
