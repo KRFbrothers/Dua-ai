@@ -25,8 +25,10 @@ import hmac
 import json
 import os
 import queue
+import random
 import re
 import threading
+import time
 
 from flask import Flask, Response, g, jsonify, request, stream_with_context
 from owner_auth import OwnerAuthError, verify_owner
@@ -111,6 +113,33 @@ def unavailable_model_error(error):
         return True
     text = str(error).upper()
     return "NOT_FOUND" in text or "PERMISSION_DENIED" in text
+
+
+def rate_limited_error(error):
+    """True for 429 / RESOURCE_EXHAUSTED (Vertex quota or rate limit)."""
+    code = getattr(error, "code", None) or getattr(error, "status_code", None)
+    return code == 429 or "RESOURCE_EXHAUSTED" in str(error).upper()
+
+
+def chat_retry_delay():
+    """Plain chat 429 retry backoff in seconds (DUA_CHAT_429_RETRY_SECONDS, default 3, 0 disables) plus jitter."""
+    try:
+        base = float(os.environ.get("DUA_CHAT_429_RETRY_SECONDS", "3"))
+    except ValueError:
+        base = 3.0
+    if base <= 0:
+        return 0
+    return min(base, 30) + random.uniform(0, 1)
+
+
+def wait_for_chat_retry(error):
+    """Sleeps once and returns True when a plain chat call that hit 429 should be retried."""
+    delay = chat_retry_delay() if rate_limited_error(error) else 0
+    if not delay:
+        return False
+    print(f"[dua-chat] Vertex rate limited ({type(error).__name__}); retrying once in {delay:.1f}s", flush=True)
+    time.sleep(delay)
+    return True
 
 
 class GenaiModel:
@@ -817,7 +846,12 @@ def api_chat():
         return jsonify({"error": "Agent mode needs streaming. Update the app."}), 400
     if data.get("stream") is not True:
         try:
-            response = get_model(system).generate_content(contents)
+            try:
+                response = get_model(system).generate_content(contents)
+            except Exception as error:
+                if not wait_for_chat_retry(error):
+                    raise
+                response = get_model(system).generate_content(contents)
             text = chunk_text(response)
         except Exception:
             app.logger.exception("api chat failed")
@@ -858,10 +892,27 @@ def api_chat():
                 if use_free:
                     openrouter.stream(free_model, system, data.get("messages"), enqueue, reasoning=data.get("mode") == "reasoning")
                     return
-                iterator = iter(get_model(system).generate_content(contents, stream=True))
-                for chunk in iterator:
-                    if not enqueue("chunk", chunk):
+                retried = False
+                while True:
+                    received = False
+                    try:
+                        iterator = iter(get_model(system).generate_content(contents, stream=True))
+                        for chunk in iterator:
+                            received = True
+                            if not enqueue("chunk", chunk):
+                                break
                         break
+                    except Exception as error:
+                        # Retry 429 once, only before any chunk reached the client; never after partial output.
+                        if retried or received or stopped.is_set() or not wait_for_chat_retry(error):
+                            raise
+                        retried = True
+                        if iterator is not None and hasattr(iterator, "close"):
+                            try:
+                                iterator.close()
+                            except Exception:
+                                pass
+                        iterator = None
                 enqueue("done")
             except Exception:
                 app.logger.exception("api chat stream failed")

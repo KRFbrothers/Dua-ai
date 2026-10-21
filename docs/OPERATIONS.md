@@ -51,6 +51,8 @@ cd ~/Dua-ai && git fetch origin && git checkout main && git reset --hard origin/
 
   (Use `gcloud secrets create SECRET_NAME --data-file=- ...` the first time.) Then attach it to the service with `--update-secrets=NAME=SECRET_NAME:latest`.
 
+Plain chat on the engine retries a Vertex `429 RESOURCE_EXHAUSTED` once, only before any reply text reached the app, after `DUA_CHAT_429_RETRY_SECONDS` (default `3`, plus up to 1s jitter; `0` turns the retry off). Agent/ADK paths are unchanged. Logs show `[dua-chat] Vertex rate limited ... retrying once`.
+
 ## Daily backup job (`dua-backup`)
 
 [`backup.py`](../google-cloud-backend/backup.py) runs as Cloud Run job `dua-backup`, built from `google-cloud-backend/`:
