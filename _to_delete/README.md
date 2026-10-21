@@ -1212,17 +1212,37 @@ Base: `main` @ `c7afa0d` (PR #314 / Step 6 merge ke baad). Yeh Step 6 ke report 
 
 ### File
 
-`app/src/test/java/com/dua/ai/viewmodel/RetryResponseTest.kt` — **281 lines, 5 `@Test`**. Koi naya dependency nahi — wahi stack jo baaki `viewmodel/` tests use karte hain: **JUnit4 + Robolectric (`sdk 34`, `LooperMode.PAUSED`) + OkHttp interceptor** (network se pehle intercept, `PersonalityPromptingTest` ka pattern).
+`app/src/test/java/com/dua/ai/viewmodel/RetryResponseTest.kt` — **5 `@Test`**. Koi naya dependency nahi — wahi stack jo baaki `viewmodel/` tests use karte hain: **JUnit4 + Robolectric (`sdk 34`, `LooperMode.PAUSED`) + OkHttp interceptor** (network se pehle intercept, `PersonalityPromptingTest` ka pattern).
 
-Harness note — **teen hangs, teen alag theories**, teesri wali sach nikli:
+**Coverage pehle kya thi:** `retryResponse` ka **0 dedicated test**; `PersonalityPromptingTest:112` se ek indirect call jo sirf personality payload dekhta hai — retry ke early-return guards, error paths, state restore, generation gate, kuch bhi assert nahi hota tha. `StoppedReplyRecoveryTest` sirf `stopReply()` ko synthetic `Job()` se test karta hai, asli retry se nahi.
+
+**Coverage ab:** teeno public paths (success, stop, fail) + Build variant + stale generation — **5/5**, aur teeno `isTyping`/`retryOriginal`/history-disk par assertions.
+
+Harness note — **chaar CI runs, chaar alag theories**, sirf aakhri wali sach nikli:
 
 1. **Blocking interceptor gate.** `CountDownLatch.await()` OkHttp interceptor ke andar chal raha tha, aur woh interceptor **Main thread** par invoke hota hai. Main block → Robolectric ka `idleFor()` bhi Main par hai → deadlock. **Fix:** koi blocking gate nahi.
 2. **`delayMs` — galat theory.** Uske baad SSE payload mein `delayMs: 30000` daala gaya yeh soch kar ki server-side delay banega. **Production client us field ko padhta hi nahi** (`grep delayMs app/src/main` mein sirf `ChatHistoryWriter` ka `Debouncer` milta hai), matlab woh ignore hua aur delay kabhi bana hi nahi. Field hata diya.
 3. **Asli mechanism.** Test 2 aur 5 ko delay ki zaroorat hi nahi: `retryResponse()` streaming turn **synchronously** set karta hai (coroutine launch se pehle), aur SSE frame Main par tabhi apply hoti hai jab **yeh thread** paused Looper ko pump kare. Test 2/5 pump nahi karte — isliye turn streaming state mein hi observable hai: na latch, na sleep, na clock advance.
 4. **Teardown.** Pehle `store.clear()` tha jo `onCleared()` chalata hai — drive rebinder, backup delegate, recorder, poll jobs, sab paused Looper par. Ab `onCleared()` nahi chalta: sirf `replyJob` cancel, Main ka bounded pump (25 × 5 ms) cancellation handlers ke liye, phir HTTP stack band. Koi assertion isse depend nahi karti.
-5. **Hang ka naam.** `@get:Rule val noHang = Timeout.seconds(60)`. Iske bina ek atka hua test Gradle worker ko 25 min tak block karta hai aur run `cancelled` milta hai — **na test ka naam, na log line**. Teeno pichhle failures isi shape ke the. Ab atkega to 60 s mein method-level failure milega jisme naam hoga.
+5. **`Timeout` rule — khud hang ka karan nikla (hata diya).** `@get:Rule val noHang = Timeout.seconds(60)` lagaya gaya tha taaki atakne par 60 s mein naam mile. Ulta hua: JUnit ka `Timeout` **test body ko ek naye thread** par chalata hai, jabki Robolectric main Looper ko **runner thread** se bandhta hai. Doosre thread se `shadowOf(mainLooper).idleFor()` — yahi woh misuse hai jo test ko **fail** nahi karta, **wedges** karta hai. Isliye rule poora hata diya; har wait pehle se bounded hai aur message ke saath assert karta hai.
 
-**Sach yeh hai ki root cause abhi prove nahi hua.** GitHub job logs admin-only hain (`403 Must have admin rights`), aur sandbox mein full Android build nahi chala (Gradle daemon memory se mar gaya). Isliye is commit ne hang ko *diagnose* nahi kiya — usne hang ko **self-reporting** bana diya. agli CI run batayegi kaunsa method atak raha hai.
+### 🔍 Root cause — jo aakhir mein mila
+
+**Hang test-level nahi, task-level tha.** Farq yahi hai aur isi ne chaar run barbaad kiye:
+
+- Agar koi **test fail** hota, XML report banti, Gradle `BUILD FAILED` deta, job **`failure`** aata — naam ke saath.
+- Yahan job **`cancelled`** aaya, 25 min ke `timeout-minutes` par — matlab **Gradle task hi khatam nahi hua**. Test fail ho hi nahi raha tha; worker intezaar mein baitha tha.
+
+Do cheezein worker ko bandhti thi, dono teardown mein Chhoot gayi thi:
+
+| # | Kyun | Ab |
+| --- | --- | --- |
+| **1** | `model.viewModelScope` **kabhi cancel nahi hua**. Har test (`ChatViewModel(application)`) ek naya ViewModel banata hai jo `viewModelScope` par collectors chhodta hai; `ViewModelStore` ka `clear()` jaan-boojh kar nahi chalaya jaata (wo `onCleared()` chalata hai). Collector zinda \u2192 non-daemon thread zinda \u2192 JVM worker thread exit nahi karta. | `teardown` mein `model.viewModelScope.cancel()`. |
+| **2** | OkHttp pools sirf tab band hote the jab `::client.isInitialized` — aur `setup()` ka **account stack** (`rejectingClient()`) alag client tha jo kabhi band nahi hota tha. Uski pool threads bhi non-daemon. | Dono stacks band: `closeHttp()` → `cancelAll` + `evictAll` + `shutdown` + **`awaitTermination(2s)`**. |
+
+Yahi wajah hai ki pichhla commit root cause *prove* nahi kar paaya: logs admin-only the (`403 Must have admin rights`) aur sandbox build memory se mar gaya. Is baar evidence code se aaya, na ki log se — aur `main` par jo job abhi bhi `in_progress` hai (`38fbc77`), wo isi diagnosis se match karta hai.
+
+**Production code chhua nahi:** `retryResponse` streaming turn coroutine launch se **pehle** synchronously set karta hai, isliye test 2/5 ko koi delay/latch nahi chahiye — yeh behaviour sahi hai, test hi galat likha gaya tha.
 
 Test 2 aur 5 **poori tarah synchronous** hain: na `await()`, na `settle()`, na `sleep`. Sirf tests 1/3/4 response ka intezaar karte hain (`PersonalityPromptingTest` wala `idleFor` + `Thread.sleep`), kyunki wahan SSE body OkHttp thread par real time mein padhi jaati hai.
 
