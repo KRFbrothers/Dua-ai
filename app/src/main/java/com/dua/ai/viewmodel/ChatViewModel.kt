@@ -105,6 +105,20 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         override fun currentDeletionIds() = this@ChatViewModel.currentDeletionIds()
         override fun onDeviceAiEnabled() = this@ChatViewModel.onDeviceAiEnabled()
     } }
+    private val modesFeature: ChatModes by lazy { ChatModes(modesHost) }
+    private val modesHost: ChatModesHost by lazy { object : ChatModesHost {
+        override val _isTyping get() = this@ChatViewModel._isTyping
+        override val _reasoning get() = this@ChatViewModel._reasoning
+        override val _agent get() = this@ChatViewModel._agent
+        override val _xSearch get() = this@ChatViewModel._xSearch
+        override val _imagine get() = this@ChatViewModel._imagine
+        override val _runCode get() = this@ChatViewModel._runCode
+        override val _webMode get() = this@ChatViewModel._webMode
+        override val _error get() = this@ChatViewModel._error
+        override val _integrations get() = this@ChatViewModel._integrations
+        override val _selectedModel get() = this@ChatViewModel._selectedModel
+        override fun leaveBuild() = this@ChatViewModel.leaveBuild()
+    } }
     private val agentFeature: ChatAgentControls by lazy { ChatAgentControls(agentHost) }
     private val agentHost: AgentControlsHost by lazy { object : AgentControlsHost {
         override val viewModelScope get() = this@ChatViewModel.viewModelScope
@@ -764,7 +778,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val _reasoning = MutableStateFlow(false)
     val reasoning = _reasoning.asStateFlow()
     private val replyReasoning = mutableMapOf<String, Boolean>()
-    fun setReasoning(enabled: Boolean) { if (!_isTyping.value) { _reasoning.value = enabled; if (enabled) { _imagine.value = false; _agent.value = false; leaveBuild() } } }
+    fun setReasoning(enabled: Boolean) = modesFeature.setReasoning(enabled)
     // Dua Agent (Cloud Run engine only): router, then a server-side tool-calling loop (search, pages, code, images, GitHub).
     // Per-session like Reasoning and never saved; it replaces the other modes for the next reply.
     private val _agent = MutableStateFlow(false)
@@ -805,7 +819,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     }
     fun setAgent(enabled: Boolean) = agentFeature.setAgent(enabled)
     /** Auto chip: plain chat, no web and no Reasoning. */
-    fun selectAuto() { if (_isTyping.value) return; _reasoning.value = false; _agent.value = false; _xSearch.value = false; _imagine.value = false; _runCode.value = false; leaveBuild(); setWebMode(null) }
+    fun selectAuto() = modesFeature.selectAuto()
 
     // Run code (Phase 5): the provider runs Python in its own sandbox. Opt-in per session like Reasoning, never saved.
     private val _runCode = MutableStateFlow(false)
@@ -875,18 +889,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         _summary.value = next
         saveHistory()
     }
-    fun setWebMode(mode: String?) {
-        if (_isTyping.value || mode !in listOf(null, "search", "page")) return
-        webModeError(mode)?.let { _error.value = it; return }
-        _webMode.value = mode
-        if (mode != null) { _imagine.value = false; _agent.value = false; leaveBuild() }
-        _error.value = null
-    }
-    private fun webModeError(mode: String?, model: String = _selectedModel.value): String? = when {
-        mode == "search" && !_integrations.value.searchAvailable(model) -> "Web search needs setup for $model. Open Feature setup to configure search, choose a model that searches natively, or choose Off or Read link."
-        mode == "page" && !_integrations.value.pageReadingAvailable -> "Read link is unavailable. Refresh Feature setup, or choose Off."
-        else -> null
-    }
+    fun setWebMode(mode: String?) = modesFeature.setWebMode(mode)
+    private fun webModeError(mode: String?, model: String = _selectedModel.value): String? = modesFeature.webModeError(mode, model)
 
     private val _isTyping = MutableStateFlow(false)
     val isTyping: StateFlow<Boolean> = _isTyping.asStateFlow()
