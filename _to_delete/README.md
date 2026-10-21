@@ -1451,3 +1451,88 @@ Koi naya dependency/framework nahi. `_to_delete/README.md` ke purane sections �
 ### Aage kya
 
 `deleteChat` + `deleteServerChat` ka cleanup coverage ab kaafi hai. Agla kaam **`ChatModes.kt`** — aur uska **pehla test mode-freeze** hona chahiye, kyunki wahi extract hone par sabse pehle tootega. Uske baad hi move.
+
+## 🧪 Chat split — tests: ChatModes mode freeze (21 Oct 2026)
+
+`ChatModes.kt` split ka **step 0**: pehla test, phir move. Yeh section sirf naye test file ka hai — production code ek line bhi nahi chhua.
+
+### Nayi file
+
+`app/src/test/java/com/dua/ai/viewmodel/ChatModesModeFreezeTest.kt` — **7 tests**, 429 lines, ek hi naya file.
+
+Branch `test/chat-modes-freeze` @ `23ee96f`, base `main` `fae0dda` (PR #318 merge). PR #319.
+
+### Coverage — pehle → ab
+
+| Contract | Pehle | Ab |
+| --- | --- | --- |
+| `retryResponse` reply ka frozen web mode replay karta hai (composer ka naya mode use **nahi**) | ❌ sirf indirect (`PersonalityPromptingTest` personality dekhta hai, mode nahi) | ✅ assertion + wire par `web="search"` |
+| Freeze **scoped** hai — naya turn composer ka current mode leta hai | ❌ | ✅ naye reply ki `replyWebModes` = `null`, purane ki `"search"` |
+| `replyBuild` freeze — Build reply composer ke Build chhodne ke baad bhi wahi repo | ⚠️ `RetryResponseTest` `original.build` se cover karta hai, `replyBuild` map se nahi | ✅ `replyBuild` + wire par `mode="build"` + `repository` |
+| `openChat` saved `buildRepository` adopt karta hai, session modes reset | ❌ | ✅ |
+| `startNewChat` teeno modes reset (`_webMode`/`_xSearch`/`_buildRepo`) | ❌ | ✅ |
+| `setWebMode` guard **dono** direction + streaming lock | ❌ | ✅ |
+| `setXSearch` guard dono direction (non-Grok refuse → Grok+server apply) | ❌ | ✅ |
+| `setRunCode` / `setBuildRepository` guard dono direction + Build exclusivity | ❌ | ✅ |
+| Modes disk par nahi jaate, `buildRepository` jaata hai | ❌ | ✅ `ChatHistoryCodec` encode→decode |
+
+### 7 cases
+
+1. `aRetrySendsTheRepliesFrozenWebModeAfterTheComposerWasTurnedOff` — seed `replyWebModes[REPLY]="search"`, composer `setWebMode(null)`, retry → wire par `web="search"`, `mode="auto"`, sirf 1 message (original prompt).
+2. `aNewTurnUsesTheComposersCurrentModeWhileTheOldReplyKeepsItsFrozenOne` — retry → stop → restore → `sendMessage` → naye reply ka mode `null`, purane ka `"search"`.
+3. `aBuildReplyKeepsItsRepositoryAfterTheComposerLeftBuildMode` — `replyBuild[REPLY]=KRFbrothers/Dua-ai` + `_buildRepo=null` → retry par `mode="build"`, `repository="KRFbrothers/Dua-ai"`, `web` field gayab.
+4. `openingASavedChatAppliesItsStoredRepositoryAndClearsTheSessionModes` — `openChat` adopt/reset, repo-less chat → Build clear, `startNewChat` → teeno reset.
+5. `webSearchAndXSearchRefuseWithoutCapabilityAndApplyOnceTheServerOffersThem` — refuse + kuch store nahi, phir offer par apply; streaming par chip lock.
+6. `buildAndRunCodeRefuseWithoutCapabilityAndApplyOnceItIsAvailable` — Run code refuse→apply; Build refuse **aur** Run code ko na chhede (early-return proof) → phir apply + web/X/reasoning/runCode sab off.
+7. `theModesAreSessionOnlyWhileTheBuildRepositorySurvivesTheDiskRoundTrip` — encode→decode round trip; `webMode`/`xSearch`/`buildRepo` keys disk par nahi.
+
+### ⏱️ Determinism — #316 wala hang dobara nahi
+
+| Check | Result |
+| --- | --- |
+| `CountDownLatch` | **0** |
+| `Thread.sleep` | 1 — sirf `awaitRequest()` helper ke andar (1 ms yield) |
+| Blocking interceptor | ❌ nahi — hamesha ek poora SSE turn, kabhi block nahi |
+| Paused looper test body mein pump | 5/7 tests mein **koi pump nahi**; tests 1 & 3 ko outgoing body chahiye (coroutine + OkHttp worker thread) |
+| JUnit `@Rule Timeout` | jaan-boojh kar nahi (body dusre thread par jaati hai, `idleFor()` wedge karta hai) |
+| Teardown | `viewModelScope.cancel()` + bounded drain + `awaitTermination(2s)`; `ViewModelStore.clear()` **nahi** |
+| Naya framework/dependency | ❌ koi nahi |
+
+### Blob proof
+
+```
+local  f2e10cf9c9728cbd79e62187d1ff764e9d3e69d6
+remote f2e10cf9c9728cbd79e62187d1ff764e9d3e69d6
+```
+
+### ❗ Production code bilkul nahi chhua
+
+```
+git diff --name-only origin/main...HEAD -- app/src/main | wc -l   → 0
+git diff --name-only origin/main...HEAD  → sirf ChatModesModeFreezeTest.kt (+ yeh README section)
+```
+
+### 🔎 Jo test likhte waqt confirm hua (bug nahi, design)
+
+- **Mode freeze `reply*` maps se aata hai, composer se nahi.** `ChatLifecycle.retryResponse` `replyWebModes[messageId]` padhta hai, `_webMode.value` nahi. Yeh contract ab locked hai — split ke waqt isi ko bachana hai.
+- **`ReplyRetryPlan.create` files wale turn ko retry se rokta hai** (`"\nFiles: "` check) — isliye mode-freeze test mein attach-free turn chahiye.
+- **`_buildRepo` per-chat hai, per-reply map optional.** `replyBuild[id]` sirf tab set hota hai jab request mein build ho; absent ho to `original.build?.repository` fallback hai.
+
+### ⚠️ Pehle se report kiye bugs (yahan bhi fix nahi kiye)
+
+1. `deleteChat` `clearAttachments()` nahi bulata — attachment agle chat mein chala jaata hai.
+2. `deleteServerChat` / `deleteChat` `_preparingFiles` / `_readingFiles` par refuse nahi karte (`syncBlocked()` mein missing).
+
+### Merge checklist
+
+```bash
+./gradlew assembleDebug
+./gradlew testDebugUnitTest
+./gradlew lint
+```
+
+> Sandbox note: cgroup limit **2 GiB** (`oom_kill 2`) — local Gradle possible nahi. Structural verify: braces 44/44, parens 337/337, 7 `@Test`, koi unused import nahi. Confirmation CI se.
+
+### Aage kya
+
+Ab `ChatModes.kt` (~200 line) extract kar sakte hain — mode toggles, compatibility guards aur yeh freeze contract tests ke saamne safe hain. Move ke waqt public API byte-identical rakhna, aur `reply*` maps ko `ChatModesHost` ke peeche se waisa hi forward karna.
