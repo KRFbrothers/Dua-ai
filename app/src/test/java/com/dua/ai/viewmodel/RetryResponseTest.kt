@@ -269,6 +269,19 @@ class RetryResponseTest {
         val repository = "KRFbrothers/Dua-ai"
         intercept { request -> stream("Repository answer", request) }
         seed(reply("Old repository answer").copy(build = BuildInfo(repository)))
+        // Build retries are gated on a server Build config, a configured provider and a signed-in
+        // owner; without them retryResponse returns early and no request is made. Server replies
+        // stay off, so signing in here adds no cloud persistence call.
+        val integrations = flow<com.dua.ai.setup.IntegrationState>("_integrations")
+        integrations.value = integrations.value.copy(build = com.dua.ai.setup.BuildModeConfig(enabled = true),
+            providers = integrations.value.providers.map { if (it.name == "Gemini") it.copy(configured = true) else it })
+        val account = field("account").get(model) as AccountRepository
+        @Suppress("UNCHECKED_CAST")
+        val accountState = AccountRepository::class.java.getDeclaredField("mutable").apply { isAccessible = true }.get(account)
+            as MutableStateFlow<com.dua.ai.account.AccountState>
+        accountState.value = accountState.value.copy(user = com.dua.ai.account.AccountUser(
+            "00000000-0000-0000-0000-000000000001", "owner@example.test", "Owner"))
+        assertNull("Build must be usable in this test", model.buildUnavailableReason())
 
         model.retryResponse("reply")
         finished()
