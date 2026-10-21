@@ -65,6 +65,8 @@ SQL persistence, embeddings, provider routes, tools, telemetry and CLI settings.
 | `AGENT_MODEL` | same as `VERTEX_MODEL` (`gemini-3.8-flash`) | Model for the Agent loop / ADK merger only. Falls back once to `VERTEX_MODEL` on 404/403. |
 | `AGENT_THINKING_LEVEL` | `low` when `AGENT_MODEL` differs from `VERTEX_MODEL`, else `VERTEX_THINKING_LEVEL` | `low`, `medium` or `high` for the Agent model. |
 | `AGENT_ENGINE` | unset (tool loop) | `adk` turns on ADK parallel mode. |
+| `GEMINI_AUTH` | `adc` | `apikey` sends chat, helpers, search grounding and the Agent (tool loop and every ADK Gemini model) to Vertex AI express mode with `GOOGLE_API_KEY` (no project/location; the key's own project is billed and must have the model, e.g. `gemini-4-argon`). Imagine and document/notes embeddings stay on ADC. `apikey` without a key logs one warning and keeps ADC. Rollback: `GEMINI_AUTH=adc`. |
+| `GOOGLE_API_KEY` | unset | Google Cloud API key (restricted to the Gemini API) for `GEMINI_AUTH=apikey`. Secret Manager only, never a plain env var: `--update-secrets GOOGLE_API_KEY=dua-gemini-key:latest` (service account needs `roles/secretmanager.secretAccessor`). Remove with `--remove-secrets GOOGLE_API_KEY`. |
 | `AGENT_SUB_STEPS` | `5` | Model calls per ADK helper. |
 | `AGENT_ADK_SECONDS` | `300` | Total time limit for the ADK path. `AGENT_CI_SECONDS` is added on top only when the request actually uses the PR flow (`AGENT_TEST_CODE=1` and a PR/CI tool ran); the limit grows at that moment, mid-run. The deadline log line prints the real limit. Logs also show `adk plan Xs`, `adk helpers Xs`, `adk merge Xs`. |
 | `AGENT_SEARCH_SECONDS` | `90` | Deadline for one `google_search` call (clamped 10–300; invalid value = 90). |
