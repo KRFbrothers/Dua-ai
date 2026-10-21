@@ -869,12 +869,11 @@ def test_agent_search_seconds_override(monkeypatch):
 def test_adk_gemini_retry_flag(monkeypatch):
     import agent_models
     monkeypatch.delenv("ADK_MODELS_JSON", raising=False)
-    monkeypatch.delenv("ADK_GEMINI_RETRY", raising=False)
+    monkeypatch.setenv("ADK_GEMINI_RETRY", "0")
     assert agent_models.resolve("helper", "gemini-x") == "gemini-x"
-    monkeypatch.setenv("ADK_GEMINI_RETRY", "1")
-    made = []
-    monkeypatch.setattr(agent_models, "gemini_with_retry", lambda name: made.append(name) or ("retry", name))
-    assert agent_models.resolve("helper", "gemini-x") == ("retry", "gemini-x")
+    monkeypatch.delenv("ADK_GEMINI_RETRY", raising=False)  # default on
+    monkeypatch.setattr(agent_models, "gemini_with_retry", lambda name, backoff=False: ("retry", name, backoff))
+    assert agent_models.resolve("helper", "gemini-x") == ("retry", "gemini-x", True)
     assert agent_models.resolve("helper", "openai/x") == "openai/x"
 
 
@@ -886,3 +885,37 @@ def test_gemini_with_retry_options():
     assert model.model == "gemini-x"
     assert model.retry_options.attempts == 2
     assert 429 in model.retry_options.http_status_codes
+
+
+def test_gemini_backoff_on_429_for_default_model():
+    pytest.importorskip("google.adk")
+    import agent_models
+    opts = agent_models.gemini_with_retry("gemini-3.8-flash", backoff=True).retry_options
+    assert opts.attempts == 4 and opts.initial_delay == 2.0 and opts.max_delay == 8.0
+    assert opts.exp_base == 2.0 and opts.jitter > 0 and 429 in opts.http_status_codes
+    # Worst case (2+4+8 s plus jitter) stays far inside the ADK deadline.
+    assert 2 + 4 + 8 + 3 * opts.jitter < agent_adk.TOTAL_SECONDS
+
+
+def test_gemini_backoff_without_sdk_keeps_plain_name(monkeypatch):
+    import agent_models
+    monkeypatch.delenv("ADK_MODELS_JSON", raising=False)
+    monkeypatch.delenv("ADK_GEMINI_RETRY", raising=False)
+    monkeypatch.setattr(agent_models, "gemini_with_retry",
+                        lambda name, backoff=False: (_ for _ in ()).throw(ImportError("no sdk")))
+    assert agent_models.resolve("helper", "gemini-x") == "gemini-x"
+
+
+@pytest.mark.parametrize("flag,expected", [(None, "sequential"), ("1", "sequential"), ("0", "parallel")])
+def test_helpers_sequential_flag(monkeypatch, flag, expected):
+    if flag is None:
+        monkeypatch.delenv("ADK_HELPERS_SEQUENTIAL", raising=False)
+    else:
+        monkeypatch.setenv("ADK_HELPERS_SEQUENTIAL", flag)
+    adk, _ = fake_adk(json.dumps(PLAN), {"research": ["r"], "notes": ["n"]}, merge_text="ok")
+    made = []
+    adk.ParallelAgent = lambda **kw: made.append("parallel") or FakeAgent(**kw)
+    adk.SequentialAgent = lambda **kw: made.append(kw["name"] == "helpers" and "sequential" or "root") or FakeAgent(**kw)
+    text, _ = agent_adk.run(make_env([]), "x", "f", "a", cfg, adk=adk, log=lambda m: None)
+    assert text == "ok" and expected in made
+    assert ("parallel" in made) == (expected == "parallel")
