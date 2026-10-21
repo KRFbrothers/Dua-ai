@@ -1898,3 +1898,132 @@ Braces 82/82 (ChatHistory), 38/38 (test). Parens 218/218, 240/240. 6 `@Test`. Ko
 ### Aage kya
 
 `deleteChat` ke baaki guard branches (`liveProjectBusy`, `_cloudPreview`, `_importPreview`, `buildPr.creating`) abhi bhi untested hain, aur `deleteServerChat` ka happy path + cloud apply bhi. Uske baad `ChatModes.kt` split — mode-freeze test pehle se green hai (7 tests), "pehle test, phir move".
+
+## 🧩 Chat split — Step 7: modes → `ChatModes.kt` (21 Oct 2026)
+
+`ChatAgentControls.kt` already owned Agent / Run code / Build / PR / approvals / X search, and the per-reply freeze maps belong to `ChatLifecycle` (retry reads) and `ChatHistory` (delete clears). What was still in `ChatViewModel.kt` was exactly the composer's own mode logic — four members. Those are now `ChatModes.kt`.
+
+**PR #326** · branch `refactor/chat-modes-split` @ `db65627` · base `main@2993516` · **merged nahi** (owner merge karega).
+
+### Kya move hua
+
+| Moved | Base lines in `ChatViewModel.kt` |
+|---|---|
+| `setReasoning` | 767 |
+| `selectAuto` | 808 |
+| `setWebMode` | 878–884 |
+| `webModeError` | 885–890 |
+
+`ChatModes.kt` = **40 lines**: `internal interface ChatModesHost` (11 members), `internal class ChatModes(host: ChatModesHost) : ChatModesHost by host`, and the four members.
+
+### Kya nahi move hua — aur kyun
+
+Har symbol ke liye teen test chalaye (feature-host contract · reflection test · shared state):
+
+| Stayed | Why |
+|---|---|
+| `_reasoning` / `_agent` / `_xSearch` / `_imagine` / `_runCode` / `_webMode` / `_error` / `_integrations` / `_selectedModel` / `_isTyping` | `AgentControlsHost` (19 fields), `ImagineHost` (28), `HistoryHost` (35), `AccountHost`, `LifecycleHost` — sab declare karte hain. Move karte hi sibling host blocks compile hona band. |
+| `leaveBuild()` | `AgentControlsHost` + `ImagineHost` dono call karte hain. |
+| `replyWebModes` / `replyReasoning` / `replyAgent` / `replyCode` / `replyBuild` / `replyXSearch` | `LifecycleHost` padhta hai (freeze), `HistoryHost` clear karta hai (delete). Base state. |
+| `codeUsable` / `buildUsable` / `xSearchUsable` | Already `ChatAgentControls` par forward; `LifecycleHost` bhi declare karta hai. |
+| `buildRepositories` / `_buildPr` / `buildUnavailableReason` / `loadBuildRepositories` / `setBuildRepository` / `setAgent` / `setRunCode` / `setXSearch` / `createPullRequest` / `decideAgentApproval` / `codeSnippetUnavailableReason` | Pehle se `ChatAgentControls` ka kaam. |
+| `requestTurns` / `applySummary` / `_summary` | Long-context plumbing, modes ka concern nahi. |
+
+Upar ke saare fields reflection tests se bhi pinned hain (`getDeclaredField("_buildRepo")`, `"_webMode"`, `"_reasoning"`, `"_xSearch"` …) — woh **runtime** par fail hote hain, compile par nahi. Isliye jo bhi test naam se pakadta hai, woh hila nahi.
+
+### `ChatModesHost` ka shape
+
+```kotlin
+internal interface ChatModesHost {
+    val _isTyping: MutableStateFlow<Boolean>
+    val _reasoning: MutableStateFlow<Boolean>
+    val _agent: MutableStateFlow<Boolean>
+    val _xSearch: MutableStateFlow<Boolean>
+    val _imagine: MutableStateFlow<Boolean>
+    val _runCode: MutableStateFlow<Boolean>
+    val _webMode: MutableStateFlow<String?>
+    val _error: MutableStateFlow<String?>
+    val _integrations: MutableStateFlow<com.dua.ai.setup.IntegrationState>
+    val _selectedModel: MutableStateFlow<String>
+    fun leaveBuild()
+}
+```
+
+ViewModel mein: `private val modesFeature: ChatModes by lazy { ChatModes(modesHost) }` + `private val modesHost: ChatModesHost by lazy { object : ChatModesHost { … } }`. Forwarders wahi ki wahi signature rakhte hain: `fun setReasoning(enabled: Boolean) = modesFeature.setReasoning(enabled)`, `fun selectAuto() = modesFeature.selectAuto()`, `fun setWebMode(mode: String?) = modesFeature.setWebMode(mode)`, aur `private fun webModeError(mode, model) = modesFeature.webModeError(mode, model)`.
+
+### Line counts — file badhi, chhoti nahi
+
+| | Before | After |
+|---|---|---|
+| `ChatViewModel.kt` | 1,616 | 1,620 (**+4**) |
+| `ChatModes.kt` | — | 40 |
+
+14 lines logic gayi, 18 wapas aayi (11-member host object + 3 forwarders + delegate + blank). `git diff --stat` = `18 insertions(+), 14 deletions(-)`. Seedha bolna: is step ka fayda yeh hai ki mode logic ka apna naam aur file hai, yeh nahi ki koi number ghata.
+
+### Verification — local Gradle nahi chal saka
+
+Sandbox ka cgroup cap **2 GiB** (`memory.max` = 2147483648, `oom_kill` badha) — `compileDebugKotlin` par Gradle daemon OOM se mar jaata hai. Isliye local build signal nahi tha; **CI hi proof hai**. Static checks:
+
+| Check | Result |
+|---|---|
+| Ordered byte-compare | **14/14** base lines maujood. `diff` sirf blank lines + javadoc + `private fun webModeError` → `fun webModeError` dikhata hai. |
+| Host parity | interface **11** == host overrides **11**, `diff` clean |
+| Accidental override (member interface + class dono mein) | **koi nahi** — `comm -12` khaali |
+| Public API | **206 == 206**, `diff` khaali |
+| Brace balance | `ChatViewModel.kt` 319/319, `ChatModes.kt` 10/10 |
+| Changed files | 3 — `ChatModes.kt` (naya), `ChatViewModel.kt`, `ChatModesCoverageTest.kt` (naya) |
+| `ui/` files | **0** — koi UI edit nahi chahiye, matlab slice sahi scoped hai |
+
+### Tests — pehle, phir move
+
+Commit order: `6316ff6` (tests) → `db65627` (move). Naya file `ChatModesCoverageTest.kt`, **4 tests**:
+
+| Test | Kya cover karta hai |
+|---|---|
+| `replyWebModeAnswersForTheFrozenReplyAndForNothingElse` | `replyWebMode()` public reader — freeze test sirf backing map reflection se padhta tha |
+| `reasoningIsLockedWhileTypingAndTakesOverImagineAgentAndBuildWhenEnabled` | `setReasoning` ka typing lock + exclusivity (Imagine/Agent off, Build left); off locked nahi |
+| `autoClearsEveryModeAndIsIgnoredWhileAReplyStreams` | `selectAuto` chhe modes + Build clear karta hai; mid-reply kuch nahi |
+| `readLinkRefusesUntilTheServerOffersItAndIgnoresAnUnknownMode` | `webModeError` ka `"page"` arm, dono direction, + invalid mode drop |
+
+**Coverage pehle → ab:**
+
+| Member | Pehle | Ab |
+|---|---|---|
+| `setReasoning` | **0 tests** | 1 |
+| `selectAuto` | **0 tests** | 1 |
+| `setWebMode` | sirf `"search"` | `search` + `page` + invalid + typing lock |
+| `webModeError` | sirf `"search"` arm | dono arm, dono direction |
+| `replyWebMode()` | **0** (sirf map reflection) | 1 |
+
+`ChatModesModeFreezeTest.kt` (7 tests, PR #319) **bilkul untouched**.
+
+### Determinism
+
+`Thread.sleep` **0** · `CountDownLatch` **0** · blocking interceptor **0** (client har request par `AssertionError` — mode toggle network chhuye to loud fail) · JUnit `@Rule Timeout` **nahi** (woh body ko alag thread par le jaata hai aur paused Looper wedge hota hai — #316 wala hang) · paused looper test body mein **kabhi pump nahi** · `advanceUntilIdle` **0**. Har assertion woh state padhti hai jo call khud synchronously set karti hai. Har test apna ViewModel + apna OkHttpClient + saaf prefs.
+
+### CI
+
+Run **`39573981048`** — https://github.com/KRFbrothers/Dua-ai/actions/runs/39573981048 — **4/4 success**:
+
+| Job | Conclusion | Time |
+|---|---|---|
+| Android build and tests | ✅ success | 09:03:25 → 09:07:44 (**4m 19s**, koi hang nahi) |
+| Backend tests | ✅ success | 18s |
+| Website build | ✅ success | 14s |
+| Google Cloud engine tests | ✅ success | 1m 21s |
+
+Merge-point `main` run `39571483986` bhi 4/4 success.
+
+### Merge checklist
+
+```bash
+./gradlew assembleDebug
+./gradlew testDebugUnitTest
+./gradlew lint
+```
+
+`lint` CI mein nahi hai — locally chalana hoga.
+
+### Aage kya
+
+Baaki untested mode paths: `setBuildRepository`/`setXSearch`/`setRunCode` ke typing-lock branches, aur `_agentAvailable` false hone par `retryResponse` ka `requestAgent` drop. Uske baad agla slice — `ChatHistory.kt` (295 lines) sabse bada bacha hua feature file hai.
