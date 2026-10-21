@@ -166,6 +166,7 @@ coverage and isolated real-container checks, then run the existing suites.
 Private SQL draft checkpoints and selected text-file import are implemented in
 [the third phase](CODING_CHECKPOINTS.md), with setup/verification still pending.
 Durable Git checkouts, interactive/background terminals, package-network policy,
-multiple toolchain profiles, app terminal/diff views and larger workers remain
-future work. Existing workspace approvals still control GitHub changes; this runner
+multiple toolchain profiles and larger workers remain future work. Android
+activity views are described in [CODING_ACTIVITY.md](CODING_ACTIVITY.md), and
+read-only CI evidence in [CODING_CI.md](CODING_CI.md). Existing workspace approvals still control GitHub changes; this runner
 does not commit, push, open/merge PRs, deploy or modify cloud settings.

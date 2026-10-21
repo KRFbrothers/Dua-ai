@@ -18,7 +18,8 @@ import com.dua.ai.ui.theme.Spacing
 
 /** Plain text only: terminal output and patches are never interpreted as markdown or links. */
 @Composable
-internal fun AgentTextPreview(title: String, text: String, truncated: Boolean = false) {
+internal fun AgentTextPreview(title: String, text: String, truncated: Boolean = false,
+    truncationMessage: String = "Preview shortened. Review the full files before publishing.") {
     var expanded by remember(title) { mutableStateOf(false) }
     TextButton(onClick = { expanded = !expanded }, modifier = Modifier.heightIn(min = Sizes.touchTarget)
         .semantics { contentDescription = "${if (expanded) "Hide" else "Show"} $title" }) {
@@ -33,7 +34,7 @@ internal fun AgentTextPreview(title: String, text: String, truncated: Boolean = 
                 }
             }
         }
-        if (truncated) Text("Preview shortened. Review the full files before publishing.",
+        if (truncated) Text(truncationMessage,
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
@@ -42,7 +43,7 @@ internal fun AgentTextPreview(title: String, text: String, truncated: Boolean = 
 internal fun AgentCodingCard(coding: AgentCoding, onOpenWorkspaces: () -> Unit) {
     OutlinedCard(Modifier.fillMaxWidth().padding(bottom = Spacing.sm)) {
         Column(Modifier.padding(Spacing.lg), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-            Text("Coding workspace", style = MaterialTheme.typography.titleSmall)
+            Text(if (coding.workspace == null && coding.ci.isNotEmpty()) "Pull request checks" else "Coding workspace", style = MaterialTheme.typography.titleSmall)
             coding.workspace?.let { w ->
                 Text("${w.repository} · ${w.base.take(8)}", style = MaterialTheme.typography.bodySmall)
                 Text(if (w.paths.isEmpty()) "No draft changes" else "${w.paths.size} changed files", style = MaterialTheme.typography.bodyMedium)
@@ -66,6 +67,7 @@ internal fun AgentCodingCard(coding: AgentCoding, onOpenWorkspaces: () -> Unit) 
                     if (run.output.isNotEmpty()) AgentTextPreview("command output", run.output, run.truncated)
                 }
             }
+            coding.ci.forEach { ci -> key(ci.repository, ci.number) { AgentCiCard(ci) } }
             coding.diff?.let { AgentTextPreview("draft diff", it, coding.diffTruncated) }
             TextButton(onClick = onOpenWorkspaces, modifier = Modifier.heightIn(min = Sizes.touchTarget)) { Text("Saved drafts") }
         }

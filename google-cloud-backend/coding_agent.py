@@ -53,6 +53,8 @@ CODING_PROMPT = (
     "use export_paths for changed text files, then import_command_changes and inspect the diff. Unexported changes "
     "are discarded. When checkpoints are enabled, edits autosave; list_workspaces/restore_workspace resume a "
     "saved draft in a fresh task. Never claim commands ran when execution is unconfigured or failed. "
+    "Use inspect_pr_ci(number) to diagnose a PR using its observed commit; this read-only tool does not restore "
+    "that PR into the main-based workspace or authorize fixes. Never claim all required checks passed. "
     "Use the tools to look at the tree, "
     "search and read the files you need (read before you change). Keep changes small and focused. When ready, "
     "call propose_changes ONCE with files=[] for staged drafts, or FULL new content when there are no drafts "
@@ -148,8 +150,11 @@ def allowed(method, path, body, repo):
         "GET": [rf"^{base}$", rf"^{base}/git/trees/[A-Za-z0-9._\-/]+$", rf"^{base}/contents/[^?]*$",
                 rf"^{base}/tarball/[0-9a-f]{{40}}$",
                 rf"^{base}/git/ref/heads/[A-Za-z0-9._\-/]+$", r"^/search/code$",
-                # CI results for the agent's own PRs (read-only).
-                rf"^{base}/commits/[0-9a-f]{{40}}/check-runs$", rf"^{base}/actions/runs$"],
+                # Read-only CI evidence inside the configured repository.
+                rf"^{base}/commits/[0-9a-f]{{40}}/check-runs$", rf"^{base}/actions/runs$",
+                rf"^{base}/pulls/[1-9][0-9]{{0,8}}$",
+                rf"^{base}/check-runs/[1-9][0-9]{{0,18}}/annotations$",
+                rf"^{base}/actions/runs/[1-9][0-9]{{0,18}}/attempts/[1-9][0-9]{{0,18}}/jobs$"],
         "POST": [rf"^{base}/git/blobs$", rf"^{base}/git/trees$", rf"^{base}/git/commits$",
                  rf"^{base}/git/refs$", rf"^{base}/pulls$"],
     }
@@ -487,6 +492,8 @@ TOOLS = [
      "parameters": {"type": "OBJECT", "properties": {"path": {"type": "STRING"}}, "required": ["path"]}},
     {"name": "search_code", "description": "Search code in the repository; returns matching file paths.",
      "parameters": {"type": "OBJECT", "properties": {"query": {"type": "STRING"}}, "required": ["query"]}},
+    {"name": "inspect_pr_ci", "description": "Read CI checks, failed steps and annotations for a PR number in this repository at its observed head commit. No rerun, logs download, workspace restore or writes. Required/merge checks are not evaluated.",
+     "parameters": {"type": "OBJECT", "properties": {"number": {"type": "INTEGER"}}, "required": ["number"]}},
     {"name": "propose_changes", "description": "Propose a PR for owner approval: title, description and full file contents. After edit_file, use files=[] to submit all staged edits.",
      "parameters": {"type": "OBJECT", "properties": {
          "title": {"type": "STRING"}, "description": {"type": "STRING"},

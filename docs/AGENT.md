@@ -112,8 +112,14 @@ The existing provider `run_python` tool remains separate from this repo terminal
 import](CODING_CHECKPOINTS.md), with opt-in owner/revision checks and atomic,
 single-use imports that reject a changed draft.
 
-**Remaining phases:** app terminal/diff/checkpoint review, richer CI failure
-evidence and end-to-end coding evaluation. No runner has been enabled or engine deployed by these implementation
+**Fourth phase:** [Android coding activity, approval diff and saved-draft
+controls](CODING_ACTIVITY.md).
+
+**Fifth phase:** [read-only PR CI evidence](CODING_CI.md), including observed-head
+checks, bounded failure annotations/steps and an Android snapshot card.
+
+**Remaining work:** end-to-end coding evaluation, existing-PR repair and richer
+execution profiles. No runner has been enabled or engine deployed by these implementation
 phases. Local tests were deferred at the owner's request; both workspace and
 runner behavior still require verification before activation.
 

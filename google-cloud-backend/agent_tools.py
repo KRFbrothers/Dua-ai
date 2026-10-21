@@ -49,7 +49,7 @@ def search_seconds():
     return max(10, min(value, 300))
 
 
-SLOW_TOOL_SECONDS = {"google_search": search_seconds(), "run_python": 90, "generate_image": 120, "run_command": 240}
+SLOW_TOOL_SECONDS = {"google_search": search_seconds(), "run_python": 90, "generate_image": 120, "run_command": 240, "inspect_pr_ci": 120}
 TICK_SECONDS = 15
 LIMITS = {"google_search": 3, "fetch_url": 5, "run_python": 2, "generate_image": 1, "remember": 3,
           "calculator": 20, "current_time": 5, "recall": 3,
@@ -58,7 +58,7 @@ LIMITS = {"google_search": 3, "fetch_url": 5, "run_python": 2, "generate_image":
           # One pull request per request (counted when it is queued for the user's approval).
           "propose_changes": 1,
           "workspace_status": 12, "edit_file": 30, "workspace_diff": 8,
-          "run_command": 4,
+          "run_command": 4, "inspect_pr_ci": 2,
           "import_command_changes": 4, "checkpoint_workspace": 4, "list_workspaces": 3, "restore_workspace": 2,
           # Agent notes (agent_notes.py): the agent's own private lessons, separate from the app's Memory.
           "save_note": 3, "search_notes": 3, "delete_note": 3, "search_documents": 3}
@@ -128,6 +128,7 @@ PROGRESS = {
     "create_issue": ("issue_new", "Creating issue\u2026"),
     "comment_on_issue": ("issue_comment", "Commenting on issue\u2026"),
     "check_pr_ci": ("ci", "Checking CI\u2026"),
+    "inspect_pr_ci": ("ci", "Reading PR failure evidence\u2026"),
     "save_note": ("notes", "Saving a note\u2026"),
     "search_notes": ("notes", "Checking notes\u2026"),
     "delete_note": ("notes", "Updating notes\u2026"),
@@ -604,6 +605,14 @@ class AgentRun:
                 self.facts.append(fact)
                 self.emit({"type": "memory", "fact": fact})
                 return {"suggested": True, "note": "Suggested to the user's Memory; they confirm it in the app before it is saved."}
+            if name == "inspect_pr_ci":
+                import coding_ci
+                github = env.get("github")
+                if github is None:
+                    return {"error": "GitHub tools are not set up."}
+                result = coding_ci.inspect(github, args.get("number"), cancelled=env.get("cancelled"))
+                self.emit(coding_ci.ui_event(result))
+                return result
             if name == "check_pr_ci":
                 if self.prflow is None:
                     return {"error": "No pull request was opened in this request yet."}
