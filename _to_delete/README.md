@@ -1376,3 +1376,78 @@ Run URL: `https://github.com/KRFbrothers/Dua-ai/actions/runs/39549094082`
 ### Aage kya
 
 `deleteChat` ke baaki missing tests (`deleteServerChat` ki tarah `_dataBusy` guard, `draftSaver.pending` wala path, aur `pollJobs`/`replyBuild` map cleanup ka direct assertion) — phir `ChatModes.kt` split. **Pehle test, phir move.**
+
+---
+
+## 🧪 Chat split — tests: `deleteChat` cleanup (21 Oct 2026)
+
+Base: `main` @ `84ebe92` (PR #317 ka merge commit). Pichhle section ("Chat split — tests: `deleteChat`") ne `deleteChat` ke **6 behaviour** cover kiye the — state reset, idempotency, cancel-reply, stale turn, unknown id, background chat. Us section ke "Aage kya" ne jo teen cheezein chhodi thi, wahi yahan cover hoti hain, plus teen jo `deleteServerChat` ke saath share hoti hain.
+
+### Nayi file
+
+`app/src/test/java/com/dua/ai/viewmodel/DeleteChatCleanupTest.kt` — **6 tests**. Harness bilkul wahi jo `DeleteChatTest` / `RetryResponseTest` / `PersonalityPromptingTest` use karte hain: Robolectric, `@Config(sdk=[34])`, `LooperMode.PAUSED`, real `ChatViewModel`, real `ChatHistoryWriter`, real SharedPreferences-backed history; network sirf interceptor tak.
+
+| # | Test | Kya prove karta hai |
+| --- | --- | --- |
+| 1 | `deletingWhileDataIsBusyChangesNothingAndWorksAgainOnceTheBusyFlagClears` | `_dataBusy = true` par delete **no-op** — disk string byte-identical, `savedChats`/`activeChatId`/`messages` unchanged. Phir `_dataBusy = false` karke wahi delete chalti hai ⇒ teesra assert prove karta hai ki guard hi wajah thi, seed toota nahi tha |
+| 2 | `deletingAnyChatFlushesThePendingTypedDraftToDiskFirst` | `updateDraft()` ke baad `draftSaver.pending == true` (debounce chal raha hai) → delete → `pending == false` **aur** typed draft disk par `ACTIVE` ke saath, `OTHER` ke saath nahi. `runNow()` ka asar, bina kisi timer ke |
+| 3 | `deletingTheActiveChatCancelsItsPollJobsAndLeavesTheSurvivingChatsPollsAlone` | `pollJobs` mein 3 jobs seed kiye (do deleted chat ke, ek bachne wale chat ka) → delete → dono `isActive == false`, bachne wala `isActive == true`, aur map se sirf deleted ids gaye |
+| 4 | `deletingTheActiveChatDropsOnlyItsPerReplyMetadata` | Paanchon maps (`replyWebModes`, `replyReasoning`, `replyAgent`, `replyCode`, `replyBuild`) mein deleted + surviving reply dono ki entries → delete ke baad deleted ki **sab gayab**, surviving ki **sab intact** (values bhi, sirf presence nahi) |
+| 5 | `deletingTheActiveChatForgetsItsExclusiveMediaButKeepsFilesOtherChatsStillUse` | Do chats jinke media ek file `shared.png` share karte hain + ek-ek exclusive (`only-active.png`, `only-other.png`) → delete active → shared **bacha**, doosre chat ki file **bachi**, sirf exclusive **gayi**. Yeh `stillUsed` wala rule hai jo `bindCloudHistory` bhi use karta hai |
+| 6 | `deletingAServerChatWhileARetryStreamsIsRefusedInsteadOfCancellingTheRetry` | `deleteServerChat` ka cancel-reply path: `chatDeletionEnabled = true` + streaming retry → delete **refuse** hoti hai (`"Finish the current reply or sync action, then try again."`), `busy == false`, `id == ACTIVE`, reply job **abhi bhi active**, reply **abhi bhi streaming**, disk untouched |
+
+### Determinism — #316 wala hang dobara nahi
+
+| Rule | Is file mein |
+| --- | --- |
+| Koi wall-clock pause test body mein | **0** (per-test count 0,0,0,0,0,0) |
+| `CountDownLatch` / `settle()` / `await()` polling | **0** |
+| Paused looper test body mein pump | **0** — sirf `@After` ka bounded drain (25×5 ms) |
+| Blocking interceptor | **0** — har request ko turant ek complete SSE turn |
+| Teardown mein bounded wait | sirf `executorService.awaitTermination(2s)`, **wahi** jo `DeleteChatTest:123` aur `RetryResponseTest:120` mein pass hota hai |
+| `runTest`/`TestDispatcher` | zaroorat nahi — har assertion us state ko padhti hai jo call ne **synchronously** set kiya (e.g. `retryResponse` streaming turn coroutine dispatch se pehle set karta hai) |
+
+Har test apna `ChatViewModel` + saaf SharedPreferences banata hai; koi test doosre par depend nahi karta. `ViewModelStore.clear()` jaan-boojh kar nahi bulaya (wahi wajah jo pichhle section mein likhi hai).
+
+### Coverage — pehle → ab
+
+| Function / path | Pehle | Ab |
+| --- | --- | --- |
+| `deleteChat` — state reset, idempotency, cancel-reply, stale turn, unknown id, background | 6 tests (`DeleteChatTest.kt`) | same, chhue nahi |
+| `deleteChat` — `_dataBusy` guard | **0 tests** | test 1 |
+| `deleteChat` — `draftSaver.runNow()` pending path | **0 tests** | test 2 |
+| `deleteChat` — `pollJobs` cancel (direct assertion) | **0 tests** | test 3 |
+| `deleteChat` — per-reply maps (5 maps) | **0 tests** | test 4 |
+| `deleteChat` — `mediaCache.forget` sharing rule | **0 tests** | test 5 |
+| `deleteServerChat` — cancel-reply / busy-reply guard | **0 tests** | test 6 |
+| `deleteServerChat` — happy path + cloud apply | `ServerChatDeletionCacheTest` (pehle se) | same, chhue nahi |
+
+Net: `deleteChat` ka cleanup half pehle **poora untested** tha (0/5 paths), ab **5/5** covered; `deleteServerChat` ka refusal path bhi ab cover hai.
+
+### Production code bilkul nahi chhua
+
+```
+git status --short -- app/src/main   → 0 paths
+git diff --stat                       → sirf DeleteChatCleanupTest.kt (+ yeh README section)
+```
+
+Koi naya dependency/framework nahi. `_to_delete/README.md` ke purane sections — khaas kar "Chat split — tests: `retryResponse`" aur "Chat split — tests: `deleteChat`" — **ek line bhi nahi badli** (sirf yeh naya section end mein juda).
+
+### ⚠️ Jo mila (report kiya, fix nahi kiya)
+
+1. **`deleteChat` `clearAttachments()` nahi bulata** — pichhle section mein detail hai; yahan dobara lock nahi kiya, aur test 1 mein attachment assertion jaan-boojh kar nahi rakha.
+2. **`deleteServerChat` sirf *typing* par refuse karta hai, sirf *preparing/reading files* par nahi.** `syncBlocked()` mein `_isTyping`, `_dataBusy`, `liveProjectBusy`, previews aur `buildPr.creating` hain — `_preparingFiles` / `_readingFiles` **nahi**. Matlab jab koi attachment abhi prepare ho raha ho (streaming shuru nahi hua), tab bhi server delete chal jaayegi. `retryResponse` khud `_preparingFiles`/`_readingFiles` ko guard karta hai (`ChatLifecycle.kt`), to yeh asymmetry hai. Expected: delete refuse ho. Actual: delete proceed karti hai. **Fix nahi kiya** — production change hai, aapka decision. `deleteChat` (local) bhi same guard use karta hai, isliye wo bhi affected hai.
+
+### Merge checklist
+
+```bash
+./gradlew assembleDebug
+./gradlew testDebugUnitTest
+./gradlew lint
+```
+
+> Sandbox note: yahan cgroup limit **2 GiB** hai (`oom_kill 2`) — `compileDebugKotlin` daemon OOM se marta hai, isliye local Gradle run possible nahi. Verify kiya: braces 42/42, parens 252/252, 6 `@Test`, koi unused import nahi, test bodies mein koi wait nahi. Confirmation CI se.
+
+### Aage kya
+
+`deleteChat` + `deleteServerChat` ka cleanup coverage ab kaafi hai. Agla kaam **`ChatModes.kt`** — aur uska **pehla test mode-freeze** hona chahiye, kyunki wahi extract hone par sabse pehle tootega. Uske baad hi move.
