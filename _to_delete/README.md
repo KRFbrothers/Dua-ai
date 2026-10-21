@@ -1792,3 +1792,109 @@ Har test apna `ChatViewModel` + apna `OkHttpClient` + saaf prefs.
 
 `deleteChat` ka `clearAttachments()` decision (aapka call), phir `ChatModes.kt` split — mode-freeze test pehle se green hai (7 tests), splitting ke waqt "pehle test, phir move".
 
+
+---
+
+## 🧹 Chat split — tests: `deleteChat` attachments (21 Oct 2026)
+
+`deleteChat()` ne messages, draft aur mode flags reset kiye — par **composer** nahi, jo usi chat ka tha. `startNewChat()` aur `clearAllChats()` dono `clearAttachments()` bulate hain; delete path nahi bulata tha.
+
+### Root cause
+
+```kotlin
+// pehle — ChatHistory.kt:264
+if (id == activeId) {
+    cancelReply()
+    activeId = UUID.randomUUID().toString()
+    _messages.value = emptyList()
+    _draft.value = ""
+    ...
+}
+```
+
+`clearAttachments()` (`ChatAttachments.kt:51`) **paanch** cheezein clear karta hai:
+
+| State | Kaun set karta hai | Delete ke baad pehle |
+|---|---|---|
+| `_attachments` | picker / `loadFiles` | **stale** — deleted chat ke draft files |
+| `_uploads` | `uploadPicked` | **stale** — pending uploads |
+| `_attachmentError` | picker failure | **stale** — purana error composer ke neeche |
+| `_readingFiles` | `loadFiles` | **stale** — read flag stuck |
+| `selectionVersion` | `loadFiles` / `clearAttachments` | **stale** — in-flight load purane chat par land kar sakta tha |
+
+`_draft` clear hota tha, par `_attachments`/`_uploads` nahi — isliye **draft text khaali, par files attached**. Agla chat un files ke saath khulta tha.
+
+### `clearAttachments()` callers ka audit
+
+| Caller | File:line | Kya clear karta hai |
+|---|---|---|
+| `startNewChat()` | `ChatHistory.kt:280` | poora composer |
+| `openChat()` | `ChatHistory.kt:124` | poora composer (chat switch) |
+| `clearAllChats()` | `ChatHistory.kt:112` | poora composer |
+| `bindCloudHistory()` (deleted active) | `ChatHistory.kt:194` | poora composer |
+| `_persistResult()` | `ChatViewModel.kt:1556` | poora composer (reply land) |
+| **`deleteChat()`** | `ChatHistory.kt:264` | **pehle: kuch nahi → ab: poora composer** |
+
+### Fix — 3 lines, ek jagah
+
+```kotlin
+if (id == activeId) {
+    cancelReply()
+    // The composer belongs to the chat being deleted: its draft files, pending uploads and
+    // selection counter must go with it, or they leak into the next conversation.
+    clearAttachments()
+    activeId = UUID.randomUUID().toString()
+```
+
+- **Sirf active branch.** Background delete composer ko chhoota nahi — woh khule chat ka hai.
+- `clearAttachments()` pehle se `HistoryHost` par declared hai (`ChatHistory.kt:60`) ⇒ **koi interface change nahi**, **public API zero change**.
+- `selectionVersion++` bhi saath aata hai ⇒ delete ke waqt chal rahi `loadFiles` apna result purane chat par **land nahi kar sakti**.
+
+### Tests — `DeleteChatAttachmentsTest.kt`, 6 cases
+
+| # | Test | Kya assert hota hai |
+|---|---|---|
+| 1 | `deletingTheActiveChatClearsTheDraftAttachmentsUploadsAndSelection` | `_attachments` empty · `_uploads` empty · `_attachmentError` `""` · `_readingFiles` false · `selectionVersion` aage badha · sirf `OTHER` disk par — **fix se pehle FAIL** |
+| 2 | `deletingABackgroundChatKeepsTheComposersAttachmentsAndSelection` | composer ke files/uploads/error/selection **intact** · khula chat + draft bacha · `OTHER` hat gaya |
+| 3 | `deletingTheActiveChatFlushesThePendingDraftAndLeavesNothingQueued` | `updateDraft()` → `pending == true` → delete → `pending == false` · draft disk par · deleted chat late save se wapas nahi aati |
+| 4 | `deletingTheActiveChatForgetsItsCachedMediaButKeepsFilesOtherChatsUse` | deleted chat ki exclusive cached file **gayi** · doosre chat ki shared file **bachi** (asli files cache dir mein) |
+| 5 | `aDraftAttachmentFromADeletedChatNeverReachesTheNextChat` | delete → `startNewChat()` → naya chat bilkul saaf (end-to-end leak) |
+| 6 | `aRefusedDeleteLeavesTheComposersAttachmentsUntouched` | `_preparingFiles` par refuse · composer + disk **byte-identical** |
+
+### Coverage pehle → ab
+
+| Kya | Pehle | Ab |
+|---|---|---|
+| `clearAttachments()` ke 5 effects, delete ke baad | **0/5** | **5/5** |
+| `deleteChat` ke composer assertions | **0** | **6 tests** |
+| Cross-chat attachment leak | **0** | **1** (end-to-end) |
+| Background delete ka composer isolation | **0** | **1** |
+| Draft saver pending path × delete | **0** | **1** |
+
+### Determinism
+
+`Thread.sleep` **0** · `CountDownLatch` **0** · blocking interceptor **0** · real network **0** · JUnit `@Rule Timeout` **nahi** (wahi #316 ka wedge) · paused looper test body mein **kabhi pump nahi** (sirf `@After` mein bounded drain) · `advanceUntilIdle` **0**. Har test apna ViewModel + apna OkHttpClient + saaf prefs. Account transport har request par `AssertionError` throw karta hai, isliye stray network hop chup-chaap nahi guzarta.
+
+### Verification
+
+```
+app/src/main/java/.../ChatHistory.kt                |   3 ++
+app/src/test/java/.../DeleteChatAttachmentsTest.kt | 327 ++++++++++++++++++++
+2 files changed, 330 insertions(+)
+```
+
+Braces 82/82 (ChatHistory), 38/38 (test). Parens 218/218, 240/240. 6 `@Test`. Koi unused import nahi. Production scope: `git diff --name-only main...HEAD` = **2 files**.
+
+### Merge checklist
+
+```bash
+./gradlew assembleDebug
+./gradlew testDebugUnitTest
+./gradlew lint
+```
+
+`lint` CI mein nahi hai — locally chalana hoga.
+
+### Aage kya
+
+`deleteChat` ke baaki guard branches (`liveProjectBusy`, `_cloudPreview`, `_importPreview`, `buildPr.creating`) abhi bhi untested hain, aur `deleteServerChat` ka happy path + cloud apply bhi. Uske baad `ChatModes.kt` split — mode-freeze test pehle se green hai (7 tests), "pehle test, phir move".
