@@ -60,6 +60,8 @@ internal interface HistoryHost {
     fun clearAttachments()
     fun refreshSyncBusy()
     fun syncBlocked(): Boolean
+    /** [syncBlocked] without `_isTyping`: the conditions that guard the stored history, not a reply. */
+    fun cacheBlocked(): Boolean
     fun currentDeletionIds(): List<String>
     fun onDeviceAiEnabled(): Boolean
 }
@@ -248,7 +250,9 @@ internal class ChatHistory(host: HistoryHost) : HistoryHost by host {
         if (selectedId in deleted) activeId = nextId
     }
     fun deleteChat(id: String) {
-        if (_dataBusy.value) return
+        // Same stored-state guard the server path uses: a pick, a cloud review, an import preview, a
+        // build PR or a starting live session owns the draft and the chat list until it finishes.
+        if (cacheBlocked()) return
         draftSaver.runNow()
         _savedChats.value.find { it.id == id }?.messages?.forEach { replyWebModes.remove(it.id); replyReasoning.remove(it.id); replyAgent.remove(it.id); replyCode.remove(it.id); replyBuild.remove(it.id) }
         // Remove cached references/media only. The server snapshot may still need the stored files.
