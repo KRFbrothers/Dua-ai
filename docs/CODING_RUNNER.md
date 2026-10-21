@@ -76,7 +76,11 @@ isolated-mode support (`-I -S`), plus the reference image's coreutils/shell tool
 Large/long Android builds exceed this first runner's limits and still belong in
 the existing GitHub CI flow.
 
-## Fixed boundaries
+Configured JVM/Android profiles and prepared image recipes are described in
+[CODING_PROFILES.md](CODING_PROFILES.md). Those optional profiles need reviewed,
+installed images and separate live verification; no images were provisioned here.
+
+## Default Python boundaries
 
 | Boundary | Value |
 | --- | --- |
@@ -131,7 +135,8 @@ generate the dedicated random token securely there, not in chat or source:
 | Runner variable | Purpose |
 | --- | --- |
 | `DUA_CODING_RUNNER_TOKEN` | Dedicated random ASCII token, at least 32 characters; never a Google/GitHub/API token |
-| `DUA_SANDBOX_IMAGE` | Installed immutable `registry/name@sha256:<64 lowercase hex>` image reference |
+| `DUA_SANDBOX_IMAGE` | Installed immutable default Python image reference |
+| `DUA_SANDBOX_IMAGES_JSON` | Optional host-only known-profile → digest map; see [toolchain profiles](CODING_PROFILES.md) |
 | `DUA_SANDBOX_RUNTIME` | Optional `runsc`; unset uses Docker's configured default runtime |
 | `DUA_RUNNER_DATA_DIR` | Host-visible temporary source directory; supplied by the systemd template |
 
@@ -166,7 +171,8 @@ coverage and isolated real-container checks, then run the existing suites.
 Private SQL draft checkpoints and selected text-file import are implemented in
 [the third phase](CODING_CHECKPOINTS.md), with setup/verification still pending.
 Durable Git checkouts, interactive/background terminals, package-network policy,
-multiple toolchain profiles and larger workers remain future work. Android
+interactive sessions and larger workers remain future work. Fixed toolchain
+profiles are described in [CODING_PROFILES.md](CODING_PROFILES.md). Android
 activity views are described in [CODING_ACTIVITY.md](CODING_ACTIVITY.md), and
 read-only CI evidence in [CODING_CI.md](CODING_CI.md). Existing workspace approvals still control GitHub changes; this runner
 does not commit, push, open/merge PRs, deploy or modify cloud settings.

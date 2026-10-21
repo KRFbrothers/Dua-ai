@@ -69,6 +69,9 @@ internal fun AgentCodingCard(coding: AgentCoding, onOpenWorkspaces: () -> Unit) 
                         else -> "Command unavailable"
                     }
                     Text(status, style = MaterialTheme.typography.labelLarge)
+                    run.profile?.let { profile ->
+                        Text("Toolchain: $profile", style = MaterialTheme.typography.bodySmall)
+                    }
                     Text(run.command, style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace))
                     if (run.output.isNotEmpty()) AgentTextPreview("command output", run.output, run.truncated)
                 }

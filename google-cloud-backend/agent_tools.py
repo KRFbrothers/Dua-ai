@@ -58,7 +58,7 @@ LIMITS = {"google_search": 3, "fetch_url": 5, "run_python": 2, "generate_image":
           # One pull request per request (counted when it is queued for the user's approval).
           "propose_changes": 1, "propose_pr_fix": 1, "open_pr_workspace": 2,
           "workspace_status": 12, "edit_file": 30, "workspace_diff": 8,
-          "run_command": 4, "inspect_pr_ci": 2,
+          "run_command": 4, "list_runner_profiles": 3, "inspect_pr_ci": 2,
           "import_command_changes": 4, "checkpoint_workspace": 4, "list_workspaces": 3, "restore_workspace": 2,
           # Agent notes (agent_notes.py): the agent's own private lessons, separate from the app's Memory.
           "save_note": 3, "search_notes": 3, "delete_note": 3, "search_documents": 3}
@@ -88,7 +88,8 @@ GITHUB_HINT = (", and the GitHub tools to read the Dua AI repository {repo} and 
                "propose_pr_fix(title) for separate owner approval on the existing branch. Never propose_changes "
                "from a PR workspace. For a new PR, read files and scoped AGENTS.md, edit_file, "
                "inspect workspace_diff, then propose_changes with files=[] for all staged edits. These drafts "
-               "are request-local unless saved checkpoints are enabled. When execution.configured is true, run_command checks the source snapshot "
+               "are request-local unless saved checkpoints are enabled. When execution.configured is true, list_runner_profiles "
+               "discovers configured python/jvm/android contracts; no live readiness is implied. run_command(profile=...) checks the source snapshot "
                "in an ephemeral, network-disabled container. Select export_paths for text changes, then "
                "import_command_changes and review the diff. Unexported changes are discarded. Enabled checkpoints "
                "autosave edits; use list_workspaces/restore_workspace to resume in a fresh task. Claim durable saving "
@@ -121,6 +122,7 @@ PROGRESS = {
     "propose_pr_fix": ("pr", "Preparing fix approval\u2026"),
     "edit_file": ("edit", "Editing draft\u2026"),
     "workspace_diff": ("diff", "Reviewing changes\u2026"),
+    "list_runner_profiles": ("terminal", "Reading runner profiles\u2026"),
     "run_command": ("terminal", "Running command in sandbox\u2026"),
     "import_command_changes": ("edit", "Importing command changes\u2026"),
     "checkpoint_workspace": ("checkpoint", "Saving workspace\u2026"),
@@ -616,6 +618,9 @@ class AgentRun:
                 self.facts.append(fact)
                 self.emit({"type": "memory", "fact": fact})
                 return {"suggested": True, "note": "Suggested to the user's Memory; they confirm it in the app before it is saved."}
+            if name == "list_runner_profiles":
+                import coding_terminal
+                return coding_terminal.list_profiles()
             if name == "inspect_pr_ci":
                 import coding_ci
                 github = env.get("github")

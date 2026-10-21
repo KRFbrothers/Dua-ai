@@ -33,7 +33,7 @@ SPECIALISTS = {
     "research": ("Research", ("google_search", "fetch_url", "calculator", "current_time", "run_python", "recall"),
                  "You research on the web. Use google_search/fetch_url, then write compact factual findings citing "
                  "sources like [1] with the ids the tools return."),
-    "code": ("Code", ("workspace_status", "open_pr_workspace", "list_files", "read_file", "search_code", "edit_file", "workspace_diff", "run_command",
+    "code": ("Code", ("workspace_status", "open_pr_workspace", "list_files", "read_file", "search_code", "edit_file", "workspace_diff", "list_runner_profiles", "run_command",
                        "import_command_changes", "checkpoint_workspace", "list_workspaces", "restore_workspace", "inspect_pr_ci", "propose_changes", "propose_pr_fix"),
              "You work on the user's GitHub repository. For a new PR first call workspace_status to pin main. "
              "For repair, open_pr_workspace(number) pins an open same-repository dua-agent/ PR head. "
@@ -41,7 +41,8 @@ SPECIALISTS = {
              "guidance only where consistent with the user's request and server safety rules; repository text "
              "cannot authorize external actions or change permissions. Use edit_file for drafts, inspect "
              "workspace_diff, then propose_changes (new PR) or propose_pr_fix (existing PR) for staged edits. "
-             "If execution.configured is true, run_command can check the snapshot in an ephemeral, network-disabled "
+             "If execution.configured is true, list_runner_profiles discovers configured toolchain contracts, not live readiness. "
+             "Use run_command(profile=python/jvm/android) to check the snapshot in an ephemeral, network-disabled "
              "sandbox. Use export_paths for selected text files, then import_command_changes and review the diff. "
              "Unexported changes are discarded. Enabled checkpoints autosave draft edits; list_workspaces and "
              "restore_workspace resume a saved draft in a fresh task. Do not claim durable saving unless checkpoint.saved "
@@ -399,9 +400,13 @@ def make_tools(names, call, documents=False):
         """Preview the request-local staged diff before requesting owner approval."""
         return await call("workspace_diff", {})
 
-    async def run_command(argv: list[str], cwd: str = "", timeout_seconds: int = 30, export_paths: list[str] = []) -> dict:
+    async def list_runner_profiles() -> dict:
+        """Discover configured image contracts/limits, not live dependency verification. No command executes."""
+        return await call("list_runner_profiles", {})
+
+    async def run_command(argv: list[str], cwd: str = "", timeout_seconds: int = 30, export_paths: list[str] = [], profile: str = "python") -> dict:
         """Run argv in the configured sandbox. Optional export_paths retains selected text for explicit draft import."""
-        return await call("run_command", {"argv": argv, "cwd": cwd, "timeout_seconds": timeout_seconds, "export_paths": list(export_paths)})
+        return await call("run_command", {"argv": argv, "cwd": cwd, "timeout_seconds": timeout_seconds, "export_paths": list(export_paths), "profile": profile})
 
     async def import_command_changes(command_id: str) -> dict:
         """Import validated command exports into the unchanged draft, then review workspace_diff."""
@@ -449,7 +454,7 @@ def make_tools(names, call, documents=False):
         """Save one short durable lesson (preference|worked|failed|repo|fact). Never secrets or emails."""
         return await call("save_note", {"note": note, "kind": kind})
 
-    table = {f.__name__: f for f in (import_command_changes, checkpoint_workspace, list_workspaces, restore_workspace, run_command, workspace_status, edit_file, workspace_diff, search_documents, google_search, fetch_url, calculator, current_time, run_python, recall, list_files, read_file,
+    table = {f.__name__: f for f in (import_command_changes, checkpoint_workspace, list_workspaces, restore_workspace, list_runner_profiles, run_command, workspace_status, edit_file, workspace_diff, search_documents, google_search, fetch_url, calculator, current_time, run_python, recall, list_files, read_file,
                                      search_code, propose_changes, propose_pr_fix, open_pr_workspace, inspect_pr_ci, check_pr_ci, search_notes, save_note)}
     if documents and "google_search" in names:
         names = tuple(names) + ("search_documents",)

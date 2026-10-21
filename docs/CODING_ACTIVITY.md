@@ -59,3 +59,5 @@ Read-only PR CI snapshots are described in [CODING_CI.md](CODING_CI.md).
 [Reviewed PR repair](CODING_PR_REPAIR.md) adds the PR/branch label to repair drafts
 and a separate stored-diff fix approval. Its approval is disabled in the new UI
 when the required diff preview is absent.
+
+[Toolchain profiles](CODING_PROFILES.md) add the selected profile label to command activity without persisting it in chat codecs.

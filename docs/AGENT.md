@@ -121,8 +121,11 @@ checks, bounded failure annotations/steps and an Android snapshot card.
 **Sixth phase:** [reviewed repairs to an existing agent PR](CODING_PR_REPAIR.md),
 with a pinned PR workspace, separate fix approval and non-forced branch update.
 
-**Remaining work:** end-to-end coding evaluation, interactive sessions and richer
-execution profiles. No runner has been enabled or engine deployed by these implementation
+**Seventh phase:** [configured Python/JVM/Android runner profiles](CODING_PROFILES.md),
+with fixed limits, image-contract discovery and explicit command profile binding.
+
+**Remaining work:** end-to-end coding evaluation, image/runner provisioning and
+interactive sessions. No runner has been enabled or engine deployed by these implementation
 phases. Local tests were deferred at the owner's request; both workspace and
 runner behavior still require verification before activation.
 

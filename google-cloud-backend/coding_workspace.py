@@ -142,7 +142,8 @@ class Workspace:
                 "checkpoint": {"configured": coding_checkpoints.enabled(), "id": self.checkpoint_id, "revision": self.checkpoint_revision,
                                "saved": self.saved_fingerprint == self.fingerprint()},
                 "command_changes": [{"command_id": key, "paths": [f["path"] for f in value["files"]],
-                                     "current": value["fingerprint"] == self.fingerprint(), "imported": value["imported"]}
+                                     "current": value["fingerprint"] == self.fingerprint(), "imported": value["imported"],
+                                     "profile": value.get("profile", "python"), "image_digest": value.get("image_digest")}
                                     for key, value in self.command_results.items()],
                 "execution": coding_terminal.status(),
                 "note": "Drafts only; opening a PR workspace does not update its branch. GitHub changes need a separate approval. Unsaved drafts and command exports are request-local."}
