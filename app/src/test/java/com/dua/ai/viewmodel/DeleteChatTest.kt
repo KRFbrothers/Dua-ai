@@ -13,10 +13,14 @@ import com.dua.ai.history.SavedChat
 import com.dua.ai.model.ChatMessage
 import com.dua.ai.model.ChatSummary
 import com.dua.ai.network.DuaApiClient
+import com.dua.ai.settings.AppearanceStore
+import com.dua.ai.settings.DevicePreferences
+import com.dua.ai.settings.LocalPreferences
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.runBlocking
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Protocol
@@ -38,40 +42,39 @@ import org.robolectric.annotation.LooperMode
 
 /**
  * deleteChat (ChatHistory.kt) through the real ViewModel, the real save path and the real
- * SharedPreferences-backed history writer.
+ * SharedPreferences-backed history cache — same harness as RetryResponseTest / PersonalityPromptingTest.
  *
- * Everything here is synchronous on purpose. There is no wall-clock wait, no Thread.sleep, no latch,
- * and no pumping of an in-flight HTTP body. The looper stays paused, so nothing that a cancelled
- * job dispatched can run between an assertion and the next one. That is exactly the lesson of the
- * RetryResponseTest hang (a latch awaited inside an OkHttp interceptor, on Main): these tests only
- * inspect the state deleteChat leaves behind, and the one test that could involve a stream asserts
- * that the network was never reached at all.
+ * Covered: the active chat really disappears (memory, caches AND disk), deleting twice, deleting
+ * while a retry streams (job cancelled, typing and retryOriginal reset), a cancelled stream never
+ * writing again, an unknown id, and deleting a background chat.
  *
- * Covered: deleting the active chat (messages, draft, caches, disk), deleting the same chat twice,
- * deleting while a retry streams (job cancelled, typing and retryOriginal reset), a cancelled
- * stream never writing again, an unknown id, and deleting a background chat.
+ * Fully synchronous: the paused looper is never pumped inside a test body, so nothing a cancelled
+ * job dispatched can run between two assertions. That is the lesson of the RetryResponseTest hang
+ * (a latch awaited inside an OkHttp interceptor, on Main) — there is no wait here to wedge on.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class)
 @LooperMode(LooperMode.Mode.PAUSED)
 class DeleteChatTest {
-    // No JUnit `Timeout` rule: it moves the body to another thread while Robolectric binds the main
-    // Looper to the runner thread, and `idleFor()` from a foreign thread wedges instead of failing.
-    // Nothing below waits, so there is nothing for a timeout to rescue.
+    // Deliberately no JUnit `Timeout` rule: it moves the body to another thread while Robolectric
+    // binds the main Looper to the runner thread, and `idleFor()` from a foreign thread wedges
+    // instead of failing. Nothing below waits, so there is nothing for it to rescue.
     private lateinit var application: Application
     private lateinit var model: ChatViewModel
     private lateinit var client: OkHttpClient
     private val store = ViewModelStore()
-    /** Held so teardown can shut down the pool the account stack opened. */
+    /** The account stack from [setup]; held so [teardown] can shut down the pool it opened. */
     private var accountClient: OkHttpClient? = null
 
     private val prompt = ChatMessage(id = "prompt", text = "Explain coroutines", isUser = true, model = "Gemini")
     private val reply = ChatMessage(id = REPLY, text = "Original answer", isUser = false, model = "Gemini", state = "complete")
     private val activeChat = SavedChat(id = ACTIVE, model = "Gemini", draft = "Half-typed follow-up",
-        messages = listOf(prompt, reply), updatedAt = 1L)
+        messages = listOf(prompt, reply), updatedAt = 1_000L)
     private val otherChat = SavedChat(id = OTHER, model = "Gemini", draft = "",
-        messages = listOf(ChatMessage(id = "other-prompt", text = "Another question", isUser = true, model = "Gemini"),
-            ChatMessage(id = "other-reply", text = "Another answer", isUser = false, model = "Gemini")), updatedAt = 2L)
+        messages = listOf(
+            ChatMessage(id = "other-prompt", text = "Another question", isUser = true, model = "Gemini"),
+            ChatMessage(id = "other-reply", text = "Another answer", isUser = false, model = "Gemini")),
+        updatedAt = 2_000L)
 
     private fun field(name: String) = ChatViewModel::class.java.getDeclaredField(name).apply { isAccessible = true }
     @Suppress("UNCHECKED_CAST") private fun <T> flow(name: String) = field(name).get(model) as MutableStateFlow<T>
@@ -80,25 +83,28 @@ class DeleteChatTest {
         application = RuntimeEnvironment.getApplication()
         for (name in listOf("dua_chat_history", "dua_files", "dua_auto_sync", "dua_account_session", "dua_preferences"))
             application.getSharedPreferences(name, 0).edit().clear().commit()
+        runBlocking { AppearanceStore(application).reset() }
+        DevicePreferences(application).update(LocalPreferences(memoryEnabled = false))
         model = ChatViewModel(application).also { store.put("chat", it) }
         for (name in listOf("engineCheck", "cloudImagineCheck")) (field(name).get(model) as? Job)?.cancel()
         // Same account wiring as PersonalityPromptingTest: signed out, and any stray account call is
         // a test bug rather than a quiet network hop.
-        field("account").set(model, AccountRepository(AccountApi("https://account.test", refusingClient()), object : SessionPersistence {
+        field("account").set(model, AccountRepository(AccountApi("https://account.test", rejectingClient()), object : SessionPersistence {
             override fun read(): AccountSession? = null
             override fun write(value: AccountSession?) = Unit
         }))
-        intercept()
-        // Retry is gated on the appearance store having loaded. These tests never read appearance, so
-        // the flag is set directly instead of waiting on a DataStore emission (no sleep, no polling).
+        // `appearance` starts from the store's initial value (the reset above), so marking it loaded
+        // here is exactly the state "loaded with defaults" — no polling, no wait. retryResponse needs
+        // this flag (test 3), and nothing read here depends on a later appearance emission.
         field("appearanceLoaded").set(model, true)
+        intercept()
     }
 
     /**
-     * Stops what this test started without calling [ViewModelStore.clear]: `onCleared()` touches the
-     * drive rebinder, the backup delegate, the recorder and every poll job, and none of the
-     * assertions depend on it. Cancelling the reply job and viewModelScope plus closing the HTTP
-     * stacks leaves nothing running behind the Gradle worker.
+     * Stops what this test started. Deliberately does NOT call [ViewModelStore.clear]: `onCleared()`
+     * touches the drive rebinder, the backup delegate, the recorder and every poll job on the paused
+     * Looper. No assertion depends on it, and one blocked step there would hang the Gradle worker
+     * with no test-level failure to report.
      */
     @After fun teardown() {
         runCatching { (field("replyJob").get(model) as? Job)?.cancel() }
@@ -108,6 +114,7 @@ class DeleteChatTest {
         accountClient?.let(::closeHttp)
     }
 
+    /** Shuts an OkHttp stack down and waits (bounded) so no pool thread outlives this test. */
     private fun closeHttp(http: OkHttpClient) {
         runCatching {
             http.dispatcher.cancelAll()
@@ -120,11 +127,12 @@ class DeleteChatTest {
     // ---- harness ----
 
     /**
-     * Answers any /api/chat request with one complete SSE turn, so a retry that somehow survived
-     * its cancellation completes on this thread instead of blocking a pool thread forever.
+     * Answers any /api/chat request with one complete SSE turn. It never blocks, so a retry that
+     * somehow survived its cancellation finishes on that thread instead of parking a pool thread.
      */
     private fun intercept() {
         client = OkHttpClient.Builder().addInterceptor { chain ->
+            check(chain.request().url.host == "chat.test") { "Unexpected test HTTP request: ${chain.request().url}" }
             Response.Builder().request(chain.request()).protocol(Protocol.HTTP_1_1).code(200).message("OK")
                 .header("Content-Type", "text/event-stream")
                 .body("data: {\"type\":\"text\",\"delta\":\"Late answer\"}\n\ndata: {\"type\":\"done\",\"truncated\":false}\n\n"
@@ -135,25 +143,26 @@ class DeleteChatTest {
     }
 
     /** The account API is never used here; refusing loudly keeps a stray call visible. */
-    private fun refusingClient() = OkHttpClient.Builder().addInterceptor { chain ->
+    private fun rejectingClient() = OkHttpClient.Builder().addInterceptor { chain ->
         throw AssertionError("Unexpected account request: ${chain.request().url}")
     }.build().also { accountClient = it }
 
     /**
-     * Seeds two saved chats and makes [ACTIVE] the open one. `openChat` is the real path, so the
-     * seed itself reaches disk before any test body runs; the non-default toggles are set after it
-     * (openChat resets them to the chat's own values) so their clearing is a real assertion.
+     * Seeds two saved chats with [ACTIVE] open, then writes them through the real save path, so every
+     * test starts from a state that is already on disk. The non-default toggles are set before the
+     * save, so their disappearance after a delete is a real assertion.
      */
     private fun seed() {
-        flow<List<SavedChat>>("_savedChats").value = listOf(activeChat, otherChat)
         flow<String>("_activeChatId").value = ACTIVE
+        flow<List<SavedChat>>("_savedChats").value = listOf(activeChat, otherChat)
         flow<List<ChatMessage>>("_messages").value = activeChat.messages
         flow<String>("_draft").value = activeChat.draft
-        model.openChat(ACTIVE)
         flow<ChatSummary?>("_summary").value = ChatSummary("Earlier summary", REPLY)
         flow<String?>("_webMode").value = "search"
         flow<Boolean>("_xSearch").value = true
         flow<String?>("_buildRepo").value = "KRFbrothers/Dua-ai"
+        ChatViewModel::class.java.getDeclaredMethod("saveHistory").apply { isAccessible = true }.invoke(model)
+        model.flushHistory()
     }
 
     /** Writes anything queued and returns the exact stored history string. */
@@ -174,11 +183,11 @@ class DeleteChatTest {
 
         assertTrue("no turn may survive the delete", model.messages.value.isEmpty())
         assertEquals("", model.draft.value)
-        assertNull("long-context summary must be dropped with the chat", flow<ChatSummary?>("_summary").value)
+        assertNull("the long-context summary must be dropped with the chat", flow<ChatSummary?>("_summary").value)
         assertNull(flow<String?>("_webMode").value)
         assertNull(flow<String?>("_buildRepo").value)
         assertFalse(flow<Boolean>("_xSearch").value)
-        assertEquals("only the other chat may remain", listOf(OTHER), flow<List<SavedChat>>("_savedChats").value.map { it.id })
+        assertEquals("only the other chat may remain", listOf(OTHER), model.savedChats.value.map { it.id })
         assertFalse("the deleted chat must not stay active", model.activeChatId.value == ACTIVE)
         val onDisk = savedOnDisk()
         assertEquals(listOf(OTHER), onDisk.map { it.id })
@@ -190,14 +199,14 @@ class DeleteChatTest {
     @Test fun deletingTheSameChatTwiceChangesNothingTheSecondTime() {
         seed()
         model.deleteChat(ACTIVE)
-        val savedAfterFirst = flow<List<SavedChat>>("_savedChats").value
+        val savedAfterFirst = model.savedChats.value
         val diskAfterFirst = rawHistory()
         val activeAfterFirst = model.activeChatId.value
 
         model.deleteChat(ACTIVE)
 
         assertEquals("a second delete must not rewrite the stored history", diskAfterFirst, rawHistory())
-        assertEquals(savedAfterFirst, flow<List<SavedChat>>("_savedChats").value)
+        assertEquals(savedAfterFirst, model.savedChats.value)
         assertEquals("a second delete must not rotate the active chat again", activeAfterFirst, model.activeChatId.value)
         assertTrue(model.messages.value.isEmpty())
         assertEquals(listOf(OTHER), savedOnDisk().map { it.id })
@@ -210,8 +219,8 @@ class DeleteChatTest {
         // retryResponse sets the streaming turn synchronously, before its coroutine is dispatched,
         // so this state is observed without pumping the paused looper.
         model.retryResponse(REPLY)
-        assertEquals(ChatMessage.STREAMING, model.messages.value.last().state)
-        assertTrue(model.isTyping.value)
+        assertEquals("the retry must be streaming", ChatMessage.STREAMING, model.messages.value.last().state)
+        assertTrue("the retry must be marked as typing", model.isTyping.value)
         val running = field("replyJob").get(model) as Job
         val generationBefore = field("generation").getInt(model)
 
@@ -222,7 +231,7 @@ class DeleteChatTest {
         assertNull("retryOriginal must be cleared with the chat", field("retryOriginal").get(model))
         assertFalse("typing must not survive the delete", model.isTyping.value)
         assertTrue("deleting a streaming chat must bump the generation", field("generation").getInt(model) > generationBefore)
-        assertTrue(model.messages.value.isEmpty())
+        assertTrue("the deleted chat must be empty", model.messages.value.isEmpty())
     }
 
     // ---- 4. a cancelled stream cannot write after the delete ----
@@ -232,15 +241,16 @@ class DeleteChatTest {
         model.retryResponse(REPLY)
         model.deleteChat(ACTIVE)
 
-        // Run whatever the cancellation already queued. A resume that had been dispatched would run
-        // here; it must find an empty list and leave it empty.
+        // Run whatever the cancellation already queued. A resumed continuation would run here; it
+        // must find an empty list and leave it empty.
         repeat(20) { shadowOf(Looper.getMainLooper()).idleFor(25, TimeUnit.MILLISECONDS) }
 
         assertTrue("a stale turn must not recreate the chat", model.messages.value.isEmpty())
-        assertNull(model.error.value)
+        assertNull("a cancelled retry must not report an error", model.error.value)
         assertFalse(model.isTyping.value)
         assertNull(field("retryOriginal").get(model))
-        assertEquals(listOf(OTHER), flow<List<SavedChat>>("_savedChats").value.map { it.id })
+        assertEquals(listOf(OTHER), model.savedChats.value.map { it.id })
+        assertEquals(listOf(OTHER), savedOnDisk().map { it.id })
     }
 
     // ---- 5. an unknown id is safe ----
@@ -248,14 +258,14 @@ class DeleteChatTest {
     @Test fun deletingAChatThatDoesNotExistIsSafeAndChangesNothing() {
         seed()
         val diskBefore = rawHistory()
-        val savedBefore = flow<List<SavedChat>>("_savedChats").value
+        val savedBefore = model.savedChats.value
         val activeBefore = model.activeChatId.value
         val messagesBefore = model.messages.value
 
         model.deleteChat("chat-that-never-existed")
 
         assertEquals(diskBefore, rawHistory())
-        assertEquals(savedBefore, flow<List<SavedChat>>("_savedChats").value)
+        assertEquals(savedBefore, model.savedChats.value)
         assertEquals(activeBefore, model.activeChatId.value)
         assertEquals(messagesBefore, model.messages.value)
         assertEquals("an unknown delete must not touch the open draft", "Half-typed follow-up", model.draft.value)
