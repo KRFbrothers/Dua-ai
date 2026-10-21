@@ -5,7 +5,8 @@ Safety is enforced here on the server, not by the model:
 - GitHubClient only sends requests that match an explicit (method, path) allowlist: reads, creating
   blobs/trees/commits, creating a NEW `refs/heads/dua-agent/...` branch and opening a pull request
   against main. Merging, deleting, force updates and any write to main are impossible.
-- The model only gets READ tools plus `propose_changes`; the server itself performs the writes.
+- The model gets read tools, request-local draft editing and `propose_changes`;
+  the server performs external writes only after owner approval.
 - Caps on tool steps, files read/changed, bytes and total time.
 """
 import base64
@@ -43,9 +44,15 @@ REPO_RULES = """Repository rules (must follow):
 - Never put secrets, keys or tokens in code."""
 
 CODING_PROMPT = (
-    "You are the Dua Agent coding step for the GitHub repository {repo}. Use the tools to look at the tree, "
+    "You are the Dua Agent coding step for the GitHub repository {repo}. "
+    "Start with workspace_status to pin the task to one commit. Read scoped AGENTS.md guidance with "
+    "workspace_status(path) or read_file before editing each file. Use edit_file for exact draft replacements "
+    "(empty old_text creates a new file only), inspect workspace_diff, then propose_changes with files=[] "
+    "to submit every staged edit for approval. Drafts last only for this request; no terminal is available. "
+    "Use the tools to look at the tree, "
     "search and read the files you need (read before you change). Keep changes small and focused. When ready, "
-    "call propose_changes ONCE with the FULL new content of each changed or new file (max {max_files} files), a "
+    "call propose_changes ONCE with files=[] for staged drafts, or FULL new content when there are no drafts "
+    "(max {max_files} files), a "
     "short PR title and a simple-language description (Hinglish-friendly) of what changed and how to test it. "
     "If the request is unclear or too big, call propose_changes with no files and explain why in description.\n\n"
     + REPO_RULES
@@ -316,18 +323,41 @@ class GitHubClient:
         return {"url": item.get("html_url")}
 
     # --- the only write sequence: new branch + one commit + PR into main ---
-    def open_pull_request(self, files, title, description, branch):
+    def open_pull_request(self, files, title, description, branch, base_sha=None):
         if not valid_agent_branch(branch):
             raise BlockedRequest("Use a new dua-agent/ branch with 1 to 80 lowercase letters, digits or dashes; start and end with a letter or digit.")
         files = validate_changes(files)
         if not files:
             raise CodingError("No file changes to submit. No pull request was opened.")
-        base_sha = self.request("GET", f"/repos/{self.repo}/git/ref/heads/{BASE_BRANCH}")["object"]["sha"]
-        base_commit = self.request("GET", f"/repos/{self.repo}/git/trees/{base_sha}")
+        latest = self.request("GET", f"/repos/{self.repo}/git/ref/heads/{BASE_BRANCH}")["object"]["sha"]
+        modes = {}
+        if base_sha is not None:
+            if not isinstance(base_sha, str) or not re.fullmatch(r"[0-9a-f]{40}", base_sha):
+                raise CodingError("Invalid workspace base commit.")
+            if latest != base_sha:
+                raise CodingError("The repository changed since this task started. Ask the agent to prepare a new proposal.")
+            base_commit = self.request("GET", f"/repos/{self.repo}/git/trees/{base_sha}", query={"recursive": "1"})
+            if base_commit.get("truncated") or not isinstance(base_commit.get("tree"), list):
+                raise CodingError("The workspace base tree is incomplete. No pull request was opened.")
+            entries_by_path = {e["path"]: e for e in base_commit["tree"] if isinstance(e, dict) and "path" in e}
+            for item in files:
+                path = item["path"]
+                entry = entries_by_path.get(path)
+                if entry and (entry.get("type") != "blob" or entry.get("mode") not in ("100644", "100755")):
+                    raise CodingError("Workspace proposals may only change regular files.")
+                parents = path.split("/")[:-1]
+                for index in range(1, len(parents) + 1):
+                    parent = entries_by_path.get("/".join(parents[:index]))
+                    if parent and parent.get("type") != "tree":
+                        raise CodingError("Workspace path conflicts with an existing file or link.")
+                modes[path] = entry["mode"] if entry else "100644"
+        else:
+            base_sha = latest
+            base_commit = self.request("GET", f"/repos/{self.repo}/git/trees/{base_sha}")
         entries = []
         for item in files:
             blob = self.request("POST", f"/repos/{self.repo}/git/blobs", {"content": item["content"], "encoding": "utf-8"})
-            entries.append({"path": item["path"], "mode": "100644", "type": "blob", "sha": blob["sha"]})
+            entries.append({"path": item["path"], "mode": modes.get(item["path"], "100644"), "type": "blob", "sha": blob["sha"]})
         tree = self.request("POST", f"/repos/{self.repo}/git/trees", {"base_tree": base_commit["sha"], "tree": entries})
         commit = self.request("POST", f"/repos/{self.repo}/git/commits", {"message": title, "tree": tree["sha"], "parents": [base_sha]})
         self.request("POST", f"/repos/{self.repo}/git/refs", {"ref": "refs/heads/" + branch, "sha": commit["sha"]})
@@ -391,13 +421,20 @@ def validate_changes(files):
 
 
 TOOLS = [
-    {"name": "list_files", "description": "List file paths in the repository (main branch). Optional prefix filter.",
+    {"name": "workspace_status", "description": "Start a workspace on one commit; read AGENTS.md for an optional file path. Call first for coding tasks. Drafts last only this request; no terminal.",
+     "parameters": {"type": "OBJECT", "properties": {"path": {"type": "STRING"}}}},
+    {"name": "edit_file", "description": "Edit a request-local draft. old_text must match exactly once; empty old_text creates a new file only. Read scoped AGENTS.md first. Does not write to GitHub.",
+     "parameters": {"type": "OBJECT", "properties": {"path": {"type": "STRING"}, "old_text": {"type": "STRING"}, "new_text": {"type": "STRING"}},
+                    "required": ["path", "old_text", "new_text"]}},
+    {"name": "workspace_diff", "description": "Preview staged workspace changes as a bounded unified diff before proposing a PR.",
+     "parameters": {"type": "OBJECT", "properties": {}}},
+    {"name": "list_files", "description": "List repository file paths, using the pinned commit after workspace_status. Optional prefix filter.",
      "parameters": {"type": "OBJECT", "properties": {"prefix": {"type": "STRING"}}}},
-    {"name": "read_file", "description": "Read one text file from main.",
+    {"name": "read_file", "description": "Read a text file; after workspace_status returns pinned/staged text and scoped AGENTS.md.",
      "parameters": {"type": "OBJECT", "properties": {"path": {"type": "STRING"}}, "required": ["path"]}},
     {"name": "search_code", "description": "Search code in the repository; returns matching file paths.",
      "parameters": {"type": "OBJECT", "properties": {"query": {"type": "STRING"}}, "required": ["query"]}},
-    {"name": "propose_changes", "description": "Finish: full new contents of changed/new files plus PR title and simple description.",
+    {"name": "propose_changes", "description": "Propose a PR for owner approval: title, description and full file contents. After edit_file, use files=[] to submit all staged edits.",
      "parameters": {"type": "OBJECT", "properties": {
          "title": {"type": "STRING"}, "description": {"type": "STRING"},
          "files": {"type": "ARRAY", "items": {"type": "OBJECT", "properties": {
@@ -425,9 +462,22 @@ class CodingSession:
     def __init__(self, github, emit, clock=time.monotonic):
         self.github, self.emit, self.clock = github, emit, clock
         self.files_read, self.bytes_read, self.tree_cache = 0, 0, None
+        self.workspace = None
+
+    def prepare_proposal(self, args):
+        # Snapshot metadata comes from the server, never from model arguments.
+        clean = {k: v for k, v in args.items() if k not in ("base_sha", "repository")}
+        if self.workspace is not None:
+            return self.workspace.proposal(clean)
+        return clean
 
     def run_tool(self, name, args):
         try:
+            import coding_workspace
+            if name in coding_workspace.TOOLS and self.workspace is None:
+                self.workspace = coding_workspace.Workspace(self.github)
+            if self.workspace is not None and name != "search_code":
+                return self.workspace.run(name, args)
             if name == "list_files":
                 if self.tree_cache is None:
                     self.tree_cache = self.github.tree()
@@ -443,7 +493,11 @@ class CodingSession:
                 self.bytes_read += len(clipped)
                 return {"content": clipped, "truncated": len(text) > len(clipped)}
             if name == "search_code":
-                return {"paths": self.github.search(str(args.get("query", ""))[:200])}
+                result = {"paths": self.github.search(str(args.get("query", ""))[:200])}
+                if self.workspace is not None:
+                    result.update(base_sha=self.workspace.base_sha,
+                                  note="Search uses GitHub's live index only as a hint. Read candidates at the pinned commit; staged edits are not indexed.")
+                return result
             return {"error": "Unknown tool."}
         except BlockedRequest as error:
             return {"error": str(error)}
@@ -461,7 +515,13 @@ def finish(github, emit, args, request_text, flow=None):
     emit(f"\n**Opening pull request** on `{branch}` ({len(files)} file(s))\n")
     body = (f"{description}\n\n---\nOpened by the Dua Agent for: \u201c{request_text[:500]}\u201d\n"
             "Review the changes and CI before merging. The agent never merges.")
-    number, url = github.open_pull_request(files, f"Dua Agent: {title}", body, branch)
+    snapshot = args.get("base_sha")
+    if snapshot is not None:
+        if args.get("repository") != github.repo:
+            raise CodingError("Workspace repository changed since approval. Ask for a new proposal.")
+        body += f"\n\nWorkspace base: `{snapshot}`."
+    number, url = github.open_pull_request(files, f"Dua Agent: {title}", body, branch,
+                                           **({"base_sha": snapshot} if snapshot is not None else {}))
     if flow is not None:
         flow.pr = {"number": number, "url": url, "branch": branch, "title": title,
                    "sha": getattr(github, "last_commit", None)}

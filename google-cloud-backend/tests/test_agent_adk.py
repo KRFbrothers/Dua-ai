@@ -651,7 +651,6 @@ def test_invalid_planner_shapes_do_not_launch_helpers(plan):
 @pytest.mark.parametrize('paths,contents', [
     (['a.txt', 'b.txt'], ['one']),
     (['a.txt'], ['one', 'two']),
-    ([], []),
     ('a.txt', ['one']),
     (['a.txt'], 'one'),
     (['a.txt'], [None]),
@@ -668,7 +667,11 @@ def test_proposal_rejects_unmatched_file_pairs_before_requesting_approval(paths,
     assert result.get('error') and calls == []
 
 
-def test_proposal_keeps_every_complete_file_including_empty_content():
+@pytest.mark.parametrize('paths,contents,files', [
+    (['a.txt', 'b.txt'], ['', 'two'], [{'path': 'a.txt', 'content': ''}, {'path': 'b.txt', 'content': 'two'}]),
+    ([], [], []),  # Server materializes the complete staged workspace before approval.
+])
+def test_proposal_keeps_every_complete_file_including_empty_content(paths, contents, files):
     calls = []
 
     async def call(name, args):
@@ -676,10 +679,10 @@ def test_proposal_keeps_every_complete_file_including_empty_content():
         return {'pending': True}
 
     propose = agent_adk.make_tools(['propose_changes'], call)[0]
-    result = asyncio.run(propose('Title', 'Description', ['a.txt', 'b.txt'], ['', 'two']))
+    result = asyncio.run(propose('Title', 'Description', paths, contents))
     assert result == {'pending': True}
     assert calls == [('propose_changes', {'title': 'Title', 'description': 'Description',
-                                         'files': [{'path': 'a.txt', 'content': ''}, {'path': 'b.txt', 'content': 'two'}]})]
+                                         'files': files})]
 
 
 def test_real_adk_caps_each_helper_and_still_merges_partial_results(monkeypatch):
