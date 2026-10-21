@@ -47,7 +47,9 @@ fun AgentScreen(viewModel: ChatViewModel, onBack: () -> Unit, voice: ReplyVoice?
     val typing by viewModel.isTyping.collectAsState()
     val dataBusy by viewModel.dataBusy.collectAsState()
     val agent by viewModel.agent.collectAsState()
+    var showFiles by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(Unit) { viewModel.refreshEngineCapabilities() }
+    if (showFiles && !agent) { AgentFilesScreen(viewModel.account, onBack = { showFiles = false }); return }
     if (agent) {
         ChatRoute(viewModel, voice ?: rememberReplyVoice(viewModel), onOpenSettings, onOpenVoice, onOpenSetup,
             onOpenDestination = onOpenDestination, onOpenVoiceMode = onOpenVoiceMode,
@@ -68,13 +70,13 @@ fun AgentScreen(viewModel: ChatViewModel, onBack: () -> Unit, voice: ReplyVoice?
             AgentTask.Research -> openTask()
             AgentTask.GitHub -> openTask(GITHUB_AGENT_PROMPT)
             AgentTask.Briefing -> openTask(briefingPrompt(), send = true)
-        } }, onSend = { openTask(it, send = true) })
+        } }, onSend = { openTask(it, send = true) }, onOpenFiles = { showFiles = true })
 }
 
 @Composable
 internal fun AgentContent(available: Boolean, busy: Boolean = false, onBack: () -> Unit,
     onNewTask: () -> Unit, onRefresh: () -> Unit = {}, onTask: (AgentTask) -> Unit, onSend: (String) -> Unit,
-    showChrome: Boolean = true) {
+    showChrome: Boolean = true, onOpenFiles: (() -> Unit)? = null) {
     var draft by rememberSaveable { mutableStateOf("") }
     val c = PageTheme.colors
     val enabled = available && !busy
@@ -99,6 +101,10 @@ internal fun AgentContent(available: Boolean, busy: Boolean = false, onBack: () 
                     AgentTaskCard("GitHub Repo & PR Assistant", "Ready", taskSurface, enabled) { onTask(AgentTask.GitHub) }
                     Spacer(Modifier.height(AgentSizes.cardGap))
                     AgentTaskCard("Daily Morning Briefing", "9:00 AM", taskSurface, enabled, hint = "Runs when tapped") { onTask(AgentTask.Briefing) }
+                    onOpenFiles?.let { open ->
+                        Spacer(Modifier.height(AgentSizes.cardGap))
+                        AgentTaskCard("Files", "Text", taskSurface, enabled = !busy, hint = "Documents Agent can search") { open() }
+                    }
                     if (!available) {
                         Spacer(Modifier.height(Spacing.md))
                         Text("Agent mode needs the Google Cloud engine. Refresh to check availability.", style = MaterialTheme.typography.bodyMedium,

@@ -104,3 +104,7 @@ The engine's `GITHUB_TOKEN` (Secret Manager; fine-grained, only the selected rep
 - Nothing else: the agent never merges, pushes to main, force-pushes or edits `.github/` workflows.
 
 This token is separate from dua-api's `GITHUB_CONNECTOR_TOKEN` (read-only) and `GITHUB_BUILD_WRITE_TOKEN`; see [GITHUB_VALIDATION.md](GITHUB_VALIDATION.md).
+
+## Agent Files (Android)
+
+The AI Agent page has a **Files** card. It opens a page that lists, adds and deletes the owner's documents through the engine's `/api/agent/documents` (same engine URL, app token and sign-in as chat). Only UTF-8 text files work (TXT, MD, CSV, JSON and similar), up to 100,000 characters (`MAX_DOCUMENT_CHARS`). PDFs are not supported yet because the app has no PDF text extractor. When the engine has no `ADK_EMBEDDING_MODEL` (or no Agent database), the page shows a friendly "Files aren't switched on" message instead of an error. Agent then finds these files with its `search_documents` tool.
