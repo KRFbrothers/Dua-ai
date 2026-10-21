@@ -67,7 +67,8 @@ Both the normal tool loop and the ADK Code helper use the same implementation in
 [`coding_workspace.py`](../google-cloud-backend/coding_workspace.py), the existing
 allowlisted GitHub REST client, and Python's standard-library `difflib`. Google
 ADK remains the runtime; no additional agent framework or copied vendor source
-is introduced. No new secret, dependency or deployment setting is required.
+is introduced. The text workspace alone requires no new secret or deployment
+setting; optional terminal execution has separate configuration below.
 
 1. `workspace_status` pins the current commit and returns root `AGENTS.md`, if
    present. With `path="app/.../File.kt"`, it returns applicable root-to-leaf
@@ -101,13 +102,17 @@ restart or a resumed ADK invocation. Completed approval records use the existing
 approval storage and expiration rules. Existing callers that do not start a
 workspace retain the previous read/full-content proposal flow.
 
-**Remaining phases:** an isolated checkout/container runner with terminal,
-dependency installation, resource/network limits and cancellation; durable
-workspace checkpoints/resume; app-facing diff review; richer CI failure evidence
-and end-to-end coding-task evaluation. The existing provider `run_python` tool
-is not a repository terminal. This phase does not run repository code, enable a
-runner, deploy the engine, or establish live readiness. Local tests were deferred
-at the owner's request; the new workspace behavior still requires verification.
+**Second phase:** [`run_command` and the separate container runner](CODING_RUNNER.md)
+execute a pinned source snapshot plus staged edits when explicitly configured.
+The runner has bounded resources, no network/engine credentials and cancellation
+wiring. Its command edits are temporary; it does not import them into the draft.
+The existing provider `run_python` tool remains separate from this repo terminal.
+
+**Remaining phases:** durable workspace checkpoints/resume, command-edit import,
+app-facing terminal/diff review, richer CI failure evidence and end-to-end coding
+evaluation. No runner has been enabled or engine deployed by these implementation
+phases. Local tests were deferred at the owner's request; both workspace and
+runner behavior still require verification before activation.
 
 ## Settings (verified from code)
 
@@ -134,6 +139,7 @@ at the owner's request; the new workspace behavior still requires verification.
 | `AGENT_STEP_TOKENS` | `16384` (`32768` for `gemini-4*` models) | Output cap per step, thinking included. |
 | `AGENT_SUB_TOKENS`, `AGENT_ANSWER_TOKENS`, `AGENT_ROUTER_TOKENS` | `3072`, `4096`, `256` | Output caps for sub-calls, the final answer and the router. |
 | `GITHUB_TOKEN`, `DUA_REPO` | unset, `KRFbrothers/Dua-ai` | Optional coding agent token and its single target repository. |
+| `DUA_CODING_RUNNER_URL`, `DUA_CODING_RUNNER_TOKEN` | unset | Optional separate HTTPS coding runner origin and dedicated secret. No engine host-shell fallback. See [setup and limits](CODING_RUNNER.md). |
 
 ## Agent notes vs phone Memory
 

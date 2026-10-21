@@ -28,7 +28,7 @@ WRITE_TOOLS = ("propose_changes", "create_issue", "comment_on_issue", "save_note
 # Tools whose output carries text written by someone else (web, repository, issues, CI, earlier notes).
 UNTRUSTED_TOOLS = ("google_search", "fetch_url", "run_python", "list_files", "read_file", "search_code",
                    "list_issues", "read_issue", "search_issues", "search_notes", "check_pr_ci", "search_documents",
-                   "workspace_status", "workspace_diff", "edit_file")
+                   "workspace_status", "workspace_diff", "edit_file", "run_command")
 # The main text field of a tool result; kept as raw text inside the fence (easier for the model than JSON escapes).
 TEXT_FIELDS = {"fetch_url": "text", "read_file": "content", "google_search": "notes"}
 
