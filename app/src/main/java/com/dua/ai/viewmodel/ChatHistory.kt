@@ -263,6 +263,9 @@ internal class ChatHistory(host: HistoryHost) : HistoryHost by host {
         chatMessages.forEach { message -> pollJobs.remove(message.id)?.cancel() }
         if (id == activeId) {
             cancelReply()
+            // The composer belongs to the chat being deleted: its draft files, pending uploads and
+            // selection counter must go with it, or they leak into the next conversation.
+            clearAttachments()
             activeId = UUID.randomUUID().toString()
             _messages.value = emptyList()
             _draft.value = ""
