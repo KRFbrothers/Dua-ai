@@ -816,6 +816,8 @@ def run(env, history, tools, tool_response, clock=time.monotonic):
     import agent_safety
     import coding_agent
     agent = AgentRun(env)
+    budget = coding_agent.RunTokenBudget()
+    agent.token_budget = budget
     if env.get("github") is not None:
         agent.coding = coding_agent.CodingSession(env["github"], lambda d: True, clock)
         if agent.coding is not None:
@@ -852,9 +854,19 @@ def run(env, history, tools, tool_response, clock=time.monotonic):
             return (f"Agent stopped: the model took longer than {STEP_SECONDS}s on step {step}. Please try again, "
                     "or ask a simpler question."), agent
         log(f"step {step}: model {time.monotonic() - step_started:.1f}s")
+        if budget.enabled:
+            budget.add(getattr(response, "usage_metadata", None))
         calls = function_calls(response)
         if not calls:
             return env["chunk_text"](response).strip() or "I could not finish this request.", agent
+        if budget.exceeded:
+            # Stop before running more tools or model steps; answer with the work done so far.
+            log(f"step {step}: run token cap {budget.cap} reached ({budget.used} used); stopping")
+            agent.status = "token_cap"
+            done = "".join(agent.steps).strip()
+            partial = (env["chunk_text"](response) or "").strip()
+            text = "\n\n".join(x for x in (partial, ("Steps completed so far:\n" + done) if done else "") if x)
+            return (text + "\n\n" if text else "") + coding_agent.TOKEN_CAP_NOTE, agent
         history.append(response.candidates[0].content)
         results = []
         for name, args in calls:

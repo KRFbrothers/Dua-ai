@@ -107,6 +107,56 @@ MAX_ISSUE_TEXT = 4_000        # per issue/comment body returned to the model
 MAX_ISSUE_COMMENTS = 20
 
 
+# Optional cumulative per-run token cap (input + output, all model steps of one Agent run).
+# MAX_RUN_TOTAL_TOKENS=0 or unset = off (no behaviour change). Missing usage metadata counts as 0.
+TOKEN_CAP_NOTE = ("Note: this run reached its token limit (MAX_RUN_TOTAL_TOKENS), so I stopped early. "
+                  "The answer above covers only what was done so far.")
+
+
+def run_token_cap():
+    try:
+        return max(0, int(os.environ.get("MAX_RUN_TOTAL_TOKENS", "0") or 0))
+    except ValueError:
+        return 0
+
+
+def usage_tokens(metadata):
+    """Input + output tokens from Gemini/ADK usage metadata (object or dict); 0 when missing.
+    Same fields agent_observability.Trace.usage records (prompt/candidates/total_token_count)."""
+    if metadata is None:
+        return 0
+    def value(name):
+        raw = metadata.get(name) if isinstance(metadata, dict) else getattr(metadata, name, None)
+        return raw if isinstance(raw, int) and not isinstance(raw, bool) and raw >= 0 else 0
+    total = value("total_token_count")
+    return total or value("prompt_token_count") + value("candidates_token_count")
+
+
+class RunTokenBudget:
+    """Thread-safe running total for one run (ADK helpers run in parallel)."""
+
+    def __init__(self, cap=None):
+        import threading
+        self.cap = run_token_cap() if cap is None else max(0, int(cap))
+        self.used = 0
+        self._lock = threading.Lock()
+
+    @property
+    def enabled(self):
+        return self.cap > 0
+
+    @property
+    def exceeded(self):
+        return self.enabled and self.used >= self.cap
+
+    def add(self, metadata):
+        tokens = usage_tokens(metadata)
+        if tokens:
+            with self._lock:
+                self.used += tokens
+        return tokens
+
+
 class CodingError(Exception):
     """Message is safe to show to the user."""
 

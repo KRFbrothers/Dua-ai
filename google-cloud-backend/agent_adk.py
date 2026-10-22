@@ -565,6 +565,35 @@ def helper_model_callback(adk, cancelled, max_calls, on_limit):
     return callback
 
 
+def token_cap_callbacks(adk, budget):
+    """(gate, meter) wrappers for the per-run token cap shared by the controller, helpers and merger.
+    gate(cb): before_model_callback that answers TOKEN_CAP_NOTE without calling the model once the cap is hit.
+    meter(cb): after_model_callback that adds the response's usage (0 when missing), then runs cb."""
+    import coding_agent
+
+    def gate(callback):
+        if not budget.enabled:
+            return callback
+
+        def before(callback_context=None, llm_request=None, **kwargs):
+            if budget.exceeded and hasattr(adk, "LlmResponse"):
+                return adk.LlmResponse(content=adk.types.Content(role="model", parts=[adk.types.Part(
+                    text=coding_agent.TOKEN_CAP_NOTE)]))
+            return callback(callback_context=callback_context, llm_request=llm_request, **kwargs) if callback else None
+        return before
+
+    def meter(callback):
+        if not budget.enabled:
+            return callback
+
+        def after(callback_context=None, llm_response=None, **kwargs):
+            if not getattr(llm_response, "partial", False):
+                budget.add(getattr(llm_response, "usage_metadata", None))
+            return callback(callback_context=callback_context, llm_response=llm_response, **kwargs) if callback else None
+        return after
+    return gate, meter
+
+
 def with_pending(answer, shared):
     import agent_safety
     pending = agent_safety.pending_text(shared.pending) if shared.pending else ""
@@ -631,10 +660,14 @@ def run(env, request_text, flash_model, agent_model, config_for, adk=None, log=p
                     llm_request.contents = list(llm_request.contents or []) + [visual]
             return result
         return with_vision
-    stop_cb = context(stop_model_callback(adk, cancelled))
+    budget = coding_agent.RunTokenBudget()
+    shared.token_budget = budget
+    gate, meter = token_cap_callbacks(adk, budget)
+    stop_cb = gate(context(stop_model_callback(adk, cancelled)))
     extra = {"before_model_callback": stop_cb} if stop_cb is not None else {}
-    if shared.trace is not None:
-        extra["after_model_callback"] = shared.trace.end_model
+    after_cb = meter(shared.trace.end_model if shared.trace is not None else None)
+    if after_cb is not None:
+        extra["after_model_callback"] = after_cb
 
     def specialist_call(index, title, letter):
         async def call(name, args):
@@ -725,8 +758,8 @@ def run(env, request_text, flash_model, agent_model, config_for, adk=None, log=p
                 name=f"{sub['kind']}_agent", model=model_for("helper", flash_model), include_contents="none",
                 generate_content_config=config_for(flash_model, SUB_TOKENS), output_key=f"{sub['kind']}_result",
                 instruction=(lambda t: (lambda ctx: t))(text),
-                before_model_callback=context(helper_model_callback(adk, cancelled, SUB_STEPS, on_limit)),
-                **({"after_model_callback":shared.trace.end_model} if shared.trace else {}), tools=tools))
+                before_model_callback=gate(context(helper_model_callback(adk, cancelled, SUB_STEPS, on_limit))),
+                **({"after_model_callback": after_cb} if after_cb is not None else {}), tools=tools))
 
         stage_marks = {}
 
@@ -789,8 +822,8 @@ def run(env, request_text, flash_model, agent_model, config_for, adk=None, log=p
             stages.append(adk.LlmAgent(name="reviser", model=model_for("reviser", review_model), include_contents="none",
                                        generate_content_config=config_for(review_model, REVISE_TOKENS),
                                        output_key="dua_revised", instruction=revise_instruction,
-                                       before_model_callback=revise_gate,
-                                       **({"after_model_callback": shared.trace.end_model} if shared.trace else {})))
+                                       before_model_callback=gate(revise_gate),
+                                       **({"after_model_callback": after_cb} if after_cb is not None else {})))
         root = adk.SequentialAgent(name="dua_root", sub_agents=stages)
         def stream_text(delta):
             shared.streamed = True
@@ -864,5 +897,16 @@ def run(env, request_text, flash_model, agent_model, config_for, adk=None, log=p
         answer += "\n\n" + pr_text[0]
     if shared.cancelled:
         return agent_tools.STOPPED_TEXT, Result(shared)
+    if budget.exceeded:
+        # Graceful stop: keep any real answer, else list the steps done, and add the note once.
+        shared.status = "token_cap"
+        log(f"[dua-agent] adk run token cap {budget.cap} reached ({budget.used} used)")
+        note = coding_agent.TOKEN_CAP_NOTE
+        body = (answer or "").replace(note, "").strip()
+        if not body and shared.steps:
+            body = "Steps completed so far:\n" + "".join(shared.steps).strip()
+        if shared.streamed and note not in (answer or ""):
+            env["stream_text"]("\n\n" + note)
+        answer = (body + "\n\n" if body else "") + note
     return with_pending(answer or "I could not combine the results.", shared), Result(shared)
 
