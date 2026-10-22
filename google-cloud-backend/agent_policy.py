@@ -7,7 +7,7 @@ import os
 import re
 
 KEY_NAMES = ('OPENAI_API_KEY','ANTHROPIC_API_KEY','OPENROUTER_API_KEY','GITHUB_TOKEN',
-             'SUPABASE_SERVICE_ROLE_KEY','DUA_APP_TOKEN','ADK_SESSION_DB_URL','DUA_CODING_RUNNER_TOKEN')
+             'SUPABASE_SERVICE_ROLE_KEY','DUA_APP_TOKEN','ADK_SESSION_DB_URL','DUA_CODING_RUNNER_TOKEN','DUA_AUTOMATION_TOKEN')
 PATTERNS = (
     re.compile(r'\b(?:sk-|ghp_|github_pat_|AIza)[A-Za-z0-9_-]{12,}'),
     re.compile(r'-----BEGIN [A-Z ]*PRIVATE KEY-----.*?-----END [A-Z ]*PRIVATE KEY-----',re.S),

@@ -67,7 +67,7 @@ SPECIALISTS = {
 PLAN_PROMPT = (
     "You are the controller of the Dua Agent. Decide whether the user's LAST message has 2-3 INDEPENDENT parts that "
     "fit these helpers: research (web facts), code (read/change the app repository{code_note}), notes (the agent's "
-    "private notes{notes_note}), actions (create an image, remember/recall Memory). If it is one task or parts depend on each other, do not split. Each kind at most "
+    "private notes{notes_note}), actions (create an image, remember/recall Memory, or configured paired-device/terminal automation). If it is one task or parts depend on each other, do not split. Each kind at most "
     'once. Reply with JSON only: {{"split": true|false, "subtasks": [{{"kind": "research|code|notes|actions", '
     '"task": "self-contained instruction"}}]}}'
 )
@@ -488,6 +488,11 @@ def make_tools(names, call, documents=False):
 
     table = {f.__name__: f for f in (update_plan, import_command_changes, checkpoint_workspace, list_workspaces, restore_workspace, list_runner_profiles, run_command, workspace_status, edit_file, workspace_diff, search_documents, google_search, fetch_url, calculator, current_time, run_python, recall, generate_image, remember, list_files, read_file,
                                      search_code, search_workspace, propose_changes, propose_pr_fix, open_pr_workspace, inspect_pr_ci, check_pr_ci, search_notes, save_note)}
+    import agent_automation
+    if agent_automation.status()["configured"] and "current_time" in names:
+        device_tools = agent_automation.adk_tools(call)
+        table.update({f.__name__: f for f in device_tools})
+        names = tuple(names) + tuple(f.__name__ for f in device_tools)
     if documents and "google_search" in names:
         names = tuple(names) + ("search_documents",)
     import agent_tools
@@ -614,8 +619,18 @@ def run(env, request_text, flash_model, agent_model, config_for, adk=None, log=p
         shared.coding.owner_id = env.get("owner_id")
 
     import agent_context
-    context = lambda callback: agent_context.callback(env.get("adk_contents", []), env.get("adk_system", ""),
-        callback, request_text=request_text, observer=shared.trace)
+    def context(callback):
+        base = agent_context.callback(env.get("adk_contents", []), env.get("adk_system", ""),
+                                     callback, request_text=request_text, observer=shared.trace)
+        def with_vision(callback_context=None, llm_request=None, **kwargs):
+            result = base(callback_context=callback_context, llm_request=llm_request, **kwargs)
+            if result is None and llm_request is not None:
+                visual = shared.visual_context()
+                if visual is not None:
+                    # Per-model-request only; do not persist screenshots in ADK session events.
+                    llm_request.contents = list(llm_request.contents or []) + [visual]
+            return result
+        return with_vision
     stop_cb = context(stop_model_callback(adk, cancelled))
     extra = {"before_model_callback": stop_cb} if stop_cb is not None else {}
     if shared.trace is not None:
@@ -630,7 +645,9 @@ def run(env, request_text, flash_model, agent_model, config_for, adk=None, log=p
             if name in agent_safety.WRITE_TOOLS or (custom and custom.write):
                 label = "Waiting for your approval"
             progress(CHIPS[index], f"{title}: {label}\u2026")
-            shown = {k: (v if not isinstance(v, str) else v[:100]) for k, v in args.items() if k not in ("files",)}
+            import agent_automation
+            shown = ({"arguments": "private device operation"} if name in agent_automation.NAMES else
+                     {k: (v if not isinstance(v, str) else v[:100]) for k, v in args.items() if k not in ("files",)})
             line = f"- {name} {json.dumps(shown, ensure_ascii=False)[:160]}\n"
             shared.steps.append(f"[{letter}] {line}")
             thinking(f"[{letter}] {line}")
@@ -848,3 +865,4 @@ def run(env, request_text, flash_model, agent_model, config_for, adk=None, log=p
     if shared.cancelled:
         return agent_tools.STOPPED_TEXT, Result(shared)
     return with_pending(answer or "I could not combine the results.", shared), Result(shared)
+
