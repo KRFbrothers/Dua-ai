@@ -161,6 +161,7 @@ runner behavior still require verification before activation.
 | `AGENT_NOTES` | `1` | `0` turns Agent notes off. |
 | `AGENT_MAX_STEPS` | `12` | Model calls per Agent request. |
 | `AGENT_DAILY_TOKEN_LIMIT` | `0` (off) | Engine-side daily token cap per owner (IST calendar day). When >0, an owner who already used this many model tokens today gets a friendly Hinglish/English "limit reached" reply instead of an Agent run. Counts every observed model call in the request (router, tools loop, ADK helpers, notes learning). In-memory per Cloud Run instance: resets on restart/scale-out, so it is a soft guard, not billing. Invalid or negative = off. |
+| `MAX_RUN_TOTAL_TOKENS` | `0` (off) | Cumulative token cap (input + output from model usage metadata) for ONE Agent run: every step of the tool loop, or the ADK controller + helpers + merger/reviewer together. When reached, the run stops cleanly and answers with what was done so far plus a short "token limit reached" note (no error). Missing usage metadata counts as 0. Invalid or negative = off. |
 | `AGENT_MAX_SECONDS` | `600` | Total Agent time limit. |
 | `AGENT_STEP_SECONDS` | `150` | Deadline per model step. |
 | `AGENT_TOOL_SECONDS` | `45` | Default deadline per tool (search/code 90 s, image 120 s). |
