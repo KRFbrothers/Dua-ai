@@ -46,6 +46,7 @@ REPO_RULES = """Repository rules (must follow):
 CODING_PROMPT = (
     "You are the Dua Agent coding step for the GitHub repository {repo}. "
     "For a new PR start workspace_status to pin main; for an existing agent PR fix start open_pr_workspace(number). "
+    "Use search_workspace for literal matches in pinned/staged source; search_code is only a live GitHub index hint. "
     "Read scoped AGENTS.md guidance with "
     "workspace_status(path) or read_file before editing each file. Use edit_file for exact draft replacements "
     "(empty old_text creates a new file only), inspect workspace_diff, then choose the workspace's approval tool "
@@ -506,6 +507,9 @@ TOOLS = [
      "parameters": {"type": "OBJECT", "properties": {"path": {"type": "STRING"}}, "required": ["path"]}},
     {"name": "search_code", "description": "Search code in the repository; returns matching file paths.",
      "parameters": {"type": "OBJECT", "properties": {"query": {"type": "STRING"}}, "required": ["query"]}},
+    {"name": "search_workspace", "description": "Find literal matching lines in validated pinned/staged source, without a runner. Optional exact file/directory path, case sensitivity and bounded result count. UTF-8 text only; skipped/partial scope is explicit. Read matching files and scoped AGENTS.md before editing.",
+     "parameters": {"type": "OBJECT", "properties": {"query": {"type": "STRING"}, "path": {"type": "STRING"},
+         "case_sensitive": {"type": "BOOLEAN"}, "max_results": {"type": "INTEGER"}}, "required": ["query"]}},
     {"name": "inspect_pr_ci", "description": "Read CI checks, failed steps and annotations for a PR number in this repository at its observed head commit. No rerun, logs download, workspace restore or writes. Required/merge checks are not evaluated.",
      "parameters": {"type": "OBJECT", "properties": {"number": {"type": "INTEGER"}}, "required": ["number"]}},
     {"name": "propose_pr_fix", "description": "Request separate owner approval to commit all staged PR-workspace edits to that same dua-agent/ PR branch. Target and files come from the server; no write occurs before approval.",
@@ -601,6 +605,26 @@ class CodingSession:
     def run_tool(self, name, args, command_progress=None):
         # Draft/restore transitions are serialized. Long-running commands release
         # the session lock; their fingerprint prevents stale-result imports.
+        if name == "search_workspace":
+            import coding_search
+            import coding_workspace
+            expires = self.clock() + 75
+            try:
+                coding_search.validate(args)  # No GitHub reads for malformed input.
+                with self.lock:
+                    if self.workspace is None:
+                        self.workspace = coding_workspace.Workspace(self.github)
+                    workspace = self.workspace
+                    with workspace.lock:
+                        workspace.active_searches += 1
+                try:
+                    return coding_search.search(workspace, args,
+                        cancelled=lambda: bool(self.cancelled and self.cancelled()) or self.clock() >= expires)
+                finally:
+                    with workspace.lock:
+                        workspace.active_searches -= 1
+            except CodingError as error:
+                return {"error": str(error)[:300]}
         if name == "run_command":
             import coding_workspace
             import coding_terminal
@@ -636,7 +660,7 @@ class CodingSession:
                         raise CodingError("PR workspace opening stopped or timed out; the previous workspace was kept.")
                 check_open()
                 current = self.workspace
-                if current is not None and (current.staged or current.command_results or current.active_commands or current.checkpoint_id):
+                if current is not None and (current.staged or current.command_results or current.active_commands or current.active_searches or current.checkpoint_id):
                     raise CodingError("Open the PR in a fresh task; the current draft, checkpoint or command state must not be discarded.")
                 target = coding_pr.current_target(self.github, args.get("number"))
                 check_open()
@@ -653,7 +677,7 @@ class CodingSession:
                 return coding_checkpoints.list_owned(self.owner_id, self.github.repo)
             if name == "restore_workspace":
                 import coding_checkpoints
-                if self.workspace is not None and (self.workspace.staged or self.workspace.command_results or self.workspace.active_commands):
+                if self.workspace is not None and (self.workspace.staged or self.workspace.command_results or self.workspace.active_commands or self.workspace.active_searches):
                     raise CodingError("Restore into a fresh task; the current draft/command exports must not be discarded.")
                 record = coding_checkpoints.load(self.owner_id, args.get("checkpoint_id"), self.github.repo)
                 restored = coding_workspace.Workspace.restore(self.github, record)

@@ -26,7 +26,7 @@ MAX_STORED = 50
 # remember (only a suggestion; the app's Memory review list asks the user first) are not in this list on purpose.
 WRITE_TOOLS = ("propose_changes", "propose_pr_fix", "create_issue", "comment_on_issue", "save_note", "delete_note")
 # Tools whose output carries text written by someone else (web, repository, issues, CI, earlier notes).
-UNTRUSTED_TOOLS = ("google_search", "fetch_url", "run_python", "list_files", "read_file", "search_code",
+UNTRUSTED_TOOLS = ("google_search", "fetch_url", "run_python", "list_files", "read_file", "search_code", "search_workspace",
                    "list_issues", "read_issue", "search_issues", "search_notes", "check_pr_ci", "inspect_pr_ci", "search_documents",
                    "update_plan", "workspace_status", "open_pr_workspace", "list_runner_profiles", "workspace_diff", "edit_file", "run_command", "import_command_changes",
                    "checkpoint_workspace", "list_workspaces", "restore_workspace")

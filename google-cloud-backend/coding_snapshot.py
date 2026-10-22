@@ -95,17 +95,29 @@ def pack(files):
     return data
 
 
-def from_workspace(workspace, cancelled):
+def files_from_workspace(workspace, cancelled):
+    """Copy one validated pinned/staged source view for commands or text search."""
     with workspace.lock:
+        if cancelled():
+            raise coding.CodingError("Source snapshot cancelled before preparation.")
         workspace.start()
         if cancelled():
-            raise coding.CodingError("Command cancelled before preparing its snapshot.")
+            raise coding.CodingError("Source snapshot cancelled before preparation.")
         if getattr(workspace, "source_archive", None) is None:
             workspace.source_archive = workspace.github.archive(workspace.base_sha)
+        if cancelled():
+            raise coding.CodingError("Source snapshot cancelled before validation.")
         files = unpack(workspace.source_archive, github_root=True, expected=workspace.entries)
         for name, text in workspace.staged.items():
             mode = workspace.entries.get(name, {}).get("mode", "100644")
             files[name] = (text.encode("utf-8"), mode)
         if cancelled():
-            raise coding.CodingError("Command cancelled before sending its snapshot.")
-        return pack(files), workspace.fingerprint()
+            raise coding.CodingError("Source snapshot cancelled before use.")
+        return files, workspace.fingerprint()
+
+
+def from_workspace(workspace, cancelled):
+    files, fingerprint = files_from_workspace(workspace, cancelled)
+    if cancelled():
+        raise coding.CodingError("Command cancelled before packing its snapshot.")
+    return pack(files), fingerprint
