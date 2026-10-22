@@ -61,6 +61,8 @@ internal fun AgentCodingCard(coding: AgentCoding, onOpenWorkspaces: () -> Unit) 
                 key(run.id) {
                     val status = when (run.state) {
                         "preparing" -> "Preparing command"
+                        "queued" -> "Command queued"
+                        "running" -> "Command running"
                         "succeeded" -> "Completed · exit ${run.exitCode ?: "unknown"}"
                         "failed" -> "Failed · exit ${run.exitCode ?: "unknown"}"
                         "timed_out" -> "Timed out"
@@ -69,11 +71,13 @@ internal fun AgentCodingCard(coding: AgentCoding, onOpenWorkspaces: () -> Unit) 
                         else -> "Command unavailable"
                     }
                     Text(status, style = MaterialTheme.typography.labelLarge)
+                    if (run.active) LinearProgressIndicator(Modifier.fillMaxWidth())
                     run.profile?.let { profile ->
                         Text("Toolchain: $profile", style = MaterialTheme.typography.bodySmall)
                     }
                     Text(run.command, style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace))
-                    if (run.output.isNotEmpty()) AgentTextPreview("command output", run.output, run.truncated)
+                    if (run.output.isNotEmpty()) AgentTextPreview("command output", run.output, run.truncated,
+                        truncationMessage = "Output shortened at the command output limit.")
                 }
             }
             coding.ci.forEach { ci -> key(ci.repository, ci.number) { AgentCiCard(ci) } }

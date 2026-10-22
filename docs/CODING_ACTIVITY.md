@@ -7,7 +7,9 @@ checkpoint storage in [CODING_RUNNER.md](CODING_RUNNER.md) and
 The Agent reply can show a coding workspace card with the pinned commit, changed
 paths, last save status, and up to four command cards. Command requests appear
 while preparing; validated final runner results supply the exit status and bounded
-output. Output is delivered at completion, not as a live terminal stream. An
+output. The engine also forwards bounded cumulative output snapshots from the
+existing runner poll while a job is queued or running; see
+[live command output](CODING_LIVE_OUTPUT.md). An
 unconfigured runner shows an error; it never falls back to running on the engine.
 When a reply stops without a final command result, the UI marks the outcome as
 unavailable rather than successful. The existing Stop control cancels the reply

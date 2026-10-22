@@ -15,6 +15,7 @@ text workspace, Gemini authentication/retry changes and website chat.
 | CI evidence | [PR check snapshots](CODING_CI.md), bounded annotations and failed steps tied to the observed commit |
 | Existing PR repairs | [Separate repair approval](CODING_PR_REPAIR.md), pinned agent PR head and non-forced branch updates |
 | Toolchains | [Python, JVM and Android profiles](CODING_PROFILES.md), fixed resources and digest-bound image contracts |
+| Live output | [Command activity updates](CODING_LIVE_OUTPUT.md), bounded redacted output during runner polling |
 
 Both the normal tool loop and Google ADK code helper use these implementations.
 The integration does not introduce another agent runtime.

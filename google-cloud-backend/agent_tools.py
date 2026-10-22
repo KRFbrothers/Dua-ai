@@ -529,12 +529,17 @@ class AgentRun:
         started = time.monotonic()
         import coding_ui
         activity = coding_ui.started(self, name, args)
+        command_progress = coding_ui.CommandProgress(self, activity) if activity else None
+        def invoke():
+            if command_progress is not None:
+                return self.run_tool(name, args, command_progress=command_progress.update)
+            return self.run_tool(name, args)
         trace = self.env.get("trace")
         if trace:
             trace.emit("tool.start", tool=name)
         try:
             from agent_resilience import retry_read
-            result = call_with_deadline(lambda: retry_read(name, lambda: self.run_tool(name, args),
+            result = call_with_deadline(lambda: retry_read(name, invoke,
                                         self.env.get("cancelled"), observer=trace),
                                         seconds, cancel=self.env.get("cancelled"))
         except Cancelled:
@@ -542,6 +547,9 @@ class AgentRun:
             result = {"error": "Stopped: the app disconnected."}
         except DeadlineExceeded:
             result = {"error": f"{name} timed out after {seconds}s. Continue without it."}
+        finally:
+            if command_progress is not None:
+                command_progress.close()
         coding_ui.completed(self, name, result, activity)
         if sum(len(e) for e in self.evidence) < 12000:
             try:
@@ -554,7 +562,7 @@ class AgentRun:
         log(f"tool {name}: {time.monotonic() - started:.1f}s{' (error)' if isinstance(result, dict) and 'error' in result else ''}")
         return result
 
-    def run_tool(self, name, args):
+    def run_tool(self, name, args, command_progress=None):
         over = self.use_budget(name)
         if over is not None:
             return over
@@ -657,6 +665,8 @@ class AgentRun:
                         "import_command_changes", "checkpoint_workspace", "list_workspaces", "restore_workspace"):
                 if self.coding is None:
                     return {"error": "GitHub tools are not set up."}
+                if name == "run_command":
+                    return self.coding.run_tool(name, args, command_progress=command_progress)
                 return self.coding.run_tool(name, args)
             return {"error": "Unknown tool."}
         except Exception as error:  # every tool failure goes back to the model as a safe message
