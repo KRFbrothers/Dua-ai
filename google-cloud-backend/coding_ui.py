@@ -6,7 +6,7 @@ import time
 
 from agent_policy import Redactor, filter_text
 
-TOOLS = frozenset(("workspace_status", "edit_file", "workspace_diff", "run_command",
+TOOLS = frozenset(("update_plan", "workspace_status", "edit_file", "workspace_diff", "run_command",
                    "import_command_changes", "checkpoint_workspace", "restore_workspace", "open_pr_workspace"))
 
 
@@ -66,6 +66,9 @@ def completed(agent, name, result, activity):
     if name not in TOOLS or not isinstance(result, dict):
         return
     event = {"type": "coding"}
+    if name == "update_plan" and "error" not in result:
+        import coding_plan
+        event["plan"] = coding_plan.preview(result.get("plan"))
     if activity:
         event["terminal"] = {"id": activity, "state": result.get("state", "error"),
                              "output": filter_text(str(result.get("output", result.get("error", ""))))[:32_000],
@@ -100,7 +103,7 @@ def completed(agent, name, result, activity):
             session.lock.release()
     # If the workspace is locked by a timed-out tool, still finish the
     # terminal card without blocking or showing inconsistent draft metadata.
-    if activity:
+    if len(event) > 1:
         agent.emit(event)
 
 

@@ -475,6 +475,11 @@ def validate_changes(files):
 
 
 TOOLS = [
+    {"name": "update_plan", "description": "Replace this coding task's checklist with 1–8 distinct steps, at most one in progress. Use pending/in_progress/completed. Agent-reported only: does not execute work, approve writes or prove tests passed. Request-local, not saved.",
+     "parameters": {"type": "OBJECT", "properties": {
+         "steps": {"type": "ARRAY", "items": {"type": "OBJECT", "properties": {
+             "step": {"type": "STRING"}, "status": {"type": "STRING", "enum": ["pending", "in_progress", "completed"]}},
+             "required": ["step", "status"]}}, "explanation": {"type": "STRING"}}, "required": ["steps"]}},
     {"name": "workspace_status", "description": "Start a workspace on one commit; read scoped AGENTS.md, report runner/checkpoint configuration and retained command changes. Unsaved state is request-local.",
      "parameters": {"type": "OBJECT", "properties": {"path": {"type": "STRING"}}}},
     {"name": "open_pr_workspace", "description": "Open an existing open same-repository dua-agent/ PR targeting main at its current head. Use a fresh task; does not write GitHub. Read files/scoped guidance before staging a fix.",
@@ -538,6 +543,8 @@ class CodingSession:
         self.workspace = None
         self.cancelled = None
         self.owner_id = None
+        from coding_plan import Plan
+        self.plan = Plan()
 
     def save_checkpoint(self, result, explicit=False):
         import coding_checkpoints
@@ -619,6 +626,8 @@ class CodingSession:
     def _run_tool(self, name, args, deadline=None):
         try:
             import coding_workspace
+            if name == "update_plan":
+                return self.plan.update(args)
             if name == "open_pr_workspace":
                 import coding_pr
                 expires = deadline if deadline is not None else self.clock() + 75

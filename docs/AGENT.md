@@ -127,6 +127,9 @@ with fixed limits, image-contract discovery and explicit command profile binding
 **Eighth phase:** [live command output](CODING_LIVE_OUTPUT.md) during existing
 runner polling, with redacted cumulative snapshots and final-state protection.
 
+**Ninth phase:** [request-local coding plans](CODING_PLANS.md), with bounded
+steps, one active step, ordered updates and an Android checklist.
+
 **Remaining work:** end-to-end coding evaluation, image/runner provisioning and
 interactive sessions. No runner has been enabled or engine deployed by these implementation
 phases. Local tests were deferred at the owner's request; both workspace and

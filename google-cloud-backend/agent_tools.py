@@ -57,7 +57,7 @@ LIMITS = {"google_search": 3, "fetch_url": 5, "run_python": 2, "generate_image":
           "issue_reads": 5, "create_issue": 1, "comment_on_issue": 1,
           # One pull request per request (counted when it is queued for the user's approval).
           "propose_changes": 1, "propose_pr_fix": 1, "open_pr_workspace": 2,
-          "workspace_status": 12, "edit_file": 30, "workspace_diff": 8,
+          "workspace_status": 12, "edit_file": 30, "workspace_diff": 8, "update_plan": 12,
           "run_command": 4, "list_runner_profiles": 3, "inspect_pr_ci": 2,
           "import_command_changes": 4, "checkpoint_workspace": 4, "list_workspaces": 3, "restore_workspace": 2,
           # Agent notes (agent_notes.py): the agent's own private lessons, separate from the app's Memory.
@@ -83,7 +83,8 @@ AGENT_PROMPT = (
     "using the source ids returned by google_search. Never claim you did something a tool did not do."
 )
 GITHUB_HINT = (", and the GitHub tools to read the Dua AI repository {repo} and propose_changes to open a pull "
-               "request. For new coding tasks start workspace_status; to fix an existing dua-agent/ PR, use "
+               "request. For multi-step coding tasks, update_plan with a concise checklist and keep its statuses current. "
+               "Plan completion never proves tests ran or approves writes. For new coding tasks start workspace_status; to fix an existing dua-agent/ PR, use "
                "open_pr_workspace(number), read that head and scoped AGENTS.md, edit_file, workspace_diff and "
                "propose_pr_fix(title) for separate owner approval on the existing branch. Never propose_changes "
                "from a PR workspace. For a new PR, read files and scoped AGENTS.md, edit_file, "
@@ -118,6 +119,7 @@ PROGRESS = {
     "read_file": ("read", "Reading files\u2026"),
     "search_code": ("search_code", "Searching the code\u2026"),
     "workspace_status": ("workspace", "Preparing workspace\u2026"),
+    "update_plan": ("plan", "Updating task plan\u2026"),
     "open_pr_workspace": ("workspace", "Opening PR workspace\u2026"),
     "propose_pr_fix": ("pr", "Preparing fix approval\u2026"),
     "edit_file": ("edit", "Editing draft\u2026"),
@@ -661,7 +663,7 @@ class AgentRun:
                     labels = args.get("labels") if isinstance(args.get("labels"), list) else []
                     return dict(github.create_issue(args.get("title"), args.get("body"), labels), created=True)
                 return dict(github.comment_issue(args.get("number"), args.get("body")), commented=True)
-            if name in ("list_files", "read_file", "search_code", "workspace_status", "open_pr_workspace", "edit_file", "workspace_diff", "run_command",
+            if name in ("list_files", "read_file", "search_code", "update_plan", "workspace_status", "open_pr_workspace", "edit_file", "workspace_diff", "run_command",
                         "import_command_changes", "checkpoint_workspace", "list_workspaces", "restore_workspace"):
                 if self.coding is None:
                     return {"error": "GitHub tools are not set up."}
