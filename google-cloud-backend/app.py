@@ -590,6 +590,10 @@ def tool_loop(messages, attachments, system, enqueue, owner, coding=False, cance
     }
     adk_result = None
     import agent_adk
+    if owner.get("token_cap") and owner.get("trace") is not None and not (agent_adk.enabled() and not coding):
+        # Only when the daily token cap supplied a trace: count tool-loop model calls too.
+        from agent_observability import ObservedModel
+        env["model"] = ObservedModel(model, owner["trace"])
     if agent_adk.enabled() and not coding:
         from agent_observability import Trace, ObservedModel
         import agent_toolkit
@@ -615,8 +619,13 @@ def tool_loop(messages, attachments, system, enqueue, owner, coding=False, cance
     if adk_result is not None:
         text, run = adk_result
     else:
+        import agent_documents
+        if env.get("documents") is None and agent_documents.enabled() and owner.get("id"):
+            env["documents"] = agent_documents.Documents(owner.get("id"), agent_documents.VertexEmbeddings(get_adc_client()))
+        docs = env.get("documents") is not None
         try:
-            text, run = agent_tools.run(env, build_contents(messages, attachments), (agent_tools.default_tools(github is not None, issues, True) if notes is not None
+            text, run = agent_tools.run(env, build_contents(messages, attachments), (agent_tools.default_tools(github is not None, issues, notes is not None, documents=True) if docs else
+                                         agent_tools.default_tools(github is not None, issues, True) if notes is not None
                                          else agent_tools.default_tools(github is not None, issues)),
                                         coding_agent.default_tool_response)
         except coding_agent.CodingError as error:
@@ -653,17 +662,87 @@ def tool_loop(messages, attachments, system, enqueue, owner, coding=False, cance
     enqueue("done")
 
 
+# Optional engine-side daily per-owner token cap. 0 (default) = off. In-memory per instance (IST day).
+_TOKEN_USAGE = {}
+_TOKEN_LOCK = threading.Lock()
+TOKEN_LIMIT_MESSAGE = ("Aaj ka Agent limit poora ho gaya hai. Kal phir try karein, ya normal chat use karein.\n\n"
+                       "You've reached today's Agent usage limit. Please try again tomorrow or use normal chat.")
+
+
+def daily_token_limit():
+    try:
+        return max(0, int(os.environ.get("AGENT_DAILY_TOKEN_LIMIT", "0") or 0))
+    except ValueError:
+        return 0
+
+
+def _usage_day():
+    return time.strftime("%Y-%m-%d", time.gmtime(time.time() + 19800))  # IST calendar day
+
+
+def tokens_used_today(owner_id):
+    with _TOKEN_LOCK:
+        return _TOKEN_USAGE.get((owner_id, _usage_day()), 0)
+
+
+def add_tokens(owner_id, tokens):
+    if not owner_id or not tokens or tokens <= 0:
+        return
+    day = _usage_day()
+    with _TOKEN_LOCK:
+        for key in [k for k in _TOKEN_USAGE if k[1] != day]:
+            _TOKEN_USAGE.pop(key, None)
+        _TOKEN_USAGE[(owner_id, day)] = _TOKEN_USAGE.get((owner_id, day), 0) + int(tokens)
+
+
+def trace_tokens(trace):
+    total = 0
+    for row in list(getattr(trace, "calls", []) or []):
+        value = row.get("total")
+        if value is None:
+            value = (row.get("input") or 0) + (row.get("output") or 0)
+        total += value or 0
+    return total
+
+
 def agent_producer(messages, attachments, system, owner=None, cancelled=None):
     """Dua Agent: route -> (direct reply) or one general tool-calling loop (agent_tools).
     [cancelled]() turns true when the app disconnected; the loop then stops calling the model and tools."""
+    limit = daily_token_limit()
+    owner_id = (owner or {}).get("id")
+    inner = _agent_producer(messages, attachments, system, owner, cancelled, observe=limit > 0 and bool(owner_id))
+    if limit <= 0 or not owner_id:
+        return inner
+
+    def produce(enqueue):
+        if tokens_used_today(owner_id) >= limit:
+            app.logger.info("agent daily token limit reached")
+            enqueue("chunk", _Text(TOKEN_LIMIT_MESSAGE))
+            enqueue("done")
+            return
+        try:
+            inner(enqueue)
+        finally:
+            add_tokens(owner_id, trace_tokens(inner.trace) if getattr(inner, "trace", None) is not None else 0)
+    return produce
+
+
+def _agent_producer(messages, attachments, system, owner=None, cancelled=None, observe=False):
     def produce(enqueue):
         import agent_adk, agent_models
         current_owner = dict(owner or {})
         trace = current_owner.get("trace")
+        if observe and trace is None:
+            from agent_observability import Trace
+            trace = current_owner["trace"] = Trace()
+        if observe:
+            current_owner["token_cap"] = True
+        produce.trace = trace
         if agent_adk.enabled():
             from agent_observability import Trace, ObservedModel
             trace = trace or Trace()
             current_owner["trace"] = trace
+            produce.trace = trace
         model = get_model(system)
         if current_owner.get("adk_resume") or (agent_adk.enabled() and agent_models.routes()):
             route = "agent"

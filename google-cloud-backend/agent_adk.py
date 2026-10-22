@@ -56,6 +56,9 @@ SPECIALISTS = {
              "That separate approval is required to commit to the existing branch; never use propose_changes on a PR workspace. "
              "Call propose_changes at most once, "
              "only if the part asks for a change; the user approves it in the app, then it opens a pull request (never merges)."),
+    "actions": ("Actions", ("generate_image", "remember", "recall", "current_time"),
+                "You handle quick personal actions: generate_image for a requested picture, remember to suggest one "
+                "short fact for the user's Memory (they confirm it in the app), recall to read saved Memory."),
     "notes": ("Notes", ("search_notes", "save_note"),
               "You manage your private notes from earlier tasks: search_notes to look things up, save_note for a "
               "durable lesson. Never store secrets or emails."),
@@ -64,8 +67,8 @@ SPECIALISTS = {
 PLAN_PROMPT = (
     "You are the controller of the Dua Agent. Decide whether the user's LAST message has 2-3 INDEPENDENT parts that "
     "fit these helpers: research (web facts), code (read/change the app repository{code_note}), notes (the agent's "
-    "private notes{notes_note}). If it is one task or parts depend on each other, do not split. Each kind at most "
-    'once. Reply with JSON only: {{"split": true|false, "subtasks": [{{"kind": "research|code|notes", '
+    "private notes{notes_note}), actions (create an image, remember/recall Memory). If it is one task or parts depend on each other, do not split. Each kind at most "
+    'once. Reply with JSON only: {{"split": true|false, "subtasks": [{{"kind": "research|code|notes|actions", '
     '"task": "self-contained instruction"}}]}}'
 )
 MERGE_PROMPT = (
@@ -373,6 +376,14 @@ def make_tools(names, call, documents=False):
         """Execute Python via the existing provider sandbox, with the shared request limits."""
         return await call("run_python", {"task": task})
 
+    async def generate_image(prompt: str, aspect_ratio: str = "1:1") -> dict:
+        """Create ONE image from a description (aspect 1:1, 3:4, 4:3, 9:16 or 16:9); it is shown in the chat."""
+        return await call("generate_image", {"prompt": prompt, "aspect_ratio": aspect_ratio})
+
+    async def remember(fact: str) -> dict:
+        """Suggest one short fact (max 200 characters) for the user's Memory; they confirm it in the app."""
+        return await call("remember", {"fact": fact})
+
     async def recall() -> dict:
         """Read the owner-approved Memory supplied with this request."""
         return await call("recall", {})
@@ -475,10 +486,13 @@ def make_tools(names, call, documents=False):
         """Save one short durable lesson (preference|worked|failed|repo|fact). Never secrets or emails."""
         return await call("save_note", {"note": note, "kind": kind})
 
-    table = {f.__name__: f for f in (update_plan, import_command_changes, checkpoint_workspace, list_workspaces, restore_workspace, list_runner_profiles, run_command, workspace_status, edit_file, workspace_diff, search_documents, google_search, fetch_url, calculator, current_time, run_python, recall, list_files, read_file,
+    table = {f.__name__: f for f in (update_plan, import_command_changes, checkpoint_workspace, list_workspaces, restore_workspace, list_runner_profiles, run_command, workspace_status, edit_file, workspace_diff, search_documents, google_search, fetch_url, calculator, current_time, run_python, recall, generate_image, remember, list_files, read_file,
                                      search_code, search_workspace, propose_changes, propose_pr_fix, open_pr_workspace, inspect_pr_ci, check_pr_ci, search_notes, save_note)}
     if documents and "google_search" in names:
         names = tuple(names) + ("search_documents",)
+    import agent_tools
+    hidden = agent_tools.hidden_tools() if any(n in names for n in agent_tools.RUNNER_TOOLS + agent_tools.CHECKPOINT_TOOLS) else set()
+    names = tuple(n for n in names if n not in hidden)
     import pr_flow
     if "propose_changes" in names and pr_flow.enabled():
         names = tuple(names) + ("check_pr_ci",)
@@ -585,6 +599,7 @@ def run(env, request_text, flash_model, agent_model, config_for, adk=None, log=p
     extensions = bool(agent_models.routes()) or env.get("documents") is not None or bool(registry and registry.tools)
     if len(allowed) < 2 and not extensions:
         return None
+    allowed.append("actions")  # only joins an already-split plan; never forces ADK on by itself
     started = time.monotonic()
     pr_text = []  # kept for old in-run PR results; write tools now only ask for approval
     import threading
@@ -663,7 +678,7 @@ def run(env, request_text, flash_model, agent_model, config_for, adk=None, log=p
                                    notes_note="" if "notes" in allowed else "; NOT available now"))
         if saved is not None:
             subtasks = saved.state["dua_plan"]
-        elif len(allowed) < 2:
+        elif len([k for k in allowed if k != "actions"]) < 2:
             subtasks = []
         else:
             plan_started = time.monotonic()

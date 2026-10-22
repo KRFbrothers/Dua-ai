@@ -183,19 +183,46 @@ ISSUE_TOOLS = [
 ]
 
 
-def declarations(github, issues=False, notes=False):
+RUNNER_TOOLS = ("list_runner_profiles", "run_command", "import_command_changes")
+CHECKPOINT_TOOLS = ("checkpoint_workspace", "list_workspaces", "restore_workspace")
+SEARCH_DOCUMENTS_TOOL = {"name": "search_documents",
+                         "description": "Search the owner's indexed documents. Cite the returned [D:document:chunk] IDs exactly.",
+                         "parameters": {"type": O, "properties": {"query": {"type": S}}, "required": ["query"]}}
+
+
+def hidden_tools():
+    """Runner/checkpoint tools are only offered when their backend is configured."""
+    import coding_checkpoints
+    import coding_terminal
+    hidden = set()
+    try:
+        if not coding_terminal.status().get("configured"):
+            hidden.update(RUNNER_TOOLS)
+    except Exception:
+        hidden.update(RUNNER_TOOLS)
+    try:
+        if not coding_checkpoints.enabled():
+            hidden.update(CHECKPOINT_TOOLS)
+    except Exception:
+        hidden.update(CHECKPOINT_TOOLS)
+    return hidden
+
+
+def declarations(github, issues=False, notes=False, documents=False):
     import agent_notes
     import coding_agent
     import pr_flow
     ci = [coding_agent.CHECK_CI_TOOL] if github and pr_flow.enabled() else []
-    return (BASE_TOOLS + (coding_agent.TOOLS if github else []) + ci + (ISSUE_TOOLS if github and issues else []) +
-            (agent_notes.TOOLS if notes else []))
+    hidden = hidden_tools() if github else set()
+    coding = [t for t in coding_agent.TOOLS if t["name"] not in hidden] if github else []
+    return (BASE_TOOLS + ([SEARCH_DOCUMENTS_TOOL] if documents else []) + coding + ci +
+            (ISSUE_TOOLS if github and issues else []) + (agent_notes.TOOLS if notes else []))
 
 
-def default_tools(github, issues=False, notes=False):
+def default_tools(github, issues=False, notes=False, documents=False):
     from google.genai import types
     return [types.Tool(function_declarations=[types.FunctionDeclaration(**tool)
-                                              for tool in declarations(github, issues, notes)])]
+                                              for tool in declarations(github, issues, notes, documents)])]
 
 
 # ---------------------------------------------------------------- calculator
