@@ -124,6 +124,11 @@ android {
         buildConfigField("String", "DUA_API_BASE_URL", "\"" + duaApiBaseUrl + "\"")
         buildConfigField("String", "DUA_CHAT_BASE_URL", "\"" + duaChatBaseUrl + "\"")
         buildConfigField("String", "DUA_APP_TOKEN", "\"" + duaAppToken + "\"")
+        // arm64-v8a only (owner decision): smaller APK; 32-bit (armeabi-v7a) and x86/x86_64
+        // devices or emulators cannot install it. Add ABIs back here if that is ever needed.
+        ndk {
+            abiFilters += listOf("arm64-v8a")
+        }
     }
 
     buildTypes {

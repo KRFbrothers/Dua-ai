@@ -103,6 +103,8 @@ These checks require a device/emulator and are not covered by the current JVM-on
 
 The app is installed directly on the owner's device(s); there is no store upload.
 
+**CPU architecture.** Debug and release APKs contain native libraries for `arm64-v8a` only (`ndk.abiFilters` in `app/build.gradle.kts`). 32-bit ARM phones and x86/x86_64 emulators cannot install them; use an arm64 phone or emulator image.
+
 **Debug APK (development).** Gradle signs with the build machine's Android debug key. Crashlytics collection is disabled in debug builds. Use the permanent personal release signer for the owner's installed app; a different debug certificate will not match the registered Android OAuth client or an installed release APK.
 
 - [ ] Build with `bash ./gradlew :app:assembleDebug --no-daemon` (output: `app/build/outputs/apk/debug/app-debug.apk`), or use Android Studio's Run.
