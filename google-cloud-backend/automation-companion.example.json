@@ -1,0 +1,20 @@
+{
+  "owner": "00000000-0000-4000-8000-000000000000",
+  "targets": {
+    "browser": {
+      "kind": "browser",
+      "headless": true,
+      "domains": ["example.com"]
+    },
+    "desktop": {
+      "kind": "desktop",
+      "apps": {"editor": ["/usr/bin/gedit"]}
+    },
+    "phone": {
+      "kind": "android",
+      "serial": "REPLACE_WITH_AUTHORIZED_ADB_SERIAL",
+      "apps": {"settings": "com.android.settings"}
+    }
+  },
+  "terminalProfiles": {}
+}

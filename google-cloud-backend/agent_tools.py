@@ -63,6 +63,8 @@ LIMITS = {"google_search": 3, "fetch_url": 5, "run_python": 2, "generate_image":
           # Agent notes (agent_notes.py): the agent's own private lessons, separate from the app's Memory.
           "save_note": 3, "search_notes": 3, "delete_note": 3, "search_documents": 3}
 NOTE_TOOLS = ("save_note", "search_notes", "delete_note")
+LIMITS.update(automation_targets=3, observe_device=6, read_terminal=8,
+              control_device=1, open_terminal=1, write_terminal=1, close_terminal=1)
 NOTES_HINT = (". Your private notes from earlier tasks may appear below; save_note a durable lesson (preference, what "
               "worked or failed, repo fact) when you learn one, search_notes to look one up, delete_note to remove a "
               "wrong one. Never put secrets or emails in notes")
@@ -209,13 +211,14 @@ def hidden_tools():
 
 
 def declarations(github, issues=False, notes=False, documents=False):
+    import agent_automation
     import agent_notes
     import coding_agent
     import pr_flow
     ci = [coding_agent.CHECK_CI_TOOL] if github and pr_flow.enabled() else []
     hidden = hidden_tools() if github else set()
     coding = [t for t in coding_agent.TOOLS if t["name"] not in hidden] if github else []
-    return (BASE_TOOLS + ([SEARCH_DOCUMENTS_TOOL] if documents else []) + coding + ci +
+    return (BASE_TOOLS + (agent_automation.TOOLS if agent_automation.status()["configured"] else []) + ([SEARCH_DOCUMENTS_TOOL] if documents else []) + coding + ci +
             (ISSUE_TOOLS if github and issues else []) + (agent_notes.TOOLS if notes else []))
 
 
@@ -450,6 +453,12 @@ class AgentRun:
         self.evidence = []  # short tool results, for the optional self-check (agent_verify)
         self.pending = []  # write actions waiting for the user's approval (agent_safety)
         self.cancelled = False
+        self.device_images = {}
+
+    def visual_context(self):
+        import agent_automation
+        with self.lock:
+            return agent_automation.vision_content(list(self.device_images.items())) if self.device_images else None
 
     def stop_requested(self):
         cancelled = self.env.get("cancelled")
@@ -482,6 +491,12 @@ class AgentRun:
         import agent_safety
         import coding_agent
         env = self.env
+        import agent_automation
+        if name in agent_automation.WRITE_TOOLS:
+            try:
+                agent_automation.owner(env.get("owner_id"))
+            except ValueError as error:
+                return {"error": str(error)}
         if name in ("propose_changes", "propose_pr_fix") and env.get("github") is None:
             return {"error": "GitHub tools are not set up."}
         if name in ("create_issue", "comment_on_issue") and (env.get("github") is None or not env["github"].issues_enabled()):
@@ -594,6 +609,26 @@ class AgentRun:
         return result
 
     def run_tool(self, name, args, command_progress=None):
+        import agent_automation
+        if name in agent_automation.WRITE_TOOLS:
+            return {"error": "Device writes require a stored owner approval; no action ran."}
+        if name in agent_automation.READ_TOOLS:
+            over = self.use_budget(name)
+            if over is not None:
+                return over
+            try:
+                result = agent_automation.call(name, args, self.env.get("owner_id"))
+                image = agent_automation.take_image(result)
+                if image:
+                    label = "target=" + args["target"] + " view_id=" + result["view_id"]
+                    with self.lock:
+                        self.device_images = {label: image}
+                if name == "read_terminal" and isinstance(result.get("output"), str):
+                    from agent_policy import filter_text
+                    result["output"] = filter_text(result["output"])
+                return result
+            except ValueError as error:
+                return {"error": str(error)[:600]}
         over = self.use_budget(name)
         if over is not None:
             return over
@@ -789,6 +824,7 @@ def run(env, history, tools, tool_response, clock=time.monotonic):
     progress = env["progress"]
     started = clock()
     history = list(history)
+    last_device_view = None
     for step in range(1, MAX_STEPS + 1):
         if agent.stop_requested():
             log(f"step {step}: app disconnected; stopping")
@@ -826,7 +862,9 @@ def run(env, history, tools, tool_response, clock=time.monotonic):
                 return STOPPED_TEXT, agent
             if name in PROGRESS and name not in agent_safety.WRITE_TOOLS:
                 progress(*PROGRESS[name])
-            shown = {k: (v if not isinstance(v, str) else v[:100]) for k, v in args.items() if k not in ("content", "files")}
+            import agent_automation
+            shown = ({"arguments": "private device operation"} if name in agent_automation.NAMES else
+                     {k: (v if not isinstance(v, str) else v[:100]) for k, v in args.items() if k not in ("content", "files")})
             line = f"- Step {step}: {name} {json.dumps(shown, ensure_ascii=False)[:160]}\n"
             agent.steps.append(line)
             env["thinking"](line)
@@ -848,4 +886,10 @@ def run(env, history, tools, tool_response, clock=time.monotonic):
         if agent.cancelled:
             return STOPPED_TEXT, agent
         history.append(tool_response(results))
+        with agent.lock:
+            latest = next(iter(agent.device_images), None)
+        if latest is not None and latest != last_device_view:
+            history.append(agent.visual_context())
+            last_device_view = latest
     return f"Agent stopped after {MAX_STEPS} steps. Try a smaller, more specific request.", agent
+

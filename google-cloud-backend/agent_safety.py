@@ -17,6 +17,7 @@ import re
 import secrets
 import threading
 import time
+import agent_automation
 
 APPROVAL_SECONDS = int(os.environ.get("AGENT_APPROVAL_SECONDS", "900"))  # 15 minutes
 MAX_PENDING_PER_REQUEST = 3
@@ -24,12 +25,12 @@ MAX_STORED = 50
 
 # Tools with side effects outside the reply. generate_image (owner's own storage, 1 per request, daily cap) and
 # remember (only a suggestion; the app's Memory review list asks the user first) are not in this list on purpose.
-WRITE_TOOLS = ("propose_changes", "propose_pr_fix", "create_issue", "comment_on_issue", "save_note", "delete_note")
+WRITE_TOOLS = ("propose_changes", "propose_pr_fix", "create_issue", "comment_on_issue", "save_note", "delete_note") + agent_automation.WRITE_TOOLS
 # Tools whose output carries text written by someone else (web, repository, issues, CI, earlier notes).
 UNTRUSTED_TOOLS = ("google_search", "fetch_url", "run_python", "list_files", "read_file", "search_code", "search_workspace",
                    "list_issues", "read_issue", "search_issues", "search_notes", "check_pr_ci", "inspect_pr_ci", "search_documents",
                    "update_plan", "workspace_status", "open_pr_workspace", "list_runner_profiles", "workspace_diff", "edit_file", "run_command", "import_command_changes",
-                   "checkpoint_workspace", "list_workspaces", "restore_workspace")
+                   "checkpoint_workspace", "list_workspaces", "restore_workspace") + agent_automation.READ_TOOLS
 # The main text field of a tool result; kept as raw text inside the fence (easier for the model than JSON escapes).
 TEXT_FIELDS = {"fetch_url": "text", "read_file": "content", "google_search": "notes"}
 
@@ -102,6 +103,15 @@ def _clip(value, limit):
 
 def describe(name, args):
     """(title, details) the approval card shows. Built only from the stored args, never from the client."""
+    if name in agent_automation.WRITE_TOOLS:
+        clean = {key: value for key, value in args.items() if not key.startswith("__")}
+        lines = []
+        for key, value in clean.items():
+            rendered = json.dumps(value, ensure_ascii=False)
+            # Escape newlines/control input visibly, and retain the entire bounded value.
+            lines.extend(f"{key}{' (continued)' if i else ''}: {rendered[i:i+500]}"
+                         for i in range(0, len(rendered), 500))
+        return "Approve " + name.replace("_", " "), lines
     if name == "propose_pr_fix":
         import coding_pr
         target, files, title = coding_pr.validate_proposal(args)
@@ -137,6 +147,8 @@ def prepare(name, args):
     """Checks a write call before it is stored, so a broken call goes back to the model instead of to the user.
     Returns the args to store. Raises ValueError with a short message for the model."""
     args = dict(args or {})
+    if name in agent_automation.WRITE_TOOLS:
+        return {**agent_automation.validate(name, args), "__automation_revision": agent_automation.revision()}
     if name in ("propose_changes", "propose_pr_fix"):
         args.pop("preview_diff", None)
         args.pop("preview_diff_truncated", None)
@@ -252,6 +264,17 @@ def execute(action, env):
     import agent_tools
     import coding_agent
     name, args = action["tool"], action["args"]
+    if name in agent_automation.WRITE_TOOLS:
+        try:
+            clean = dict(args)
+            if clean.pop("__automation_revision", None) != agent_automation.revision():
+                return False, "Companion configuration changed; request a fresh approval. Nothing was executed."
+            result = agent_automation.call(name, clean, action.get("owner"), request_id=action["id"])
+            if "error" in result:
+                return False, str(result["error"])[:600]
+            return True, "Approved device action result: " + json.dumps(result, ensure_ascii=False)[:2000]
+        except ValueError as error:
+            return False, str(error)[:600]
     registry = env.get("custom_tools")
     spec = registry.tools.get(name) if registry else None
     if spec:

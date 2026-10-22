@@ -196,6 +196,8 @@ This token is separate from dua-api's `GITHUB_CONNECTOR_TOKEN` (read-only) and `
 The AI Agent page has a **Files** card. It opens a page that lists, adds and deletes the owner's documents through the engine's `/api/agent/documents` (same engine URL, app token and sign-in as chat). Only UTF-8 text files work (TXT, MD, CSV, JSON and similar), up to 100,000 characters (`MAX_DOCUMENT_CHARS`). PDFs are not supported yet because the app has no PDF text extractor. When the engine has no `ADK_EMBEDDING_MODEL` (or no Agent database), the page shows a friendly "Files aren't switched on" message instead of an error. Agent then finds these files with its `search_documents` tool.
 
 ## Tool availability (audit fixes)
+- Optional [paired desktop/browser/Android control and interactive terminal sessions](DEVICE_AUTOMATION.md) use a separate companion and existing owner approvals. Tools stay hidden without companion configuration; no host was paired or deployed by the implementation.
 - Runner tools (`list_runner_profiles`, `run_command`, `import_command_changes`) are only declared, in the tool loop and the ADK code helper, when `coding_terminal.status()` reports `configured`. Checkpoint tools (`checkpoint_workspace`, `list_workspaces`, `restore_workspace`) only when `coding_checkpoints.enabled()`.
 - ADK has a small `actions` helper (`generate_image`, `remember`, `recall`, `current_time`) so a split request does not lose image/Memory parts. It only joins an already-split plan; it never turns the ADK path on by itself.
 - The tool loop gets `search_documents` when `agent_documents.enabled()` (ADK research helper already had it).
+

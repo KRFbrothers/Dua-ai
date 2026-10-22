@@ -570,6 +570,9 @@ def tool_loop(messages, attachments, system, enqueue, owner, coding=False, cance
     if notes is not None:
         prompt += agent_tools.NOTES_HINT + notes_context
     prompt += agent_safety.SAFETY_PROMPT
+    import agent_automation
+    if agent_automation.status()["configured"]:
+        prompt += agent_automation.HINT
     model = get_agent_model(system + "\n\n" + prompt)
     if not enqueue("event", progress_event("plan", "Planning\u2026")):
         return
@@ -586,7 +589,8 @@ def tool_loop(messages, attachments, system, enqueue, owner, coding=False, cance
         "adk_run_id": owner.get("adk_run_id"), "adk_resume": owner.get("adk_resume", False),
         "adk_request": owner.get("adk_request", {}),
         "adk_system": system + "\n\n" + agent_safety.SAFETY_PROMPT + "\n\n" +
-                      agent_safety.fence("search_notes", {"notes": notes_context}).get("untrusted_data", ""),
+                      agent_safety.fence("search_notes", {"notes": notes_context}).get("untrusted_data", "") +
+                      (agent_automation.HINT if agent_automation.status()["configured"] else ""),
     }
     adk_result = None
     import agent_adk
@@ -818,7 +822,7 @@ def agent_capabilities():
     denied = owner_access_error()
     if denied is not None:
         return denied
-    import agent_adk, agent_store, agent_documents, agent_models, agent_toolkit, coding_terminal, coding_checkpoints
+    import agent_adk, agent_store, agent_documents, agent_models, agent_toolkit, coding_terminal, coding_checkpoints, agent_automation
     try:
         routes = agent_models.routes()
         agent_models.check_adapters()
@@ -828,6 +832,7 @@ def agent_capabilities():
             "customTools": sorted(tools.tools), "answerStreaming": True,
             "codingExecution": coding_terminal.status(),
             "codingCheckpoints": {"configured": coding_checkpoints.enabled(), "liveVerified": False},
+            "deviceAutomation": agent_automation.status(),
             "liveProvidersVerified": False, "build": os.environ.get("DUA_BUILD_SHA","unknown")}))
     except Exception:
         return no_store(jsonify({"error": "ADK configuration is invalid or an optional adapter is missing."}), 503)
@@ -1268,3 +1273,4 @@ def too_large(_error):
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
+
