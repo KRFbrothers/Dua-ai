@@ -157,6 +157,7 @@ runner behavior still require verification before activation.
 | `AGENT_CI_SECONDS` | `420` | Total CI wait per request. |
 | `AGENT_NOTES` | `1` | `0` turns Agent notes off. |
 | `AGENT_MAX_STEPS` | `12` | Model calls per Agent request. |
+| `AGENT_DAILY_TOKEN_LIMIT` | `0` (off) | Engine-side daily token cap per owner (IST calendar day). When >0, an owner who already used this many model tokens today gets a friendly Hinglish/English "limit reached" reply instead of an Agent run. Counts every observed model call in the request (router, tools loop, ADK helpers, notes learning). In-memory per Cloud Run instance: resets on restart/scale-out, so it is a soft guard, not billing. Invalid or negative = off. |
 | `AGENT_MAX_SECONDS` | `600` | Total Agent time limit. |
 | `AGENT_STEP_SECONDS` | `150` | Deadline per model step. |
 | `AGENT_TOOL_SECONDS` | `45` | Default deadline per tool (search/code 90 s, image 120 s). |
@@ -190,3 +191,8 @@ This token is separate from dua-api's `GITHUB_CONNECTOR_TOKEN` (read-only) and `
 ## Agent Files (Android)
 
 The AI Agent page has a **Files** card. It opens a page that lists, adds and deletes the owner's documents through the engine's `/api/agent/documents` (same engine URL, app token and sign-in as chat). Only UTF-8 text files work (TXT, MD, CSV, JSON and similar), up to 100,000 characters (`MAX_DOCUMENT_CHARS`). PDFs are not supported yet because the app has no PDF text extractor. When the engine has no `ADK_EMBEDDING_MODEL` (or no Agent database), the page shows a friendly "Files aren't switched on" message instead of an error. Agent then finds these files with its `search_documents` tool.
+
+## Tool availability (audit fixes)
+- Runner tools (`list_runner_profiles`, `run_command`, `import_command_changes`) are only declared, in the tool loop and the ADK code helper, when `coding_terminal.status()` reports `configured`. Checkpoint tools (`checkpoint_workspace`, `list_workspaces`, `restore_workspace`) only when `coding_checkpoints.enabled()`.
+- ADK has a small `actions` helper (`generate_image`, `remember`, `recall`, `current_time`) so a split request does not lose image/Memory parts. It only joins an already-split plan; it never turns the ADK path on by itself.
+- The tool loop gets `search_documents` when `agent_documents.enabled()` (ADK research helper already had it).
