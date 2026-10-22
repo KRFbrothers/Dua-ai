@@ -739,7 +739,7 @@ def agent_capabilities():
     denied = owner_access_error()
     if denied is not None:
         return denied
-    import agent_adk, agent_store, agent_documents, agent_models, agent_toolkit
+    import agent_adk, agent_store, agent_documents, agent_models, agent_toolkit, coding_terminal, coding_checkpoints
     try:
         routes = agent_models.routes()
         agent_models.check_adapters()
@@ -747,9 +747,25 @@ def agent_capabilities():
         return no_store(jsonify({"adkEnabled": agent_adk.enabled(), "storage": agent_store.status(),
             "embeddingConfigured": agent_documents.enabled(), "providerRoutes": routes,
             "customTools": sorted(tools.tools), "answerStreaming": True,
+            "codingExecution": coding_terminal.status(),
+            "codingCheckpoints": {"configured": coding_checkpoints.enabled(), "liveVerified": False},
             "liveProvidersVerified": False, "build": os.environ.get("DUA_BUILD_SHA","unknown")}))
     except Exception:
         return no_store(jsonify({"error": "ADK configuration is invalid or an optional adapter is missing."}), 503)
+
+
+@app.route("/api/agent/workspaces", methods=["GET"])
+def agent_workspaces_api():
+    denied = owner_access_error()
+    if denied is not None:
+        return denied
+    import coding_checkpoints, coding_agent
+    if not coding_checkpoints.enabled():
+        return no_store(jsonify({"code": "not_configured", "error": "Workspace checkpoints are not configured."}), 503)
+    try:
+        return no_store(jsonify(coding_checkpoints.list_owned(g.owner_id, coding_agent.repo_name())))
+    except Exception:
+        return no_store(jsonify({"error": "Workspace checkpoints are unavailable."}), 503)
 
 
 @app.route("/api/agent/documents", methods=["GET", "POST", "DELETE"])

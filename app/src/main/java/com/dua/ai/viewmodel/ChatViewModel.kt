@@ -711,7 +711,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 !message.streaming -> message
                 original != null && original.id == message.id && message.text.isBlank() -> original
                 message.isImagine && message.text.isBlank() -> null
-                else -> message.copy(state = "stopped", thinkingSeconds = message.thinkingSeconds ?: elapsedThinking(message))
+                else -> message.copy(state = "stopped", coding = message.coding?.ended(), thinkingSeconds = message.thinkingSeconds ?: elapsedThinking(message))
             }
         }
         return true
@@ -743,7 +743,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 val completed = _messages.value.map { message -> if (message.id == id) message.copy(
                     text = latest.text, thinking = latest.thinking, thinkingSeconds = receipt.thinkingSeconds,
                     notice = latest.notice, codeRuns = latest.codeRuns, build = latest.build ?: message.build,
-                    proposal = latest.proposal ?: message.proposal, state = "complete") else message }
+                    proposal = latest.proposal ?: message.proposal, coding = latest.coding ?: message.coding, state = "complete") else message }
                 val confirmed = withContext(Dispatchers.Default) { com.dua.ai.account.ReplyPersistenceCodec.confirmedChat(receipt, completed) }
                 check(activeId == chatId && account.state.value.user?.id == receipt.ownerId && _messages.value.lastOrNull()?.id == id)
                 val prior = _savedChats.value.find { chat -> chat.id == chatId }
@@ -757,7 +757,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             accumulator.apply(it)
         }.conflate().collect {
             val snapshot = accumulator.snapshot()
-            updateMessage(id) { it.copy(progress = snapshot.progress, approvals = snapshot.approvals.ifEmpty { it.approvals }, media = snapshot.media.ifEmpty { it.media }, text = snapshot.text, thinking = snapshot.thinking, thinkingSeconds = snapshot.thinkingSeconds, notice = snapshot.notice, codeRuns = snapshot.codeRuns, build = snapshot.build ?: it.build, proposal = snapshot.proposal ?: it.proposal) }
+            updateMessage(id) { it.copy(progress = snapshot.progress, approvals = snapshot.approvals.ifEmpty { it.approvals }, coding = snapshot.coding ?: it.coding, media = snapshot.media.ifEmpty { it.media }, text = snapshot.text, thinking = snapshot.thinking, thinkingSeconds = snapshot.thinkingSeconds, notice = snapshot.notice, codeRuns = snapshot.codeRuns, build = snapshot.build ?: it.build, proposal = snapshot.proposal ?: it.proposal) }
             delay(STREAM_FRAME_MS)
         }
     }
@@ -1388,6 +1388,23 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         saveHistory()
     }
 
+    /** A checkpoint ID is a request to the existing owner-scoped tool, never direct restored state. */
+    fun resumeCodingCheckpoint(id: String): Boolean {
+        if (!Regex("[0-9a-f]{32}").matches(id) || syncBlocked() || !_online.value ||
+            account.state.value.user == null || !_agentAvailable.value || _switches.value.agent ||
+            _draft.value.isNotBlank() || _attachments.value.isNotEmpty() || _uploads.value.isNotEmpty() ||
+            _recordingSince.value != null || _editingId.value != null || projectUnavailable() != null || personalityUnavailable() != null) return false
+        startNewChat()
+        setAgent(true)
+        if (!_agent.value) return false
+        val prompt = "Restore my saved coding workspace checkpoint $id using restore_workspace. " +
+            "Show its saved draft and workspace_diff. Do not rerun commands or publish changes."
+        updateDraft(prompt)
+        val plan = _prepareSend(prompt) ?: return false
+        _streamReply(plan, prompt)
+        return true
+    }
+
     fun startNewChat() = historyFeature.startNewChat()
 
     fun retryResponse(messageId: String) = lifecycleFeature.retryResponse(messageId)
@@ -1559,7 +1576,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         _uploads.update { list -> list.filterNot { it.ref?.path in plan.sentPaths } }
         clearAttachments()
         val result = final()
-        updateMessage(plan.reply.id) { it.copy(text = result.text, thinking = result.thinking, thinkingSeconds = result.thinkingSeconds, notice = result.notice, codeRuns = result.codeRuns, build = result.build ?: it.build, proposal = result.proposal ?: it.proposal, approvals = result.approvals.ifEmpty { it.approvals }, state = state) }
+        updateMessage(plan.reply.id) { it.copy(text = result.text, thinking = result.thinking, thinkingSeconds = result.thinkingSeconds, notice = result.notice, codeRuns = result.codeRuns, build = result.build ?: it.build, proposal = result.proposal ?: it.proposal, approvals = result.approvals.ifEmpty { it.approvals }, coding = result.coding ?: it.coding, state = state) }
     }
 
     /** Nothing reached the model: take the turn back out and, when it was a plain text send, queue it for reconnect. */

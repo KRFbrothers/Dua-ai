@@ -396,7 +396,8 @@ fun ChatScreen(
                         } else if (home && feature == ChatFeature.Agent) {
                             AgentContent(state.agentAvailable, busy = state.typing, onBack = actions.onExitFeature,
                                 onNewTask = actions.onNewFeatureSession, onRefresh = actions.onRefreshAgent,
-                                onTask = actions.onAgentTask, onSend = {}, showChrome = false)
+                                onTask = actions.onAgentTask, onSend = {}, showChrome = false,
+                                onOpenWorkspaces = { actions.onOpenDestination(DuaDestination.AgentWorkspaces) })
                         } else if (home && feature != null) {
                             Text(if (feature == ChatFeature.Projects) state.projects.firstOrNull { it.id == state.projectId }?.name ?: "Projects" else "Create an image with Dua",
                                 Modifier.align(Alignment.Center).padding(Spacing.lg), style = MaterialTheme.typography.titleLarge)

@@ -135,6 +135,7 @@ fun MessageList(state: ChatUiState, actions: ChatActions, listState: LazyListSta
                         confirmPr = state.confirmPr == message.id,
                         onCreatePr = { title -> actions.onCreatePr(message.id, title) },
                         onApproval = { approvalId, approve -> actions.onAgentApproval(message.id, approvalId, approve) },
+                        onOpenWorkspaces = { actions.onOpenDestination(com.dua.ai.ui.navigation.DuaDestination.AgentWorkspaces) },
                         showActions = !suppliedStyle && message.id == lastAssistantId,
                         suppliedStyle = suppliedStyle,
                     )

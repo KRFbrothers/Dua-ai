@@ -1,0 +1,8 @@
+**
+!Sandbox.Dockerfile
+!Jvm.Dockerfile
+!Android.Dockerfile
+!dua-gradle
+!verify_profile_image.py
+!gradle-seed/
+!gradle-seed/**
