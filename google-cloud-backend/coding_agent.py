@@ -591,7 +591,7 @@ class CodingSession:
                 return {"preview_diff": text[:24_000],
                         "preview_diff_truncated": preview["truncated"] or len(text) > 24_000}
 
-    def run_tool(self, name, args):
+    def run_tool(self, name, args, command_progress=None):
         # Draft/restore transitions are serialized. Long-running commands release
         # the session lock; their fingerprint prevents stale-result imports.
         if name == "run_command":
@@ -604,7 +604,7 @@ class CodingSession:
                 with workspace.lock:
                     workspace.active_commands += 1
             try:
-                return coding_terminal.run(workspace, args, cancelled=self.cancelled)
+                return coding_terminal.run(workspace, args, cancelled=self.cancelled, progress=command_progress)
             except CodingError as error:
                 return {"error": str(error)[:300]}
             finally:

@@ -106,7 +106,7 @@ def list_profiles():
     return dict(result, configured=True, note="Configured image contracts only, not live verification. Dependencies must be preinstalled; networking stays disabled.")
 
 
-def run(workspace, args, cancelled=None):
+def run(workspace, args, cancelled=None, progress=None):
     import coding_artifacts
     argv, cwd, seconds = validate_command(args)
     profile = coding_profiles.name(args.get("profile", "python"))
@@ -194,6 +194,14 @@ def run(workspace, args, cancelled=None):
                         "note": "Container is ephemeral. Requested text exports are request-local until import_command_changes; review workspace_diff before PR approval."}
             if state not in ("queued", "running"):
                 raise coding.CodingError("Invalid runner job state.")
+            output = result.get("output", "")
+            if not isinstance(output, str):
+                raise coding.CodingError("Invalid runner output.")
+            if progress is not None:
+                raw = output.encode("utf-8")
+                progress({"state": state, "profile": profile,
+                          "output": raw[:MAX_OUTPUT_BYTES].decode("utf-8", errors="ignore"),
+                          "truncated": result.get("truncated") is True or len(raw) > MAX_OUTPUT_BYTES})
             for _ in range(5):
                 if stop():
                     break

@@ -4,13 +4,15 @@ import org.json.JSONObject
 
 /** Ephemeral UI data: not a source of approval arguments or persisted chat content. */
 data class AgentTerminal(val id: String, val command: String = "Command", val state: String,
-    val output: String = "", val exitCode: Int? = null, val truncated: Boolean = false, val profile: String? = null)
+    val output: String = "", val exitCode: Int? = null, val truncated: Boolean = false, val profile: String? = null) {
+    val active: Boolean get() = state in setOf("preparing", "queued", "running")
+}
 data class AgentPrTarget(val number: Int, val branch: String)
 data class AgentWorkspace(val repository: String, val base: String, val paths: List<String>,
     val checkpointId: String?, val revision: Int, val saved: Boolean, val prTarget: AgentPrTarget? = null)
 data class AgentCoding(val workspace: AgentWorkspace? = null, val terminals: List<AgentTerminal> = emptyList(),
     val diff: String? = null, val diffTruncated: Boolean = false, val ci: List<AgentCi> = emptyList()) {
-    fun ended() = copy(terminals = terminals.map { if (it.state == "preparing") it.copy(state = "interrupted") else it })
+    fun ended() = copy(terminals = terminals.map { if (it.active) it.copy(state = "interrupted") else it })
 }
 data class AgentCodingUpdate(val workspace: AgentWorkspace?, val terminal: AgentTerminal?, val diff: String?,
     val diffTruncated: Boolean, val resetDiff: Boolean, val hasCommand: Boolean, val ci: AgentCi? = null) {
@@ -18,8 +20,12 @@ data class AgentCodingUpdate(val workspace: AgentWorkspace?, val terminal: Agent
         val before = previous ?: AgentCoding()
         val runs = terminal?.let { next ->
             val old = before.terminals.find { it.id == next.id }
+            // A timed-out worker can finish a blocked SSE enqueue after the
+            // final event. Such a live snapshot cannot reopen a finished card.
+            if (old != null && ((!old.active && next.active) || (old.state == "running" && next.state == "queued"))) return@let before.terminals
             val merged = if (!hasCommand && old != null) next.copy(command = old.command, profile = next.profile ?: old.profile) else next
-            (before.terminals.filterNot { it.id == next.id } + merged).takeLast(4)
+            if (old == null) (before.terminals + merged).takeLast(4)
+            else before.terminals.map { if (it.id == next.id) merged else it }
         } ?: before.terminals
         return AgentCoding(workspace ?: before.workspace, runs,
             if (resetDiff) null else diff ?: before.diff,
@@ -52,7 +58,7 @@ data class AgentCodingUpdate(val workspace: AgentWorkspace?, val terminal: Agent
             }
             val terminal = json.optJSONObject("terminal")?.let { t ->
                 val key = t.optString("id"); val state = t.optString("state")
-                if (!Regex("[0-9a-f]{16}").matches(key) || state !in setOf("preparing", "succeeded", "failed", "timed_out", "cancelled", "error")) return null
+                if (!Regex("[0-9a-f]{16}").matches(key) || state !in setOf("preparing", "queued", "running", "succeeded", "failed", "timed_out", "cancelled", "error")) return null
                 val profile = if (t.has("profile")) {
                     (t.opt("profile") as? String)?.takeIf { it in setOf("python", "jvm", "android") } ?: return null
                 } else null

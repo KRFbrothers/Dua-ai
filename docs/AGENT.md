@@ -124,6 +124,9 @@ with a pinned PR workspace, separate fix approval and non-forced branch update.
 **Seventh phase:** [configured Python/JVM/Android runner profiles](CODING_PROFILES.md),
 with fixed limits, image-contract discovery and explicit command profile binding.
 
+**Eighth phase:** [live command output](CODING_LIVE_OUTPUT.md) during existing
+runner polling, with redacted cumulative snapshots and final-state protection.
+
 **Remaining work:** end-to-end coding evaluation, image/runner provisioning and
 interactive sessions. No runner has been enabled or engine deployed by these implementation
 phases. Local tests were deferred at the owner's request; both workspace and
