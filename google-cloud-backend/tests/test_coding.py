@@ -395,7 +395,7 @@ def test_real_genai_tool_declarations():
     tools = ca.default_tools()
     assert [f.name for f in tools[0].function_declarations] == [
         "update_plan", "workspace_status", "open_pr_workspace", "edit_file", "workspace_diff", "list_runner_profiles", "run_command", "import_command_changes",
-        "checkpoint_workspace", "list_workspaces", "restore_workspace", "list_files", "read_file", "search_code", "inspect_pr_ci", "propose_pr_fix", "propose_changes"]
+        "checkpoint_workspace", "list_workspaces", "restore_workspace", "list_files", "read_file", "search_code", "search_workspace", "inspect_pr_ci", "propose_pr_fix", "propose_changes"]
     content = ca.default_tool_response([("read_file", {"content": "x"})])
     assert content.role == "user" and content.parts[0].function_response.name == "read_file"
 

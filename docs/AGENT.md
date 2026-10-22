@@ -130,6 +130,9 @@ runner polling, with redacted cumulative snapshots and final-state protection.
 **Ninth phase:** [request-local coding plans](CODING_PLANS.md), with bounded
 steps, one active step, ordered updates and an Android checklist.
 
+**Tenth phase:** [pinned/staged text search](CODING_SEARCH.md), with literal
+matches, file paths, line numbers and explicit coverage/output limits.
+
 **Remaining work:** end-to-end coding evaluation, image/runner provisioning and
 interactive sessions. No runner has been enabled or engine deployed by these implementation
 phases. Local tests were deferred at the owner's request; both workspace and

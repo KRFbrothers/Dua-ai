@@ -17,6 +17,7 @@ text workspace, Gemini authentication/retry changes and website chat.
 | Toolchains | [Python, JVM and Android profiles](CODING_PROFILES.md), fixed resources and digest-bound image contracts |
 | Live output | [Command activity updates](CODING_LIVE_OUTPUT.md), bounded redacted output during runner polling |
 | Task checklist | [Coding plans](CODING_PLANS.md), agent-reported steps and statuses within the current task |
+| Source discovery | [Pinned workspace search](CODING_SEARCH.md), matching lines from the pinned commit plus staged edits |
 
 Both the normal tool loop and Google ADK code helper use these implementations.
 The integration does not introduce another agent runtime.
