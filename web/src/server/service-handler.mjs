@@ -64,6 +64,9 @@ async function routeService(request,{env=process.env,fetcher=fetch}={}) {
 // DUA_ENGINE_URL overrides the engine origin; DUA_APP_TOKEN (optional) is added server-side only.
 export const DEFAULT_ENGINE_URL='https://dua-ai-engine-228305912525.us-central1.run.app';
 const WEB_CHAT_MAX_BYTES=4*1024*1024;
+const WEB_CHAT_MAX_MESSAGES=200;
+// The website sends {role,text}; accept the engine's `content` too (string or parts array).
+const validTurn=m=>!!m&&typeof m==='object'&&!Array.isArray(m)&&typeof m.role==='string'&&m.role.length<=32&&(typeof m.text==='string'||typeof m.content==='string'||Array.isArray(m.content));
 const noStore=(error,status)=>Response.json({error},{status,headers:{'Cache-Control':'no-store'}});
 function engineUrl(env){
  try{const url=new URL(String(env.DUA_ENGINE_URL||DEFAULT_ENGINE_URL));
@@ -79,23 +82,38 @@ export async function handleWebChat(request,{env=process.env,fetcher=fetch}={}){
  if(!token||token.length>10000||!/^[A-Za-z0-9._-]+$/.test(token))return noStore('Sign in to chat.',401);
  const target=engineUrl(env);
  if(!target)return noStore('Chat engine is not configured.',503);
+ const tooLarge=()=>noStore('Conversation too large. Start a new chat.',413);
+ const declared=Number(request.headers.get('content-length'));
+ if(Number.isFinite(declared)&&declared>WEB_CHAT_MAX_BYTES)return tooLarge();
  const body=await request.text();
- if(body.length>WEB_CHAT_MAX_BYTES)return noStore('Conversation too large. Start a new chat.',413);
+ if(Buffer.byteLength(body,'utf8')>WEB_CHAT_MAX_BYTES)return tooLarge();
  let data;try{data=JSON.parse(body);}catch{return noStore('Invalid request.',400);}
  if(!data||typeof data!=='object'||Array.isArray(data)||!Array.isArray(data.messages))return noStore('Invalid request.',400);
+ if(data.messages.length>WEB_CHAT_MAX_MESSAGES)return noStore('Conversation too long. Start a new chat.',413);
+ if(!data.messages.every(validTurn))return noStore('Invalid request.',400);
+ // Same login/owner/daily-quota policy as /api/chat (shared Supabase counter), only after input is valid.
+ const access=await guardChatAccess(request,{env,fetcher});
+ if(!access.allowed)return access.response;
  // Plain chat or Agent only from the website; Build/persistence stay Android-only.
  const mode=data.mode==='agent'?'agent':data.mode==='reasoning'?'reasoning':'auto';
  const payload={model:typeof data.model==='string'?data.model:'Dua',messages:data.messages,attachments:[],memory:typeof data.memory==='string'?data.memory:'',stream:true,mode};
  const headers={'Content-Type':'application/json','Accept':'text/event-stream, application/json','Authorization':'Bearer '+token,'x-dua-native':'1'};
  if(env.DUA_APP_TOKEN)headers['X-Dua-App-Token']=env.DUA_APP_TOKEN;
  let upstream;
- try{upstream=await fetcher(target,{method:'POST',headers,body:JSON.stringify(payload),signal:request.signal});}
- catch{return noStore('Chat engine is not reachable. Try again.',502);}
+ try{upstream=await fetcher(target,{method:'POST',headers,body:JSON.stringify(payload),signal:AbortSignal.any([request.signal,AbortSignal.timeout(chatDeadlineMs(env))])});}
+ catch{return withAccess(noStore('Chat engine is not reachable. Try again.',502),access);}
  const type=upstream.headers.get('content-type')||'';
  if(type.includes('text/event-stream')&&upstream.body)
-  return new Response(upstream.body,{status:upstream.status,headers:{'Content-Type':'text/event-stream; charset=utf-8','Cache-Control':'no-store','X-Accel-Buffering':'no','X-Content-Type-Options':'nosniff'}});
+  return withAccess(new Response(upstream.body,{status:upstream.status,headers:{'Content-Type':'text/event-stream; charset=utf-8','Cache-Control':'no-store','X-Accel-Buffering':'no','X-Content-Type-Options':'nosniff'}}),access);
  // Non-stream answers (errors): pass a short JSON error only, never upstream details beyond `error`.
  let message='Reply failed. Try again.';
  try{const json=await upstream.json();if(typeof json?.error==='string')message=json.error.slice(0,300);}catch{}
- return noStore(message,upstream.ok?502:upstream.status);
+ return withAccess(noStore(message,upstream.ok?502:upstream.status),access);
+}
+// Keep renewed HttpOnly session cookies and the remaining-requests header from the access guard.
+function withAccess(response,access){
+ const headers=new Headers(access.headers||undefined);
+ const remaining=headers.get('x-dua-requests-remaining');if(remaining)response.headers.set('X-Dua-Requests-Remaining',remaining);
+ for(const cookie of headers.getSetCookie())response.headers.append('Set-Cookie',cookie);
+ return response;
 }
