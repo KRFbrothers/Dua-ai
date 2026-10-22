@@ -35,6 +35,7 @@ class Workspace:
         self.saved_fingerprint = None
         self.command_results = {}
         self.active_commands = 0
+        self.active_searches = 0
 
     def start(self, base_sha=None):
         if self.base_sha is not None:
