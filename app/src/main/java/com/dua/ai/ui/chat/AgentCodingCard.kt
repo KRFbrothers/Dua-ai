@@ -43,7 +43,30 @@ internal fun AgentTextPreview(title: String, text: String, truncated: Boolean = 
 internal fun AgentCodingCard(coding: AgentCoding, onOpenWorkspaces: () -> Unit) {
     OutlinedCard(Modifier.fillMaxWidth().padding(bottom = Spacing.sm)) {
         Column(Modifier.padding(Spacing.lg), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-            Text(if (coding.workspace == null && coding.ci.isNotEmpty()) "Pull request checks" else "Coding workspace", style = MaterialTheme.typography.titleSmall)
+            Text(when {
+                coding.workspace != null -> "Coding workspace"
+                coding.plan != null -> "Coding plan"
+                coding.ci.isNotEmpty() -> "Pull request checks"
+                else -> "Coding workspace"
+            }, style = MaterialTheme.typography.titleSmall)
+            coding.plan?.let { plan ->
+                Text("Agent-reported plan", style = MaterialTheme.typography.labelLarge)
+                if (plan.explanation.isNotBlank()) Text(plan.explanation, style = MaterialTheme.typography.bodySmall)
+                plan.steps.forEachIndexed { index, step ->
+                    val label = when (step.status) {
+                        "completed" -> "Done"
+                        "in_progress" -> if (plan.ended) "Not completed" else "In progress"
+                        else -> "Pending"
+                    }
+                    Column(Modifier.fillMaxWidth().padding(vertical = Spacing.xs)) {
+                        Text("${index + 1}. ${step.text}", style = MaterialTheme.typography.bodyMedium)
+                        Text(label, style = MaterialTheme.typography.labelSmall,
+                            color = if (step.status == "in_progress" && !plan.ended) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+                if (plan.ended && plan.steps.any { it.status != "completed" }) Text("Reply ended · plan incomplete",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
             coding.workspace?.let { w ->
                 Text("${w.repository} · ${w.base.take(8)}", style = MaterialTheme.typography.bodySmall)
                 w.prTarget?.let { target ->

@@ -11,11 +11,11 @@ data class AgentPrTarget(val number: Int, val branch: String)
 data class AgentWorkspace(val repository: String, val base: String, val paths: List<String>,
     val checkpointId: String?, val revision: Int, val saved: Boolean, val prTarget: AgentPrTarget? = null)
 data class AgentCoding(val workspace: AgentWorkspace? = null, val terminals: List<AgentTerminal> = emptyList(),
-    val diff: String? = null, val diffTruncated: Boolean = false, val ci: List<AgentCi> = emptyList()) {
-    fun ended() = copy(terminals = terminals.map { if (it.active) it.copy(state = "interrupted") else it })
+    val diff: String? = null, val diffTruncated: Boolean = false, val ci: List<AgentCi> = emptyList(), val plan: AgentPlan? = null) {
+    fun ended() = copy(terminals = terminals.map { if (it.active) it.copy(state = "interrupted") else it }, plan = plan?.copy(ended = true))
 }
 data class AgentCodingUpdate(val workspace: AgentWorkspace?, val terminal: AgentTerminal?, val diff: String?,
-    val diffTruncated: Boolean, val resetDiff: Boolean, val hasCommand: Boolean, val ci: AgentCi? = null) {
+    val diffTruncated: Boolean, val resetDiff: Boolean, val hasCommand: Boolean, val ci: AgentCi? = null, val plan: AgentPlan? = null) {
     fun apply(previous: AgentCoding?): AgentCoding {
         val before = previous ?: AgentCoding()
         val runs = terminal?.let { next ->
@@ -30,7 +30,8 @@ data class AgentCodingUpdate(val workspace: AgentWorkspace?, val terminal: Agent
         return AgentCoding(workspace ?: before.workspace, runs,
             if (resetDiff) null else diff ?: before.diff,
             if (resetDiff) false else if (diff != null) diffTruncated else before.diffTruncated,
-            ci?.let { next -> (before.ci.filterNot { it.repository == next.repository && it.number == next.number } + next).takeLast(2) } ?: before.ci)
+            ci?.let { next -> (before.ci.filterNot { it.repository == next.repository && it.number == next.number } + next).takeLast(2) } ?: before.ci,
+            plan?.takeIf { before.plan == null || (!before.plan.ended && it.revision > before.plan.revision) } ?: before.plan)
     }
     companion object {
         private val id = Regex("[0-9a-f]{32}")
@@ -67,12 +68,13 @@ data class AgentCodingUpdate(val workspace: AgentWorkspace?, val terminal: Agent
                     (t.opt("exitCode") as? Number)?.toInt(), t.optBoolean("truncated") || output.length > 32_000, profile)
             }
             val ci = json.optJSONObject("ci")?.let { AgentCi.fromJson(it) ?: return null }
+            val plan = if (json.has("plan")) AgentPlan.fromJson(json.optJSONObject("plan") ?: return null) ?: return null else null
             val diff = (json.opt("diff") as? String)
             val reset = json.optBoolean("resetDiff")
-            if (workspace == null && terminal == null && diff == null && !reset && ci == null) return null
+            if (workspace == null && terminal == null && diff == null && !reset && ci == null && plan == null) return null
             return AgentCodingUpdate(workspace, terminal, diff?.take(24_000),
                 json.optBoolean("diffTruncated") || (diff?.length ?: 0) > 24_000, reset,
-                json.optJSONObject("terminal")?.has("command") == true, ci)
+                json.optJSONObject("terminal")?.has("command") == true, ci, plan)
         }
     }
 }

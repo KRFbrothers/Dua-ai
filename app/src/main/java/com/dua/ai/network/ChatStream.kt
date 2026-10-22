@@ -161,7 +161,7 @@ class StreamAccumulator(private val startedAt: Long, private val clock: () -> Lo
             is ReplyEvent.Build -> build = event.info
             is ReplyEvent.Proposal -> proposal = event.proposal
             is ReplyEvent.Code -> codeRuns = com.dua.ai.model.CodeRuns.merge(codeRuns, event.index, event.language, event.code, event.output, event.outcome)
-            is ReplyEvent.Coding -> coding = event.update.apply(coding)
+            is ReplyEvent.Coding -> if (!finished) coding = event.update.apply(coding)
             is ReplyEvent.Saved -> thinkingSeconds = event.receipt.thinkingSeconds
             is ReplyEvent.Done -> {
                 finished = true
