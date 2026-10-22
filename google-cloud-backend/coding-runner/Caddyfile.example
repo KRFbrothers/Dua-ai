@@ -1,0 +1,8 @@
+# Replace with the runner's DNS name. Caddy terminates TLS; the controller
+# validates its dedicated bearer token and per-run scope on every API request.
+runner.example.com {
+    request_body {
+        max_size 24MB
+    }
+    reverse_proxy 127.0.0.1:8091
+}

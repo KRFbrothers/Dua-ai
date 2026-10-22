@@ -5,7 +5,7 @@ import org.json.JSONObject
 /**
  * A write action the Dua Agent asked to do (open a PR, create an issue, comment, save or delete a note).
  * The server stores the exact action; the app only shows this summary and sends back [id] with approve or reject.
- * In memory only: the server forgets the action after 15 minutes, so restored chats never show live cards.
+ * In memory only in the app: actions expire after 15 minutes; restored chats never show live cards.
  */
 data class AgentApproval(
     val id: String,
@@ -17,6 +17,9 @@ data class AgentApproval(
     val status: Status = Status.Pending,
     /** Server answer after a decision (PR link, "Note saved.", error), shown on the card. */
     val result: String? = null,
+    /** Bounded, redacted diff of the exact server-stored proposal. In memory only. */
+    val diff: String? = null,
+    val diffTruncated: Boolean = false,
 ) {
     enum class Status { Pending, Working, Done, Failed, Rejected, Expired }
 
@@ -47,7 +50,9 @@ object AgentApprovals {
             (0 until minOf(array.length(), MAX_DETAILS)).mapNotNull { array.opt(it) as? String }.map { clean(it, MAX_DETAIL) }.filter { it.isNotEmpty() }
         }.orEmpty()
         val seconds = json.optInt("expiresIn", MAX_SECONDS).coerceIn(0, MAX_SECONDS)
-        return AgentApproval(id, tool, title, details, now + seconds * 1000L)
+        return AgentApproval(id, tool, title, details, now + seconds * 1000L,
+            diff = (json.opt("diff") as? String)?.take(24_000),
+            diffTruncated = json.optBoolean("diffTruncated") || (json.opt("diff") as? String)?.length?.let { it > 24_000 } == true)
     }
 
     /** Adds or replaces [approval] by id (at most [MAX_PER_REPLY] per reply). */

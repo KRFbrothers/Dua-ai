@@ -17,6 +17,7 @@ object AgentSizes {
     val cardPadding = 18.dp
     val cardGap = 12.dp
     val border = 1.dp
+    val codeMaxHeight = 240.dp
     val maxWidth = 520.dp
     val badgePaddingH = 10.dp
     val badgePaddingV = 5.dp

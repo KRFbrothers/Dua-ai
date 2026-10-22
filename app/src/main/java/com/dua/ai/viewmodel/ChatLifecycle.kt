@@ -90,7 +90,7 @@ internal class ChatLifecycle(private val host: LifecycleHost) : LifecycleHost by
         val startedAt = System.currentTimeMillis()
         _error.value = null; _isTyping.value = true; refreshSyncBusy()
         retryOriginal = original
-        updateMessage(messageId) { it.copy(text = "", thinking = null, thinkingSeconds = null, notice = null, codeRuns = emptyList(), build = requestBuild?.let { com.dua.ai.model.BuildInfo(it) }, proposal = null, approvals = emptyList(), state = ChatMessage.STREAMING, startedAt = startedAt) }
+        updateMessage(messageId) { it.copy(text = "", thinking = null, thinkingSeconds = null, notice = null, codeRuns = emptyList(), build = requestBuild?.let { com.dua.ai.model.BuildInfo(it) }, proposal = null, approvals = emptyList(), coding = null, state = ChatMessage.STREAMING, startedAt = startedAt) }
         replyJob = viewModelScope.launch {
             var accumulator: com.dua.ai.network.StreamAccumulator? = null
             try {
@@ -109,7 +109,7 @@ internal class ChatLifecycle(private val host: LifecycleHost) : LifecycleHost by
                 if (generation == currentGeneration) {
                     val final = accumulator!!.snapshot(ended = true)
                     retryOriginal = null
-                    updateMessage(messageId) { it.copy(text = final.text, thinking = final.thinking, thinkingSeconds = final.thinkingSeconds, notice = final.notice, codeRuns = final.codeRuns, build = final.build ?: it.build, proposal = final.proposal ?: it.proposal, approvals = final.approvals.ifEmpty { it.approvals }, state = "complete") }
+                    updateMessage(messageId) { it.copy(text = final.text, thinking = final.thinking, thinkingSeconds = final.thinkingSeconds, notice = final.notice, codeRuns = final.codeRuns, build = final.build ?: it.build, proposal = final.proposal ?: it.proposal, approvals = final.approvals.ifEmpty { it.approvals }, coding = final.coding ?: it.coding, state = "complete") }
                 }
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (failure: Exception) {
@@ -118,7 +118,7 @@ internal class ChatLifecycle(private val host: LifecycleHost) : LifecycleHost by
                     val partial = accumulator?.snapshot(ended = true)
                     retryOriginal = null
                     if (partial != null && partial.text.isNotBlank()) {
-                        updateMessage(messageId) { it.copy(text = partial.text, thinking = partial.thinking, thinkingSeconds = partial.thinkingSeconds, notice = partial.notice, codeRuns = partial.codeRuns, build = partial.build ?: it.build, proposal = partial.proposal ?: it.proposal, approvals = partial.approvals.ifEmpty { it.approvals }, state = "stopped") }
+                        updateMessage(messageId) { it.copy(text = partial.text, thinking = partial.thinking, thinkingSeconds = partial.thinkingSeconds, notice = partial.notice, codeRuns = partial.codeRuns, build = partial.build ?: it.build, proposal = partial.proposal ?: it.proposal, approvals = partial.approvals.ifEmpty { it.approvals }, coding = partial.coding ?: it.coding, state = "stopped") }
                         _error.value = "Retry interrupted: ${failureText(failure)} Partial reply kept; tap retry."
                     } else {
                         updateMessage(messageId) { original }

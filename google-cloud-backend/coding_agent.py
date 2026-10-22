@@ -5,7 +5,7 @@ Safety is enforced here on the server, not by the model:
 - GitHubClient only sends requests that match an explicit (method, path) allowlist: reads, creating
   blobs/trees/commits, creating a NEW `refs/heads/dua-agent/...` branch and opening a pull request
   against main. Merging, deleting, force updates and any write to main are impossible.
-- The model gets read tools, request-local draft editing and `propose_changes`;
+- The model gets read tools, request-local main/PR draft editing and approval proposals;
   the server performs external writes only after owner approval.
 - Caps on tool steps, files read/changed, bytes and total time.
 """
@@ -15,7 +15,7 @@ import os
 import re
 import time
 from urllib.error import HTTPError
-from urllib.parse import quote, urlencode
+from urllib.parse import quote, urlencode, urlsplit
 from urllib.request import Request, build_opener, HTTPRedirectHandler
 
 API = "https://api.github.com"
@@ -45,16 +45,28 @@ REPO_RULES = """Repository rules (must follow):
 
 CODING_PROMPT = (
     "You are the Dua Agent coding step for the GitHub repository {repo}. "
-    "Start with workspace_status to pin the task to one commit. Read scoped AGENTS.md guidance with "
+    "For a new PR start workspace_status to pin main; for an existing agent PR fix start open_pr_workspace(number). "
+    "Read scoped AGENTS.md guidance with "
     "workspace_status(path) or read_file before editing each file. Use edit_file for exact draft replacements "
-    "(empty old_text creates a new file only), inspect workspace_diff, then propose_changes with files=[] "
-    "to submit every staged edit for approval. Drafts last only for this request; no terminal is available. "
+    "(empty old_text creates a new file only), inspect workspace_diff, then choose the workspace's approval tool "
+    "to submit every staged edit for approval. Unsaved drafts are request-local. When workspace_status reports "
+    "execution.configured, list_runner_profiles reports configured toolchain contracts (not live readiness). "
+    "run_command(profile=python/jvm/android) checks a source snapshot in the selected configured, network-disabled sandbox; "
+    "never infer Java/Android dependencies are available or fall back to another profile. "
+    "use export_paths for changed text files, then import_command_changes and inspect the diff. Unexported changes "
+    "are discarded. When checkpoints are enabled, edits autosave; list_workspaces/restore_workspace resume a "
+    "saved draft in a fresh task. Never claim commands ran when execution is unconfigured or failed. "
+    "Use inspect_pr_ci(number) to diagnose a PR using its observed commit; this read-only tool does not restore "
+    "that PR into a workspace or authorize fixes. For repair of an open dua-agent/ PR, open_pr_workspace(number), "
+    "read its files/scoped guidance, edit_file, workspace_diff, then propose_pr_fix(title). A separate owner approval "
+    "commits those staged files to that existing branch. Do not use propose_changes on a PR workspace. "
+    "Never claim all required checks passed. "
     "Use the tools to look at the tree, "
     "search and read the files you need (read before you change). Keep changes small and focused. When ready, "
-    "call propose_changes ONCE with files=[] for staged drafts, or FULL new content when there are no drafts "
+    "for a new PR call propose_changes ONCE with files=[] for staged drafts, or FULL new content when there are no drafts "
     "(max {max_files} files), a "
     "short PR title and a simple-language description (Hinglish-friendly) of what changed and how to test it. "
-    "If the request is unclear or too big, call propose_changes with no files and explain why in description.\n\n"
+    "If the request is unclear or too big, explain the limitation without proposing a write.\n\n"
     + REPO_RULES
 )
 
@@ -142,9 +154,13 @@ def allowed(method, path, body, repo):
     base = f"/repos/{r}"
     rules = {
         "GET": [rf"^{base}$", rf"^{base}/git/trees/[A-Za-z0-9._\-/]+$", rf"^{base}/contents/[^?]*$",
+                rf"^{base}/tarball/[0-9a-f]{{40}}$",
                 rf"^{base}/git/ref/heads/[A-Za-z0-9._\-/]+$", r"^/search/code$",
-                # CI results for the agent's own PRs (read-only).
-                rf"^{base}/commits/[0-9a-f]{{40}}/check-runs$", rf"^{base}/actions/runs$"],
+                # Read-only CI evidence inside the configured repository.
+                rf"^{base}/commits/[0-9a-f]{{40}}/check-runs$", rf"^{base}/actions/runs$",
+                rf"^{base}/pulls/[1-9][0-9]{{0,8}}$",
+                rf"^{base}/check-runs/[1-9][0-9]{{0,18}}/annotations$",
+                rf"^{base}/actions/runs/[1-9][0-9]{{0,18}}/attempts/[1-9][0-9]{{0,18}}/jobs$"],
         "POST": [rf"^{base}/git/blobs$", rf"^{base}/git/trees$", rf"^{base}/git/commits$",
                  rf"^{base}/git/refs$", rf"^{base}/pulls$"],
     }
@@ -224,6 +240,44 @@ class GitHubClient:
             raise CodingError(f"GitHub request failed ({status}).")
 
     # --- read helpers used by model tools ---
+    def archive(self, sha):
+        """Bounded archive at one commit; allow only GitHub's exact codeload redirect.
+
+        The token stays in this engine. Neither source bundles nor the runner
+        receive it. This binary endpoint is separate from request()'s JSON API.
+        """
+        from coding_snapshot import MAX_ARCHIVE_BYTES
+        if not isinstance(sha, str) or not re.fullmatch(r"[0-9a-f]{40}", sha):
+            raise CodingError("Invalid source snapshot commit.")
+        path = f"/repos/{self.repo}/tarball/{sha}"
+        if allowed("GET", path, None, self.repo):
+            raise BlockedRequest("Source archive request is not allowed.")
+        headers = {"Authorization": f"Bearer {self.token}", "User-Agent": "dua-agent",
+                   "Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"}
+        try:
+            try:
+                response = self.opener.open(Request(API + path, headers=headers), timeout=20)
+            except HTTPError as redirect:
+                if redirect.code != 302:
+                    raise
+                location = redirect.headers.get("Location", "")
+                redirect.close()
+                target = urlsplit(location)
+                expected = f"/{self.repo}/legacy.tar.gz/{sha}"
+                if (target.scheme != "https" or target.netloc != "codeload.github.com" or
+                        target.path.casefold() != expected.casefold() or target.query or target.fragment):
+                    raise CodingError("GitHub returned an unexpected archive destination.")
+                response = self.opener.open(Request(location, headers=headers), timeout=20)
+            with response:
+                data = response.read(MAX_ARCHIVE_BYTES + 1)
+        except HTTPError:
+            raise CodingError("GitHub source archive is unavailable. Check repository access.") from None
+        except OSError:
+            raise CodingError("GitHub source archive download failed.") from None
+        if not data or len(data) > MAX_ARCHIVE_BYTES:
+            raise CodingError("Source archive exceeds the runner download limit.")
+        return data
+
     def tree(self):
         data = self.request("GET", f"/repos/{self.repo}/git/trees/{BASE_BRANCH}", query={"recursive": "1"})
         return [item["path"] for item in data.get("tree", []) if item.get("type") == "blob"]
@@ -322,7 +376,7 @@ class GitHubClient:
         item = self.request("POST", f"/repos/{self.repo}/issues/{number}/comments", {"body": text + COMMENT_FOOTER})
         return {"url": item.get("html_url")}
 
-    # --- the only write sequence: new branch + one commit + PR into main ---
+    # --- new-PR write sequence: new branch + one commit + PR into main ---
     def open_pull_request(self, files, title, description, branch, base_sha=None):
         if not valid_agent_branch(branch):
             raise BlockedRequest("Use a new dua-agent/ branch with 1 to 80 lowercase letters, digits or dashes; start and end with a letter or digit.")
@@ -421,19 +475,36 @@ def validate_changes(files):
 
 
 TOOLS = [
-    {"name": "workspace_status", "description": "Start a workspace on one commit; read AGENTS.md for an optional file path. Call first for coding tasks. Drafts last only this request; no terminal.",
+    {"name": "workspace_status", "description": "Start a workspace on one commit; read scoped AGENTS.md, report runner/checkpoint configuration and retained command changes. Unsaved state is request-local.",
      "parameters": {"type": "OBJECT", "properties": {"path": {"type": "STRING"}}}},
+    {"name": "open_pr_workspace", "description": "Open an existing open same-repository dua-agent/ PR targeting main at its current head. Use a fresh task; does not write GitHub. Read files/scoped guidance before staging a fix.",
+     "parameters": {"type": "OBJECT", "properties": {"number": {"type": "INTEGER"}}, "required": ["number"]}},
     {"name": "edit_file", "description": "Edit a request-local draft. old_text must match exactly once; empty old_text creates a new file only. Read scoped AGENTS.md first. Does not write to GitHub.",
      "parameters": {"type": "OBJECT", "properties": {"path": {"type": "STRING"}, "old_text": {"type": "STRING"}, "new_text": {"type": "STRING"}},
                     "required": ["path", "old_text", "new_text"]}},
     {"name": "workspace_diff", "description": "Preview staged workspace changes as a bounded unified diff before proposing a PR.",
      "parameters": {"type": "OBJECT", "properties": {}}},
+    {"name": "list_runner_profiles", "description": "Discover configured python/jvm/android image contracts and fixed limits on the separate runner. Metadata is not proof of working dependencies. No command runs."},
+    {"name": "run_command", "description": "Run argv on pinned/staged source in a configured profile (default python). Discover profiles before JVM/Android; dependencies must be preinstalled, runtime networking is disabled. Optional export_paths retains selected text files for explicit draft import. Read scoped AGENTS.md first; never auto-retry.",
+     "parameters": {"type": "OBJECT", "properties": {
+         "argv": {"type": "ARRAY", "items": {"type": "STRING"}}, "cwd": {"type": "STRING"},
+         "timeout_seconds": {"type": "INTEGER"}, "profile": {"type": "STRING", "enum": ["python", "jvm", "android"]}, "export_paths": {"type": "ARRAY", "items": {"type": "STRING"}}}, "required": ["argv"]}},
+    {"name": "import_command_changes", "description": "Atomically import selected text exports from a successful command into the unchanged draft. Inspect workspace_diff afterwards; no GitHub write.",
+     "parameters": {"type": "OBJECT", "properties": {"command_id": {"type": "STRING"}}, "required": ["command_id"]}},
+    {"name": "checkpoint_workspace", "description": "Save the pinned draft to private owner-scoped SQL if checkpoints are enabled. No process, command output or credentials are saved."},
+    {"name": "list_workspaces", "description": "List this authenticated owner's unexpired workspace checkpoint IDs for the configured repository."},
+    {"name": "restore_workspace", "description": "Restore this owner's checkpoint into a fresh task at its original commit. Reread changed files/scoped AGENTS.md before editing or proposing.",
+     "parameters": {"type": "OBJECT", "properties": {"checkpoint_id": {"type": "STRING"}}, "required": ["checkpoint_id"]}},
     {"name": "list_files", "description": "List repository file paths, using the pinned commit after workspace_status. Optional prefix filter.",
      "parameters": {"type": "OBJECT", "properties": {"prefix": {"type": "STRING"}}}},
     {"name": "read_file", "description": "Read a text file; after workspace_status returns pinned/staged text and scoped AGENTS.md.",
      "parameters": {"type": "OBJECT", "properties": {"path": {"type": "STRING"}}, "required": ["path"]}},
     {"name": "search_code", "description": "Search code in the repository; returns matching file paths.",
      "parameters": {"type": "OBJECT", "properties": {"query": {"type": "STRING"}}, "required": ["query"]}},
+    {"name": "inspect_pr_ci", "description": "Read CI checks, failed steps and annotations for a PR number in this repository at its observed head commit. No rerun, logs download, workspace restore or writes. Required/merge checks are not evaluated.",
+     "parameters": {"type": "OBJECT", "properties": {"number": {"type": "INTEGER"}}, "required": ["number"]}},
+    {"name": "propose_pr_fix", "description": "Request separate owner approval to commit all staged PR-workspace edits to that same dua-agent/ PR branch. Target and files come from the server; no write occurs before approval.",
+     "parameters": {"type": "OBJECT", "properties": {"title": {"type": "STRING"}}, "required": ["title"]}},
     {"name": "propose_changes", "description": "Propose a PR for owner approval: title, description and full file contents. After edit_file, use files=[] to submit all staged edits.",
      "parameters": {"type": "OBJECT", "properties": {
          "title": {"type": "STRING"}, "description": {"type": "STRING"},
@@ -460,24 +531,135 @@ def function_calls(response):
 
 class CodingSession:
     def __init__(self, github, emit, clock=time.monotonic):
+        import threading
+        self.lock = threading.RLock()
         self.github, self.emit, self.clock = github, emit, clock
         self.files_read, self.bytes_read, self.tree_cache = 0, 0, None
         self.workspace = None
+        self.cancelled = None
+        self.owner_id = None
+
+    def save_checkpoint(self, result, explicit=False):
+        import coding_checkpoints
+        if not explicit and not coding_checkpoints.enabled():
+            return dict(result, checkpoint={"saved": False, "configured": False})
+        try:
+            workspace = self.workspace
+            with workspace.lock:
+                workspace.start()
+                saved = coding_checkpoints.save(workspace, self.owner_id)
+            return dict(result, checkpoint=saved)
+        except Exception as error:
+            message = str(error) if isinstance(error, CodingError) else "Workspace checkpoint storage is unavailable."
+            if explicit:
+                raise CodingError(message) from None
+            return dict(result, checkpoint={"saved": False, "error": message},
+                        checkpoint_note="The current draft changed, but was not durably saved. Keep this task open or resolve checkpoint storage before stopping.")
 
     def prepare_proposal(self, args):
         # Snapshot metadata comes from the server, never from model arguments.
-        clean = {k: v for k, v in args.items() if k not in ("base_sha", "repository")}
-        if self.workspace is not None:
-            return self.workspace.proposal(clean)
-        return clean
+        clean = {k: v for k, v in args.items() if k not in ("base_sha", "repository", "pr_target", "preview_diff", "preview_diff_truncated")}
+        with self.lock:
+            if self.workspace is not None:
+                return self.workspace.proposal(clean)
+            return clean
+
+    def prepare_pr_fix(self, args):
+        import coding_pr
+        title = args.get("title")
+        if not isinstance(title, str) or not title.strip():
+            raise CodingError("Provide a commit title for the staged fix.")
+        with self.lock:
+            if self.workspace is None:
+                raise CodingError("Open a PR workspace before proposing its fix.")
+            with self.workspace.lock:
+                result = self.workspace.proposal({"title": " ".join(title.split())[:120], "files": []}, repair=True)
+                coding_pr.current_target(self.github, result["pr_target"]["number"], expected=result["pr_target"])
+                return result
+
+    def preview_proposal(self, proposal):
+        from agent_policy import filter_text
+        with self.lock:
+            workspace = self.workspace
+            if workspace is None:
+                return {}
+            with workspace.lock:
+                if proposal.get("base_sha") != workspace.base_sha or proposal.get("repository") != self.github.repo or proposal.get("pr_target") != workspace.pr_target:
+                    return {}
+                preview = workspace.diff(proposal["files"])
+                text = filter_text(preview["diff"])
+                return {"preview_diff": text[:24_000],
+                        "preview_diff_truncated": preview["truncated"] or len(text) > 24_000}
 
     def run_tool(self, name, args):
+        # Draft/restore transitions are serialized. Long-running commands release
+        # the session lock; their fingerprint prevents stale-result imports.
+        if name == "run_command":
+            import coding_workspace
+            import coding_terminal
+            with self.lock:
+                if self.workspace is None:
+                    self.workspace = coding_workspace.Workspace(self.github)
+                workspace = self.workspace
+                with workspace.lock:
+                    workspace.active_commands += 1
+            try:
+                return coding_terminal.run(workspace, args, cancelled=self.cancelled)
+            except CodingError as error:
+                return {"error": str(error)[:300]}
+            finally:
+                with workspace.lock:
+                    workspace.active_commands -= 1
+        # Include lock contention in the inner budget. A timed-out read must
+        # not later replace the task's workspace after the caller continued.
+        deadline = self.clock() + 75 if name == "open_pr_workspace" else None
+        with self.lock:
+            return self._run_tool(name, args, deadline=deadline)
+
+    def _run_tool(self, name, args, deadline=None):
         try:
             import coding_workspace
-            if name in coding_workspace.TOOLS and self.workspace is None:
+            if name == "open_pr_workspace":
+                import coding_pr
+                expires = deadline if deadline is not None else self.clock() + 75
+                def check_open():
+                    if (self.cancelled and self.cancelled()) or self.clock() >= expires:
+                        raise CodingError("PR workspace opening stopped or timed out; the previous workspace was kept.")
+                check_open()
+                current = self.workspace
+                if current is not None and (current.staged or current.command_results or current.active_commands or current.checkpoint_id):
+                    raise CodingError("Open the PR in a fresh task; the current draft, checkpoint or command state must not be discarded.")
+                target = coding_pr.current_target(self.github, args.get("number"))
+                check_open()
+                opened = coding_workspace.Workspace(self.github)
+                opened.start(target["head_sha"])
+                check_open()
+                opened.pr_target = target
+                result = opened.run("workspace_status", {})
+                check_open()
+                self.workspace = opened
+                return result
+            if name == "list_workspaces":
+                import coding_checkpoints
+                return coding_checkpoints.list_owned(self.owner_id, self.github.repo)
+            if name == "restore_workspace":
+                import coding_checkpoints
+                if self.workspace is not None and (self.workspace.staged or self.workspace.command_results or self.workspace.active_commands):
+                    raise CodingError("Restore into a fresh task; the current draft/command exports must not be discarded.")
+                record = coding_checkpoints.load(self.owner_id, args.get("checkpoint_id"), self.github.repo)
+                restored = coding_workspace.Workspace.restore(self.github, record)
+                result = restored.run("workspace_status", {})
+                self.workspace = restored
+                return dict(result, restored=True, note="Original commit and draft restored. Reread changed files and scoped AGENTS.md; no command was replayed.")
+            if name in (*coding_workspace.TOOLS, "run_command", "checkpoint_workspace", "import_command_changes") and self.workspace is None:
                 self.workspace = coding_workspace.Workspace(self.github)
+            if name == "checkpoint_workspace":
+                return self.save_checkpoint({}, explicit=True)
+            if name == "import_command_changes":
+                return self.save_checkpoint(self.workspace.import_command(args.get("command_id")))
             if self.workspace is not None and name != "search_code":
-                return self.workspace.run(name, args)
+                result = self.workspace.run(name, args)
+                return self.save_checkpoint(result) if name == "edit_file" else result
             if name == "list_files":
                 if self.tree_cache is None:
                     self.tree_cache = self.github.tree()
@@ -506,6 +688,8 @@ class CodingSession:
 
 
 def finish(github, emit, args, request_text, flow=None):
+    if args.get("pr_target") is not None:
+        raise CodingError("Existing PR repairs require propose_pr_fix approval.")
     files = validate_changes(args.get("files") or [])
     title = " ".join(str(args.get("title") or "Dua Agent change").split())[:120]
     description = str(args.get("description") or "").strip()[:6000]

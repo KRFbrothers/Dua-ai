@@ -2,10 +2,12 @@
 
 Uses the existing allowlisted GitHub client and Python's difflib; no checkout,
 shell, repository code execution or additional agent framework. External writes
-still go through propose_changes and the owner's approval.
+still go through propose_changes/propose_pr_fix and the owner's approval.
 """
 import base64
 import difflib
+import hashlib
+import json
 import re
 import threading
 
@@ -22,18 +24,27 @@ class Workspace:
     def __init__(self, github):
         self.github = github
         self.base_sha = None
+        self.tree_sha, self.pr_target = None, None
         self.entries = {}
         self.originals = {}
         self.staged = {}
         self.instructions_seen = set()
         self.bytes_read = 0
         self.lock = threading.RLock()
+        self.checkpoint_id, self.checkpoint_revision = None, 0
+        self.saved_fingerprint = None
+        self.command_results = {}
+        self.active_commands = 0
 
-    def start(self):
+    def start(self, base_sha=None):
         if self.base_sha is not None:
+            if base_sha is not None and base_sha != self.base_sha:
+                raise coding.CodingError("Cannot change an active workspace base.")
             return
-        ref = self.github.request("GET", f"/repos/{self.github.repo}/git/ref/heads/{coding.BASE_BRANCH}")
-        sha = (ref.get("object") or {}).get("sha")
+        if base_sha is None:
+            ref = self.github.request("GET", f"/repos/{self.github.repo}/git/ref/heads/{coding.BASE_BRANCH}")
+            base_sha = (ref.get("object") or {}).get("sha")
+        sha = base_sha
         if not isinstance(sha, str) or not SHA.fullmatch(sha):
             raise coding.CodingError("GitHub did not return a valid workspace commit.")
         tree = self.github.request("GET", f"/repos/{self.github.repo}/git/trees/{sha}", query={"recursive": "1"})
@@ -44,6 +55,25 @@ class Workspace:
         if len(entries) > MAX_TREE_FILES:
             raise coding.CodingError("Repository exceeds the workspace file limit.")
         self.entries, self.base_sha = entries, sha
+        self.tree_sha = tree.get("sha")
+
+    def fingerprint(self):
+        return hashlib.sha256(json.dumps({"base_sha": self.base_sha, "staged": self.staged, "pr_target": self.pr_target},
+                                        sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+
+    @classmethod
+    def restore(cls, github, record):
+        workspace = cls(github)
+        workspace.start(record["base_sha"])
+        if record.get("pr_target") is not None:
+            import coding_pr
+            workspace.pr_target = coding_pr.clean_target(record["pr_target"], workspace.base_sha)
+        for item in record["files"]:
+            workspace.check_path(item["path"], write=True)
+            workspace.staged[item["path"]] = item["content"]
+        workspace.checkpoint_id, workspace.checkpoint_revision = record["id"], record["revision"]
+        workspace.saved_fingerprint = workspace.fingerprint()
+        return workspace
 
     def check_path(self, path, write=False):
         if not coding.valid_path(path, write=write):
@@ -100,13 +130,23 @@ class Workspace:
         return result
 
     def status(self, path=""):
+        import coding_terminal
+        import coding_checkpoints
         instructions = self.instructions(path)
         self.instructions_seen.update(item["path"] for item in instructions)
         return {"repository": self.github.repo, "base_sha": self.base_sha,
-                "instructions": instructions, "changed_files": sorted(self.staged),
+                "instructions": instructions, "changed_files": sorted(self.staged), "pr_target": self.pr_target,
                 "files_read": len(self.originals), "bytes_read": self.bytes_read,
-                "storage": "request_memory", "execution": "not_available",
-                "note": "Edits are local drafts. No branch, commit or PR exists until the owner approves a proposal."}
+                "running_commands": self.active_commands,
+                "storage": "private_sql_checkpoint" if self.checkpoint_id else "request_memory",
+                "checkpoint": {"configured": coding_checkpoints.enabled(), "id": self.checkpoint_id, "revision": self.checkpoint_revision,
+                               "saved": self.saved_fingerprint == self.fingerprint()},
+                "command_changes": [{"command_id": key, "paths": [f["path"] for f in value["files"]],
+                                     "current": value["fingerprint"] == self.fingerprint(), "imported": value["imported"],
+                                     "profile": value.get("profile", "python"), "image_digest": value.get("image_digest")}
+                                    for key, value in self.command_results.items()],
+                "execution": coding_terminal.status(),
+                "note": "Drafts only; opening a PR workspace does not update its branch. GitHub changes need a separate approval. Unsaved drafts and command exports are request-local."}
 
     def read(self, path):
         instructions = self.instructions(path)
@@ -146,12 +186,14 @@ class Workspace:
         coding.validate_changes([{"path": p, "content": c} for p, c in candidate.items()])
         self.staged = candidate
         return {"path": path, "staged": path in self.staged, "changed_files": sorted(self.staged),
-                "note": "Draft updated in this request only; nothing was written to GitHub."}
+                "note": "Draft updated; nothing was written to GitHub. Persistence is reported separately."}
 
-    def diff(self):
+    def diff(self, files=None):
+        # Explicit files are an immutable proposal, never the current mutable draft.
+        staged = self.staged if files is None else {f["path"]: f["content"] for f in files}
         chunks, remaining = [], MAX_DIFF_CHARS
         truncated = False
-        for path, content in sorted(self.staged.items()):
+        for path, content in sorted(staged.items()):
             original = self.original(path)
             lines = difflib.unified_diff((original or "").splitlines(keepends=True), content.splitlines(keepends=True),
                                          fromfile="a/" + path if original is not None else "/dev/null", tofile="b/" + path)
@@ -169,12 +211,40 @@ class Workspace:
                 remaining -= len(line)
             if truncated:
                 break
-        return {"base_sha": self.base_sha, "paths": sorted(self.staged),
-                "diff": "".join(chunks), "truncated": truncated}
+        return {"base_sha": self.base_sha, "paths": sorted(staged),
+                "diff": "".join(chunks), "truncated": truncated, "draft_fingerprint": self.fingerprint()}
 
-    def proposal(self, args):
+    def import_command(self, command_id):
+        with self.lock:
+            result = self.command_results.get(command_id) if isinstance(command_id, str) else None
+            if result is None or result["imported"]:
+                raise coding.CodingError("Command exports are unavailable or already imported in this task.")
+            if result["fingerprint"] != self.fingerprint():
+                raise coding.CodingError("Draft changed after this command ran. Rerun it before importing; no changes were applied.")
+            candidate = dict(self.staged)
+            for item in result["files"]:
+                path, content = item["path"], item["content"]
+                self.check_path(path, write=True)
+                if any(p not in self.instructions_seen for p in self.instruction_paths(path)):
+                    raise coding.CodingError("Read scoped AGENTS.md before importing this path.")
+                original = self.original(path)
+                if content == original:
+                    candidate.pop(path, None)
+                else:
+                    candidate[path] = content
+            coding.validate_changes([{"path": p, "content": c} for p, c in candidate.items()])
+            self.staged = candidate
+            result["imported"] = True
+            return {"imported": [f["path"] for f in result["files"]], "changed_files": sorted(self.staged),
+                    "note": "Command text copied into the draft. Review workspace_diff before proposing a PR."}
+
+    def proposal(self, args, repair=False):
         with self.lock:
             self.start()
+            if self.pr_target is not None and not repair:
+                raise coding.CodingError("This is an existing PR workspace. Use propose_pr_fix for a separate owner-approved fix.")
+            if repair and (self.pr_target is None or not self.staged):
+                raise coding.CodingError("Open a PR workspace and stage its fix before proposing a repair.")
             result = dict(args)
             files = args.get("files")
             if self.staged:
@@ -189,6 +259,8 @@ class Workspace:
                 if any(p not in self.instructions_seen for p in self.instruction_paths(item["path"])):
                     raise coding.CodingError("Read scoped AGENTS.md before proposing changes to this file.")
             result.update(files=files, base_sha=self.base_sha, repository=self.github.repo)
+            if repair:
+                result["pr_target"] = dict(self.pr_target)
             return result
 
     def run(self, name, args):

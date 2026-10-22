@@ -82,7 +82,7 @@ def engine():
 
 
 def tables():
-    from sqlalchemy import MetaData, Table, Column, String, Float, JSON
+    from sqlalchemy import MetaData, Table, Column, String, Float, JSON, Integer, Index
     metadata = MetaData()
     table = Table('dua_agent_approvals', metadata,
                   Column('id', String(64), primary_key=True), Column('owner', String(128), nullable=False),
@@ -93,6 +93,12 @@ def tables():
     Table('dua_agent_leases', metadata, Column('id',String(36),primary_key=True),
           Column('owner',String(128),primary_key=True),Column('holder',String(36),nullable=False),
           Column('expires',Float,nullable=False))
+    workspaces = Table('dua_coding_workspaces', metadata,
+        Column('id', String(32), primary_key=True), Column('owner', String(128), nullable=False),
+        Column('repository', String(160), nullable=False), Column('base_sha', String(40), nullable=False),
+        Column('revision', Integer, nullable=False), Column('updated', Float, nullable=False),
+        Column('expires', Float, nullable=False), Column('payload', JSON, nullable=False))
+    Index('ix_dua_coding_workspaces_owner_updated', workspaces.c.owner, workspaces.c.updated)
     return metadata, table
 
 
@@ -108,6 +114,13 @@ def initialize():
                     raise ValueError('An administrator must create the private dua_adk schema before init-db')
                 con.execute(text('REVOKE ALL ON SCHEMA dua_adk FROM PUBLIC'))
         metadata.create_all(db)
+        if db.url.get_backend_name() == 'postgresql':
+            from sqlalchemy import text
+            with db.begin() as con:
+                con.execute(text('REVOKE ALL ON TABLE dua_coding_workspaces FROM PUBLIC'))
+                # Runtime uses the dedicated table-owner role; all application
+                # access is additionally owner-scoped. No API-role policies.
+                con.execute(text('ALTER TABLE dua_coding_workspaces ENABLE ROW LEVEL SECURITY'))
     finally:
         db.dispose()
 

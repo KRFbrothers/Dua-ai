@@ -38,6 +38,8 @@ data class ChatMessage(
     val progress: List<AgentStep> = emptyList(),
     /** In memory only: Agent write actions waiting for Approve / Reject (the outcome is also added to [text]). */
     val approvals: List<AgentApproval> = emptyList(),
+    /** Request-only terminal/diff UI; excluded from history, cloud sync and backups. */
+    val coding: AgentCoding? = null,
 ) {
     /** An Imagine reply (generated images or video, finished or not). */
     val isImagine: Boolean get() = !isUser && (imagine != null || media.isNotEmpty())
