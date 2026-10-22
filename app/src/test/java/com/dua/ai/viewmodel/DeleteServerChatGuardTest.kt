@@ -17,12 +17,15 @@ import com.dua.ai.settings.DevicePreferences
 import com.dua.ai.settings.LocalPreferences
 import com.dua.ai.setup.IntegrationState
 import java.io.IOException
+import java.util.concurrent.AbstractExecutorService
+import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.runBlocking
 import okhttp3.OkHttpClient
+import okhttp3.Dispatcher
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -52,7 +55,8 @@ import org.robolectric.annotation.LooperMode
  *
  * Determinism contract (same as [DeleteChatTest] / [DeleteChatCleanupTest] / [DeleteChatCleanupTest]):
  * **nothing in a test body waits.** No wall-clock pause, no latch, no interceptor that blocks, and the
- * paused looper is never pumped inside a test. Every assertion reads state that the call under test
+ * paused looper is never pumped inside a test. Account HTTP tasks are queued until teardown,
+ * so a fast offline response cannot race the accepted-delete assertions. Every assertion reads state that the call under test
  * sets *synchronously, before it touches the network* — the refusal writes `_chatDeletion.error` and
  * returns, and the accepted path writes `_chatDeletion.busy` + `_dataBusy` before `viewModelScope`
  * launches. The account stack is deliberately offline: it fails with a plain `IOException`, so a
@@ -69,6 +73,7 @@ class DeleteServerChatGuardTest {
     private lateinit var application: Application
     private lateinit var model: ChatViewModel
     private lateinit var accountClient: OkHttpClient
+    private val accountWork = DeferredAccountWork()
     private val store = ViewModelStore()
 
     private val owner = "11111111-1111-4111-8111-111111111111"
@@ -125,6 +130,9 @@ class DeleteServerChatGuardTest {
     @After fun teardown() {
         runCatching { (field("replyJob").get(model) as? Job)?.cancel() }
         runCatching { model.viewModelScope.cancel() }
+        // Run only after cancellation: release OkHttp's bookkeeping without a
+        // background response racing the assertions or leaving suspended calls.
+        accountWork.drain()
         runCatching { repeat(25) { shadowOf(Looper.getMainLooper()).idleFor(5, TimeUnit.MILLISECONDS) } }
         closeHttp(accountClient)
     }
@@ -144,9 +152,33 @@ class DeleteServerChatGuardTest {
      * `deleteServerChat` catches as an ordinary `Exception`. If a guard ever lets a delete through,
      * the deletion is observably *accepted* (busy flag set) rather than quietly succeeding.
      */
-    private fun offlineAccount() = OkHttpClient.Builder().addInterceptor { _ ->
+    private fun offlineAccount() = OkHttpClient.Builder().dispatcher(Dispatcher(accountWork)).addInterceptor { _ ->
         throw IOException("account backend is offline in this test")
     }.build()
+
+    /** No threads or waits: accepted requests stay pending until teardown. */
+    private class DeferredAccountWork : AbstractExecutorService() {
+        private val tasks = ArrayDeque<Runnable>()
+        private var stopped = false
+        override fun execute(command: Runnable) = synchronized(this) {
+            if (stopped) throw RejectedExecutionException("Test executor stopped")
+            tasks.addLast(command)
+        }
+        fun drain() {
+            while (true) {
+                val task = synchronized(this) { tasks.removeFirstOrNull() } ?: return
+                task.run()
+            }
+        }
+        override fun shutdown() = synchronized(this) { stopped = true }
+        override fun shutdownNow(): MutableList<Runnable> = synchronized(this) {
+            stopped = true
+            tasks.toMutableList().also { tasks.clear() }
+        }
+        override fun isShutdown() = synchronized(this) { stopped }
+        override fun isTerminated() = synchronized(this) { stopped && tasks.isEmpty() }
+        override fun awaitTermination(timeout: Long, unit: TimeUnit) = isTerminated
+    }
 
     /** Writes both chats through the real save path, so "untouched" can be checked byte for byte. */
     private fun seed() {

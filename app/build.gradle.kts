@@ -186,6 +186,9 @@ baselineProfile {
 //   ./gradlew :app:recordRoborazziDebug -Pdua.screenshots
 val screenshotTestsEnabled = providers.gradleProperty("dua.screenshots").isPresent
 tasks.withType<Test>().configureEach {
+    // Robolectric resolves its Android runtime separately from Gradle's
+    // repositories. Use Maven Central's canonical endpoint for that resolver too.
+    systemProperty("robolectric.dependency.repo.url", "https://repo.maven.apache.org/maven2")
     if (!screenshotTestsEnabled) exclude("**/screenshots/**")
     if (providers.gradleProperty("dua.ui-record").isPresent) systemProperty("roborazzi.test.record", "true")
 }
