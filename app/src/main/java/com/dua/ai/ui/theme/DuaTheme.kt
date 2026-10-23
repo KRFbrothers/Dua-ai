@@ -83,27 +83,3 @@ data class DuaSemanticColors(
     val bg: Color, val surface: Color, val border: Color, val primary: Color,
     val highlight: Color, val text: Color, val muted: Color, val danger: Color,
 )
-
-/**
- * Fixed (theme-independent) colours that were previously hardcoded hex in screens.
- * Same value in light and dark, exactly as before.
- */
-internal object DuaFixedColors {
-    // Supplied (Gemini-style) chat surface.
-    val SuppliedBg = Color(0xFF131314)
-    val SuppliedSurface = Color(0xFF1E1F20)
-    val SuppliedBubble = Color(0xFF282A2C)
-    val SuppliedText = Color(0xFFE3E3E3)
-    val SuppliedPrimary = Color(0xFFA8C7FA)
-    val SuppliedOnPrimary = Color(0xFF062E6F)
-    val SuppliedGlowBlue = Color(0xFF4285F4)
-    val SuppliedGlowPurple = Color(0xFF9B72CB)
-    val SuppliedGlowRose = Color(0xFFD96570)
-    // Swipe-to-delete action.
-    val SwipeDanger = Color(0xFFDD4B39)
-    // Composer aurora ring.
-    val AuroraBlue = Color(0xFF3B82F6)
-    val AuroraViolet = Color(0xFF8B5CF6)
-    val AuroraPink = Color(0xFFEC4899)
-    val AuroraOrange = Color(0xFFF97316)
-}

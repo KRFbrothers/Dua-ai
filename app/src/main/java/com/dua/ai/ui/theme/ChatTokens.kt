@@ -9,11 +9,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-/**
- * In-chat conversation tokens copied from the code of Fareed's "Dua AI Dabba" reference shell
- * (DuaApp.kt HomeScreen, the `messages.isNotEmpty()` branch). Top bar and composer reuse [HomeTheme].
- * Light values are the reference's exact colours; dark values are the matching Tailwind-gray steps inverted.
- */
+/** Conversation surfaces use the shared semantic palette in Color.kt. */
 @Immutable
 data class ChatColors(
     val background: Color,
@@ -28,31 +24,9 @@ data class ChatColors(
     val errorFill: Color, val onErrorFill: Color, val errorIcon: Color,
 )
 
-val ChatLightColors = ChatColors(
-    background = Color(0xFFFFFFFF),
-    userBubble = Color(0xFFF3F4F6), onUserBubble = Color(0xFF111827),
-    assistantBubble = Color.Transparent, assistantText = Color(0xFF111827),
-    chipFill = Color(0xFFF3F4F6), chipBorder = Color(0xFFE5E7EB), chipText = Color(0xFF374151), chipIcon = Color(0xFF6B7280),
-    text = Color(0xFF111827), mutedText = Color(0xFF6B7280),
-    cardFill = Color(0xFFF9FAFB), divider = Color(0xFFE5E7EB),
-    mediaFill = Color(0xFFF3F4F6), shimmer = Color(0xFFE5E7EB),
-    // Same purple as Sheet/Page/Home/Drawer tokens (#8B5CF6), not a chat-only copy.
-    accent = PageLightColors.accent, accentSoft = PageLightColors.accentContainer, onAccentSoft = PageLightColors.onAccentContainer,
-    errorFill = Color(0xFFFEF2F2), onErrorFill = Color(0xFF991B1B), errorIcon = Color(0xFFDC2626),
-)
+val ChatLightColors = chatColors(DuaLightColorScheme, DuaLightColors)
 
-val ChatDarkColors = ChatColors(
-    background = DuaPalette.Neutral4,
-    userBubble = Color(0xFF1F2937), onUserBubble = Color(0xFFF9FAFB),
-    assistantBubble = Color.Transparent, assistantText = Color(0xFFF9FAFB),
-    chipFill = Color(0xFF1F2937), chipBorder = Color(0xFF374151), chipText = Color(0xFFD1D5DB), chipIcon = Color(0xFF9CA3AF),
-    text = Color(0xFFF9FAFB), mutedText = Color(0xFF9CA3AF),
-    cardFill = Color(0xFF111827), divider = Color(0xFF374151),
-    mediaFill = Color(0xFF1F2937), shimmer = Color(0xFF374151),
-    // Same purple as Sheet/Page/Home/Drawer tokens (#8B5CF6), not a chat-only copy.
-    accent = PageDarkColors.accent, accentSoft = PageDarkColors.accentContainer, onAccentSoft = PageDarkColors.onAccentContainer,
-    errorFill = Color(0xFF450A0A), onErrorFill = Color(0xFFFECACA), errorIcon = Color(0xFFF87171),
-)
+val ChatDarkColors = chatColors(DuaDarkColorScheme, DuaDarkColors)
 
 object ChatTheme {
     val colors: ChatColors
@@ -68,9 +42,9 @@ object ChatSizes {
     /** Shared pulse timing for the active Agent step. */
     const val placeholderPulseMs = 900
     val listPaddingH = 16.dp
-    val listPaddingTop = 20.dp
+    val listPaddingTop = Spacing.xxl
     val listPaddingBottom = 12.dp
-    val messageSpacing = 14.dp
+    val messageSpacing = Spacing.xl
     /** Between consecutive messages from the same author (Jetchat-style grouping). */
     val groupedMessageSpacing = 6.dp
     val bubblePaddingH = 16.dp
@@ -99,4 +73,3 @@ object ChatShapes {
 }
 
 /** Reference message text: 16 sp. Line height 24 sp keeps multi-line markdown readable. */
-val ChatMessageStyle = TextStyle(fontFamily = InterFont, fontSize = 16.sp, lineHeight = 24.sp)

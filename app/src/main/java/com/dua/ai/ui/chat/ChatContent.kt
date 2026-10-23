@@ -9,6 +9,8 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.border
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -125,8 +127,9 @@ private fun TaskStarters(onTask: (String) -> Unit, modifier: Modifier = Modifier
             Row(Modifier.fillMaxWidth().heightIn(min = Sizes.touchTarget)
                 .clip(HomeShapes.promptRow)
                 .background(c.promptRow)
+                .border(HomeSizes.barBorder, MaterialTheme.colorScheme.outlineVariant.copy(alpha = .35f), HomeShapes.promptRow)
                 .clickable(enabled = visible, role = Role.Button) { haptic(ChatHaptic.Tap); onTask(prompt) }
-                .padding(horizontal = HomeSizes.promptRowPaddingH),
+                .padding(horizontal = HomeSizes.promptRowPaddingH, vertical = Spacing.md),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(HomeSizes.promptGap)) {
                 Icon(ImageVector.vectorResource(icons[i]), null, tint = c.promptIcon, modifier = Modifier.size(HomeSizes.promptIcon))

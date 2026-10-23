@@ -29,14 +29,12 @@ package com.dua.ai.ui.chat
 import android.content.Context
 import android.os.PowerManager
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -50,6 +48,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.SuggestionChipDefaults
 import androidx.compose.material3.Text
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -65,6 +64,9 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.currentStateAsState
 import com.dua.ai.ui.components.infinitelyAnimatingLinearGradient
 import com.dua.ai.ui.theme.DuaFixedColors
+import com.dua.ai.ui.theme.DuaMotion
+import com.dua.ai.ui.theme.DuaShape
+import com.dua.ai.ui.theme.Sizes
 import com.dua.ai.ui.theme.HomeTheme
 import com.dua.ai.ui.theme.Spacing
 import com.dua.ai.ui.theme.rememberMotionAllowed
@@ -81,7 +83,7 @@ object ComposerGlass {
     val Elevation = 6.dp
     val PaddingV = 10.dp
     val MarginH = 20.dp
-    val Shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp)
+    val Shape = DuaShape.composer
 }
 
 /** Jetchat: brief scale pop when the field gains focus, spring back when it settles. Instant when motion is off. */
@@ -93,10 +95,10 @@ internal fun Modifier.composerFocusPop(focused: Boolean, enabled: Boolean): Modi
     LaunchedEffect(focused, motion) {
         if (!motion) { focusScale.snapTo(1f); return@LaunchedEffect }
         if (focused) {
-            focusScale.animateTo(ComposerGlass.FOCUS_POP, tween(durationMillis = 120, easing = FastOutSlowInEasing))
-            focusScale.animateTo(1f, spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow))
+            focusScale.animateTo(ComposerGlass.FOCUS_POP, DuaMotion.fast())
+            focusScale.animateTo(1f, DuaMotion.gentle())
         } else if (focusScale.value != 1f) {
-            focusScale.animateTo(1f, spring(stiffness = Spring.StiffnessMedium))
+            focusScale.animateTo(1f, DuaMotion.fast())
         }
     }
     return graphicsLayer { scaleX = focusScale.value; scaleY = focusScale.value }
@@ -126,6 +128,7 @@ internal fun Modifier.composerAurora(enabled: Boolean): Modifier {
 }
 
 /** One prompt chip: label plus its Material Symbols icon. */
+@Immutable
 data class ComposerSuggestion(val text: String, val icon: androidx.compose.ui.graphics.vector.ImageVector)
 
 /** Dua glue: soft tint per chip, derived from the current theme palette (never new brand colours). */
@@ -147,7 +150,8 @@ internal fun ComposerSuggestionChips(suggestions: List<ComposerSuggestion>, onPi
         suggestions.forEachIndexed { index, item ->
             SuggestionChip(onClick = { onPick(item.text) }, label = { Text(item.text, maxLines = 1) },
                 icon = { androidx.compose.material3.Icon(item.icon, null, tint = c.barIcon, modifier = Modifier.size(SuggestionChipDefaults.IconSize)) },
-                shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+                modifier = Modifier.heightIn(min = Sizes.touchTarget),
+                shape = DuaShape.card,
                 colors = SuggestionChipDefaults.suggestionChipColors(containerColor = suggestionTint(index), labelColor = c.input),
                 border = SuggestionChipDefaults.suggestionChipBorder(enabled = true, borderColor = c.barBorder))
         }

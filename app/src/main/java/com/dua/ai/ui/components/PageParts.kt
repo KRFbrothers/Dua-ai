@@ -4,6 +4,9 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.material3.MaterialTheme
+import com.dua.ai.ui.theme.DuaShape
+import androidx.compose.ui.unit.dp
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -34,7 +37,8 @@ import com.dua.ai.ui.theme.SettingsSizes
 @Composable
 fun PageCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
     val p = PageTheme.colors
-    Surface(shape = SettingsShapes.card, color = p.card, contentColor = p.text, border = BorderStroke(SettingsSizes.border, p.cardBorder),
+    Surface(shape = DuaShape.card, color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = .94f), contentColor = p.text,
+        shadowElevation = 6.dp, border = BorderStroke(SettingsSizes.border, MaterialTheme.colorScheme.outlineVariant.copy(alpha = .35f)),
         modifier = modifier.fillMaxWidth()) { Column(content = content) }
 }
 

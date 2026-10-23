@@ -11,12 +11,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-/**
- * Bottom-sheet and dialog tokens. The "Dua AI Dabba" reference (DuaApp.kt) has no sheet or dialog designs,
- * so these are DERIVED from its palette: white surface, #F3F4F6 fills, #111827 text, #E5E7EB dividers,
- * #8B5CF6 purple accent, Inter 16 sp semibold rows with 22 dp icons (the drawer menu row).
- * Dark values are the matching Tailwind-gray steps inverted, same as DrawerTokens.
- */
+/** Sheet and dialog roles share the semantic palette in Color.kt. */
 @Immutable
 data class SheetColors(
     val container: Color, val handle: Color, val title: Color, val text: Color, val subText: Color, val icon: Color,
@@ -24,19 +19,9 @@ data class SheetColors(
     val switchTrackOff: Color, val switchThumbOff: Color, val destructive: Color, val scrim: Color,
 )
 
-val SheetLightColors = SheetColors(
-    container = Color(0xFFFFFFFF), handle = Color(0xFFD1D5DB), title = Color(0xFF111827), text = Color(0xFF111827),
-    subText = Color(0xFF6B7280), icon = Color(0xFF111827), fill = Color(0xFFF3F4F6), selectedFill = Color(0xFFEDE9FE),
-    divider = Color(0xFFE5E7EB), accent = Color(0xFF8B5CF6), onAccent = Color(0xFFFFFFFF),
-    switchTrackOff = Color(0xFFE5E7EB), switchThumbOff = Color(0xFFFFFFFF), destructive = Color(0xFFDC2626), scrim = Color(0x66000000),
-)
+val SheetLightColors = sheetColors(DuaLightColorScheme, DuaLightColors)
 
-val SheetDarkColors = SheetColors(
-    container = Color(0xFF111827), handle = Color(0xFF4B5563), title = Color(0xFFF9FAFB), text = Color(0xFFF9FAFB),
-    subText = Color(0xFF9CA3AF), icon = Color(0xFFF9FAFB), fill = Color(0xFF1F2937), selectedFill = Color(0xFF2E1065),
-    divider = Color(0xFF374151), accent = Color(0xFF8B5CF6), onAccent = Color(0xFFFFFFFF),
-    switchTrackOff = Color(0xFF374151), switchThumbOff = Color(0xFF9CA3AF), destructive = Color(0xFFF87171), scrim = Color(0x99000000),
-)
+val SheetDarkColors = sheetColors(DuaDarkColorScheme, DuaDarkColors)
 
 object SheetTheme {
     val colors: SheetColors

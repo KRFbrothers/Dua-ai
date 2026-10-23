@@ -76,8 +76,8 @@ fun duaTypography(family: FontFamily = InterFont): Typography {
         titleLarge = TextStyle(fontFamily = family, fontWeight = FontWeight.SemiBold, fontSize = 20.sp),
         titleMedium = TextStyle(fontFamily = family, fontWeight = FontWeight.SemiBold, fontSize = 17.sp),
         titleSmall = TextStyle(fontFamily = family, fontWeight = FontWeight.Medium, fontSize = 15.sp),
-        bodyLarge = TextStyle(fontFamily = family, fontWeight = FontWeight.Normal, fontSize = 16.sp),
-        bodyMedium = TextStyle(fontFamily = family, fontWeight = FontWeight.Normal, fontSize = 14.sp),
+        bodyLarge = TextStyle(fontFamily = family, fontWeight = FontWeight.Normal, fontSize = 16.sp, lineHeight = 24.sp),
+        bodyMedium = TextStyle(fontFamily = family, fontWeight = FontWeight.Normal, fontSize = 14.sp, lineHeight = 21.sp),
         bodySmall = TextStyle(fontFamily = family, fontWeight = FontWeight.Normal, fontSize = 12.sp),
         labelLarge = TextStyle(fontFamily = family, fontWeight = FontWeight.SemiBold, fontSize = 14.sp),
         labelMedium = TextStyle(fontFamily = family, fontWeight = FontWeight.Medium, fontSize = 12.sp),
@@ -100,18 +100,18 @@ val VoicePermissionHeadingStyle = VoiceGreetingStyle.copy(fontSize = 22.sp, line
 /** Quick prompt rows on Home ("Create an image…"), Dabba bodyLarge. */
 val HomePromptStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Normal, fontSize = 16.sp)
 /** Primary brand in the Home header. */
-val HomeHeaderStyle = TextStyle(fontFamily = HomeFontFamily, fontWeight = FontWeight.Medium, fontSize = 19.sp, lineHeight = 26.sp)
+val HomeHeaderStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.SemiBold, fontSize = 20.sp, lineHeight = 28.sp)
 /** Smaller model choice, visually separate from the Dua AI brand. */
 val HomeHeaderModelStyle = HomeHeaderStyle.copy(fontSize = 14.sp, lineHeight = 20.sp)
 /** Home uses Google Sans; other screens retain their existing font preference. */
-val HomeTaskPromptStyle = HomePromptStyle.copy(fontFamily = HomeFontFamily)
+val HomeTaskPromptStyle = HomePromptStyle.copy(lineHeight = 24.sp)
 /** Composer input and its "Ask Dua AI" placeholder. */
 val ComposerTextStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Normal, fontSize = 16.sp, lineHeight = 22.sp)
 /** Dynamic chat composer, independent of other existing input styles. */
 val ComposerInputStyle = ComposerTextStyle.copy(fontSize = 18.sp, lineHeight = 26.sp)
 /** assistant_robin_input_oneline explicitly declares an 18 sp input. */
-val HomeComposerInputStyle = ComposerInputStyle.copy(fontFamily = HomeFontFamily)
-val ComposerModeStyle = TextStyle(fontFamily = HomeFontFamily, fontWeight = FontWeight.Medium, fontSize = 14.sp)
+val HomeComposerInputStyle = ComposerTextStyle.copy(lineHeight = 24.sp)
+val ComposerModeStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Medium, fontSize = 14.sp)
 /** Labels on the three Home action buttons. */
 val HomeActionLabelStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Medium, fontSize = 14.sp)
 
@@ -137,3 +137,14 @@ internal val ProjectTabStyle = TextStyle(fontSize = 15.sp, lineHeight = 21.sp, f
 internal val ProjectTabSelectedStyle = TextStyle(fontSize = 15.sp, lineHeight = 21.sp, fontWeight = FontWeight.SemiBold)
 internal val ProjectInputStyle = TextStyle(fontSize = 18.sp, lineHeight = 26.sp, fontWeight = FontWeight.Normal)
 internal val ProjectEmptyTitleStyle = TextStyle(fontSize = 17.sp, lineHeight = 24.sp, fontWeight = FontWeight.Medium)
+
+/** Alternate chat uses the same accessible type scale as the primary conversation. */
+val ChatWelcomeStyle = TextStyle(fontFamily = InterFont, fontSize = 16.sp, lineHeight = 26.sp)
+
+val DrawerTitleStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Medium, fontSize = 22.sp)
+val DrawerMenuStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Normal, fontSize = 17.sp)
+val DrawerChatStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Normal, fontSize = 16.sp)
+
+val HomeModelLabelStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Medium, fontSize = 12.sp)
+
+val ChatMessageStyle = TextStyle(fontFamily = InterFont, fontSize = 16.sp, lineHeight = 26.sp)

@@ -1,5 +1,8 @@
 package com.dua.ai.ui.chat
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.border
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.heightIn
@@ -39,7 +42,8 @@ import com.dua.ai.ui.theme.SheetTitleStyle
 fun DuaSheet(onDismiss: () -> Unit, sheetState: SheetState = rememberModalBottomSheetState(), content: @Composable ColumnScope.() -> Unit) {
     val colors = SheetTheme.colors
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState, containerColor = colors.container, contentColor = colors.text,
-        shape = SheetShapes.sheet, scrimColor = colors.scrim, dragHandle = {
+        modifier = Modifier.border(SheetSizes.dividerThickness, MaterialTheme.colorScheme.outlineVariant.copy(alpha = .35f), SheetShapes.sheet),
+        tonalElevation = 6.dp, shape = SheetShapes.sheet, scrimColor = colors.scrim, dragHandle = {
             Box(Modifier.padding(vertical = SheetSizes.handlePadding).size(SheetSizes.handleWidth, SheetSizes.handleHeight)
                 .background(colors.handle, SheetShapes.handle))
         }) { com.dua.ai.ui.theme.DuaPageTheme { Column(content = content) } }
@@ -54,7 +58,8 @@ fun SheetTitle(text: String, modifier: Modifier = Modifier) {
 /** Gray #F3F4F6 rounded group, rows separated by E5E7EB dividers indented past the icon. */
 @Composable
 fun SheetGroup(content: @Composable ColumnScope.() -> Unit) {
-    Surface(shape = SheetShapes.group, color = SheetTheme.colors.fill, contentColor = SheetTheme.colors.text) {
+    Surface(shape = SheetShapes.group, color = SheetTheme.colors.fill, contentColor = SheetTheme.colors.text,
+        border = BorderStroke(SheetSizes.dividerThickness, MaterialTheme.colorScheme.outlineVariant.copy(alpha = .35f))) {
         Column(Modifier.fillMaxWidth(), content = content)
     }
 }

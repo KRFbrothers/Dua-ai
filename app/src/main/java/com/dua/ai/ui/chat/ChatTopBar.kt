@@ -11,6 +11,9 @@ import androidx.compose.material.icons.outlined.DragHandle
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.runtime.remember
+import com.dua.ai.ui.components.pressFeedback
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
@@ -99,13 +102,14 @@ private fun HeaderLabels(name: String, onModel: () -> Unit, modifier: Modifier =
 private fun HeaderButton(icon: ImageVector, description: String, onClick: () -> Unit, enabled: Boolean = true,
     onLongPress: (() -> Unit)? = null, iconSize: Dp = Sizes.icon) {
     val c = HomeTheme.colors
+    val interaction = remember { MutableInteractionSource() }
     val body: @Composable () -> Unit = {
-        Icon(icon, contentDescription = null, tint = c.roundButtonIcon, modifier = Modifier.size(iconSize))
+        Icon(icon, contentDescription = null, tint = c.roundButtonIcon, modifier = Modifier.size(iconSize).pressFeedback(interaction))
     }
-    if (onLongPress == null) IconButton(onClick = onClick, enabled = enabled,
+    if (onLongPress == null) IconButton(onClick = onClick, enabled = enabled, interactionSource = interaction,
         modifier = Modifier.size(Sizes.touchTarget).semantics { contentDescription = description }) { body() }
     else Box(Modifier.size(Sizes.touchTarget)
-        .combinedClickable(enabled = enabled, role = Role.Button, onClick = onClick,
+        .combinedClickable(interactionSource = interaction, indication = androidx.compose.foundation.LocalIndication.current, enabled = enabled, role = Role.Button, onClick = onClick,
             onLongClickLabel = "Find in chat", onLongClick = onLongPress)
         .semantics { contentDescription = description }, contentAlignment = Alignment.Center) { body() }
 }

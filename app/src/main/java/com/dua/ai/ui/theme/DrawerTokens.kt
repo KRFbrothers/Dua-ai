@@ -24,19 +24,9 @@ data class DrawerColors(
     val gradientTop: Color, val searchShadow: Color, val avatarRing: Color,
 )
 
-val DrawerLightColors = DrawerColors(
-    container = Color(0xFFFFFFFF), title = Color(0xFF111827), searchCircle = Color(0xFFFFFFFF), searchIcon = Color(0xFF1F2937),
-    menuText = Color(0xFF111827), chevron = Color(0xFF6B7280), divider = Color(0xFFE5E7EB), chatText = Color(0xFF1F2937), subText = Color(0xFF6B7280),
-    newChat = Color(0xFF8B5CF6), onNewChat = Color(0xFFFFFFFF), avatar = Color(0xFFFDE68A), onAvatar = Color(0xFF1F2937),
-    gradientTop = Color(0xFFF1F1F3), searchShadow = Color(0x33000000), avatarRing = Color(0xFFFFFFFF),
-)
+val DrawerLightColors = drawerColors(DuaLightColorScheme, DuaLightColors)
 
-val DrawerDarkColors = DrawerColors(
-    container = Color(0xFF111827), title = Color(0xFFF9FAFB), searchCircle = Color(0xFF273244), searchIcon = Color(0xFFE5E7EB),
-    menuText = Color(0xFFF9FAFB), chevron = Color(0xFF9CA3AF), divider = Color(0xFF374151), chatText = Color(0xFFE5E7EB), subText = Color(0xFF9CA3AF),
-    newChat = Color(0xFF8B5CF6), onNewChat = Color(0xFFFFFFFF), avatar = Color(0xFFFDE68A), onAvatar = Color(0xFF1F2937),
-    gradientTop = Color(0xFF1F2937), searchShadow = Color(0x66000000), avatarRing = Color(0xFF273244),
-)
+val DrawerDarkColors = drawerColors(DuaDarkColorScheme, DuaDarkColors)
 
 object DrawerTheme {
     val colors: DrawerColors
@@ -77,7 +67,3 @@ object DrawerShapes {
     val circle = CircleShape
     val row = RoundedCornerShape(12.dp)
 }
-
-val DrawerTitleStyle = TextStyle(fontFamily = HomeFontFamily, fontWeight = FontWeight.Medium, fontSize = 22.sp)
-val DrawerMenuStyle = TextStyle(fontFamily = HomeFontFamily, fontWeight = FontWeight.Normal, fontSize = 17.sp)
-val DrawerChatStyle = TextStyle(fontFamily = HomeFontFamily, fontWeight = FontWeight.Normal, fontSize = 16.sp)
