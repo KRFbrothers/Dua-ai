@@ -113,3 +113,20 @@ test('web chat forwards a combined abort signal with the chat deadline to the en
  controller.abort();
  assert.equal(seen.aborted,true);
 });
+
+test('web chat forwards the refreshed access token after the guard renews the session',async()=>{
+ const refreshed=Response.json({access_token:'new-access',refresh_token:'new-refresh',expires_in:3600,user:{id:'11111111-1111-4111-8111-111111111111',email:'owner@example.com'}});
+ const fetcher=mockFetch(Response.json({error:'expired'},{status:401}),refreshed,Response.json({allowed:true,used:1,resetAt:Math.floor(Date.now()/1000)+3600}),sseResponse([sse({type:'done'},'done')]));
+ const response=await run(req(),fetcher,quotaEnv);
+ assert.equal(response.status,200);await response.text();
+ assert.ok(response.headers.getSetCookie().some(c=>c.startsWith('dua_access=new-access')));
+ const engine=fetcher.calls.find(c=>c.url==='https://engine.test/api/chat');
+ assert.equal(engine.init.headers.Authorization,'Bearer new-access');
+});
+
+test('web chat keeps the original access token when the guard does not refresh',async()=>{
+ const fetcher=mockFetch(user(),Response.json({allowed:true,used:1,resetAt:Math.floor(Date.now()/1000)+3600}),sseResponse([sse({type:'done'},'done')]));
+ const response=await run(req(),fetcher,quotaEnv);
+ assert.equal(response.status,200);await response.text();
+ assert.equal(fetcher.calls[2].init.headers.Authorization,'Bearer fake-access');
+});

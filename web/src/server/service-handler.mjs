@@ -94,10 +94,13 @@ export async function handleWebChat(request,{env=process.env,fetcher=fetch}={}){
  // Same login/owner/daily-quota policy as /api/chat (shared Supabase counter), only after input is valid.
  const access=await guardChatAccess(request,{env,fetcher});
  if(!access.allowed)return access.response;
+ // A refreshed session returns a new access cookie; forward that token, not the expired one.
+ let bearer=token;
+ for(const c of new Headers(access.headers||undefined).getSetCookie()){const m=/^dua_access=([^;]*)/.exec(c);if(m&&m[1].length<=10000&&/^[A-Za-z0-9._-]+$/.test(m[1]))bearer=m[1];}
  // Plain chat or Agent only from the website; Build/persistence stay Android-only.
  const mode=data.mode==='agent'?'agent':data.mode==='reasoning'?'reasoning':'auto';
  const payload={model:typeof data.model==='string'?data.model:'Dua',messages:data.messages,attachments:[],memory:typeof data.memory==='string'?data.memory:'',stream:true,mode};
- const headers={'Content-Type':'application/json','Accept':'text/event-stream, application/json','Authorization':'Bearer '+token,'x-dua-native':'1'};
+ const headers={'Content-Type':'application/json','Accept':'text/event-stream, application/json','Authorization':'Bearer '+bearer,'x-dua-native':'1'};
  if(env.DUA_APP_TOKEN)headers['X-Dua-App-Token']=env.DUA_APP_TOKEN;
  let upstream;
  try{upstream=await fetcher(target,{method:'POST',headers,body:JSON.stringify(payload),signal:AbortSignal.any([request.signal,AbortSignal.timeout(chatDeadlineMs(env))])});}
