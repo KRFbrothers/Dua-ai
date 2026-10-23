@@ -1,3 +1,4 @@
+import { handleWebAgentAction } from '../core/web-agent-action.mjs';
 import { handleChat } from '../core/providers.mjs';
 import { handleSearch } from '../core/search.mjs';
 import { handleAccount, handleCloudRead } from '../core/account.mjs';
@@ -30,6 +31,7 @@ async function routeService(request,{env=process.env,fetcher=fetch}={}) {
  const paused=switchResponse(path,env);
  if(paused)return paused;
  if(path==='/api/web/chat')return handleWebChat(request,{env,fetcher});
+ if(path==='/api/web/agent/action')return handleWebAgentAction(request,{env,fetcher});
  if(path==='/api/setup')return handleSetup(request,{env});
  if(path==='/api/config')return handleChat(request,{env,fetcher});
  // Account and cloud routes: owner-locked by DUA_ALLOWED_EMAIL inside handleAccount (session, features and logout stay open).
