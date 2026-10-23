@@ -1,6 +1,15 @@
 package com.dua.ai.ui.chat
 
 import android.app.Activity
+import androidx.compose.foundation.border
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.focus.onFocusChanged
+import com.dua.ai.ui.theme.DuaShape
+import com.dua.ai.ui.theme.DuaMotion
+import com.dua.ai.ui.theme.Spacing
+import com.dua.ai.ui.theme.Sizes
+import com.dua.ai.ui.theme.ChatWelcomeStyle
+import com.dua.ai.ui.theme.ChatMessageStyle
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
@@ -39,7 +48,6 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 import com.dua.ai.model.ChatMessage
 import com.dua.ai.ui.theme.DuaTheme
@@ -65,20 +73,6 @@ internal fun SuppliedChatScreen(
     newReplies: Int,
     onLatest: () -> Unit,
 ) {
-    val parentDark = DuaTheme.colors.isDark
-    val view = LocalView.current
-    DisposableEffect(view, parentDark) {
-        onDispose {
-            (view.context as? Activity)?.window?.let { window ->
-                WindowCompat.getInsetsController(window, view).apply {
-                    isAppearanceLightStatusBars = !parentDark
-                    isAppearanceLightNavigationBars = !parentDark
-                }
-            }
-        }
-    }
-    DuaTheme(darkTheme = true) {
-      MaterialTheme(colorScheme = darkColorScheme(), typography = Typography()) {
         Scaffold(
             modifier = Modifier.testTag("supplied-chat"),
             containerColor = DuaTheme.semantic.bg,
@@ -88,7 +82,7 @@ internal fun SuppliedChatScreen(
                         Text(
                             text = "Dua AI ✨",
                             color = DuaTheme.semantic.text,
-                            fontSize = 18.sp,
+                            style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Medium,
                             modifier = Modifier.heightIn(min = 48.dp)
                                 .combinedClickable(role = Role.Button, onClick = onMenu,
@@ -126,7 +120,7 @@ internal fun SuppliedChatScreen(
                             Text(
                                 text = (if (name != null) "Hello $name! " else "Hello! ") +
                                     "Main Dua AI hoon. Aaj hum kis project par kaam kar rahe hain?",
-                                color = DuaTheme.semantic.text, fontSize = 16.sp, lineHeight = 24.sp,
+                                color = DuaTheme.semantic.text, style = ChatWelcomeStyle,
                             )
                         }
                     })
@@ -135,8 +129,6 @@ internal fun SuppliedChatScreen(
                     modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp))
             }
         }
-      }
-    }
 }
 
 @Composable
@@ -145,14 +137,14 @@ internal fun SuppliedUserMessage(message: ChatMessage, onOpenFile: (com.dua.ai.f
     val (body, names) = remember(text) { splitFileNames(text) }
     Column(modifier.fillMaxWidth(), horizontalAlignment = Alignment.End) {
         if (message.files.isNotEmpty()) MessageFileChips(names, message.files, onOpenFile)
-        else if (names.isNotEmpty()) Text(names.joinToString(", "), color = DuaTheme.semantic.text, fontSize = 12.sp)
+        else if (names.isNotEmpty()) Text(names.joinToString(", "), color = DuaTheme.semantic.text, style = MaterialTheme.typography.labelMedium)
         Box(Modifier.widthIn(max = 280.dp)
-            .clip(RoundedCornerShape(topStart = 20.dp, topEnd = 4.dp, bottomStart = 20.dp, bottomEnd = 20.dp))
-            .background(MaterialTheme.colorScheme.outlineVariant).padding(horizontal = 16.dp, vertical = 12.dp)) {
+            .clip(DuaShape.userBubble)
+            .background(DuaTheme.colors.userBubble).padding(horizontal = 16.dp, vertical = 12.dp)) {
             SelectionContainer {
                 Column {
                     quote?.let { BubbleQuote(it) }
-                    Text(body, color = DuaTheme.semantic.text, fontSize = 16.sp, lineHeight = 22.sp)
+                    Text(body, color = DuaTheme.semantic.text, style = ChatMessageStyle)
                 }
             }
         }
@@ -162,7 +154,7 @@ internal fun SuppliedUserMessage(message: ChatMessage, onOpenFile: (com.dua.ai.f
 @Composable
 internal fun SuppliedAssistantTurn(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
     Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
-        Text("✨", fontSize = 18.sp, modifier = Modifier.padding(end = 12.dp, top = 2.dp))
+        Text("✨", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(end = 12.dp, top = 2.dp))
         Box(Modifier.weight(1f)) { content() }
     }
 }
@@ -178,50 +170,73 @@ internal fun GeminiBottomBar(
     onVoice: () -> Unit,
     focusRequester: FocusRequester,
 ) {
-    val surfaceColor = MaterialTheme.colorScheme.surfaceVariant
-    val textColor = DuaTheme.semantic.text
-    val text = state.draft
-    val hasContent = text.isNotBlank() || state.attachments.isNotEmpty() || state.uploads.any { it.ref != null }
+    val currentUploads by rememberUpdatedState(state.uploads)
+    val cancelUploads = remember(actions.onCancelUpload) {
+        { currentUploads.filter { it.uploading }.forEach { actions.onCancelUpload(it.id) } }
+    }
+    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+        SuppliedComposer(state.draft, state.typing, state.readingFiles, state.canSend,
+            state.attachments.isNotEmpty() || state.uploads.any { it.ref != null },
+            state.uploads.any { it.uploading }, actions.onDraftChange, actions.onSend,
+            actions.onStop, cancelUploads, onAttach, onVoice, focusRequester)
+    }
+}
+
+/** Primitive inputs let Compose skip this field while reply tokens update message history. */
+@Composable
+private fun SuppliedComposer(
+    text: String, typing: Boolean, readingFiles: Boolean, canSend: Boolean,
+    hasAttachments: Boolean, uploading: Boolean, onDraftChange: (String) -> Unit,
+    onSend: () -> Unit, onStop: () -> Unit, onCancelUploads: () -> Unit,
+    onAttach: () -> Unit, onVoice: () -> Unit, focusRequester: FocusRequester,
+) {
+    val surfaceColor = DuaTheme.colors.composer
+    val textColor = MaterialTheme.colorScheme.onSurface
+    var focused by remember { mutableStateOf(false) }
+    val hasContent = text.isNotBlank() || hasAttachments
     val action = when {
-        state.typing -> SuppliedComposerAction.Stop
-        state.uploads.any { it.uploading } -> SuppliedComposerAction.CancelUpload
+        typing -> SuppliedComposerAction.Stop
+        uploading -> SuppliedComposerAction.CancelUpload
         hasContent -> SuppliedComposerAction.Send
         else -> SuppliedComposerAction.Mic
     }
     val motion = rememberReplyMotionAllowed()
     Row(
-        modifier = Modifier.fillMaxWidth().navigationBarsPadding().imePadding()
+        modifier = Modifier.widthIn(max = Sizes.contentMaxWidth).fillMaxWidth().navigationBarsPadding().imePadding()
             .padding(horizontal = 16.dp, vertical = 8.dp).testTag("supplied-composer")
-            .clip(RoundedCornerShape(28.dp)).background(surfaceColor)
-            .animateContentSize(animationSpec = if (motion) spring(
-                dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessLow) else snap())
+            .composerFocusPop(focused, true)
+            .shadow(6.dp, DuaShape.composer, clip = false)
+            .clip(DuaShape.composer).background(surfaceColor).background(DuaTheme.colors.floatingSurface)
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = if (focused) .65f else .35f), DuaShape.composer)
+            .animateContentSize(animationSpec = if (motion) DuaMotion.gentle() else snap())
             .padding(horizontal = 8.dp, vertical = 6.dp),
         verticalAlignment = Alignment.Bottom,
     ) {
-        IconButton(onClick = onAttach, enabled = !state.typing && !state.readingFiles, modifier = Modifier.size(48.dp)) {
+        IconButton(onClick = onAttach, enabled = !typing && !readingFiles, modifier = Modifier.size(48.dp)) {
             Icon(Icons.Default.Add, "Add", tint = textColor)
         }
         Box(Modifier.weight(1f).padding(vertical = 12.dp, horizontal = 4.dp), contentAlignment = Alignment.CenterStart) {
-            if (text.isEmpty()) Text("Ask Dua AI...", color = Color.Gray, fontSize = 16.sp)
+            if (text.isEmpty()) Text("Ask Dua AI...", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyLarge)
             BasicTextField(
-                value = text, onValueChange = actions.onDraftChange,
-                textStyle = TextStyle(color = textColor, fontSize = 16.sp),
+                value = text, onValueChange = onDraftChange,
+                textStyle = MaterialTheme.typography.bodyLarge.copy(color = textColor),
                 cursorBrush = SolidColor(DuaTheme.semantic.primary), maxLines = 6,
-                modifier = Modifier.fillMaxWidth().focusRequester(focusRequester)
+                decorationBox = { inner -> Box(Modifier.heightIn(min = Sizes.touchTarget), contentAlignment = Alignment.CenterStart) { inner() } },
+                modifier = Modifier.fillMaxWidth().heightIn(min = Sizes.touchTarget).focusRequester(focusRequester).onFocusChanged { focused = it.isFocused }
                     .semantics { contentDescription = "Message" },
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                keyboardActions = KeyboardActions(onSend = { if (state.canSend) actions.onSend() }),
+                keyboardActions = KeyboardActions(onSend = { if (canSend) onSend() }),
             )
         }
         val control: @Composable (SuppliedComposerAction) -> Unit = { target ->
-            val enabled = target != SuppliedComposerAction.Send || state.canSend
+            val enabled = target != SuppliedComposerAction.Send || canSend
             IconButton(
                 enabled = enabled,
                 onClick = {
                     when (target) {
-                        SuppliedComposerAction.Send -> if (state.canSend) actions.onSend()
-                        SuppliedComposerAction.Stop -> actions.onStop()
-                        SuppliedComposerAction.CancelUpload -> state.uploads.filter { it.uploading }.forEach { actions.onCancelUpload(it.id) }
+                        SuppliedComposerAction.Send -> if (canSend) onSend()
+                        SuppliedComposerAction.Stop -> onStop()
+                        SuppliedComposerAction.CancelUpload -> onCancelUploads()
                         SuppliedComposerAction.Mic -> onVoice()
                     }
                 },

@@ -15,6 +15,8 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.core.snap
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.border
+import androidx.compose.ui.draw.shadow
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -427,8 +429,11 @@ internal object ProfilePhotoCache {
 @Composable
 private fun HistorySheet(permanent: Boolean, drawerState: DrawerState, container: androidx.compose.ui.graphics.Color, modifier: Modifier,
     content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
+    val shape = if (permanent) RectangleShape else DuaShape.drawer
+    val panel = modifier.shadow(6.dp, shape, clip = false)
+        .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = .35f), shape)
     if (permanent) androidx.compose.foundation.layout.Box(Modifier.testTag("history-panel")) {
-        androidx.compose.material3.PermanentDrawerSheet(modifier = modifier, drawerShape = RectangleShape, drawerContainerColor = container, content = content)
+        androidx.compose.material3.PermanentDrawerSheet(modifier = panel, drawerShape = shape, drawerContainerColor = container, content = content)
     }
-    else ModalDrawerSheet(drawerState = drawerState, drawerShape = RectangleShape, drawerContainerColor = container, modifier = modifier, content = content)
+    else ModalDrawerSheet(drawerState = drawerState, drawerShape = shape, drawerContainerColor = container, modifier = panel, content = content)
 }

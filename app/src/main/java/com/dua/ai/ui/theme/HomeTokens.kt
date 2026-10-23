@@ -12,10 +12,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.sp
 
-/**
- * Home screen tokens copied from the code of Fareed's "Dua AI Dabba" reference shell (DuaApp.kt HomeScreen).
- * Light values are the reference's exact colours; dark values are the matching Tailwind-gray steps inverted.
- */
+/** Home chrome uses the shared semantic palette in Color.kt. */
 @Immutable
 data class HomeColors(
     val roundButton: Color, val roundButtonIcon: Color,
@@ -27,23 +24,9 @@ data class HomeColors(
     val voice: Color, val onVoice: Color, val modelLabel: Color,
 )
 
-val HomeLightColors = HomeColors(
-    roundButton = Color(0xFFF3F4F6), roundButtonIcon = Color(0xFF1F2937),
-    segmentTrack = Color(0xFFE5E7EB), segmentSelected = Color(0xFFFFFFFF), segmentSelectedText = Color(0xFF111827), segmentText = Color(0xFF374151),
-    segmentFloatSelected = Color(0xB3FFFFFF),
-    promptIcon = Color(0xFF374151), promptText = Color(0xFF1F2937), promptRow = Color(0xB3FFFFFF), tagline = Color(0xFF4B5563),
-    bar = Color(0xFFF9FAFB), barBorder = Color(0xFFE5E7EB), barIcon = Color(0xFF374151), input = Color(0xFF111827), placeholder = Color(0xFF6B7280),
-    voice = Color(0xFF8B5CF6), onVoice = Color(0xFFFFFFFF), modelLabel = Color(0xFF6B7280),
-)
+val HomeLightColors = homeColors(DuaLightColorScheme, DuaLightColors)
 
-val HomeDarkColors = HomeColors(
-    roundButton = Color(0xFF1F2937), roundButtonIcon = Color(0xFFE5E7EB),
-    segmentTrack = Color(0xFF1F2937), segmentSelected = Color(0xFF4B5563), segmentSelectedText = Color(0xFFF9FAFB), segmentText = Color(0xFFD1D5DB),
-    segmentFloatSelected = Color(0xB31F2937),
-    promptIcon = Color(0xFFD1D5DB), promptText = Color(0xFFF3F4F6), promptRow = Color(0x1FFFFFFF), tagline = Color(0xFFD1D5DB),
-    bar = Color(0xFF111827), barBorder = Color(0xFF374151), barIcon = Color(0xFFD1D5DB), input = Color(0xFFF9FAFB), placeholder = Color(0xFF9CA3AF),
-    voice = Color(0xFF8B5CF6), onVoice = Color(0xFFFFFFFF), modelLabel = Color(0xFF9CA3AF),
-)
+val HomeDarkColors = homeColors(DuaDarkColorScheme, DuaDarkColors)
 
 object HomeTheme {
     val colors: HomeColors
@@ -64,7 +47,7 @@ object HomeSizes {
     val composerRoomyWidth = 360.dp
     val composerIdlePaddingV = 16.dp
     val composerKeyboardPaddingV = 8.dp
-    val composerElevation = 2.dp
+    val composerElevation = 6.dp
     val noElevation = 0.dp
     fun composerHorizontalMargin(availableWidth: Dp): Dp =
         if (availableWidth >= composerRoomyWidth) composerMarginH else composerCompactMarginH
@@ -100,11 +83,9 @@ object HomeMotion {
 object HomeShapes {
     val segmentTrack = RoundedCornerShape(24.dp)
     val segmentTab = RoundedCornerShape(20.dp)
-    val bar = RoundedCornerShape(32.dp)
-    val homeBar = RoundedCornerShape(40.dp)
+    val bar = DuaShape.composer
+    val homeBar = DuaShape.composer
     /** Task starter rows on Home. */
     val promptRow = RoundedCornerShape(16.dp)
     val round = CircleShape
 }
-
-val HomeModelLabelStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Medium, fontSize = 12.sp)

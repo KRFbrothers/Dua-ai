@@ -10,6 +10,9 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.snap
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import com.dua.ai.ui.components.pressFeedback
+import com.dua.ai.ui.theme.DuaTheme
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -161,11 +164,17 @@ fun Composer(
 
     val c = HomeTheme.colors
     val motion = rememberMotionAllowed()
-    val border by animateColorAsState(if (homeLayout && inputFocused) c.voice else c.barBorder,
-        tween(if (motion) DuaMotion.DurationFast else 0), label = "Home input focus")
+    val border by animateColorAsState(if (inputFocused) MaterialTheme.colorScheme.primary.copy(alpha = .65f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = .35f),
+        if (motion) DuaMotion.fast() else snap(), label = "Home input focus")
     val hasAttachments = attachments.isNotEmpty() || uploads.isNotEmpty()
     val inputStyle = if (homeLayout) HomeComposerInputStyle else ComposerInputStyle
     val textMeasurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    // Keep idle Chat/Task geometry stable even when their hints have different lengths.
+    val minimumInputWidth = remember(textMeasurer, inputStyle, density) {
+        textMeasurer.measure(AnnotatedString("Ask Dua AI..."), style = inputStyle,
+            softWrap = false, maxLines = 1).size.width
+    }
     val hasContent = activeText.isNotBlank() || hasAttachments
     val expanded = (!homeLayout && hasContent) || hasAttachments || '\n' in activeText
     val canSubmit = hasContent && sendEnabled && !typing && !uploading
@@ -183,7 +192,7 @@ fun Composer(
     }
 
     // Keep the input spacious on regular phones and leave room for controls on narrow windows.
-    BoxWithConstraints(modifier.let { if (homeLayout) it.widthIn(max = HomeSizes.composerMaxWidth) else it }.fillMaxWidth()) {
+    BoxWithConstraints(modifier.widthIn(max = HomeSizes.composerMaxWidth).fillMaxWidth()) {
         val keyboardOpen = homeLayout && WindowInsets.ime.getBottom(LocalDensity.current) > 0
         val margin = (if (homeLayout && !keyboardOpen) HomeSizes.composerHorizontalMargin(maxWidth) else HomeSizes.composerCompactMarginH)
             // The image shortcut needs another 48 dp slot. Use the glass card's own margin
@@ -193,6 +202,7 @@ fun Composer(
         // Keep the field in the same Layout slot so resizing never discards focus or the draft.
         val inlineTextWidth = maxWidth - margin * 2 - HomeSizes.barPaddingH * 2 - Sizes.touchTarget * (if (onImage != null) 4 else 3) - Spacing.sm * 2
         val stacked = expanded || (homeLayout && maxOf(
+            minimumInputWidth,
             textMeasurer.measure(AnnotatedString(placeholder), style = inputStyle, softWrap = false, maxLines = 1).size.width,
             textMeasurer.measure(AnnotatedString(activeText), style = inputStyle, softWrap = false, maxLines = 1).size.width,
         ) > with(LocalDensity.current) { inlineTextWidth.roundToPx() })
@@ -232,9 +242,9 @@ fun Composer(
                 .testTag("composer-container")
                 .composerFocusPop(inputFocused, glass)
                 .shadow(if (glass) ComposerGlass.Elevation else if (homeLayout) HomeSizes.composerElevation else HomeSizes.noElevation, shape, clip = false)
-                .clip(shape).background(c.bar).composerAurora(glass).border(HomeSizes.barBorder, border, shape)) {
+                .clip(shape).background(c.bar).background(DuaTheme.colors.floatingSurface).composerAurora(glass).border(HomeSizes.barBorder, border, shape)) {
                 Column(Modifier.fillMaxWidth()
-                    .let { if (homeLayout) it.animateContentSize(animationSpec = if (motion) DuaMotion.gentle() else snap()) else it.animateContentSize() }
+                    .animateContentSize(animationSpec = if (motion) DuaMotion.gentle() else snap())
                     .padding(horizontal = HomeSizes.barPaddingH, vertical = when {
                         glass -> ComposerGlass.PaddingV
                         homeLayout && !stacked && !keyboardOpen -> HomeSizes.composerIdlePaddingV
@@ -328,9 +338,10 @@ fun Composer(
 private fun ComposerAction(icon: ImageVector, label: String, enabled: Boolean = true, onClick: () -> Unit, iconSize: Dp = HomeSizes.voiceIcon) {
     val c = HomeTheme.colors
     val motion = com.dua.ai.ui.theme.rememberMotionAllowed()
-    Box(Modifier.size(Sizes.touchTarget).clip(HomeShapes.round).clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+    val interaction = remember { MutableInteractionSource() }
+    Box(Modifier.size(Sizes.touchTarget).clip(HomeShapes.round).clickable(interactionSource = interaction, indication = androidx.compose.foundation.LocalIndication.current, enabled = enabled, role = Role.Button, onClick = onClick)
         .semantics(mergeDescendants = true) { contentDescription = label }, contentAlignment = Alignment.Center) {
-        Box(Modifier.size(ComposerSizes.actionButton).clip(HomeShapes.round).background(c.voice), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(ComposerSizes.actionButton).pressFeedback(interaction).clip(HomeShapes.round).background(c.voice), contentAlignment = Alignment.Center) {
             if (motion) AnimatedContent(icon, contentAlignment = Alignment.Center,
                 transitionSpec = {
                     (fadeIn(tween(150)) + scaleIn(tween(150), initialScale = 0.85f)) togetherWith

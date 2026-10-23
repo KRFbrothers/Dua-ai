@@ -87,7 +87,7 @@ fun MessageList(state: ChatUiState, actions: ChatActions, listState: LazyListSta
             bottom = (if (suppliedStyle) 12.dp else ChatSizes.listPaddingBottom) + bottomOverlay),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        if (state.messages.isEmpty() && !state.typing && emptyContent != null) item(key = "welcome") { emptyContent() }
+        if (state.messages.isEmpty() && !state.typing && emptyContent != null) item(key = "welcome", contentType = "welcome") { emptyContent() }
         itemsIndexed(state.messages, key = { _, message -> message.id }, contentType = { _, message -> if (message.isUser) "user" else "assistant" }) { index, message ->
             val selected = message.id == searchMessageId
             Column(Modifier.padding(top = if (suppliedStyle) 10.dp else MessageGrouping.gapBefore(state.messages, index),
@@ -145,7 +145,7 @@ fun MessageList(state: ChatUiState, actions: ChatActions, listState: LazyListSta
             }
         }
         // Streaming replies render their own progress; the orb covers non-streaming waits.
-        if (state.typing && state.messages.none { it.streaming }) item(key = "typing") {
+        if (state.typing && state.messages.none { it.streaming }) item(key = "typing", contentType = "typing") {
             AssistantTurn(modifier = Modifier.padding(top = if (state.messages.isEmpty()) 0.dp else ChatSizes.messageSpacing).widthIn(max = Sizes.contentMaxWidth), suppliedStyle = suppliedStyle) {
                 if (suppliedStyle) GeminiLoadingShimmer() else TypingIndicator(Modifier.heightIn(min = Sizes.touchTarget))
             }

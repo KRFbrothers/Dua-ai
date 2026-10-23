@@ -23,7 +23,7 @@ object ComposerSizes {
     val attachment = 60.dp
     val fileChipMaxWidth = 220.dp
     val tabShape = androidx.compose.foundation.shape.RoundedCornerShape(18.dp)
-    val expandedShape = androidx.compose.foundation.shape.RoundedCornerShape(26.dp)
+    val expandedShape = DuaShape.composer
     val attachmentShape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp)
 }
 

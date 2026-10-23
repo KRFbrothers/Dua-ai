@@ -152,6 +152,9 @@ data class DuaColors(
     val onCode: Color,
     val composer: Color,
     val composerBorder: Color,
+    /** Floating glass overlay; an opaque composer base keeps text contrast independent of content below. */
+    val floatingSurface: Color,
+    val floatingBorder: Color,
     /** High-emphasis neutral action (send button, selected chip): white on dark, ink on light. */
     val action: Color,
     val onAction: Color,
@@ -217,6 +220,8 @@ internal val DuaDarkColors = DuaColors(
     onCode = DuaPalette.Neutral90,
     composer = DuaPalette.Neutral10,
     composerBorder = DuaPalette.Neutral22,
+    floatingSurface = DuaPalette.Neutral13.copy(alpha = .94f),
+    floatingBorder = DuaPalette.Neutral22.copy(alpha = .35f),
     action = DuaPalette.Neutral93,
     onAction = DuaPalette.Neutral4,
     voiceCubeStroke = DuaPalette.Neutral72,
@@ -250,6 +255,8 @@ internal val DuaLightColors = DuaColors(
     onCode = DuaPalette.Ink,
     composer = DuaPalette.Neutral97,
     composerBorder = DuaPalette.Neutral90,
+    floatingSurface = DuaPalette.Neutral100.copy(alpha = .94f),
+    floatingBorder = DuaPalette.Neutral90.copy(alpha = .35f),
     action = DuaPalette.Ink,
     onAction = DuaPalette.Neutral100,
     voiceCubeStroke = DuaPalette.Neutral45,
@@ -290,3 +297,94 @@ internal val ProjectPaletteDark = ProjectPalette(Color(0xFF101114), Color(0xFF20
     Color(0xFF9FC4FF), Color(0xFF20324C), Color(0xFF75D8B4), Color(0xFF193D35), Color(0xFFF5F5F7), Color(0xFF101114), Color(0xFF34353F), Color(0xFF8B5CF6), Color.White)
 
 internal val ProjectHomeworkBlueLight = Color(0xFF2563EB)
+
+
+/** Feature palettes share the same semantic canvas, contrast and restrained accent. */
+internal fun homeColors(s: ColorScheme, d: DuaColors) = HomeColors(
+    roundButton = s.surfaceContainer, roundButtonIcon = s.onSurface,
+    segmentTrack = s.surfaceContainer, segmentSelected = s.surfaceContainerHighest,
+    segmentSelectedText = s.onSurface, segmentText = s.onSurfaceVariant,
+    segmentFloatSelected = s.surfaceContainerHighest.copy(alpha = .96f),
+    promptIcon = s.onSurfaceVariant, promptText = s.onSurface,
+    promptRow = s.surfaceContainerLow.copy(alpha = .96f),
+    tagline = if (d.isDark) s.secondary else s.onSurfaceVariant,
+    bar = d.composer, barBorder = d.floatingBorder, barIcon = s.onSurfaceVariant,
+    input = s.onSurface, placeholder = s.onSurfaceVariant,
+    voice = s.primary, onVoice = s.onPrimary, modelLabel = s.onSurfaceVariant,
+)
+
+internal fun chatColors(s: ColorScheme, d: DuaColors) = ChatColors(
+    background = s.background, userBubble = d.userBubble, onUserBubble = d.onUserBubble,
+    assistantBubble = Color.Transparent, assistantText = s.onSurface,
+    chipFill = s.surfaceContainer, chipBorder = d.floatingBorder,
+    chipText = s.onSurface, chipIcon = s.onSurfaceVariant,
+    text = s.onSurface, mutedText = s.onSurfaceVariant,
+    cardFill = s.surfaceContainerLow, divider = s.outlineVariant,
+    mediaFill = s.surfaceContainer, shimmer = s.surfaceContainerHighest,
+    accent = s.primary, accentSoft = s.primaryContainer, onAccentSoft = s.onPrimaryContainer,
+    errorFill = s.errorContainer, onErrorFill = s.onErrorContainer, errorIcon = s.error,
+)
+
+internal fun drawerColors(s: ColorScheme, d: DuaColors) = DrawerColors(
+    container = s.surfaceContainerLow, title = s.onSurface,
+    searchCircle = s.surfaceContainerHigh, searchIcon = s.onSurfaceVariant,
+    menuText = s.onSurface, chevron = s.onSurfaceVariant, divider = d.floatingBorder,
+    chatText = s.onSurface, subText = s.onSurfaceVariant,
+    newChat = s.primaryContainer, onNewChat = s.onPrimaryContainer,
+    avatar = s.primaryContainer, onAvatar = s.onPrimaryContainer,
+    gradientTop = s.surfaceContainerHigh, searchShadow = s.scrim.copy(alpha = .12f),
+    avatarRing = s.surfaceContainerHighest,
+)
+
+internal fun sheetColors(s: ColorScheme, d: DuaColors) = SheetColors(
+    container = s.surfaceContainerLow, handle = s.outline, title = s.onSurface,
+    text = s.onSurface, subText = s.onSurfaceVariant, icon = s.onSurfaceVariant,
+    fill = s.surfaceContainerHigh, selectedFill = s.primaryContainer,
+    divider = d.floatingBorder, accent = s.primary, onAccent = s.onPrimary,
+    switchTrackOff = s.surfaceContainerHighest, switchThumbOff = s.onSurfaceVariant,
+    destructive = s.error, scrim = s.scrim.copy(alpha = .48f),
+)
+
+/**
+ * Fixed (theme-independent) colours that were previously hardcoded hex in screens.
+ * Same value in light and dark, exactly as before.
+ */
+internal object DuaFixedColors {
+    // Supplied (Gemini-style) chat surface.
+    val SuppliedBg = Color(0xFF131314)
+    val SuppliedSurface = Color(0xFF1E1F20)
+    val SuppliedBubble = Color(0xFF282A2C)
+    val SuppliedText = Color(0xFFE3E3E3)
+    val SuppliedPrimary = Color(0xFFA8C7FA)
+    val SuppliedOnPrimary = Color(0xFF062E6F)
+    val SuppliedGlowBlue = Color(0xFF4285F4)
+    val SuppliedGlowPurple = Color(0xFF9B72CB)
+    val SuppliedGlowRose = Color(0xFFD96570)
+    // Swipe-to-delete action.
+    val SwipeDanger = Color(0xFFDD4B39)
+    // Composer aurora ring.
+    val AuroraBlue = Color(0xFF3B82F6)
+    val AuroraViolet = Color(0xFF8B5CF6)
+    val AuroraPink = Color(0xFFEC4899)
+    val AuroraOrange = Color(0xFFF97316)
+}
+
+
+internal fun settingsColors(s: ColorScheme, d: DuaColors) = SettingsColors(
+    background = s.background, circleButton = s.surfaceContainerHigh,
+    circleBorder = d.floatingBorder, circleIcon = s.onSurfaceVariant,
+    avatar = s.primaryContainer, onAvatar = s.onPrimaryContainer,
+    editBadge = s.surfaceContainerHigh, editIcon = s.onSurface,
+    name = s.onSurface, card = s.surfaceContainerLow, cardBorder = d.floatingBorder,
+    rowIcon = s.onSurfaceVariant, rowText = s.onSurface, value = s.onSurfaceVariant,
+    accentValue = s.primary, arrow = s.onSurfaceVariant, chevron = s.onSurfaceVariant,
+    divider = d.floatingBorder, upgrade = s.primary, danger = s.error,
+)
+
+internal fun pageColors(s: ColorScheme, d: DuaColors) = PageColors(
+    background = s.background, card = s.surfaceContainerLow, cardBorder = d.floatingBorder,
+    fill = s.surfaceContainerHigh, text = s.onSurface, subText = s.onSurfaceVariant,
+    divider = d.floatingBorder, accent = s.primary, onAccent = s.onPrimary,
+    accentContainer = s.primaryContainer, onAccentContainer = s.onPrimaryContainer,
+    danger = s.error, outline = s.outline,
+)

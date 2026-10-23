@@ -7,7 +7,6 @@ import androidx.compose.material.icons.outlined.Search
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
@@ -22,6 +21,9 @@ import com.dua.ai.settings.LocalPreferences
 import com.dua.ai.ui.theme.ChatDarkColors
 import com.dua.ai.ui.theme.ChatLightColors
 import com.dua.ai.ui.theme.DuaTheme
+import com.dua.ai.ui.theme.DuaLightColorScheme
+import com.dua.ai.ui.theme.DuaDarkColorScheme
+import com.dua.ai.ui.theme.DuaLightColors
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
@@ -30,7 +32,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
-/** Chat components on ChatTokens: zip palette, light+dark, labels, handlers and 48 dp targets. */
+/** Chat components on ChatTokens: shared semantic palette, light+dark, labels, handlers and 48 dp targets. */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [34], qualifiers = "w360dp-h800dp-xhdpi")
@@ -42,25 +44,30 @@ class ChatTokensComponentsTest {
         assertTrue("touch target ${it.size}", it.size.height >= 48 * 2 - 1 && it.size.width >= 48 * 2 - 1)
     }
 
-    @Test fun lightTokensMatchZipPalette() {
+    @Test fun lightTokensMatchSemanticPalette() {
         val c = ChatLightColors
-        assertEquals(Color(0xFFFFFFFF), c.background)
-        assertEquals(Color(0xFFF3F4F6), c.chipFill)
-        assertEquals(Color(0xFFE5E7EB), c.chipBorder)
-        assertEquals(Color(0xFF111827), c.text)
-        assertEquals(Color(0xFF8B5CF6), c.accent)
+        val scheme = DuaLightColorScheme
+        assertEquals(scheme.background, c.background)
+        assertEquals(scheme.surfaceContainer, c.chipFill)
+        assertEquals(DuaLightColors.floatingBorder, c.chipBorder)
+        assertEquals(scheme.onSurface, c.text)
+        assertEquals(scheme.primary, c.accent)
     }
 
     @Test fun accentSharedWithOtherTokens() {
-        listOf(ChatLightColors to com.dua.ai.ui.theme.PageLightColors, ChatDarkColors to com.dua.ai.ui.theme.PageDarkColors).forEach { (c, p) ->
-            assertEquals(Color(0xFF8B5CF6), c.accent)
-            assertEquals(com.dua.ai.ui.theme.SheetLightColors.accent, c.accent)
-            assertEquals(com.dua.ai.ui.theme.HomeLightColors.voice, c.accent)
+        listOf(
+            Triple(ChatLightColors, com.dua.ai.ui.theme.PageLightColors, DuaLightColorScheme),
+            Triple(ChatDarkColors, com.dua.ai.ui.theme.PageDarkColors, DuaDarkColorScheme),
+        ).forEach { (c, p, scheme) ->
+            assertEquals(scheme.primary, c.accent)
+            assertEquals(p.accent, c.accent)
             assertEquals(p.accentContainer, c.accentSoft)
             assertEquals(p.onAccentContainer, c.onAccentSoft)
         }
-        assertEquals(Color(0xFFEDE9FE), ChatLightColors.accentSoft); assertEquals(Color(0xFF4C1D95), ChatLightColors.onAccentSoft)
-        assertEquals(Color(0xFF2E1065), ChatDarkColors.accentSoft); assertEquals(Color(0xFFEDE9FE), ChatDarkColors.onAccentSoft)
+        assertEquals(com.dua.ai.ui.theme.SheetLightColors.accent, ChatLightColors.accent)
+        assertEquals(com.dua.ai.ui.theme.SheetDarkColors.accent, ChatDarkColors.accent)
+        assertEquals(com.dua.ai.ui.theme.HomeLightColors.voice, ChatLightColors.accent)
+        assertEquals(com.dua.ai.ui.theme.HomeDarkColors.voice, ChatDarkColors.accent)
     }
 
     @Test fun darkTokensDifferFromLight() {

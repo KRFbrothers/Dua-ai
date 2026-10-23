@@ -65,8 +65,8 @@ class HomeHeaderRefinementUiTest(private val dark: Boolean, private val large: B
             onProfile = { profile++ }, onNewChat = { newChat++ }) }
         for (text in listOf("Dua AI", "Gemini")) {
             val result = layout(text)
-            assertEquals(if (text == "Dua AI") 19.sp else 14.sp, result.layoutInput.style.fontSize)
-            assertEquals(FontWeight.Medium, result.layoutInput.style.fontWeight)
+            assertEquals(if (text == "Dua AI") HomeHeaderStyle.fontSize else HomeHeaderModelStyle.fontSize, result.layoutInput.style.fontSize)
+            assertEquals(if (text == "Dua AI") HomeHeaderStyle.fontWeight else HomeHeaderModelStyle.fontWeight, result.layoutInput.style.fontWeight)
             assertFalse("$text: size=${result.size}, width=${result.didOverflowWidth}, height=${result.didOverflowHeight}, lines=${result.lineCount}, constraints=${result.layoutInput.constraints}, para=${result.multiParagraph.height}", result.hasVisualOverflow)
             compose.onNodeWithText(text, useUnmergedTree = true).assertIsDisplayed()
         }
