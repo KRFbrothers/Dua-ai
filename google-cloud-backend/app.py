@@ -1228,6 +1228,10 @@ def api_title():
     denied = owner_access_error()
     if denied is not None:
         return denied
+    import kill_switches
+    paused = kill_switches.maintenance_message()
+    if paused:
+        return no_store(jsonify({"error": paused, "maintenance": True}), 503)
     data = request.get_json(silent=True) or {}
     user = str(data.get("user", "")).strip()[:4000]
     reply = str(data.get("reply", "")).strip()[:4000]
@@ -1253,6 +1257,10 @@ def chat():
     denied = owner_access_error()
     if denied is not None:
         return denied
+    import kill_switches
+    paused = kill_switches.maintenance_message()
+    if paused:
+        return no_store(jsonify({"error": paused, "maintenance": True}), 503)
     data = request.get_json(silent=True) or {}
     user_message = str(data.get("message", "")).strip()
     if not user_message:

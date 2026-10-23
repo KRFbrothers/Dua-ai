@@ -72,3 +72,29 @@ def test_imagine_switch_refuses_engine_imagine(monkeypatch):
     imagine = client().get("/").get_json().get("imagine")
     if isinstance(imagine, dict):
         assert imagine["enabled"] is False
+
+
+def test_maintenance_refuses_title_and_legacy_chat_without_model_call(monkeypatch):
+    monkeypatch.setattr(engine, "get_model", lambda *a, **k: (_ for _ in ()).throw(AssertionError("model must not run")))
+    monkeypatch.setenv("DUA_MAINTENANCE", "1")
+    for path, body in (("/api/title", {"user": "Hi", "reply": "Hello"}), ("/chat", {"message": "Hi"})):
+        response = client().post(path, json=body)
+        assert response.status_code == 503
+        assert response.get_json() == {"error": kill_switches.DEFAULT_MAINTENANCE_MESSAGE, "maintenance": True}
+        assert "no-store" in response.headers.get("Cache-Control", "")
+
+
+def test_title_and_legacy_chat_still_answer_without_maintenance(monkeypatch):
+    class Reply:
+        text = '{"title": "Greeting chat"}'
+
+    class Model:
+        def generate_content(self, *args, **kwargs):
+            return Reply()
+
+    monkeypatch.setattr(engine, "get_model", lambda *a, **k: Model())
+    monkeypatch.setattr(engine, "chunk_text", lambda response: response.text)
+    title = client().post("/api/title", json={"user": "Hi", "reply": "Hello"})
+    assert title.status_code == 200 and title.get_json() == {"title": "Greeting chat"}
+    chat = client().post("/chat", json={"message": "Hi"})
+    assert chat.status_code == 200 and chat.get_json() == {"reply": Reply.text}
