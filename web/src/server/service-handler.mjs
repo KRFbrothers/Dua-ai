@@ -10,7 +10,7 @@ import { handleImagine } from '../core/imagine.mjs';
 import { handleVoice } from '../core/voice.mjs';
 import { handleBuildPr } from '../core/build-pr.mjs';
 import { withRequestLog } from '../core/request-logging.mjs';
-import { switchResponse } from '../core/kill-switches.mjs';
+import { switchResponse, killSwitches, PAUSED } from '../core/kill-switches.mjs';
 
 /** DUA_CHAT_DEADLINE_SECONDS: whole-request chat deadline (default 280 s, allowed 10–790 s). */
 export const chatDeadlineMs = env => envInteger(env, 'DUA_CHAT_DEADLINE_SECONDS', 280, 10, 790) * 1000;
@@ -67,6 +67,8 @@ const WEB_CHAT_MAX_BYTES=4*1024*1024;
 const WEB_CHAT_MAX_MESSAGES=200;
 // The website sends {role,text}; accept the engine's `content` too (string or parts array).
 const validTurn=m=>!!m&&typeof m==='object'&&!Array.isArray(m)&&typeof m.role==='string'&&m.role.length<=32&&(typeof m.text==='string'||typeof m.content==='string'||Array.isArray(m.content));
+// The engine reads only `text`; turn `content` (string or parts) into text and drop `content`.
+const normalizeTurn=({content,...m})=>typeof m.text==='string'?m:{...m,text:typeof content==='string'?content:content.filter(p=>p&&typeof p.text==='string').map(p=>p.text).join('')};
 const noStore=(error,status)=>Response.json({error},{status,headers:{'Cache-Control':'no-store'}});
 function engineUrl(env){
  try{const url=new URL(String(env.DUA_ENGINE_URL||DEFAULT_ENGINE_URL));
@@ -91,6 +93,8 @@ export async function handleWebChat(request,{env=process.env,fetcher=fetch}={}){
  if(!data||typeof data!=='object'||Array.isArray(data)||!Array.isArray(data.messages))return noStore('Invalid request.',400);
  if(data.messages.length>WEB_CHAT_MAX_MESSAGES)return noStore('Conversation too long. Start a new chat.',413);
  if(!data.messages.every(validTurn))return noStore('Invalid request.',400);
+ // Agent kill switch: refuse before the quota so no daily request is used (maintenance is refused in routeService).
+ if(data.mode==='agent'&&killSwitches(env).agent)return Response.json({error:PAUSED.agent,paused:'agent'},{status:503,headers:{'Cache-Control':'no-store'}});
  // Same login/owner/daily-quota policy as /api/chat (shared Supabase counter), only after input is valid.
  const access=await guardChatAccess(request,{env,fetcher});
  if(!access.allowed)return access.response;
@@ -99,7 +103,7 @@ export async function handleWebChat(request,{env=process.env,fetcher=fetch}={}){
  for(const c of new Headers(access.headers||undefined).getSetCookie()){const m=/^dua_access=([^;]*)/.exec(c);if(m&&m[1].length<=10000&&/^[A-Za-z0-9._-]+$/.test(m[1]))bearer=m[1];}
  // Plain chat or Agent only from the website; Build/persistence stay Android-only.
  const mode=data.mode==='agent'?'agent':data.mode==='reasoning'?'reasoning':'auto';
- const payload={model:typeof data.model==='string'?data.model:'Dua',messages:data.messages,attachments:[],memory:typeof data.memory==='string'?data.memory:'',stream:true,mode};
+ const payload={model:typeof data.model==='string'?data.model:'Dua',messages:data.messages.map(normalizeTurn),attachments:[],memory:typeof data.memory==='string'?data.memory:'',stream:true,mode};
  const headers={'Content-Type':'application/json','Accept':'text/event-stream, application/json','Authorization':'Bearer '+bearer,'x-dua-native':'1'};
  if(env.DUA_APP_TOKEN)headers['X-Dua-App-Token']=env.DUA_APP_TOKEN;
  let upstream;

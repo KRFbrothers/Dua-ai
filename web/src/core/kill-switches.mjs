@@ -30,7 +30,7 @@ export function killSwitches(env = {}) {
 }
 
 /** Routes that stop during maintenance. Account, cloud sync, files and config keep working so data stays reachable. */
-const MAINTENANCE_PATHS = /^\/api\/(chat|search|connectors\/github|build\/pr|imagine\/.*|voice\/.*)$/;
+const MAINTENANCE_PATHS = /^\/api\/(chat|web\/chat|search|connectors\/github|build\/pr|imagine\/.*|voice\/.*)$/;
 
 /** A 503 for a request blocked by a switch, or null. */
 export function switchResponse(path, env = {}) {
