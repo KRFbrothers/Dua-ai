@@ -88,7 +88,7 @@ data class DuaSemanticColors(
  * Fixed (theme-independent) colours that were previously hardcoded hex in screens.
  * Same value in light and dark, exactly as before.
  */
-object DuaFixedColors {
+internal object DuaFixedColors {
     // Supplied (Gemini-style) chat surface.
     val SuppliedBg = Color(0xFF131314)
     val SuppliedSurface = Color(0xFF1E1F20)
