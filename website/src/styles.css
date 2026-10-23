@@ -92,3 +92,15 @@ button:disabled { cursor: default; opacity: .55; }
   .msg-user div { max-width: 88%; }
 }
 @media (prefers-reduced-motion: reduce) { .sidebar { transition: none; } .pulse { animation: none; } }
+
+
+/* Explicit owner decisions and incomplete-reply recovery. */
+.action-card { margin: 14px 0; padding: 16px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); white-space: normal; }
+.action-status { color: var(--accent); font-size: 13px; margin-bottom: 6px; }
+.action-card ul { padding-left: 20px; }
+.action-card li { margin: 4px 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+.action-card summary { cursor: pointer; min-height: var(--touch); display: flex; align-items: center; }
+.action-card pre { white-space: pre; overflow: auto; max-height: 320px; padding: 12px; background: var(--bg); border-radius: 8px; }
+.action-approve { background: var(--accent); color: var(--bg); }
+.action-result { white-space: pre-wrap; overflow-wrap: anywhere; }
+.retry-row { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 10px; }

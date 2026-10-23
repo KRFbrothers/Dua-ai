@@ -1,9 +1,11 @@
 import { FormEvent, ReactNode, useEffect, useRef, useState } from 'react';
-import { streamChat, type ChatMode, type User } from './api';
+import { approvalFromEvent, streamChat, type Approval, type ChatMode, type ChatTurn, type User } from './api';
+import ApprovalCard from './ApprovalCard';
 
-type Message = { id: number; role: 'user' | 'assistant'; text: string; status?: string; error?: string; streaming?: boolean };
+type ChatRequest = { model: string; mode: ChatMode; messages: ChatTurn[] };
+type Message = { id: number; role: 'user' | 'assistant'; text: string; status?: string; error?: string; streaming?: boolean; notice?: string; approvals?: Approval[]; request?: ChatRequest };
 
-const MODELS = ['Dua', 'Gemini', 'Claude', 'Grok', 'Kimi'] as const;
+const MODELS = ['Dua', 'Gemini'] as const;
 
 // Minimal, safe markdown: ``` fenced code blocks, `inline code` and **bold**. Built as React nodes (no HTML injection).
 function inline(text: string, key: string): ReactNode[] {
@@ -37,6 +39,7 @@ export default function ChatShell({ user, onLogout }: { user: User; onLogout: ()
   const [messages, setMessages] = useState<Message[]>([]);
   const [busy, setBusy] = useState(false);
   const abort = useRef<AbortController | null>(null);
+  const running = useRef(false);
   const bottom = useRef<HTMLDivElement | null>(null);
   const name = user.displayName || user.email.split('@')[0] || 'Owner';
 
@@ -47,34 +50,53 @@ export default function ChatShell({ user, onLogout }: { user: User; onLogout: ()
     setMessages(list => list.map(m => m.id === id ? change(m) : m));
   }
 
-  function newChat() { abort.current?.abort(); setMessages([]); }
+  function newChat() {
+    abort.current?.abort(); abort.current = null; running.current = false;
+    setBusy(false); setMessages([]);
+  }
+
+  async function reply(id: number, request: ChatRequest) {
+    if (running.current) return;
+    running.current = true;
+    setBusy(true);
+    const controller = new AbortController();
+    abort.current = controller;
+    update(id, m => ({ ...m, text: '', error: undefined, notice: undefined, status: undefined, streaming: true }));
+    try {
+      await streamChat(request, ev => {
+        if (abort.current !== controller) return;
+        if (ev.type === 'text' && typeof ev.delta === 'string') { const delta = ev.delta; update(id, m => ({ ...m, text: m.text + delta, status: undefined })); }
+        else if (ev.type === 'progress' && typeof ev.label === 'string') { const label = ev.label; update(id, m => ({ ...m, status: label })); }
+        else if (ev.type === 'thinking') update(id, m => ({ ...m, status: m.status || 'Thinking…' }));
+        else if (ev.type === 'notice' && typeof ev.message === 'string') { const notice = ev.message; update(id, m => ({ ...m, notice })); }
+        else if (ev.type === 'approval') {
+          const action = approvalFromEvent(ev);
+          if (!action) throw new Error('The action preview could not be validated. Ask the agent again.');
+          update(id, m => ({ ...m, approvals: m.approvals?.some(a => a.id === action.id) ? m.approvals : [...(m.approvals || []), action].slice(0, 3) }));
+        }
+      }, controller.signal);
+    } catch (error) {
+      if (abort.current === controller) update(id, m => ({ ...m,
+        error: controller.signal.aborted ? 'Stopped. This reply is incomplete.' : error instanceof Error ? error.message : 'Reply interrupted. Try again.' }));
+    } finally {
+      if (abort.current === controller) {
+        update(id, m => ({ ...m, streaming: false, status: undefined }));
+        abort.current = null; running.current = false; setBusy(false);
+      }
+    }
+  }
 
   async function send(event: FormEvent) {
     event.preventDefault();
     const text = draft.trim();
-    if (!text || busy) return;
+    if (!text || running.current) return;
     const history = [...messages.filter(m => !m.error && m.text), { id: 0, role: 'user' as const, text }]
       .slice(-40).map(m => ({ role: m.role === 'user' ? 'user' as const : 'model' as const, text: m.text }));
     const id = Date.now();
-    setMessages(list => [...list, { id, role: 'user', text }, { id: id + 1, role: 'assistant', text: '', streaming: true }]);
+    const request: ChatRequest = { model, mode, messages: history };
+    setMessages(list => [...list, { id, role: 'user', text }, { id: id + 1, role: 'assistant', text: '', streaming: true, request }]);
     setDraft('');
-    setBusy(true);
-    const controller = new AbortController();
-    abort.current = controller;
-    try {
-      await streamChat({ model, mode, messages: history }, ev => {
-        if (ev.type === 'text' && typeof ev.delta === 'string') { const delta = ev.delta; update(id + 1, m => ({ ...m, text: m.text + delta, status: undefined })); }
-        else if (ev.type === 'progress' && typeof ev.label === 'string') { const label = ev.label; update(id + 1, m => ({ ...m, status: label })); }
-        else if (ev.type === 'thinking') update(id + 1, m => ({ ...m, status: m.status || 'Thinking…' }));
-        else if (ev.type === 'error') { const message = typeof ev.message === 'string' ? ev.message : 'Reply failed.'; update(id + 1, m => ({ ...m, error: message })); }
-      }, controller.signal);
-    } catch (error) {
-      if (!controller.signal.aborted) update(id + 1, m => ({ ...m, error: error instanceof Error ? error.message : 'Reply failed. Try again.' }));
-    } finally {
-      update(id + 1, m => ({ ...m, streaming: false, status: undefined, error: m.error ?? (controller.signal.aborted && !m.text ? 'Stopped.' : undefined) }));
-      if (abort.current === controller) abort.current = null;
-      setBusy(false);
-    }
+    await reply(id + 1, request);
   }
 
   return (
@@ -115,9 +137,17 @@ export default function ChatShell({ user, onLogout }: { user: User; onLogout: ()
             ) : messages.map(m => m.role === 'user'
               ? <div key={m.id} className="msg-user"><div>{m.text}</div></div>
               : <div key={m.id} className="msg-ai"><img src="/dua-logo.webp" alt="" /><div className="body">
+                  {m.notice && <p className="muted small">{m.notice}</p>}
                   {m.status && <div className="muted small">{m.status}</div>}
                   {m.text ? <Markdown text={m.text} /> : m.streaming && !m.status ? <span className="muted">…</span> : null}
+                  {m.approvals?.map(action => <ApprovalCard key={action.id} action={action} disabled={busy} />)}
                   {m.error && <div className="banner" role="alert" style={{ marginTop: 8 }}>{m.error}</div>}
+                  {m.error && m.request && !m.approvals?.length && messages[messages.length - 1]?.id === m.id &&
+                    <div className="retry-row">
+                      <button type="button" className="pill" disabled={busy} onClick={() => m.request && reply(m.id, m.request)}>Retry request</button>
+                      {m.request.mode === 'agent' && <span className="muted small">Starts the Agent request again.</span>}
+                    </div>}
+                  {m.error && !!m.approvals?.length && <p className="muted small">Review the action cards before asking the agent again.</p>}
                 </div></div>)}
             <div ref={bottom} />
           </div>

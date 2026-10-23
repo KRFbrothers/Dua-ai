@@ -5,7 +5,8 @@
   "scripts": {
     "logo": "node scripts/copy-logo.mjs",
     "dev": "node scripts/copy-logo.mjs && vite",
-    "build": "node scripts/copy-logo.mjs && tsc --noEmit && vite build"
+    "build": "node scripts/copy-logo.mjs && tsc --noEmit && vite build",
+    "test": "node --test test/*.test.mjs"
   },
   "engines": {
     "node": ">=20.0.0"
