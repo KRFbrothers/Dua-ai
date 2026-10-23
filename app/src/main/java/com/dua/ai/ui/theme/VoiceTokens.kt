@@ -9,7 +9,7 @@ import androidx.compose.ui.unit.dp
 
 /**
  * Voice tokens for voice mode, live voice and dictation. Every colour is taken from the shared page/sheet tokens, so the
- * accent is the same #8B5CF6 as Sheet/Page/Chat/Home (no voice-only copy). The voice-mode canvas, glow and orb keep
+ * accent follows the same semantic primary as Sheet/Page/Chat/Home (no voice-only copy). The voice-mode canvas, glow and orb keep
  * their decorative [DuaVoiceColors] roles.
  */
 @Immutable

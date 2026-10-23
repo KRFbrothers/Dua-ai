@@ -169,6 +169,12 @@ fun Composer(
     val hasAttachments = attachments.isNotEmpty() || uploads.isNotEmpty()
     val inputStyle = if (homeLayout) HomeComposerInputStyle else ComposerInputStyle
     val textMeasurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    // Keep idle Chat/Task geometry stable even when their hints have different lengths.
+    val minimumInputWidth = remember(textMeasurer, inputStyle, density) {
+        textMeasurer.measure(AnnotatedString("Ask Dua AI..."), style = inputStyle,
+            softWrap = false, maxLines = 1).size.width
+    }
     val hasContent = activeText.isNotBlank() || hasAttachments
     val expanded = (!homeLayout && hasContent) || hasAttachments || '\n' in activeText
     val canSubmit = hasContent && sendEnabled && !typing && !uploading
@@ -196,6 +202,7 @@ fun Composer(
         // Keep the field in the same Layout slot so resizing never discards focus or the draft.
         val inlineTextWidth = maxWidth - margin * 2 - HomeSizes.barPaddingH * 2 - Sizes.touchTarget * (if (onImage != null) 4 else 3) - Spacing.sm * 2
         val stacked = expanded || (homeLayout && maxOf(
+            minimumInputWidth,
             textMeasurer.measure(AnnotatedString(placeholder), style = inputStyle, softWrap = false, maxLines = 1).size.width,
             textMeasurer.measure(AnnotatedString(activeText), style = inputStyle, softWrap = false, maxLines = 1).size.width,
         ) > with(LocalDensity.current) { inlineTextWidth.roundToPx() })

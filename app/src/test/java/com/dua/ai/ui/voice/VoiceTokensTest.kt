@@ -1,6 +1,5 @@
 package com.dua.ai.ui.voice
 
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -19,6 +18,8 @@ import com.dua.ai.settings.LocalPreferences
 import com.dua.ai.ui.features.ComputerScreen
 import com.dua.ai.ui.settings.SettingsContent
 import com.dua.ai.ui.settings.SettingsUiState
+import com.dua.ai.ui.theme.DuaLightColorScheme
+import com.dua.ai.ui.theme.DuaDarkColorScheme
 import com.dua.ai.ui.theme.DuaTheme
 import com.dua.ai.ui.theme.PageDarkColors
 import com.dua.ai.ui.theme.PageLightColors
@@ -44,17 +45,16 @@ import org.robolectric.annotation.Config
 @Config(sdk = [34], qualifiers = "w411dp-h914dp-xxhdpi")
 class VoiceTokensTest {
     @get:Rule val compose = createComposeRule()
-    private val purple = Color(0xFF8B5CF6)
 
-    @Test fun voiceAccentIsTheSharedPurpleInLightAndDark() {
-        assertEquals(purple, VoiceLightColors.accent); assertEquals(purple, VoiceDarkColors.accent)
+    @Test fun voiceAccentMatchesSharedSchemeInLightAndDark() {
+        assertEquals(DuaLightColorScheme.primary, VoiceLightColors.accent); assertEquals(DuaDarkColorScheme.primary, VoiceDarkColors.accent)
         assertEquals(SheetLightColors.accent, VoiceLightColors.accent); assertEquals(SheetDarkColors.accent, VoiceDarkColors.accent)
         assertEquals(PageLightColors.text, VoiceLightColors.text); assertEquals(PageDarkColors.text, VoiceDarkColors.text)
         assertEquals(PageLightColors.subText, VoiceLightColors.subText); assertEquals(PageDarkColors.subText, VoiceDarkColors.subText)
     }
 
-    @Test fun settingsUpgradeUsesTheRequestedLightPurpleAndReadableDarkVariant() {
-        assertEquals(androidx.compose.ui.graphics.Color(0xFF7C3AED), SettingsLightColors.upgrade); assertEquals(androidx.compose.ui.graphics.Color(0xFFA78BFA), SettingsDarkColors.upgrade)
+    @Test fun settingsUpgradeUsesTheSharedAccentForEachAppearance() {
+        assertEquals(DuaLightColorScheme.primary, SettingsLightColors.upgrade); assertEquals(DuaDarkColorScheme.primary, SettingsDarkColors.upgrade)
     }
 
     @Test fun voiceTouchSlotsAreAtLeast48dp() {
