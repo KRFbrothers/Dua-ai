@@ -91,6 +91,7 @@ internal class ChatSettings(host: SettingsHost) : SettingsHost by host {
     fun setPersonality(value: com.dua.ai.settings.DuaPersonality) = saveAppearance { appearanceStore.setPersonality(value) }
     fun setAppearance(value: String) = saveAppearance { appearanceStore.setTheme(value) }
     fun setAccent(value: com.dua.ai.settings.AccentPreset?) = saveAppearance { appearanceStore.setAccent(value) }
+    fun setDynamicColor(enabled: Boolean) = saveAppearance { appearanceStore.setDynamicColor(enabled) }
     private fun saveAppearance(write: suspend () -> Unit) = viewModelScope.launch {
         try { write(); _settingsStatus.value = "Saved on this device." }
         catch (cancelled: CancellationException) { throw cancelled }

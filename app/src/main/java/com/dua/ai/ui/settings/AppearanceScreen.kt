@@ -44,13 +44,14 @@ fun AppearanceScreen(viewModel: ChatViewModel, onBack: () -> Unit, accentPage: B
         { enabled ->
             viewModel.updateSettings(viewModel.localSettings.value.copy(haptic = enabled))
             if (enabled) haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-        }, notice.ifBlank { readNotice }, onPersonality = viewModel::setPersonality)
+        }, notice.ifBlank { readNotice }, onPersonality = viewModel::setPersonality,
+        onDynamicColor = viewModel::setDynamicColor)
 }
 
 @Composable
 fun AppearanceContent(appearance: AppearancePreferences, settings: LocalPreferences, onBack: () -> Unit,
     onTheme: (String) -> Unit, onFont: (String) -> Unit, onHaptic: (Boolean) -> Unit, notice: String = "",
-    onPersonality: (DuaPersonality) -> Unit = {}) {
+    onPersonality: (DuaPersonality) -> Unit = {}, onDynamicColor: (Boolean) -> Unit = {}) {
     DuaPageScaffold("Appearance", onBack) {
         val switcher = com.dua.ai.ui.components.LocalThemeSwitcher.current
         Text("Choose your appearance", style = MaterialTheme.typography.titleLarge)
@@ -71,6 +72,9 @@ fun AppearanceContent(appearance: AppearancePreferences, settings: LocalPreferen
                 PreferenceChoice(title, settings.font == key) { onFont(key) }
             }
         }
+        SettingsGroup(null) { SettingsToggleRow(icon = null, title = "Wallpaper colours", checked = appearance.dynamicColor, onCheckedChange = onDynamicColor) }
+        Text(if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) "Use colours from your wallpaper instead of the Dua palette."
+            else "Needs Android 12 or newer. The Dua palette is used on this phone.", color = MaterialTheme.colorScheme.onSurfaceVariant)
         SettingsGroup(null) { SettingsToggleRow(Icons.Outlined.Vibration, "Haptic feedback", checked = settings.haptic, onCheckedChange = onHaptic) }
         Text("Text size follows your phone's font size setting.", color = MaterialTheme.colorScheme.onSurfaceVariant)
         SettingsGroup("Dua AI Personality", Modifier.selectableGroup()) {
