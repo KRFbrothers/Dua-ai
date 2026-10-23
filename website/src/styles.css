@@ -1,9 +1,24 @@
-/* Dua AI dark theme tokens (own palette; violet accent from the DUA logo). */
+/* Tailwind v4 (theme + utilities only; preflight skipped so existing look stays same). */
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+
+/* Dua AI dark theme — semantic tokens. primary = app teal (was violet #8b6cf0).
+   highlight = sidebar/raised surface (#0e0e11). */
 :root {
-  --bg: #141418; --side: #0e0e11; --panel: #1e1e24; --line: #2a2a32;
-  --text: #ececf1; --muted: #9a9aa6; --accent: #8b6cf0; --danger: #f08080;
+  --bg: #141418; --surface: #1e1e24; --border: #2a2a32;
+  --primary: #79D4C3; --highlight: #0e0e11;
+  --text: #ececf1; --muted: #9a9aa6; --danger: #f08080;
+  /* Legacy aliases — purane names abhi bhi kaam karte hain */
+  --panel: var(--surface); --line: var(--border); --accent: var(--primary); --side: var(--highlight);
   --radius: 14px; --touch: 48px;
   color-scheme: dark;
+}
+
+/* Tailwind semantic colour scale: bg-bg, bg-surface, border-border, text-primary, etc. */
+@theme inline {
+  --color-bg: var(--bg); --color-surface: var(--surface); --color-border: var(--border);
+  --color-primary: var(--primary); --color-highlight: var(--highlight);
+  --color-text: var(--text); --color-muted: var(--muted); --color-danger: var(--danger);
 }
 * { box-sizing: border-box; }
 html, body, #root { height: 100%; margin: 0; }
