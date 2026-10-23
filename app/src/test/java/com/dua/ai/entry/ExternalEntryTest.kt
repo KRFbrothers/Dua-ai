@@ -66,4 +66,12 @@ class ExternalEntryTest {
         val original = recreated.pending.toList()
         assertFalse(recreated.offer(a)); assertEquals(original, recreated.pending)
     }
+    @Test fun restoreSkipsBadBundlesWithoutDroppingGoodSavedEntries() {
+        assertNull(ExternalEntry.restore(android.os.Bundle().apply { putString("action", EntryAction.Query.wire) }))
+        assertNull(ExternalEntry.restore(ExternalEntry(action = EntryAction.Query).bundle().apply { putString("action", "bogus") }))
+        val good = ExternalEntry(action = EntryAction.Camera)
+        val bad = android.os.Bundle().apply { putString("action", "bogus") }
+        val saved = SavedStateHandle().apply { set("entries", arrayListOf(good.bundle(), bad)) }
+        assertEquals(listOf(good), EntryRequests(saved).pending)
+    }
 }
