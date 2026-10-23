@@ -22,8 +22,10 @@ import re
 import time
 import uuid
 
-SUB_STEPS = int(os.environ.get("AGENT_SUB_STEPS", "5"))
-TOTAL_SECONDS = int(os.environ.get("AGENT_ADK_SECONDS", "300"))
+from env_config import env_int
+
+SUB_STEPS = env_int("AGENT_SUB_STEPS", 5)
+TOTAL_SECONDS = env_int("AGENT_ADK_SECONDS", 300)
 PLAN_TOKENS = 2048
 SUB_TOKENS = 8192
 MERGE_TOKENS = 8192

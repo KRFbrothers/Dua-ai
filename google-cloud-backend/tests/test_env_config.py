@@ -42,3 +42,15 @@ def test_daily_limits_fall_back_to_zero(monkeypatch):
     assert app.daily_token_limit() == 0
     monkeypatch.setenv("AGENT_DAILY_TOKEN_LIMIT", "-5")
     assert app.daily_token_limit() == 0
+
+
+def test_bad_values_do_not_break_agent_adk_import(monkeypatch):
+    monkeypatch.setenv("AGENT_SUB_STEPS", "oops")
+    monkeypatch.setenv("AGENT_ADK_SECONDS", "")
+    import agent_adk
+    try:
+        adk = importlib.reload(agent_adk)
+        assert adk.SUB_STEPS == 5 and adk.TOTAL_SECONDS == 300
+    finally:
+        monkeypatch.undo()
+        importlib.reload(agent_adk)
