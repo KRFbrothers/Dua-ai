@@ -657,6 +657,10 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     fun setPersonality(value: com.dua.ai.settings.DuaPersonality) = settingsFeature.setPersonality(value)
     fun setAppearance(value: String) = settingsFeature.setAppearance(value)
     fun setAccent(value: com.dua.ai.settings.AccentPreset?) = settingsFeature.setAccent(value)
+    fun setDynamicColor(enabled: Boolean) { viewModelScope.launch {
+        try { appearanceStore.setDynamicColor(enabled); settingsNotice("Saved on this device.") }
+        catch (_: java.io.IOException) { settingsNotice("Appearance could not be saved. Check device storage and retry.") }
+    } }
     fun resetSettings() = settingsFeature.resetSettings()
     fun settingsNotice(text: String) = settingsFeature.settingsNotice(text)
     fun updateSettings(value: com.dua.ai.settings.LocalPreferences) = settingsFeature.updateSettings(value)
