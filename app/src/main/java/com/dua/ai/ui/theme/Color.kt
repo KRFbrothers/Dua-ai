@@ -9,8 +9,8 @@ import dev.snipme.highlights.model.SyntaxTheme
 import dev.snipme.highlights.model.SyntaxThemes
 
 /** Reference Agent task surface, with a readable dark counterpart. */
-val AgentTaskSurfaceLight = Color(0xFFF7F7F8)
-val AgentTaskSurfaceDark = Color(0xFF1A1B1F)
+internal val AgentTaskSurfaceLight = Color(0xFFF7F7F8)
+internal val AgentTaskSurfaceDark = Color(0xFF1A1B1F)
 
 /**
  * Raw palette. Screens never use these directly: they read [ColorScheme] roles from
@@ -63,7 +63,7 @@ internal object DuaPalette {
     val Red10 = Color(0xFF410002)
 }
 
-val DuaDarkColorScheme: ColorScheme = darkColorScheme(
+internal val DuaDarkColorScheme: ColorScheme = darkColorScheme(
     primary = DuaPalette.Teal80,
     onPrimary = DuaPalette.Teal20,
     primaryContainer = DuaPalette.Teal30,
@@ -102,7 +102,7 @@ val DuaDarkColorScheme: ColorScheme = darkColorScheme(
     surfaceContainerHighest = DuaPalette.Neutral16,
 )
 
-val DuaLightColorScheme: ColorScheme = lightColorScheme(
+internal val DuaLightColorScheme: ColorScheme = lightColorScheme(
     primary = DuaPalette.Teal40,
     onPrimary = DuaPalette.Neutral100,
     primaryContainer = DuaPalette.Teal95,
