@@ -53,7 +53,7 @@ object SheetSizes {
 }
 
 object SheetShapes {
-    val sheet = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+    val sheet = DuaShape.sheet
     val group = RoundedCornerShape(20.dp)
     val tile = RoundedCornerShape(20.dp)
     val badge = RoundedCornerShape(12.dp)

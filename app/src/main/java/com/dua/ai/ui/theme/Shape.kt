@@ -22,5 +22,5 @@ object DuaShape {
     val drawer = RoundedCornerShape(topEnd = 24.dp, bottomEnd = 24.dp)
     val pill = RoundedCornerShape(24.dp)
     val homeAction = RoundedCornerShape(20.dp)
-    val sheet = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+    val sheet = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
 }

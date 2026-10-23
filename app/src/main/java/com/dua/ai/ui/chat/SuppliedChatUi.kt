@@ -221,7 +221,8 @@ private fun SuppliedComposer(
                 value = text, onValueChange = onDraftChange,
                 textStyle = MaterialTheme.typography.bodyLarge.copy(color = textColor),
                 cursorBrush = SolidColor(DuaTheme.semantic.primary), maxLines = 6,
-                modifier = Modifier.fillMaxWidth().focusRequester(focusRequester).onFocusChanged { focused = it.isFocused }
+                decorationBox = { inner -> Box(Modifier.heightIn(min = Sizes.touchTarget), contentAlignment = Alignment.CenterStart) { inner() } },
+                modifier = Modifier.fillMaxWidth().heightIn(min = Sizes.touchTarget).focusRequester(focusRequester).onFocusChanged { focused = it.isFocused }
                     .semantics { contentDescription = "Message" },
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                 keyboardActions = KeyboardActions(onSend = { if (canSend) onSend() }),
