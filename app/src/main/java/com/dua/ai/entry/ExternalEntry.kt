@@ -27,8 +27,11 @@ data class ExternalEntry(val id: String = UUID.randomUUID().toString(), val acti
     companion object {
         const val IS_REMEMBER_THIS = "is_remember_this"
         const val MAX_TEXT = 32000
-        fun restore(b: Bundle) = ExternalEntry(b.getString("id")!!, EntryAction.entries.first { it.wire == b.getString("action") },
-            b.getString("text").orEmpty().take(MAX_TEXT), b.getStringArrayList("uris").orEmpty().take(3).map(Uri::parse), b.getString("notice").orEmpty(), b.getString("chatId"))
+        fun restore(b: Bundle): ExternalEntry? {
+            val id = b.getString("id")?.takeIf { it.isNotBlank() } ?: return null
+            val action = EntryAction.entries.firstOrNull { it.wire == b.getString("action") } ?: return null
+            return ExternalEntry(id, action, b.getString("text").orEmpty().take(MAX_TEXT), b.getStringArrayList("uris").orEmpty().take(3).map(Uri::parse), b.getString("notice").orEmpty(), b.getString("chatId"))
+        }
         fun parse(intent: Intent, packageName: String): ExternalEntry? = try {
             if (intent.action !in setOf(Intent.ACTION_SEND, Intent.ACTION_SEND_MULTIPLE)) {
                 EntryAction.widget.find { it.wire == intent.getStringExtra(DuaToolbarWidgetReceiver.EXTRA_WIDGET_ACTION) }?.let { ExternalEntry(action = it) }
@@ -65,7 +68,7 @@ data class ExternalEntry(val id: String = UUID.randomUUID().toString(), val acti
 
 /** Survives rotation/process recreation; consumed entries never repeat a picker or memory save. */
 class EntryRequests(private val savedState: SavedStateHandle) : ViewModel() {
-    var pending by mutableStateOf(runCatching { savedState.get<ArrayList<Bundle>>("entries").orEmpty().map(ExternalEntry::restore) }.getOrDefault(emptyList()))
+    var pending by mutableStateOf(runCatching { savedState.get<ArrayList<Bundle>>("entries").orEmpty().mapNotNull(ExternalEntry::restore) }.getOrDefault(emptyList()))
         private set
     fun offer(entry: ExternalEntry): Boolean {
         if (pending.size >= 4) return false
