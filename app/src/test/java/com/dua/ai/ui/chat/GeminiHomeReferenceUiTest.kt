@@ -18,7 +18,7 @@ import com.dua.ai.settings.LocalPreferences
 import com.dua.ai.setup.ProviderCapability
 import com.dua.ai.ui.theme.DuaTheme
 import com.dua.ai.ui.theme.Sizes
-import com.dua.ai.ui.theme.HomeFontFamily
+import com.dua.ai.ui.theme.InterFont
 import com.dua.ai.ui.theme.ComposerInputStyle
 import com.github.takahirom.roborazzi.captureRoboImage
 import java.io.File
@@ -40,7 +40,7 @@ class GeminiHomeReferenceUiTest(private val dark: Boolean, private val compact: 
     }
     @get:Rule val compose = createComposeRule()
 
-    @Test fun extractedFontIsOfflineAndLimitedToTheHomeComposer() {
+    @Test fun sharedInterFontIsOfflineAndDraftSurvivesLayoutChanges() {
         val home = mutableStateOf(true)
         compose.setContent {
             DuaTheme(LocalPreferences(theme = if (dark) "dark" else "light")) {
@@ -50,7 +50,7 @@ class GeminiHomeReferenceUiTest(private val dark: Boolean, private val compact: 
         fun fieldStyle() = mutableListOf<TextLayoutResult>().also { results ->
             compose.onNodeWithContentDescription("Message").performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(results) }
         }.single().layoutInput.style
-        assertEquals(HomeFontFamily, fieldStyle().fontFamily)
+        assertEquals(InterFont, fieldStyle().fontFamily)
         compose.runOnIdle { home.value = false }
         assertEquals(ComposerInputStyle.fontFamily, fieldStyle().fontFamily)
         compose.onNodeWithContentDescription("Message").assertTextContains("A real draft")
