@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { handleService, DEFAULT_ENGINE_URL } from '../src/server/service-handler.mjs';
 import { mockFetch, sseResponse, sse } from './helpers.mjs';
+import { PAUSED } from '../src/core/kill-switches.mjs';
 
 const origin='https://dua.test';
 // No access policy by default so engine-proxy tests need no Supabase fakes; quota tests add it.
@@ -129,4 +130,32 @@ test('web chat keeps the original access token when the guard does not refresh',
  const response=await run(req(),fetcher,quotaEnv);
  assert.equal(response.status,200);await response.text();
  assert.equal(fetcher.calls[2].init.headers.Authorization,'Bearer fake-access');
+});
+
+test('web chat returns the maintenance 503 before the quota or engine',async()=>{
+ const fetcher=mockFetch();
+ const response=await run(req(),fetcher,{...quotaEnv,DUA_MAINTENANCE:'1'});
+ assert.equal(response.status,503);
+ assert.equal((await response.json()).maintenance,true);
+ assert.equal(fetcher.calls.length,0);
+});
+
+test('web chat refuses paused Agent mode before the quota but still allows normal chat',async()=>{
+ const fetcher=mockFetch();
+ const response=await run(req(),fetcher,{...quotaEnv,DUA_DISABLE_AGENT:'1'});
+ assert.equal(response.status,503);
+ assert.deepEqual(await response.json(),{error:PAUSED.agent,paused:'agent'});
+ assert.equal(fetcher.calls.length,0);
+ const ok=mockFetch(sseResponse([sse({type:'done'},'done')]));
+ const plain=rawReq(JSON.stringify({mode:'auto',messages:[{role:'user',text:'hi'}]}));
+ const res=await run(plain,ok,{DUA_DISABLE_AGENT:'1'});
+ assert.equal(res.status,200);await res.text();
+});
+
+test('web chat turns content strings and parts into text for the engine',async()=>{
+ const fetcher=mockFetch(sseResponse([sse({type:'done'},'done')]));
+ const messages=[{role:'user',text:'a'},{role:'assistant',content:'b'},{role:'user',content:[{type:'text',text:'c'},{type:'image',url:'x'},{type:'text',text:'d'}],attachments:[]}];
+ const res=await run(rawReq(JSON.stringify({messages})),fetcher);
+ assert.equal(res.status,200);await res.text();
+ assert.deepEqual(fetcher.calls[0].body.messages,[{role:'user',text:'a'},{role:'assistant',text:'b'},{role:'user',attachments:[],text:'cd'}]);
 });
