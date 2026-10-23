@@ -368,3 +368,23 @@ internal object DuaFixedColors {
     val AuroraPink = Color(0xFFEC4899)
     val AuroraOrange = Color(0xFFF97316)
 }
+
+
+internal fun settingsColors(s: ColorScheme, d: DuaColors) = SettingsColors(
+    background = s.background, circleButton = s.surfaceContainerHigh,
+    circleBorder = d.floatingBorder, circleIcon = s.onSurfaceVariant,
+    avatar = s.primaryContainer, onAvatar = s.onPrimaryContainer,
+    editBadge = s.surfaceContainerHigh, editIcon = s.onSurface,
+    name = s.onSurface, card = s.surfaceContainerLow, cardBorder = d.floatingBorder,
+    rowIcon = s.onSurfaceVariant, rowText = s.onSurface, value = s.onSurfaceVariant,
+    accentValue = s.primary, arrow = s.onSurfaceVariant, chevron = s.onSurfaceVariant,
+    divider = d.floatingBorder, upgrade = s.primary, danger = s.error,
+)
+
+internal fun pageColors(s: ColorScheme, d: DuaColors) = PageColors(
+    background = s.background, card = s.surfaceContainerLow, cardBorder = d.floatingBorder,
+    fill = s.surfaceContainerHigh, text = s.onSurface, subText = s.onSurfaceVariant,
+    divider = d.floatingBorder, accent = s.primary, onAccent = s.onPrimary,
+    accentContainer = s.primaryContainer, onAccentContainer = s.onPrimaryContainer,
+    danger = s.error, outline = s.outline,
+)
