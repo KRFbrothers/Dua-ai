@@ -14,7 +14,7 @@ import androidx.compose.ui.unit.sp
 import com.dua.ai.model.ChatMessage
 import com.dua.ai.model.CodeRuns
 import com.dua.ai.model.ReplySources
-import com.dua.ai.ui.theme.DuaFixedColors
+import com.dua.ai.ui.theme.DuaTheme
 import com.dua.ai.ui.theme.Sizes
 import com.dua.ai.ui.theme.Spacing
 
@@ -82,7 +82,7 @@ fun AssistantMessage(
                     bodyStyle = if (suppliedStyle) androidx.compose.ui.text.TextStyle(
                         fontFamily = androidx.compose.ui.text.font.FontFamily.SansSerif,
                         fontSize = 16.sp, lineHeight = 24.sp) else null,
-                    textColor = if (suppliedStyle) DuaFixedColors.SuppliedText else null)
+                    textColor = if (suppliedStyle) DuaTheme.semantic.text else null)
             }
             if (streaming && !suppliedStyle) FadeInOnce { body() } else body()
         }
