@@ -18,20 +18,21 @@ from urllib.error import HTTPError
 from urllib.parse import quote, urlencode, urlsplit
 from urllib.request import Request, build_opener, HTTPRedirectHandler
 
+from env_config import env_int
 API = "https://api.github.com"
 BASE_BRANCH = "main"
 BRANCH_PREFIX = "dua-agent/"
 # Matches the generated flat slug/timestamp branch; never accept Git ref syntax from a tool caller.
 AGENT_BRANCH = re.compile(r"dua-agent/[a-z0-9](?:[a-z0-9-]{0,78}[a-z0-9])?")
-MAX_TOOL_STEPS = int(os.environ.get("CODING_MAX_STEPS", "15"))
+MAX_TOOL_STEPS = env_int("CODING_MAX_STEPS", 15)
 MAX_FILES_READ = 40
 MAX_READ_BYTES = 60_000           # per file returned to the model
 MAX_TOTAL_READ_BYTES = 600_000
 MAX_FILES_CHANGED = 10
 MAX_FILE_BYTES = 200_000          # per changed file
 MAX_TOTAL_CHANGE_BYTES = 600_000
-MAX_SECONDS = int(os.environ.get("CODING_MAX_SECONDS", "600"))  # deploy with --timeout 900
-STEP_TOKENS = int(os.environ.get("CODING_STEP_TOKENS", "16384"))
+MAX_SECONDS = env_int("CODING_MAX_SECONDS", 600)  # deploy with --timeout 900
+STEP_TOKENS = env_int("CODING_STEP_TOKENS", 16384)
 
 REPO_RULES = """Repository rules (must follow):
 - Android app in Kotlin with Jetpack Compose and Material 3.
@@ -115,7 +116,7 @@ TOKEN_CAP_NOTE = ("Note: this run reached its token limit (MAX_RUN_TOTAL_TOKENS)
 
 def run_token_cap():
     try:
-        return max(0, int(os.environ.get("MAX_RUN_TOTAL_TOKENS", "0") or 0))
+        return max(0, env_int("MAX_RUN_TOTAL_TOKENS", 0))
     except ValueError:
         return 0
 

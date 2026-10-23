@@ -33,6 +33,7 @@ import time
 from flask import Flask, Response, g, jsonify, request, stream_with_context
 import agent_models
 from owner_auth import OwnerAuthError, verify_owner
+from env_config import env_int
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 5 * 1024 * 1024
@@ -68,7 +69,7 @@ GENERIC_ERROR = "The Dua AI engine could not answer right now. Please try again.
 # Dua Agent: casual messages get one direct reply; tasks run the tool loop in agent_tools.py
 # (max AGENT_MAX_STEPS model calls, at most 3 grounded searches and 2 code runs per request).
 # Output caps include thinking tokens on Gemini 2.5/3, so leave room for low-level thinking.
-AGENT_ANSWER_TOKENS = int(os.environ.get("AGENT_ANSWER_TOKENS", "4096"))
+AGENT_ANSWER_TOKENS = env_int("AGENT_ANSWER_TOKENS", 4096)
 AGENT_MAX_SOURCES = 12
 
 SSE_HEADERS = {
@@ -429,7 +430,7 @@ def grounding_sources(response, limit=AGENT_MAX_SOURCES):
     return sources
 
 
-AGENT_ROUTER_TOKENS = int(os.environ.get("AGENT_ROUTER_TOKENS", "256"))
+AGENT_ROUTER_TOKENS = env_int("AGENT_ROUTER_TOKENS", 256)
 AGENT_ROUTER_TURNS = 6
 AGENT_ROUTER_PROMPT = (
     "You are a router for the Dua Agent. Decide if the user's LAST message needs web research. "
@@ -675,7 +676,7 @@ TOKEN_LIMIT_MESSAGE = ("Aaj ka Agent limit poora ho gaya hai. Kal phir try karei
 
 def daily_token_limit():
     try:
-        return max(0, int(os.environ.get("AGENT_DAILY_TOKEN_LIMIT", "0") or 0))
+        return max(0, env_int("AGENT_DAILY_TOKEN_LIMIT", 0))
     except ValueError:
         return 0
 
@@ -1205,7 +1206,7 @@ def api_imagine_image():
     return response
 
 
-TITLE_TOKENS = int(os.environ.get("TITLE_TOKENS", "256"))
+TITLE_TOKENS = env_int("TITLE_TOKENS", 256)
 TITLE_PROMPT = ("Write a short title (3 to 6 words) for this chat, in the language of the user's message. "
                 "No quotes, no emoji, no ending punctuation. Reply only with JSON like {\"title\": \"...\"}.")
 
