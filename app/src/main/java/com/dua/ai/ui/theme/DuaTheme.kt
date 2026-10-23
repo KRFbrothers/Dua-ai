@@ -1,8 +1,11 @@
 package com.dua.ai.ui.theme
 
 import android.app.Activity
+import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.dynamicDarkColorScheme
+import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -12,6 +15,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 import com.dua.ai.settings.LocalPreferences
@@ -37,11 +41,18 @@ fun DuaTheme(
     darkTheme: Boolean = isDarkTheme(preferences),
     accent: AccentPreset? = null,
     updateSystemBars: Boolean = true,
+    /** "Wallpaper colours" setting: on Android 12+ use the system dynamic scheme. */
+    dynamicColor: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     val typography = remember(preferences.font) { duaTypography(fontFamilyFor(preferences.font)) }
     val preset = accent ?: AccentPreset.defaultFor(darkTheme)
-    val scheme = remember(darkTheme, preset) { accentedScheme(if (darkTheme) DuaDarkColorScheme else DuaLightColorScheme, preset, darkTheme) }
+    val context = LocalContext.current
+    val useDynamic = dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+    val scheme = remember(darkTheme, preset, useDynamic, context) {
+        if (dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) { if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context) }
+        else accentedScheme(if (darkTheme) DuaDarkColorScheme else DuaLightColorScheme, preset, darkTheme)
+    }
     val extra = if (darkTheme) DuaDarkColors else DuaLightColors
     val view = LocalView.current
     if (updateSystemBars && !view.isInEditMode) SideEffect {

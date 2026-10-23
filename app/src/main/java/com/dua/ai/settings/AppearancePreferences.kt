@@ -27,7 +27,9 @@ enum class AccentPreset(val label: String, val argb: Long) {
 }
 
 data class AppearancePreferences(val theme: String = "system", val accent: AccentPreset? = null,
-    val personality: DuaPersonality? = null) {
+    val personality: DuaPersonality? = null,
+    /** "Wallpaper colours": use Android 12+ dynamic colour instead of the Dua palette. Off by default. */
+    val dynamicColor: Boolean = false) {
     fun resolvedAccent(dark: Boolean) = accent ?: AccentPreset.defaultFor(dark)
 }
 
@@ -69,20 +71,25 @@ class AppearanceStore internal constructor(private val store: DataStore<Preferen
         store.edit { if (value == null) it.remove(ACCENT) else it[ACCENT] = value.name }
         mutableNotice.value = ""
     }
+    suspend fun setDynamicColor(enabled: Boolean) {
+        store.edit { it[DYNAMIC_COLOR] = enabled }
+        mutableNotice.value = ""
+    }
     suspend fun setPersonality(value: DuaPersonality) {
         store.edit { it[PERSONALITY] = value.id }
         mutableNotice.value = ""
     }
     suspend fun reset() {
-        store.edit { it[THEME] = "system"; it.remove(ACCENT); it.remove(PERSONALITY) }
+        store.edit { it[THEME] = "system"; it.remove(ACCENT); it.remove(PERSONALITY); it.remove(DYNAMIC_COLOR) }
         mutableNotice.value = ""
     }
     companion object {
         internal val THEME = stringPreferencesKey("appearance")
         internal val ACCENT = stringPreferencesKey("accent_override")
         internal val PERSONALITY = stringPreferencesKey("dua_personality")
+        internal val DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
         internal val MIGRATED = booleanPreferencesKey("legacy_appearance_copied")
         internal fun decode(p: Preferences) = AppearancePreferences(p[THEME]?.takeIf { it in listOf("system", "light", "dark") } ?: "system",
-            AccentPreset.fromName(p[ACCENT]), DuaPersonality.fromId(p[PERSONALITY]))
+            AccentPreset.fromName(p[ACCENT]), DuaPersonality.fromId(p[PERSONALITY]), p[DYNAMIC_COLOR] == true)
     }
 }

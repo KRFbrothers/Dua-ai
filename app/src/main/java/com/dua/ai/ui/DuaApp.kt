@@ -44,7 +44,7 @@ fun DuaApp(viewModel: ChatViewModel = viewModel(), notificationRoute: Pair<Strin
             runCatching { com.dua.ai.entry.ChatShortcuts.publish(context, shortcutTargets) }
         }
     }
-    DuaTheme(preferences.copy(theme = appearance.theme), accent = appearance.accent) {
+    DuaTheme(preferences.copy(theme = appearance.theme), accent = appearance.accent, dynamicColor = appearance.dynamicColor) {
         com.dua.ai.ui.components.TelegramThemeSwitchHost(com.dua.ai.ui.theme.DuaTheme.colors.isDark, com.dua.ai.ui.theme.rememberMotionAllowed()) {
         val switches by viewModel.switches.collectAsState()
         val checking by viewModel.switchesChecking.collectAsState()
