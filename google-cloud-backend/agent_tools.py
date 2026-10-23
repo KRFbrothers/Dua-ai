@@ -29,15 +29,16 @@ import ssl
 import time
 from urllib.parse import urljoin, urlsplit
 
-MAX_STEPS = int(os.environ.get("AGENT_MAX_STEPS", "12"))
+from env_config import env_int
+MAX_STEPS = env_int("AGENT_MAX_STEPS", 12)
 # Argon thinks longer (output cap includes thinking), so it gets 32768 per step unless AGENT_STEP_TOKENS is set.
-STEP_TOKENS = int(os.environ.get("AGENT_STEP_TOKENS") or
-                  ("32768" if os.environ.get("AGENT_MODEL", "").startswith("gemini-4") else "16384"))
-SUB_TOKENS = int(os.environ.get("AGENT_SUB_TOKENS", "3072"))
-MAX_SECONDS = int(os.environ.get("AGENT_MAX_SECONDS", "600"))
+STEP_TOKENS = env_int("AGENT_STEP_TOKENS",
+                      32768 if os.environ.get("AGENT_MODEL", "").startswith("gemini-4") else 16384)
+SUB_TOKENS = env_int("AGENT_SUB_TOKENS", 3072)
+MAX_SECONDS = env_int("AGENT_MAX_SECONDS", 600)
 # Hard per-call deadlines so one slow model step or tool can never freeze the reply.
-STEP_SECONDS = int(os.environ.get("AGENT_STEP_SECONDS", "150"))
-TOOL_SECONDS = int(os.environ.get("AGENT_TOOL_SECONDS", "45"))
+STEP_SECONDS = env_int("AGENT_STEP_SECONDS", 150)
+TOOL_SECONDS = env_int("AGENT_TOOL_SECONDS", 45)
 
 
 def search_seconds():
