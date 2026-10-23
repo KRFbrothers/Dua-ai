@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 import com.dua.ai.model.ChatMessage
+import com.dua.ai.ui.theme.DuaFixedColors
 import com.dua.ai.ui.theme.DuaTheme
 
 /** Fareed's supplied UI, bound to the existing ChatRoute state/actions and ChatScreen host.
@@ -80,13 +81,13 @@ internal fun SuppliedChatScreen(
       MaterialTheme(colorScheme = darkColorScheme(), typography = Typography()) {
         Scaffold(
             modifier = Modifier.testTag("supplied-chat"),
-            containerColor = Color(0xFF131314),
+            containerColor = DuaFixedColors.SuppliedBg,
             topBar = {
                 CenterAlignedTopAppBar(
                     title = {
                         Text(
                             text = "Dua AI ✨",
-                            color = Color(0xFFE3E3E3),
+                            color = DuaFixedColors.SuppliedText,
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Medium,
                             modifier = Modifier.heightIn(min = 48.dp)
@@ -95,7 +96,7 @@ internal fun SuppliedChatScreen(
                                 .semantics { contentDescription = "Dua AI, chats and settings" }.wrapContentHeight(),
                         )
                     },
-                    colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = Color(0xFF131314)),
+                    colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = DuaFixedColors.SuppliedBg),
                 )
             },
             bottomBar = {
@@ -125,7 +126,7 @@ internal fun SuppliedChatScreen(
                             Text(
                                 text = (if (name != null) "Hello $name! " else "Hello! ") +
                                     "Main Dua AI hoon. Aaj hum kis project par kaam kar rahe hain?",
-                                color = Color(0xFFE3E3E3), fontSize = 16.sp, lineHeight = 24.sp,
+                                color = DuaFixedColors.SuppliedText, fontSize = 16.sp, lineHeight = 24.sp,
                             )
                         }
                     })
@@ -144,14 +145,14 @@ internal fun SuppliedUserMessage(message: ChatMessage, onOpenFile: (com.dua.ai.f
     val (body, names) = remember(text) { splitFileNames(text) }
     Column(modifier.fillMaxWidth(), horizontalAlignment = Alignment.End) {
         if (message.files.isNotEmpty()) MessageFileChips(names, message.files, onOpenFile)
-        else if (names.isNotEmpty()) Text(names.joinToString(", "), color = Color(0xFFE3E3E3), fontSize = 12.sp)
+        else if (names.isNotEmpty()) Text(names.joinToString(", "), color = DuaFixedColors.SuppliedText, fontSize = 12.sp)
         Box(Modifier.widthIn(max = 280.dp)
             .clip(RoundedCornerShape(topStart = 20.dp, topEnd = 4.dp, bottomStart = 20.dp, bottomEnd = 20.dp))
-            .background(Color(0xFF282A2C)).padding(horizontal = 16.dp, vertical = 12.dp)) {
+            .background(DuaFixedColors.SuppliedBubble).padding(horizontal = 16.dp, vertical = 12.dp)) {
             SelectionContainer {
                 Column {
                     quote?.let { BubbleQuote(it) }
-                    Text(body, color = Color(0xFFE3E3E3), fontSize = 16.sp, lineHeight = 22.sp)
+                    Text(body, color = DuaFixedColors.SuppliedText, fontSize = 16.sp, lineHeight = 22.sp)
                 }
             }
         }
@@ -177,8 +178,8 @@ internal fun GeminiBottomBar(
     onVoice: () -> Unit,
     focusRequester: FocusRequester,
 ) {
-    val surfaceColor = Color(0xFF1E1F20)
-    val textColor = Color(0xFFE3E3E3)
+    val surfaceColor = DuaFixedColors.SuppliedSurface
+    val textColor = DuaFixedColors.SuppliedText
     val text = state.draft
     val hasContent = text.isNotBlank() || state.attachments.isNotEmpty() || state.uploads.any { it.ref != null }
     val action = when {
@@ -205,7 +206,7 @@ internal fun GeminiBottomBar(
             BasicTextField(
                 value = text, onValueChange = actions.onDraftChange,
                 textStyle = TextStyle(color = textColor, fontSize = 16.sp),
-                cursorBrush = SolidColor(Color(0xFFA8C7FA)), maxLines = 6,
+                cursorBrush = SolidColor(DuaFixedColors.SuppliedPrimary), maxLines = 6,
                 modifier = Modifier.fillMaxWidth().focusRequester(focusRequester)
                     .semantics { contentDescription = "Message" },
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
@@ -225,7 +226,7 @@ internal fun GeminiBottomBar(
                     }
                 },
                 modifier = if (target == SuppliedComposerAction.Mic) Modifier.size(48.dp) else Modifier.size(48.dp)
-                    .clip(CircleShape).background(Color(0xFFA8C7FA)),
+                    .clip(CircleShape).background(DuaFixedColors.SuppliedPrimary),
             ) {
                 val (icon, description) = when (target) {
                     SuppliedComposerAction.Mic -> Icons.Default.Mic to "Voice"
@@ -233,7 +234,7 @@ internal fun GeminiBottomBar(
                     SuppliedComposerAction.Stop -> Icons.Default.Stop to "Stop response"
                     SuppliedComposerAction.CancelUpload -> Icons.Default.Close to "Cancel upload"
                 }
-                Icon(icon, description, tint = if (target == SuppliedComposerAction.Mic) textColor else Color(0xFF062E6F))
+                Icon(icon, description, tint = if (target == SuppliedComposerAction.Mic) textColor else DuaFixedColors.SuppliedOnPrimary)
             }
         }
         if (motion) AnimatedContent(
@@ -247,11 +248,11 @@ internal fun GeminiBottomBar(
 @Composable
 internal fun GeminiLoadingShimmer() {
     val shimmerColors = listOf(
-        Color(0xFF1E1F20),
-        Color(0xFF4285F4).copy(alpha = 0.6f),
-        Color(0xFF9B72CB).copy(alpha = 0.6f),
-        Color(0xFFD96570).copy(alpha = 0.6f),
-        Color(0xFF1E1F20)
+        DuaFixedColors.SuppliedSurface,
+        DuaFixedColors.SuppliedGlowBlue.copy(alpha = 0.6f),
+        DuaFixedColors.SuppliedGlowPurple.copy(alpha = 0.6f),
+        DuaFixedColors.SuppliedGlowRose.copy(alpha = 0.6f),
+        DuaFixedColors.SuppliedSurface
     )
 
     val motion = rememberReplyMotionAllowed()

@@ -64,13 +64,14 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.currentStateAsState
 import com.dua.ai.ui.components.infinitelyAnimatingLinearGradient
+import com.dua.ai.ui.theme.DuaFixedColors
 import com.dua.ai.ui.theme.HomeTheme
 import com.dua.ai.ui.theme.Spacing
 import com.dua.ai.ui.theme.rememberMotionAllowed
 
 object ComposerGlass {
     /** Blue, purple, pink, orange. Kept faint behind the glass so text contrast stays with the bar colours. */
-    val AuroraColors = listOf(Color(0xFF3B82F6), Color(0xFF8B5CF6), Color(0xFFEC4899), Color(0xFFF97316))
+    val AuroraColors = listOf(DuaFixedColors.AuroraBlue, DuaFixedColors.AuroraViolet, DuaFixedColors.AuroraPink, DuaFixedColors.AuroraOrange)
     const val AURORA_ALPHA = 0.22f
     const val AURORA_CYCLE_MILLIS = 9000
     /** Translucent chip fill; also retains the original effective aurora tint strength. */

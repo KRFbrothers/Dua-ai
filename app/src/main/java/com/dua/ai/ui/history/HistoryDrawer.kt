@@ -1,5 +1,6 @@
 package com.dua.ai.ui.history
 
+import com.dua.ai.ui.theme.DuaFixedColors
 import com.dua.ai.ui.theme.ChatTheme
 
 import com.dua.ai.ui.chat.DuaDialog
@@ -228,7 +229,7 @@ fun HistoryDrawer(
                             DialogSwipeRow(
                                 start = if (pinEnabled) DialogSwipeAction(if (chat.pinned) "Unpin" else "Pin", SwipePinIcon,
                                     c.chipFill, c.accent, c.chipText, slideOut = false) { onPinChat(chat.id, !chat.pinned)?.let { notice = it } } else null,
-                                end = DialogSwipeAction("Delete", SwipeDeleteIcon, c.chipFill, androidx.compose.ui.graphics.Color(0xFFDD4B39),
+                                end = DialogSwipeAction("Delete", SwipeDeleteIcon, c.chipFill, DuaFixedColors.SwipeDanger,
                                     c.chipText, slideOut = true) { swipeDelete(chat) },
                             ) {
                                 ChatRow(chat, chat.id == currentChatId, serverDeletionEnabled, pinEnabled, motionAllowed,
