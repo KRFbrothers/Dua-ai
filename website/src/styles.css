@@ -41,7 +41,7 @@ button:disabled { cursor: default; opacity: .55; }
 .login-card p { margin: 0; text-align: center; }
 .login-card label { display: flex; flex-direction: column; gap: 6px; font-size: 14px; color: var(--muted); }
 .login-card input { min-height: var(--touch); background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 0 14px; color: var(--text); }
-.primary-btn { min-height: var(--touch); border: 0; border-radius: 999px; background: var(--accent); color: #fff; font-weight: 600; }
+.primary-btn { min-height: var(--touch); border: 0; border-radius: 999px; background: var(--accent); color: var(--bg); font-weight: 600; }
 .banner { background: rgba(240,128,128,.12); border: 1px solid rgba(240,128,128,.4); color: var(--text); border-radius: 12px; padding: 10px 12px; font-size: 14px; }
 
 /* Layout */
@@ -55,7 +55,7 @@ button:disabled { cursor: default; opacity: .55; }
 .section { color: var(--muted); font-size: 12px; padding: 14px 10px 4px; }
 .foot { margin-top: auto; border-top: 1px solid var(--line); padding: 10px 4px 0; display: flex; gap: 10px; align-items: center; font-size: 14px; }
 .who { flex: 1; min-width: 0; } .who small { color: var(--muted); font-size: 12px; }
-.avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--accent); display: grid; place-items: center; font-weight: 700; color: #fff; }
+.avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--accent); display: grid; place-items: center; font-weight: 700; color: var(--bg); }
 .icon-btn { width: var(--touch); height: var(--touch); flex: none; display: grid; place-items: center; border-radius: 50%; color: var(--muted); border: 1px solid var(--line); background: none; }
 .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .top { height: 60px; display: flex; align-items: center; gap: 8px; padding: 0 12px; }
