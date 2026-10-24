@@ -73,7 +73,7 @@ class DuaApiClientWebTest {
         requests.forEach { request ->
             val json = requestJson(request)
             assertFalse(json.has("web"))
-            assertEquals(setOf("model", "messages", "attachments", "memory"), json.keySet())
+            assertEquals(setOf("model", "messages", "attachments", "memory"), json.keys().asSequence().toSet())
         }
     }
 
@@ -95,7 +95,7 @@ class DuaApiClientWebTest {
             assertEquals("application/json", request.header("Accept"))
             assertEquals("1", request.header("x-dua-native"))
             assertEquals("Bearer fake-session", request.header("Authorization"))
-            assertEquals(setOf("model", "messages", "attachments", "memory", "web"), json.keySet())
+            assertEquals(setOf("model", "messages", "attachments", "memory", "web"), json.keys().asSequence().toSet())
             assertEquals(mode, json.getString("web"))
             assertEquals("Gemini", json.getString("model"))
             assertEquals("- Prefer Hindi", json.getString("memory"))
