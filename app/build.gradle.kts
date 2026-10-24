@@ -208,7 +208,7 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("androidx.credentials:credentials:1.3.0")
     implementation("androidx.credentials:credentials-play-services-auth:1.3.0")
-    implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
+    implementation("com.google.android.libraries.identity.googleid:googleid:1.2.1")
     implementation("androidx.exifinterface:exifinterface:1.4.1")
     // On-device AI (Gemini Nano via ML Kit GenAI Prompt). beta2 is the last build on Kotlin stdlib 1.8 (beta3+ needs Kotlin 2.3).
     // The model itself is downloaded by Android AICore on supported phones, so nothing large ships in the APK.
