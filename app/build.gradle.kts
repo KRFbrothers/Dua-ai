@@ -110,7 +110,7 @@ gradle.taskGraph.whenReady({
 
 android {
     namespace = "com.dua.ai"
-    compileSdk = 35
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.dua.ai"

@@ -14,7 +14,7 @@ plugins {
 
 android {
     namespace = "com.dua.ai.benchmark"
-    compileSdk = 35
+    compileSdk = 37
 
     defaultConfig {
         minSdk = 28
