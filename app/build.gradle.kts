@@ -195,7 +195,7 @@ tasks.withType<Test>().configureEach {
 
 dependencies {
     // Streaming authenticated encryption for password-protected, bounded-memory data backups.
-    implementation("com.google.crypto.tink:tink-android:1.23.0")
+    implementation("com.google.crypto.tink:tink-android:1.24.0")
     implementation("com.google.android.gms:play-services-auth:21.6.0")
     implementation("androidx.work:work-runtime-ktx:2.10.1")
     implementation(platform("com.google.firebase:firebase-bom:34.7.0"))
