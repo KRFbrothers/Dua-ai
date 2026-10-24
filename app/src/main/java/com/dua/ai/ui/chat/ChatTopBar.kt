@@ -64,7 +64,9 @@ fun ChatTopBar(
         maxOf(Sizes.touchTarget, modelWidth + Sizes.iconTiny + Spacing.xs + HomeSizes.modelPillPaddingH * 2)
     BoxWithConstraints(Modifier.fillMaxWidth().statusBarsPadding()
         .padding(horizontal = HomeSizes.topBarPaddingH, vertical = HomeSizes.topBarPaddingV)) {
-        val inline = pairWidth + Spacing.xs * 2 <= maxWidth - Sizes.touchTarget * if (task) 2 else 3
+        // Reserve the same action space in both modes so large text never changes
+        // header height (and shifts the Home logo) when New chat is hidden in Task.
+        val inline = pairWidth + Spacing.xs * 2 <= maxWidth - Sizes.touchTarget * 3
         Column {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 HeaderButton(Icons.Outlined.DragHandle, "Open chat history", onMenu, onLongPress = onFindInChat)
