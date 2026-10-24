@@ -45,7 +45,9 @@ class AccountRepository(private val api: AccountApi, private val store: SessionP
     private fun installRefresh(value: Snapshot, next: AccountSession): String = synchronized(sessionLock) {
         check(credentialsMatch(value) && next.user.id == value.value?.user?.id) { "Account changed. Retry from the current account." }
         // Preserve any profile update that completed while the credential refresh was in flight.
-        writeSession(next.copy(user = session!!.user, provider = session!!.provider))
+        // credentialsMatch() proved the field is non-null; capture it once so the compiler can see that too.
+        val current = session ?: error("Sign in from Profile to continue.")
+        writeSession(next.copy(user = current.user, provider = current.provider))
         next.accessToken
     }
     private suspend fun token(expected: Snapshot): String = mutex.withLock {
@@ -103,7 +105,11 @@ class AccountRepository(private val api: AccountApi, private val store: SessionP
         check(user == null || user.id == expected.value?.user?.id) { "Account response changed. Sign in again." }
         if (user == null) {
             writeSession(null, authenticationChange = true); notice("Session expired. Sign in again.")
-        } else writeSession(session!!.copy(user = user.withAvatarFallback(session!!.user)))
+        } else {
+            // matches() proved the field is non-null; capture it once so the compiler can see that too.
+            val current = session ?: error("Sign in from Profile to continue.")
+            writeSession(current.copy(user = user.withAvatarFallback(current.user)))
+        }
         true
     }
     suspend fun load() {
@@ -172,7 +178,9 @@ class AccountRepository(private val api: AccountApi, private val store: SessionP
         synchronized(sessionLock) {
             check(matches(expected)) { "Account changed. Review phone number editing again." }
             // Keep any credentials or avatar refreshed while saving this single profile field.
-            writeSession(session!!.copy(user = session!!.user.copy(phoneNumber = phone)))
+            // matches() proved the field is non-null; capture it once so the compiler can see that too.
+            val current = session ?: error("Sign in from Profile to continue.")
+            writeSession(current.copy(user = current.user.copy(phoneNumber = phone)))
             notice(if (phone.isBlank()) "Phone number removed." else "Phone number saved.")
         }
     }
@@ -195,7 +203,7 @@ class AccountRepository(private val api: AccountApi, private val store: SessionP
         var revoked = false
         try { if (prior != null) revoked = api.request("/api/account/logout", "POST", token = prior.accessToken).optBoolean("revoked") }
         catch (cancelled: CancellationException) { throw cancelled }
-        catch (_: Exception) { }
+        catch (failure: Exception) { com.dua.ai.diagnostics.DuaLog.soft(com.dua.ai.diagnostics.SoftErrorArea.CloudSync, failure) }
         noticeIfCurrent(signedOut, if (revoked) "Signed out on this device. Local data stays saved." else "Signed out locally. Server revocation could not be confirmed.")
     }
     suspend fun cloud(): CloudReview {
