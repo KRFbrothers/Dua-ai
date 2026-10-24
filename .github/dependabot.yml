@@ -1,0 +1,98 @@
+# Dependabot configuration — dependency updates + security alerts.
+#
+# Kyun: repository me pehle koi dependabot.yml nahi tha, isliye
+# "Dependabot alerts are disabled for this repository" (403) aata tha
+# aur 14 known vulnerabilities (2 critical) chup-chaap jama ho rahe the.
+#
+# Docs: https://docs.github.com/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+
+version: 2
+
+updates:
+  # --- Android / Kotlin: root build.gradle.kts + gradle/libs.versions.toml ---
+  - package-ecosystem: "gradle"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Asia/Kolkata"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "android"
+    groups:
+      # Compose/AndroidX/AGP/Kotlin ek hi major family hai — inhe ek
+      # PR me rakho, warna 20 chhote PRs ban jaate hain.
+      kotlin-and-androidx:
+        patterns:
+          - "org.jetbrains.kotlin*"
+          - "androidx.*"
+          - "com.android.tools.build*"
+          - "com.google.devtools.ksp*"
+    commit-message:
+      prefix: "chore(deps)"
+      include: "scope"
+
+  # --- Website: React + Vite + Tailwind ---
+  - package-ecosystem: "npm"
+    directory: "/website"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:15"
+      timezone: "Asia/Kolkata"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "website"
+    groups:
+      react:
+        patterns:
+          - "react"
+          - "react-dom"
+          - "@types/react*"
+      vite-and-tailwind:
+        patterns:
+          - "vite"
+          - "@vitejs/*"
+          - "tailwindcss"
+          - "@tailwindcss/*"
+    commit-message:
+      prefix: "chore(deps)"
+      include: "scope"
+
+  # --- Web worker: pdf/excel parsing (unpdf, cfb) ---
+  - package-ecosystem: "npm"
+    directory: "/web"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:30"
+      timezone: "Asia/Kolkata"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "web"
+    commit-message:
+      prefix: "chore(deps)"
+      include: "scope"
+
+  # --- GitHub Actions: checks.yml + personal-apk.yml ---
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:45"
+      timezone: "Asia/Kolkata"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "ci"
+    groups:
+      actions:
+        patterns:
+          - "*"
+    commit-message:
+      prefix: "chore(ci)"
