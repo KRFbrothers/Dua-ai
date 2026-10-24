@@ -4,6 +4,8 @@
  */
 // Test-only module: macrobenchmarks + Baseline Profile generator for :app.
 // Nothing here is packaged in the Dua app. Needs a real phone (USB or wireless adb); see docs/PERFORMANCE.md.
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
 plugins {
     alias(libs.plugins.android.test)
     alias(libs.plugins.kotlin.android)
@@ -23,11 +25,14 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions {
-        jvmTarget = "17"
-    }
     targetProjectPath = ":app"
     experimentalProperties["android.experimental.self-instrumenting"] = true
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget.set(JvmTarget.JVM_17)
+    }
 }
 
 baselineProfile {
