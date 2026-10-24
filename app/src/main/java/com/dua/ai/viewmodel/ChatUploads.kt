@@ -139,7 +139,7 @@ internal class ChatUploads(host: UploadsHost) : UploadsHost by host {
                 pendingDeletes.remove(paths); again = true
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (failure: com.dua.ai.account.AccountException) { if (failure.status == 400) pendingDeletes.remove(paths) }
-            catch (_: Exception) { }
+            catch (failure: Exception) { com.dua.ai.diagnostics.DuaLog.soft(com.dua.ai.diagnostics.SoftErrorArea.FileDelete, failure) }
             finally { flushingDeletes = false }
             if (again) flushPendingFileDeletes()
         }

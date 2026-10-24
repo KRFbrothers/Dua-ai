@@ -307,7 +307,7 @@ internal class ChatImagine(host: ImagineHost) : ImagineHost by host {
         viewModelScope.launch {
             try { _imagineUsage.value = account.withToken { token -> token?.let { imagineApi.usage(it) } } }
             catch (cancelled: CancellationException) { throw cancelled }
-            catch (_: Exception) { }
+            catch (failure: Exception) { com.dua.ai.diagnostics.DuaLog.soft(com.dua.ai.diagnostics.SoftErrorArea.ImagineUsage, failure) }
         }
     }
 
