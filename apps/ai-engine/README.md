@@ -176,7 +176,9 @@ Then use this single flow for the existing `dua-ai-engine` service:
    service environment, secret and IAM bindings. Keep the snapshot for rollback.
 3. Verify the candidate revision/tag URL, owner-only capabilities, storage
    readiness and the intended authenticated workflow. Public health or offline
-   CI alone does not verify provider readiness. `adk_cli.py status --endpoint`
+   CI alone does not verify provider readiness. Follow the
+   [PostgreSQL readiness checklist](../../docs/ADK_IMPLEMENTATION.md#postgresql-readiness-checklist-before-promote)
+   before promotion. `adk_cli.py status --endpoint`
    can query candidate capabilities with the existing owner credentials in the
    environment; `run` is a separate explicit live request.
 4. Set `ADK_VERIFIED_REVISION` to the exact revision you verified, then run
@@ -363,13 +365,17 @@ result is thrown away and no further calls are made.)
 
 - **Write tools need your approval.** `propose_changes` (open a PR), `create_issue`, `comment_on_issue`, `save_note`
   and `delete_note` never run inside the agent loop. The engine checks the call (paths, sizes, pre-check), stores it
-  in server memory and streams an `approval` event `{"id","tool","title","details","expiresIn"}`; the reply says
+  through `agent_store.approvals()` and streams an `approval` event `{"id","tool","title","details","expiresIn"}`; the reply says
   "Approval needed". The normal loop then stops; in ADK mode the helper is told to wait and the merger says so.
   The app shows an Approve / Reject card. Approve calls `POST /api/agent/action` with only the id: the engine checks
-  the owner login, takes the action out of memory (single use) and refuses it after 15 minutes
-  (`AGENT_APPROVAL_SECONDS`, 410) or if unknown/used/another owner (404). Reject drops it, and the app adds
-  "You declined …" to the reply so the Agent sees it in the next turn. Pending actions live only in this instance's
-  memory (`--workers 1`): after a restart or on another instance the id is unknown and nothing runs.
+  the owner login, consumes the action (single use) and refuses it after 15 minutes
+  (`AGENT_APPROVAL_SECONDS`, 410) or if unknown/used/another owner (404). Reject consumes it without
+  executing the write, and the app adds "You declined …" to the reply so the Agent sees it in the next turn. With `ADK_SESSION_DB_URL`
+  configured, both paths use SQL approvals and atomic claims; shared PostgreSQL preserves pending
+  actions across instances/restarts. Without it, the fallback is this instance's memory
+  (`--workers 1`): after a restart or on another instance the id is unknown and nothing runs.
+  Follow the [PostgreSQL readiness checklist](../../docs/ADK_IMPLEMENTATION.md#postgresql-readiness-checklist-before-promote)
+  before relying on durable approvals; worker/min-instance settings do not establish durability.
 - **Read-only tools stay automatic** (search, pages, files, issues, notes search, calculator, time, Python sandbox).
   `generate_image` (owner storage, 1 per request, daily cap) and `remember` (only a suggestion the app's Memory review
   list asks you about) also stay automatic.

@@ -85,8 +85,10 @@ python adk_cli.py status
 ```
 
 The official SDK owns its session/event tables; Dua adds approvals, leases,
-documents and vector chunks in the same private schema. Initialization is
-additive. No user migration or cloud command is executed by routine tests.
+coding workspaces, documents and vector chunks in the same private schema.
+`init-db` changes database objects and permissions; it is a separate setup step,
+not a read-only readiness probe. No user migration or cloud command is executed
+by routine tests.
 
 Each durable pipeline emits an `agent_session` SSE event containing `runId`.
 Resume with the owner-authenticated existing chat endpoint:
@@ -106,6 +108,96 @@ prevents duplicate queued writes during resume. An atomic claim makes an
 approval single-use; other owners cannot consume it. Claimed/expired actions
 are not retried automatically. A provider-side failure after a claim can be
 uncertain; inspect the external action before requesting a new write.
+
+### PostgreSQL readiness checklist before promote
+
+Audit finding #5 is a deployment check. This checklist documents how to collect
+evidence; it does not certify the owner's live database. Keep the candidate at
+0% traffic until these checks and the intended workflow have been verified.
+
+1. **Check the candidate's settings.** `ADK_SESSION_DB_URL` must be bound from
+   Secret Manager to the intended shared PostgreSQL database and dedicated role,
+   using a direct/session connection with verified TLS. All participating
+   revisions/instances must use that same database/schema. The staged rollout
+   sets `AGENT_ENGINE=adk` and `ADK_PRODUCTION=1`; it preserves other bindings
+   but does not create the DB binding or initialize tables. Retain the existing
+   owner Auth settings listed in the [engine README](../apps/ai-engine/README.md#settings-environment-variables-only-no-secrets-in-code).
+   A successful startup without the DB URL still permits instance-memory
+   approvals; startup/health alone is insufficient.
+2. **Confirm preparation.** The private `dua_adk` schema must contain
+   `dua_agent_approvals`, `dua_agent_leases`, `dua_agent_documents`,
+   `dua_agent_chunks` and the pinned SDK's session tables (including `sessions`
+   and `events`). Initialization also creates `dua_coding_workspaces`; check it
+   if workspace checkpoints are used. pgvector's `extensions.vector` type and
+   schema permissions are required by `init-db` even when embeddings are off.
+   Have the administrator confirm runtime table privileges and the approval
+   columns/primary key/unique `request_key` against
+   [the owner module](../apps/ai-engine/dua_engine/agent/agent_store.py).
+   Keep the schema private and unrelated application tables inaccessible.
+3. **Run the read-only commands in Cloud Shell.** Use the current checkout and
+   its installed engine dependencies. Cloud Run bindings are not automatically
+   exported into Cloud Shell: securely supply the same `ADK_SESSION_DB_URL` for
+   local diagnostics, and `DUA_OWNER_ACCESS_TOKEN` plus `DUA_APP_TOKEN` if the
+   service requires it for remote diagnostics. Do not print credentials or pass
+   them as command arguments. Set `ADK_CANDIDATE_ORIGIN` to the HTTPS origin of
+   the staged `adk-candidate` tag, not the serving service URL.
+
+   ```bash
+   # From the repository root; plan prints revision/traffic, not env values.
+   bash apps/ai-engine/deploy-adk.sh plan
+   cd apps/ai-engine
+   python adk_cli.py status
+   python adk_cli.py status --endpoint "$ADK_CANDIDATE_ORIGIN"
+   ```
+
+   Both storage results must show `configured: true`, `ready: true`,
+   `reason: "ok"` and `durableAcrossInstances: true`. On the candidate also check
+   `adkEnabled: true` and `build` against the intended source SHA; record the
+   exact tagged revision for `ADK_VERIFIED_REVISION`. Any missing/false field,
+   `not_configured`, `migration_required`, `unavailable` or nonzero command exit
+   blocks promotion. `durableAcrossInstances: true` alone only identifies a
+   connected PostgreSQL backend; `ready` only checks six visible table names.
+4. **Check private-schema metadata through the application's connection.**
+   From that same `apps/ai-engine/` shell, this reads metadata only and prints no
+   DB URL, owner IDs or approval payloads:
+
+   ```bash
+   python - <<'PY'
+   import json
+   import agent_store
+   from sqlalchemy import inspect, text
+   db = None
+   try:
+       db = agent_store.engine()
+       with db.connect() as connection:
+           connection.execute(text("SET TRANSACTION READ ONLY"))
+           row = connection.execute(text("SELECT current_schema(), current_setting('search_path'), to_regtype('extensions.vector') IS NOT NULL")).one()
+           print(json.dumps({"schema": row[0], "searchPath": row[1],
+                             "vectorTypePresent": row[2],
+                             "tables": inspect(connection).get_table_names(schema="dua_adk")}))
+   except Exception:
+       raise SystemExit("Metadata check failed; check server configuration securely.") from None
+   finally:
+       if db is not None:
+           db.dispose()
+   PY
+   ```
+
+   Require `schema: "dua_adk"`, search path `dua_adk, extensions`, the expected
+   tables above and `vectorTypePresent: true`. This checks the synchronous
+   approval connection; it does not exercise the SDK's async session/resume
+   path. Neither metadata probe proves column compatibility, write privileges,
+   atomic claims across instances or live provider availability.
+5. **Record the remaining evidence before promote.** Verify session/resume and
+   cross-instance single-use approvals with synthetic data in isolated staging,
+   using the same image/configuration. Those are separate write-capable checks,
+   not commands to run against real pending approvals. Approve/reject consumes
+   an action, and a claim does not prove the external write succeeded. Do not
+   use `init-db`, indexing or approval actions as read-only probes. Keep the
+   checked revision, build, secret versions (not values), diagnostic results and
+   staging workflow result with the rollout record. CI's disposable PostgreSQL
+   tests do not certify the live database; `liveProvidersVerified: false` in
+   capabilities is deliberate.
 
 ## Vector memory and owned-document RAG
 
