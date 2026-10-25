@@ -17,9 +17,11 @@ SATELLITES = (
     "agent_models", "agent_notes", "agent_observability", "agent_policy",
     "agent_resilience", "agent_safety", "agent_store", "agent_toolkit", "agent_verify",
 )
+HUBS = ("agent_adk", "agent_tools")
+AGENT_MODULES = SATELLITES + HUBS
 
 
-@pytest.mark.parametrize("name", SATELLITES)
+@pytest.mark.parametrize("name", AGENT_MODULES)
 def test_legacy_and_packaged_agent_imports_share_module(name):
     legacy = importlib.import_module(name)
     packaged = importlib.import_module("dua_engine.agent." + name)
@@ -59,6 +61,37 @@ def test_model_client_cache_is_shared_without_creating_a_client(monkeypatch):
     assert packaged.key_client() is cached
 
 
+def test_legacy_tools_monkeypatch_changes_packaged_class_globals(monkeypatch):
+    import agent_tools
+    from dua_engine.agent import agent_tools as packaged
+
+    assert agent_tools.AgentRun is packaged.AgentRun
+    assert agent_tools.Cancelled is packaged.Cancelled
+    assert agent_tools.DeadlineExceeded is packaged.DeadlineExceeded
+    monkeypatch.setattr(agent_tools, "MAX_SOURCES", 1)
+    run = packaged.AgentRun({})
+    found = run.add_sources([
+        {"url": "https://example.test/one", "title": "One"},
+        {"url": "https://example.test/two", "title": "Two"},
+    ])
+    assert [row["title"] for row in found] == ["One"]
+    assert len(run.sources) == 1
+
+
+def test_legacy_adk_monkeypatch_preserves_lazy_fallback(monkeypatch):
+    import agent_adk
+    from dua_engine.agent import agent_adk as packaged
+
+    calls, logs = [], []
+    def unavailable():
+        calls.append("load")
+        raise ImportError("Synthetic SDK unavailable")
+    monkeypatch.setattr(agent_adk, "load_adk", unavailable)
+    assert packaged.run({}, "Synthetic request", "flash", "agent", None, log=logs.append) is None
+    assert calls == ["load"]
+    assert logs == ["[dua-agent] ADK not installed; using the normal loop"]
+
+
 @pytest.fixture(scope="module")
 def shipped_runtime(tmp_path_factory):
     """Stage the Docker Python inputs without relying on checkout/test imports."""
@@ -80,7 +113,7 @@ def run_isolated(runtime, probe, *args):
     assert result.returncode == 0, result.stdout + result.stderr
 
 
-@pytest.mark.parametrize("name", SATELLITES)
+@pytest.mark.parametrize("name", AGENT_MODULES)
 @pytest.mark.parametrize("legacy_first", (True, False))
 def test_fresh_import_orders_and_reload(shipped_runtime, name, legacy_first):
     run_isolated(shipped_runtime, """
@@ -99,6 +132,9 @@ def test_fresh_import_orders_and_reload(shipped_runtime, name, legacy_first):
             canonical = importlib.import_module('dua_engine.agent.' + path.stem)
             assert legacy is canonical
             assert getattr(dua_engine.agent, path.stem) is canonical
+        assert not any(key == 'google.adk' or key.startswith('google.adk.') or
+                       key == 'google.genai' or key.startswith('google.genai.')
+                       for key in sys.modules)
         assert importlib.reload(module) is module
         assert importlib.import_module(name) is module
         assert importlib.import_module('dua_engine.agent.' + name) is module
@@ -114,7 +150,7 @@ def test_shipped_runtime_hubs_coding_and_cloud_run_entrypoints(shipped_runtime, 
 
         sys.path.insert(0, sys.argv[1])
         prefix = '' if sys.argv[2] == 'True' else 'dua_engine.agent.'
-        for name in ('agent_safety', 'agent_models', 'agent_store', 'agent_toolkit'):
+        for name in ('agent_adk', 'agent_tools', 'agent_safety', 'agent_models', 'agent_store', 'agent_toolkit'):
             importlib.import_module(prefix + name)
         import agent_adk, agent_tools, agent_models, agent_store, agent_toolkit
         from dua_engine.agent import agent_safety
