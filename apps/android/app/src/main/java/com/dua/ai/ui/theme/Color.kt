@@ -63,6 +63,34 @@ internal object DuaPalette {
     val Red10 = Color(0xFF410002)
 }
 
+/**
+ * Reference-matched surface values, read pixel-by-pixel from the supplied reference screenshots.
+ * Kept separate from [DuaPalette] so the original neutral ramp stays intact for every role that
+ * was not part of the match.
+ *
+ * Values only: no third-party logo, wordmark or brand font is referenced here. Dua's own logo
+ * and heading assets stay the sole brand identity.
+ */
+internal object DuaMatch {
+    // Dark surfaces.
+    val DarkComposer = Color(0xFF20201E)
+    val DarkBackground = Color(0xFF151515)
+    val DarkBubble = Color(0xFF313131)
+    val DarkText = Color(0xFFFAFAF8)
+    val DarkMuted = Color(0xFFB4B4B4)
+    // Light surfaces.
+    val LightComposer = Color(0xFFFFFFFF)
+    val LightBackground = Color(0xFFF9F9F9)
+    val LightText = Color(0xFF1F1F1F)
+    val LightMuted = Color(0xFF444746)
+    // Light composer gradient (top -> bottom) and its suggestion chip.
+    val ComposerGradientTop = Color(0xFFF9F9F9)
+    val ComposerGradientBottom = Color(0xFFC4E3FF)
+    val SuggestionChip = Color(0xFFDBEEFD)
+    // Optional warm copper accent. Dua's own teal stays the default accent.
+    val WarmCopper = Color(0xFFDA7757)
+}
+
 /** Material 3 tonal-spot scheme generated from seed #0B7366 (material-color-utilities 0.3.0). */
 internal val DuaDarkColorScheme: ColorScheme = darkColorScheme(
     primary = Color(0xFF83D5C6),
@@ -78,12 +106,12 @@ internal val DuaDarkColorScheme: ColorScheme = darkColorScheme(
     onTertiary = Color(0xFF133348),
     tertiaryContainer = Color(0xFF2C4A60),
     onTertiaryContainer = Color(0xFFCBE6FF),
-    background = Color(0xFF0E1513),
-    onBackground = Color(0xFFDDE4E1),
-    surface = Color(0xFF0E1513),
-    onSurface = Color(0xFFDDE4E1),
+    background = DuaMatch.DarkBackground,
+    onBackground = DuaMatch.DarkText,
+    surface = DuaMatch.DarkBackground,
+    onSurface = DuaMatch.DarkText,
     surfaceVariant = Color(0xFF3F4946),
-    onSurfaceVariant = Color(0xFFBEC9C5),
+    onSurfaceVariant = DuaMatch.DarkMuted,
     inverseSurface = Color(0xFFDDE4E1),
     inverseOnSurface = Color(0xFF2B3230),
     error = Color(0xFFFFB4AB),
@@ -118,12 +146,12 @@ internal val DuaLightColorScheme: ColorScheme = lightColorScheme(
     onTertiary = Color(0xFFFFFFFF),
     tertiaryContainer = Color(0xFFCBE6FF),
     onTertiaryContainer = Color(0xFF2C4A60),
-    background = Color(0xFFF4FBF8),
-    onBackground = Color(0xFF171D1B),
-    surface = Color(0xFFF4FBF8),
-    onSurface = Color(0xFF171D1B),
+    background = DuaMatch.LightBackground,
+    onBackground = DuaMatch.LightText,
+    surface = DuaMatch.LightBackground,
+    onSurface = DuaMatch.LightText,
     surfaceVariant = Color(0xFFDAE5E1),
-    onSurfaceVariant = Color(0xFF3F4946),
+    onSurfaceVariant = DuaMatch.LightMuted,
     inverseSurface = Color(0xFF2B3230),
     inverseOnSurface = Color(0xFFECF2EF),
     error = Color(0xFFBA1A1A),
@@ -214,13 +242,13 @@ internal fun voiceCubeFaceColor(shade: Float, alpha: Float): Color = Color(shade
 internal fun syntaxTokenColor(rgb: Int): Color = Color(rgb).copy(alpha = 1f)
 
 internal val DuaDarkColors = DuaColors(
-    userBubble = DuaPalette.Neutral16,
+    userBubble = DuaMatch.DarkBubble,
     onUserBubble = DuaPalette.Neutral93,
     codeBackground = DuaPalette.Neutral8,
     codeHeader = DuaPalette.Neutral13,
     codeBorder = DuaPalette.Neutral22,
     onCode = DuaPalette.Neutral90,
-    composer = DuaPalette.Neutral10,
+    composer = DuaMatch.DarkComposer,
     composerBorder = DuaPalette.Neutral22,
     floatingSurface = DuaPalette.Neutral13.copy(alpha = .94f),
     floatingBorder = DuaPalette.Neutral22.copy(alpha = .35f),
@@ -255,7 +283,7 @@ internal val DuaLightColors = DuaColors(
     codeHeader = DuaPalette.Neutral93,
     codeBorder = DuaPalette.Neutral90,
     onCode = DuaPalette.Ink,
-    composer = DuaPalette.Neutral97,
+    composer = DuaMatch.LightComposer,
     composerBorder = DuaPalette.Neutral90,
     floatingSurface = DuaPalette.Neutral100.copy(alpha = .94f),
     floatingBorder = DuaPalette.Neutral90.copy(alpha = .35f),
