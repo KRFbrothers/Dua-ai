@@ -1,0 +1,32 @@
+# Normalize line endings
+* text=auto eol=lf
+
+# Windows-only scripts keep CRLF
+*.bat text eol=crlf
+gradlew text eol=lf
+
+# Binary — never diff, never merge
+*.png binary
+*.jpg binary
+*.webp binary
+*.ttf binary
+*.otf binary
+*.riv binary
+*.apk binary
+*.jar binary
+*.so binary
+
+# Lottie / Rive JSON: generated, collapse in diffs
+*.json text eol=lf
+apps/android/app/src/main/assets/lottie/*.json -diff linguist-generated
+apps/android/app/src/main/res/raw/*.riv -diff linguist-generated
+
+# Lockfiles: generated, hide from diffs and stats
+package-lock.json -diff linguist-generated
+requirements-lock.txt -diff linguist-generated
+requirements-adapters-lock.txt -diff linguist-generated
+
+# Language stats: docs and vendored code don't count
+docs/** linguist-documentation
+third_party/** linguist-vendored
+apps/ai-engine/adk_examples/** linguist-vendored
