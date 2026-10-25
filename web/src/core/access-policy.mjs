@@ -1,4 +1,5 @@
 import { handleAccount } from './account.mjs';
+import { chatRateLimiter } from './request-rate-limit.mjs';
 
 const json = (body, status, headers = new Headers()) => {
   headers.set('Cache-Control', 'no-store');
@@ -13,19 +14,22 @@ function adminKey(value) {
 }
 
 /** Optional owner policy and durable request count; this is not a token or billing cap. */
-export async function guardChatAccess(request, { env = {}, fetcher = env.fetcher || fetch } = {}) {
+export async function guardChatAccess(request, { env = {}, fetcher = env.fetcher || fetch, rateLimiter = chatRateLimiter } = {}) {
   const owner = String(env.allowedEmail || env.DUA_ALLOWED_EMAIL || '').trim().toLowerCase();
   const loginValue = String(env.requireLogin ?? env.DUA_REQUIRE_LOGIN ?? '').trim().toLowerCase();
   const requireLogin = loginValue === 'true' || loginValue === '1';
   const rawLimit = env.dailyRequests ?? env.DUA_DAILY_REQUEST_LIMIT;
   const hasLimit = rawLimit !== undefined && rawLimit !== null && rawLimit !== '';
   const limit = Number(rawLimit);
+  const rawMinuteLimit = env.DUA_MINUTE_REQUEST_LIMIT ?? 20;
+  const minuteLimit = Number(rawMinuteLimit);
   const headers = new Headers();
   const denied = (message, status, extra = {}) => ({ allowed: false, headers, response: json({ error: message, ...extra }, status, headers) });
   if (!['', 'false', '0', 'true', '1'].includes(loginValue)) return denied('Required login setup is invalid.', 503);
+  if ((typeof rawMinuteLimit !== 'number' && (typeof rawMinuteLimit !== 'string' || !/^[1-9][0-9]*$/.test(rawMinuteLimit.trim()))) || !Number.isSafeInteger(minuteLimit) || minuteLimit < 1 || minuteLimit > 100000) return denied('Minute request limit setup is invalid.', 503);
   if (hasLimit && (typeof rawLimit !== 'number' && (typeof rawLimit !== 'string' || !/^[1-9][0-9]*$/.test(rawLimit.trim())) || !Number.isInteger(limit) || limit < 1 || limit > 100000)) return denied('Daily request limit setup is invalid.', 503);
   if (owner && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(owner)) return denied('Allowed account email setup is invalid.', 503);
-  if (!requireLogin && !owner && !hasLimit) return { allowed: true, user: null, headers };
+  if (!requireLogin && !owner && !hasLimit && env.DUA_MINUTE_REQUEST_LIMIT === undefined) return { allowed: true, user: null, headers };
 
   const settings = { ...env, url: env.url || env.SUPABASE_URL, key: env.key || env.SUPABASE_ANON_KEY, fetcher };
   const session = await handleAccount(new Request(new URL('/api/account/session', request.url), { headers: request.headers, signal: request.signal }), settings);
@@ -40,6 +44,11 @@ export async function guardChatAccess(request, { env = {}, fetcher = env.fetcher
   }
   if (owner && details.user.email.toLowerCase() !== owner) console.warn('[dua-access] AI request from non-allowed account rejected (403).');
   if (owner && details.user.email.toLowerCase() !== owner) return denied('Only the configured personal account can use online AI.', 403);
+  const burst = rateLimiter.consume(JSON.stringify([settings.url, details.user.id]), minuteLimit);
+  if (!burst.allowed) {
+    headers.set('Retry-After', String(burst.retryAfterSeconds));
+    return denied('Too many requests. Wait before trying again.', 429, { retryAfterSeconds: burst.retryAfterSeconds });
+  }
   if (!hasLimit) return { allowed: true, user: details.user, headers };
 
   const serviceKey = adminKey(env.serviceRoleKey || env.SUPABASE_SERVICE_ROLE_KEY);

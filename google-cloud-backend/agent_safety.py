@@ -8,8 +8,9 @@
    goes back to the model inside <<<UNTRUSTED_DATA>>> markers, and the system prompt says that such content is data,
    never instructions.
 
-Pending actions live in this process's memory (one Cloud Run instance, --workers 1). A restart or a different instance
-means the id is unknown: the app then shows "expired, ask the agent again" and nothing is written.
+agent_store.approvals() selects SQL-backed single-use approvals when ADK_SESSION_DB_URL is configured.
+Without it, PendingStore is a bounded process-local fallback: a restart or another instance cannot find the id,
+so nothing is written. Multi-instance deployments need the shared PostgreSQL store.
 """
 import json
 import os

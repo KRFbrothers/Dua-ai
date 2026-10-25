@@ -125,8 +125,18 @@ internal class ChatAgentControls(host: AgentControlsHost) : AgentControlsHost by
         if (!com.dua.ai.model.BuildInfos.validRepository(repository)) return
         buildUnavailableReason()?.let { _error.value = it; return }
         if (!buildUsable()) {
-            val config = _integrations.value.build!!
-            _selectedModel.value = listOf("Dua", "Gemini").first { name -> name in config.providers && _integrations.value.providers.any { it.name == name && it.configured } }
+            val integrations = _integrations.value
+            val config = integrations.build ?: run {
+                _error.value = "Build configuration changed. Refresh Feature setup and retry."
+                return
+            }
+            val model = listOf("Dua", "Gemini").firstOrNull { name ->
+                name in config.providers && integrations.providers.any { it.name == name && it.configured }
+            } ?: run {
+                _error.value = "Build mode needs a configured Dua or Gemini provider. Refresh Feature setup."
+                return
+            }
+            _selectedModel.value = model
         }
         _reasoning.value = false; _webMode.value = null; _xSearch.value = false; _runCode.value = false; _imagine.value = false; _agent.value = false
         _buildRepo.value = repository

@@ -8,10 +8,10 @@ Project `global-healer-m6shk`, region `us-central1`. Services: `dua-api` (web/) 
 
 | Switch | dua-api | dua-ai-engine | What the user sees |
 | --- | --- | --- | --- |
-| `DUA_DISABLE_AGENT=1` | Reported in `/api/config` (`switches.agent`) | Agent hidden in `GET /` and refused in `/api/chat` and `/api/agent/action` (works for old APKs too) | "Agent mode is paused right now…"; normal chat keeps working |
+| `DUA_DISABLE_AGENT=1` | Reported in `/api/config` (`switches.agent`) | Agent hidden in `GET /` and capabilities; Agent chat/actions, document POST/DELETE (including semantic search) and note reindex refused | "Agent mode is paused right now…"; normal chat keeps working |
 | `DUA_DISABLE_IMAGINE=1` | `/api/imagine/*` refused; `imagine` reported off | Engine Imagine endpoint refused | "Imagine is paused right now…" |
 | `DUA_DISABLE_VOICE=1` | `/api/voice/*` refused; AI voices and live voice reported off | – | "AI voices and live voice are paused…"; device voice still works |
-| `DUA_MAINTENANCE=1` (+ optional `DUA_MAINTENANCE_MESSAGE`, max 300 characters) | Chat, search, Imagine, voice, Build PR refused; account, cloud sync, files and config keep working | Chat, Agent and Imagine refused | New app: full-screen "App paused" page with the message. Old app: the message as a chat error |
+| `DUA_MAINTENANCE=1` (+ optional `DUA_MAINTENANCE_MESSAGE`, max 300 characters) | Chat, search, Imagine, voice, Build PR refused; account, cloud sync, files and config keep working | Chat, title generation, Agent, Imagine, document POST/DELETE (including semantic search) and note reindex refused; document GET and owner diagnostics remain available | New app: full-screen "App paused" page with the message. Old app: the message as a chat error |
 
 If the app cannot reach `/api/config` (offline, timeout after 5 s), it keeps working normally (fail open).
 

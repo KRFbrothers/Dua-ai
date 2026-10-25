@@ -12,6 +12,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
@@ -89,7 +90,7 @@ class DuaNavigator(private val nav: NavHostController, private val viewModel: Ch
 /** Swallows system Back while local data operations are running, as the old navigator did. */
 @Composable
 private fun BusyBackGuard(viewModel: ChatViewModel) {
-    val busy by viewModel.dataBusy.collectAsState()
+    val busy by viewModel.dataBusy.collectAsStateWithLifecycle()
     BackHandler(enabled = busy) {}
 }
 
@@ -113,16 +114,17 @@ fun DuaNavHost(viewModel: ChatViewModel, voice: ReplyVoice, notificationRoute: P
     val backStack by nav.currentBackStackEntryAsState()
     val route = backStack?.destination?.route
     val unstarted = remember { kotlinx.coroutines.flow.MutableStateFlow(androidx.lifecycle.Lifecycle.State.INITIALIZED) }
+    // Observe lifecycle transitions even below STARTED so background entry dispatch is blocked immediately.
     val entryLifecycle by (backStack?.lifecycle?.currentStateFlow ?: unstarted).collectAsState()
     val entryReady = entryLifecycle.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)
-    val dataBusy by viewModel.dataBusy.collectAsState()
-    val typing by viewModel.isTyping.collectAsState()
-    val reading by viewModel.readingFiles.collectAsState()
-    val preparing by viewModel.preparingFiles.collectAsState()
-    val attachments by viewModel.attachments.collectAsState()
-    val uploads by viewModel.uploads.collectAsState()
-    val account by viewModel.account.state.collectAsState()
-    val live by com.dua.ai.voice.live.LiveVoiceController.state.collectAsState()
+    val dataBusy by viewModel.dataBusy.collectAsStateWithLifecycle()
+    val typing by viewModel.isTyping.collectAsStateWithLifecycle()
+    val reading by viewModel.readingFiles.collectAsStateWithLifecycle()
+    val preparing by viewModel.preparingFiles.collectAsStateWithLifecycle()
+    val attachments by viewModel.attachments.collectAsStateWithLifecycle()
+    val uploads by viewModel.uploads.collectAsStateWithLifecycle()
+    val account by viewModel.account.state.collectAsStateWithLifecycle()
+    val live by com.dua.ai.voice.live.LiveVoiceController.state.collectAsStateWithLifecycle()
     val context = androidx.compose.ui.platform.LocalContext.current
     val waitingForAttachments = externalEntry?.let { it.action == EntryAction.Share && it.uris.isNotEmpty() } == true &&
         (attachments.isNotEmpty() || uploads.isNotEmpty())
@@ -190,7 +192,7 @@ fun DuaNavHost(viewModel: ChatViewModel, voice: ReplyVoice, notificationRoute: P
         composable(DuaDestination.Chat.route) {
             val remembered = rememberedRequest.value
             if (remembered != null) {
-                val owner by viewModel.account.state.collectAsState()
+                val owner by viewModel.account.state.collectAsStateWithLifecycle()
                 val dismiss = { consumeEntry.value(remembered.id) }
                 BackHandler { dismiss() }
                 RememberThisScreen(remembered, owner.user?.email, processAllowed.value, onSave = { text ->
@@ -200,7 +202,7 @@ fun DuaNavHost(viewModel: ChatViewModel, voice: ReplyVoice, notificationRoute: P
                 }, onSignIn = { navigator.open(DuaDestination.Account) }, onDismiss = dismiss)
             } else CompositionLocalProvider(LocalEntryDispatch provides entryDispatch.value) {
                 BusyBackGuard(viewModel)
-                val activeProject by viewModel.projectId.collectAsState()
+                val activeProject by viewModel.projectId.collectAsStateWithLifecycle()
                 if (activeProject != com.dua.ai.projects.ProjectCodec.PERSONAL) ProjectChatRoute(viewModel, voice,
                     onBack = exitFeature,
                     onDetail = { page ->
@@ -264,8 +266,8 @@ fun DuaNavHost(viewModel: ChatViewModel, voice: ReplyVoice, notificationRoute: P
         composable(DuaDestination.Projects.route) {
             BackHandler { exitFeature() }
             BusyBackGuard(viewModel)
-            val requestedProject by it.savedStateHandle.getStateFlow<String?>("open_project", null).collectAsState()
-            val requestedPage by it.savedStateHandle.getStateFlow<String?>("project_page", null).collectAsState()
+            val requestedProject by it.savedStateHandle.getStateFlow<String?>("open_project", null).collectAsStateWithLifecycle()
+            val requestedPage by it.savedStateHandle.getStateFlow<String?>("project_page", null).collectAsStateWithLifecycle()
             ProjectsFeatureFlow(viewModel, onBack = exitFeature, onOpenChat = { navigator.open(DuaDestination.ProjectChat) },
                 onPlugins = { navigator.open(DuaDestination.Plugins) }, onMic = { navigator.open(DuaDestination.Voice) },
                 onVoice = { navigator.open(DuaDestination.HandsFree) },
@@ -273,7 +275,7 @@ fun DuaNavHost(viewModel: ChatViewModel, voice: ReplyVoice, notificationRoute: P
                 onRequestConsumed = { it.savedStateHandle["open_project"] = null; it.savedStateHandle["project_page"] = null })
         }
         composable(DuaDestination.ProjectChat.route) {
-            val displayedProject by viewModel.projectId.collectAsState()
+            val displayedProject by viewModel.projectId.collectAsStateWithLifecycle()
             fun detail(page: String? = null) {
                 if (!viewModel.dataBusy.value) {
                     navigator.back()
@@ -301,10 +303,10 @@ fun DuaNavHost(viewModel: ChatViewModel, voice: ReplyVoice, notificationRoute: P
             }
         }
         composable(DuaDestination.Voice.route) {
-            val draft by viewModel.draft.collectAsState()
-            val settings by viewModel.localSettings.collectAsState()
-            val integrations by viewModel.integrations.collectAsState()
-            val account by viewModel.account.state.collectAsState()
+            val draft by viewModel.draft.collectAsStateWithLifecycle()
+            val settings by viewModel.localSettings.collectAsStateWithLifecycle()
+            val integrations by viewModel.integrations.collectAsStateWithLifecycle()
+            val account by viewModel.account.state.collectAsStateWithLifecycle()
             // Same condition as viewModel.liveVoiceAvailable(), so the label matches where the button goes.
             val live = integrations.voice?.live?.enabled == true && account.user != null && viewModel.projectId.value == com.dua.ai.projects.ProjectCodec.PERSONAL
             VoiceScreen(draft = draft, onBack = navigator::back, onHandsFree = { navigator.open(if (viewModel.projectId.value == com.dua.ai.projects.ProjectCodec.PERSONAL && viewModel.liveVoiceAvailable()) DuaDestination.LiveVoice else DuaDestination.HandsFree) },
@@ -357,21 +359,21 @@ fun DuaNavHost(viewModel: ChatViewModel, voice: ReplyVoice, notificationRoute: P
             notifications = { BusyBackGuard(viewModel); NotificationsScreen(viewModel, navigator::back) },
             usage = {
                 BusyBackGuard(viewModel)
-                val integrations by viewModel.integrations.collectAsState()
-                val owner by viewModel.account.state.collectAsState()
+                val integrations by viewModel.integrations.collectAsStateWithLifecycle()
+                val owner by viewModel.account.state.collectAsStateWithLifecycle()
                 UsageLimitsContent(integrations, owner.user != null, navigator::back, navigator::open)
             },
             safety = {
                 BusyBackGuard(viewModel)
-                val settings by viewModel.localSettings.collectAsState()
-                val status by viewModel.settingsStatus.collectAsState()
+                val settings by viewModel.localSettings.collectAsStateWithLifecycle()
+                val status by viewModel.settingsStatus.collectAsStateWithLifecycle()
                 SafetyContent(settings.memoryEnabled, navigator::back, navigator::open,
                     onPermissions = { if (!openAndroidSettings(context)) viewModel.settingsNotice("Android app settings are unavailable on this device.") }, status = status)
             },
             security = {
                 BusyBackGuard(viewModel)
-                val owner by viewModel.account.state.collectAsState()
-                val status by viewModel.settingsStatus.collectAsState()
+                val owner by viewModel.account.state.collectAsStateWithLifecycle()
+                val status by viewModel.settingsStatus.collectAsStateWithLifecycle()
                 SecurityLoginContent(owner.user?.email, navigator::back, navigator::open,
                     onPermissions = { if (!openAndroidSettings(context)) viewModel.settingsNotice("Android app settings are unavailable on this device.") }, status = status)
             },
