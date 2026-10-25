@@ -8,7 +8,7 @@ import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import app as engine  # noqa: E402
-import coding_agent as ca  # noqa: E402
+from dua_engine.coding import coding_agent as ca  # noqa: E402
 import agent_tools  # noqa: E402
 
 REPO = "KRFbrothers/Dua-ai"
@@ -412,3 +412,89 @@ def test_coding_reports_read_and_pr_progress(monkeypatch, owner):
     steps = [e["step"] for e in evs if e["type"] == "progress"]
     assert steps[0] == "plan" and steps[-2:] == ["approval", "answer"] and "read" in steps
     assert "Waiting for your approval" in [e["label"] for e in evs if e["type"] == "progress"]
+
+
+CODING_MODULES = (
+    "coding_agent", "coding_artifacts", "coding_checkpoints", "coding_ci",
+    "coding_plan", "coding_pr", "coding_profiles", "coding_runner_server",
+    "coding_search", "coding_snapshot", "coding_terminal", "coding_ui",
+    "coding_workspace", "pr_flow",
+)
+
+
+@pytest.mark.parametrize("name", CODING_MODULES)
+def test_legacy_and_packaged_coding_imports_share_module_state(name):
+    import importlib
+    legacy = importlib.import_module(name)
+    packaged = importlib.import_module("dua_engine.coding." + name)
+    assert legacy is packaged
+    assert sys.modules[name] is packaged
+
+
+def test_legacy_monkeypatch_changes_packaged_function_globals(monkeypatch):
+    import coding_agent
+    monkeypatch.setattr(coding_agent, "MAX_FILES_CHANGED", 0)
+    with pytest.raises(ca.CodingError, match="Too many files changed"):
+        ca.validate_changes([{"path": "safe.py", "content": "pass"}])
+
+
+@pytest.mark.parametrize("first", ("coding_agent", "coding_runner_server", "coding_workspace", "pr_flow"))
+@pytest.mark.parametrize("legacy_first", (True, False))
+def test_fresh_runtime_import_orders_reload_and_entrypoints(tmp_path, first, legacy_first):
+    """Exercise shipped Python files without the checkout/tests on the import path."""
+    from pathlib import Path
+    import shutil
+    import subprocess
+    import textwrap
+
+    source = Path(__file__).resolve().parents[1]
+    runtime = tmp_path / "runtime"
+    runtime.mkdir()
+    for file in source.glob("*.py"):
+        shutil.copy2(file, runtime / file.name)
+    for directory in ("dua_engine", "adk_examples", "evals"):
+        shutil.copytree(source / directory, runtime / directory,
+                        ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+    probe = textwrap.dedent("""
+        import importlib
+        import os
+        from pathlib import Path
+        import sys
+
+        runtime = Path(sys.argv[1])
+        sys.path.insert(0, str(runtime))
+        first, legacy_first = sys.argv[2], sys.argv[3] == "True"
+        importlib.import_module(first if legacy_first else "dua_engine.coding." + first)
+        for path in (runtime / "dua_engine/coding").glob("*.py"):
+            if path.stem == "__init__":
+                continue
+            assert importlib.import_module(path.stem) is importlib.import_module("dua_engine.coding." + path.stem)
+
+        import coding_agent
+        import coding_runner_server
+        from dua_engine.coding import coding_runner_server as packaged_runner
+        assert coding_runner_server.JOBS is packaged_runner.JOBS
+        assert coding_runner_server.app.import_name == "coding_runner_server"
+        assert Path(coding_runner_server.app.root_path) == runtime
+        assert coding_runner_server.app.test_client().get("/healthz").get_json() == {
+            "service": "dua-coding-runner", "liveVerified": False}
+
+        import wsgi
+        import adk_server
+        assert wsgi.app.test_client().get("/").status_code == 200
+        launched = []
+        os.execvp = lambda executable, argv: launched.append((executable, argv))
+        adk_server.main()
+        assert len(launched) == 1 and launched[0][0] == "gunicorn"
+        assert launched[0][1][-1] == "wsgi:app"
+
+        assert importlib.reload(coding_agent) is coding_agent
+        assert importlib.import_module("coding_agent") is coding_agent
+        assert importlib.import_module("dua_engine.coding.coding_agent") is coding_agent
+    """)
+    result = subprocess.run(
+        [sys.executable, "-I", "-c", probe, str(runtime), first, str(legacy_first)],
+        cwd=runtime, env={"PATH": os.defpath, "PYTHONDONTWRITEBYTECODE": "1"},
+        capture_output=True, text=True, timeout=30,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
