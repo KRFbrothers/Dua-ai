@@ -78,6 +78,12 @@ object DuaTheme {
         @Composable @ReadOnlyComposable get() = LocalDuaAccent.current
     val colors: DuaColors
         @Composable @ReadOnlyComposable get() = LocalDuaColors.current
+    /** Composer gradient, top -> bottom (light theme). */
+    val composerGradient: List<Color> get() = listOf(DuaMatch.ComposerGradientTop, DuaMatch.ComposerGradientBottom)
+    /** Suggestion chip fill. */
+    val suggestionChip: Color get() = DuaMatch.SuggestionChip
+    /** Optional warm copper accent; Dua's teal remains the default. */
+    val warmCopper: Color get() = DuaMatch.WarmCopper
     /** Short semantic names mapped 1:1 onto the active Material colour scheme (light/dark follow it). */
     val semantic: DuaSemanticColors
         @Composable @ReadOnlyComposable get() = MaterialTheme.colorScheme.let { c ->
