@@ -1,10 +1,12 @@
 [versions]
-agp = "9.1.1"
+agp = "8.8.0"
 kotlin = "2.4.21"
-composeBom = "2026.09.00"
+# 2026.06.00 is the newest Compose BOM whose ui artifact declares minCompileSdk 35 (2026.08.00+ needs 37).
+composeBom = "2026.06.00"
 activityCompose = "1.10.0"
 lifecycleRuntimeKtx = "2.8.7"
-navigationCompose = "2.10.2"
+# 2.9.8 is the newest navigation-compose whose AAR metadata declares minCompileSdk 35 (2.10.0+ needs 37).
+navigationCompose = "2.9.8"
 markdownRenderer = "0.30.0"
 roborazzi = "1.40.1"
 robolectric = "4.14.1"
@@ -19,13 +21,16 @@ androidxTestExtJunit = "1.2.1"
 [libraries]
 # Animation runtimes (owner-approved): Rive (MIT) for the chat thinking loader, Lottie (Apache-2.0) for Settings icons.
 # rive-android 10.4.5 is the newest release that does not pull Compose BOM 2025.x / core-ktx 1.17 (compileSdk 36).
+# compileSdk is 35, so core-ktx, the Compose BOM and navigation-compose are held at the newest releases
+# whose AAR metadata still declares minCompileSdk 35 (see the pins below).
 rive-android = { group = "app.rive", name = "rive-android", version = "10.4.5" }
 lottie-compose = { group = "com.airbnb.android", name = "lottie-compose", version = "6.7.1" }
 # Offline speech-to-text (Apache-2.0). Pulls JNA (Apache-2.0/LGPL dual) as its only dependency.
 vosk-android = { group = "com.alphacephei", name = "vosk-android", version = "0.3.75" }
 androidx-profileinstaller = { group = "androidx.profileinstaller", name = "profileinstaller", version = "1.4.1" }
 androidx-datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "datastore" }
-androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version = "1.19.1" }
+# 1.16.0 is the newest core-ktx whose AAR metadata declares minCompileSdk 35 (1.17.0+ needs 36).
+androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version = "1.16.0" }
 androidx-core-splashscreen = { group = "androidx.core", name = "core-splashscreen", version.ref = "coreSplashscreen" }
 androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycleRuntimeKtx" }
 androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }

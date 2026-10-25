@@ -196,7 +196,10 @@ fun ChatScreen(
     var automaticScroll by remember(conversationKey) { mutableStateOf(false) }
     var dragging by remember(conversationKey) { mutableStateOf(false) }
     suspend fun goToLatest() {
-        if (searchOpen || automaticScroll || dragging) return
+        // Layout snapshots can resume this collector synchronously during measurement.
+        // Scroll only after that pass returns; scrollToItem forces a fresh measurement.
+        androidx.compose.runtime.withFrameNanos { }
+        if (!followTail || searchOpen || automaticScroll || dragging) return
         val latestIndex = listState.layoutInfo.totalItemsCount - 1
         if (latestIndex < 0) return
         automaticScroll = true

@@ -15,6 +15,10 @@ enum class SoftErrorArea(val key: String) {
     ChatRetry("chat_retry"),
     CloudSync("cloud_sync"),
     DriveBackup("drive_backup"),
+    ImagineUsage("imagine_usage"),
+    VoiceUsage("voice_usage"),
+    FileDelete("file_delete"),
+    ReplyNotification("reply_notification"),
 }
 
 /**

@@ -2,7 +2,6 @@ import java.io.File
 import java.security.KeyStore
 import java.security.MessageDigest
 import java.util.Properties
-import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     alias(libs.plugins.android.application)
@@ -110,7 +109,7 @@ gradle.taskGraph.whenReady({
 
 android {
     namespace = "com.dua.ai"
-    compileSdk = 37
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.dua.ai"
@@ -173,7 +172,7 @@ android {
 
 kotlin {
     compilerOptions {
-        jvmTarget.set(JvmTarget.JVM_17)
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
     }
 }
 

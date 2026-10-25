@@ -82,7 +82,7 @@ internal class ChatVoice(host: VoiceHost) : VoiceHost by host {
     fun loadLiveUsage() = viewModelScope.launch {
         if (!liveVoiceAvailable()) { _liveUsage.value = null; return@launch }
         try { _liveUsage.value = com.dua.ai.voice.live.LiveVoiceCodec.usage(account.request("/api/voice/usage", authenticated = true)) }
-        catch (cancelled: CancellationException) { throw cancelled } catch (_: Exception) {}
+        catch (cancelled: CancellationException) { throw cancelled } catch (failure: Exception) { com.dua.ai.diagnostics.DuaLog.soft(com.dua.ai.diagnostics.SoftErrorArea.VoiceUsage, failure) }
     }
     fun clearLiveError() { _liveStart.value = LiveStartState() }
     fun startLiveVoice() {
