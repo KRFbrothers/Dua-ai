@@ -6,6 +6,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.*
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
@@ -104,7 +105,9 @@ class FeatureIsolationUiTest(private val dark: Boolean, private val compact: Boo
         compose.onNode(hasText("Chat") and isSelectable()).assertIsDisplayed()
         compose.onNodeWithContentDescription("Open profile and settings").assertIsDisplayed()
         compose.runOnIdle { state.value = ChatUiState(agent = true, agentAvailable = true) }
-        compose.onNodeWithContentDescription("Add photos and files").performClick()
+        // Verify the accessible attachment action after switching away and back to the feature.
+        compose.onNodeWithContentDescription("Add photos and files").assertIsEnabled()
+            .performSemanticsAction(SemanticsActions.OnClick) { assertTrue(it()) }
         compose.onNodeWithText("Files", substring = false).assertExists()
         compose.onNodeWithText("Turn off all modes").assertDoesNotExist()
         compose.onNodeWithText("Search", substring = false).assertDoesNotExist()
