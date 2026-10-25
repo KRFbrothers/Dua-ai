@@ -2,6 +2,14 @@
 
 Where tests live, how CI runs them, and which focused tests cover the flagship Android features.
 
+Android app tests currently live under `app/src/test` (JVM, Compose and Robolectric).
+There is no `app/src/androidTest` suite; the separate `benchmark` module has device
+tests for baseline profiles. These do not provide app instrumentation coverage.
+Android lint is available through the Android Gradle plugin even without an explicit
+`lint {}` block. Its error/report settings are now explicit in `app/build.gradle.kts`.
+Run `./gradlew :app:lintDebug` locally; the current checks workflow does not run lint.
+No lint baseline has been generated or existing findings suppressed.
+
 ## CI jobs (`.github/workflows/checks.yml`)
 
 Every pull request and push to `main` runs four jobs:

@@ -300,6 +300,31 @@ class ChatModesCoverageTest {
         assertEquals(history, model.savedChats.value)
     }
 
+    @Test fun buildSelectionWithNoDuaOrGeminiProviderShowsErrorAndKeepsModes() {
+        applyIntegrations(IntegrationState(
+            build = BuildModeConfig(enabled = true, providers = setOf("ChatGPT")),
+            providers = listOf(com.dua.ai.setup.ProviderCapability("ChatGPT", true, "configured", false)),
+        ))
+        val account = field("account").get(model) as AccountRepository
+        @Suppress("UNCHECKED_CAST")
+        val accountState = AccountRepository::class.java.getDeclaredField("mutable").apply { isAccessible = true }
+            .get(account) as MutableStateFlow<AccountState>
+        accountState.value = accountState.value.copy(user = AccountUser(
+            "00000000-0000-0000-0000-000000000001", "owner@example.test", "Owner"))
+        flow<String>("_selectedModel").value = "Grok"
+        flow<Boolean>("_reasoning").value = true
+        flow<Boolean>("_agent").value = true
+        assertNull(model.buildUnavailableReason())
+
+        model.setBuildRepository(REPO)
+
+        assertEquals("Grok", model.selectedModel.value)
+        assertNull(model.buildRepo.value)
+        assertTrue(model.reasoning.value)
+        assertTrue(model.agent.value)
+        assertEquals("Build mode needs a configured Dua or Gemini provider. Refresh Feature setup.", model.error.value)
+    }
+
     private companion object {
         const val REPLY = "reply"
         const val OTHER = "other-reply"

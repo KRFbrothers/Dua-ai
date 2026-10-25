@@ -38,6 +38,9 @@ from env_config import env_int
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 5 * 1024 * 1024
 
+if not os.environ.get("DUA_APP_TOKEN", ""):
+    app.logger.warning("DUA_APP_TOKEN is unset; the optional app-token gate is disabled. Owner authentication remains required.")
+
 PROJECT_ID = os.environ.get("GOOGLE_CLOUD_PROJECT", "")
 LOCATION = os.environ.get("VERTEX_LOCATION", "global")
 MODEL_NAME = os.environ.get("VERTEX_MODEL", "gemini-3.8-flash")
@@ -823,12 +826,13 @@ def agent_capabilities():
     denied = owner_access_error()
     if denied is not None:
         return denied
-    import agent_adk, agent_store, agent_documents, agent_models, agent_toolkit, coding_terminal, coding_checkpoints, agent_automation
+    import agent_adk, agent_store, agent_documents, agent_models, agent_toolkit, coding_terminal, coding_checkpoints, agent_automation, kill_switches
     try:
         routes = agent_models.routes()
         agent_models.check_adapters()
         tools = agent_toolkit.configured()
-        return no_store(jsonify({"adkEnabled": agent_adk.enabled(), "storage": agent_store.status(),
+        return no_store(jsonify({"adkEnabled": agent_adk.enabled() and not kill_switches.agent_disabled()
+            and kill_switches.maintenance_message() is None, "storage": agent_store.status(),
             "embeddingConfigured": agent_documents.enabled(), "providerRoutes": routes,
             "customTools": sorted(tools.tools), "answerStreaming": True,
             "codingExecution": coding_terminal.status(),
@@ -858,6 +862,13 @@ def agent_documents_api():
     denied = owner_access_error()
     if denied is not None:
         return denied
+    import kill_switches
+    if request.method != "GET":
+        paused = kill_switches.maintenance_message()
+        if paused:
+            return no_store(jsonify({"error": paused, "maintenance": True}), 503)
+        if kill_switches.agent_disabled():
+            return no_store(jsonify({"error": kill_switches.AGENT_PAUSED, "paused": "agent"}), 503)
     import agent_documents
     if not agent_documents.enabled():
         return no_store(jsonify({"error": "ADK document storage/embeddings are not configured."}), 503)
@@ -883,6 +894,12 @@ def agent_documents_api():
 def agent_notes_reindex():
     denied=owner_access_error()
     if denied is not None:return denied
+    import kill_switches
+    paused = kill_switches.maintenance_message()
+    if paused:
+        return no_store(jsonify({"error": paused, "maintenance": True}), 503)
+    if kill_switches.agent_disabled():
+        return no_store(jsonify({"error": kill_switches.AGENT_PAUSED, "paused": "agent"}), 503)
     import agent_notes,agent_documents
     if not agent_documents.enabled():
         return no_store(jsonify({"error":"Semantic memory is not configured."}),503)

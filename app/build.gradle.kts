@@ -164,6 +164,12 @@ android {
     testOptions {
         unitTests.isIncludeAndroidResources = true
     }
+    lint {
+        abortOnError = true
+        checkReleaseBuilds = true
+        htmlReport = true
+        xmlReport = true
+    }
     packaging {
         // JNA (pulled in by Vosk) ships dead ABIs no Android 8+ phone uses; Dua has no other code for them.
         jniLibs.excludes += listOf("lib/armeabi/**", "lib/mips/**", "lib/mips64/**")
@@ -230,6 +236,7 @@ dependencies {
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.core.splashscreen)
     implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.ui)
