@@ -5,7 +5,7 @@
 --
 -- Size: 50 MB per file (52428800 bytes). That is the Supabase Free plan maximum, and the bucket limit
 -- cannot go above the project's global limit (Storage > Settings). On Pro and above you can raise both
--- the global and bucket limits, then set DUA_FILES_MAX_MB on Vercel to the same value.
+-- the global and bucket limits, then set DUA_FILES_MAX_MB in Cloud Run / Secret Manager to the same value.
 -- Files are immutable: there is no update policy, and uploads use x-upsert: false.
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values ('dua-files', 'dua-files', false, 52428800, array[
