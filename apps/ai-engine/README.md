@@ -12,6 +12,36 @@ return 401, non-owner/unconfirmed accounts return 403, and missing setup or unav
 returns 503 **before calling Vertex**. The health check remains public. Owner login cannot be disabled
 with `DUA_REQUIRE_LOGIN=0`; `DUA_APP_TOKEN`, if retained, is an additional gate only.
 
+## Python module ownership: done / leave / optional later
+
+After coding/agent/automation packaging, the root has 43 Python files: 32
+compatibility aliases and 11 files with implementation or entrypoint composition.
+Root placement alone does not make a file stale.
+
+| Status | Root files | Owner / reason |
+| --- | --- | --- |
+| Done (14 shims) | `coding_*.py` (13 files), `pr_flow.py` | Real implementations are the same filenames under [dua_engine/coding/](dua_engine/coding/). |
+| Done (14 shims) | `agent_*.py` except `agent_automation.py` | Real implementations are under [dua_engine/agent/](dua_engine/agent/). |
+| Done (4 shims) | `agent_automation.py`, `automation_companion.py`, `automation_drivers.py`, `automation_terminal.py` | Real implementations are under [dua_engine/automation/](dua_engine/automation/). The companion shim also preserves script/CLI dispatch; the earlier `dua_engine.agent.agent_automation` path remains an alias. |
+| Leave | `app.py` | Flask endpoints, request assembly, streaming and chat/Agent coordination. |
+| Leave | `adk_server.py`, `wsgi.py` | Startup validation/Gunicorn launch and Flask/CORS composition. `wsgi.py` is short but is not an import-compatibility shim. Keep Docker CMD and `wsgi:app`. |
+| Leave | `adk_cli.py`, `backup.py` | Operations CLI and separate backup-job implementation; neither is a second chat server. |
+| Leave | `owner_auth.py`, `kill_switches.py`, `web_cors.py`, `env_config.py` | Live owner authentication, pause policy, browser transport policy and shared integer-setting parser. |
+| Leave | `imagine.py`, `openrouter.py` | Image generation/storage/quota integration and optional free-model streaming/catalog integration. |
+
+The root aliases share the packaged module objects, preserving legacy imports,
+private helpers, monkeypatches and shared state. Keep them for current callers.
+The remaining owners have distinct responsibilities; the scan found no complete
+root implementation duplicated under `dua_engine/`, and no safe module fold was
+identified. Similar-looking provider/HTTP helpers are not enough evidence to
+merge their different authentication, payload, quota and error behavior.
+
+**Optional later:** review smaller responsibilities inside `app.py` if a specific
+maintenance problem justifies extraction into the existing package layout.
+Any such change needs its own caller/behavior review and tests; this inventory
+does not schedule another package or a move. See [ADK entrypoints](#adk-entrypoints-and-ownership)
+and [kill-switch ownership](#kill-switch-ownership) for the live paths.
+
 ## Endpoints
 - `GET /` – health check.
 - `POST /api/chat` – same format as the Node API's chat:
