@@ -9,9 +9,9 @@
 version: 2
 
 updates:
-  # --- Android / Kotlin: root build.gradle.kts + gradle/libs.versions.toml ---
+  # --- Android / Kotlin: apps/android/build.gradle.kts + apps/android/gradle/libs.versions.toml ---
   - package-ecosystem: "gradle"
-    directory: "/"
+    directory: "/apps/android"
     schedule:
       interval: "weekly"
       day: "monday"

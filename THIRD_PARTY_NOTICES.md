@@ -15,16 +15,16 @@ copyright and the license. Only code was reused: no logos, brand art, images or 
 
 | Dua file | Adapted from (Androidify) | What changed |
 | --- | --- | --- |
-| `app/src/main/java/com/dua/ai/attachments/DroppedFiles.kt` | `data/.../DropBehaviourFactory.kt` | Any file type, up to three items, byte cap, original names, private cache folder |
-| `app/src/main/java/com/dua/ai/ui/chat/ChatDropTarget.kt` | `data/.../DropBehaviourFactory.kt`, `feature/creation/.../PhotoPrompt.kt` | Whole-chat drop target, text drops, Dua provider URIs rejected, Dua overlay |
-| `app/src/main/java/com/dua/ai/diagnostics/DuaLog.kt` | `app/.../CrashlyticsTree.kt` | No Timber; release-only; never sends message text; per-kind cap |
-| `app/src/main/java/com/dua/ai/ui/components/PressScale.kt` | `core/theme/.../components/ScaleIndication.kt` | Shrinks instead of grows, keeps the ripple, follows "Remove animations" |
-| `app/src/main/java/com/dua/ai/ui/components/Shimmer.kt` | `core/theme/.../transitions/LoadingShimmerOverlay.kt` | Dua colours, combined with Dua's pulse, follows reduce-motion |
-| `app/src/main/java/com/dua/ai/ondevice/GeminiNanoTextModel.kt` | `data/.../GeminiNanoDownloaderImpl.kt`, `data/.../GeminiNanoGenerationDataSource.kt` | No Remote Config or Hilt, AICore presence check, failures become "unsupported"/null, no logging of prompts |
-| `app/src/main/java/com/dua/ai/ondevice/MlKitBackgroundRemover.kt` | `core/network/.../ondevice/LocalSegmentationDataSource.kt` | No Hilt or Timber, Play services check, download timeout, segmenter closed after use, Dua error messages |
-| `app/src/main/java/com/dua/ai/ui/AppPausedScreen.kt` | `feature/home/.../AppInactiveScreen.kt` | Dua calligraphy logo (no Android robot), server message, Try again button, no top bar |
-| `app/src/main/java/com/dua/ai/ui/components/ColorSplash.kt` | `core/theme/.../transitions/ColorSplashTransition.kt` | Circle grows from the tap point over Home for Voice mode / Imagine, Dua colours, instant when animations are off |
-| `app/src/main/java/com/dua/ai/ui/chat/ComposerGlass.kt` | `core/theme/.../components/AnimatingGradientBrush.kt` (reused through `AgentEdgeGlow.kt`) | Faint blue-purple-pink-orange gradient behind the chat composer; animates only while resumed, with animations on and battery saver off |
+| `apps/android/app/src/main/java/com/dua/ai/attachments/DroppedFiles.kt` | `data/.../DropBehaviourFactory.kt` | Any file type, up to three items, byte cap, original names, private cache folder |
+| `apps/android/app/src/main/java/com/dua/ai/ui/chat/ChatDropTarget.kt` | `data/.../DropBehaviourFactory.kt`, `feature/creation/.../PhotoPrompt.kt` | Whole-chat drop target, text drops, Dua provider URIs rejected, Dua overlay |
+| `apps/android/app/src/main/java/com/dua/ai/diagnostics/DuaLog.kt` | `app/.../CrashlyticsTree.kt` | No Timber; release-only; never sends message text; per-kind cap |
+| `apps/android/app/src/main/java/com/dua/ai/ui/components/PressScale.kt` | `core/theme/.../components/ScaleIndication.kt` | Shrinks instead of grows, keeps the ripple, follows "Remove animations" |
+| `apps/android/app/src/main/java/com/dua/ai/ui/components/Shimmer.kt` | `core/theme/.../transitions/LoadingShimmerOverlay.kt` | Dua colours, combined with Dua's pulse, follows reduce-motion |
+| `apps/android/app/src/main/java/com/dua/ai/ondevice/GeminiNanoTextModel.kt` | `data/.../GeminiNanoDownloaderImpl.kt`, `data/.../GeminiNanoGenerationDataSource.kt` | No Remote Config or Hilt, AICore presence check, failures become "unsupported"/null, no logging of prompts |
+| `apps/android/app/src/main/java/com/dua/ai/ondevice/MlKitBackgroundRemover.kt` | `core/network/.../ondevice/LocalSegmentationDataSource.kt` | No Hilt or Timber, Play services check, download timeout, segmenter closed after use, Dua error messages |
+| `apps/android/app/src/main/java/com/dua/ai/ui/AppPausedScreen.kt` | `feature/home/.../AppInactiveScreen.kt` | Dua calligraphy logo (no Android robot), server message, Try again button, no top bar |
+| `apps/android/app/src/main/java/com/dua/ai/ui/components/ColorSplash.kt` | `core/theme/.../transitions/ColorSplashTransition.kt` | Circle grows from the tap point over Home for Voice mode / Imagine, Dua colours, instant when animations are off |
+| `apps/android/app/src/main/java/com/dua/ai/ui/chat/ComposerGlass.kt` | `core/theme/.../components/AnimatingGradientBrush.kt` (reused through `AgentEdgeGlow.kt`) | Faint blue-purple-pink-orange gradient behind the chat composer; animates only while resumed, with animations on and battery saver off |
 
 The adapted portions keep their Apache License 2.0 notices; Apache-2.0 is compatible with GPL-3.0, so they are distributed as part of the GPL-3.0-or-later work. "Android" is a trademark of Google LLC; Dua does not use the Android robot or
 other Google brand assets.
@@ -37,7 +37,7 @@ other Google brand assets.
 
 | Dua file | Adapted from | What changed |
 | --- | --- | --- |
-| `app/src/main/java/com/dua/ai/ondevice/WritingTools.kt` | `samples/genai-summarization/.../GenAISummarizationViewModel.kt`, `samples/genai-writing-assistance/.../GenAIWritingAssistanceViewModel.kt` | Same check → download → run → result/error flow, but on Dua's existing ML Kit GenAI Prompt client (no extra Summarization/Rewriting libraries), Dua prompts, output clean-up, visible server fallback |
+| `apps/android/app/src/main/java/com/dua/ai/ondevice/WritingTools.kt` | `samples/genai-summarization/.../GenAISummarizationViewModel.kt`, `samples/genai-writing-assistance/.../GenAIWritingAssistanceViewModel.kt` | Same check → download → run → result/error flow, but on Dua's existing ML Kit GenAI Prompt client (no extra Summarization/Rewriting libraries), Dua prompts, output clean-up, visible server fallback |
 
 ## ADK samples (llm-auditor)
 
@@ -57,10 +57,10 @@ other Google brand assets.
 
 | Dua file | Adapted from | What changed |
 | --- | --- | --- |
-| `app/src/main/java/com/dua/ai/ui/chat/JumpToLatest.kt` | `conversation/JumpToBottom.kt`, `conversation/Conversation.kt` (same-author grouping) | Only the same-author grouping and new-replies count remain; the button is now Telegram's page-down (`TelegramPageDown.kt`) |
-| `app/src/main/java/com/dua/ai/ui/chat/ComposerGlass.kt` (used by `ChatComposer.kt`) | `Jetchat/.../conversation/UserInput.kt` (fork commit `0bc770fd`: focus scale pop, translucent rounded input card) | Smaller pop (1.02), Dua colours, opaque elevated backing with faint gradient tint, no mesh glow, instant when animations are off |
-| `app/src/main/java/com/dua/ai/ui/chat/WideLayout.kt` | `Reply/.../ui/ReplyApp.kt`, `Reply/.../ui/navigation/ReplyNavigationComponents.kt` (fork commit `0bc770fd`) | Width from `BoxWithConstraints` instead of the window-size-class library; only switches chat history between a permanent side panel and the existing modal drawer |
-| `benchmark/build.gradle.kts`, `benchmark/src/main/java/com/dua/ai/benchmark/*.kt` | `benchmarks/build.gradle.kts`, `benchmarks/.../startup/StartupBenchmark.kt`, `.../baselineprofile/StartupBaselineProfile.kt`, `.../GeneralActions.kt` | Dua journeys (onboarding skip, drawer, chat, scroll, send with airplane mode), connected phone only, no managed emulator |
+| `apps/android/app/src/main/java/com/dua/ai/ui/chat/JumpToLatest.kt` | `conversation/JumpToBottom.kt`, `conversation/Conversation.kt` (same-author grouping) | Only the same-author grouping and new-replies count remain; the button is now Telegram's page-down (`TelegramPageDown.kt`) |
+| `apps/android/app/src/main/java/com/dua/ai/ui/chat/ComposerGlass.kt` (used by `ChatComposer.kt`) | `Jetchat/.../conversation/UserInput.kt` (fork commit `0bc770fd`: focus scale pop, translucent rounded input card) | Smaller pop (1.02), Dua colours, opaque elevated backing with faint gradient tint, no mesh glow, instant when animations are off |
+| `apps/android/app/src/main/java/com/dua/ai/ui/chat/WideLayout.kt` | `Reply/.../ui/ReplyApp.kt`, `Reply/.../ui/navigation/ReplyNavigationComponents.kt` (fork commit `0bc770fd`) | Width from `BoxWithConstraints` instead of the window-size-class library; only switches chat history between a permanent side panel and the existing modal drawer |
+| `apps/android/benchmark/build.gradle.kts`, `apps/android/benchmark/src/main/java/com/dua/ai/benchmark/*.kt` | `benchmarks/build.gradle.kts`, `benchmarks/.../startup/StartupBenchmark.kt`, `.../baselineprofile/StartupBaselineProfile.kt`, `.../GeneralActions.kt` | Dua journeys (onboarding skip, drawer, chat, scroll, send with airplane mode), connected phone only, no managed emulator |
 
 ## Now in Android
 
@@ -70,8 +70,8 @@ other Google brand assets.
 
 | Dua file | Adapted from | What changed |
 | --- | --- | --- |
-| `app/src/main/java/com/dua/ai/network/NetworkMonitor.kt` | `core/data/.../util/ConnectivityManagerNetworkMonitor.kt`, `NetworkMonitor.kt` | No Hilt or tracing, default network only, requires a validated connection, repeated values filtered |
-| `app/src/main/java/com/dua/ai/ui/chat/WideLayout.kt` | `app/.../ui/NiaApp.kt` (adaptive shell: permanent navigation on expanded widths) | Same expanded-width rule, applied to Dua's chat history panel |
+| `apps/android/app/src/main/java/com/dua/ai/network/NetworkMonitor.kt` | `core/data/.../util/ConnectivityManagerNetworkMonitor.kt`, `NetworkMonitor.kt` | No Hilt or tracing, default network only, requires a validated connection, repeated values filtered |
+| `apps/android/app/src/main/java/com/dua/ai/ui/chat/WideLayout.kt` | `app/.../ui/NiaApp.kt` (adaptive shell: permanent navigation on expanded widths) | Same expanded-width rule, applied to Dua's chat history panel |
 
 ## Android snippets
 
@@ -81,7 +81,7 @@ other Google brand assets.
 
 | Dua file | Adapted from | What changed |
 | --- | --- | --- |
-| `app/src/main/java/com/dua/ai/ui/components/PredictiveBack.kt` | `compose/snippets/.../predictiveback/PredictiveBackSnippets.kt` (`PredictiveBackHandler` example) | Reusable progress state and a small scale/fade, no motion when animations are off |
+| `apps/android/app/src/main/java/com/dua/ai/ui/components/PredictiveBack.kt` | `compose/snippets/.../predictiveback/PredictiveBackSnippets.kt` (`PredictiveBackHandler` example) | Reusable progress state and a small scale/fade, no motion when animations are off |
 
 ## SociaLite
 
@@ -91,8 +91,8 @@ other Google brand assets.
 
 | Dua file | Adapted from | What changed |
 | --- | --- | --- |
-| `app/src/main/java/com/dua/ai/entry/ChatShortcuts.kt` | `app/.../repository/NotificationHelper.kt` (`Contact.toShortcut`, `pushShortcut`) | Dua chats instead of contacts, no Person/LocusId/bubbles/notifications, Dua icon, max four chats, launcher actions, deleted chats removed |
-| `app/src/main/res/xml/sharing_shortcuts.xml` | `app/src/main/res/xml/sharing_shortcuts.xml` | Dua activity and share category |
+| `apps/android/app/src/main/java/com/dua/ai/entry/ChatShortcuts.kt` | `app/.../repository/NotificationHelper.kt` (`Contact.toShortcut`, `pushShortcut`) | Dua chats instead of contacts, no Person/LocusId/bubbles/notifications, Dua icon, max four chats, launcher actions, deleted chats removed |
+| `apps/android/app/src/main/res/xml/sharing_shortcuts.xml` | `app/src/main/res/xml/sharing_shortcuts.xml` | Dua activity and share category |
 
 ## Vosk offline speech recognition
 
@@ -128,13 +128,13 @@ terms; their bundled open-source licenses are listed by Google Play services at 
 
 | Dua file | Adapted from (Telegram, `TMessagesProj/src/main/java/org/telegram/`) | What changed |
 | --- | --- | --- |
-| `app/src/main/java/com/dua/ai/ui/chat/TelegramInterpolators.kt` | `ui/Components/CubicBezierInterpolator.java`, `ui/recyclerview/ChatListItemAnimator.java` (`DEFAULT_INTERPOLATOR`, `DEFAULT_DURATION`) | Compose `Easing` instead of `Interpolator` |
-| `app/src/main/java/com/dua/ai/ui/chat/ChatSwipeReply.kt` | `ui/ChatActivity.java` (chat list swipe tracking: 0.4 cm start, `|dx|/3 > dy`, dp(80) clamp, dp(50) haptic/reply, 180 ms decelerate return, `drawReplyButton` progress), `ui/recyclerview/ChatListItemAnimator.java` (`animateAddImpl`) | Compose pointer input; mirrored to a right swipe; reply opens Dua's quote preview |
-| `app/src/main/java/com/dua/ai/ui/chat/TelegramMessagePopup.kt` | `ui/ActionBar/ActionBarPopupWindow.java` (`startAnimation`, `startChildAnimation`, `setBackScaleY`, `dismiss`) | Compose `Popup`; Dua colours and actions; "More" opens Dua's full actions sheet |
-| `app/src/main/java/com/dua/ai/ui/history/TelegramDialogSwipe.kt` | `ui/DialogsActivity.java` (`SwipeController`: 0.45 threshold, no fling, 200 ms cancel), `ui/Cells/DialogCell.java` (swipe background, reveal circle 300 ms accelerate, icon `BounceInterpolator` 170 ms, haptic on threshold change), `ui/Components/UndoView.java` (5 s undo countdown) | Compose draggable row; left = Delete (with Undo), mirrored right = Pin/Unpin; Dua colours and Material icons |
-| `app/src/main/java/com/dua/ai/ui/chat/TelegramPageDown.kt` | `ui/Components/chat/layouts/ChatActivitySideControlsButtonsLayout.java` (page-down visibility: alpha, scale 0.7→1, 80 dp rise, 280 ms decelerate, counter visibility), `ui/Components/chat/buttons/ChatActivityBlurredRoundPageDownButton.java` (56 dp round button, counter on top), `ui/ChatActivity.java` (`newUnreadMessageCount`) | Compose; no blur; counts Dua replies below the viewport; replaces the Jetchat "Latest reply" pill |
-| `app/src/main/java/com/dua/ai/ui/components/TelegramThemeSwitch.kt` | `ui/LaunchActivity.java` (`needSetDayNightTheme`: window snapshot, circular reveal from the tap, `finalRadius`, 400 ms), `ui/Components/Easings.java` (`easeInOutQuad`) | Compose `GraphicsLayer` snapshot + clip path instead of `ViewAnimationUtils`; no sun Lottie; off when animations are off |
-| `app/src/main/java/com/dua/ai/ui/chat/TelegramImageReveal.kt` | `messenger/ImageReceiver.java` (150 ms crossfade only for non-memory-cache loads) | Compose modifier; adds the roadmap's 25 dp → 0 blur over 500 ms (Android 12+) |
+| `apps/android/app/src/main/java/com/dua/ai/ui/chat/TelegramInterpolators.kt` | `ui/Components/CubicBezierInterpolator.java`, `ui/recyclerview/ChatListItemAnimator.java` (`DEFAULT_INTERPOLATOR`, `DEFAULT_DURATION`) | Compose `Easing` instead of `Interpolator` |
+| `apps/android/app/src/main/java/com/dua/ai/ui/chat/ChatSwipeReply.kt` | `ui/ChatActivity.java` (chat list swipe tracking: 0.4 cm start, `|dx|/3 > dy`, dp(80) clamp, dp(50) haptic/reply, 180 ms decelerate return, `drawReplyButton` progress), `ui/recyclerview/ChatListItemAnimator.java` (`animateAddImpl`) | Compose pointer input; mirrored to a right swipe; reply opens Dua's quote preview |
+| `apps/android/app/src/main/java/com/dua/ai/ui/chat/TelegramMessagePopup.kt` | `ui/ActionBar/ActionBarPopupWindow.java` (`startAnimation`, `startChildAnimation`, `setBackScaleY`, `dismiss`) | Compose `Popup`; Dua colours and actions; "More" opens Dua's full actions sheet |
+| `apps/android/app/src/main/java/com/dua/ai/ui/history/TelegramDialogSwipe.kt` | `ui/DialogsActivity.java` (`SwipeController`: 0.45 threshold, no fling, 200 ms cancel), `ui/Cells/DialogCell.java` (swipe background, reveal circle 300 ms accelerate, icon `BounceInterpolator` 170 ms, haptic on threshold change), `ui/Components/UndoView.java` (5 s undo countdown) | Compose draggable row; left = Delete (with Undo), mirrored right = Pin/Unpin; Dua colours and Material icons |
+| `apps/android/app/src/main/java/com/dua/ai/ui/chat/TelegramPageDown.kt` | `ui/Components/chat/layouts/ChatActivitySideControlsButtonsLayout.java` (page-down visibility: alpha, scale 0.7→1, 80 dp rise, 280 ms decelerate, counter visibility), `ui/Components/chat/buttons/ChatActivityBlurredRoundPageDownButton.java` (56 dp round button, counter on top), `ui/ChatActivity.java` (`newUnreadMessageCount`) | Compose; no blur; counts Dua replies below the viewport; replaces the Jetchat "Latest reply" pill |
+| `apps/android/app/src/main/java/com/dua/ai/ui/components/TelegramThemeSwitch.kt` | `ui/LaunchActivity.java` (`needSetDayNightTheme`: window snapshot, circular reveal from the tap, `finalRadius`, 400 ms), `ui/Components/Easings.java` (`easeInOutQuad`) | Compose `GraphicsLayer` snapshot + clip path instead of `ViewAnimationUtils`; no sun Lottie; off when animations are off |
+| `apps/android/app/src/main/java/com/dua/ai/ui/chat/TelegramImageReveal.kt` | `messenger/ImageReceiver.java` (150 ms crossfade only for non-memory-cache loads) | Compose modifier; adds the roadmap's 25 dp → 0 blur over 500 ms (Android 12+) |
 
 Apache-2.0 and MIT dependencies remain compatible with GPL-3.0-or-later. Note: closed-source Google Play services /
 ML Kit binaries are not GPL-compatible "system libraries" in a strict reading; see the PR discussion.
@@ -163,8 +163,8 @@ separate. No proprietary app code, logos or fonts are added by these integration
 
 | Dua file | Adapted from | Licence |
 |---|---|---|
-| `app/src/main/java/com/dua/ai/ui/components/AgentEdgeGlow.kt` | Androidify `core/theme/.../theme/components/AnimatingGradientBrush.kt` (https://github.com/android/androidify, commit a4be10f), Copyright 2025 The Android Open Source Project | Apache-2.0 |
-| `app/src/main/java/com/dua/ai/ui/chat/TelegramRadialProgress.kt` | Telegram `TMessagesProj/src/main/java/org/telegram/ui/Components/RadialProgressView.java` (commit 68c6775ac373f4bdb30ae9986282dd5ec0407756), Copyright Nikolai Kudashov 2013-2018 | GPL-2.0-or-later (used under GPL-3.0-or-later) |
+| `apps/android/app/src/main/java/com/dua/ai/ui/components/AgentEdgeGlow.kt` | Androidify `core/theme/.../theme/components/AnimatingGradientBrush.kt` (https://github.com/android/androidify, commit a4be10f), Copyright 2025 The Android Open Source Project | Apache-2.0 |
+| `apps/android/app/src/main/java/com/dua/ai/ui/chat/TelegramRadialProgress.kt` | Telegram `TMessagesProj/src/main/java/org/telegram/ui/Components/RadialProgressView.java` (commit 68c6775ac373f4bdb30ae9986282dd5ec0407756), Copyright Nikolai Kudashov 2013-2018 | GPL-2.0-or-later (used under GPL-3.0-or-later) |
 ## Animation runtimes and assets
 
 Libraries (binary Maven dependencies, not vendored):
@@ -178,8 +178,8 @@ Bundled animation files (no logos or brand art; each has a static fallback):
 
 | Dua file | Source | Author | License |
 | --- | --- | --- | --- |
-| `app/src/main/res/raw/rive_thinking_dots.riv` | [rive-android `app/src/main/res/raw/progress.riv`](https://github.com/rive-app/rive-android/blob/c8e596cd00550f3f7bc344f681a0f5fb7ac650c0/app/src/main/res/raw/progress.riv) (commit `c8e596cd`) | Rive (sample asset, added by Maxwell Talbot, 2021) | MIT (rive-android repository licence, Copyright (c) 2020-2024 Rive) |
-| `app/src/main/assets/lottie/settings.json`, `notification.json`, `microphone.json`, `shield.json`, `lock.json`, `database.json` | [useAnimations/react-useanimations `icons/`](https://github.com/useAnimations/react-useanimations/tree/035f164df779da512f06f1de4b0b59f7bf5624ba/icons) (commit `035f164d`) | useAnimations (https://useanimations.com) | MIT, Copyright (c) 2018-2026 useAnimations |
+| `apps/android/app/src/main/res/raw/rive_thinking_dots.riv` | [rive-android `app/src/main/res/raw/progress.riv`](https://github.com/rive-app/rive-android/blob/c8e596cd00550f3f7bc344f681a0f5fb7ac650c0/app/src/main/res/raw/progress.riv) (commit `c8e596cd`) | Rive (sample asset, added by Maxwell Talbot, 2021) | MIT (rive-android repository licence, Copyright (c) 2020-2024 Rive) |
+| `apps/android/app/src/main/assets/lottie/settings.json`, `notification.json`, `microphone.json`, `shield.json`, `lock.json`, `database.json` | [useAnimations/react-useanimations `icons/`](https://github.com/useAnimations/react-useanimations/tree/035f164df779da512f06f1de4b0b59f7bf5624ba/icons) (commit `035f164d`) | useAnimations (https://useanimations.com) | MIT, Copyright (c) 2018-2026 useAnimations |
 
 MIT License text (applies to the Rive and useAnimations items above with their copyright lines):
 
@@ -199,11 +199,11 @@ Bundled unchanged for offline use; full license texts ship inside the APK under 
 
 | Font | Dua file | Source | License |
 | --- | --- | --- | --- |
-| Google Sans (variable, Home only) | `app/src/main/res/font/home_google_sans_variable.ttf` | <https://github.com/google/fonts/tree/47d54ca1ebb14fd864695f1d39dc734f39017c33/ofl/googlesans> (`GoogleSans[GRAD,opsz,wght].ttf`, SHA-256 `d0a87d835a944b8b40d0e82a5651bb59ab97b936a2aeed5946eb57e7b2a3a90a`) | SIL Open Font License 1.1, Copyright 2025 The Google Sans Project Authors. [GoogleSans-OFL.txt](app/src/main/assets/licenses/GoogleSans-OFL.txt), [GoogleSans-NOTICE.txt](app/src/main/assets/licenses/GoogleSans-NOTICE.txt) |
-| Inter | `app/src/main/res/font/inter_*.ttf` | <https://github.com/rsms/inter> | SIL Open Font License 1.1. [Inter-OFL.txt](app/src/main/assets/licenses/Inter-OFL.txt) |
+| Google Sans (variable, Home only) | `apps/android/app/src/main/res/font/home_google_sans_variable.ttf` | <https://github.com/google/fonts/tree/47d54ca1ebb14fd864695f1d39dc734f39017c33/ofl/googlesans> (`GoogleSans[GRAD,opsz,wght].ttf`, SHA-256 `d0a87d835a944b8b40d0e82a5651bb59ab97b936a2aeed5946eb57e7b2a3a90a`) | SIL Open Font License 1.1, Copyright 2025 The Google Sans Project Authors. [GoogleSans-OFL.txt](apps/android/app/src/main/assets/licenses/GoogleSans-OFL.txt), [GoogleSans-NOTICE.txt](apps/android/app/src/main/assets/licenses/GoogleSans-NOTICE.txt) |
+| Inter | `apps/android/app/src/main/res/font/inter_*.ttf` | <https://github.com/rsms/inter> | SIL Open Font License 1.1. [Inter-OFL.txt](apps/android/app/src/main/assets/licenses/Inter-OFL.txt) |
 
 "Google" and "Google Sans" are trademarks of Google LLC (see
-[GoogleSans-TRADEMARKS.md](app/src/main/assets/licenses/GoogleSans-TRADEMARKS.md)). The font is used only as a
+[GoogleSans-TRADEMARKS.md](apps/android/app/src/main/assets/licenses/GoogleSans-TRADEMARKS.md)). The font is used only as a
 typeface; Dua does not use Google logos or brand assets, and the font is not modified or re-branded.
 
 ## Dua OG Assets: generation backdrop and attachment icons
@@ -211,7 +211,7 @@ typeface; Dua does not use Google logos or brand assets, and the font is not mod
 Selected sources were reused from [KRFbrothers/Dua-OG-Assets-](https://github.com/KRFbrothers/Dua-OG-Assets-/tree/f11b3c4f2f998665377079cdb7517a456bd8d502), collection commit `f11b3c4f2f998665377079cdb7517a456bd8d502`.
 Each component retains its original license; the collection is not treated as having a blanket license.
 
-- `app/src/main/java/com/dua/ai/ui/chat/BlobDrawable.java` adapts
+- `apps/android/app/src/main/java/com/dua/ai/ui/chat/BlobDrawable.java` adapts
   `code/telegram/org/telegram/ui/Components/BlobDrawable.java` (source blob
   `d2519fab2b7916e1cc3861fbdd4671dddde451f9`), originally
   [Telegram for Android](https://github.com/DrKLO/Telegram/blob/f32ffeec763f0bdbf4bec25b52d654f77bff733d/TMessagesProj/src/main/java/org/telegram/ui/Components/BlobDrawable.java).
@@ -219,13 +219,13 @@ Each component retains its original license; the collection is not treated as ha
   Changes: package, deterministic random seed, removal of Telegram-specific LiteMode guards.
   Original blob geometry and interpolation remain. Dua's Compose host supplies the palette,
   drawing position, generation state, lifecycle and reduced-motion handling.
-  The original license ships as [DuaOG-Telegram-LICENSE.txt](app/src/main/assets/licenses/DuaOG-Telegram-LICENSE.txt).
+  The original license ships as [DuaOG-Telegram-LICENSE.txt](apps/android/app/src/main/assets/licenses/DuaOG-Telegram-LICENSE.txt).
 - `og_photo_camera.xml`, `og_photo_library.xml`, `og_upload.xml`, and `og_graphic_eq.xml`
-  under `app/src/main/res/drawable/` come from the collection's
+  under `apps/android/app/src/main/res/drawable/` come from the collection's
   `icons/material-symbols/symbols/android/{name}/materialsymbolsoutlined/{name}_24px.xml`.
   Original Google Material Symbols, Apache-2.0; path data retained unchanged.
   Removed only the root Android theme tint so Dua's existing light/dark icon colors apply.
-  License: [MaterialSymbols-LICENSE.txt](app/src/main/assets/licenses/MaterialSymbols-LICENSE.txt).
+  License: [MaterialSymbols-LICENSE.txt](apps/android/app/src/main/assets/licenses/MaterialSymbols-LICENSE.txt).
 
 The generation background is a Dua integration of Telegram's open-source geometry, not
 proprietary Google Gemini UI code. Existing Dua branding, fonts and Live icon are reused

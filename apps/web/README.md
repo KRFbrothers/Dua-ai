@@ -7,7 +7,7 @@ same-origin checks just work. No separate hosting, no extra cost.
 - Sign-in: dua-api email + password (`/api/account/email-login`), the same Supabase owner
   account as the Android app. Only `DUA_ALLOWED_EMAIL` can sign in. If you normally use
   Google in the app, set an email password from the app's Account screen first.
-- Logo: copied at build time from `app/src/main/res/drawable-nodpi/dua_logo_home.webp`.
+- Logo: copied at build time from `apps/android/app/src/main/res/drawable-nodpi/dua_logo_home.webp`.
 - Chat streaming arrives in the next PR; this one ships the layout and sign-in.
 
 ## Local development

@@ -53,7 +53,7 @@ test('non-owner and unavailable cloud fail closed', async () => {
   assert.equal((await handleChat(request(body()), { env: { ...settings, DUA_ALLOWED_EMAIL: '' }, fetcher: mockFetch() })).status, 503);
 });
 test('stored file references from other projects are refused', async () => {
-  const fixture = JSON.parse(readFileSync(new URL('../../../app/src/test/resources/cloud-snapshot-v1.json', import.meta.url), 'utf8'));
+  const fixture = JSON.parse(readFileSync(new URL('../../android/app/src/test/resources/cloud-snapshot-v1.json', import.meta.url), 'utf8'));
   const file = fixture.chats[0].messages[0].files[0]; const s = snapshot();
   s.chats = [{ id: 'other-chat', model: 'Dua', projectId: 'business', draft: '', updatedAt: 0, messages: [{ role: 'user', text: 'Business document', state: 'complete', files: [file] }] }];
   const data = body(); data.messages[0].files = [file];

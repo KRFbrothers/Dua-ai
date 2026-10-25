@@ -4,7 +4,7 @@
 Make Dua AI easier to maintain, safer to extend, faster to understand, and more reliable across the Android app, the web/backend layer, and the Google Cloud engine.
 
 ## Current shape of the project
-- **Android app** in `app/`
+- **Android app** in `apps/android/app/`
 - **Backend / orchestration layer** in `apps/api/`
 - **Cloud Run engine** in `apps/ai-engine/`
 - **Tests** in `apps/api/test/` and `apps/ai-engine/tests/`

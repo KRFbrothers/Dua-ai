@@ -43,7 +43,7 @@ Actual Compose renders: [Dark preview](compact-preview-dark.png) · [Light previ
 ## Run the real app
 
 1. Open the repo in Android Studio. Install JDK 17, Android SDK 35 and build-tools 35.0.0.
-2. Build `bash ./gradlew :app:assembleDebug --no-daemon --max-workers=2`. Install `app/build/outputs/apk/debug/app-debug.apk` on an emulator for development.
+2. Build `bash apps/android/gradlew -p apps/android :app:assembleDebug --no-daemon --max-workers=2`. Install `apps/android/app/build/outputs/apk/debug/app-debug.apk` on an emulator for development.
 3. For the owner's phone, use the permanent signed release workflow in [SIGNING.md](../../SIGNING.md). A development/debug certificate differs from the owner release certificate; do not replace an installed release with a debug APK.
 4. The production API defaults to `https://dua-api-228305912525.us-central1.run.app` (dua-api on Cloud Run). For local backend development, install the `apps/api/` dependencies and run `npm start`. Android requires HTTPS in every build: use a trusted HTTPS development endpoint and override it with `-PduaApiBaseUrl=https://YOUR-ENDPOINT`. A raw HTTP emulator URL is rejected. See [README.md](../../README.md) for backend requirements.
 5. Online replies require the deployed backend, owner Google/Supabase account configuration and at least one configured provider. Verify `DUA_REQUIRE_LOGIN=1` and `DUA_ALLOWED_EMAIL` on the server. Local cache access does not bypass that lock.
@@ -53,13 +53,13 @@ Actual Compose renders: [Dark preview](compact-preview-dark.png) · [Light previ
 The debug build includes a separate `UiPreviewActivity`, using only synthetic fixtures and the same production chat/onboarding components:
 
 ```sh
-adb install -r app/build/outputs/apk/debug/app-debug.apk
+adb install -r apps/android/app/build/outputs/apk/debug/app-debug.apk
 adb shell am start -n com.dua.ai/.preview.UiPreviewActivity
 ```
 
 Use Home, Chat, Error and Welcome plus the Light/Dark switch. A persistent **UI preview · sample data · no backend** banner distinguishes these fixtures. Sending/retrying displays a preview notice; it never generates an AI response or contacts a backend. Real account, voice and picker actions direct you to the normal app. The preview neither loads private chats nor creates an account/ViewModel. It is excluded from release source/manifest; the normal launcher remains unchanged.
 
-The default native UI tests render production components with synthetic fixtures, separately from the preview activity. Run `bash ./gradlew :app:testDebugUnitTest -Pdua.ui-record --no-daemon --max-workers=2` from the repository root and inspect `app/build/approved-ui/*.png`. The flag enables PNG recording; without it, the tests still run. Historical screenshot classes are excluded unless `-Pdua.screenshots` is supplied. See [README.md — Android and routine checks](../../README.md#android-and-routine-checks) for both commands, report locations and CI scope. Recorded PNGs are not proof of physical-device or pixel-baseline verification.
+The default native UI tests render production components with synthetic fixtures, separately from the preview activity. Run `bash apps/android/gradlew -p apps/android :app:testDebugUnitTest -Pdua.ui-record --no-daemon --max-workers=2` from the repository root and inspect `apps/android/app/build/approved-ui/*.png`. The flag enables PNG recording; without it, the tests still run. Historical screenshot classes are excluded unless `-Pdua.screenshots` is supplied. See [README.md — Android and routine checks](../../README.md#android-and-routine-checks) for both commands, report locations and CI scope. Recorded PNGs are not proof of physical-device or pixel-baseline verification.
 
 ## Implemented versus integration-dependent or pending
 
@@ -165,7 +165,7 @@ These are code/build/automated rendering checks. Physical-device Google login, l
 Run locally:
 
 ```sh
-bash ./gradlew :app:testDebugUnitTest :app:assembleDebug -Pdua.ui-record --no-daemon --max-workers=2
+bash apps/android/gradlew -p apps/android :app:testDebugUnitTest :app:assembleDebug -Pdua.ui-record --no-daemon --max-workers=2
 ```
 
-Review `app/build/approved-ui/*.png` and the test reports. The opt-in full historical screenshot suite remains separate (`-Pdua.screenshots`). Do not merge or replace the permanent signing key as part of UI review.
+Review `apps/android/app/build/approved-ui/*.png` and the test reports. The opt-in full historical screenshot suite remains separate (`-Pdua.screenshots`). Do not merge or replace the permanent signing key as part of UI review.

@@ -16,7 +16,7 @@ Preview is explicit and renders below the code (or inside the Canvas):
 
 - Markdown uses the existing native renderer and safe-link handler.
 - HTML and SVG use a bounded WebView with JavaScript, network, file/content access, persistent storage and popups disabled. Scripts and remote resources in generated HTML do not run. This is a static preview, not an application runtime.
-- Mermaid uses the pinned, offline Mermaid 12.2.0 bundle in strict mode with strict sanitization. Only that exact bundled script can load. Diagram source is JSON-escaped into a trusted template, external loads/navigation are blocked, and no app JavaScript bridge exists. Invalid diagrams show a syntax message. The bundle and dependency notices are kept under `app/src/main/assets/vendor/mermaid/`.
+- Mermaid uses the pinned, offline Mermaid 12.2.0 bundle in strict mode with strict sanitization. Only that exact bundled script can load. Diagram source is JSON-escaped into a trusted template, external loads/navigation are blocked, and no app JavaScript bridge exists. Invalid diagrams show a syntax message. The bundle and dependency notices are kept under `apps/android/app/src/main/assets/vendor/mermaid/`.
 
 WebViews block network loads/navigation, file/content access and persistent storage and expose no app JavaScript bridge. Previews over 100,000 characters are rejected; source can still be copied/shared. Switching artifact type recreates the WebView, so a Mermaid view cannot leave JavaScript enabled for HTML/SVG. Views are destroyed on disposal. Physical-device WebView rendering still needs checking; Robolectric tests verify document construction, resource interception and settings rather than executing Chromium's renderer.
 
@@ -47,7 +47,7 @@ The Canvas reuses the preview renderer above. Switching to Code, changing artifa
 ## Tests and device checks
 
 - Thinking and code: tests cover tree parsing/toggle/completion, exact share/copy payloads, font and syntax roles, run delegation and rejection, preview opt-in, JSON script escaping, sandbox settings and exact offline-resource matching. Existing Home/header/composer/theme and message-selection tests remain part of the full Android suite.
-- Canvas: unit/Compose tests cover detection, formatted tables, source/copy fidelity, multiple artifacts, small-screen/font scaling and renderer release across tab switching, artifact changes, chat switching, Back and repeated open/close in both themes. Native screenshot captures are written under `app/build/approved-ui/` when `-Pdua.ui-record` is set.
+- Canvas: unit/Compose tests cover detection, formatted tables, source/copy fidelity, multiple artifacts, small-screen/font scaling and renderer release across tab switching, artifact changes, chat switching, Back and repeated open/close in both themes. Native screenshot captures are written under `apps/android/app/build/approved-ui/` when `-Pdua.ui-record` is set.
 - Still needs a device: physical-device WebView rendering and Android memory profiling; release assertions do not prove that Chromium has terminated its shared renderer process.
 
 Focused test classes are listed in [TESTING.md](TESTING.md).

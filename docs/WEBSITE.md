@@ -9,7 +9,7 @@ URL: `https://dua-api-228305912525.us-central1.run.app/`
 - `apps/web/` is built into `apps/api/site` and shipped inside the **dua-api** image by [`apps/api/deploy-cloudrun.sh`](../apps/api/deploy-cloudrun.sh). No separate hosting or cost.
 - [`static-site.mjs`](../apps/api/src/server/static-site.mjs) serves it for every non-`/api` path: SPA fallback to `index.html`, hashed `assets/` cached long-term, `index.html` not cached, CSP / `nosniff` / frame-deny headers, no files outside `apps/api/site`. `/api/*` is unchanged; without a built site `/` returns 404.
 - [`server.mjs`](../apps/api/src/server/server.mjs) builds the request URL from `X-Forwarded-Proto`, so the same-origin checks in dua-api see Cloud Run's `https` origin.
-- The DUA logo is copied at build time from `app/src/main/res/drawable-nodpi/dua_logo_home.webp`.
+- The DUA logo is copied at build time from `apps/android/app/src/main/res/drawable-nodpi/dua_logo_home.webp`.
 
 ## Sign-in (#226)
 

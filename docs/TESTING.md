@@ -2,12 +2,16 @@
 
 Where tests live, how CI runs them, and which focused tests cover the flagship Android features.
 
-Android app tests currently live under `app/src/test` (JVM, Compose and Robolectric).
-There is no `app/src/androidTest` suite; the separate `benchmark` module has device
+Open `apps/android/` in Android Studio. The Android commands below run from the
+repository root with an explicit Gradle project path. From `apps/android/`, the
+same tasks can be run with `./gradlew` directly.
+
+Android app tests currently live under `apps/android/app/src/test` (JVM, Compose and Robolectric).
+There is no `apps/android/app/src/androidTest` suite; the separate `benchmark` module has device
 tests for baseline profiles. These do not provide app instrumentation coverage.
 Android lint is available through the Android Gradle plugin even without an explicit
-`lint {}` block. Its error/report settings are now explicit in `app/build.gradle.kts`.
-Run `./gradlew :app:lintDebug` locally; the current checks workflow does not run lint.
+`lint {}` block. Its error/report settings are now explicit in `apps/android/app/build.gradle.kts`.
+Run `bash apps/android/gradlew -p apps/android :app:lintDebug` locally; the current checks workflow does not run lint.
 No lint baseline has been generated or existing findings suppressed.
 
 ## CI jobs (`.github/workflows/checks.yml`)
@@ -19,7 +23,7 @@ Every pull request and push to `main` runs four jobs:
 | Google Cloud engine tests | Python tests in `apps/ai-engine/tests` run twice: minimal Flask + pytest, then production ADK/GenAI dependencies with scripted offline models; no live provider, Supabase or GitHub calls | `python -m pytest -q apps/ai-engine/tests` (repo root) |
 | Backend tests | Node tests in `apps/api/test` (`npm run test:ci`, needs Node 24) | `cd apps/api && npm ci && npm test` |
 | Website build | `apps/web/`: `npm ci`, type-check and Vite build into `apps/api/site`, then checks `index.html` and the logo exist | `cd apps/web && npm ci && npm run build` |
-| Android build and tests | `./gradlew :app:testDebugUnitTest -Pdua.ui-record` (JVM, Compose and Robolectric tests) | see below |
+| Android build and tests | `bash apps/android/gradlew -p apps/android :app:testDebugUnitTest -Pdua.ui-record` (JVM, Compose and Robolectric tests) | see below |
 
 The [personal APK workflow](../.github/workflows/personal-apk.yml) is a separate, manually started signing/build path ([SIGNING.md](../SIGNING.md)). Tests use mocked integrations; passing them does not verify deployed Auth, provider billing, live RLS or physical-device behavior.
 
@@ -61,13 +65,13 @@ not enable `AGENT_ENGINE=adk` in production.
 Run the complete standard Android test task (includes Compose/Robolectric tests):
 
 ```sh
-./gradlew :app:testDebugUnitTest --no-daemon --max-workers=2
+bash apps/android/gradlew -p apps/android :app:testDebugUnitTest --no-daemon --max-workers=2
 ```
 
 For a focused run, add one or more `--tests` options, for example:
 
 ```sh
-./gradlew :app:testDebugUnitTest --no-daemon --max-workers=2 \
+bash apps/android/gradlew -p apps/android :app:testDebugUnitTest --no-daemon --max-workers=2 \
   --tests com.dua.ai.ui.chat.ThinkingTreeTest \
   --tests com.dua.ai.model.MessageArtifactsTest \
   --tests com.dua.ai.ui.chat.ArtifactCanvasTest \
@@ -79,7 +83,7 @@ For a focused run, add one or more `--tests` options, for example:
   --tests com.dua.ai.ui.voice.VoiceBargeInIntegrationTest
 ```
 
-Reports: `app/build/reports/tests/testDebugUnitTest/index.html` and XML under `app/build/test-results/testDebugUnitTest/`. CI runs the full task with `-Pdua.ui-record` to preserve UI captures. Separate opt-in snapshot-recording classes under `screenshots/` keep the repository's existing `dua.screenshots` configuration.
+Reports: `apps/android/app/build/reports/tests/testDebugUnitTest/index.html` and XML under `apps/android/app/build/test-results/testDebugUnitTest/`. CI runs the full task with `-Pdua.ui-record` to preserve UI captures. Separate opt-in snapshot-recording classes under `screenshots/` keep the repository's existing `dua.screenshots` configuration.
 
 ## Flagship feature tests
 

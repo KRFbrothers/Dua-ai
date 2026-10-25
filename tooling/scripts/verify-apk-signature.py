@@ -19,7 +19,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--apk", type=Path, required=True)
     parser.add_argument("--apksigner", required=True)
-    parser.add_argument("--certificate", type=Path, default=Path("app/signing-certificate.properties"))
+    parser.add_argument("--certificate", type=Path, default=Path("apps/android/app/signing-certificate.properties"))
     parser.add_argument("--output-dir", type=Path, required=True)
     args = parser.parse_args()
     properties = {}

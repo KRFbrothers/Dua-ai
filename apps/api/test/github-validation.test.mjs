@@ -8,7 +8,7 @@ import { validateChat } from '../src/core/providers.mjs';
 import { checkChanges, pathProblem, prLimits, proposeChanges, validatePrRequest } from '../src/core/build-pr.mjs';
 import { validateCloudSnapshot } from '../src/core/cloud-snapshot.mjs';
 
-const fixture = JSON.parse(readFileSync(new URL('../../../app/src/test/resources/cloud-snapshot-v1.json', import.meta.url), 'utf8'));
+const fixture = JSON.parse(readFileSync(new URL('../../android/app/src/test/resources/cloud-snapshot-v1.json', import.meta.url), 'utf8'));
 const snapshotPath = (path, kind) => {
   const snapshot = structuredClone(fixture);
   const message = snapshot.chats[0].messages.find(item => item[kind]);

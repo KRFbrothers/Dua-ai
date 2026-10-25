@@ -8,7 +8,7 @@ tools and the ADK code helper can use the new search tool.
 ```json
 {
   "query": "syncBlocked",
-  "path": "app/src/main/java",
+  "path": "apps/android/app/src/main/java",
   "case_sensitive": true,
   "max_results": 30
 }
