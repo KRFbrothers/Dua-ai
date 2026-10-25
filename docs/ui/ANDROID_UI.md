@@ -28,7 +28,7 @@ Actual Compose renders: [Dark preview](compact-preview-dark.png) · [Light previ
 
 - Existing `ui/theme/Color.kt` neutral surfaces, error/code roles and full logo artwork are preserved.
 - `DuaTheme.kt` and `AccentColors.kt` apply Light/Dark plus six accent presets independently. Defaults: Light Purple `#AA4FF6`; Dark Orange `#FF6308`. Accent reset clears only the override.
-- `Type.kt` supplies the Inter-based text scale: 16sp body, 14sp secondary/buttons, 20sp page titles; Android font scaling stays enabled. The Home tagline uses `InterFont` (bundled `krfbrothers_regular`), like the rest of the text scale.
+- `Type.kt` supplies the Inter-based text scale: 16sp body, 14sp secondary/buttons, 20sp page titles; Android font scaling stays enabled. The Home tagline uses `InterFont` (bundled `inter_*`), like the rest of the text scale.
 - `Spacing.kt` supplies the 4dp spacing scale. Rounded surfaces use `Shape.kt`. Controls retain 48dp touch targets; menu/footer stay fixed while history scrolls. Code/Think/Search use accessible icon-only controls when their labels cannot fit.
 - The header and project actions are neutral. Accent is used selectively for selection and settings; the logo is never tinted.
 - Existing reduced-motion handling, keyboard insets, Android back navigation and conversation scroll-follow behavior remain in place.

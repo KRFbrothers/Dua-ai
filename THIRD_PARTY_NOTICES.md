@@ -202,6 +202,10 @@ Bundled unchanged for offline use; full license texts ship inside the APK under 
 | Google Sans (variable, Home only) | `apps/android/app/src/main/res/font/home_google_sans_variable.ttf` | <https://github.com/google/fonts/tree/47d54ca1ebb14fd864695f1d39dc734f39017c33/ofl/googlesans> (`GoogleSans[GRAD,opsz,wght].ttf`, SHA-256 `d0a87d835a944b8b40d0e82a5651bb59ab97b936a2aeed5946eb57e7b2a3a90a`) | SIL Open Font License 1.1, Copyright 2025 The Google Sans Project Authors. [GoogleSans-OFL.txt](apps/android/app/src/main/assets/licenses/GoogleSans-OFL.txt), [GoogleSans-NOTICE.txt](apps/android/app/src/main/assets/licenses/GoogleSans-NOTICE.txt) |
 | Inter | `apps/android/app/src/main/res/font/inter_*.ttf` | <https://github.com/rsms/inter> | SIL Open Font License 1.1. [Inter-OFL.txt](apps/android/app/src/main/assets/licenses/Inter-OFL.txt) |
 
+The primary text scale (`InterFont`) is the bundled Inter release above. A previously bundled
+proprietary display face was removed from `app/src/main/res/font/` and is no longer referenced by
+`Type.kt`; no third-party display or brand typeface ships in the app.
+
 "Google" and "Google Sans" are trademarks of Google LLC (see
 [GoogleSans-TRADEMARKS.md](apps/android/app/src/main/assets/licenses/GoogleSans-TRADEMARKS.md)). The font is used only as a
 typeface; Dua does not use Google logos or brand assets, and the font is not modified or re-branded.

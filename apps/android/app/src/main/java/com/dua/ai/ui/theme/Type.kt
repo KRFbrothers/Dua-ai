@@ -10,12 +10,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import com.dua.ai.R
 
-/** Existing primary resource family; retained for backward-compatible typography. */
+/**
+ * Primary resource family: the bundled Inter release (SIL OFL 1.1), used for the whole text scale.
+ * See app/src/main/assets/licenses/Inter-OFL.txt and THIRD_PARTY_NOTICES.md.
+ */
 val InterFont: FontFamily = FontFamily(
-    Font(R.font.krfbrothers_regular, FontWeight.Normal),
-    Font(R.font.krfbrothers_regular, FontWeight.Medium),
-    Font(R.font.krfbrothers_regular, FontWeight.SemiBold),
-    Font(R.font.krfbrothers_regular, FontWeight.Bold)
+    Font(R.font.inter_regular, FontWeight.Normal),
+    Font(R.font.inter_medium, FontWeight.Medium),
+    Font(R.font.inter_semibold, FontWeight.SemiBold),
+    Font(R.font.inter_bold, FontWeight.Bold)
 )
 
 /**
