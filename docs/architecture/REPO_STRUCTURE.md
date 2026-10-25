@@ -1,12 +1,16 @@
 # Monorepo target structure
 
-Status: agreed target, documentation only. The current runtime layout remains
-described in [ARCHITECTURE.md](../ARCHITECTURE.md).
+Status: step 1 (documentation) and step 2 (database/tooling paths) are complete.
+The database migrations are now under `infra/database/` and the root helper
+scripts under `tooling/scripts/`. Applications remain at `app/`, `web/`,
+`website/` and `google-cloud-backend/`; Android Gradle roots stay at the repository
+root. See [ARCHITECTURE.md](../ARCHITECTURE.md) for the current runtime layout.
 
-This document records where components should live after separately reviewed
-migrations. It does not move code, tests, Android Gradle roots, Dockerfiles,
-workflows, database migrations or deployment paths. Do not create empty `apps/`,
-`packages/` or `infra/` directories to match this diagram.
+This document records completed and future migrations. Step 2 moves SQL files
+and the APK verification helper without changing their contents, and updates
+their documentation and workflow references. It does not move application code,
+tests, service Dockerfiles or deployment scripts. Do not create empty `apps/`,
+`packages/` or `infra/cloudrun/` directories to match this diagram.
 
 ## Target tree
 
@@ -20,8 +24,8 @@ Dua-ai/
 ├── packages/                    # Future shared contracts only when actually needed
 │   └── contracts/               # API/event schemas; create with a real consumer
 ├── infra/
-│   ├── database/                # Supabase project, migrations and related config
-│   └── cloudrun/                # Shared Cloud Run deployment infrastructure
+│   ├── database/                # Migrations moved here in step 2
+│   └── cloudrun/                # Future shared infrastructure; not created yet
 ├── tooling/
 │   └── scripts/                 # Repository-wide development/build helper scripts
 ├── docs/
@@ -58,12 +62,13 @@ convention is illustrated in the [Turborepo repository guide](https://turborepo.
 | `website/` | `apps/web/` | Browser frontend, built and served through `dua-api` |
 | `google-cloud-backend/` | `apps/ai-engine/` | Python engine, deployed as `dua-ai-engine` |
 | `app/` | `apps/android/` | Android application; coordinate its Gradle workspace in the final migration |
-| `supabase/` | `infra/database/` | Supabase project, migrations and configuration |
+| `infra/database/` | `infra/database/` | Supabase migrations; moved from the former root directory in step 2 |
+| `tooling/scripts/` | `tooling/scripts/` | Repository helpers; moved from the former root directory in step 2 |
 
 The Android row identifies the destination responsibility, not a standalone
 `mv app apps/android` command. The Android migration must account for the root
 Gradle files, wrapper, version catalog, benchmark module and all build consumers
-together. Their current locations remain unchanged in this documentation PR.
+together. Their current locations remain unchanged after step 2.
 
 ## Placement rules
 
@@ -110,14 +115,21 @@ starting the next. This document authorizes no path migration by itself.
 
 | Order | PR scope | Required review and validation |
 | --- | --- | --- |
-| 1. Docs | Record this target and link it from the docs index; this PR only. | Verify links and the documentation-only diff. |
-| 2. Infra paths | Plan and move Supabase/deployment infrastructure to `infra/database/` and `infra/cloudrun/`; place repository helper scripts under `tooling/scripts/` as applicable. | Update path consumers together; preserve SQL and migration identity, service names, secret bindings and environment values. Verify deployment references before rollout. |
+| 1. Docs — done | Record this target and link it from the docs index. | Verify links and the documentation-only diff. |
+| 2. Infra/tooling paths — done | Move the seven database migrations to `infra/database/` and the repository helper to `tooling/scripts/`; update docs and the APK workflow invocation. Service-owned deployment files stay in place; no shared Cloud Run directory is needed yet. | Preserve file contents/modes and migration identity; verify references and unchanged application/test/build paths. No database apply or redeploy is required for this move. |
 | 3. API / website | Move `web/` to `apps/api/` and `website/` to `apps/web/` together. | Update frontend build output, API static serving, imports, workspace/build and deployment references atomically. Keep tests with their owners and run backend tests plus the website build. |
 | 4. Engine | Move `google-cloud-backend/` to `apps/ai-engine/`. | Update engine import/build/deployment paths and dependent references; preserve runtime behavior and run engine tests. |
 | 5. Android | Migrate the Android application and coordinated Gradle workspace to `apps/android/`. | Review wrapper, Gradle roots, modules, benchmark, signing-file references and CI paths together. Preserve `com.dua.ai`, resources and tests; run Android build/tests and relevant lint/signing checks. |
 
+Step 2 updates only the APK helper path in the existing personal APK workflow;
+its job names, signing settings and build paths stay unchanged. There is no
+versioned Supabase CLI config to relocate; see the [CLI workspace note](../../SUPABASE.md#repository-paths-and-optional-cli-workspace).
+Source-level setup messages retain some former migration paths until their
+owning source is separately updated; these are informational strings, not file
+loads. Use `infra/database/migrations/` to find the referenced files.
+
 Future migration PRs must explicitly include any required workflow, Dockerfile or
-build-path edits; none are made here. Separate path moves from behavior changes,
+build-path edits. Separate path moves from behavior changes,
 keep CI job names stable, and follow the repository's protected-path rules.
 Use [TESTING.md](../TESTING.md) for existing checks and
 [OPERATIONS.md](../OPERATIONS.md) for deployment procedures.

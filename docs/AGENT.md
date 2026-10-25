@@ -175,7 +175,7 @@ runner behavior still require verification before activation.
 
 | | Agent notes | Phone Personal Memory |
 | --- | --- | --- |
-| Where | Supabase table `agent_notes` ([migration](../supabase/migrations/202610160001_dua_agent_notes.sql)), owner-only RLS | Phone cache + owner cloud snapshot (`dua_cloud_snapshots`) |
+| Where | Supabase table `agent_notes` ([migration](../infra/database/migrations/202610160001_dua_agent_notes.sql)), owner-only RLS | Phone cache + owner cloud snapshot (`dua_cloud_snapshots`) |
 | Who writes | The Agent: after a reply it may save 0–3 short lessons; tools `save_note`, `search_notes`, `delete_note` | You, in Settings → Memory (user-approved) |
 | Limits | 200 notes per owner (oldest pruned), up to 20 relevant notes loaded per task; anything that looks like a secret, token, key or email is dropped | 10 notes of 200 characters ([SETTINGS_DEVICE_CHECK.md](SETTINGS_DEVICE_CHECK.md)) |
 | Turn off | `AGENT_NOTES=0` | Memory switch in Settings |

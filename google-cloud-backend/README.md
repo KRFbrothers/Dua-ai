@@ -199,7 +199,7 @@ in the app ("Searching the web…", "Opening page…", "Running code…", "Creat
 
 ## Agent notes (self-learning, optional)
 
-The Dua Agent keeps its own private notes in Supabase table `agent_notes` (migration `supabase/migrations/202610160001_dua_agent_notes.sql`). They are separate from the app's user-approved Memory. Every request uses the signed-in owner's token plus the anon key, so RLS keeps rows owner-only; no service-role key is used.
+The Dua Agent keeps its own private notes in Supabase table `agent_notes` (migration `infra/database/migrations/202610160001_dua_agent_notes.sql`). They are separate from the app's user-approved Memory. Every request uses the signed-in owner's token plus the anon key, so RLS keeps rows owner-only; no service-role key is used.
 - At the start of an Agent task, up to 20 relevant notes (about 2k tokens) are added to the system prompt.
 - After the reply, one cheap `VERTEX_MODEL` call (low thinking, 1024-token cap) extracts 0–3 durable lessons, drops duplicates and anything that looks like a secret, token, key or email, and saves them (`source = auto`).
 - Tools: `save_note`, `search_notes`, `delete_note` (3 each per request; delete works only on the owner's rows).
