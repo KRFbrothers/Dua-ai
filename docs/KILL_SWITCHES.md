@@ -4,7 +4,7 @@ Turn Dua features off (and back on) from Cloud Run, without a new APK. All switc
 Each command creates a new Cloud Run revision in ~30 seconds; the app picks the change up on its next start
 or when it comes back to the foreground (at most once a minute; the Try again button on the paused screen checks immediately).
 
-Project `global-healer-m6shk`, region `us-central1`. Services: `dua-api` (apps/api/) and `dua-ai-engine` (google-cloud-backend/).
+Project `global-healer-m6shk`, region `us-central1`. Services: `dua-api` (apps/api/) and `dua-ai-engine` (apps/ai-engine/).
 
 | Switch | dua-api | dua-ai-engine | What the user sees |
 | --- | --- | --- | --- |

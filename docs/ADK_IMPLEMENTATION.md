@@ -79,7 +79,7 @@ transaction-pooler settings are not certified by these tests.
 With the server secret available in the command's environment, run:
 
 ```bash
-cd google-cloud-backend
+cd apps/ai-engine
 python adk_cli.py init-db
 python adk_cli.py status
 ```
@@ -228,7 +228,7 @@ build proxies without copying their certificates into image layers. No secret
 files are copied into the build context/image.
 
 ```bash
-bash google-cloud-backend/deploy-adk.sh plan
+bash apps/ai-engine/deploy-adk.sh plan
 ```
 
 `plan` is read-only and prints serving revision/traffic, not environment values.

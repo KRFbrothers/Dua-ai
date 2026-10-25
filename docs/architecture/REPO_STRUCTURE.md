@@ -1,10 +1,11 @@
 # Monorepo target structure
 
-Status: steps 1 (documentation), 2 (database/tooling paths) and 3 (API/website paths) are complete.
+Status: steps 1 (documentation), 2 (database/tooling paths), 3 (API/website paths)
+and 4 (engine path) are complete.
 The database migrations are now under `infra/database/` and the root helper
 scripts under `tooling/scripts/`. The Node API and website now live at `apps/api/`
-and `apps/web/`. Android and the engine remain at `app/` and
-`google-cloud-backend/`; Android Gradle roots stay at the repository
+and `apps/web/`; the Python engine now lives at `apps/ai-engine/`, including its
+`coding-runner/`, tests and evals. Android remains at `app/`; Gradle roots stay at the repository
 root. See [ARCHITECTURE.md](../ARCHITECTURE.md) for the current runtime layout.
 
 This document records completed and future migrations. Step 2 moves SQL files
@@ -13,7 +14,8 @@ their documentation and workflow references. It does not move application code,
 tests, service Dockerfiles or deployment scripts. Step 3 moves the API and website
 with their tests and deployment files, and updates their path references. The
 website builds into `apps/api/site/`, served by the existing `dua-api` service.
-Do not create empty `packages/`, `apps/android/`, `apps/ai-engine/` or
+Step 4 moves the engine as one unit and updates paths, without reorganizing its
+`agent_*.py` or `coding_*.py` modules. Do not create empty `packages/`, `apps/android/` or
 `infra/cloudrun/` directories to match this diagram.
 
 ## Target tree
@@ -24,7 +26,7 @@ Dua-ai/
 │   ├── android/                 # Android application and its build workspace
 │   ├── web/                     # Browser frontend; moved in step 3
 │   ├── api/                     # Node dua-api; moved in step 3
-│   └── ai-engine/               # Python dua-ai-engine, currently google-cloud-backend/
+│   └── ai-engine/               # Python dua-ai-engine; moved in step 4; includes coding-runner/
 ├── packages/                    # Future shared contracts only when actually needed
 │   └── contracts/               # API/event schemas; create with a real consumer
 ├── infra/
@@ -64,7 +66,7 @@ convention is illustrated in the [Turborepo repository guide](https://turborepo.
 | --- | --- | --- |
 | `apps/api/` | `apps/api/` | Node backend, deployed as `dua-api`; moved from `web/` in step 3 |
 | `apps/web/` | `apps/web/` | Browser frontend, built and served through `dua-api`; moved from `website/` in step 3 |
-| `google-cloud-backend/` | `apps/ai-engine/` | Python engine, deployed as `dua-ai-engine` |
+| `apps/ai-engine/` | `apps/ai-engine/` | Python engine, deployed as `dua-ai-engine`; moved from `google-cloud-backend/` in step 4 |
 | `app/` | `apps/android/` | Android application; coordinate its Gradle workspace in the final migration |
 | `infra/database/` | `infra/database/` | Supabase migrations; moved from the former root directory in step 2 |
 | `tooling/scripts/` | `tooling/scripts/` | Repository helpers; moved from the former root directory in step 2 |
@@ -72,7 +74,7 @@ convention is illustrated in the [Turborepo repository guide](https://turborepo.
 The Android row identifies the destination responsibility, not a standalone
 `mv app apps/android` command. The Android migration must account for the root
 Gradle files, wrapper, version catalog, benchmark module and all build consumers
-together. Their current locations remain unchanged after step 3.
+together. Their current locations remain unchanged after step 4.
 
 ## Placement rules
 
@@ -122,7 +124,7 @@ starting the next. This document authorizes no path migration by itself.
 | 1. Docs — done | Record this target and link it from the docs index. | Verify links and the documentation-only diff. |
 | 2. Infra/tooling paths — done | Move the seven database migrations to `infra/database/` and the repository helper to `tooling/scripts/`; update docs and the APK workflow invocation. Service-owned deployment files stay in place; no shared Cloud Run directory is needed yet. | Preserve file contents/modes and migration identity; verify references and unchanged application/test/build paths. No database apply or redeploy is required for this move. |
 | 3. API / website — done | Moved `web/` to `apps/api/` and `website/` to `apps/web/` together, including tests and deployment files. | Updated frontend output (`apps/api/site/`), shared fixture/logo paths, CI, Dependabot and deployment/docs references. Keep Cloud Run service `dua-api`; run all four existing CI jobs. |
-| 4. Engine | Move `google-cloud-backend/` to `apps/ai-engine/`. | Update engine import/build/deployment paths and dependent references; preserve runtime behavior and run engine tests. |
+| 4. Engine — done | Moved `google-cloud-backend/` to `apps/ai-engine/` as one unit, including tests, evals and `coding-runner/`. | Updated CI, deployment/runner paths and documentation links; preserve module layout, Dockerfile/wsgi entrypoints and service `dua-ai-engine`. Run all four existing CI jobs. |
 | 5. Android | Migrate the Android application and coordinated Gradle workspace to `apps/android/`. | Review wrapper, Gradle roots, modules, benchmark, signing-file references and CI paths together. Preserve `com.dua.ai`, resources and tests; run Android build/tests and relevant lint/signing checks. |
 
 Step 2 updates only the APK helper path in the existing personal APK workflow;
@@ -130,6 +132,12 @@ its job names, signing settings and build paths stay unchanged. There is no
 versioned Supabase CLI config to relocate; see the [CLI workspace note](../../SUPABASE.md#repository-paths-and-optional-cli-workspace).
 Source-level setup messages now use `infra/database/migrations/` to locate the
 referenced files; their path text was corrected before step 3.
+
+The historical `apps/ai-engine/dua-adk-cloudshell.sh` bootstrap still fetches its
+fixed reviewed commit (`cea9b6df188b8bd926bbf549419ef62e8e08643b`). Its internal
+`google-cloud-backend/` paths refer to that snapshot, where the old directory
+exists; they do not refer to the current checkout. Keep the pin and those paths
+together. Normal current-checkout deployment uses `apps/ai-engine/`.
 
 Future migration PRs must explicitly include any required workflow, Dockerfile or
 build-path edits. Separate path moves from behavior changes,

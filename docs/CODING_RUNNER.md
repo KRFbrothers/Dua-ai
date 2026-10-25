@@ -55,7 +55,7 @@ regular source assets are supported within the bundle limits.
 ```json
 {
   "argv": ["python", "-m", "unittest", "discover", "-s", "tests"],
-  "cwd": "google-cloud-backend",
+  "cwd": "apps/ai-engine",
   "timeout_seconds": 60,
   "export_paths": []
 }
@@ -115,7 +115,7 @@ the host kernel; an operator may install gVisor and set `DUA_SANDBOX_RUNTIME=run
 for an additional isolation layer. Selecting an unavailable runtime fails; it
 never falls back to host execution or an unconfined container.
 
-Templates live under [`google-cloud-backend/coding-runner`](../google-cloud-backend/coding-runner):
+Templates live under [`apps/ai-engine/coding-runner`](../apps/ai-engine/coding-runner):
 
 - `Sandbox.Dockerfile`: reference Python image using the repository's pinned
   Python base. Build/publish a reviewed image and install its immutable digest

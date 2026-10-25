@@ -20,7 +20,7 @@ URL: `https://dua-api-228305912525.us-central1.run.app/`
 
 ## Engine access from the browser
 
-[`web_cors.py`](../google-cloud-backend/web_cors.py) (wired by [`wsgi.py`](../google-cloud-backend/wsgi.py)) handles browser calls to dua-ai-engine:
+[`web_cors.py`](../apps/ai-engine/web_cors.py) (wired by [`wsgi.py`](../apps/ai-engine/wsgi.py)) handles browser calls to dua-ai-engine:
 
 | Setting | Default | Meaning |
 | --- | --- | --- |

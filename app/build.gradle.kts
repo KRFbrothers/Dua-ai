@@ -27,7 +27,7 @@ require(duaApiBaseUrl.startsWith("https://") && !duaApiBaseUrl.contains('"')) {
 }
 
 // Chat (POST /api/chat) can use a separate engine, by default the Google Cloud Run backend
-// (google-cloud-backend/). Everything else (account, files, imagine, voice, setup) stays on duaApiBaseUrl.
+// (apps/ai-engine/). Everything else (account, files, imagine, voice, setup) stays on duaApiBaseUrl.
 // Set -PduaChatBaseUrl=https://dua-api-228305912525.us-central1.run.app (or DUA_CHAT_BASE_URL) to send chat to the Node API instead.
 val duaChatBaseUrl = providers.gradleProperty("duaChatBaseUrl")
     .orElse(providers.environmentVariable("DUA_CHAT_BASE_URL"))

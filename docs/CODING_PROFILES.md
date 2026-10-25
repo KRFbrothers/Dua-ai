@@ -111,7 +111,7 @@ controller supplies one.
 
 ## Prepared image recipes — build separately
 
-Files are under `google-cloud-backend/coding-runner`, which is the Docker build
+Files are under `apps/ai-engine/coding-runner`, which is the Docker build
 context. `.dockerignore` includes only recipes, the build verifier, wrapper and
 explicit dependency seed. These templates were not built or run in this change.
 

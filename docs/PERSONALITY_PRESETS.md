@@ -31,10 +31,10 @@ It does not alter Imagine, title generation or the separate live-audio protocol.
 ## Backend rollout
 
 Deploy the updated chat backend(s) using the existing [Node deployment steps](../apps/api/README.md)
-or [Google Cloud engine deployment steps](../google-cloud-backend/README.md):
+or [Google Cloud engine deployment steps](../apps/ai-engine/README.md):
 
 - Node `apps/api/`: `/api/config` must include `"personalization":{"personality":true}`.
-- Python `google-cloud-backend/`: `GET /` must advertise the same object. This is
+- Python `apps/ai-engine/`: `GET /` must advertise the same object. This is
   the capability the Android app checks when a separate chat engine is configured.
 
 After deployment, refresh **Feature setup** or restart the app. If the actual chat

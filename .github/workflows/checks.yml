@@ -35,25 +35,25 @@ jobs:
           python3 -m venv /tmp/dua-gcb-tests
           /tmp/dua-gcb-tests/bin/python -m pip install Flask==3.0.3 pytest==8.3.5
       - name: Run mocked Vertex engine tests
-        run: /tmp/dua-gcb-tests/bin/python -m pytest -q google-cloud-backend/tests --junitxml=google-cloud-backend/pytest-results.xml
+        run: /tmp/dua-gcb-tests/bin/python -m pytest -q apps/ai-engine/tests --junitxml=apps/ai-engine/pytest-results.xml
       - name: Install production SDK test dependencies
         run: |
           python3 -m venv /tmp/dua-gcb-adk-tests
-          /tmp/dua-gcb-adk-tests/bin/python -m pip install -r google-cloud-backend/requirements-adapters-lock.txt pytest==8.3.5
+          /tmp/dua-gcb-adk-tests/bin/python -m pip install -r apps/ai-engine/requirements-adapters-lock.txt pytest==8.3.5
       - name: Run engine tests with the real ADK SDK and offline models
         env:
           ADK_TEST_POSTGRES_URL: postgresql://postgres:adk-ci-disposable-only@127.0.0.1:5432/postgres
         run: |
           /tmp/dua-gcb-adk-tests/bin/python -c "import google.adk, google.genai, asyncpg, psycopg, pgvector, litellm"
-          /tmp/dua-gcb-adk-tests/bin/python -m pytest -q google-cloud-backend/tests --junitxml=google-cloud-backend/pytest-sdk-results.xml
+          /tmp/dua-gcb-adk-tests/bin/python -m pytest -q apps/ai-engine/tests --junitxml=apps/ai-engine/pytest-sdk-results.xml
       - name: Preserve engine test report
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: google-cloud-engine-test-report
           path: |
-            google-cloud-backend/pytest-results.xml
-            google-cloud-backend/pytest-sdk-results.xml
+            apps/ai-engine/pytest-results.xml
+            apps/ai-engine/pytest-sdk-results.xml
           if-no-files-found: ignore
 
   backend:

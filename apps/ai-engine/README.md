@@ -50,7 +50,7 @@ with `DUA_REQUIRE_LOGIN=0`; `DUA_APP_TOKEN`, if retained, is an additional gate 
 
 ### Local environment file
 
-Use [.env.example](.env.example) as the local template. It leaves project/account values and credentials empty, documents the separate coding-agent token and keeps an empty repository target until you choose one. From `google-cloud-backend/`, with your Python virtual environment active and runtime dependencies installed:
+Use [.env.example](.env.example) as the local template. It leaves project/account values and credentials empty, documents the separate coding-agent token and keeps an empty repository target until you choose one. From `apps/ai-engine/`, with your Python virtual environment active and runtime dependencies installed:
 
 ```bash
 # Preserve an existing local file.
@@ -74,7 +74,7 @@ Runtime settings (`GOOGLE_CLOUD_PROJECT`, `VERTEX_LOCATION`, `VERTEX_MODEL`, `SU
 **Cloud Run service**. A redeploy keeps them, so the standard command passes no settings:
 
 ```bash
-cd ~/Dua-ai && git fetch origin && git checkout main && git reset --hard origin/main && cd google-cloud-backend && gcloud run deploy dua-ai-engine --source . --region us-central1 --project global-healer-m6shk --allow-unauthenticated --timeout 900
+cd ~/Dua-ai && git fetch origin && git checkout main && git reset --hard origin/main && cd apps/ai-engine && gcloud run deploy dua-ai-engine --source . --region us-central1 --project global-healer-m6shk --allow-unauthenticated --timeout 900
 ```
 
 To change one setting, use `gcloud run services update dua-ai-engine --region us-central1 --project
@@ -100,10 +100,10 @@ reject traversal, empty/dot path segments, controls and case-insensitive `.git` 
 block root `.gitmodules` and all root `.github/` files; tree entries must be regular files, not symlinks
 or submodules. Code search accepts plain terms, replaces caller-supplied repository/org/user scopes
 with the configured repository, rejects quotes/parentheses/backslashes and OR/NOT operators, and
-verifies each result belongs to that repository. See [GitHub validation policy](../docs/GITHUB_VALIDATION.md)
+verifies each result belongs to that repository. See [GitHub validation policy](../../docs/GITHUB_VALIDATION.md)
 for platform-specific limits and mocked regression tests.
 
-Before GitHub writes, the PR client now checks the complete `dua-agent/` branch name (1–80 lowercase letters/digits/dashes after the prefix, with an alphanumeric start/end), rejects empty submissions and file/folder clashes within the proposed changes, and enforces the same changed-file count cap at the tree request boundary. Existing generated branch names and file order are preserved. See [Agent PR preflight](../docs/GITHUB_VALIDATION.md#cloud-run-agent-pr-preflight) for the exact policy and limits; this is roadmap section 2.3 hardening, not a new write capability.
+Before GitHub writes, the PR client now checks the complete `dua-agent/` branch name (1–80 lowercase letters/digits/dashes after the prefix, with an alphanumeric start/end), rejects empty submissions and file/folder clashes within the proposed changes, and enforces the same changed-file count cap at the tree request boundary. Existing generated branch names and file order are preserved. See [Agent PR preflight](../../docs/GITHUB_VALIDATION.md#cloud-run-agent-pr-preflight) for the exact policy and limits; this is roadmap section 2.3 hardening, not a new write capability.
 
 **1. Create the GitHub token** (on github.com, signed in as KRFbrothers)
 1. Profile picture → **Settings** → **Developer settings** → **Personal access tokens** → **Fine-grained tokens** → **Generate new token**.
@@ -154,7 +154,7 @@ then run the `--update-secrets` line again. To switch free models off: `gcloud r
 pip install -r requirements.txt pytest && python -m pytest -q tests
 ```
 
-For mocked unit tests only, Vertex credentials/SDK are unnecessary: install `Flask==3.0.3 pytest==8.3.5` and run `python -m pytest -q tests`. GitHub's Google Cloud engine check runs this minimal setup first, then reruns with the production SDK dependencies and scripted offline models (see [ADK SDK checks](../docs/TESTING.md#agent--adk-sdk-checks)).
+For mocked unit tests only, Vertex credentials/SDK are unnecessary: install `Flask==3.0.3 pytest==8.3.5` and run `python -m pytest -q tests`. GitHub's Google Cloud engine check runs this minimal setup first, then reruns with the production SDK dependencies and scripted offline models (see [ADK SDK checks](../../docs/TESTING.md#agent--adk-sdk-checks)).
 
 Separate-engine Android builds treat Dua/Gemini chat as configured independently of the base backend's provider keys. Chat file selection uses the existing bounded inline path (up to 3 files / 2 MB total; oversized photos are resized). Audio can also be sent inline. Use CSV/UTF-8 text for spreadsheets; XLSX/ODS and documents over the inline limit are rejected rather than uploaded as inaccessible storage references. Imagine retains the base-backend storage path.
 
@@ -284,7 +284,7 @@ interface with async session creation. Thought updates are forwarded during the
 run. The stream and runner close on the same event loop on success, failure or
 cancellation; the total deadline also signals background ADK work to stop.
 Already-started synchronous tool calls retain their existing HTTP timeouts.
-See [ADK SDK checks](../docs/TESTING.md#agent--adk-sdk-checks) for offline regression coverage.
+See [ADK SDK checks](../../docs/TESTING.md#agent--adk-sdk-checks) for offline regression coverage.
 
 **Fallback:** ordinary unsplit requests can use the existing loop. Explicit provider routes and extension tools use ADK even for one part. Failures after streaming/actions, during resume, or with explicit routes stop without replay or silent provider changes. Coding-mode requests use the existing coding loop. Optional notes learning is included in request usage reporting.
 
@@ -310,7 +310,7 @@ by `POST /api/agent/action` after you approve, without the CI wait / auto-fix be
 
 ## Complete ADK integrations
 
-See [ADK implementation and operations](../docs/ADK_IMPLEMENTATION.md) for the
+See [ADK implementation and operations](../../docs/ADK_IMPLEMENTATION.md) for the
 unchanged 25-requirement scope, durable SQL sessions/resume and approvals, native
 pgvector document/note retrieval, provider routing/fallback, custom typed tools,
 streaming, safe tracing/usage, evaluations, CLI and staged deployment/rollback.
