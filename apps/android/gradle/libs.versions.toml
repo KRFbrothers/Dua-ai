@@ -8,7 +8,7 @@ lifecycleRuntimeKtx = "2.8.7"
 # 2.9.8 is the newest navigation-compose whose AAR metadata declares minCompileSdk 35 (2.10.0+ needs 37).
 navigationCompose = "2.9.8"
 markdownRenderer = "0.30.0"
-roborazzi = "1.40.1"
+roborazzi = "1.77.0"
 robolectric = "4.17"
 media3 = "1.5.1"
 coreSplashscreen = "1.2.0"
