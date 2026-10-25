@@ -8,6 +8,7 @@ COPY requirements*.txt ./
 RUN python -m pip install --no-cache-dir -r "$REQUIREMENTS" && python -m pip check
 RUN groupadd --gid 10001 dua && useradd --uid 10001 --gid dua --no-create-home dua
 COPY --chown=dua:dua *.py ./
+COPY --chown=dua:dua dua_engine/ ./dua_engine/
 COPY --chown=dua:dua adk_examples/ ./adk_examples/
 COPY --chown=dua:dua evals/ ./evals/
 USER 10001:10001
