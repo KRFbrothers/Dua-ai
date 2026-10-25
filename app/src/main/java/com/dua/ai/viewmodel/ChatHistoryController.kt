@@ -66,8 +66,12 @@ internal interface HistoryHost {
     fun onDeviceAiEnabled(): Boolean
 }
 
-/** Chat history and lifecycle: open, new, rename, auto title, pin, cloud rebind, server/local delete and clear all, moved out of ChatViewModel.kt unchanged. */
-internal class ChatHistory(host: HistoryHost) : HistoryHost by host {
+/**
+ * Owns ViewModel history operations: open, new, rename, auto title, pin, cloud rebind, delete and clear.
+ * Domain models and serialization belong to com.dua.ai.history; this controller uses [SavedChat] and
+ * [ChatHistoryCodec] without owning or duplicating their data/codec rules.
+ */
+internal class ChatHistoryController(host: HistoryHost) : HistoryHost by host {
 
     fun clearAllChats() {
         replyAudioCache.clear()
