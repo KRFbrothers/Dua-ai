@@ -23,7 +23,7 @@ not a fresh line-by-line audit of every repository file or a production audit.
 | 14: backup owner assertion | Guarded: `owner` already is a local `val`; a non-null owner is required to compute the restore path before reaching the download. | Proposed audit change would duplicate existing protection. |
 | 15: voice assertions | Chunk zero schedules `next` for every later chunk; `playing` is assigned synchronously before `output.play` on the main dispatcher. | No demonstrated ordering defect; unchanged. |
 | 16: navigation collects in background | Confirmed use of non-lifecycle-aware state collection. | Converted data StateFlow collections to `collectAsStateWithLifecycle`, with explicit lifecycle-runtime-compose dependency matching 2.8.7. The lifecycle-state observer remains unconditional so it can immediately block external entries while backgrounded. |
-| 17: missing lint block disables lint | Incorrect causal claim: Android Gradle plugin supplies lint tasks and defaults without the block. CI omits lint. | Made error/report settings explicit; documented `:app:lintDebug`. No fabricated baseline, suppressed findings or CI edit. Lint execution remains unverified. |
+| 17: missing lint block disables lint | Incorrect causal claim: Android Gradle plugin supplies lint tasks and defaults without the block. CI omits lint. | Made error/report settings explicit; documented `:app:lintDebug`. Local lint now ran and failed on two pre-existing errors; see Validation. No fabricated baseline, suppressed findings or CI edit. |
 | 18: font subsetting | Font exists; size alone does not establish unused glyphs/weights. Chat can display arbitrary multilingual text. | Deferred pending an explicit glyph/language/weight coverage target and rendering checks; no asset removed or restricted to guessed languages. |
 | 19: maintenance documentation | Coverage was incomplete. | Updated docs to describe implemented document/reindex guards, semantic search, title generation and diagnostic exceptions. |
 | 20: Google sign-in has no accessible label | Incorrect target: `GoogleSignInButton.kt` contains sign-in orchestration, not a button. `OnboardingContent` uses an OutlinedButton with visible “Continue with Google” text, which supplies Compose semantics. | No redundant description added to decorative Google artwork. |
@@ -48,8 +48,8 @@ Additional source checks:
 ## Validation observed
 
 The original local audit results below are retained as historical observations.
-The Python request-test block is superseded by the fresh GitHub Actions rerun
-described below; local tool restrictions are not CI failures.
+The Python request-test and Android blocks are superseded by the explicit reruns
+described below; local setup failures are distinguished from code/test findings.
 
 - PASS: `node --test --test-isolation=none --test-reporter=spec test/request-rate-limit.test.mjs test/web-agent-action.test.mjs`
   from `web/`: 11 tests passed. Covers bucket refill/account isolation, bounded
@@ -81,10 +81,32 @@ described below; local tool restrictions are not CI failures.
   `/tmp/dua-audit-request-tests` environment failed with a proxy/socket permission
   error, and the additional network-access request was cancelled. No local test
   PASS is claimed and no repository runtime dependencies were added.
-- BLOCKED: `:app:testDebugUnitTest :app:lintDebug` could not download the Gradle
-  distribution (`SocketException: Operation not permitted`). Retried using a
-  writable Gradle cache. Android compilation, added regression test, lifecycle
-  behavior and lint findings have not been verified.
+- PASS (local, 25 October 2026), from `apps/android/`, on a source tree matching
+  `cf201e2ed9623aed3df62312df06b1f8337e865f`:
+  `bash ./gradlew :app:assembleDebug :app:testDebugUnitTest --tests com.dua.ai.viewmodel.ChatModesCoverageTest --tests com.dua.ai.viewmodel.ChatModesModeFreezeTest --no-daemon --max-workers=2`.
+  Debug APK built at `app/build/outputs/apk/debug/app-debug.apk`; main and unit-test
+  sources compiled. **15 tests passed, zero failures/errors/skips**: 8 in
+  `ChatModesCoverageTest`, 7 in `ChatModesModeFreezeTest`. The audit regression
+  `buildSelectionWithNoDuaOrGeminiProviderShowsErrorAndKeepsModes` passed, verifying
+  the `ChatAgentControls.kt` fallback refuses without changing model/modes.
+  `DuaNavHost.kt` and its lifecycle-aware collections/dependency compiled too;
+  this is not real-device background/resume verification.
+  Setup used declared Gradle 8.14.4, Android platform/build-tools 35 and a full
+  JDK 21.0.12.1 (project target remains Java 17), the configured network proxy and
+  writable temporary Gradle/Android/JVM caches. Initial socket/DNS, read-only
+  Android/Robolectric home and incomplete-JRE failures were resolved through
+  local setup only; no project dependency or Kotlin/test changes were needed.
+- FAIL (local lint), from `apps/android/`:
+  `bash ./gradlew :app:lintDebug --no-daemon --max-workers=2` — **2 errors,
+  68 warnings**, plus 3 informational findings. Errors:
+  `StateFlowValueCalledInComposition` at `DuaNavHost.kt:311` (`projectId.value`)
+  and `UseAppTint` at `res/layout/dua_toolbar_widget.xml:21` (`android:tint`).
+  Both error sites already exist in audit baseline `569b70f`; they are not
+  compile/regression failures introduced by these audit fixes. Left unchanged
+  within this verification scope, without suppressions or a lint baseline.
+  Reports: `app/build/reports/lint-results-debug.html` and
+  `app/build/reports/lint-results-debug.xml`. Existing CI omits lint; green CI
+  must not be read as a lint PASS.
 
 Burst limits are local to each Node process and reset on restart. They cover
 authenticated requests through the shared Node access guard, including web chat,
