@@ -236,7 +236,7 @@ async function statusAction(body, ctx) {
     notice: `This video is larger than the ${Math.floor(ctx.storage.maxBytes / 1048576)} MB storage limit, so it was not saved to your storage. Save it to the gallery now; the provider link expires.` });
   try { await uploadObject(ctx.storage, ctx.token, job.p, bytes, 'video/mp4', { ...ctx.io, allowExisting: true }); }
   catch (error) {
-    if (error instanceof StorageError && error.status === 415) throw new ImagineError('Storage does not accept MP4 videos yet. Run the Phase 3 migration (supabase/migrations/202610090001_dua_imagine.sql) in the Supabase SQL editor.', 503);
+    if (error instanceof StorageError && error.status === 415) throw new ImagineError('Storage does not accept MP4 videos yet. Run the Phase 3 migration (infra/database/migrations/202610090001_dua_imagine.sql) in the Supabase SQL editor.', 503);
     throw error;
   }
   const url = await signDownload(ctx.storage, ctx.token, job.p, RESULT_URL_SECONDS, ctx.io);

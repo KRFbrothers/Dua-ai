@@ -9,7 +9,7 @@
 //  - session.update: instructions, voice, turn_detection {type: server_vad}, audio.input/output.format
 //    {type: audio/pcm, rate: 24000}, audio.input.transcription {model: grok-transcribe, language_hint},
 //    audio.output.speed 0.7–1.5. Billed per minute ($0.08/min at the time of writing).
-// Minutes are capped durably per UTC day with the RPCs in supabase/migrations/202610100001_dua_voice.sql.
+// Minutes are capped durably per UTC day with the RPCs in infra/database/migrations/202610100001_dua_voice.sql.
 import { readJsonLimited } from './limited-json.mjs';
 import { XAI_VOICES, SPEED, VoiceError } from './voice-tts.mjs';
 
@@ -17,7 +17,7 @@ export const XAI_REALTIME_URL = 'wss://api.x.ai/v1/realtime';
 export const XAI_CLIENT_SECRETS_URL = 'https://api.x.ai/v1/realtime/client_secrets';
 export const DEFAULT_REALTIME_MODEL = 'grok-voice-latest';
 export const SAMPLE_RATE = 24000;
-const SETUP = 'Live voice minutes need the Phase 4 Supabase migration (supabase/migrations/202610100001_dua_voice.sql). Run it in the Supabase SQL editor.';
+const SETUP = 'Live voice minutes need the Phase 4 Supabase migration (infra/database/migrations/202610100001_dua_voice.sql). Run it in the Supabase SQL editor.';
 
 /** Languages listed for the Speech to Speech API (language_hint values). Urdu is not listed: it is asked for in the instructions only. */
 export const REALTIME_LANGUAGES = Object.freeze([

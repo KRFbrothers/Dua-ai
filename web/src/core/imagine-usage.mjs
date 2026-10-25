@@ -1,10 +1,10 @@
-// Durable per-feature daily caps for Imagine (Supabase RPCs from supabase/migrations/202610090001_dua_imagine.sql).
+// Durable per-feature daily caps for Imagine (Supabase RPCs from infra/database/migrations/202610090001_dua_imagine.sql).
 // The RPCs run as the signed-in owner (auth.uid()), so no service-role key is needed. A caller can only
 // add to its own usage: amounts are positive and the limit only decides whether the request is allowed.
 import { readJsonLimited } from './limited-json.mjs';
 import { ImagineError } from './imagine-providers.mjs';
 
-const SETUP = 'Imagine usage caps need the Phase 3 Supabase migration (supabase/migrations/202610090001_dua_imagine.sql). Run it in the Supabase SQL editor.';
+const SETUP = 'Imagine usage caps need the Phase 3 Supabase migration (infra/database/migrations/202610090001_dua_imagine.sql). Run it in the Supabase SQL editor.';
 
 async function rpc(config, token, name, body, { fetcher = fetch, signal } = {}) {
   let response;
