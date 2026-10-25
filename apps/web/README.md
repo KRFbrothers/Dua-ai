@@ -25,6 +25,6 @@ DUA_API_URL=https://dua-api-228305912525.us-central1.run.app npm run dev   # htt
 
 ## Engine access from the browser (dua-ai-engine)
 
-`google-cloud-backend/web_cors.py` allows browser calls from `WEB_ORIGINS` (default: the
+`apps/ai-engine/web_cors.py` allows browser calls from `WEB_ORIGINS` (default: the
 dua-api URL and `http://localhost:5173`). `WEB_SKIP_APP_TOKEN=1` lets allowed web origins
 skip the optional `DUA_APP_TOKEN` gate; owner login is always required.

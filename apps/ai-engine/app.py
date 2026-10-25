@@ -505,7 +505,7 @@ def route_agent(messages, attachments, system, observer=None):
 
 CODING_NOT_SET_UP = (
     "Coding mode abhi set up nahi hai. To let the Dua Agent open pull requests, add a GitHub token "
-    "to the Cloud Run service (see google-cloud-backend/README.md, \"Coding agent setup\"). Until then I can "
+    "to the Cloud Run service (see apps/ai-engine/README.md, \"Coding agent setup\"). Until then I can "
     "still chat and research."
 )
 

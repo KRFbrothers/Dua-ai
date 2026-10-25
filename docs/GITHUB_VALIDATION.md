@@ -19,7 +19,7 @@ The write client's `POST /git/trees` boundary independently checks every entry's
 
 Consumers: [read client](../apps/api/src/core/github.mjs), [write client](../apps/api/src/core/github-write.mjs), [Build chat](../apps/api/src/core/build-chat.mjs), [PR validation](../apps/api/src/core/build-pr.mjs), and [snapshot validation](../apps/api/src/core/cloud-snapshot.mjs). Existing `github.mjs` / `build-chat.mjs` exports remain available for callers.
 
-Android and the Python Cloud Run agent have their own runtime implementations. Cloud Run's [coding_agent.py](../google-cloud-backend/coding_agent.py) validates its configured repository at construction, uses full-match request/path checks, and blocks case-insensitive `.git` segments on reads and writes. Its write policy also blocks root `.gitmodules` and all root `.github/` files (a deliberately stricter policy than the Node API's workflow-only restriction). Its existing 300-character ASCII path cap and rejection of any `..` substring remain. Both direct PR creation and the low-level tree request check protected paths; code search enforces one selected repository and validates result metadata. See [architecture boundaries](ARCHITECTURE.md#github-permission-boundaries) before changing either backend.
+Android and the Python Cloud Run agent have their own runtime implementations. Cloud Run's [coding_agent.py](../apps/ai-engine/coding_agent.py) validates its configured repository at construction, uses full-match request/path checks, and blocks case-insensitive `.git` segments on reads and writes. Its write policy also blocks root `.gitmodules` and all root `.github/` files (a deliberately stricter policy than the Node API's workflow-only restriction). Its existing 300-character ASCII path cap and rejection of any `..` substring remain. Both direct PR creation and the low-level tree request check protected paths; code search enforces one selected repository and validates result metadata. See [architecture boundaries](ARCHITECTURE.md#github-permission-boundaries) before changing either backend.
 
 ## Cloud Run Agent PR preflight
 
@@ -27,7 +27,7 @@ The Python client shares `valid_agent_branch` across direct PR creation and low-
 
 Proposal validation also rejects duplicate normalized paths and file/folder conflicts **within the proposed batch**, independent of file order. Low-level tree requests enforce these conflicts, the same 10-file count cap, protected paths and regular-file modes. Non-conflicting files retain their input order. The direct PR method rejects empty change lists without contacting GitHub; the Agent's existing no-change response still opens nothing. Content budgets remain 200,000 UTF-8 bytes per file and 600,000 total, including multibyte text.
 
-These checks do not inspect current main for stale file versions, provide retry idempotency, or prevent every remote GitHub rejection. They do not add merge, push-to-main or branch-update permissions. Regression cases live in [test_coding.py](../google-cloud-backend/tests/test_coding.py).
+These checks do not inspect current main for stale file versions, provide retry idempotency, or prevent every remote GitHub rejection. They do not add merge, push-to-main or branch-update permissions. Regression cases live in [test_coding.py](../apps/ai-engine/tests/test_coding.py).
 
 ## Related size limits
 
@@ -42,7 +42,7 @@ These bounds serve different protocols and units; they must not be silently repl
 | Stored snapshots | JSON-compatible metadata caps include up to 512 × 1024 code units per saved proposal file; total snapshot payload is bounded to 4 MiB. A restorable snapshot is not permission to submit an oversized PR: [cloud-snapshot.mjs](../apps/api/src/core/cloud-snapshot.mjs), [snapshot migration](../infra/database/migrations/202610040001_dua_cloud.sql). |
 | Stored uploads | Separate private Storage path, normally 50 MiB per file, further limited by the bucket/plan. Not the inline chat limit: [SUPABASE.md](../SUPABASE.md#1b-stored-files-bucket-phase-2-uploads-pdfs-spreadsheets-audio). |
 
-Provider-specific and Cloud Run limits remain documented in [PROVIDERS.md](PROVIDERS.md) and the [engine README](../google-cloud-backend/README.md). Raising one limit does not raise another layer's bound.
+Provider-specific and Cloud Run limits remain documented in [PROVIDERS.md](PROVIDERS.md) and the [engine README](../apps/ai-engine/README.md). Raising one limit does not raise another layer's bound.
 
 ## Verification
 
@@ -53,6 +53,6 @@ node --test test/github-validation.test.mjs test/build-chat.test.mjs test/build-
 npm run test:ci
 ```
 
-From the repository root, `python -m pytest -q google-cloud-backend/tests` also covers direct client bypass attempts, scoped search, protected paths and the successful mocked coding-to-PR sequence. These tests do not write to GitHub or change deployed token permissions.
+From the repository root, `python -m pytest -q apps/ai-engine/tests` also covers direct client bypass attempts, scoped search, protected paths and the successful mocked coding-to-PR sequence. These tests do not write to GitHub or change deployed token permissions.
 
 When changing policy, test saved snapshots and live requests together. For user-facing recovery steps, see [GitHub troubleshooting](GITHUB_TROUBLESHOOTING.md).

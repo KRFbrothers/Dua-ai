@@ -6,7 +6,7 @@ How Dua AI runs in production and how to redeploy, configure, back up and check 
 | --- | --- |
 | Google Cloud project | `global-healer-m6shk` |
 | Region | `us-central1` |
-| Chat/Agent engine | Cloud Run service `dua-ai-engine` (`google-cloud-backend/`, Python/Flask) |
+| Chat/Agent engine | Cloud Run service `dua-ai-engine` (`apps/ai-engine/`, Python/Flask) |
 | Base API + website | Cloud Run service `dua-api` (`apps/api/` + `apps/web/`, Node) — website at `https://dua-api-228305912525.us-central1.run.app/` |
 | Daily backup | Cloud Run job `dua-backup` + Cloud Scheduler `dua-backup-daily` |
 | Backup bucket | `gs://dua-backups-m6shk` |
@@ -22,7 +22,7 @@ Always deploy from a clean, up-to-date `main`.
 ### dua-ai-engine
 
 ```bash
-cd ~/Dua-ai && git fetch origin && git checkout main && git reset --hard origin/main && cd google-cloud-backend && gcloud run deploy dua-ai-engine --source . --region us-central1 --project global-healer-m6shk --allow-unauthenticated --timeout 900
+cd ~/Dua-ai && git fetch origin && git checkout main && git reset --hard origin/main && cd apps/ai-engine && gcloud run deploy dua-ai-engine --source . --region us-central1 --project global-healer-m6shk --allow-unauthenticated --timeout 900
 ```
 
 A source deploy keeps the service's existing environment variables and secrets.
@@ -55,7 +55,7 @@ Plain chat on the engine retries a Vertex `429 RESOURCE_EXHAUSTED` once, only be
 
 ## Daily backup job (`dua-backup`)
 
-[`backup.py`](../google-cloud-backend/backup.py) runs as Cloud Run job `dua-backup`, built from `google-cloud-backend/`:
+[`backup.py`](../apps/ai-engine/backup.py) runs as Cloud Run job `dua-backup`, built from `apps/ai-engine/`:
 
 - Buildpack images need the launcher: the job runs with command `launcher` and args `python,backup.py` (`gcloud run jobs update dua-backup --command launcher --args "python,backup.py" ...`).
 - Schedule: Cloud Scheduler `dua-backup-daily`, cron `0 3 * * *`, time zone `Asia/Kolkata` (03:00 IST).

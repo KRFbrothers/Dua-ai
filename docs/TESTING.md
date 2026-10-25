@@ -16,7 +16,7 @@ Every pull request and push to `main` runs four jobs:
 
 | Job | What runs | Local command |
 | --- | --- | --- |
-| Google Cloud engine tests | Python tests in `google-cloud-backend/tests` run twice: minimal Flask + pytest, then production ADK/GenAI dependencies with scripted offline models; no live provider, Supabase or GitHub calls | `python -m pytest -q google-cloud-backend/tests` (repo root) |
+| Google Cloud engine tests | Python tests in `apps/ai-engine/tests` run twice: minimal Flask + pytest, then production ADK/GenAI dependencies with scripted offline models; no live provider, Supabase or GitHub calls | `python -m pytest -q apps/ai-engine/tests` (repo root) |
 | Backend tests | Node tests in `apps/api/test` (`npm run test:ci`, needs Node 24) | `cd apps/api && npm ci && npm test` |
 | Website build | `apps/web/`: `npm ci`, type-check and Vite build into `apps/api/site`, then checks `index.html` and the logo exist | `cd apps/web && npm ci && npm run build` |
 | Android build and tests | `./gradlew :app:testDebugUnitTest -Pdua.ui-record` (JVM, Compose and Robolectric tests) | see below |
@@ -26,7 +26,7 @@ The [personal APK workflow](../.github/workflows/personal-apk.yml) is a separate
 ## Agent / ADK SDK checks
 
 The engine CI job keeps the minimal dependency run to verify lazy imports and the
-normal-loop fallback. It then installs `google-cloud-backend/requirements.txt`
+normal-loop fallback. It then installs `apps/ai-engine/requirements.txt`
 into a separate environment and reruns the suite with the **real pinned ADK**.
 An explicit SDK import fails the job if installation/import is broken, rather
 than silently skipping the real-SDK tests. Both JUnit reports are retained.
@@ -34,9 +34,9 @@ than silently skipping the real-SDK tests. Both JUnit reports are retained.
 To run that second pass locally, in a dedicated virtual environment:
 
 ```sh
-python -m pip install -r google-cloud-backend/requirements.txt pytest==8.3.5
+python -m pip install -r apps/ai-engine/requirements.txt pytest==8.3.5
 python -c "import google.adk, google.genai"
-python -m pytest -q google-cloud-backend/tests
+python -m pytest -q apps/ai-engine/tests
 ```
 
 `test_agent_adk.py` drives the real `ParallelAgent` / `SequentialAgent` with a
@@ -117,4 +117,4 @@ administrator. `test_adk_postgres.py` creates its own random database/role and
 cleans only those; it refuses non-local hosts. Without that opt-in, the native
 PostgreSQL case skips and cannot establish PostgreSQL verification. Quality
 scoring is separate from regression counts; see `evals/adk-v1.json` and
-`python google-cloud-backend/adk_cli.py evaluate --help`.
+`python apps/ai-engine/adk_cli.py evaluate --help`.

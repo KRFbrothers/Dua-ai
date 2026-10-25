@@ -22,7 +22,7 @@ replaced. The existing Google ADK runtime and native approval flow remain in use
 
 ## Open-source sources
 
-Versions are pinned in `google-cloud-backend/requirements-automation.txt`.
+Versions are pinned in `apps/ai-engine/requirements-automation.txt`.
 
 | Dependency | Source | License |
 | --- | --- | --- |
@@ -77,7 +77,7 @@ expose the ADB server/port to the Internet.
 From your checkout of this branch:
 
 ```bash
-cd google-cloud-backend
+cd apps/ai-engine
 python3 -m venv .automation-venv
 .automation-venv/bin/python -m pip install -r requirements-automation.txt
 .automation-venv/bin/python -m playwright install chromium

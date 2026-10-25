@@ -24,7 +24,7 @@ WebViews block network loads/navigation, file/content access and persistent stor
 
 Run supports Python through the existing provider-hosted Run code pipeline, with real execution/output records displayed inline in the next assistant reply's code-results block. It never executes generated code on Android. Existing backend configuration, selected provider, online/busy state and draft/attachment guards determine availability. Starting a snippet cannot overwrite an unsent draft or attach unrelated files.
 
-The separate Python Cloud Run chat engine explicitly reports standalone `code` requests as unsupported today (`google-cloud-backend/app.py`), even when the base Node API advertises a sandbox. This view therefore reports Run as unavailable on that route. It does not fake an output or silently reroute the request. HTML/SVG/Markdown/Mermaid previews remain available offline. Other languages report that Python is required. No backend endpoint or provider capability was added by this UI change.
+The separate Python Cloud Run chat engine explicitly reports standalone `code` requests as unsupported today (`apps/ai-engine/app.py`), even when the base Node API advertises a sandbox. This view therefore reports Run as unavailable on that route. It does not fake an output or silently reroute the request. HTML/SVG/Markdown/Mermaid previews remain available offline. Other languages report that Python is required. No backend endpoint or provider capability was added by this UI change.
 
 ## Artifacts Canvas
 

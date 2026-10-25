@@ -47,7 +47,7 @@ other Google brand assets.
 
 | Dua file | Adapted from | What changed |
 | --- | --- | --- |
-| `google-cloud-backend/agent_adk.py` (reviewer step) | `contrib/kotlin/llm-auditor/.../LlmAuditorAgent.kt` (critic then reviser in a SequentialAgent) | Python, Dua prompts, JSON verdict, reviser runs at most once and only on `needs_fix`, behind `DUA_AGENT_REVIEW` |
+| `apps/ai-engine/agent_adk.py` (reviewer step) | `contrib/kotlin/llm-auditor/.../LlmAuditorAgent.kt` (critic then reviser in a SequentialAgent) | Python, Dua prompts, JSON verdict, reviser runs at most once and only on `needs_fix`, behind `DUA_AGENT_REVIEW` |
 
 ## Jetchat and Reply (Compose samples)
 

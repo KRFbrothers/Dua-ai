@@ -6,8 +6,8 @@ Make Dua AI easier to maintain, safer to extend, faster to understand, and more 
 ## Current shape of the project
 - **Android app** in `app/`
 - **Backend / orchestration layer** in `apps/api/`
-- **Cloud Run engine** in `google-cloud-backend/`
-- **Tests** in `apps/api/test/` and `google-cloud-backend/tests/`
+- **Cloud Run engine** in `apps/ai-engine/`
+- **Tests** in `apps/api/test/` and `apps/ai-engine/tests/`
 - **Docs** in `README.md` and `docs/`
 
 The codebase already has strong safety ideas: repository validation, path validation, read-only GitHub access in some flows, and CI checks. This roadmap focuses on making those strengths easier to grow and maintain.
@@ -44,7 +44,7 @@ The codebase already has strong safety ideas: repository validation, path valida
 ### 1.4 Add `.env.example` files
 - Provide sample environment variables for:
   - `apps/api/`
-  - `google-cloud-backend/`
+  - `apps/ai-engine/`
 - Mark secrets clearly and keep unsafe values empty.
 
 ---
@@ -229,7 +229,7 @@ You'll know the repo is better when:
 
 ### For Phase 1, start with:
 1. **Documentation** – update `README.md` with architecture section
-2. **`.env.example`** – create in `apps/api/` and `google-cloud-backend/`
+2. **`.env.example`** – create in `apps/api/` and `apps/ai-engine/`
 3. **`docs/ARCHITECTURE.md`** – explain the structure
 4. **Error messages** – review and standardize in `apps/api/src/core/github.mjs` and `apps/api/src/core/build-pr.mjs`
 

@@ -8,7 +8,7 @@ Type=simple
 User=dua-runner
 Group=dua-runner
 SupplementaryGroups=docker
-WorkingDirectory=/opt/dua/google-cloud-backend
+WorkingDirectory=/opt/dua/apps/ai-engine
 EnvironmentFile=/etc/dua-coding-runner.env
 Environment=DUA_RUNNER_DATA_DIR=/var/lib/dua-coding-runner
 ExecStart=/opt/dua-runner-venv/bin/gunicorn --bind 127.0.0.1:8091 --workers 1 --threads 8 --timeout 180 coding_runner_server:app

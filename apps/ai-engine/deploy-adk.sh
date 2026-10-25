@@ -6,7 +6,7 @@ adk_region="${REGION:-us-central1}"
 adk_service="${SERVICE:-dua-ai-engine}"
 adk_action="${1:-plan}"
 adk_snapshot="${ADK_SNAPSHOT:-/tmp/dua-adk-rollout.json}"
-adk_root="$(cd "$(dirname "$0")/.." && pwd)"
+adk_root="$(cd "$(dirname "$0")/../.." && pwd)"
 case "$adk_action" in
   plan)
     gcloud run services describe "$adk_service" --project "$adk_project" --region "$adk_region" --format=json |
@@ -20,8 +20,8 @@ case "$adk_action" in
     gcloud run services describe "$adk_service" --project "$adk_project" --region "$adk_region" --format=json |
       python3 -c 'import json,sys; d=json.load(sys.stdin); print(json.dumps({"service":d["metadata"]["name"],"project":sys.argv[1],"region":sys.argv[2],"traffic":d["status"]["traffic"]}))' "$adk_project" "$adk_region" > "$adk_snapshot"
     # Existing secret/env bindings and IAM stay on the service. No --set-* reset.
-    gcloud builds submit "$adk_root/google-cloud-backend" --project "$adk_project" \
-      --config "$adk_root/google-cloud-backend/cloudbuild-adk.yaml" \
+    gcloud builds submit "$adk_root/apps/ai-engine" --project "$adk_project" \
+      --config "$adk_root/apps/ai-engine/cloudbuild-adk.yaml" \
       --substitutions "_IMAGE=$ADK_IMAGE,_SOURCE_SHA=$(git -C "$adk_root" rev-parse HEAD)"
     gcloud run deploy "$adk_service" --project "$adk_project" --region "$adk_region" --image "$ADK_IMAGE" \
       --timeout 900 --no-traffic --tag adk-candidate --update-env-vars "AGENT_ENGINE=adk,ADK_PRODUCTION=1,DUA_BUILD_SHA=$(git -C "$adk_root" rev-parse HEAD)"

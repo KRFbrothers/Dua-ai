@@ -47,7 +47,7 @@ is implemented. Work remains limited to ADK, not unrelated app/UI changes.
 ## Source and integration rules
 
 Use the official [google/adk-python](https://github.com/google/adk-python/tree/v2.12.0)
-SDK already installed by [engine requirements](../google-cloud-backend/requirements.txt).
+SDK already installed by [engine requirements](../apps/ai-engine/requirements.txt).
 The inspected release is **v2.12.0**, tree
 `38381f65f2bee0f70a89f938ee64e51b34916fa7`, under its
 [Apache-2.0 license](https://github.com/google/adk-python/blob/v2.12.0/LICENSE).
