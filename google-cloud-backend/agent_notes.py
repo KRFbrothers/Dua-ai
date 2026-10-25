@@ -245,7 +245,7 @@ def load_prompt(store, query, log=print):
     except Exception as error:
         reason = failure_reason(error)
         log(f"[dua-agent-notes] could not load notes: {reason}"
-            + (" (apply supabase/migrations/202610160001_dua_agent_notes.sql)" if reason == "missing_table" else ""))
+            + (" (apply infra/database/migrations/202610160001_dua_agent_notes.sql)" if reason == "missing_table" else ""))
         store.unavailable = reason
         return UNAVAILABLE_NOTE.format(reason="the notes table is not set up yet" if reason == "missing_table"
                                        else "notes storage could not be reached")

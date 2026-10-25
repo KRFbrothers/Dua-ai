@@ -1,5 +1,5 @@
 // Supabase Storage REST calls for the private `dua-files` bucket. Every call uses the owner's own
-// access token, so the bucket's row-level security policies (supabase/migrations/202610080001_dua_files.sql)
+// access token, so the bucket's row-level security policies (infra/database/migrations/202610080001_dua_files_storage.sql)
 // decide access. No service-role key is needed or used here.
 import { handleAccount } from './account.mjs';
 import { readJsonLimited } from './limited-json.mjs';
