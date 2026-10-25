@@ -7,6 +7,7 @@ Start with [ARCHITECTURE.md](ARCHITECTURE.md) for how the pieces fit, and [OPERA
 | Doc | What it covers |
 | --- | --- |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Runtime map, request flow, data ownership, where to change what |
+| [architecture/REPO_STRUCTURE.md](architecture/REPO_STRUCTURE.md) | Agreed monorepo target, placement/dependency rules and staged migration order (documentation only) |
 | [OPERATIONS.md](OPERATIONS.md) | Project/region, redeploy commands, safe settings changes, secrets, `dua-backup`, monitoring, logs, credit expiry |
 | [AGENT.md](AGENT.md) | Agent tool loop vs ADK, Agent flags, Agent notes vs phone Memory, GitHub token permissions |
 | [ADK_IMPLEMENTATION.md](ADK_IMPLEMENTATION.md) | ADK persistence/resume, pgvector RAG, provider routes, custom tools, usage/evals, CLI and staged rollback |
