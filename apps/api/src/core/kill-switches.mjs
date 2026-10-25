@@ -1,10 +1,10 @@
 /**
- * Remote kill switches read from Cloud Run environment variables. All default to off.
- *   DUA_DISABLE_AGENT=1   Agent mode paused (the Google Cloud engine refuses it too)
- *   DUA_DISABLE_IMAGINE=1 Imagine (image and video) paused
- *   DUA_DISABLE_VOICE=1   AI reply voices and live voice paused (device voice keeps working)
- *   DUA_MAINTENANCE=1     Whole app paused; DUA_MAINTENANCE_MESSAGE (optional, up to 300 characters) is shown
- * Never secret; published in /api/config as `switches`.
+ * API implementation of packages/contracts/KILL_SWITCHES.md (authoritative).
+ * DUA_DISABLE_AGENT and DUA_DISABLE_IMAGINE are shared with the engine.
+ * DUA_DISABLE_VOICE is API-only; device voice keeps working.
+ * DUA_MAINTENANCE pauses selected AI routes; DUA_MAINTENANCE_MESSAGE is optional.
+ * All switches default off. Each service reads its own Cloud Run environment;
+ * matching names do not synchronize configuration. Published in /api/config as `switches`.
  */
 const on = value => ['1', 'true', 'yes', 'on'].includes(String(value ?? '').trim().toLowerCase());
 export const DEFAULT_MAINTENANCE_MESSAGE = 'Dua is taking a short break for maintenance. Please check back soon.';

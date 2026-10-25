@@ -1,8 +1,10 @@
-"""Remote kill switches from Cloud Run env vars (all default off). Same names and messages as dua-api (apps/api/src/core/kill-switches.mjs).
+"""Engine implementation of packages/contracts/KILL_SWITCHES.md (authoritative).
 
-DUA_DISABLE_AGENT=1   Agent mode is refused here, so it stops even for old APKs.
-DUA_DISABLE_IMAGINE=1 The engine's Imagine endpoint is refused.
-DUA_MAINTENANCE=1     Chat, Agent and Imagine are refused with DUA_MAINTENANCE_MESSAGE (optional).
+DUA_DISABLE_AGENT and DUA_DISABLE_IMAGINE pause the corresponding engine work.
+DUA_MAINTENANCE pauses selected AI work; DUA_MAINTENANCE_MESSAGE is optional.
+DUA_DISABLE_VOICE belongs to the API only; this engine does not implement it.
+All switches default off. Each service reads its own Cloud Run environment;
+shared names/messages do not synchronize service configuration automatically.
 """
 import os
 import re
