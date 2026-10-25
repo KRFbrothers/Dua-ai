@@ -1,0 +1,2 @@
+# Built website (from ../web); produced by deploy-cloudrun.sh / npm run build
+/site/

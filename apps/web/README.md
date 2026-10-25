@@ -1,6 +1,6 @@
 # Dua AI website
 
-A personal web version of Dua AI (Vite + React + TypeScript). It is built into `web/site`
+A personal web version of Dua AI (Vite + React + TypeScript). It is built into `apps/api/site`
 and served by **dua-api** at `/`, on the same origin as `/api/*`, so sign-in cookies and
 same-origin checks just work. No separate hosting, no extra cost.
 
@@ -13,15 +13,15 @@ same-origin checks just work. No separate hosting, no extra cost.
 ## Local development
 
 ```bash
-cd website
+cd apps/web
 npm ci
 DUA_API_URL=https://dua-api-228305912525.us-central1.run.app npm run dev   # http://localhost:5173
 ```
 
 ## Deploy
 
-`PROJECT_ID=global-healer-m6shk bash web/deploy-cloudrun.sh` builds this folder into
-`web/site` and ships it inside the dua-api image.
+`PROJECT_ID=global-healer-m6shk bash apps/api/deploy-cloudrun.sh` builds this folder into
+`apps/api/site` and ships it inside the dua-api image.
 
 ## Engine access from the browser (dua-ai-engine)
 

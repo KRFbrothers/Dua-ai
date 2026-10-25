@@ -58,7 +58,7 @@ export function makeServer({ key = process.env.GEMINI_API_KEY, model = process.e
         } finally { controller.signal.removeEventListener('abort', stop); }
         return res.end();
       }
-      // The Dua AI website (built into web/site) is served from the same origin as /api/*.
+      // The Dua AI website (built into apps/api/site) is served from the same origin as /api/*.
       if (await serveSite(req, res)) return;
       return json(res, 404, { error: 'Not found.' });
     } catch (error) {

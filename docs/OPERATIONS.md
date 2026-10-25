@@ -7,7 +7,7 @@ How Dua AI runs in production and how to redeploy, configure, back up and check 
 | Google Cloud project | `global-healer-m6shk` |
 | Region | `us-central1` |
 | Chat/Agent engine | Cloud Run service `dua-ai-engine` (`google-cloud-backend/`, Python/Flask) |
-| Base API + website | Cloud Run service `dua-api` (`web/` + `website/`, Node) — website at `https://dua-api-228305912525.us-central1.run.app/` |
+| Base API + website | Cloud Run service `dua-api` (`apps/api/` + `apps/web/`, Node) — website at `https://dua-api-228305912525.us-central1.run.app/` |
 | Daily backup | Cloud Run job `dua-backup` + Cloud Scheduler `dua-backup-daily` |
 | Backup bucket | `gs://dua-backups-m6shk` |
 | Auth / data | Supabase (owner-only via `DUA_ALLOWED_EMAIL`) |
@@ -30,10 +30,10 @@ A source deploy keeps the service's existing environment variables and secrets.
 ### dua-api
 
 ```bash
-cd ~/Dua-ai && git fetch origin && git checkout main && git reset --hard origin/main && PROJECT_ID=global-healer-m6shk bash web/deploy-cloudrun.sh
+cd ~/Dua-ai && git fetch origin && git checkout main && git reset --hard origin/main && PROJECT_ID=global-healer-m6shk bash apps/api/deploy-cloudrun.sh
 ```
 
-[`deploy-cloudrun.sh`](../web/deploy-cloudrun.sh) builds `website/` into `web/site`, builds the container with Cloud Build and deploys it. It rebuilds dua-api's settings from Secret Manager (names listed in `web/.env.example`), so keep dua-api configuration in Secret Manager rather than setting it by hand.
+[`deploy-cloudrun.sh`](../apps/api/deploy-cloudrun.sh) builds `apps/web/` into `apps/api/site`, builds the container with Cloud Build and deploys it. It rebuilds dua-api's settings from Secret Manager (names listed in `apps/api/.env.example`), so keep dua-api configuration in Secret Manager rather than setting it by hand.
 
 ## Changing settings safely
 

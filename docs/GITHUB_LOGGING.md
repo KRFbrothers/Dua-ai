@@ -14,7 +14,7 @@ jsonPayload.source="dua-github"
 
 Add `jsonPayload.requestId="ID_FROM_A_LOG_ENTRY"` to follow that request. Local `npm start` stdout contain the same JSON records. There is no new credential, environment setting or external logging dependency.
 
-Each `/api/chat`, `/api/connectors/github` and `/api/build/pr` request reaching [handleService](../web/src/server/service-handler.mjs) receives a fresh server-generated UUID. Incoming request-ID headers are ignored; concurrent async operations retain their own context through Node's `AsyncLocalStorage`. Account/file/voice/setup and unrelated routes are not part of this logger. Hosting/burst rejections before the shared router are outside its scope.
+Each `/api/chat`, `/api/connectors/github` and `/api/build/pr` request reaching [handleService](../apps/api/src/server/service-handler.mjs) receives a fresh server-generated UUID. Incoming request-ID headers are ignored; concurrent async operations retain their own context through Node's `AsyncLocalStorage`. Account/file/voice/setup and unrelated routes are not part of this logger. Hosting/burst rejections before the shared router are outside its scope.
 
 ## Events and fields
 
@@ -36,13 +36,13 @@ Access/setup/input rejection may return before a stage starts; its status still 
 
 ## Privacy and behavior
 
-[request-logging.mjs](../web/src/core/request-logging.mjs) constructs a fixed-field record instead of serializing requests, results or errors. It excludes tokens, account identifiers, repository names, file paths/contents, search queries, model prompts, proposal IDs/titles/diffs, branch names, PR URLs, response bodies, headers and query strings. Use existing user-facing errors for recovery guidance; do not add sensitive context to these records.
+[request-logging.mjs](../apps/api/src/core/request-logging.mjs) constructs a fixed-field record instead of serializing requests, results or errors. It excludes tokens, account identifiers, repository names, file paths/contents, search queries, model prompts, proposal IDs/titles/diffs, branch names, PR URLs, response bodies, headers and query strings. Use existing user-facing errors for recovery guidance; do not add sensitive context to these records.
 
 The logger does not read or drain response bodies, add response headers, change validation/permissions, retry GitHub calls or create extra writes. A synchronous log-sink failure is ignored. Operations called outside a router logging context remain unlogged; the synchronous proposal API stays synchronous. These are operational diagnostics, not a durable audit ledger or an authentication mechanism.
 
 ## Verify
 
-From `web/`:
+From `apps/api/`:
 
 ```sh
 node --test test/request-logging.test.mjs test/build-chat.test.mjs test/build-pr.test.mjs

@@ -42,7 +42,7 @@ export const emailLogin = (email: string, password: string) =>
 export const logout = () => call('/api/account/logout', { method: 'POST', body: '{}' });
 
 // Website chat: dua-api POST /api/web/chat forwards the cookie session to dua-ai-engine /api/chat
-// and streams its SSE events back (see web/src/core/sse.mjs for the event shapes).
+// and streams its SSE events back (see apps/api/src/core/sse.mjs for the event shapes).
 export type ChatTurn = { role: 'user' | 'model'; text: string };
 export type ChatMode = 'auto' | 'agent';
 export type StreamEvent =

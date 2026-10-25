@@ -1,16 +1,20 @@
 # Monorepo target structure
 
-Status: step 1 (documentation) and step 2 (database/tooling paths) are complete.
+Status: steps 1 (documentation), 2 (database/tooling paths) and 3 (API/website paths) are complete.
 The database migrations are now under `infra/database/` and the root helper
-scripts under `tooling/scripts/`. Applications remain at `app/`, `web/`,
-`website/` and `google-cloud-backend/`; Android Gradle roots stay at the repository
+scripts under `tooling/scripts/`. The Node API and website now live at `apps/api/`
+and `apps/web/`. Android and the engine remain at `app/` and
+`google-cloud-backend/`; Android Gradle roots stay at the repository
 root. See [ARCHITECTURE.md](../ARCHITECTURE.md) for the current runtime layout.
 
 This document records completed and future migrations. Step 2 moves SQL files
 and the APK verification helper without changing their contents, and updates
 their documentation and workflow references. It does not move application code,
-tests, service Dockerfiles or deployment scripts. Do not create empty `apps/`,
-`packages/` or `infra/cloudrun/` directories to match this diagram.
+tests, service Dockerfiles or deployment scripts. Step 3 moves the API and website
+with their tests and deployment files, and updates their path references. The
+website builds into `apps/api/site/`, served by the existing `dua-api` service.
+Do not create empty `packages/`, `apps/android/`, `apps/ai-engine/` or
+`infra/cloudrun/` directories to match this diagram.
 
 ## Target tree
 
@@ -18,8 +22,8 @@ tests, service Dockerfiles or deployment scripts. Do not create empty `apps/`,
 Dua-ai/
 ├── apps/
 │   ├── android/                 # Android application and its build workspace
-│   ├── web/                     # Browser frontend, currently website/
-│   ├── api/                     # Node dua-api, currently web/
+│   ├── web/                     # Browser frontend; moved in step 3
+│   ├── api/                     # Node dua-api; moved in step 3
 │   └── ai-engine/               # Python dua-ai-engine, currently google-cloud-backend/
 ├── packages/                    # Future shared contracts only when actually needed
 │   └── contracts/               # API/event schemas; create with a real consumer
@@ -58,8 +62,8 @@ convention is illustrated in the [Turborepo repository guide](https://turborepo.
 
 | Current path | Target path | Responsibility |
 | --- | --- | --- |
-| `web/` | `apps/api/` | Node backend, deployed as `dua-api` |
-| `website/` | `apps/web/` | Browser frontend, built and served through `dua-api` |
+| `apps/api/` | `apps/api/` | Node backend, deployed as `dua-api`; moved from `web/` in step 3 |
+| `apps/web/` | `apps/web/` | Browser frontend, built and served through `dua-api`; moved from `website/` in step 3 |
 | `google-cloud-backend/` | `apps/ai-engine/` | Python engine, deployed as `dua-ai-engine` |
 | `app/` | `apps/android/` | Android application; coordinate its Gradle workspace in the final migration |
 | `infra/database/` | `infra/database/` | Supabase migrations; moved from the former root directory in step 2 |
@@ -68,7 +72,7 @@ convention is illustrated in the [Turborepo repository guide](https://turborepo.
 The Android row identifies the destination responsibility, not a standalone
 `mv app apps/android` command. The Android migration must account for the root
 Gradle files, wrapper, version catalog, benchmark module and all build consumers
-together. Their current locations remain unchanged after step 2.
+together. Their current locations remain unchanged after step 3.
 
 ## Placement rules
 
@@ -117,16 +121,15 @@ starting the next. This document authorizes no path migration by itself.
 | --- | --- | --- |
 | 1. Docs — done | Record this target and link it from the docs index. | Verify links and the documentation-only diff. |
 | 2. Infra/tooling paths — done | Move the seven database migrations to `infra/database/` and the repository helper to `tooling/scripts/`; update docs and the APK workflow invocation. Service-owned deployment files stay in place; no shared Cloud Run directory is needed yet. | Preserve file contents/modes and migration identity; verify references and unchanged application/test/build paths. No database apply or redeploy is required for this move. |
-| 3. API / website | Move `web/` to `apps/api/` and `website/` to `apps/web/` together. | Update frontend build output, API static serving, imports, workspace/build and deployment references atomically. Keep tests with their owners and run backend tests plus the website build. |
+| 3. API / website — done | Moved `web/` to `apps/api/` and `website/` to `apps/web/` together, including tests and deployment files. | Updated frontend output (`apps/api/site/`), shared fixture/logo paths, CI, Dependabot and deployment/docs references. Keep Cloud Run service `dua-api`; run all four existing CI jobs. |
 | 4. Engine | Move `google-cloud-backend/` to `apps/ai-engine/`. | Update engine import/build/deployment paths and dependent references; preserve runtime behavior and run engine tests. |
 | 5. Android | Migrate the Android application and coordinated Gradle workspace to `apps/android/`. | Review wrapper, Gradle roots, modules, benchmark, signing-file references and CI paths together. Preserve `com.dua.ai`, resources and tests; run Android build/tests and relevant lint/signing checks. |
 
 Step 2 updates only the APK helper path in the existing personal APK workflow;
 its job names, signing settings and build paths stay unchanged. There is no
 versioned Supabase CLI config to relocate; see the [CLI workspace note](../../SUPABASE.md#repository-paths-and-optional-cli-workspace).
-Source-level setup messages retain some former migration paths until their
-owning source is separately updated; these are informational strings, not file
-loads. Use `infra/database/migrations/` to find the referenced files.
+Source-level setup messages now use `infra/database/migrations/` to locate the
+referenced files; their path text was corrected before step 3.
 
 Future migration PRs must explicitly include any required workflow, Dockerfile or
 build-path edits. Separate path moves from behavior changes,

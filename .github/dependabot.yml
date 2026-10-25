@@ -36,7 +36,7 @@ updates:
 
   # --- Website: React + Vite + Tailwind ---
   - package-ecosystem: "npm"
-    directory: "/website"
+    directory: "/apps/web"
     schedule:
       interval: "weekly"
       day: "monday"
@@ -64,7 +64,7 @@ updates:
 
   # --- Web worker: pdf/excel parsing (unpdf, cfb) ---
   - package-ecosystem: "npm"
-    directory: "/web"
+    directory: "/apps/api"
     schedule:
       interval: "weekly"
       day: "monday"

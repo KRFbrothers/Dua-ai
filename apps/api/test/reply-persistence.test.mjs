@@ -42,7 +42,7 @@ const success = [{ type: 'text', delta: 'A complete reply.' }, { type: 'done', t
 const complete = (prepared, events = success, signal = request().signal) => readEvents(savedReplyStream(source(events), prepared, { signal }));
 
 test('the shared Android digest fixture matches regardless of object key order', () => {
-  const fixture = JSON.parse(readFileSync(new URL('../../app/src/test/resources/reply-digest-v1.json', import.meta.url), 'utf8'));
+  const fixture = JSON.parse(readFileSync(new URL('../../../app/src/test/resources/reply-digest-v1.json', import.meta.url), 'utf8'));
   assert.equal(messagesHash(fixture.messages), fixture.digest);
   assert.equal(messagesHash([{ x: 2, y: '✨' }]), messagesHash([{ y: '✨', x: 2.0 }]));
 });
@@ -201,7 +201,7 @@ test('generation reserve cancels a hanging model without consuming the independe
 });
 
 test('stored-file references, bounded text context and fresh transcripts survive completion', async () => {
-  const shared = JSON.parse(readFileSync(new URL('../../app/src/test/resources/cloud-snapshot-v1.json', import.meta.url), 'utf8'));
+  const shared = JSON.parse(readFileSync(new URL('../../../app/src/test/resources/cloud-snapshot-v1.json', import.meta.url), 'utf8'));
   const reference = shared.chats.flatMap(chat => chat.messages).find(message => message.role === 'user' && message.files?.length).files[0];
   const state = fixture(); const value = data();
   value.persistence.user.files = [reference]; value.persistence.user.attachmentText = 'Attached text context';
