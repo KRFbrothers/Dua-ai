@@ -207,7 +207,7 @@ dependencies {
     implementation("com.google.crypto.tink:tink-android:1.24.0")
     implementation("com.google.android.gms:play-services-auth:21.6.0")
     implementation("androidx.work:work-runtime-ktx:2.12.0")
-    implementation(platform("com.google.firebase:firebase-bom:34.7.0"))
+    implementation(platform("com.google.firebase:firebase-bom:35.1.0"))
     implementation("com.google.firebase:firebase-crashlytics")
     testImplementation("junit:junit:4.13.2")
     testImplementation("androidx.work:work-testing:2.12.0")
