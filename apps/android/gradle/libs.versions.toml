@@ -20,10 +20,10 @@ androidxTestExtJunit = "1.2.1"
 
 [libraries]
 # Animation runtimes (owner-approved): Rive (MIT) for the chat thinking loader, Lottie (Apache-2.0) for Settings icons.
-# rive-android 10.4.5 is the newest release that does not pull Compose BOM 2025.x / core-ktx 1.17 (compileSdk 36).
+# rive-android 11.14.3 is the newest release that does not pull Compose BOM 2025.x / core-ktx 1.17 (compileSdk 36).
 # compileSdk is 35, so core-ktx, the Compose BOM and navigation-compose are held at the newest releases
 # whose AAR metadata still declares minCompileSdk 35 (see the pins below).
-rive-android = { group = "app.rive", name = "rive-android", version = "10.4.5" }
+rive-android = { group = "app.rive", name = "rive-android", version = "11.14.3" }
 lottie-compose = { group = "com.airbnb.android", name = "lottie-compose", version = "6.7.1" }
 # Offline speech-to-text (Apache-2.0). Pulls JNA (Apache-2.0/LGPL dual) as its only dependency.
 vosk-android = { group = "com.alphacephei", name = "vosk-android", version = "0.3.75" }
