@@ -1,6 +1,7 @@
 package com.dua.ai.viewmodel
 
 import android.app.Application
+import android.os.Handler
 import android.os.Looper
 import androidx.lifecycle.ViewModelStore
 import com.dua.ai.account.AccountApi
@@ -14,8 +15,13 @@ import com.dua.ai.settings.DuaPersonality
 import com.dua.ai.settings.LocalPreferences
 import com.dua.ai.setup.IntegrationState
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.android.asCoroutineDispatcher
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.setMain
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Protocol
@@ -39,6 +45,7 @@ import java.util.concurrent.CopyOnWriteArrayList
 @RunWith(ParameterizedRobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class)
 @LooperMode(LooperMode.Mode.PAUSED)
+@OptIn(ExperimentalCoroutinesApi::class)
 class PersonalityPromptingTest(private val separateEngine: Boolean) {
     companion object {
         @JvmStatic @ParameterizedRobolectricTestRunner.Parameters(name = "separateEngine={0}")
@@ -52,6 +59,8 @@ class PersonalityPromptingTest(private val separateEngine: Boolean) {
     @Suppress("UNCHECKED_CAST") private fun <T> flow(name: String) = field(name).get(model) as MutableStateFlow<T>
 
     @Before fun setup() {
+        // Use the current sandbox's paused Looper rather than a Handler cached by another test.
+        Dispatchers.setMain(Handler(Looper.getMainLooper()).asCoroutineDispatcher())
         val app = RuntimeEnvironment.getApplication()
         for (name in listOf("dua_chat_history", "dua_preferences", "dua_auto_sync", "dua_files", "dua_account_session"))
             app.getSharedPreferences(name, 0).edit().clear().commit()
@@ -79,8 +88,14 @@ class PersonalityPromptingTest(private val separateEngine: Boolean) {
         await("initial preferences") { field("appearanceLoaded").getBoolean(model) }
     }
     @After fun close() {
-        store.clear()
-        client.dispatcher.cancelAll(); client.connectionPool.evictAll(); client.dispatcher.executorService.shutdown()
+        try {
+            store.clear()
+            if (::client.isInitialized) {
+                client.dispatcher.cancelAll(); client.connectionPool.evictAll(); client.dispatcher.executorService.shutdown()
+            }
+        } finally {
+            Dispatchers.resetMain()
+        }
     }
     private fun await(description: String, condition: () -> Boolean) {
         val until = System.nanoTime() + 10_000_000_000L

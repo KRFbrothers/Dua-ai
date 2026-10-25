@@ -1,6 +1,7 @@
 package com.dua.ai.viewmodel
 
 import android.app.Application
+import android.os.Handler
 import android.os.Looper
 import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.viewModelScope
@@ -19,9 +20,14 @@ import com.dua.ai.settings.LocalPreferences
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.android.asCoroutineDispatcher
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.setMain
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Protocol
@@ -53,6 +59,7 @@ import org.robolectric.annotation.LooperMode
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class)
 @LooperMode(LooperMode.Mode.PAUSED)
+@OptIn(ExperimentalCoroutinesApi::class)
 class RetryResponseTest {
     // Deliberately no JUnit `Timeout` rule. It runs the test body on a NEW thread, while Robolectric
     // binds the main Looper to the runner's thread — `shadowOf(mainLooper).idleFor()` called from any
@@ -73,6 +80,9 @@ class RetryResponseTest {
     @Suppress("UNCHECKED_CAST") private fun <T> map(name: String) = field(name).get(model) as MutableMap<String, T>
 
     @Before fun setup() {
+        // Bind Main to this Robolectric sandbox's Looper. Other test classes can create a
+        // cached Android Main dispatcher whose Handler belongs to a previous sandbox.
+        Dispatchers.setMain(Handler(Looper.getMainLooper()).asCoroutineDispatcher())
         application = RuntimeEnvironment.getApplication()
         for (name in listOf("dua_chat_history", "dua_files", "dua_auto_sync", "dua_account_session", "dua_preferences"))
             application.getSharedPreferences(name, 0).edit().clear().commit()
@@ -98,18 +108,22 @@ class RetryResponseTest {
      * test with nothing running.
      */
     @After fun teardown() {
-        runCatching { (field("replyJob").get(model) as? Job)?.cancel() }
-        // Everything this class starts hangs off viewModelScope. Cancelling it is what frees the
-        // Gradle worker: a collector left behind keeps a non-daemon thread alive, the test TASK then
-        // never returns, and the run ends as a 25-minute job timeout with no failing test name —
-        // which is the shape this file has failed CI in four times. A failing test would have reported
-        // a name; a wedged worker reports nothing, so this is the only teardown that closes it.
-        runCatching { model.viewModelScope.cancel() }
-        // Cancellation handlers and `awaitClose { call.cancel() }` are dispatched on Main. A bounded
-        // pump lets them run instead of leaving the worker's dispatcher threads parked forever.
-        runCatching { repeat(25) { shadowOf(Looper.getMainLooper()).idleFor(5, TimeUnit.MILLISECONDS) } }
-        if (::client.isInitialized) closeHttp(client)
-        accountClient?.let(::closeHttp)
+        try {
+            runCatching { (field("replyJob").get(model) as? Job)?.cancel() }
+            // Everything this class starts hangs off viewModelScope. Cancelling it is what frees the
+            // Gradle worker: a collector left behind keeps a non-daemon thread alive, the test TASK then
+            // never returns, and the run ends as a 25-minute job timeout with no failing test name —
+            // which is the shape this file has failed CI in four times. A failing test would have reported
+            // a name; a wedged worker reports nothing, so this is the only teardown that closes it.
+            runCatching { model.viewModelScope.cancel() }
+            // Cancellation handlers and `awaitClose { call.cancel() }` are dispatched on Main. A bounded
+            // pump lets them run instead of leaving the worker's dispatcher threads parked forever.
+            runCatching { repeat(25) { shadowOf(Looper.getMainLooper()).idleFor(5, TimeUnit.MILLISECONDS) } }
+            if (::client.isInitialized) closeHttp(client)
+            accountClient?.let(::closeHttp)
+        } finally {
+            Dispatchers.resetMain()
+        }
     }
 
     /** Shuts an OkHttp stack down and waits (bounded) so no pool thread outlives this test. */
@@ -163,7 +177,7 @@ class RetryResponseTest {
             Thread.sleep(2)
         }
         assertTrue("Timed out: $description; requests=${requests.size}, typing=${model.isTyping.value}, " +
-            "error=${model.error.value}, messages=${model.messages.value.map { "${it.text}/${it.state}" }}", condition())
+            "scope=${model.viewModelScope}, appearanceNotice=${model.appearanceNotice.value}, error=${model.error.value}, messages=${model.messages.value.map { "${it.text}/${it.state}" }}", condition())
     }
 
     /** Bounded idle for "nothing should have happened" assertions. */

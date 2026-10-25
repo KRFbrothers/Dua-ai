@@ -150,6 +150,8 @@ class MessageLongPressTest(private val dark: Boolean) {
         compose.onNodeWithText(prompt.text, useUnmergedTree = true).performTouchInput {
             longClick(Offset(width * .75f, height / 2f))
         }
+        // Smart selection can finish on a background text-classification task after Compose idles.
+        compose.waitUntil(timeoutMillis = 5_000) { textToolbar.shown }
         compose.runOnIdle {
             assertTrue("Selection must show the text context menu", textToolbar.shown)
             assertNotNull(textToolbar.copy)
@@ -253,7 +255,7 @@ class MessageLongPressTest(private val dark: Boolean) {
 
     /** Record the current Compose toolbar API while retaining real word selection and copy. */
     private class RecordingTextToolbar : TextContextMenuProvider {
-        var shown = false
+        @Volatile var shown = false
             private set
         var copy: (() -> Unit)? = null
         override suspend fun showTextContextMenu(dataProvider: TextContextMenuDataProvider) {
