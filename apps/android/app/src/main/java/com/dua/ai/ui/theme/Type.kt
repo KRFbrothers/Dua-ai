@@ -100,7 +100,7 @@ val VoiceReplyCaptionStyle = TextStyle(fontSize = 24.sp, lineHeight = 33.sp, fon
 val VoicePermissionHeadingStyle = VoiceGreetingStyle.copy(fontSize = 22.sp, lineHeight = 28.sp)
 
 // Home screen + composer styles, taken from the "Dua AI Dabba" reference shell (Inter, standard chat sizes).
-/** Quick prompt rows on Home ("Create an image\u2026"), Dabba bodyLarge. */
+/** Quick prompt rows on Home ("Create an image…"), Dabba bodyLarge. */
 val HomePromptStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Normal, fontSize = 16.sp)
 /** Primary brand in the Home header. */
 val HomeHeaderStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.SemiBold, fontSize = 20.sp, lineHeight = 28.sp)
