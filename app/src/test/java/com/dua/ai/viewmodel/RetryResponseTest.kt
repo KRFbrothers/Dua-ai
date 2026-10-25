@@ -83,6 +83,13 @@ class RetryResponseTest {
         // Bind Main to this Robolectric sandbox's Looper. Other test classes can create a
         // cached Android Main dispatcher whose Handler belongs to a previous sandbox.
         Dispatchers.setMain(Handler(Looper.getMainLooper()).asCoroutineDispatcher())
+        // Robolectric 4.17 reuses its sandbox across test classes, so the process-wide appearance
+        // DataStore singleton can still point at a previous test's (deleted) app directory and never
+        // emit. Drop the cached instance so this test's application gets a fresh store.
+        Class.forName("com.dua.ai.settings.AppearancePreferencesKt").getDeclaredField("appearanceDataStore\$delegate")
+            .apply { isAccessible = true }.get(null).let { delegate ->
+                delegate.javaClass.getDeclaredField("INSTANCE").apply { isAccessible = true }.set(delegate, null)
+            }
         application = RuntimeEnvironment.getApplication()
         for (name in listOf("dua_chat_history", "dua_files", "dua_auto_sync", "dua_account_session", "dua_preferences"))
             application.getSharedPreferences(name, 0).edit().clear().commit()

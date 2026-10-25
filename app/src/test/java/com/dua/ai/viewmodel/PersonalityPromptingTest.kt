@@ -61,6 +61,13 @@ class PersonalityPromptingTest(private val separateEngine: Boolean) {
     @Before fun setup() {
         // Use the current sandbox's paused Looper rather than a Handler cached by another test.
         Dispatchers.setMain(Handler(Looper.getMainLooper()).asCoroutineDispatcher())
+        // Robolectric 4.17 reuses its sandbox across test classes, so the process-wide appearance
+        // DataStore singleton can still point at a previous test's (deleted) app directory and never
+        // emit. Drop the cached instance so this test's application gets a fresh store.
+        Class.forName("com.dua.ai.settings.AppearancePreferencesKt").getDeclaredField("appearanceDataStore\$delegate")
+            .apply { isAccessible = true }.get(null).let { delegate ->
+                delegate.javaClass.getDeclaredField("INSTANCE").apply { isAccessible = true }.set(delegate, null)
+            }
         val app = RuntimeEnvironment.getApplication()
         for (name in listOf("dua_chat_history", "dua_preferences", "dua_auto_sync", "dua_files", "dua_account_session"))
             app.getSharedPreferences(name, 0).edit().clear().commit()
