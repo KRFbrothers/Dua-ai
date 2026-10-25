@@ -16,9 +16,12 @@ Configuration comes only from environment variables; no secrets in code.
   VERTEX_MODEL (default gemini-3.8-flash), AGENT_MODEL (Agent tool loop only, default VERTEX_MODEL),
   AGENT_THINKING_LEVEL (low|medium|high; default low when AGENT_MODEL differs), AGENT_STEP_SECONDS, AGENT_TOOL_SECONDS, AGENT_NOTES (0 turns off
   the Agent's private Supabase notes; see agent_notes.py), VERTEX_THINKING_LEVEL (Gemini 3: low|medium|high, default low),
+  THINKING_ROUTER (default 1; 0 restores env levels), THINKING_MAX_LEVEL (low|medium|high, default high),
   SUPABASE_URL, SUPABASE_ANON_KEY (or SUPABASE_PUBLISHABLE_KEY), DUA_ALLOWED_EMAIL (required owner authentication).
   DUA_APP_TOKEN is an optional additional gate, never a replacement for owner login.
 """
+from contextvars import ContextVar
+
 import base64
 import binascii
 import hmac
@@ -55,6 +58,10 @@ AGENT_THINKING_LEVEL = os.environ.get("AGENT_THINKING_LEVEL", "").strip().lower(
 if AGENT_THINKING_LEVEL not in ("low", "medium", "high"):
     # Argon at medium can spend minutes per tool step; low keeps the Agent responsive (set the env var to change).
     AGENT_THINKING_LEVEL = "low" if AGENT_MODEL != MODEL_NAME else THINKING_LEVEL
+THINKING_ROUTER = os.environ.get("THINKING_ROUTER", "1").strip()
+THINKING_MAX_LEVEL = os.environ.get("THINKING_MAX_LEVEL", "high").strip().lower()
+if THINKING_MAX_LEVEL not in ("low", "medium", "high"):
+    THINKING_MAX_LEVEL = "high"
 MAX_MESSAGE_CHARS = 8000
 MAX_TURNS = 400
 MAX_TURN_CHARS = 100_000
@@ -176,6 +183,7 @@ class GenaiModel:
         self.model_name = model_name or MODEL_NAME
         self.thinking_level = thinking_level
         self.fallback = fallback if fallback and fallback != self.model_name else None
+        self.routed_thinking = False
 
     def config(self, generation_config=None, tools=None):
         from google.genai import types
@@ -204,15 +212,23 @@ class GenaiModel:
                 raise
             print(f"[dua-agent] {self.model_name} unavailable ({type(error).__name__}); falling back to {self.fallback}",
                   flush=True)
-            self.model_name, self.fallback, self.thinking_level = self.fallback, None, None
+            self.model_name, self.fallback, self.thinking_level = self.fallback, None, (
+                self.thinking_level if THINKING_ROUTER != "0" and self.routed_thinking else None)
             return call(model=self.model_name, contents=contents, config=self.config(generation_config, tools))
+
+
+# Keep the legacy factory API while isolating the override to this request/thread.
+_agent_request_level = ContextVar("agent_thinking_level", default=None)
 
 
 def get_agent_model(system_text):
     """Agent tool-loop model: AGENT_MODEL with one fallback to VERTEX_MODEL if it is missing or not permitted."""
-    if AGENT_MODEL == MODEL_NAME and AGENT_THINKING_LEVEL == THINKING_LEVEL:
+    level = _agent_request_level.get() or AGENT_THINKING_LEVEL
+    if AGENT_MODEL == MODEL_NAME and level == THINKING_LEVEL:
         return get_model(system_text)
-    return GenaiModel(system_text, AGENT_MODEL, AGENT_THINKING_LEVEL, fallback=MODEL_NAME)
+    model = GenaiModel(system_text, AGENT_MODEL, level, fallback=MODEL_NAME)
+    model.routed_thinking = _agent_request_level.get() is not None
+    return model
 
 
 def get_model(system_text=SYSTEM_PROMPT):
@@ -472,6 +488,26 @@ def last_user_text(messages):
     return ""
 
 
+_THINKING_WORDS = re.compile(
+    r"\b(math|algebra|calculus|equation|solve|calculate|proof|prove|theorem|code|coding|"
+    r"debug\w*|bug\w*|traceback|algorithm|python|javascript|kotlin|sql|refactor)\b", re.IGNORECASE)
+
+
+def pick_thinking_level(data, route=None):
+    """Pure request heuristic; rollback preserves legacy levels without clamping."""
+    if THINKING_ROUTER == "0":
+        return AGENT_THINKING_LEVEL if route in ("agent", "code") else THINKING_LEVEL
+    text = last_user_text(data.get("messages"))
+    if data.get("mode") == "reasoning" or route == "code":
+        level = "high"
+    elif route == "agent" or _THINKING_WORDS.search(text) or len(text.split()) > 400:
+        level = "medium"
+    else:
+        level = "low"
+    levels = ("low", "medium", "high")
+    return levels[min(levels.index(level), levels.index(THINKING_MAX_LEVEL))]
+
+
 def route_agent(messages, attachments, system, observer=None):
     """Returns "chat" (direct reply, no Search) or "agent" (full pipeline).
 
@@ -532,11 +568,13 @@ VERIFY_SYSTEM = "You are a careful fact-checker for an AI assistant's answers."
 NOTES_SYSTEM = "You extract short, durable, non-sensitive lessons for an AI agent's private notes. Reply with JSON only."
 
 
-def adk_config(model_name, max_tokens, json_out=False):
+def adk_config(model_name, max_tokens, json_out=False, thinking_level=None):
     """GenerateContentConfig for ADK agents: same thinking levels and #214 per-call HTTP timeout as the old loop."""
     import agent_tools
     from google.genai import types
     level = AGENT_THINKING_LEVEL if model_name == AGENT_MODEL and AGENT_MODEL != MODEL_NAME else THINKING_LEVEL
+    if THINKING_ROUTER != "0" and thinking_level is not None and model_name == AGENT_MODEL:
+        level = thinking_level
     options = {"max_output_tokens": max_tokens, "http_options": types.HttpOptions(timeout=agent_tools.STEP_SECONDS * 1000)}
     thinking = thinking_config(model_name, level)
     if thinking is not None:
@@ -577,7 +615,12 @@ def tool_loop(messages, attachments, system, enqueue, owner, coding=False, cance
     import agent_automation
     if agent_automation.status()["configured"]:
         prompt += agent_automation.HINT
-    model = get_agent_model(system + "\n\n" + prompt)
+    level = pick_thinking_level({"messages": messages}, route="code" if coding else "agent")
+    level_token = _agent_request_level.set(level if THINKING_ROUTER != "0" else None)
+    try:
+        model = get_agent_model(system + "\n\n" + prompt)
+    finally:
+        _agent_request_level.reset(level_token)
     if not enqueue("event", progress_event("plan", "Planning\u2026")):
         return
     import agent_store
@@ -623,7 +666,8 @@ def tool_loop(messages, attachments, system, enqueue, owner, coding=False, cance
         if not agent_models.key_mode():  # key mode: ADK Gemini models get the key client explicitly
             os.environ.setdefault("GOOGLE_GENAI_USE_ENTERPRISE", "TRUE")
             os.environ.setdefault("GOOGLE_CLOUD_LOCATION", LOCATION)
-        adk_result = agent_adk.run(env, last, MODEL_NAME, AGENT_MODEL, adk_config)
+        adk_result = agent_adk.run(env, last, MODEL_NAME, AGENT_MODEL,
+            lambda name, tokens, json_out=False: adk_config(name, tokens, json_out, thinking_level=level))
     if adk_result is not None:
         text, run = adk_result
     else:
@@ -757,6 +801,8 @@ def _agent_producer(messages, attachments, system, owner=None, cancelled=None, o
         else:
             route = route_agent(messages, attachments, system, observer=trace) if trace else route_agent(messages, attachments, system)
         app.logger.info("agent route: %s", route)
+        level = pick_thinking_level({"messages": messages}, route=route)
+        app.logger.info("thinking level: %s", level)
         if route == "chat":
             # Casual message: one streamed reply with full history, no Search/tools. The owner's notes (cheap, capped)
             # are still loaded, and lessons are learned after the reply.
@@ -769,7 +815,7 @@ def _agent_producer(messages, attachments, system, owner=None, cancelled=None, o
                 casual = ObservedModel(casual, trace)
             parts = []
             for chunk in casual.generate_content(build_contents(messages, attachments),
-                                                 generation_config={"max_output_tokens": AGENT_ANSWER_TOKENS}, stream=True):
+                                                 generation_config={"max_output_tokens": AGENT_ANSWER_TOKENS, **({"thinking_level": level} if THINKING_ROUTER != "0" else {})}, stream=True):
                 parts.append(chunk_text(chunk))
                 if not enqueue("chunk", chunk):
                     return
@@ -985,14 +1031,20 @@ def api_chat():
         and not data.get("web") and not data.get("code")
     if agent and data.get("stream") is not True:
         return jsonify({"error": "Agent mode needs streaming. Update the app."}), 400
+    chat_config = {}
+    if not agent and not use_free:
+        level = pick_thinking_level(data)
+        app.logger.info("thinking level: %s", level)
+        if THINKING_ROUTER != "0":
+            chat_config["generation_config"] = {"thinking_level": level}
     if data.get("stream") is not True:
         try:
             try:
-                response = get_model(system).generate_content(contents)
+                response = get_model(system).generate_content(contents, **chat_config)
             except Exception as error:
                 if not wait_for_chat_retry(error):
                     raise
-                response = get_model(system).generate_content(contents)
+                response = get_model(system).generate_content(contents, **chat_config)
             text = chunk_text(response)
         except Exception:
             app.logger.exception("api chat failed")
@@ -1037,7 +1089,7 @@ def api_chat():
                 while True:
                     received = False
                     try:
-                        iterator = iter(get_model(system).generate_content(contents, stream=True))
+                        iterator = iter(get_model(system).generate_content(contents, stream=True, **chat_config))
                         for chunk in iterator:
                             received = True
                             if not enqueue("chunk", chunk):

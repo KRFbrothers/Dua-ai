@@ -39,6 +39,7 @@ class AgentModel:
 def model(monkeypatch):
     m = AgentModel()
     monkeypatch.setattr(engine, "get_model", lambda system=engine.SYSTEM_PROMPT: m)
+    monkeypatch.setattr(engine, "get_agent_model", lambda system: m)
     monkeypatch.setattr(engine, "make_part", lambda text=None, data=None, mime_type=None: ("text", text))
     monkeypatch.setattr(engine, "make_content", lambda role, parts: {"role": role, "parts": parts})
     monkeypatch.setattr(engine, "google_search_tool", lambda: "GOOGLE_SEARCH")
@@ -156,6 +157,7 @@ class RouterModel(AgentModel):
 
 def use(monkeypatch, m):
     monkeypatch.setattr(engine, "get_model", lambda system=engine.SYSTEM_PROMPT: m)
+    monkeypatch.setattr(engine, "get_agent_model", lambda system: m)
     return m
 
 
@@ -228,6 +230,7 @@ class TitleModel:
 def test_title_is_cheap_clean_and_owner_only(monkeypatch):
     m = TitleModel()
     monkeypatch.setattr(engine, "get_model", lambda system=engine.SYSTEM_PROMPT: m)
+    monkeypatch.setattr(engine, "get_agent_model", lambda system: m)
     monkeypatch.delenv("DUA_APP_TOKEN", raising=False)
     monkeypatch.setattr(engine, "verify_owner", lambda authorization: "verified-owner")
     r = engine.app.test_client().post("/api/title", json={"user": "dark mode kaise add karun?", "reply": "Use MaterialTheme..."})

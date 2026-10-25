@@ -356,6 +356,7 @@ def test_coding_route_runs_pipeline_and_streams_pr_link(monkeypatch, owner):
     monkeypatch.setenv("GITHUB_TOKEN", "tok")
     model, systems = CodingModel(), []
     monkeypatch.setattr(engine, "get_model", lambda system=engine.SYSTEM_PROMPT: systems.append(system) or model)
+    monkeypatch.setattr(engine, "get_agent_model", lambda system: systems.append(system) or model)
     opener = Opener()
     real = ca.GitHubClient
     monkeypatch.setattr(ca, "GitHubClient", lambda token, repo: real(token, repo, opener=opener))
@@ -403,6 +404,7 @@ def test_real_genai_tool_declarations():
 def test_coding_reports_read_and_pr_progress(monkeypatch, owner):
     monkeypatch.setenv("GITHUB_TOKEN", "tok")
     monkeypatch.setattr(engine, "get_model", lambda system=engine.SYSTEM_PROMPT: CodingModel())
+    monkeypatch.setattr(engine, "get_agent_model", lambda system: CodingModel())
     opener = Opener()
     real = ca.GitHubClient
     monkeypatch.setattr(ca, "GitHubClient", lambda token, repo: real(token, repo, opener=opener))
