@@ -48,7 +48,7 @@ Additional source checks:
 ## Validation observed
 
 The original local audit results below are retained as historical observations.
-The Python request-test and Android blocks are superseded by the explicit reruns
+The Node, Python request-test and Android blocks are superseded by the explicit reruns
 described below; local setup failures are distinguished from code/test findings.
 
 - PASS: `node --test --test-isolation=none --test-reporter=spec test/request-rate-limit.test.mjs test/web-agent-action.test.mjs`
@@ -57,9 +57,18 @@ described below; local setup failures are distinguished from code/test findings.
 - PASS: Python `compileall` for modified app and kill-switch test files. This
   checks syntax only, not Flask request behavior.
 - PASS: `git diff --check`.
-- BLOCKED: full `npm test` fails loading missing `cfb`; dependencies could not
-  be installed because network-permission tool calls did not complete. This is
-  not a passing full Node regression run.
+- PASS (local, 25 October 2026), from `apps/api/`, on a source tree matching
+  `597df1895a81792efc2637b80b96a856778d0a6b`: reproduced `npm test` failing with
+  `ERR_MODULE_NOT_FOUND: Cannot find package 'cfb'` from
+  `src/core/spreadsheet-formats.mjs` before dependencies were installed.
+  `cfb` is required for legacy XLS parsing and the BIFF8 test fixture writer;
+  both `package.json` and `package-lock.json` already correctly pin **1.2.2**.
+  Ran `npm ci --ignore-scripts --no-audit --no-fund --cache /tmp/dua-api-audit-npm-cache`
+  (4 packages installed), confirmed `npm ls cfb --depth=0` reports `cfb@1.2.2`,
+  then reran the unmodified **`npm test`: 338 passed, zero failures/skips/cancellations**
+  using Node 24.19.0 and npm 11.9.0. The issue was missing installed dependencies,
+  not a missing declaration or unused import. No manifest/lockfile/import changes
+  were needed, and legacy spreadsheet support remains intact.
 - PASS (GitHub Actions, 25 October 2026): reran the existing engine job in
   [Project checks, attempt 2](https://github.com/KRFbrothers/Dua-ai/actions/runs/40201238507/attempts/2).
   Its source tree matches verification baseline `56325428a723922645288149067035acf6abd790`
