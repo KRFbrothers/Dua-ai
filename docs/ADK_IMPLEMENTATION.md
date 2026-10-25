@@ -214,6 +214,15 @@ not a comprehensive semantic safety grader or a claim of live accuracy.
 
 ## CLI, image and rollout
 
+The engine README is the entrypoint and deployment map:
+[ADK entrypoints and ownership](../apps/ai-engine/README.md#adk-entrypoints-and-ownership)
+and [supported staged ADK rollout](../apps/ai-engine/README.md#supported-adk-rollout).
+The single server chain is Docker CMD → `adk_server.py` → Gunicorn `wsgi:app` →
+the existing Flask app. Packaged `dua_engine.agent.agent_adk` runs inside that
+server; `adk_cli.py` and `adk_examples/` do not replace it. Use current-checkout
+`deploy-adk.sh` for ADK rollouts; `dua-adk-cloudshell.sh` is the retained historical
+bootstrap pinned to an older checkout, with its own setup side effects.
+
 `python adk_cli.py --help` exposes `scaffold`, `run`, `test`, `init-db`, `status`,
 `index`, `delete-document`, `reindex-notes` and `evaluate`. Scaffold creates a real discoverable
 ADK package without overwriting an existing directory; `adk run <package>` then

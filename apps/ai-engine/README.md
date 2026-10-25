@@ -69,6 +69,11 @@ On Cloud Run, configure runtime settings on the service and keep the optional Gi
 
 ## Redeploy from Cloud Shell
 
+For an ADK rollout, use the [supported staged ADK path](#supported-adk-rollout)
+below. The direct source command in this section retains existing service
+settings and can change serving traffic immediately; it is not the staged ADK
+rollout procedure.
+
 Runtime settings (`GOOGLE_CLOUD_PROJECT`, `VERTEX_LOCATION`, `VERTEX_MODEL`, `SUPABASE_URL`,
 `SUPABASE_PUBLISHABLE_KEY` or `SUPABASE_ANON_KEY`, `DUA_ALLOWED_EMAIL`, optional secrets) already live on the
 **Cloud Run service**. A redeploy keeps them, so the standard command passes no settings:
@@ -85,6 +90,75 @@ tokens or keys into chat, source files or screenshots; they are never compiled i
 After deployment, confirm both `/api/chat` and `/chat` reject a request without `Authorization`,
 reject a non-owner/expired session, and allow a fresh owner session. No rejected request should
 invoke Vertex. Tests mock Auth/Vertex; successful tests do not certify the live service settings.
+
+## ADK entrypoints and ownership
+
+There is one supported Cloud Run HTTP server chain for normal chat and ADK:
+
+```text
+Dockerfile CMD -> adk_server.py -> exec Gunicorn wsgi:app -> app.py Flask app
+```
+
+`wsgi.py` applies the website CORS middleware to the existing Flask app. ADK runs
+inside the same owner-authenticated `/api/chat` request path when selected by the
+existing configuration/router. It does not start a separate ADK HTTP server or
+change `dua-ai-engine` into an SDK example server. This map describes the current
+checkout's roles; it does not assert which revision is serving in Cloud Run.
+
+| File or directory | Role | Used for current ADK rollout? |
+| --- | --- | --- |
+| [adk_server.py](adk_server.py) | Container startup validator and Gunicorn launcher. Checks adapters/custom tools, `PORT` and configured production persistence; does not initialize database tables. | Yes: Docker CMD calls it for the same `wsgi:app` server. Keep the wrapper. |
+| [wsgi.py](wsgi.py), [app.py](app.py) | Main HTTP entry and Flask chat/Agent endpoints. | Yes: one server for ordinary chat and ADK. |
+| [dua_engine/agent/agent_adk.py](dua_engine/agent/agent_adk.py) | Real ADK orchestration: planner, helpers, merger, optional review, cancellation and SDK runner lifecycle. | Yes, in process when the existing ADK route is selected. Root [agent_adk.py](agent_adk.py) is a compatibility alias for imports/monkeypatches, not another server. |
+| [adk_cli.py](adk_cli.py) | Operations CLI: status, explicit database initialization, live requests/indexing, scaffold, offline tests/evaluation. | Optional operator tool, never the HTTP server or deploy command. `run`/indexing can make provider calls. |
+| [adk_examples/](adk_examples/) | Opt-in custom-tool examples, including `text_tools.word_count`; exercised by extension tests. | Only if explicitly configured through `ADK_TOOL_MODULES`. No server and no default activation. CLI-generated scaffold packages and official `adk run` are separate development examples, not the chat deployment. |
+| [deploy-adk.sh](deploy-adk.sh) | Current-checkout rollout controller: `plan`, `deploy` (stage), `promote`, `rollback`. | Yes: the supported ADK deployment path below. |
+| [cloudbuild-adk.yaml](cloudbuild-adk.yaml) | Image build/push recipe invoked by `deploy-adk.sh`; passes the source SHA into the existing Dockerfile. | Yes, as a build input; it does not serve HTTP or promote traffic. |
+| [dua-adk-cloudshell.sh](dua-adk-cloudshell.sh) | Historical executable bootstrap pinned to commit `cea9b6df188b8bd926bbf549419ef62e8e08643b`. It clones that old checkout and uses its `google-cloud-backend/` paths. | No for current-source rollouts. Retained for historical setup/recovery; it can alter database/secret/candidate state when run, so it is not a harmless example. Do not substitute it for `deploy-adk.sh` or rewrite its pinned paths in isolation. |
+
+The launcher, operations CLI and import alias have different responsibilities;
+there is no duplicate HTTP server wrapper to fold. Their filenames, behavior,
+tests, deployment scripts and historical pin are retained.
+
+### Supported ADK rollout
+
+Use `deploy-adk.sh` from a clean, fetched and fast-forwarded `main`; it checks that
+the checkout matches `origin/main`. Start from the repository root:
+
+```bash
+git fetch origin
+git switch main
+git pull --ff-only
+bash apps/ai-engine/deploy-adk.sh plan
+```
+
+Then use this single flow for the existing `dua-ai-engine` service:
+
+1. Prepare the existing server settings/secret bindings and required PostgreSQL
+   schema/tables as described in [ADK operations](../../docs/ADK_IMPLEMENTATION.md#durable-sessions-and-approvals).
+   Startup validates configured storage; it does not run `init-db` automatically.
+2. Set `ADK_IMAGE` to the intended unique image URL in your existing Artifact
+   Registry repository, then run `bash apps/ai-engine/deploy-adk.sh deploy`.
+   The script records prior traffic in `ADK_SNAPSHOT` (default
+   `/tmp/dua-adk-rollout.json`), builds this checkout through
+   `cloudbuild-adk.yaml` and stages tag `adk-candidate` with `--no-traffic`.
+   It updates the existing ADK mode/production/build markers and retains other
+   service environment, secret and IAM bindings. Keep the snapshot for rollback.
+3. Verify the candidate revision/tag URL, owner-only capabilities, storage
+   readiness and the intended authenticated workflow. Public health or offline
+   CI alone does not verify provider readiness. `adk_cli.py status --endpoint`
+   can query candidate capabilities with the existing owner credentials in the
+   environment; `run` is a separate explicit live request.
+4. Set `ADK_VERIFIED_REVISION` to the exact revision you verified, then run
+   `bash apps/ai-engine/deploy-adk.sh promote`. This is the explicit traffic
+   change; staging does not promote automatically.
+5. If rollback is needed, select the saved `ADK_SNAPSHOT` and run
+   `bash apps/ai-engine/deploy-adk.sh rollback`. It validates the target and
+   restores recorded traffic; it does not undo database/schema changes.
+
+Defaults target `dua-ai-engine` in `global-healer-m6shk`, `us-central1`; keep the
+intended target consistent across plan, stage, promote and rollback. These are
+operator instructions, not a deployment performed by this documentation change.
 
 ## Coding agent setup (phase 2, optional)
 
@@ -260,9 +334,9 @@ result is thrown away and no further calls are made.)
 
 ## Parallel multi-agent mode on Google ADK (optional, `AGENT_ENGINE=adk`)
 
-[`agent_adk.py`](agent_adk.py) uses Google Agent Development Kit (`google-adk==2.12.0`, official source: [google/adk-python](https://github.com/google/adk-python/tree/v2.12.0); owner fork: [KRFbrothers/adk-python](https://github.com/KRFbrothers/adk-python)), imported only when the flag is on.
+[`dua_engine/agent/agent_adk.py`](dua_engine/agent/agent_adk.py) (root `agent_adk.py` is its compatibility alias) uses Google Agent Development Kit (`google-adk==2.12.0`, official source: [google/adk-python](https://github.com/google/adk-python/tree/v2.12.0); owner fork: [KRFbrothers/adk-python](https://github.com/KRFbrothers/adk-python)), imported only when the flag is on.
 1. **Plan:** an ADK controller agent on `AGENT_MODEL` decides whether the request has 2–3 independent parts (research / code / notes). Uses robust JSON plan parsing that handles both raw JSON and markdown codeblock responses.
-2. **Parallel helpers:** an ADK `SequentialAgent[ParallelAgent(helpers on VERTEX_MODEL), merger on AGENT_MODEL]` runs them.
+2. **Helpers:** an ADK `SequentialAgent` runs the helper stage, then the merger on `AGENT_MODEL`. Helpers on `VERTEX_MODEL` run sequentially by default (`ADK_HELPERS_SEQUENTIAL=1`); `0` selects the existing `ParallelAgent` stage.
    - Helpers call the existing tools through one shared `AgentRun`, so the same per-tool caps, #214 timeouts and global source numbers apply.
    - At most one pull request is opened per request.
    - `AGENT_SUB_STEPS` (default 5 per helper) caps model calls, and `AGENT_ADK_SECONDS` (default 300) caps total time.
