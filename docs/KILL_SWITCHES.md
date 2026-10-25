@@ -6,9 +6,14 @@ or when it comes back to the foreground (at most once a minute; the Try again bu
 
 Project `global-healer-m6shk`, region `us-central1`. Services: `dua-api` (apps/api/) and `dua-ai-engine` (apps/ai-engine/).
 
+The authoritative flag names, defaults, messages and per-service ownership are in
+[the shared kill-switch contract](../packages/contracts/KILL_SWITCHES.md).
+This guide covers operations. Each service reads its own environment; set shared
+switches on both services when both must stop. Voice is API-only.
+
 | Switch | dua-api | dua-ai-engine | What the user sees |
 | --- | --- | --- | --- |
-| `DUA_DISABLE_AGENT=1` | Reported in `/api/config` (`switches.agent`) | Agent hidden in `GET /` and capabilities; Agent chat/actions, document POST/DELETE (including semantic search) and note reindex refused | "Agent mode is paused right now…"; normal chat keeps working |
+| `DUA_DISABLE_AGENT=1` | Reported in `/api/config` (`switches.agent`); website Agent chat and action bridge refused | Agent hidden in `GET /` and capabilities; Agent chat/actions, document POST/DELETE (including semantic search) and note reindex refused | "Agent mode is paused right now…"; normal chat keeps working |
 | `DUA_DISABLE_IMAGINE=1` | `/api/imagine/*` refused; `imagine` reported off | Engine Imagine endpoint refused | "Imagine is paused right now…" |
 | `DUA_DISABLE_VOICE=1` | `/api/voice/*` refused; AI voices and live voice reported off | – | "AI voices and live voice are paused…"; device voice still works |
 | `DUA_MAINTENANCE=1` (+ optional `DUA_MAINTENANCE_MESSAGE`, max 300 characters) | Chat, search, Imagine, voice, Build PR refused; account, cloud sync, files and config keep working | Chat, title generation, Agent, Imagine, document POST/DELETE (including semantic search) and note reindex refused; document GET and owner diagnostics remain available | New app: full-screen "App paused" page with the message. Old app: the message as a chat error |
@@ -43,7 +48,7 @@ gcloud run services update dua-api --project=global-healer-m6shk --region=us-cen
 gcloud run services update dua-api --project=global-healer-m6shk --region=us-central1 --update-env-vars=DUA_DISABLE_VOICE=0
 ```
 
-## Maintenance (whole app)
+## Maintenance (AI work; account and stored data remain reachable)
 
 ```sh
 # On, default message
