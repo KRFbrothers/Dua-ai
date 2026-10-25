@@ -22,7 +22,7 @@ The upload button uses the existing document picker and attachment/upload pipeli
 
 `GET /api/files/list` on the **Node base API** is additive and read-only. It reuses `resolveOwner`, the user's bearer token and `listOwnerFiles` (private owner folder, existing pagination cap of 10,000 objects). The response is `{ files: [{ path, name, mimeType, size }], truncated }`; names for unreferenced objects are their stored UUID filenames. It contains no signed URLs, credentials or raw object metadata. Non-owner/anonymous requests and write methods are refused. Existing RLS, schema and keys are unchanged; no service-role key is used for listing.
 
-**Deployment:** after merging, redeploy `web/` on the existing `dua-api` service using [the current deployment instructions](../web/README.md). No new secrets/migration are required. Older backends return 404; the app keeps chat/project items available and shows a retry/update notice for cloud inventory. Refresh cloud files retries the listing. Android checks the response owner prefix and hides an inventory whose owner no longer matches the signed-in account. The inventory is transient, not another authoritative snapshot.
+**Deployment:** after merging, redeploy `apps/api/` on the existing `dua-api` service using [the current deployment instructions](../apps/api/README.md). No new secrets/migration are required. Older backends return 404; the app keeps chat/project items available and shows a retry/update notice for cloud inventory. Refresh cloud files retries the listing. Android checks the response owner prefix and hides an inventory whose owner no longer matches the signed-in account. The inventory is transient, not another authoritative snapshot.
 
 ## Plugins
 

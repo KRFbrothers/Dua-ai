@@ -19,15 +19,15 @@ This guide covers the Node API's (dua-api) read-only connector and owner-confirm
 | `The proposal is out of date: ask Dua to regenerate it.` | The proposal's saved file version no longer matches the default branch. Ask for a fresh proposal and review its diff again before confirming. An unrelated existing branch also requires a fresh proposal; do not overwrite it. |
 | `GitHub refused to open the pull request.` | Check repository PR settings, then retry the same proposal to reuse its branch. A failed request may have created a commit/branch already. Do not assume that an error means nothing was written. |
 
-For a local Node server, update the ignored `web/.env` and restart `npm start` instead of redeploying. Start from [web/.env.example](../web/.env.example) without overwriting an existing local file. Never paste tokens into chat, screenshots, source or test fixtures.
+For a local Node server, update the ignored `apps/api/.env` and restart `npm start` instead of redeploying. Start from [apps/api/.env.example](../apps/api/.env.example) without overwriting an existing local file. Never paste tokens into chat, screenshots, source or test fixtures.
 
 ## Maintainer notes
 
 Messages follow **what failed + the next recovery step**. The implementation keeps the existing public status mappings and authentication/validation boundaries; a message is not a new machine-readable error code. In particular, the existing read client maps GitHub 403 and 429 to its rate/access error status, and callers retain their existing HTTP mappings.
 
-Recovery copy lives in [github.mjs](../web/src/core/github.mjs), [github-write.mjs](../web/src/core/github-write.mjs) and [build-pr.mjs](../web/src/core/build-pr.mjs). Shared repository/path/setup hints also reach the [connector route](../web/src/core/advanced-integrations.mjs) and [Build request validation](../web/src/core/providers.mjs). Request method/path allowlists, owner checks, limits, file-version checks, branch prefixes and confirmation behavior are unchanged.
+Recovery copy lives in [github.mjs](../apps/api/src/core/github.mjs), [github-write.mjs](../apps/api/src/core/github-write.mjs) and [build-pr.mjs](../apps/api/src/core/build-pr.mjs). Shared repository/path/setup hints also reach the [connector route](../apps/api/src/core/advanced-integrations.mjs) and [Build request validation](../apps/api/src/core/providers.mjs). Request method/path allowlists, owner checks, limits, file-version checks, branch prefixes and confirmation behavior are unchanged.
 
-Mocked tests in [build-chat.test.mjs](../web/test/build-chat.test.mjs) and [build-pr.test.mjs](../web/test/build-pr.test.mjs) cover setup/input guidance, HTTP failures, hidden upstream details, unchanged status mappings and no extra retries/writes. Run from `web/`:
+Mocked tests in [build-chat.test.mjs](../apps/api/test/build-chat.test.mjs) and [build-pr.test.mjs](../apps/api/test/build-pr.test.mjs) cover setup/input guidance, HTTP failures, hidden upstream details, unchanged status mappings and no extra retries/writes. Run from `apps/api/`:
 
 ```sh
 node --test test/build-chat.test.mjs test/build-pr.test.mjs

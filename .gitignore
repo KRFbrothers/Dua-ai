@@ -61,7 +61,7 @@ Thumbs.db
 
 # Node.js
 node_modules/
-/web/backend-test-results.xml
+/apps/api/backend-test-results.xml
 
 # Local scripts
 run_emulator.bat

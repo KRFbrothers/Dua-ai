@@ -43,7 +43,7 @@ done
 is_kill_switch() { [[ "$1" =~ ^DUA_(DISABLE_[A-Z0-9_]+|MAINTENANCE(_MESSAGE)?)$ ]]; }
 
 # Optional, explicit and narrow: DUA_REMOVE_SECRETS=NAME1,NAME2 detaches only those secret bindings
-# (for a setting removed from web/.env.example). Nothing else is ever removed.
+# (for a setting removed from apps/api/.env.example). Nothing else is ever removed.
 remove_secrets=()
 if [[ -n "${DUA_REMOVE_SECRETS:-}" ]]; then
   IFS=, read -r -a requested_removals <<< "$DUA_REMOVE_SECRETS"
@@ -84,14 +84,14 @@ done < "$web_dir/.env.example"
 feature_flags=(DUA_FILES ENABLE_GITHUB_CONNECTOR DUA_BUILD_PR ENABLE_GENERATED_VOICE)
 for flag in "${feature_flags[@]}"; do
   if [[ -v "secret_names[$flag]" && ! -v "attached_settings[$flag]" ]]; then
-    echo "Feature flag $flag exists in Secret Manager but was not attached from web/.env.example. Restore its NAME=value entry in web/.env.example, then retry." >&2
+    echo "Feature flag $flag exists in Secret Manager but was not attached from apps/api/.env.example. Restore its NAME=value entry in apps/api/.env.example, then retry." >&2
     exit 1
   fi
 done
 
-# Build the Dua AI website (website/) into web/site so dua-api serves it at /. The folder is
-# always recreated, so the image never carries a stale site; without website/ the API deploys alone.
-site_src="${DUA_WEBSITE_DIR:-$web_dir/../website}"
+# Build the Dua AI website (apps/web/) into apps/api/site so dua-api serves it at /. The folder is
+# always recreated, so the image never carries a stale site; without apps/web/ the API deploys alone.
+site_src="${DUA_WEBSITE_DIR:-$web_dir/../web}"
 rm -rf "$web_dir/site"
 mkdir -p "$web_dir/site"
 if [[ -f "$site_src/package.json" ]]; then
@@ -99,11 +99,11 @@ if [[ -f "$site_src/package.json" ]]; then
   echo "Building the Dua AI website..."
   (cd "$site_src" && npm ci --no-audit --no-fund && npm run build -- --outDir "$web_dir/site" --emptyOutDir)
   if [[ ! -f "$web_dir/site/index.html" ]]; then
-    echo "Website build did not produce web/site/index.html." >&2
+    echo "Website build did not produce apps/api/site/index.html." >&2
     exit 1
   fi
 else
-  echo "website/ not found; deploying the API without the website."
+  echo "apps/web/ not found; deploying the API without the website."
 fi
 
 echo "Preparing separate build and runtime service accounts..."

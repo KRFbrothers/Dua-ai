@@ -75,7 +75,7 @@ With those permissions the token cannot change Actions workflows (GitHub blocks 
 
 ## Server variables
 
-Add variables to Secret Manager (same name as the variable) and re-run `web/deploy-cloudrun.sh`, or to a local ignored `.env` file. API keys must never be added to Android resources, public client configuration or GitHub commits.
+Add variables to Secret Manager (same name as the variable) and re-run `apps/api/deploy-cloudrun.sh`, or to a local ignored `.env` file. API keys must never be added to Android resources, public client configuration or GitHub commits.
 
 | Choice | API key | Model ID |
 | --- | --- | --- |
@@ -105,7 +105,7 @@ Redeploy after setting server variables. `/api/config` exposes provider availabi
 | Claude | No visible thinking yet; the reply says so | — | `ANTHROPIC_MAX_OUTPUT_TOKENS` (8192) |
 | Kimi | Shows `reasoning_content` when the model returns it | — | `KIMI_MAX_OUTPUT_TOKENS` (8192) |
 
-Output caps accept 256–1,000,000; output tokens include thinking tokens. A reply that hits the cap ends with `done.truncated` and the app shows a note. `DUA_CHAT_DEADLINE_SECONDS` (10–790) must stay below the Cloud Run request timeout: `web/deploy-cloudrun.sh` sets the Cloud Run timeout.js` (Hobby with Fluid compute allows 300 s; Pro allows up to 800 s). The Android app allows 75 s between bytes and 330 s per call.
+Output caps accept 256–1,000,000; output tokens include thinking tokens. A reply that hits the cap ends with `done.truncated` and the app shows a note. `DUA_CHAT_DEADLINE_SECONDS` (10–790) must stay below the Cloud Run request timeout: `apps/api/deploy-cloudrun.sh` sets the Cloud Run timeout.js` (Hobby with Fluid compute allows 300 s; Pro allows up to 800 s). The Android app allows 75 s between bytes and 330 s per call.
 
 For streaming Auto/Reasoning chat, the backend opens SSE after access, input, project and provider-setup checks, before web/file preparation, context summarization or waiting for provider response headers. An initial comment and 15-second heartbeat comments keep the Android read timeout from expiring during these waits. Stop cancels the preparation/provider work; the whole-request deadline still applies. Failures after SSE opens use a terminal `error` event carrying `message`, `status` and optional `retryAfterSeconds` (HTTP remains 200); access/setup failures before it opens remain JSON with an HTTP error status. Non-streaming JSON replies keep their existing HTTP error behavior. Build mode uses its existing separate stream path.
 
@@ -196,7 +196,7 @@ Prices change; check docs.x.ai and ai.google.dev before raising caps. The image 
 | `DUA_IMAGINE_MAX_SOURCE_MB` | `15` | Largest source photo sent for edits or image-to-video (1–20). |
 | `GROK_API_KEY` / `GEMINI_API_KEY` | — | xAI is needed for video and Grok images; Gemini is optional for images. |
 
-API routes (owner sign-in required): `POST /api/imagine/image`, `POST /api/imagine/video`, `POST /api/imagine/status`, `GET /api/imagine/usage`. A burst guard allows 30 requests a minute per instance. Local smoke test without keys: `cd web && node scripts/imagine-smoke.mjs` (fake providers and Supabase).
+API routes (owner sign-in required): `POST /api/imagine/image`, `POST /api/imagine/video`, `POST /api/imagine/status`, `GET /api/imagine/usage`. A burst guard allows 30 requests a minute per instance. Local smoke test without keys: `cd apps/api && node scripts/imagine-smoke.mjs` (fake providers and Supabase).
 
 ## Voice v2: reply voices and languages (Phase 4)
 

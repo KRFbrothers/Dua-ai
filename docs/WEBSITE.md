@@ -1,14 +1,14 @@
 # Dua AI website
 
-The personal web version of Dua AI. Source: [`website/`](../website) (Vite + React + TypeScript); developer notes: [website/README.md](../website/README.md).
+The personal web version of Dua AI. Source: [`apps/web/`](../apps/web) (Vite + React + TypeScript); developer notes: [apps/web/README.md](../apps/web/README.md).
 
 URL: `https://dua-api-228305912525.us-central1.run.app/`
 
 ## Same-origin serving (#224)
 
-- `website/` is built into `web/site` and shipped inside the **dua-api** image by [`web/deploy-cloudrun.sh`](../web/deploy-cloudrun.sh). No separate hosting or cost.
-- [`static-site.mjs`](../web/src/server/static-site.mjs) serves it for every non-`/api` path: SPA fallback to `index.html`, hashed `assets/` cached long-term, `index.html` not cached, CSP / `nosniff` / frame-deny headers, no files outside `web/site`. `/api/*` is unchanged; without a built site `/` returns 404.
-- [`server.mjs`](../web/src/server/server.mjs) builds the request URL from `X-Forwarded-Proto`, so the same-origin checks in dua-api see Cloud Run's `https` origin.
+- `apps/web/` is built into `apps/api/site` and shipped inside the **dua-api** image by [`apps/api/deploy-cloudrun.sh`](../apps/api/deploy-cloudrun.sh). No separate hosting or cost.
+- [`static-site.mjs`](../apps/api/src/server/static-site.mjs) serves it for every non-`/api` path: SPA fallback to `index.html`, hashed `assets/` cached long-term, `index.html` not cached, CSP / `nosniff` / frame-deny headers, no files outside `apps/api/site`. `/api/*` is unchanged; without a built site `/` returns 404.
+- [`server.mjs`](../apps/api/src/server/server.mjs) builds the request URL from `X-Forwarded-Proto`, so the same-origin checks in dua-api see Cloud Run's `https` origin.
 - The DUA logo is copied at build time from `app/src/main/res/drawable-nodpi/dua_logo_home.webp`.
 
 ## Sign-in (#226)
@@ -31,7 +31,7 @@ Streaming (SSE) replies pass through unbuffered; requests without `Origin` (Andr
 
 ## Chat (PR 2)
 
-- The page calls dua-api `POST /api/web/chat` ([`service-handler.mjs`](../web/src/server/service-handler.mjs)). It accepts only a same-origin browser request (`Origin` equals the dua-api origin, `Sec-Fetch-Site` absent or `same-origin`) with the `dua_access` HttpOnly cookie; otherwise 403 / 401 before any engine call.
+- The page calls dua-api `POST /api/web/chat` ([`service-handler.mjs`](../apps/api/src/server/service-handler.mjs)). It accepts only a same-origin browser request (`Origin` equals the dua-api origin, `Sec-Fetch-Site` absent or `same-origin`) with the `dua_access` HttpOnly cookie; otherwise 403 / 401 before any engine call.
 - dua-api forwards `{model, messages, mode, stream: true}` to dua-ai-engine `/api/chat` with the cookie session as the owner `Authorization: Bearer` token (plus `X-Dua-App-Token` from `DUA_APP_TOKEN` when set) and streams the SSE reply back unbuffered. Tokens never reach page scripts.
 - Engine URL: `DUA_ENGINE_URL` (optional) or the default `https://dua-ai-engine-228305912525.us-central1.run.app`. No deploy change is needed.
 - Website: streamed replies with simple markdown (code blocks, inline code, bold), Agent progress label, Stop button, Chat/Agent toggle, model picker. A 401 refreshes the session once and retries.

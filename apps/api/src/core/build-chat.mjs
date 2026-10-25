@@ -53,7 +53,7 @@ export function buildConfiguration(env = {}, configured = new Set()) {
 /** Gemini function declarations (OpenAPI schema subset). Read tools only. */
 export const FUNCTION_DECLARATIONS = Object.freeze([
   { name: 'list_files', description: 'List file paths (with sizes in bytes) in the repository default branch. Use path_prefix to look inside one folder.',
-    parameters: { type: 'OBJECT', properties: { path_prefix: { type: 'STRING', description: 'Folder path such as "web/src/core/". Empty for the whole repository.' } } } },
+    parameters: { type: 'OBJECT', properties: { path_prefix: { type: 'STRING', description: 'Folder path such as "apps/api/src/core/". Empty for the whole repository.' } } } },
   { name: 'read_file', description: 'Read one text file from the repository default branch. Large files are cut; use start_line and end_line to read a part.',
     parameters: { type: 'OBJECT', properties: { path: { type: 'STRING', description: 'File path relative to the repository root.' }, start_line: { type: 'INTEGER', description: 'First line to return (1-based, optional).' }, end_line: { type: 'INTEGER', description: 'Last line to return (optional).' } }, required: ['path'] } },
   { name: 'search_code', description: 'Search the repository code with GitHub code search (default branch, plain words or identifiers). Returns matching file paths.',

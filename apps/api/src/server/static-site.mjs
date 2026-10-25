@@ -2,7 +2,7 @@ import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-/** Built website (website/ → web/site by `npm run build`). Absent in tests/local API-only runs. */
+/** Built website (apps/web/ → apps/api/site by `npm run build`). Absent in tests/local API-only runs. */
 export const defaultSiteDir = fileURLToPath(new URL('../../site/', import.meta.url));
 
 const TYPES = {

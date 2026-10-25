@@ -1,6 +1,6 @@
 # Dua AI documentation index
 
-Start with [ARCHITECTURE.md](ARCHITECTURE.md) for how the pieces fit, and [OPERATIONS.md](OPERATIONS.md) for deploying and running them. Root guides ([README](../README.md), [SUPABASE](../SUPABASE.md), [SIGNING](../SIGNING.md), [SECURITY](../SECURITY.md)) cover setup and stay at the repository root because app/backend messages or the build point to them; the [engine README](../google-cloud-backend/README.md), [web/README](../web/README.md) and [website/README](../website/README.md) cover each service.
+Start with [ARCHITECTURE.md](ARCHITECTURE.md) for how the pieces fit, and [OPERATIONS.md](OPERATIONS.md) for deploying and running them. Root guides ([README](../README.md), [SUPABASE](../SUPABASE.md), [SIGNING](../SIGNING.md), [SECURITY](../SECURITY.md)) cover setup and stay at the repository root because app/backend messages or the build point to them; the [engine README](../google-cloud-backend/README.md), [apps/api/README](../apps/api/README.md) and [apps/web/README](../apps/web/README.md) cover each service.
 
 ## Docs in this folder
 
@@ -49,7 +49,7 @@ Start with [ARCHITECTURE.md](ARCHITECTURE.md) for how the pieces fit, and [OPERA
 
 ## Environment variables (names and purpose only)
 
-Values live in Secret Manager or the Cloud Run service settings — never in code or docs. Change them with `--update-env-vars` only ([OPERATIONS.md](OPERATIONS.md#changing-settings-safely)). Templates: [`google-cloud-backend/.env.example`](../google-cloud-backend/.env.example), [`web/.env.example`](../web/.env.example).
+Values live in Secret Manager or the Cloud Run service settings — never in code or docs. Change them with `--update-env-vars` only ([OPERATIONS.md](OPERATIONS.md#changing-settings-safely)). Templates: [`google-cloud-backend/.env.example`](../google-cloud-backend/.env.example), [`apps/api/.env.example`](../apps/api/.env.example).
 
 | Service | Variable(s) | Purpose |
 | --- | --- | --- |

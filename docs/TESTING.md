@@ -17,8 +17,8 @@ Every pull request and push to `main` runs four jobs:
 | Job | What runs | Local command |
 | --- | --- | --- |
 | Google Cloud engine tests | Python tests in `google-cloud-backend/tests` run twice: minimal Flask + pytest, then production ADK/GenAI dependencies with scripted offline models; no live provider, Supabase or GitHub calls | `python -m pytest -q google-cloud-backend/tests` (repo root) |
-| Backend tests | Node tests in `web/test` (`npm run test:ci`, needs Node 24) | `cd web && npm ci && npm test` |
-| Website build | `website/`: `npm ci`, type-check and Vite build into `web/site`, then checks `index.html` and the logo exist | `cd website && npm ci && npm run build` |
+| Backend tests | Node tests in `apps/api/test` (`npm run test:ci`, needs Node 24) | `cd apps/api && npm ci && npm test` |
+| Website build | `apps/web/`: `npm ci`, type-check and Vite build into `apps/api/site`, then checks `index.html` and the logo exist | `cd apps/web && npm ci && npm run build` |
 | Android build and tests | `./gradlew :app:testDebugUnitTest -Pdua.ui-record` (JVM, Compose and Robolectric tests) | see below |
 
 The [personal APK workflow](../.github/workflows/personal-apk.yml) is a separate, manually started signing/build path ([SIGNING.md](../SIGNING.md)). Tests use mocked integrations; passing them does not verify deployed Auth, provider billing, live RLS or physical-device behavior.

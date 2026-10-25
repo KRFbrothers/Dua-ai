@@ -6,19 +6,19 @@ These rules apply throughout the repository. Preserve unrelated work. Paths are 
 
 ## 1. Project Overview & Architecture Map
 
-**Dua AI (`com.dua.ai`)** is a private, owner-locked multimodal GenAI assistant across Android (`app/`), Web (`website/` + `web/`), and Google Cloud Run (`google-cloud-backend/`), backed by Supabase Auth, PostgreSQL RLS, and Storage (`infra/database/`).
+**Dua AI (`com.dua.ai`)** is a private, owner-locked multimodal GenAI assistant across Android (`app/`), Web (`apps/web/` + `apps/api/`), and Google Cloud Run (`google-cloud-backend/`), backed by Supabase Auth, PostgreSQL RLS, and Storage (`infra/database/`).
 
 | Layer / Directory | Tech Stack | Key Entry Points & Files | Responsibility |
 | :--- | :--- | :--- | :--- |
 | Android App (`app/`) | Kotlin + Jetpack Compose + Material 3 | `MainActivity.kt`, `ui/navigation/DuaNavHost.kt`, `ui/chat/ChatScreen.kt`, `ui/chat/ChatTopBar.kt`, `ui/chat/ChatComposer.kt`, `viewmodel/ChatViewModel.kt`, `network/DuaApiClient.kt` | Native Android client, 4-state composer, Live Voice, Artifacts Canvas, Projects, Settings, Home AppWidget (`DuaToolbarWidgetReceiver`) |
 | Android Theme (`app/.../ui/theme/`) | Compose Design Tokens (`@Immutable`) | `Color.kt`, `DuaTheme.kt`, `Type.kt`, `Motion.kt`, `Spacing.kt`, `HomeTokens.kt`, `ChatTokens.kt`, `DrawerTokens.kt` | Single source of truth for colors, typography, shapes, spacing, and motion springs |
 | Cloud Run AI Engine (`google-cloud-backend/`) | Python 3.12 container + Flask + Vertex AI (`google-genai`) + Google ADK (`google-adk==2.12.0`) | `app.py`, `owner_auth.py`, `agent_tools.py`, `agent_adk.py`, `coding_agent.py`, `coding_workspace.py`, `coding_runner_server.py`, `kill_switches.py`, `backup.py` | Owner-verified Gemini streaming chat, single-loop and ADK multi-agent tools, grounded search, coding PR agent, Imagine, backups |
-| Node API & Proxy (`web/`) | Node.js 24+; native HTTP server | `src/server/server.mjs`, `src/server/service-handler.mjs`, `src/core/access-policy.mjs`, `src/core/account.mjs`, `src/core/providers.mjs`, `src/core/kill-switches.mjs` | Same-origin web host, HttpOnly cookie sessions, daily request quota, cloud snapshot sync, `/api/web/chat` SSE proxy |
-| Web Frontend (`website/`) | React 19 + TypeScript + Vite 6 | `src/main.tsx`, `src/App.tsx`, `src/ChatShell.tsx`, `src/Login.tsx`, `src/api.ts`, `src/styles.css` | Browser chat and Agent UI compiled into `web/site` |
+| Node API & Proxy (`apps/api/`) | Node.js 24+; native HTTP server | `src/server/server.mjs`, `src/server/service-handler.mjs`, `src/core/access-policy.mjs`, `src/core/account.mjs`, `src/core/providers.mjs`, `src/core/kill-switches.mjs` | Same-origin web host, HttpOnly cookie sessions, daily request quota, cloud snapshot sync, `/api/web/chat` SSE proxy |
+| Web Frontend (`apps/web/`) | React 19 + TypeScript + Vite 6 | `src/main.tsx`, `src/App.tsx`, `src/ChatShell.tsx`, `src/Login.tsx`, `src/api.ts`, `src/styles.css` | Browser chat and Agent UI compiled into `apps/api/site` |
 | Database & Storage (`infra/database/`) | PostgreSQL + RLS + `SECURITY DEFINER` RPCs | `migrations/*.sql` | Owner-isolated cloud snapshots (`dua_cloud_snapshots`), usage budgets, private `dua-files` bucket, Agent notes |
 | Documentation (`docs/`) | Markdown | `README.md`, `ARCHITECTURE.md`, `AGENT.md`, `OPERATIONS.md`, `TESTING.md` | Runtime, deployment, testing, and feature specifications |
 
-Use the runtime and dependency versions declared in the repository. The Node API declares Node 24+ in `web/package.json`; the engine Dockerfile uses Python 3.12.
+Use the runtime and dependency versions declared in the repository. The Node API declares Node 24+ in `apps/api/package.json`; the engine Dockerfile uses Python 3.12.
 
 ## 2. Hard Stop Rules (Zero-Tolerance Guardrails for All AI Tools)
 
@@ -77,7 +77,7 @@ Always use `MaterialTheme.typography`, `CodeTextStyle`, or named `TextStyle` tok
 - Every interactive button, chip, or row must have at least a `48.dp` touch target (`Sizes.touchTarget`) and a meaningful TalkBack label through `contentDescription` or semantics.
 - Never rename or remove existing `Modifier.testTag` identifiers relied upon by tests, including `home-empty-content`, `open-canvas`, `drawer-search-field`, and `code-preview`.
 
-## 4. GenAI Backends (`google-cloud-backend/` & `web/`) — Security, Streaming & Cost Rules
+## 4. GenAI Backends (`google-cloud-backend/` & `apps/api/`) — Security, Streaming & Cost Rules
 
 ### 4.1 Authentication, Owner Lock & Kill Switches
 
@@ -88,7 +88,7 @@ Always use `MaterialTheme.typography`, `CodeTextStyle`, or named `TextStyle` tok
 - Never follow HTTP redirects on authentication calls; preserve `NoAuthRedirects` in `owner_auth.py`.
 - Check `kill_switches.maintenance_message()` and applicable feature switches, including `agent_disabled()` and `imagine_disabled()`, before invoking models or performing side effects.
 
-**Node API (`web/`):**
+**Node API (`apps/api/`):**
 
 - Enforce same-origin browser checks (`Origin` and `Sec-Fetch-Site`) on cookie-authenticated routes while preserving native-client authentication.
 - Preserve owner authentication, `DUA_ALLOWED_EMAIL`, applicable `DUA_REQUIRE_LOGIN` policy, and account-scoped access to stored data.
@@ -112,7 +112,7 @@ X-Content-Type-Options: nosniff
 
 Run checks appropriate to the changed code using declared dependencies and supported runtimes:
 
-- Node.js API: `cd web && npm test`
+- Node.js API: `cd apps/api && npm test`
 - Python engine: `cd google-cloud-backend && python -m pytest -q tests`
 - Android, from the repository root: `./gradlew :app:testDebugUnitTest`
 

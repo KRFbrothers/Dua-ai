@@ -1,6 +1,6 @@
 # GitHub repository and path policy
 
-The Node API's pure policy lives in [github-validation.mjs](../web/src/core/github-validation.mjs). It contains no HTTP calls, credentials, filesystem access or user-facing messages. The read/write clients keep their independent method/path allowlists and tokens; central validation does not grant write access.
+The Node API's pure policy lives in [github-validation.mjs](../apps/api/src/core/github-validation.mjs). It contains no HTTP calls, credentials, filesystem access or user-facing messages. The read/write clients keep their independent method/path allowlists and tokens; central validation does not grant write access.
 
 ## Call sites and policies
 
@@ -17,7 +17,7 @@ All Node API repository file paths share the existing **400 UTF-16 code-unit** c
 
 The write client's `POST /git/trees` boundary independently checks every entry's protected path, blob type and regular-file mode (`100644` / `100755`). Workflow ancestors (`.github` and `.github/workflows`) are protected too, so replacing a whole directory cannot remove its protected files. Direct client calls cannot bypass proposal validation to write protected paths, symlinks or submodules. Regular-file updates and deletions retain their existing behavior. Method allowlists, tokens, owner confirmation and PR flow remain separate checks.
 
-Consumers: [read client](../web/src/core/github.mjs), [write client](../web/src/core/github-write.mjs), [Build chat](../web/src/core/build-chat.mjs), [PR validation](../web/src/core/build-pr.mjs), and [snapshot validation](../web/src/core/cloud-snapshot.mjs). Existing `github.mjs` / `build-chat.mjs` exports remain available for callers.
+Consumers: [read client](../apps/api/src/core/github.mjs), [write client](../apps/api/src/core/github-write.mjs), [Build chat](../apps/api/src/core/build-chat.mjs), [PR validation](../apps/api/src/core/build-pr.mjs), and [snapshot validation](../apps/api/src/core/cloud-snapshot.mjs). Existing `github.mjs` / `build-chat.mjs` exports remain available for callers.
 
 Android and the Python Cloud Run agent have their own runtime implementations. Cloud Run's [coding_agent.py](../google-cloud-backend/coding_agent.py) validates its configured repository at construction, uses full-match request/path checks, and blocks case-insensitive `.git` segments on reads and writes. Its write policy also blocks root `.gitmodules` and all root `.github/` files (a deliberately stricter policy than the Node API's workflow-only restriction). Its existing 300-character ASCII path cap and rejection of any `..` substring remain. Both direct PR creation and the low-level tree request check protected paths; code search enforces one selected repository and validates result metadata. See [architecture boundaries](ARCHITECTURE.md#github-permission-boundaries) before changing either backend.
 
@@ -35,18 +35,18 @@ These bounds serve different protocols and units; they must not be silently repl
 
 | Layer / operation | Bound and source |
 | --- | --- |
-| Node API inline chat body | 4 MiB JSON bytes, with up to 3 attachments / 2 MiB decoded total and 256 KiB UTF-8 per text file: [attachments.mjs](../web/src/core/attachments.mjs). Message history has its own 2.5 MiB serialized-byte cap: [providers.mjs](../web/src/core/providers.mjs). |
-| GitHub repository reads | File responses are bounded to 3 MiB JSON, tree responses to 8 MiB JSON; decoded read output is truncated to 100 × 1024 string code units by default. Files GitHub does not return as base64 text are rejected: [github.mjs](../web/src/core/github.mjs). |
-| Node API Build read budget | 100 × 1024 code units per file, 600 × 1024 total and 40 files per reply, configured by `DUA_BUILD_*`: [build-chat.mjs](../web/src/core/build-chat.mjs). These are read/context bounds, not write byte limits. |
-| Node API PR creation | 20 files, 200 KiB UTF-8 per new file content, 1 MiB UTF-8 total by default; bounded request size includes JSON escaping overhead: [prLimits / handleBuildPr](../web/src/core/build-pr.mjs). |
-| Stored snapshots | JSON-compatible metadata caps include up to 512 × 1024 code units per saved proposal file; total snapshot payload is bounded to 4 MiB. A restorable snapshot is not permission to submit an oversized PR: [cloud-snapshot.mjs](../web/src/core/cloud-snapshot.mjs), [snapshot migration](../infra/database/migrations/202610040001_dua_cloud.sql). |
+| Node API inline chat body | 4 MiB JSON bytes, with up to 3 attachments / 2 MiB decoded total and 256 KiB UTF-8 per text file: [attachments.mjs](../apps/api/src/core/attachments.mjs). Message history has its own 2.5 MiB serialized-byte cap: [providers.mjs](../apps/api/src/core/providers.mjs). |
+| GitHub repository reads | File responses are bounded to 3 MiB JSON, tree responses to 8 MiB JSON; decoded read output is truncated to 100 × 1024 string code units by default. Files GitHub does not return as base64 text are rejected: [github.mjs](../apps/api/src/core/github.mjs). |
+| Node API Build read budget | 100 × 1024 code units per file, 600 × 1024 total and 40 files per reply, configured by `DUA_BUILD_*`: [build-chat.mjs](../apps/api/src/core/build-chat.mjs). These are read/context bounds, not write byte limits. |
+| Node API PR creation | 20 files, 200 KiB UTF-8 per new file content, 1 MiB UTF-8 total by default; bounded request size includes JSON escaping overhead: [prLimits / handleBuildPr](../apps/api/src/core/build-pr.mjs). |
+| Stored snapshots | JSON-compatible metadata caps include up to 512 × 1024 code units per saved proposal file; total snapshot payload is bounded to 4 MiB. A restorable snapshot is not permission to submit an oversized PR: [cloud-snapshot.mjs](../apps/api/src/core/cloud-snapshot.mjs), [snapshot migration](../infra/database/migrations/202610040001_dua_cloud.sql). |
 | Stored uploads | Separate private Storage path, normally 50 MiB per file, further limited by the bucket/plan. Not the inline chat limit: [SUPABASE.md](../SUPABASE.md#1b-stored-files-bucket-phase-2-uploads-pdfs-spreadsheets-audio). |
 
 Provider-specific and Cloud Run limits remain documented in [PROVIDERS.md](PROVIDERS.md) and the [engine README](../google-cloud-backend/README.md). Raising one limit does not raise another layer's bound.
 
 ## Verification
 
-[github-validation.test.mjs](../web/test/github-validation.test.mjs) exercises valid/invalid names, normalization versus strict paths, encoding, controls, path boundaries, protected-file read/write differences, and live/snapshot policy consistency. Existing Build tests also verify owner gates, allowed methods, no network/writes for rejected requests, stale versions and PR idempotency. From `web/`:
+[github-validation.test.mjs](../apps/api/test/github-validation.test.mjs) exercises valid/invalid names, normalization versus strict paths, encoding, controls, path boundaries, protected-file read/write differences, and live/snapshot policy consistency. Existing Build tests also verify owner gates, allowed methods, no network/writes for rejected requests, stale versions and PR idempotency. From `apps/api/`:
 
 ```sh
 node --test test/github-validation.test.mjs test/build-chat.test.mjs test/build-pr.test.mjs test/cloud-snapshot.test.mjs

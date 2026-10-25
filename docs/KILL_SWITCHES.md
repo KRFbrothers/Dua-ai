@@ -4,7 +4,7 @@ Turn Dua features off (and back on) from Cloud Run, without a new APK. All switc
 Each command creates a new Cloud Run revision in ~30 seconds; the app picks the change up on its next start
 or when it comes back to the foreground (at most once a minute; the Try again button on the paused screen checks immediately).
 
-Project `global-healer-m6shk`, region `us-central1`. Services: `dua-api` (web/) and `dua-ai-engine` (google-cloud-backend/).
+Project `global-healer-m6shk`, region `us-central1`. Services: `dua-api` (apps/api/) and `dua-ai-engine` (google-cloud-backend/).
 
 | Switch | dua-api | dua-ai-engine | What the user sees |
 | --- | --- | --- | --- |
@@ -61,9 +61,9 @@ Check: `curl -s https://<dua-api URL>/api/config | jq .switches`.
 
 ## Deploys keep the switches
 
-`web/deploy-cloudrun.sh` only uses `--update-env-vars` / `--update-secrets` (never `--set-*` or `--clear-*`), and it never
+`apps/api/deploy-cloudrun.sh` only uses `--update-env-vars` / `--update-secrets` (never `--set-*` or `--clear-*`), and it never
 passes any `DUA_DISABLE_*` or `DUA_MAINTENANCE*` variable, so a switch you set stays set across dua-api deploys
-(tested in `web/test/deploy-cloudrun.test.mjs`). The only removals it can make are explicit and narrow:
+(tested in `apps/api/test/deploy-cloudrun.test.mjs`). The only removals it can make are explicit and narrow:
 a feature flag that moved into Secret Manager drops its old literal value, and `DUA_REMOVE_SECRETS=NAME1,NAME2`
 (optional, when running the script) detaches exactly those secret bindings; kill-switch names are refused there.
 Turn a switch off with the "Back on" / "Off" commands above.

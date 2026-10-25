@@ -12,7 +12,7 @@ RUN --mount=type=secret,id=proxy_ca \
     npm ci --omit=dev --ignore-scripts --no-audit --no-fund && npm cache clean --force
 
 COPY --chown=node:node src/ ./src/
-# Built Dua AI website (deploy-cloudrun.sh builds website/ into web/site; may be empty).
+# Built Dua AI website (deploy-cloudrun.sh builds apps/web/ into apps/api/site; may be empty).
 COPY --chown=node:node site/ ./site/
 USER node
 EXPOSE 8080

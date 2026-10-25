@@ -106,7 +106,7 @@ test('existing feature flag secrets must be attached from the template before an
     const result = deployment({ secrets: [...required, flag], omitTemplateFlags: [flag] });
     assert.notEqual(result.status, 0, flag);
     assert.ok(result.stderr.includes(flag), result.stderr);
-    assert.match(result.stderr, /exists in Secret Manager but was not attached from web\/\.env\.example/);
+    assert.match(result.stderr, /exists in Secret Manager but was not attached from apps\/api\/\.env\.example/);
     assert.match(result.stderr, /Restore its NAME=value entry/);
     assert.ok(!result.calls.some(args => ['iam', 'projects', 'artifacts', 'builds', 'run'].includes(args[0])));
     assert.ok(!result.calls.some(args => args.includes('add-iam-policy-binding')));
@@ -140,7 +140,7 @@ test('a failed container build cannot deploy a stale image', () => {
   assert.ok(!result.calls.some(args => args[0] === 'run'));
 });
 
-test('deployment builds the website into web/site before the container build, and fails closed if it breaks', () => {
+test('deployment builds the website into apps/api/site before the container build, and fails closed if it breaks', () => {
   const site = mkdtempSync(join(tmpdir(), 'dua-website-'));
   try {
     // Fake npm: `npm run build -- --outDir X` writes X/index.html unless MOCK_SITE_FAIL=1.
@@ -163,7 +163,7 @@ if (out > 0 && process.env.MOCK_SITE_FAIL !== '1') { mkdirSync(args[out + 1], { 
     assert.match(ok.calls[npmAt].join(' '), /--outDir \S+\/site --emptyOutDir/);
     const broken = deployment({ settings: { ...env, MOCK_SITE_FAIL: '1' } });
     assert.notEqual(broken.status, 0);
-    assert.match(broken.stderr, /did not produce web\/site\/index.html/);
+    assert.match(broken.stderr, /did not produce apps\/api\/site\/index.html/);
     assert.ok(!broken.calls.some(args => ['iam', 'builds', 'run'].includes(args[0])));
   } finally { rmSync(site, { recursive: true, force: true }); }
 });

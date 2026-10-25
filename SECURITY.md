@@ -71,7 +71,7 @@ We will acknowledge reports within 48 hours and aim to provide an update within 
 - Repository/org settings such as branch protection, required reviews/checks, secret scanning and Dependabot are not verifiable from this checkout.
 
 ### Testing & CI/CD
-- Backend (`web/`): Node tests cover authentication, owner access, storage, account deletion, providers and sync behavior. Run `cd web && npm test`.
+- Backend (`apps/api/`): Node tests cover authentication, owner access, storage, account deletion, providers and sync behavior. Run `cd apps/api && npm test`.
 - Android: Gradle JVM unit tests and source compilation; no APK or instrumented tests in CI.
 - The checked-in workflows do not run dependency or secret scanning. Verify any GitHub-hosted scanning configuration separately.
 

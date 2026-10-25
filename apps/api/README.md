@@ -1,6 +1,6 @@
 # Node API on Cloud Run (migration step 1)
 
-This runs the existing `web/` Node API as a separate **dua-api** service in
+This runs the existing `apps/api/` Node API as a separate **dua-api** service in
 **us-central1**, next to the Python `dua-ai-engine`. It does not
 switch Android URLs or move Python/Vertex features into Node.
 
@@ -8,7 +8,7 @@ switch Android URLs or move Python/Vertex features into Node.
 
 Use Node 24. Local development remains `npm ci && npm start` on
 `127.0.0.1:3000` (or your `PORT`); `npm start` loads ignored `.env` settings.
-From `web/`, build and smoke-test the production container:
+From `apps/api/`, build and smoke-test the production container:
 
 ```sh
 docker build -t dua-api .
@@ -38,7 +38,7 @@ the port. Both Docker and Cloud Build contexts allow only runtime inputs, keepin
    | `DUA_ALLOWED_EMAIL` | Required: your allowed owner's email. |
    | `GEMINI_API_KEY` + `GEMINI_MODEL` | For Gemini chat: your API key and an available model ID. Alternatively create the key/model pair for the provider you use from `.env.example`. Python's Vertex credentials are not a Node provider API key. |
    | `SUPABASE_SERVICE_ROLE_KEY` | Optional admin credential: account deletion and durable daily limits. |
-   | `DUA_FILES_BUCKET` + `DUA_FILES` | For existing stored files: private bucket name and `1`, **after** the Storage migration/bucket from [SUPABASE.md](../SUPABASE.md) is ready. Files default off in this deployment. |
+   | `DUA_FILES_BUCKET` + `DUA_FILES` | For existing stored files: private bucket name and `1`, **after** the Storage migration/bucket from [SUPABASE.md](../../SUPABASE.md) is ready. Files default off in this deployment. |
 
    Other active or commented `NAME=value` settings in [.env.example](.env.example),
    such as provider keys/models, `BRAVE_SEARCH_API_KEY`, voice settings and GitHub
@@ -50,7 +50,7 @@ the port. Both Docker and Cloud Build contexts allow only runtime inputs, keepin
 
    ```sh
    export PROJECT_ID=your-google-cloud-project-id
-   bash web/deploy-cloudrun.sh
+   bash apps/api/deploy-cloudrun.sh
    ```
 
    The script enables required APIs, creates `dua-api` (runtime) and `dua-api-build`
@@ -91,6 +91,6 @@ accounts are reused; this script does not create or migrate application data.
 
 ### Android feature hubs
 
-The native Library/Images screens use the additive owner-only `GET /api/files/list` route for private cloud inventory. It returns bounded file metadata without signed links; existing `/api/files/url` resolves a selected file on demand. Redeploy this Node service after merging the feature hubs; no new secrets or migration are required. Older deployments keep chat/project references usable and the app shows a cloud-inventory retry/update notice. See [feature hub behavior and validation](../docs/FEATURE_HUBS.md).
+The native Library/Images screens use the additive owner-only `GET /api/files/list` route for private cloud inventory. It returns bounded file metadata without signed links; existing `/api/files/url` resolves a selected file on demand. Redeploy this Node service after merging the feature hubs; no new secrets or migration are required. Older deployments keep chat/project references usable and the app shows a cloud-inventory retry/update notice. See [feature hub behavior and validation](../../docs/FEATURE_HUBS.md).
 
-Android's password-protected Storage backup additionally uses owner-only `POST /api/files/restore-sign` for insert-only recovery of original paths. Redeploy this service and refresh Feature setup before restoring raw files; `/api/config` advertises `files.restore`. No new secrets or RLS changes are needed. See [Storage backup rollout and recovery rules](../docs/STORAGE_BACKUP.md#backend-rollout).
+Android's password-protected Storage backup additionally uses owner-only `POST /api/files/restore-sign` for insert-only recovery of original paths. Redeploy this service and refresh Feature setup before restoring raw files; `/api/config` advertises `files.restore`. No new secrets or RLS changes are needed. See [Storage backup rollout and recovery rules](../../docs/STORAGE_BACKUP.md#backend-rollout).

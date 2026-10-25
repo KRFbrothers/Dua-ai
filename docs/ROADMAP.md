@@ -5,9 +5,9 @@ Make Dua AI easier to maintain, safer to extend, faster to understand, and more 
 
 ## Current shape of the project
 - **Android app** in `app/`
-- **Backend / orchestration layer** in `web/`
+- **Backend / orchestration layer** in `apps/api/`
 - **Cloud Run engine** in `google-cloud-backend/`
-- **Tests** in `web/test/` and `google-cloud-backend/tests/`
+- **Tests** in `apps/api/test/` and `google-cloud-backend/tests/`
 - **Docs** in `README.md` and `docs/`
 
 The codebase already has strong safety ideas: repository validation, path validation, read-only GitHub access in some flows, and CI checks. This roadmap focuses on making those strengths easier to grow and maintain.
@@ -20,7 +20,7 @@ The codebase already has strong safety ideas: repository validation, path valida
 - Expand the main `README.md` with a clearer architecture overview.
 - Add a "How the pieces fit together" section for:
   - Android app
-  - Node API backend in `web/` (Cloud Run `dua-api`)
+  - Node API backend in `apps/api/` (Cloud Run `dua-api`)
   - Google Cloud Run engine
   - GitHub connector / build flows
 - Add a simple local setup guide.
@@ -43,7 +43,7 @@ The codebase already has strong safety ideas: repository validation, path valida
 
 ### 1.4 Add `.env.example` files
 - Provide sample environment variables for:
-  - `web/`
+  - `apps/api/`
   - `google-cloud-backend/`
 - Mark secrets clearly and keep unsafe values empty.
 
@@ -229,9 +229,9 @@ You'll know the repo is better when:
 
 ### For Phase 1, start with:
 1. **Documentation** – update `README.md` with architecture section
-2. **`.env.example`** – create in `web/` and `google-cloud-backend/`
+2. **`.env.example`** – create in `apps/api/` and `google-cloud-backend/`
 3. **`docs/ARCHITECTURE.md`** – explain the structure
-4. **Error messages** – review and standardize in `web/src/core/github.mjs` and `web/src/core/build-pr.mjs`
+4. **Error messages** – review and standardize in `apps/api/src/core/github.mjs` and `apps/api/src/core/build-pr.mjs`
 
 ### For each phase:
 - Create an issue or pull request per section

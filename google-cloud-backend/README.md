@@ -2,7 +2,7 @@
 
 Flask service that answers chats with Gemini on Vertex AI. The Android app sends its chat
 messages here by default (`DUA_CHAT_BASE_URL`); everything else (sign-in, cloud history, files,
-Imagine, voice, setup/config) uses the Node API `web/` (Cloud Run `dua-api`).
+Imagine, voice, setup/config) uses the Node API `apps/api/` (Cloud Run `dua-api`).
 
 Both chat endpoints require the owner's existing Supabase access token in `Authorization: Bearer <token>`.
 The engine verifies it with the configured Supabase project's `GET /auth/v1/user`, then matches the
@@ -17,7 +17,7 @@ with `DUA_REQUIRE_LOGIN=0`; `DUA_APP_TOKEN`, if retained, is an additional gate 
 - `POST /api/chat` – same format as the Node API's chat:
   `{"model","messages":[{"role":"user|model","text","attachmentText?"}],"attachments":[{"name","mimeType","data(base64)"}],"memory","stream":true,"mode","context?"}`.
   With `"stream": true` it replies with Server-Sent Events (`event: text` / `data: {"type":"text","delta":"..."}`,
-  then `done`, or `error`), exactly like `web/src/core/sse.mjs`. Without it: `{"text": "..."}`.
+  then `done`, or `error`), exactly like `apps/api/src/core/sse.mjs`. Without it: `{"text": "..."}`.
   The whole conversation is sent to Gemini, so it remembers earlier messages.
   Earlier user turns can also carry inline `attachments`; `attachmentText` and supplied `files` metadata text/transcripts are included as context. Storage paths are never fetched by Cloud Run.
   Streaming flushes an initial SSE heartbeat and sends another every 15 seconds while the Vertex worker is waiting. Cancelling the stream stops queueing results.

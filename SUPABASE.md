@@ -33,12 +33,12 @@ use `infra/database/migrations/` when locating the named SQL file.
 
 ## Anonymous access smoke check
 
-Use Node 24+ from `web/` with `SUPABASE_URL` and `SUPABASE_ANON_KEY` (or `SUPABASE_PUBLISHABLE_KEY`) exported, then run `npm run verify:rls`. For an ignored local `.env` instead, run `node --env-file-if-exists=.env scripts/verify-rls.mjs`. Do not use a user access token, secret key or service-role key. The URL must be the project root, not `/rest/v1/`. Missing credentials print a helpful SKIP and exit 0; configuration, network and unverified access results exit 1. The script never prints keys or returned row contents.
+Use Node 24+ from `apps/api/` with `SUPABASE_URL` and `SUPABASE_ANON_KEY` (or `SUPABASE_PUBLISHABLE_KEY`) exported, then run `npm run verify:rls`. For an ignored local `.env` instead, run `node --env-file-if-exists=.env scripts/verify-rls.mjs`. Do not use a user access token, secret key or service-role key. The URL must be the project root, not `/rest/v1/`. Missing credentials print a helpful SKIP and exit 0; configuration, network and unverified access results exit 1. The script never prints keys or returned row contents.
 
 The requested default table names are `chats`, `messages`, `projects`, and `memories`. **This repo stores those collections together in `public.dua_cloud_snapshots`, not four separate tables.** For the deployed schema from the migration above, run:
 
 ```sh
-cd web
+cd apps/api
 npm run verify:rls -- --tables=dua_cloud_snapshots
 ```
 
@@ -110,12 +110,12 @@ Without this migration `/api/voice/session` refuses with a setup message and liv
 
 ## 2. Configure the shared backend
 
-Add these as Secret Manager secrets (same names) and re-run `web/deploy-cloudrun.sh`:
+Add these as Secret Manager secrets (same names) and re-run `apps/api/deploy-cloudrun.sh`:
 
 - `SUPABASE_URL`: project URL, such as `https://PROJECT.supabase.co`.
 - `SUPABASE_ANON_KEY`: the project's public publishable key or legacy anon key.
 
-`SUPABASE_ANON_KEY` accepts only the project's public publishable/anon credential; service-role/secret credentials are rejected in that field. Optional deletion and durable request quotas use a separate server-only `SUPABASE_SERVICE_ROLE_KEY`. Keep existing model configuration. Supabase credentials are read by the backend and are not embedded in the Android app. Local development uses an ignored `web/.env`; run `npm start` from `web` with Node 24 or newer.
+`SUPABASE_ANON_KEY` accepts only the project's public publishable/anon credential; service-role/secret credentials are rejected in that field. Optional deletion and durable request quotas use a separate server-only `SUPABASE_SERVICE_ROLE_KEY`. Keep existing model configuration. Supabase credentials are read by the backend and are not embedded in the Android app. Local development uses an ignored `apps/api/.env`; run `npm start` from `apps/api` with Node 24 or newer.
 
 Android defaults to the dua-api Cloud Run backend through `DUA_API_BASE_URL`. Native source changes reach installed apps through a later release; routine compilation/JVM tests do not package an APK. The backend serves `/api/account/*`, `/api/cloud` and `/api/cloud/chat`. No separate Supabase key belongs in Android.
 

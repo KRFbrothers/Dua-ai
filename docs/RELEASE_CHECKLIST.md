@@ -28,7 +28,7 @@ Source/mock tests do not establish live RPC deployment or physical-device behavi
 
 The owner-only lock is the permanent access model: it keeps the server-side keys and provider spend limited to the owner. Before enabling online AI on dua-api (Cloud Run):
 
-- [ ] On the `dua-api` Cloud Run service, verify `DUA_REQUIRE_LOGIN=1` (set by `web/deploy-cloudrun.sh`).
+- [ ] On the `dua-api` Cloud Run service, verify `DUA_REQUIRE_LOGIN=1` (set by `apps/api/deploy-cloudrun.sh`).
 - [ ] Set `DUA_ALLOWED_EMAIL` to the owner's account. Login-required alone permits any account accepted by Supabase; it does not restrict access to the owner.
 - [ ] As a daily backstop, apply `infra/database/migrations/202610040002_dua_usage.sql`, set `DUA_DAILY_REQUEST_LIMIT` and the server-only `SUPABASE_SERVICE_ROLE_KEY`, then redeploy. Keep the admin key out of client/public variables.
 - [ ] Check `GET https://YOUR-PRODUCTION-DOMAIN/api/setup`. Confirm `account.requireLogin` and `account.ownerRestricted` are `true`; confirm `account.dailyRequestLimit` is the intended positive limit when using the durable quota. This endpoint reports configuration, not proof that the quota's database RPC works.
@@ -42,10 +42,10 @@ The owner-only lock is the permanent access model: it keeps the server-side keys
 
 ## API and deployment runbook
 
-1. Review the change and ensure both `Project checks` jobs (Android and Backend tests) pass. Run `bash ./gradlew :app:testDebugUnitTest --no-daemon --max-workers=2` from the repository root and `npm ci && npm test` from `web/`. CI retains Android test reports and a backend JUnit report; backend tests use fake provider responses and require no real provider keys.
-2. Deploy the backend API (`web/`) to Cloud Run with `bash web/deploy-cloudrun.sh` (see [web/README.md](../web/README.md)); production secrets live in Secret Manager. Never copy secret values into Android resources or client configuration.
+1. Review the change and ensure both `Project checks` jobs (Android and Backend tests) pass. Run `bash ./gradlew :app:testDebugUnitTest --no-daemon --max-workers=2` from the repository root and `npm ci && npm test` from `apps/api/`. CI retains Android test reports and a backend JUnit report; backend tests use fake provider responses and require no real provider keys.
+2. Deploy the backend API (`apps/api/`) to Cloud Run with `bash apps/api/deploy-cloudrun.sh` (see [apps/api/README.md](../apps/api/README.md)); production secrets live in Secret Manager. Never copy secret values into Android resources or client configuration.
 3. Apply reviewed Supabase migrations before enabling their dependent features. Verify RLS, grants, and function permissions in the Supabase SQL editor; do not grant clients direct snapshot writes or access to daily usage rows.
-4. After deployment, smoke-check `/api/config`, `/api/setup`, and `/api/account/session`. (`/` serves the website from `web/site` when it was built at deploy; see [WEBSITE.md](WEBSITE.md).) Confirm that responses contain no API keys, service-role key, or owner email. `/api/setup` may expose feature availability and access-policy booleans.
+4. After deployment, smoke-check `/api/config`, `/api/setup`, and `/api/account/session`. (`/` serves the website from `apps/api/site` when it was built at deploy; see [WEBSITE.md](WEBSITE.md).) Confirm that responses contain no API keys, service-role key, or owner email. `/api/setup` may expose feature availability and access-policy booleans.
 5. In staging, check the owner lock with the owner account and one disposable non-owner account: sign-in, refresh, logout, cloud ownership/conflicts, and quota enforcement. Test account deletion only with the disposable account.
 6. In staging, with two separate accounts, verify that `/api/files/sign`, `/api/files/url`, `/api/files/delete`, `/api/files/delete-all`, `/api/files/usage`, `/api/cloud`, `/api/imagine/*`, and `/api/voice/*` cannot read or mutate the other account's data. Verify a signed file URL expires and cannot be reused after expiry.
 7. With the disposable account, create a cloud snapshot and upload a file, then run account deletion. Confirm the snapshot row, Storage objects, and account are gone; repeat the owner check afterward to ensure the configured owner still works.
