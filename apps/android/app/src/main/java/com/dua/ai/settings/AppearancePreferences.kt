@@ -19,7 +19,8 @@ import java.io.IOException
 
 enum class AccentPreset(val label: String, val argb: Long) {
     Purple("Purple", 0xFFAA4FF6), Orange("Orange", 0xFFFF6308), Blue("Blue", 0xFF2979FF),
-    Green("Green", 0xFF16A34A), Pink("Pink", 0xFFE84393), Teal("Teal", 0xFF00897B);
+    Green("Green", 0xFF16A34A), Pink("Pink", 0xFFE84393), Teal("Teal", 0xFF00897B),
+    Copper("Copper", 0xFFDA7757);
     companion object {
         fun fromName(value: String?) = entries.find { it.name == value }
         fun defaultFor(dark: Boolean) = if (dark) Orange else Purple
