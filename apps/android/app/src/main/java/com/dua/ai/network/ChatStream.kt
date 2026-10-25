@@ -2,7 +2,7 @@ package com.dua.ai.network
 
 import org.json.JSONObject
 
-/** Events of the opt-in `/api/chat` stream (see web/src/core/sse.mjs for the wire format). */
+/** Events of the opt-in `/api/chat` stream (see apps/api/src/core/sse.mjs for the wire format). */
 sealed interface ReplyEvent {
     data class Thinking(val delta: String) : ReplyEvent
     data class Text(val delta: String) : ReplyEvent

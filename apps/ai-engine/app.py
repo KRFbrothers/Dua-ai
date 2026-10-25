@@ -2,9 +2,9 @@
 
 Endpoints
 - GET  /            health check
-- POST /api/chat    drop-in replacement for the web/ backend's chat endpoint used by the Android app:
+- POST /api/chat    drop-in replacement for the apps/api/ backend's chat endpoint used by the Android app:
                     full conversation history, inline attachments, SSE streaming (`"stream": true`)
-                    with the same wire format as web/src/core/sse.mjs, or one JSON reply `{"text": ...}`.
+                    with the same wire format as apps/api/src/core/sse.mjs, or one JSON reply `{"text": ...}`.
                     `"mode": "agent"` runs the Dua Agent: router (casual -> direct reply), otherwise the
                     tool-calling loop in agent_tools.py (search, pages, code, images, memory, GitHub).
 - POST /api/agent/action  {"id", "decision": "approve"|"reject"}: runs (or drops) ONE write action the Agent asked
@@ -404,7 +404,7 @@ def _domain(url):
 
 
 def sources_footer(sources):
-    """Plain-text footer in the exact format of web/src/core/chat-web.mjs sourcesFooter, which the app
+    """Plain-text footer in the exact format of apps/api/src/core/chat-web.mjs sourcesFooter, which the app
     (ReplySources.split) turns into clickable source chips and keeps in saved history."""
     if not sources:
         return ""

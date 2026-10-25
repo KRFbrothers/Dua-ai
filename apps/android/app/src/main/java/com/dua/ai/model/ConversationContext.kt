@@ -26,7 +26,7 @@ data class ConversationContext(val id: String, val summary: String?, val project
 
 /** Chooses the turns a long-context request sends and moves the summary boundary when the server summarises. */
 object ContextWindow {
-    /** Server limit (web/src/core/providers.mjs MAX_MESSAGES). */
+    /** Server limit (apps/api/src/core/providers.mjs MAX_MESSAGES). */
     const val MAX_TURNS = 400
 
     data class Selection(val turns: List<ChatMessage>, val summary: ChatSummary?, val dropped: Int)

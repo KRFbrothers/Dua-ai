@@ -9,7 +9,7 @@ import java.util.Base64
 
 data class ChatAttachment(val name: String, val mimeType: String, val data: String)
 
-/** UTF-8 text and source-code files sent inline as text/plain (same list as web/src/core/attachments.mjs). */
+/** UTF-8 text and source-code files sent inline as text/plain (same list as apps/api/src/core/attachments.mjs). */
 object TextFiles {
     const val MAX_BYTES = 256 * 1024
     val EXTENSIONS = setOf("txt", "text", "csv", "tsv", "md", "markdown", "json", "jsonl", "xml", "yaml", "yml", "toml", "ini", "cfg", "conf", "env", "log",

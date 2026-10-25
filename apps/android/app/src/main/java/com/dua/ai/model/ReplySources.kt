@@ -25,7 +25,7 @@ data class ReplyParts(val body: String, val sources: List<ReplySource>)
 
 /**
  * Splits the plain-text "Sources:" footer that the backend appends to web replies
- * (`web/src/core/chat-web.mjs` withWebSources) from the answer, so the UI can show
+ * (`apps/api/src/core/chat-web.mjs` withWebSources) from the answer, so the UI can show
  * sources as chips. The footer is only removed when every entry parses and every
  * URL passes [IntegrationCapabilities.safeUrl]; otherwise the text is left untouched.
  */
