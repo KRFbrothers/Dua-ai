@@ -45,7 +45,11 @@ Additional source checks:
   its other HTTP literal prints the local/container listener address. Neither
   establishes an insecure upstream provider connection.
 
-## Validation observed in this environment
+## Validation observed
+
+The original local audit results below are retained as historical observations.
+The Python request-test block is superseded by the fresh GitHub Actions rerun
+described below; local tool restrictions are not CI failures.
 
 - PASS: `node --test --test-isolation=none --test-reporter=spec test/request-rate-limit.test.mjs test/web-agent-action.test.mjs`
   from `web/`: 11 tests passed. Covers bucket refill/account isolation, bounded
@@ -56,9 +60,27 @@ Additional source checks:
 - BLOCKED: full `npm test` fails loading missing `cfb`; dependencies could not
   be installed because network-permission tool calls did not complete. This is
   not a passing full Node regression run.
-- BLOCKED: Python request tests need pytest/Flask (not installed). Installation
-  initially failed with a proxy/socket permission error; permission attempts
-  were interrupted. Added tests have not been executed.
+- PASS (GitHub Actions, 25 October 2026): reran the existing engine job in
+  [Project checks, attempt 2](https://github.com/KRFbrothers/Dua-ai/actions/runs/40201238507/attempts/2).
+  Its source tree matches verification baseline `56325428a723922645288149067035acf6abd790`
+  (the workflow head is `cbf88510332258b277b8115542cbe2ae200be0c5`). Commands ran
+  from the repository root, not the local workspace:
+  - `/tmp/dua-gcb-tests/bin/python -m pytest -q apps/ai-engine/tests --junitxml=apps/ai-engine/pytest-results.xml`
+    — **677 passed, 38 skipped** with test-only `Flask==3.0.3 pytest==8.3.5`.
+  - `/tmp/dua-gcb-adk-tests/bin/python -m pytest -q apps/ai-engine/tests --junitxml=apps/ai-engine/pytest-sdk-results.xml`
+    — **715 passed, zero skipped**, 19 warnings, using the existing locked SDK
+    dependencies and offline models.
+  The complete suite includes `test_agent_audit_fixes.py`, `test_kill_switches.py`,
+  `test_kill_switch_contract.py`, `test_owner_auth.py` and `test_imagine.py`.
+  This verifies maintenance/Agent-pause refusals before provider initialization
+  for document POST (ingest/search), DELETE and note reindex; document GET remains
+  available; provider failure returns the existing generic no-store 503.
+  No guard failure occurred, so `app.py` and tests remain unchanged. Reports are
+  preserved in the run's `google-cloud-engine-test-report` artifact.
+  Local execution remains unavailable: installing pytest/Flask in an isolated
+  `/tmp/dua-audit-request-tests` environment failed with a proxy/socket permission
+  error, and the additional network-access request was cancelled. No local test
+  PASS is claimed and no repository runtime dependencies were added.
 - BLOCKED: `:app:testDebugUnitTest :app:lintDebug` could not download the Gradle
   distribution (`SocketException: Operation not permitted`). Retried using a
   writable Gradle cache. Android compilation, added regression test, lifecycle
