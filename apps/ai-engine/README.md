@@ -15,7 +15,8 @@ with `DUA_REQUIRE_LOGIN=0`; `DUA_APP_TOKEN`, if retained, is an additional gate 
 ## Python module ownership: done / leave / optional later
 
 After coding/agent/automation packaging, the root has 43 Python files: 32
-compatibility aliases and 11 files with implementation or entrypoint composition.
+compatibility shims (14 coding, 14 agent and 4 automation) and 11 implementation
+or entrypoint files (the five Leave rows below: 1 + 2 + 2 + 4 + 2).
 Root placement alone does not make a file stale.
 
 | Status | Root files | Owner / reason |
