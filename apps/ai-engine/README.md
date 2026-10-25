@@ -160,6 +160,35 @@ Defaults target `dua-ai-engine` in `global-healer-m6shk`, `us-central1`; keep th
 intended target consistent across plan, stage, promote and rollback. These are
 operator instructions, not a deployment performed by this documentation change.
 
+## Kill-switch ownership
+
+[`kill_switches.py`](kill_switches.py) is the engine's single live kill-switch
+implementation. It owns parsing, pause messages and the engine checks for
+`DUA_DISABLE_AGENT`, `DUA_DISABLE_IMAGINE`, `DUA_MAINTENANCE` and optional
+`DUA_MAINTENANCE_MESSAGE`. It is not a leftover root module: the Flask routes
+import it directly. There is no second implementation under `dua_engine/` and
+no stale engine copy to remove or compatibility shim to add.
+
+| Path | Responsibility |
+| --- | --- |
+| [kill_switches.py](kill_switches.py) | Live Python owner of emergency pause flags/messages; all switches default off. |
+| [app.py](app.py) | Calls that owner for chat/Agent admission, Agent actions, capabilities, selected document operations, note reindex, Imagine, titles and legacy chat. These route checks are callers, not duplicate flag definitions. |
+| [dua_engine/agent/agent_tools.py](dua_engine/agent/agent_tools.py), [dua_engine/agent/agent_adk.py](dua_engine/agent/agent_adk.py) | Tool-loop and ADK implementations run behind the same Flask chat/Agent guards. Their root aliases preserve imports; neither owns another kill-switch parser. |
+| [imagine.py](imagine.py) | `DUA_IMAGINE` is feature configuration checked separately from the route's emergency pause guard. Its `enabled()` helper is not a second definition of `DUA_DISABLE_IMAGINE`. |
+| [Shared contract](../../packages/contracts/KILL_SWITCHES.md) | Authoritative names/defaults/messages and per-service ownership. This document is consumed by contract tests, not loaded to resolve runtime switches. |
+
+`AGENT_ENGINE=adk` selects the Agent implementation; removing it can select the
+ordinary tool loop, so it is not a replacement for pausing Agent. Likewise,
+`DUA_IMAGINE` and `DUA_DISABLE_IMAGINE` keep their different existing meanings
+and parsing/default rules. Do not merge or alias those settings.
+
+The separate `dua-api` implementation enforces its own routes using the shared
+contract; it is not an engine duplicate or an obsolete import path. Voice's
+`DUA_DISABLE_VOICE` belongs only to the API. Each service reads its own environment,
+so shared names do not synchronize deployed values. See the
+[operations guide](../../docs/KILL_SWITCHES.md) for existing route exemptions and
+operator commands. This ownership map changes no flags, live defaults or routes.
+
 ## Coding agent setup (phase 2, optional)
 
 In Agent mode, coding requests ("fix the login bug", "add X to the app", "code likho …") make the Dua Agent
