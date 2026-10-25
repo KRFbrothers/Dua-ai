@@ -51,7 +51,7 @@ import kotlinx.coroutines.flow.update
 
 class ChatViewModel(application: Application) : AndroidViewModel(application) {
     // Declared first: init-time collectors (e.g. resumeImagineJobs) may reach the Imagine feature during construction.
-    private val historyFeature: ChatHistory by lazy { ChatHistory(historyHost) }
+    private val historyFeature: ChatHistoryController by lazy { ChatHistoryController(historyHost) }
     private val historyHost: HistoryHost by lazy { object : HistoryHost {
         override val viewModelScope get() = this@ChatViewModel.viewModelScope
         override fun <T : Application> getApplication(): T = this@ChatViewModel.getApplication()

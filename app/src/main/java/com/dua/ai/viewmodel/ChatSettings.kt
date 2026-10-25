@@ -14,7 +14,7 @@ internal interface SettingsHost {
     val localPreferences: com.dua.ai.settings.DevicePreferences
     /** Appearance storage; ChatViewModel still owns the [appearance] stream that reads it. */
     val appearanceStore: com.dua.ai.settings.AppearanceStore
-    /** The on-device model, shared with ChatHistory (automatic chat titles). */
+    /** The on-device model, shared with [ChatHistoryController] (automatic chat titles). */
     val onDeviceAi: com.dua.ai.ondevice.OnDeviceAi
     fun onDeviceAiEnabled(): Boolean
     /** The shared composer draft; polish and Summarize / Rewrite put their result here. */
