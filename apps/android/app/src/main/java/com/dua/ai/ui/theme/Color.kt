@@ -200,7 +200,7 @@ data class DuaColors(
     val mediaBackground: Color,
     val mediaOverlay: Color,
     val onMedia: Color,
-    /** Fixed artwork highlights and the Google badge retain their original colors. */
+    /** Fixed artwork highlights and the provider sign-in badge retain their original colors. */
     val logoHighlight: Color,
     val brandBadgeBackground: Color,
     /** Small gold accent (the Home tagline sparkle). Decorative only. */
@@ -380,7 +380,7 @@ internal fun sheetColors(s: ColorScheme, d: DuaColors) = SheetColors(
  * Same value in light and dark, exactly as before.
  */
 internal object DuaFixedColors {
-    // Supplied (Gemini-style) chat surface.
+    // Fixed dark chat surface used by the alternate chat shell.
     val SuppliedBg = Color(0xFF131314)
     val SuppliedSurface = Color(0xFF1E1F20)
     val SuppliedBubble = Color(0xFF282A2C)
