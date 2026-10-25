@@ -13,7 +13,7 @@ plugins {
     id("com.google.firebase.crashlytics")
 }
 
-// Account, cloud sync, files, Imagine, voice, setup and connectors: the Node API (web/) on Cloud Run (dua-api).
+// Account, cloud sync, files, Imagine, voice, setup and connectors: the Node API (apps/api/) on Cloud Run (dua-api).
 // Override with -PduaApiBaseUrl=https://... (or DUA_API_BASE_URL) for a different Node API deployment.
 val duaBuildNumber = providers.environmentVariable("GITHUB_RUN_NUMBER").orNull?.toIntOrNull()?.takeIf { it in 1..1_000_000 }
 val duaVersionCode = 12 + (duaBuildNumber ?: 0)

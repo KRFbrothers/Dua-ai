@@ -1,4 +1,4 @@
-"""Remote kill switches from Cloud Run env vars (all default off). Same names and messages as dua-api (web/src/core/kill-switches.mjs).
+"""Remote kill switches from Cloud Run env vars (all default off). Same names and messages as dua-api (apps/api/src/core/kill-switches.mjs).
 
 DUA_DISABLE_AGENT=1   Agent mode is refused here, so it stops even for old APKs.
 DUA_DISABLE_IMAGINE=1 The engine's Imagine endpoint is refused.

@@ -18,7 +18,7 @@ object ReplyPersistenceCodec {
         listOf(SavedChat("hash", "Dua", "", messages, 0)), exportedAt = 0, includeServerFields = true
     )).getJSONArray("chats").getJSONObject(0).getJSONArray("messages")
 
-    /** Same versioned binary JSON encoding as web/src/core/reply-persistence.mjs. */
+    /** Same versioned binary JSON encoding as apps/api/src/core/reply-persistence.mjs. */
     fun digest(value: Any): String {
         val digest = MessageDigest.getInstance("SHA-256")
         fun marker(value: String) { digest.update(value.toByteArray(Charsets.UTF_8)) }

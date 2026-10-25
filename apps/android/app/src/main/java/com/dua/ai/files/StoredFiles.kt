@@ -12,7 +12,7 @@ data class FileRef(val path: String, val name: String, val mimeType: String, val
     val kind: String get() = StoredFileTypes.kind(mimeType)
 }
 
-/** Mirrors web/src/core/file-types.mjs (the server re-validates everything). */
+/** Mirrors apps/api/src/core/file-types.mjs (the server re-validates everything). */
 object StoredFileTypes {
     private val byMime = mapOf(
         "image/jpeg" to "image", "image/png" to "image", "image/webp" to "image",
