@@ -6,12 +6,12 @@ These rules apply throughout the repository. Preserve unrelated work. Paths are 
 
 ## 1. Project Overview & Architecture Map
 
-**Dua AI (`com.dua.ai`)** is a private, owner-locked multimodal GenAI assistant across Android (`app/`), Web (`apps/web/` + `apps/api/`), and Google Cloud Run (`apps/ai-engine/`), backed by Supabase Auth, PostgreSQL RLS, and Storage (`infra/database/`).
+**Dua AI (`com.dua.ai`)** is a private, owner-locked multimodal GenAI assistant across Android (`apps/android/app/`), Web (`apps/web/` + `apps/api/`), and Google Cloud Run (`apps/ai-engine/`), backed by Supabase Auth, PostgreSQL RLS, and Storage (`infra/database/`).
 
 | Layer / Directory | Tech Stack | Key Entry Points & Files | Responsibility |
 | :--- | :--- | :--- | :--- |
-| Android App (`app/`) | Kotlin + Jetpack Compose + Material 3 | `MainActivity.kt`, `ui/navigation/DuaNavHost.kt`, `ui/chat/ChatScreen.kt`, `ui/chat/ChatTopBar.kt`, `ui/chat/ChatComposer.kt`, `viewmodel/ChatViewModel.kt`, `network/DuaApiClient.kt` | Native Android client, 4-state composer, Live Voice, Artifacts Canvas, Projects, Settings, Home AppWidget (`DuaToolbarWidgetReceiver`) |
-| Android Theme (`app/.../ui/theme/`) | Compose Design Tokens (`@Immutable`) | `Color.kt`, `DuaTheme.kt`, `Type.kt`, `Motion.kt`, `Spacing.kt`, `HomeTokens.kt`, `ChatTokens.kt`, `DrawerTokens.kt` | Single source of truth for colors, typography, shapes, spacing, and motion springs |
+| Android App (`apps/android/app/`) | Kotlin + Jetpack Compose + Material 3 | `MainActivity.kt`, `ui/navigation/DuaNavHost.kt`, `ui/chat/ChatScreen.kt`, `ui/chat/ChatTopBar.kt`, `ui/chat/ChatComposer.kt`, `viewmodel/ChatViewModel.kt`, `network/DuaApiClient.kt` | Native Android client, 4-state composer, Live Voice, Artifacts Canvas, Projects, Settings, Home AppWidget (`DuaToolbarWidgetReceiver`) |
+| Android Theme (`apps/android/app/.../ui/theme/`) | Compose Design Tokens (`@Immutable`) | `Color.kt`, `DuaTheme.kt`, `Type.kt`, `Motion.kt`, `Spacing.kt`, `HomeTokens.kt`, `ChatTokens.kt`, `DrawerTokens.kt` | Single source of truth for colors, typography, shapes, spacing, and motion springs |
 | Cloud Run AI Engine (`apps/ai-engine/`) | Python 3.12 container + Flask + Vertex AI (`google-genai`) + Google ADK (`google-adk==2.12.0`) | `app.py`, `owner_auth.py`, `agent_tools.py`, `agent_adk.py`, `coding_agent.py`, `coding_workspace.py`, `coding_runner_server.py`, `kill_switches.py`, `backup.py` | Owner-verified Gemini streaming chat, single-loop and ADK multi-agent tools, grounded search, coding PR agent, Imagine, backups |
 | Node API & Proxy (`apps/api/`) | Node.js 24+; native HTTP server | `src/server/server.mjs`, `src/server/service-handler.mjs`, `src/core/access-policy.mjs`, `src/core/account.mjs`, `src/core/providers.mjs`, `src/core/kill-switches.mjs` | Same-origin web host, HttpOnly cookie sessions, daily request quota, cloud snapshot sync, `/api/web/chat` SSE proxy |
 | Web Frontend (`apps/web/`) | React 19 + TypeScript + Vite 6 | `src/main.tsx`, `src/App.tsx`, `src/ChatShell.tsx`, `src/Login.tsx`, `src/api.ts`, `src/styles.css` | Browser chat and Agent UI compiled into `apps/api/site` |
@@ -27,10 +27,10 @@ Use the runtime and dependency versions declared in the repository. The Node API
 Do not edit, delete, or move these paths unless explicitly instructed by the owner:
 
 - `.github/workflows/` and `.gitmodules`
-- `app/src/main/assets/vendor/mermaid/`
+- `apps/android/app/src/main/assets/vendor/mermaid/`
 - Deployment and container configs anywhere in the repository: `Dockerfile`, `*.Dockerfile`, `cloudbuild*.yaml`, `deploy*.sh`, and `Procfile`, including `apps/ai-engine/coding-runner/*.Dockerfile`
 - Database migrations (`infra/database/migrations/*.sql`)
-- The `+` attachment sheet layout (`app/src/main/java/com/dua/ai/ui/chat/AttachmentSheet.kt`)
+- The `+` attachment sheet layout (`apps/android/app/src/main/java/com/dua/ai/ui/chat/AttachmentSheet.kt`)
 
 ### 2.2 Zero Secrets in Code or Docs
 
@@ -49,11 +49,11 @@ Do not edit, delete, or move these paths unless explicitly instructed by the own
 - Never claim tests ran or passed unless you executed the command and observed a zero-exit-code pass.
 - Distinguish source findings from runtime verification. Report blocked checks and their blockers explicitly.
 
-## 3. Android (`app/`) — Jetpack Compose, Theme Tokens & 120fps Smoothness Rules
+## 3. Android (`apps/android/app/`) — Jetpack Compose, Theme Tokens & 120fps Smoothness Rules
 
 ### 3.1 Three-Layer Design Token Architecture (`ui/theme/Color.kt` & `Type.kt`)
 
-**Never write raw `Color(0x...)` or `.sp` literals outside `app/src/main/java/com/dua/ai/ui/theme/`.**
+**Never write raw `Color(0x...)` or `.sp` literals outside `apps/android/app/src/main/java/com/dua/ai/ui/theme/`.**
 
 1. **Layer 1:** Raw hex palette values belong only in `internal object DuaPalette` in `Color.kt`.
 2. **Layer 2:** Map palette colors to semantic roles in `@Immutable data class DuaColors` and `DuaLightColorScheme` / `DuaDarkColorScheme`, supplying both Light and Dark values.
@@ -114,6 +114,6 @@ Run checks appropriate to the changed code using declared dependencies and suppo
 
 - Node.js API: `cd apps/api && npm test`
 - Python engine: `cd apps/ai-engine && python -m pytest -q tests`
-- Android, from the repository root: `./gradlew :app:testDebugUnitTest`
+- Android, from the repository root: `bash apps/android/gradlew -p apps/android :app:testDebugUnitTest`
 
 Report only commands actually executed and their observed results. Explain any checks that could not run; never present blocked or unexecuted checks as passing.

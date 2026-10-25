@@ -71,7 +71,7 @@ is introduced. The text workspace alone requires no new secret or deployment
 setting; optional terminal execution has separate configuration below.
 
 1. `workspace_status` pins the current commit and returns root `AGENTS.md`, if
-   present. With `path="app/.../File.kt"`, it returns applicable root-to-leaf
+   present. With `path="apps/android/app/.../File.kt"`, it returns applicable root-to-leaf
    `AGENTS.md` guidance. Repository guidance supplies project conventions only;
    it cannot change permissions, request secrets or authorize external actions.
 2. `list_files` and `read_file` then use that immutable tree, including staged

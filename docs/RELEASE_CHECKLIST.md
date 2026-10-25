@@ -42,7 +42,7 @@ The owner-only lock is the permanent access model: it keeps the server-side keys
 
 ## API and deployment runbook
 
-1. Review the change and ensure both `Project checks` jobs (Android and Backend tests) pass. Run `bash ./gradlew :app:testDebugUnitTest --no-daemon --max-workers=2` from the repository root and `npm ci && npm test` from `apps/api/`. CI retains Android test reports and a backend JUnit report; backend tests use fake provider responses and require no real provider keys.
+1. Review the change and ensure both `Project checks` jobs (Android and Backend tests) pass. Run `bash apps/android/gradlew -p apps/android :app:testDebugUnitTest --no-daemon --max-workers=2` from the repository root and `npm ci && npm test` from `apps/api/`. CI retains Android test reports and a backend JUnit report; backend tests use fake provider responses and require no real provider keys.
 2. Deploy the backend API (`apps/api/`) to Cloud Run with `bash apps/api/deploy-cloudrun.sh` (see [apps/api/README.md](../apps/api/README.md)); production secrets live in Secret Manager. Never copy secret values into Android resources or client configuration.
 3. Apply reviewed Supabase migrations before enabling their dependent features. Verify RLS, grants, and function permissions in the Supabase SQL editor; do not grant clients direct snapshot writes or access to daily usage rows.
 4. After deployment, smoke-check `/api/config`, `/api/setup`, and `/api/account/session`. (`/` serves the website from `apps/api/site` when it was built at deploy; see [WEBSITE.md](WEBSITE.md).) Confirm that responses contain no API keys, service-role key, or owner email. `/api/setup` may expose feature availability and access-policy booleans.
@@ -105,13 +105,13 @@ The app is installed directly on the owner's device(s); there is no store upload
 
 **Debug APK (development).** Gradle signs with the build machine's Android debug key. Crashlytics collection is disabled in debug builds. Use the permanent personal release signer for the owner's installed app; a different debug certificate will not match the registered Android OAuth client or an installed release APK.
 
-- [ ] Build with `bash ./gradlew :app:assembleDebug --no-daemon` (output: `app/build/outputs/apk/debug/app-debug.apk`), or use Android Studio's Run.
-- [ ] Install with `adb install -r app/build/outputs/apk/debug/app-debug.apk`, or copy the APK to the phone and allow installing from that source.
+- [ ] Build with `bash apps/android/gradlew -p apps/android :app:assembleDebug --no-daemon` (output: `apps/android/app/build/outputs/apk/debug/app-debug.apk`), or use Android Studio's Run.
+- [ ] Install with `adb install -r apps/android/app/build/outputs/apk/debug/app-debug.apk`, or copy the APK to the phone and allow installing from that source.
 - [ ] Confirm the app reaches the intended backend (default `https://dua-api-228305912525.us-central1.run.app` (dua-api on Cloud Run); chat uses `https://dua-ai-engine-228305912525.us-central1.run.app`; override with `duaApiBaseUrl` / `DUA_API_BASE_URL` at build time) and that signing in with the owner account works.
 
-**Release APK (personal install).** [SIGNING.md](../SIGNING.md) describes permanent key storage and GitHub builds. `bash ./gradlew :app:assembleRelease --no-daemon` builds a shrunk APK (R8 code shrinking and optimization plus resource shrinking; class names are kept with `-dontobfuscate`, so Crashlytics traces stay readable and no mapping file is uploaded). Output: `app/build/outputs/apk/release/app-release.apk`. Crashlytics collection is enabled in release builds.
+**Release APK (personal install).** [SIGNING.md](../SIGNING.md) describes permanent key storage and GitHub builds. `bash apps/android/gradlew -p apps/android :app:assembleRelease --no-daemon` builds a shrunk APK (R8 code shrinking and optimization plus resource shrinking; class names are kept with `-dontobfuscate`, so Crashlytics traces stay readable and no mapping file is uploaded). Output: `apps/android/app/build/outputs/apk/release/app-release.apk`. Crashlytics collection is enabled in release builds.
 
-- Every release requires the permanent personal keystore. Missing credentials, incorrect alias/password, and a SHA-256 certificate different from `app/signing-certificate.properties` fail the build before packaging. There is no debug-key fallback.
+- Every release requires the permanent personal keystore. Missing credentials, incorrect alias/password, and a SHA-256 certificate different from `apps/android/app/signing-certificate.properties` fail the build before packaging. There is no debug-key fallback.
 - Set all four values below; a partial set fails the build.
 
 - `DUA_RELEASE_STORE_FILE` — path to the keystore file.
@@ -122,7 +122,7 @@ The app is installed directly on the owner's device(s); there is no store upload
 The matching Gradle properties are `duaReleaseStoreFile`, `duaReleaseStorePassword`, `duaReleaseKeyAlias`, and `duaReleaseKeyPassword`. Prefer environment variables. Do not commit the keystore or place passwords in tracked `gradle.properties`.
 
 - [ ] Save the original personal keystore and its passwords in a password manager and a separate encrypted backup. Test restoration; use that same key for every update.
-- [ ] Run `bash ./gradlew :app:assembleRelease --no-daemon`, then install the APK as above (`apksigner verify --print-certs` shows the signing SHA-1).
+- [ ] Run `bash apps/android/gradlew -p apps/android :app:assembleRelease --no-daemon`, then install the APK as above (`apksigner verify --print-certs` shows the signing SHA-1).
 - [ ] Check the version code/name, permissions, backend URL and Crashlytics behavior.
 
 **Updates.** Android only installs an update signed with the same key as the installed app. Switching to a different key (a personal release key, or another machine's debug key) requires uninstalling first, which deletes the phone cache. Confirm the authoritative server snapshot is synced before uninstalling.
@@ -131,7 +131,7 @@ No private signing keys are supplied by this repository. The manual `Build perso
 
 ## Phase 6 repository validation record (2026-10-10)
 
-- [x] `:app:assembleDebug` completed successfully with the documented Android/Gradle cache environment. APK: `app/build/outputs/apk/debug/app-debug.apk` (25 MB).
+- [x] `:app:assembleDebug` completed successfully with the documented Android/Gradle cache environment. APK: `apps/android/app/build/outputs/apk/debug/app-debug.apk` (25 MB).
 - [x] Core Android JVM tests for `history`, `network`, `account`, `setup`, and `model` completed successfully (164 tests across 25 test classes, zero failures/errors in the saved JUnit XML). The previously reported 31 was the Gradle task count, not the test count.
 - [ ] The full Android JVM suite is not green in this environment: 40 Roborazzi/Compose interaction tests fail before assertions in `MavenDependencyResolver` with `FileNotFoundException`. Re-run with a writable, fully populated Maven/Gradle cache before treating this as an app regression.
 - [ ] Backend tests could not be completed because `npm ci` was blocked fetching the locked SheetJS tarball from `cdn.sheetjs.com` (HTTP 403). The prior import error for `xlsx` is therefore an environment/dependency-install issue, not a verified production failure.

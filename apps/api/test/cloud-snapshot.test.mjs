@@ -6,7 +6,7 @@ import { handleAccount, handleCloudRead } from '../src/core/account.mjs';
 import { mockFetch } from './helpers.mjs';
 
 // Android decodes/re-encodes this same fixture in CloudSnapshotTest.
-const fixture = JSON.parse(readFileSync(new URL('../../../app/src/test/resources/cloud-snapshot-v1.json', import.meta.url), 'utf8'));
+const fixture = JSON.parse(readFileSync(new URL('../../android/app/src/test/resources/cloud-snapshot-v1.json', import.meta.url), 'utf8'));
 const fresh = () => structuredClone(fixture);
 const owner = '11111111-1111-4111-8111-111111111111';
 const user = () => Response.json({ id: owner, email: 'owner@example.com' });

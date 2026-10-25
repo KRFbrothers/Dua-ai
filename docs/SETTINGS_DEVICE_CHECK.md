@@ -22,10 +22,10 @@ No backend contract or provider configuration changes are needed. Chat-wide toke
 ## Automated checks
 
 ```sh
-./gradlew :app:testDebugUnitTest --no-daemon --max-workers=2
+bash apps/android/gradlew -p apps/android :app:testDebugUnitTest --no-daemon --max-workers=2
 ```
 
-Focused coverage is in `SettingsCompletionUiTest`, `SettingsFunctionalNavigationTest`, `PersonalMemoryTest`, and `NotificationAccessTest`. Existing Settings, appearance, voice, Imagine, reminder and navigation tests remain in the standard suite. With `-Pdua.ui-record`, the UI tests also write light/dark hub review images under `app/build/approved-ui/`.
+Focused coverage is in `SettingsCompletionUiTest`, `SettingsFunctionalNavigationTest`, `PersonalMemoryTest`, and `NotificationAccessTest`. Existing Settings, appearance, voice, Imagine, reminder and navigation tests remain in the standard suite. With `-Pdua.ui-record`, the UI tests also write light/dark hub review images under `apps/android/app/build/approved-ui/`.
 
 ## Phone checks
 

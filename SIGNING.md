@@ -1,6 +1,6 @@
 # Permanent personal APK signing
 
-Every personal release APK must use the same private keystore. The app verifies the public SHA-256 fingerprint in `app/signing-certificate.properties` before packaging; release builds fail when credentials are missing, the alias/password is wrong, or the signer differs. Debug builds still use a development key and should not be used as personal updates.
+Every personal release APK must use the same private keystore. The app verifies the public SHA-256 fingerprint in `apps/android/app/signing-certificate.properties` before packaging; release builds fail when credentials are missing, the alias/password is wrong, or the signer differs. Debug builds still use a development key and should not be used as personal updates.
 
 The public Google OAuth web client ID has a repository default. `duaGoogleWebClientId` or `GOOGLE_CLIENT_ID` can override it. The ID is public; no Google client secret belongs in the APK.
 
@@ -30,6 +30,11 @@ Only manual `main` builds receive signing credentials. Pull-request checks conti
 
 ## Build locally
 
+The Gradle workspace is now `apps/android/`; open that folder in Android Studio.
+The commands below run from the repository root. This folder move preserves the
+existing package, permanent signing certificate and build-number rule, so updates
+to the current permanently signed app do not require uninstalling it.
+
 Load the four signing values from your private storage into environment variables:
 
 - `DUA_RELEASE_STORE_FILE`: path to the original keystore.
@@ -37,20 +42,20 @@ Load the four signing values from your private storage into environment variable
 - `DUA_RELEASE_KEY_ALIAS`.
 - `DUA_RELEASE_KEY_PASSWORD`.
 
-Run `bash ./gradlew :app:validatePersonalReleaseSigning :app:assembleRelease --no-daemon`. Use environment variables for passwords rather than command-line arguments or tracked Gradle properties. Output: `app/build/outputs/apk/release/app-release.apk`.
+Run `bash apps/android/gradlew -p apps/android :app:validatePersonalReleaseSigning :app:assembleRelease --no-daemon`. Use environment variables for passwords rather than command-line arguments or tracked Gradle properties. Output: `apps/android/app/build/outputs/apk/release/app-release.apk`.
 
 Verify the finished APK:
 
 ```sh
 python3 tooling/scripts/verify-apk-signature.py \
-  --apk app/build/outputs/apk/release/app-release.apk \
+  --apk apps/android/app/build/outputs/apk/release/app-release.apk \
   --apksigner "$ANDROID_HOME/build-tools/35.0.0/apksigner" \
   --output-dir /path/to/private-download-folder
 ```
 
 ## Google configuration and first install
 
-In the existing Google Cloud **Android** OAuth client, keep package `com.dua.ai` and set the SHA-1 from `app/signing-certificate.properties`. Keep the existing **web** OAuth client. Supabase's Google provider must accept that same web client ID. Wait for Google configuration to propagate, then test the owner account on the phone.
+In the existing Google Cloud **Android** OAuth client, keep package `com.dua.ai` and set the SHA-1 from `apps/android/app/signing-certificate.properties`. Keep the existing **web** OAuth client. Supabase's Google provider must accept that same web client ID. Wait for Google configuration to propagate, then test the owner account on the phone.
 
 The new permanent certificate differs from earlier cloud/debug APKs. Android will require uninstalling the old signer once before installing this APK. The owner confirmed there are no chats on the old install. If another installation contains data, sync/export it before uninstalling. Subsequent updates use this permanent key and install normally.
 

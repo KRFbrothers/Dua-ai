@@ -54,9 +54,9 @@ The caption toggle uses `Sizes.touchTarget` (48dp); existing action targets rema
 ## Checks
 
 ```sh
-rg 'Color\(0x' app/src/main          # only theme/Color.kt
-rg '\.sp\b' app/src/main            # only theme/Type.kt
-bash ./gradlew :app:testDebugUnitTest --no-daemon --max-workers=2
+rg 'Color\(0x' apps/android/app/src/main          # only theme/Color.kt
+rg '\.sp\b' apps/android/app/src/main            # only theme/Type.kt
+bash apps/android/gradlew -p apps/android :app:testDebugUnitTest --no-daemon --max-workers=2
 ```
 
 `DesignSystemContrastTest` checks AA text contrast (4.5:1) on the existing diff/badge/voice-base/media surfaces in both themes. The restored end-call color is checked at the non-text icon threshold (3:1); syntax highlighting is checked against the exact original Atom colors. It does not claim every original syntax hue or text over arbitrary artwork/animated glow meets text AA. Existing accent tests cover all six presets. UI rendering uses sample data; physical-device/TalkBack verification is separate from automated checks.

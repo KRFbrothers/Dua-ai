@@ -7,14 +7,14 @@ There are two profiles:
 
 | File | What it is |
 | --- | --- |
-| `app/src/main/baseline-prof.txt` | Hand-written fallback. Always used. Do not delete it. |
-| `app/src/release/generated/baselineProfiles/` | The real, generated profile. Appears after you run the generator below and commit it. |
+| `apps/android/app/src/main/baseline-prof.txt` | Hand-written fallback. Always used. Do not delete it. |
+| `apps/android/app/src/release/generated/baselineProfiles/` | The real, generated profile. Appears after you run the generator below and commit it. |
 
 Both are merged into the release APK automatically.
 
 ## The `:benchmark` module
 
-`benchmark/` is a **test-only** module. Nothing in it is packaged in the Dua app and it adds no runtime
+`apps/android/benchmark/` is a **test-only** module. Nothing in it is packaged in the Dua app and it adds no runtime
 library. It contains:
 
 - `BaselineProfileGenerator`: records these journeys: cold start, open the history drawer, open a
@@ -44,21 +44,21 @@ can't reach a phone over adb. GitHub Actions can't do it either, and we have no 
 5. Unlock the phone and keep the screen on. In the repo folder run:
 
    ```bash
-   ./gradlew :app:generateBaselineProfile
+   bash apps/android/gradlew -p apps/android :app:generateBaselineProfile
    ```
 
    It installs a special `benchmarkRelease` build of Dua (signed with the debug key), runs the
    journeys a few times and
-   writes the profile to `app/src/release/generated/baselineProfiles/baseline-prof.txt`.
+   writes the profile to `apps/android/app/src/release/generated/baselineProfiles/baseline-prof.txt`.
 6. Commit that file in a PR. The next personal APK build includes it.
 
 To measure startup (optional):
 
 ```bash
-./gradlew :benchmark:connectedBenchmarkReleaseAndroidTest
+bash apps/android/gradlew -p apps/android :benchmark:connectedBenchmarkReleaseAndroidTest
 ```
 
-Results are printed and saved under `benchmark/build/outputs/`. Compare `startupNoCompilation`
+Results are printed and saved under `apps/android/benchmark/build/outputs/`. Compare `startupNoCompilation`
 vs `startupBaselineProfile` (`timeToInitialDisplayMs`).
 
 ## Notes

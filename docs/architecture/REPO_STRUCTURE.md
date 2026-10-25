@@ -1,12 +1,13 @@
 # Monorepo target structure
 
-Status: steps 1 (documentation), 2 (database/tooling paths), 3 (API/website paths)
-and 4 (engine path) are complete.
+Status: all five stages are complete: documentation, database/tooling paths,
+API/website paths, engine path and the Android Gradle workspace.
 The database migrations are now under `infra/database/` and the root helper
 scripts under `tooling/scripts/`. The Node API and website now live at `apps/api/`
 and `apps/web/`; the Python engine now lives at `apps/ai-engine/`, including its
-`coding-runner/`, tests and evals. Android remains at `app/`; Gradle roots stay at the repository
-root. See [ARCHITECTURE.md](../ARCHITECTURE.md) for the current runtime layout.
+`coding-runner/`, tests and evals. Android's Gradle workspace is at `apps/android/`,
+including `app/`, `benchmark/`, the wrapper, version catalog and root Gradle files.
+See [ARCHITECTURE.md](../ARCHITECTURE.md) for the current runtime layout.
 
 This document records completed and future migrations. Step 2 moves SQL files
 and the APK verification helper without changing their contents, and updates
@@ -15,7 +16,8 @@ tests, service Dockerfiles or deployment scripts. Step 3 moves the API and websi
 with their tests and deployment files, and updates their path references. The
 website builds into `apps/api/site/`, served by the existing `dua-api` service.
 Step 4 moves the engine as one unit and updates paths, without reorganizing its
-`agent_*.py` or `coding_*.py` modules. Do not create empty `packages/`, `apps/android/` or
+`agent_*.py` or `coding_*.py` modules. Step 5 moves the complete Android Gradle
+workspace without changing module names, packages, signing or versioning. Do not create empty `packages/` or
 `infra/cloudrun/` directories to match this diagram.
 
 ## Target tree
@@ -23,7 +25,14 @@ Step 4 moves the engine as one unit and updates paths, without reorganizing its
 ```text
 Dua-ai/
 ├── apps/
-│   ├── android/                 # Android application and its build workspace
+│   ├── android/                 # Android Gradle workspace; moved in step 5
+│   │   ├── app/                 # Existing :app module, all source/resources/tests
+│   │   ├── benchmark/           # Existing :benchmark module and device tests
+│   │   ├── gradle/              # Version catalog and wrapper files
+│   │   ├── gradlew, gradlew.bat
+│   │   ├── settings.gradle.kts
+│   │   ├── build.gradle.kts
+│   │   └── gradle.properties
 │   ├── web/                     # Browser frontend; moved in step 3
 │   ├── api/                     # Node dua-api; moved in step 3
 │   └── ai-engine/               # Python dua-ai-engine; moved in step 4; includes coding-runner/
@@ -67,14 +76,15 @@ convention is illustrated in the [Turborepo repository guide](https://turborepo.
 | `apps/api/` | `apps/api/` | Node backend, deployed as `dua-api`; moved from `web/` in step 3 |
 | `apps/web/` | `apps/web/` | Browser frontend, built and served through `dua-api`; moved from `website/` in step 3 |
 | `apps/ai-engine/` | `apps/ai-engine/` | Python engine, deployed as `dua-ai-engine`; moved from `google-cloud-backend/` in step 4 |
-| `app/` | `apps/android/` | Android application; coordinate its Gradle workspace in the final migration |
+| `apps/android/` | `apps/android/` | Android Gradle workspace; moved with `app/`, `benchmark/`, wrapper and build files in step 5 |
 | `infra/database/` | `infra/database/` | Supabase migrations; moved from the former root directory in step 2 |
 | `tooling/scripts/` | `tooling/scripts/` | Repository helpers; moved from the former root directory in step 2 |
 
-The Android row identifies the destination responsibility, not a standalone
-`mv app apps/android` command. The Android migration must account for the root
-Gradle files, wrapper, version catalog, benchmark module and all build consumers
-together. Their current locations remain unchanged after step 4.
+The Android workspace keeps the existing `:app` and `:benchmark` modules. Open
+`apps/android/` in Android Studio. Run `./gradlew :app:testDebugUnitTest` from that
+directory, or `bash apps/android/gradlew -p apps/android :app:testDebugUnitTest`
+from the repository root. Shared backend fixtures and the website logo continue
+to use the same Android-owned files through updated paths.
 
 ## Placement rules
 
@@ -125,10 +135,11 @@ starting the next. This document authorizes no path migration by itself.
 | 2. Infra/tooling paths — done | Move the seven database migrations to `infra/database/` and the repository helper to `tooling/scripts/`; update docs and the APK workflow invocation. Service-owned deployment files stay in place; no shared Cloud Run directory is needed yet. | Preserve file contents/modes and migration identity; verify references and unchanged application/test/build paths. No database apply or redeploy is required for this move. |
 | 3. API / website — done | Moved `web/` to `apps/api/` and `website/` to `apps/web/` together, including tests and deployment files. | Updated frontend output (`apps/api/site/`), shared fixture/logo paths, CI, Dependabot and deployment/docs references. Keep Cloud Run service `dua-api`; run all four existing CI jobs. |
 | 4. Engine — done | Moved `google-cloud-backend/` to `apps/ai-engine/` as one unit, including tests, evals and `coding-runner/`. | Updated CI, deployment/runner paths and documentation links; preserve module layout, Dockerfile/wsgi entrypoints and service `dua-ai-engine`. Run all four existing CI jobs. |
-| 5. Android | Migrate the Android application and coordinated Gradle workspace to `apps/android/`. | Review wrapper, Gradle roots, modules, benchmark, signing-file references and CI paths together. Preserve `com.dua.ai`, resources and tests; run Android build/tests and relevant lint/signing checks. |
+| 5. Android — done | Moved `app/`, `benchmark/`, `gradle/`, wrapper scripts and root Gradle files into `apps/android/` together. | Updated CI/personal APK cwd and report/input paths, Dependabot, signature-verifier certificate path and approved shared-fixture/logo consumers. Preserve all Android file contents, `com.dua.ai`, signing, resources, tests and versioning; run all four CI jobs. |
 
-Step 2 updates only the APK helper path in the existing personal APK workflow;
-its job names, signing settings and build paths stay unchanged. There is no
+Step 2 updated only the APK helper path in the existing personal APK workflow.
+Step 5 also updates the Android build cwd and APK source path; job names, signing
+settings, the build-number rule and published release/artifact names stay unchanged. There is no
 versioned Supabase CLI config to relocate; see the [CLI workspace note](../../SUPABASE.md#repository-paths-and-optional-cli-workspace).
 Source-level setup messages now use `infra/database/migrations/` to locate the
 referenced files; their path text was corrected before step 3.
