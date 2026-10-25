@@ -144,6 +144,8 @@ runner behavior still require verification before activation.
 | --- | --- | --- |
 | `AGENT_MODEL` | same as `VERTEX_MODEL` (`gemini-3.8-flash`) | Model for the Agent loop / ADK merger only. Falls back once to `VERTEX_MODEL` on 404/403. |
 | `AGENT_THINKING_LEVEL` | `low` when `AGENT_MODEL` differs from `VERTEX_MODEL`, else `VERTEX_THINKING_LEVEL` | `low`, `medium` or `high` for the Agent model. |
+| `THINKING_ROUTER` | `1` | Per-request Gemini thinking: reasoning/code high, Agent medium, math/code/proof/debug or over 400 words medium, other chat low. Router/title/notes/self-check calls use low. `0` restores legacy `VERTEX_THINKING_LEVEL` / `AGENT_THINKING_LEVEL`, bypassing the ceiling. |
+| `THINKING_MAX_LEVEL` | `high` | Ceiling for routed requests: `low`, `medium`, `high`. Invalid values use `high`. Older Gemini models receive no thinking config. |
 | `AGENT_ENGINE` | unset (tool loop) | `adk` turns on ADK parallel mode. |
 | `GEMINI_AUTH` | `adc` | `apikey` sends chat, helpers, search grounding and the Agent (tool loop and every ADK Gemini model) to Vertex AI express mode with `GOOGLE_API_KEY` (no project/location; the key's own project is billed and must have the model, e.g. `gemini-4-argon`). Imagine and document/notes embeddings stay on ADC. `apikey` without a key logs one warning and keeps ADC. Rollback: `GEMINI_AUTH=adc`. |
 | `GOOGLE_API_KEY` | unset | Google Cloud API key (restricted to the Gemini API) for `GEMINI_AUTH=apikey`. Secret Manager only, never a plain env var: `--update-secrets GOOGLE_API_KEY=dua-gemini-key:latest` (service account needs `roles/secretmanager.secretAccessor`). Remove with `--remove-secrets GOOGLE_API_KEY`. |
@@ -202,3 +204,22 @@ The AI Agent page has a **Files** card. It opens a page that lists, adds and del
 - ADK has a small `actions` helper (`generate_image`, `remember`, `recall`, `current_time`) so a split request does not lose image/Memory parts. It only joins an already-split plan; it never turns the ADK path on by itself.
 - The tool loop gets `search_documents` when `agent_documents.enabled()` (ADK research helper already had it).
 
+## Dynamic thinking rollout and rollback
+
+After merge, redeploy only the engine using the usual Cloud Shell command in the
+[engine README](../apps/ai-engine/README.md#redeploy-from-cloud-shell). No new secrets or dependencies are needed.
+Chosen levels are logged once per request without user text. This is a thinking-level
+ceiling, not a token or billing cap. ADK helpers on a distinct `VERTEX_MODEL` retain
+their existing configuration; routing applies to `AGENT_MODEL` calls.
+
+Optional cost ceiling:
+
+```bash
+gcloud run services update dua-ai-engine --region us-central1 --project global-healer-m6shk --update-env-vars THINKING_MAX_LEVEL=medium
+```
+
+Rollback to the previous environment-driven thinking levels:
+
+```bash
+gcloud run services update dua-ai-engine --region us-central1 --project global-healer-m6shk --update-env-vars THINKING_ROUTER=0
+```

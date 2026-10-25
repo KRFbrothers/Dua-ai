@@ -75,7 +75,8 @@ def check(request, draft, evidence, sources, critic, reviser, chunk_text, progre
     try:
         response = agent_tools.call_with_deadline(lambda: reviser.generate_content(
             REVISE_PROMPT.format(issues="\n".join("- " + i for i in verdict["issues"]), **fields), generation_config={
-                "max_output_tokens": REVISE_TOKENS, "temperature": 0.2, "timeout_seconds": REVISE_SECONDS}),
+                "max_output_tokens": REVISE_TOKENS, "temperature": 0.2, "timeout_seconds": REVISE_SECONDS,
+                **({"thinking_level": "low"} if os.environ.get("THINKING_ROUTER", "1").strip() != "0" else {})}),
             REVISE_SECONDS)
         revised = chunk_text(response).strip()
     except Exception as error:

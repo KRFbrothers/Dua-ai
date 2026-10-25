@@ -60,7 +60,7 @@ def smoke(monkeypatch):
         return "verified-owner"
 
     class Model:
-        def generate_content(self, contents, stream=False):
+        def generate_content(self, contents, stream=False, generation_config=None):
             seen["contents"].append(contents)
             return iter([SimpleNamespace(text=t, candidates=[]) for t in ("I am ", "working.")])
 

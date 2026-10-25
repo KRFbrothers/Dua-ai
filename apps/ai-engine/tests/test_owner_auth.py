@@ -45,7 +45,7 @@ def auth(monkeypatch):
     monkeypatch.setattr(owner_auth.auth_opener, "open", verify)
     provider_calls = []
 
-    def generate(contents, stream=False):
+    def generate(contents, stream=False, generation_config=None):
         provider_calls.append(contents)
         chunk = SimpleNamespace(text="Hello", candidates=[])
         return iter([chunk]) if stream else chunk

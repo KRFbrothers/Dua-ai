@@ -35,7 +35,7 @@ class Model:
     def __init__(self, outcomes):
         self.outcomes, self.calls = list(outcomes), 0
 
-    def generate_content(self, contents, stream=False):
+    def generate_content(self, contents, stream=False, generation_config=None):
         self.calls += 1
         outcome = self.outcomes.pop(0)
         if isinstance(outcome, Exception):

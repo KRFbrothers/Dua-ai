@@ -343,6 +343,7 @@ def test_agent_image_streams_media_event_with_owner_identity(monkeypatch):
     monkeypatch.setattr(coding_agent, "default_tool_response", lambda results: ("tool", results))
     model = Script([call("generate_image", {"prompt": "sunset"}), final("Here is your image.")])
     monkeypatch.setattr(engine, "get_model", lambda system=engine.SYSTEM_PROMPT: model)
+    monkeypatch.setattr(engine, "get_agent_model", lambda system: model)
     r = engine.app.test_client().post("/api/chat", headers={"Authorization": "Bearer tok"},
                                       json={"model": "Dua", "stream": True, "mode": "agent", "messages": [{"role": "user", "text": "make an image of a sunset please"}]})
     evs = [json.loads(l[6:]) for l in r.get_data(as_text=True).splitlines() if l.startswith("data: ")]

@@ -16,7 +16,7 @@ class FakeModel:
     def __init__(self, chunks=("Hello", " there"), fail=False):
         self.chunks, self.fail, self.calls = chunks, fail, []
 
-    def generate_content(self, contents, stream=False):
+    def generate_content(self, contents, stream=False, generation_config=None):
         self.calls.append((contents, stream))
         if self.fail:
             raise RuntimeError("secret internal detail")
@@ -145,7 +145,7 @@ def test_heartbeats_while_vertex_waits_for_iterator_or_next_chunk(client, fake, 
     polls = []
     real_queue = queue.Queue
 
-    def generate(contents, stream=False):
+    def generate(contents, stream=False, generation_config=None):
         if not between_chunks:
             assert release.wait(3)
             return iter([SimpleNamespace(text="Late", candidates=[])])
@@ -178,7 +178,7 @@ def test_heartbeats_while_vertex_waits_for_iterator_or_next_chunk(client, fake, 
 
 def test_client_disconnect_stops_a_worker_blocked_on_a_full_queue(client, fake, monkeypatch):
     closed = threading.Event()
-    def generate(contents, stream=False):
+    def generate(contents, stream=False, generation_config=None):
         def chunks():
             try:
                 for _ in range(10000):
@@ -193,7 +193,7 @@ def test_client_disconnect_stops_a_worker_blocked_on_a_full_queue(client, fake, 
 
 
 def test_vertex_error_after_partial_text_keeps_text_and_does_not_emit_done(client, fake, monkeypatch):
-    def generate(contents, stream=False):
+    def generate(contents, stream=False, generation_config=None):
         def chunks():
             yield SimpleNamespace(text="Partial", candidates=[])
             raise RuntimeError("secret Vertex detail")
