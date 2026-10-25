@@ -56,6 +56,8 @@ class ThinkingTreeTest {
         compose.mainClock.advanceTimeBy(700)
         compose.onNodeWithText("Exact detail").assertDoesNotExist()
         compose.onNodeWithContentDescription("Thought for 8s").performClick()
+        compose.mainClock.advanceTimeByFrame()
+        compose.waitForIdle()
         compose.mainClock.advanceTimeBy(700)
         compose.onNodeWithText("Final detail").assertExists()
     }
@@ -78,6 +80,8 @@ class ThinkingTreeTest {
         compose.mainClock.advanceTimeBy(700)
         compose.onNodeWithTag("reasoning-step-tree").assertDoesNotExist()
         compose.onNodeWithContentDescription("Thought for 4s").performClick()
+        compose.mainClock.advanceTimeByFrame()
+        compose.waitForIdle()
         compose.mainClock.advanceTimeBy(700)
         compose.onNodeWithText("First detail").assertExists()
         compose.onNodeWithText("Only the received source detail").assertExists()

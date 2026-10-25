@@ -48,7 +48,16 @@ class CloudSnapshotTest {
         for (i in 0 until chats.length()) chats.getJSONObject(i).put("projectId", "personal").put("pinned", false)
         val restored = CloudSnapshotCodec.decode(expected)
         val actual = CloudSnapshotCodec.encode(restored)
-        assertTrue("Android and backend must preserve the same snapshot fields", expected.similar(actual))
+        assertEquals("Android and backend must preserve the same snapshot fields", jsonTree(expected), jsonTree(actual))
+    }
+
+    /** Android JSONObject has no JVM-only similar(); retain every field and array position. */
+    private fun jsonTree(value: Any?): Any? = when (value) {
+        null, org.json.JSONObject.NULL -> null
+        is org.json.JSONObject -> value.keys().asSequence().associateWith { jsonTree(value.get(it)) }
+        is org.json.JSONArray -> (0 until value.length()).map { jsonTree(value.get(it)) }
+        is Number -> java.math.BigDecimal(value.toString()).stripTrailingZeros()
+        else -> value
     }
 
     private val chat = SavedChat("id", "Dua", "Local draft", listOf(ChatMessage(text = "Hi", isUser = true)), 123)

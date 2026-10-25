@@ -17,7 +17,7 @@ class SharedTextProvider : ContentProvider() {
     override fun getType(uri: Uri) = "text/plain"
     override fun query(uri: Uri, projection: Array<out String>?, selection: String?, selectionArgs: Array<out String>?, sortOrder: String?): MatrixCursor {
         if (blockFirstMetadata && uri.lastPathSegment == "first.txt") check(releaseMetadata.await(5, TimeUnit.SECONDS))
-        return MatrixCursor(arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE)).apply { addRow(arrayOf(uri.lastPathSegment, 5L)) }
+        return MatrixCursor(arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE)).apply { addRow(arrayOf<Any?>(uri.lastPathSegment, 5L)) }
     }
     override fun openFile(uri: Uri, mode: String): ParcelFileDescriptor {
         val file = java.io.File(context!!.cacheDir, uri.lastPathSegment!!).apply { writeText("hello") }

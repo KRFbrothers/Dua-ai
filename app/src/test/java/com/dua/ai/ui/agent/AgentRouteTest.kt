@@ -3,6 +3,7 @@ package com.dua.ai.ui.agent
 import android.app.Application
 import com.dua.ai.attachments.ChatAttachment
 import androidx.compose.ui.test.*
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.lifecycle.ViewModelStore
 import com.dua.ai.history.ChatHistoryCodec
@@ -27,7 +28,11 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.LooperMode
 import org.robolectric.annotation.GraphicsMode
 
-/** Route callbacks use the real ViewModel; draft-only actions make no backend/provider requests. */
+/**
+ * Route callbacks use the real ViewModel; draft-only actions make no backend/provider requests.
+ * Activate navigation through accessibility after modal transitions so these callback assertions
+ * do not depend on Robolectric's native dialog touch routing. Feature UI tests retain touch clicks.
+ */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [34], application = Application::class, qualifiers = "w360dp-h800dp-mdpi")
@@ -113,12 +118,14 @@ class AgentRouteTest {
         compose.onNodeWithText("Deep Web Research").performScrollTo().assertIsDisplayed()
         model.updateDraft("Unsent agent prompt")
         val id = model.activeChatId.value
-        compose.onNodeWithContentDescription("New AI Agent session").performClick()
+        compose.onNodeWithContentDescription("New AI Agent session").assertIsEnabled()
+            .performSemanticsAction(SemanticsActions.OnClick) { assertTrue(it()) }
         assertTrue("Agent available=${model.agentAvailable.value}, typing=${model.isTyping.value}", model.agent.value) // In particular, the handler must not capture the initial false mode.
         assertNotEquals(id, model.activeChatId.value)
         assertEquals("", model.draft.value)
         compose.onNodeWithText("AI Agent").assertIsDisplayed()
-        compose.onNodeWithContentDescription("Back").performClick()
+        compose.onNodeWithContentDescription("Back").assertIsEnabled()
+            .performSemanticsAction(SemanticsActions.OnClick) { assertTrue(it()) }
         assertFalse(model.agent.value)
         compose.onNodeWithTag("supplied-chat").assertIsDisplayed()
         compose.onNodeWithContentDescription("Dua AI, chats and settings").performClick()
@@ -153,7 +160,8 @@ class AgentRouteTest {
         assertEquals(previous.draft, model.draft.value)
         compose.onNodeWithTag("feature-top-bar").assertIsDisplayed()
         compose.onNodeWithTag("supplied-chat").assertDoesNotExist()
-        compose.onNodeWithContentDescription("Back").performClick()
+        compose.onNodeWithContentDescription("Back").assertIsEnabled()
+            .performSemanticsAction(SemanticsActions.OnClick) { assertTrue(it()) }
         assertFalse(model.agent.value)
         // The existing feature exit starts a fresh chat; the preceding conversation remains restorable.
         compose.onNodeWithTag("supplied-chat").assertIsDisplayed()

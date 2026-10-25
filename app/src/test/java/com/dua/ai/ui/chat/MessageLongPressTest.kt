@@ -16,9 +16,13 @@ import androidx.compose.ui.platform.ClipboardManager
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalTextToolbar
-import androidx.compose.ui.platform.TextToolbar
-import androidx.compose.ui.platform.TextToolbarStatus
+import androidx.compose.foundation.text.contextmenu.data.TextContextMenuItem
+import androidx.compose.foundation.text.contextmenu.data.TextContextMenuKeys
+import androidx.compose.foundation.text.contextmenu.data.TextContextMenuSession
+import androidx.compose.foundation.text.contextmenu.provider.LocalTextContextMenuToolbarProvider
+import androidx.compose.foundation.text.contextmenu.provider.TextContextMenuDataProvider
+import androidx.compose.foundation.text.contextmenu.provider.TextContextMenuProvider
+import kotlinx.coroutines.CompletableDeferred
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -65,7 +69,7 @@ class MessageLongPressTest(private val dark: Boolean) {
     private fun show(fontScale: Float = 1f) {
         compose.setContent {
             clipboard = LocalClipboardManager.current; context = LocalContext.current
-            CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, fontScale), LocalTextToolbar provides textToolbar) {
+            CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, fontScale), LocalTextContextMenuToolbarProvider provides textToolbar) {
                 DuaTheme(LocalPreferences(theme = if (dark) "dark" else "light")) {
                     Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
                         MessageList(state.value, ChatActions(onRetry = { retries += it }, onSpeak = { spoken += it.id }, haptic = { haptics += it }, onEditMessage = { edits += it }), rememberLazyListState())
@@ -146,10 +150,14 @@ class MessageLongPressTest(private val dark: Boolean) {
         compose.onNodeWithText(prompt.text, useUnmergedTree = true).performTouchInput {
             longClick(Offset(width * .75f, height / 2f))
         }
+        // Smart selection can finish on a background text-classification task after Compose idles.
+        compose.waitUntil(timeoutMillis = 5_000) { textToolbar.shown }
         compose.runOnIdle {
-            assertEquals(TextToolbarStatus.Shown, textToolbar.status)
+            assertTrue("Selection must show the text context menu", textToolbar.shown)
             assertNotNull(textToolbar.copy)
             textToolbar.copy!!.invoke()
+        }
+        compose.runOnIdle {
             assertEquals("question", clipboard.getText()?.text)
         }
     }
@@ -245,15 +253,22 @@ class MessageLongPressTest(private val dark: Boolean) {
             sheetAction(action).performScrollTo().assertIsDisplayed().assertHeightIsAtLeast(48.dp).assertWidthIsAtLeast(48.dp)
     }
 
-    private class RecordingTextToolbar : TextToolbar {
-        override var status = TextToolbarStatus.Hidden
+    /** Record the current Compose toolbar API while retaining real word selection and copy. */
+    private class RecordingTextToolbar : TextContextMenuProvider {
+        @Volatile var shown = false
             private set
         var copy: (() -> Unit)? = null
-        override fun showMenu(rect: Rect, onCopyRequested: (() -> Unit)?, onPasteRequested: (() -> Unit)?,
-            onCutRequested: (() -> Unit)?, onSelectAllRequested: (() -> Unit)?) {
-            copy = onCopyRequested; status = TextToolbarStatus.Shown
+        override suspend fun showTextContextMenu(dataProvider: TextContextMenuDataProvider) {
+            val closed = CompletableDeferred<Unit>()
+            val session = object : TextContextMenuSession {
+                override fun close() { closed.complete(Unit) }
+            }
+            val copyItem = dataProvider.data().components.filterIsInstance<TextContextMenuItem>()
+                .singleOrNull { it.key == TextContextMenuKeys.CopyKey }
+            copy = copyItem?.let { { it.onClick(session) } }
+            shown = true
+            try { closed.await() } finally { shown = false }
         }
-        override fun hide() { status = TextToolbarStatus.Hidden }
     }
 
     // Robolectric's native magnifier popup has no backing Surface. Only its drawing is

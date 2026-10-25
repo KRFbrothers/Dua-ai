@@ -24,8 +24,12 @@ import org.robolectric.annotation.Config
 class GoogleSignInFlowTest {
     private val clientId = "test-web-client.apps.googleusercontent.com"
     private val email = "owner@example.com"
+    // googleid 1.2 parses the JWT payload even in builder-created credentials.
+    // This unsigned fixture is used only by the intercepted sign-in flow.
+    private val idToken = listOf("{\"alg\":\"none\"}", "{\"sub\":\"test-owner\",\"email\":\"$email\"}")
+        .joinToString(".") { java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(it.toByteArray()) } + ".test-signature"
     private fun credential() = GetCredentialResponse(GoogleIdTokenCredential.Builder()
-        .setId(email).setIdToken("header.payload.signature")
+        .setId(email).setIdToken(idToken)
         .setProfilePictureUri(Uri.parse("https://example.com/avatar.png")).build())
 
     @Test fun explicitButtonRequestsGoogleSignInAndHandsOffFreshRawNonceWithTheIdentity() = runBlocking {
@@ -43,11 +47,11 @@ class GoogleSignInFlowTest {
                 }
             }, submitIdentity = { identities += it }, onFailure = { failures += it })
         }
-        assertTrue(failures.isEmpty())
+        assertTrue(failures.toString(), failures.isEmpty())
         assertEquals(2, identities.size)
         assertNotEquals(identities[0].nonce, identities[1].nonce)
         identities.forEachIndexed { index, identity ->
-            assertEquals("header.payload.signature", identity.idToken)
+            assertEquals(idToken, identity.idToken)
             assertEquals("https://example.com/avatar.png", identity.photoUrl)
             assertTrue(identity.nonce.matches(Regex("[A-Za-z0-9_-]{43}")))
             assertEquals(GoogleSignIn.sha256Hex(identity.nonce), sentNonces[index])
@@ -82,7 +86,7 @@ class GoogleSignInFlowTest {
             GoogleSignIn.requestIdentity(clientId, "different@example.com") { credential() }
         }, submitIdentity = { exchanges++ }, onFailure = { failures += it })
         assertEquals(0, exchanges)
-        assertTrue(failures.single()!!.contains("Select different@example.com"))
+        assertTrue(failures.toString(), failures.single()!!.contains("Select different@example.com"))
     }
 
     @Test fun screenCancellationIsRethrownWithoutShowingAProviderErrorOrExchangingTokens() = runBlocking {
