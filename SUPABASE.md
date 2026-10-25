@@ -7,7 +7,29 @@ Supabase provides Google-backed accounts, device logout, the authoritative serve
 1. Reuse the existing Supabase project for this app. Create a project only when setting up a separate installation, retaining its database password securely.
 2. In Authentication → Providers, enable Google (see [Native Google sign-in](#native-google-sign-in)). Keep Google enabled. For the new email flow, enable Email and keep **Confirm email on**; see [Owner email login and signup](#owner-email-login-and-signup). Password reset/recovery routes are not implemented.
 3. In Authentication → URL Configuration, review Site URL and the allowed redirect URLs. The removed web client used `https://YOUR-SITE/profile.html` (and the web Google OAuth flow used `/api/account/oauth/callback`); neither page exists any more, so remove those redirect entries. The Android app does not consume confirmation or redirect links (native Google sign-in needs none). Set Site URL to an HTTPS page you control (for example your backend origin); the confirmation itself succeeds regardless of where the browser lands afterwards.
-4. Run `supabase/migrations/202610040001_dua_cloud.sql` in the SQL editor. It creates the snapshot table, owner-only read policy and authenticated revision-checked write function. Do not disable RLS or grant direct snapshot writes to app users.
+4. Run `infra/database/migrations/202610040001_dua_cloud.sql` in the SQL editor. It creates the snapshot table, owner-only read policy and authenticated revision-checked write function. Do not disable RLS or grant direct snapshot writes to app users.
+
+## Repository paths and optional CLI workspace
+
+Checked-in migrations now live in `infra/database/migrations/`; their filenames
+and SQL contents are unchanged. This directory move does not require reapplying
+migrations or changing the deployed Supabase project. The SQL editor instructions
+below use the new paths.
+
+There is no versioned `config.toml`, initialized CLI workspace or migration runner
+in this repository. The Supabase CLI normally reads a `supabase/` directory under
+its project root; `--workdir` selects that project root, not an arbitrary migration
+directory ([official configuration guide](https://supabase.com/docs/guides/local-development/managing-config)).
+Do not assume `cd infra/database` makes `supabase db push` use these files.
+If you already use a separate initialized and linked CLI workspace, keep running
+the CLI from its root and make its `supabase/migrations` point to this checkout's
+`infra/database/migrations` (for example with a local symlink). Keep one migration
+source, preserve existing local configuration/link state, and review the CLI's
+dry-run before applying any future migration. No CLI setup or database command
+is needed just to adopt this path move.
+
+Some unchanged backend setup messages still mention the former migration path;
+use `infra/database/migrations/` when locating the named SQL file.
 
 ## Anonymous access smoke check
 
@@ -28,7 +50,7 @@ The credential-free backend test suite verifies these outcomes with mocked respo
 
 ## 1b. Stored files bucket (Phase 2: uploads, PDFs, spreadsheets, audio)
 
-Run `supabase/migrations/202610080001_dua_files_storage.sql` once (SQL editor → New query → paste → Run, or `supabase db push` from a linked CLI project). It:
+Run `infra/database/migrations/202610080001_dua_files_storage.sql` once (SQL editor → New query → paste → Run, or `supabase db push` from a linked CLI project). It:
 
 - creates a **private** bucket `dua-files` with a 50 MB per-file limit (52,428,800 bytes) and an allowed MIME list (images, PDF, XLSX/XLS/ODS/CSV, TXT/MD/JSON, common audio types);
 - adds RLS policies on `storage.objects` so a signed-in user can only **select, insert and delete** objects whose first folder is their own `auth.uid()`. There is no update policy: files are immutable and uploads use `x-upsert: false`.
@@ -63,7 +85,7 @@ Per-file cleanup checks the owner's current server snapshot with the same owner 
 
 ## 1c. Imagine (Phase 3: generated images and videos)
 
-Run `supabase/migrations/202610090001_dua_imagine.sql` once, after the §1b migration (SQL editor → New query → paste → Run, or `supabase db push`). It is safe to run again. It:
+Run `infra/database/migrations/202610090001_dua_imagine.sql` once, after the §1b migration (SQL editor → New query → paste → Run, or `supabase db push`). It is safe to run again. It:
 
 - adds `video/mp4` to the `dua-files` bucket's allowed MIME list (nothing else about the bucket changes: still private, 50 MB per file, owner-folder policies);
 - creates `public.dua_imagine_usage` (per account and UTC day: images and video seconds; RLS on, no client access);
@@ -77,7 +99,7 @@ Without this migration the backend refuses Imagine requests with a setup message
 
 ## 1d. Live voice minutes (Phase 4: realtime voice)
 
-Run `supabase/migrations/202610100001_dua_voice.sql` once (SQL editor → New query → paste → Run, or `supabase db push`). It is safe to run again and does not change earlier tables. It:
+Run `infra/database/migrations/202610100001_dua_voice.sql` once (SQL editor → New query → paste → Run, or `supabase db push`). It is safe to run again and does not change earlier tables. It:
 
 - creates `public.dua_voice_usage` (seconds charged per account and UTC day) and `public.dua_voice_sessions` (one row per live session: reserved seconds, start, end, charged seconds); RLS on, no client access;
 - creates `dua_start_voice_session(session_id, reserve_seconds, daily_limit_seconds, min_seconds)`, `dua_end_voice_session(session_id)` and `dua_read_voice_usage()`, `security definer` functions that only act on `auth.uid()`. The backend calls them with your own token (no service-role key). Starting a session reserves minutes under a row lock, so the daily cap holds even with parallel requests; ending charges the time used (never more than reserved); sessions left open are charged their full reservation once overdue.

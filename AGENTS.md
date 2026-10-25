@@ -6,7 +6,7 @@ These rules apply throughout the repository. Preserve unrelated work. Paths are 
 
 ## 1. Project Overview & Architecture Map
 
-**Dua AI (`com.dua.ai`)** is a private, owner-locked multimodal GenAI assistant across Android (`app/`), Web (`website/` + `web/`), and Google Cloud Run (`google-cloud-backend/`), backed by Supabase Auth, PostgreSQL RLS, and Storage (`supabase/`).
+**Dua AI (`com.dua.ai`)** is a private, owner-locked multimodal GenAI assistant across Android (`app/`), Web (`website/` + `web/`), and Google Cloud Run (`google-cloud-backend/`), backed by Supabase Auth, PostgreSQL RLS, and Storage (`infra/database/`).
 
 | Layer / Directory | Tech Stack | Key Entry Points & Files | Responsibility |
 | :--- | :--- | :--- | :--- |
@@ -15,7 +15,7 @@ These rules apply throughout the repository. Preserve unrelated work. Paths are 
 | Cloud Run AI Engine (`google-cloud-backend/`) | Python 3.12 container + Flask + Vertex AI (`google-genai`) + Google ADK (`google-adk==2.12.0`) | `app.py`, `owner_auth.py`, `agent_tools.py`, `agent_adk.py`, `coding_agent.py`, `coding_workspace.py`, `coding_runner_server.py`, `kill_switches.py`, `backup.py` | Owner-verified Gemini streaming chat, single-loop and ADK multi-agent tools, grounded search, coding PR agent, Imagine, backups |
 | Node API & Proxy (`web/`) | Node.js 24+; native HTTP server | `src/server/server.mjs`, `src/server/service-handler.mjs`, `src/core/access-policy.mjs`, `src/core/account.mjs`, `src/core/providers.mjs`, `src/core/kill-switches.mjs` | Same-origin web host, HttpOnly cookie sessions, daily request quota, cloud snapshot sync, `/api/web/chat` SSE proxy |
 | Web Frontend (`website/`) | React 19 + TypeScript + Vite 6 | `src/main.tsx`, `src/App.tsx`, `src/ChatShell.tsx`, `src/Login.tsx`, `src/api.ts`, `src/styles.css` | Browser chat and Agent UI compiled into `web/site` |
-| Database & Storage (`supabase/`) | PostgreSQL + RLS + `SECURITY DEFINER` RPCs | `migrations/*.sql` | Owner-isolated cloud snapshots (`dua_cloud_snapshots`), usage budgets, private `dua-files` bucket, Agent notes |
+| Database & Storage (`infra/database/`) | PostgreSQL + RLS + `SECURITY DEFINER` RPCs | `migrations/*.sql` | Owner-isolated cloud snapshots (`dua_cloud_snapshots`), usage budgets, private `dua-files` bucket, Agent notes |
 | Documentation (`docs/`) | Markdown | `README.md`, `ARCHITECTURE.md`, `AGENT.md`, `OPERATIONS.md`, `TESTING.md` | Runtime, deployment, testing, and feature specifications |
 
 Use the runtime and dependency versions declared in the repository. The Node API declares Node 24+ in `web/package.json`; the engine Dockerfile uses Python 3.12.
@@ -29,7 +29,7 @@ Do not edit, delete, or move these paths unless explicitly instructed by the own
 - `.github/workflows/` and `.gitmodules`
 - `app/src/main/assets/vendor/mermaid/`
 - Deployment and container configs anywhere in the repository: `Dockerfile`, `*.Dockerfile`, `cloudbuild*.yaml`, `deploy*.sh`, and `Procfile`, including `google-cloud-backend/coding-runner/*.Dockerfile`
-- Database migrations (`supabase/migrations/*.sql`)
+- Database migrations (`infra/database/migrations/*.sql`)
 - The `+` attachment sheet layout (`app/src/main/java/com/dua/ai/ui/chat/AttachmentSheet.kt`)
 
 ### 2.2 Zero Secrets in Code or Docs

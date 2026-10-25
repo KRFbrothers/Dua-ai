@@ -42,7 +42,7 @@ Run `bash ./gradlew :app:validatePersonalReleaseSigning :app:assembleRelease --n
 Verify the finished APK:
 
 ```sh
-python3 scripts/verify-apk-signature.py \
+python3 tooling/scripts/verify-apk-signature.py \
   --apk app/build/outputs/apk/release/app-release.apk \
   --apksigner "$ANDROID_HOME/build-tools/35.0.0/apksigner" \
   --output-dir /path/to/private-download-folder
