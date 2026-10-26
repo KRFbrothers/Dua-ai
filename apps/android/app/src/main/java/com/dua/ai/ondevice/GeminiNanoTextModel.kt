@@ -8,7 +8,6 @@
 package com.dua.ai.ondevice
 
 import android.content.Context
-import android.content.pm.PackageManager
 import com.google.mlkit.genai.common.DownloadStatus
 import com.google.mlkit.genai.common.FeatureStatus
 import com.google.mlkit.genai.prompt.Generation
