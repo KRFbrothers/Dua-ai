@@ -79,7 +79,10 @@ GENERIC_ERROR = "The Dua AI engine could not answer right now. Please try again.
 # Dua Agent: casual messages get one direct reply; tasks run the tool loop in agent_tools.py
 # (max AGENT_MAX_STEPS model calls, at most 3 grounded searches and 2 code runs per request).
 # Output caps include thinking tokens on Gemini 2.5/3, so leave room for low-level thinking.
-AGENT_ANSWER_TOKENS = env_int("AGENT_ANSWER_TOKENS", 4096)
+# Output caps include thinking tokens; zero leaves plain chat at the model default.
+CHAT_MAX_OUTPUT_TOKENS = min(65536, max(0, env_int("CHAT_MAX_OUTPUT_TOKENS", 0)))
+AGENT_ANSWER_TOKENS = min(65536, max(1, env_int("AGENT_ANSWER_TOKENS", 8192)))
+CONTINUE_HINT = 'Reply was cut off. Say "continue" to get the rest.'
 AGENT_MAX_SOURCES = 12
 
 SSE_HEADERS = {
@@ -838,12 +841,16 @@ def sse(event):
     return f"event: {event['type']}\ndata: {json.dumps(event, ensure_ascii=False)}\n\n"
 
 
-def is_truncated(chunk):
+def finish_truncated(response_or_chunk):
     try:
-        reason = chunk.candidates[0].finish_reason
+        reason = response_or_chunk.candidates[0].finish_reason
         return getattr(reason, "name", str(reason)) == "MAX_TOKENS"
     except (AttributeError, IndexError, TypeError):
         return False
+
+
+# Compatibility name for existing callers.
+is_truncated = finish_truncated
 
 
 def chunk_text(chunk):
@@ -1037,6 +1044,8 @@ def api_chat():
         app.logger.info("thinking level: %s", level)
         if THINKING_ROUTER != "0":
             chat_config["generation_config"] = {"thinking_level": level}
+        if CHAT_MAX_OUTPUT_TOKENS > 0:
+            chat_config.setdefault("generation_config", {})["max_output_tokens"] = CHAT_MAX_OUTPUT_TOKENS
     if data.get("stream") is not True:
         try:
             try:
@@ -1049,9 +1058,12 @@ def api_chat():
         except Exception:
             app.logger.exception("api chat failed")
             return jsonify({"error": GENERIC_ERROR}), 502
-        if not text.strip():
+        if not text.strip() and not finish_truncated(response):
             return jsonify({"error": GENERIC_ERROR}), 502
-        return jsonify({"text": text})
+        result = {"text": text}
+        if finish_truncated(response):
+            result.update(truncated=True, hint=CONTINUE_HINT)
+        return jsonify(result)
 
     notice = unsupported_notice(data)
     if use_free:
@@ -1145,7 +1157,7 @@ def api_chat():
                     sent = sent or chunk.get("type") == "text"
                     yield sse(chunk)
                     continue
-                truncated = truncated or is_truncated(chunk)
+                truncated = truncated or finish_truncated(chunk)
                 text = chunk_text(chunk)
                 if text:
                     sent = True
@@ -1153,10 +1165,13 @@ def api_chat():
                 else:
                     # Metadata-only chunks must not reset queue polling without emitting any bytes.
                     yield ": heartbeat\n\n"
-            if not sent:
+            if not sent and not truncated:
                 yield sse({"type": "error", "message": GENERIC_ERROR, "status": 502})
                 return
-            yield sse({"type": "done", "truncated": truncated})
+            if truncated:
+                yield sse({"type": "notice", "message": CONTINUE_HINT,
+                           "truncated": True, "hint": CONTINUE_HINT})
+            yield sse({"type": "done", **({"truncated": True} if truncated else {})})
         finally:
             # On client disconnect (GeneratorExit at a yield) or normal end: stop enqueuing, close the iterator on its
             # owning worker, and tell the Agent loop to stop calling the model and tools (stopped.is_set).

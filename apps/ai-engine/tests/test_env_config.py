@@ -19,7 +19,7 @@ def test_env_int_reads_valid_and_falls_back(monkeypatch, capsys):
 
 
 def test_bad_values_do_not_break_engine_imports(monkeypatch):
-    for name in ("AGENT_MAX_STEPS", "AGENT_STEP_TOKENS", "CODING_MAX_STEPS", "AGENT_ANSWER_TOKENS", "TITLE_TOKENS"):
+    for name in ("AGENT_MAX_STEPS", "AGENT_STEP_TOKENS", "CODING_MAX_STEPS", "AGENT_ANSWER_TOKENS", "CHAT_MAX_OUTPUT_TOKENS", "TITLE_TOKENS"):
         monkeypatch.setenv(name, "oops")
     monkeypatch.setenv("AGENT_MODEL", "")
     import agent_tools
@@ -54,3 +54,24 @@ def test_bad_values_do_not_break_agent_adk_import(monkeypatch):
     finally:
         monkeypatch.undo()
         importlib.reload(agent_adk)
+
+
+def test_output_caps_defaults_and_clamps(monkeypatch):
+    # Separate imports keep the rest of the suite's app globals untouched.
+    import json
+    from pathlib import Path
+    import subprocess
+    root = Path(__file__).resolve().parents[1]
+    cases = [(None, [0, 8192]), ("", [0, 8192]), ("oops", [0, 8192]),
+             ("-5", [0, 1]), ("0", [0, 1]), ("64", [64, 64]),
+             ("65536", [65536, 65536]), ("999999", [65536, 65536])]
+    for raw, expected in cases:
+        for name in ("CHAT_MAX_OUTPUT_TOKENS", "AGENT_ANSWER_TOKENS"):
+            if raw is None:
+                monkeypatch.delenv(name, raising=False)
+            else:
+                monkeypatch.setenv(name, raw)
+        result = subprocess.run([sys.executable, "-c",
+            "import app,json; print(json.dumps([app.CHAT_MAX_OUTPUT_TOKENS,app.AGENT_ANSWER_TOKENS]))"],
+            cwd=root, capture_output=True, text=True, check=True)
+        assert json.loads(result.stdout) == expected

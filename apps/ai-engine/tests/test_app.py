@@ -56,7 +56,7 @@ def test_stream_matches_app_wire_format(client, fake):
     r = client.post("/api/chat", json={"model": "Dua", "messages": HISTORY, "attachments": [], "memory": "", "stream": True, "mode": "auto"})
     assert r.status_code == 200 and r.headers["Content-Type"].startswith("text/event-stream")
     assert "event: text\ndata: " in r.get_data(as_text=True)
-    assert events(r) == [{"type": "text", "delta": "Hello"}, {"type": "text", "delta": " there"}, {"type": "done", "truncated": False}]
+    assert events(r) == [{"type": "text", "delta": "Hello"}, {"type": "text", "delta": " there"}, {"type": "done"}]
     contents, stream = fake.calls[0]
     assert stream is True
     assert [c["role"] for c in contents] == ["user", "model", "user"]
@@ -173,7 +173,7 @@ def test_heartbeats_while_vertex_waits_for_iterator_or_next_chunk(client, fake, 
     assert polls and all(timeout == 15 for timeout in polls)
     text = [event["delta"] for event in events(response) if event["type"] == "text"]
     assert text == (["First", "Late"] if between_chunks else ["Late"])
-    assert events(response)[-1] == {"type": "done", "truncated": False}
+    assert events(response)[-1] == {"type": "done"}
 
 
 def test_client_disconnect_stops_a_worker_blocked_on_a_full_queue(client, fake, monkeypatch):
@@ -216,7 +216,7 @@ def test_metadata_only_chunks_also_keep_the_connection_alive(client, fake):
     fake.chunks = ("", "", "Late text")
     response = client.post("/api/chat", json={"messages": HISTORY, "stream": True})
     assert response.get_data(as_text=True).count(": heartbeat\n\n") == 3
-    assert events(response) == [{"type": "text", "delta": "Late text"}, {"type": "done", "truncated": False}]
+    assert events(response) == [{"type": "text", "delta": "Late text"}, {"type": "done"}]
 
 
 def test_project_instructions_and_memory_fit_the_bounded_system_context(client, fake):
