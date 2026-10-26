@@ -59,4 +59,6 @@ rg '\.sp\b' apps/android/app/src/main            # only theme/Type.kt
 bash apps/android/gradlew -p apps/android :app:testDebugUnitTest --no-daemon --max-workers=2
 ```
 
-`DesignSystemContrastTest` checks AA text contrast (4.5:1) on the existing diff/badge/voice-base/media surfaces in both themes. The restored end-call color is checked at the non-text icon threshold (3:1); syntax highlighting is checked against the exact original Atom colors. It does not claim every original syntax hue or text over arbitrary artwork/animated glow meets text AA. Existing accent tests cover all six presets. UI rendering uses sample data; physical-device/TalkBack verification is separate from automated checks.
+`DesignSystemContrastTest` checks AA text contrast (4.5:1) on the existing diff/badge/voice-base/media surfaces in both themes. The restored end-call color is checked at the non-text icon threshold (3:1); syntax highlighting is checked against the exact original Atom colors. It does not claim every original syntax hue or text over arbitrary artwork/animated glow meets text AA. `AccentContrastTest` iterates `AccentPreset.entries`, currently seven presets including Copper. Default selection remains Purple in light mode and Orange in dark mode. UI rendering uses sample data; physical-device/TalkBack verification is separate from automated checks.
+
+For dated current-build results and checks still outstanding, see [Android UI verification](ANDROID_UI.md#current-verification-2026-10-26).

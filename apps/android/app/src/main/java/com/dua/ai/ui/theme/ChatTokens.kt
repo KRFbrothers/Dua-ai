@@ -15,7 +15,7 @@ data class ChatColors(
     val background: Color,
     val userBubble: Color, val onUserBubble: Color,
     val assistantBubble: Color, val assistantText: Color,
-    /** Chat-area chips, cards and media (zip look: #F3F4F6 fills, #E5E7EB borders, #111827 text, purple accent). */
+    /** Chip, card and media roles derived from the shared light/dark schemes in Color.kt. */
     val chipFill: Color, val chipBorder: Color, val chipText: Color, val chipIcon: Color,
     val text: Color, val mutedText: Color,
     val cardFill: Color, val divider: Color,
