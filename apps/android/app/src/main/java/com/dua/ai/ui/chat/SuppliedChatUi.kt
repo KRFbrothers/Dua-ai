@@ -50,6 +50,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
+import com.dua.ai.R
 import com.dua.ai.model.ChatMessage
 import com.dua.ai.ui.theme.DuaTheme
 import androidx.compose.material3.MaterialTheme
@@ -131,7 +132,7 @@ internal fun SuppliedChatScreen(
                     emptyContent = {
                         if (task) {
                             if (state.draft.isBlank() && state.attachments.isEmpty() && state.uploads.isEmpty()) {
-                                SuppliedTaskStarters(onTaskStarter)
+                                SuppliedTaskPrompts(onTaskStarter)
                             }
                         } else {
                         val name = state.profileName.trim().substringBefore(" ").takeIf { it.isNotBlank() }
@@ -152,8 +153,14 @@ internal fun SuppliedChatScreen(
         }
 }
 
+/** Home destinations shared by navigation and both chat panes. */
+enum class HomeTab(val label: String) { Chat("Chat"), Work("Work") }
+
+/** Task starter labels (strings.xml) paired with their icons. */
+internal val HomeTaskPromptIds = listOf(R.string.home_task_prompt_backup, R.string.home_task_prompt_react, R.string.home_task_prompt_compare)
+
 @Composable
-private fun SuppliedTaskStarters(onTaskStarter: (String) -> Unit) {
+private fun SuppliedTaskPrompts(onTaskStarter: (String) -> Unit) {
     val haptic = LocalChatHaptic.current
     Column(Modifier.fillMaxWidth().testTag("supplied-task-starters"),
         verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {

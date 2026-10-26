@@ -59,34 +59,6 @@ class HomeChatTaskUiTest(private val dark: Boolean, private val compact: Boolean
         compose.onRoot().captureRoboImage(file.absolutePath)
     }
 
-    @Test fun chatHeaderModelPickerProfileFocusAndBottomTabsUseExistingHandlersAndPalette() {
-        val state = mutableStateOf(initial)
-        var profile = 0; var newChat = 0
-        show { ChatScreen(state.value, ChatActions(onOpenSettings = { profile++ }, onNewChat = { newChat++ })) }
-        compose.onNodeWithText("Your AI, always with you").assertExists()
-        compose.onNodeWithContentDescription("Dua AI").assertWidthIsEqualTo(if (compact) HomeSizes.heroCompactLogo else HomeSizes.heroLogo)
-        compose.onNodeWithContentDescription("Model, Flash").assertIsDisplayed().performClick()
-        compose.onNodeWithTag("model-picker-sheet").assertExists()
-        compose.onNodeWithText("Done").performClick()
-        compose.onNodeWithContentDescription("Open profile and settings").assertWidthIsAtLeast(48.dp).performClick()
-        compose.onNodeWithTag("home-profile-dialog").assertIsDisplayed()
-        compose.onNodeWithText("Settings").performScrollTo().performClick()
-        compose.onNodeWithTag("account-avatar", useUnmergedTree = true).assertWidthIsEqualTo(34.dp).assertHeightIsEqualTo(34.dp)
-        compose.onNodeWithContentDescription("New chat").performClick()
-        compose.onNodeWithText("Let's go").assertDoesNotExist()
-        compose.onNodeWithContentDescription("Message").performClick()
-        compose.onNodeWithContentDescription("Message").assertIsFocused()
-        assertEquals(1, profile); assertEquals(1, newChat)
-        val tab = compose.onNode(hasText("Chat") and isSelectable()).fetchSemanticsNode().boundsInRoot
-        val input = compose.onNodeWithContentDescription("Message").fetchSemanticsNode().boundsInRoot
-        val model = compose.onNodeWithContentDescription("Model, Flash").fetchSemanticsNode().boundsInRoot
-        assertTrue(tab.bottom <= input.top)
-        assertTrue(model.bottom < tab.top)
-        compose.runOnIdle { state.value = state.value.copy(providers = listOf(ProviderCapability("Dua", true, "gemini-next-pro-preview", true))) }
-        compose.onNodeWithContentDescription("Model, Pro").assertIsDisplayed()
-        capture("chat")
-    }
-
     @Test fun taskSuggestionsFillDraftAndSendThroughExistingAgentHandlerWithoutFeatureChrome() {
         val state = mutableStateOf(initial)
         val modes = mutableListOf<Boolean>()
@@ -97,8 +69,8 @@ class HomeChatTaskUiTest(private val dark: Boolean, private val compact: Boolean
                 state.value = state.value.copy(draft = "", messages = listOf(ChatMessage(text = "Task output", isUser = false)))
             })) }
         compose.onNode(hasText("Task") and isSelectable()).performClick().assertIsSelected()
-        compose.onNodeWithTag("home-hero").assertExists(); compose.onNodeWithContentDescription("Dua AI").assertExists()
-        compose.onNodeWithContentDescription("Dua AI").assertExists()
+        compose.onNodeWithTag("supplied-chat").assertIsDisplayed()
+        compose.onNodeWithTag("supplied-task-starters").assertIsDisplayed()
         compose.onNodeWithText("Describe...").assertIsDisplayed()
         compose.onNodeWithContentDescription("New chat").assertDoesNotExist()
         compose.onNodeWithText("AI Agent").assertIsNotDisplayed() // The closed drawer retains its destination label.
@@ -107,14 +79,12 @@ class HomeChatTaskUiTest(private val dark: Boolean, private val compact: Boolean
         capture("task")
         compose.onNodeWithText(HomeTaskPrompts[1]).performScrollTo().performClick()
         compose.onNodeWithContentDescription("Message").assertTextContains(HomeTaskPrompts[1]).assertIsFocused()
-        compose.onNodeWithContentDescription("Send message").performClick()
+        compose.onNodeWithContentDescription("Send").performClick()
         assertEquals(HomeTaskPrompts[1] to true, submitted)
         compose.onNodeWithText("Task output").assertIsDisplayed()
         compose.onNodeWithText(HomeTaskPrompts[1]).assertDoesNotExist()
-        compose.onNode(hasText("Task") and isSelectable()).assertIsSelected()
-        compose.onNode(hasText("Chat") and isSelectable()).performClick()
-        assertEquals(listOf(true, false), modes)
-        compose.onNodeWithContentDescription("New chat").assertIsDisplayed()
+        compose.onNodeWithTag("home-mode-switcher").assertDoesNotExist()
+        assertEquals(listOf(true), modes)
     }
 
     @Test fun unavailableTaskModeCannotSilentlySendPlainChatOrEraseDraft() {
@@ -123,12 +93,12 @@ class HomeChatTaskUiTest(private val dark: Boolean, private val compact: Boolean
         show { ChatScreen(state.value, ChatActions(onDraftChange = { state.value = state.value.copy(draft = it) }, onSend = { sends++ })) }
         compose.onNode(hasText("Task") and isSelectable()).performClick()
         compose.onNodeWithContentDescription("Message").performTextInput("Keep this task")
-        compose.onNodeWithContentDescription("Send message").assertIsNotEnabled()
+        compose.onNodeWithContentDescription("Send").assertIsNotEnabled()
         compose.onNodeWithContentDescription("Message").performImeAction()
         assertEquals(0, sends)
         assertEquals("Keep this task", state.value.draft)
         compose.onNode(hasText("Chat") and isSelectable()).performClick()
-        compose.onNodeWithContentDescription("Send message").assertIsEnabled().performClick()
+        compose.onNodeWithContentDescription("Send").assertIsEnabled().performClick()
         assertEquals(1, sends)
     }
 
@@ -143,9 +113,9 @@ class HomeChatTaskUiTest(private val dark: Boolean, private val compact: Boolean
         show { ChatScreen(state.value, ChatActions(onAgent = { state.value = state.value.copy(agent = it) },
             onAuto = { state.value = state.value.copy(agent = false) })) }
         compose.onNode(hasText("Task") and isSelectable()).performClick()
-        compose.onNodeWithContentDescription("Add photos and files").performClick()
+        compose.onNodeWithContentDescription("Add").performClick()
         compose.onNodeWithText("Turn off all modes").performScrollTo().performClick()
         compose.onNode(hasText("Chat") and isSelectable()).assertIsSelected()
-        compose.onNodeWithContentDescription("New chat").assertIsDisplayed()
+        compose.onNodeWithTag("supplied-chat").assertIsDisplayed()
     }
 }

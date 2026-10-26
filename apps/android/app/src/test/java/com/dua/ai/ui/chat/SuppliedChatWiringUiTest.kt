@@ -39,12 +39,12 @@ class SuppliedChatWiringUiTest(private val large: Boolean) {
         fun sizes() = listOf(arrayOf(false), arrayOf(true))
     }
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
-    private fun show(state: State<ChatUiState>, actions: ChatActions = ChatActions(), useSuppliedChatUi: Boolean = true) {
+    private fun show(state: State<ChatUiState>, actions: ChatActions = ChatActions()) {
         WindowCompat.setDecorFitsSystemWindows(compose.activity.window, false)
         compose.setContent {
             CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, if (large) 2f else 1f)) {
                 DuaTheme(LocalPreferences(theme = "light")) {
-                    ChatScreen(state.value, actions, useSuppliedChatUi = useSuppliedChatUi)
+                    ChatScreen(state.value, actions)
                 }
             }
         }
@@ -278,19 +278,27 @@ class SuppliedChatWiringUiTest(private val large: Boolean) {
         assertEquals("Keep this task", state.value.draft)
     }
 
-    // The unchanged legacy pane supplies genuine before-port Task/Work comparison captures.
-    @Test fun retainedLegacyTaskBeforePortCapture() {
-        val state = mutableStateOf(ChatUiState(profileName = "Amina Khan", agentAvailable = true))
-        show(state, ChatActions(onAgent = { state.value = state.value.copy(agent = it) }), useSuppliedChatUi = false)
-        compose.onNode(hasText("Task") and isSelectable()).performClick()
+
+    @Test fun projectCustomHeaderKeepsLegacyPaneAndComposer() {
+        compose.setContent { DuaTheme(LocalPreferences(theme = "light")) {
+            ChatScreen(ChatUiState(feature = ChatFeature.Projects,
+                messages = listOf(ChatMessage(text = "Project reply", isUser = false))), ChatActions(),
+                topBar = { androidx.compose.material3.Text("Project chat header") })
+        } }
         compose.onNodeWithTag("supplied-chat").assertDoesNotExist()
-        capture("pr4-before-task")
+        compose.onNodeWithText("Project chat header").assertIsDisplayed()
+        compose.onNodeWithText("Project reply").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Add photos and files").assertIsDisplayed()
+        compose.onNodeWithTag("home-mode-switcher").assertDoesNotExist()
+        capture("pr5b-project-chat")
     }
 
-    @Test fun retainedLegacyWorkBeforePortCapture() {
-        show(mutableStateOf(ChatUiState(homeTab = HomeTab.Work)), useSuppliedChatUi = false)
-        compose.onNodeWithText("Coming soon").assertIsDisplayed()
+    @Test fun imagesFeatureKeepsLegacyPaneAndFeatureHeader() {
+        show(mutableStateOf(ChatUiState(feature = ChatFeature.Images)))
         compose.onNodeWithTag("supplied-chat").assertDoesNotExist()
-        capture("pr4-before-work")
+        compose.onNodeWithText("Images").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Add photos and files").assertIsDisplayed()
+        compose.onNodeWithTag("home-mode-switcher").assertDoesNotExist()
+        capture("pr5b-images")
     }
 }
