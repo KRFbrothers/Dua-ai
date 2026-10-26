@@ -119,7 +119,7 @@ private fun LiveVoiceContentBody(state: LiveState, starting: Boolean, error: Str
             Spacer(Modifier.height(Spacing.xl))
             Box(Modifier.size(VoiceSizes.liveOrb).clickable(enabled = state.phase == LivePhase.SPEAKING, onClick = onInterrupt)
                 .semantics { contentDescription = if (state.phase == LivePhase.SPEAKING) "Speaking. Tap to interrupt" else "Live voice waveform" }) {
-                VoiceOrb(state.phase, state.level, state.muted, Modifier.fillMaxSize())
+                LiveVoiceWaveformOrb(state.phase, state.level, state.muted, Modifier.fillMaxSize())
                 if (state.phase == LivePhase.SPEAKING) Icon(painterResource(R.drawable.ls_gemini_live_wght320_vd_theme_28), "Dua is speaking",
                     tint = v.text, modifier = Modifier.align(Alignment.Center).size(Spacing.xxl))
             }
@@ -186,7 +186,7 @@ private fun Captions(captions: List<LiveCaption>, modifier: Modifier) {
 
 /** Animated orb: breathes while listening, swells with the voice level and ripples while Dua speaks. */
 @Composable
-fun VoiceOrb(phase: LivePhase, level: Float, muted: Boolean, modifier: Modifier = Modifier) {
+fun LiveVoiceWaveformOrb(phase: LivePhase, level: Float, muted: Boolean, modifier: Modifier = Modifier) {
     val speaking = phase == LivePhase.SPEAKING
     VoiceFrequencyWaveform(level = { level }, speaking = speaking, muted = muted, modifier = modifier)
 }
