@@ -1,5 +1,7 @@
 # Android chat shell ownership — restored Dua Home
 
+Related: [settings-card and loading ownership](COMPONENT_OWNERSHIP.md).
+
 The owner restored the original Dua calligraphy Home with the Chat/Task switcher.
 `ChatScreen` defaults to the original pane for Home and conversations; `ChatRoute`
 does not opt into the supplied reference screen. Work remains in the drawer and
