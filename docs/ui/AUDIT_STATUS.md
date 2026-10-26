@@ -1,8 +1,12 @@
 # Android UI audit status
 
 Checked on 2026-10-26 against main
-`f32cd8a1e36bcbc72c0661444fb16f9c0ec27995` (through PR446), followed by the
-owner-requested removal of the archived parallel shell documented below.
+`9514a1863906f0cb8abc957c860811db647371ba` (through PR453). Since PR446 the
+following were merged: PR447 (owner-requested removal of the archived parallel
+shell documented below), PR448 (unused HomeTaglineCompactStyle token removed),
+PR451 (live VoiceOrb renamed to LiveVoiceWaveformOrb), PR452 (Task Home switch
+sets agentStartAfterId and closes the sheet) and PR453 (Home tagline docs synced
+with HomeTaglineQuietStyle + Google Sans).
 This is the follow-up to the owner's `Dua_AI_Android_Design_UI_Audit.md`.
 The confirmed-safe cleanup and ownership review are complete. Lint, the opt-in
 screenshot package and owner phone acceptance remain unverified; this is not a
@@ -36,7 +40,8 @@ Details: [Home/Projects ownership](LEGACY_CHAT_SHELL.md) and
 [settings/loading ownership](COMPONENT_OWNERSHIP.md). PR440 also corrected the
 documentation/KDoc and PR441 fixed narrow-screen drawer/Voice clearance. The
 restored Home retains that conservative clearance and its pointer regression.
-The four locked sheet/composer files were not edited by these follow-ups.
+The four locked sheet/composer files were not edited by these follow-ups
+(`git diff f32cd8a..9514a18` shows no changes to them through PR453).
 
 ## Verified evidence
 
