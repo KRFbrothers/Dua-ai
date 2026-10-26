@@ -90,7 +90,6 @@ fun duaTypography(family: FontFamily = InterFont): Typography {
 
 val CodeTextStyle = TextStyle(fontFamily = LegacyCodeFont, fontSize = 13.5.sp)
 val HomeTaglineStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Medium, fontSize = 20.sp)
-val HomeTaglineCompactStyle = HomeTaglineStyle.copy(fontSize = 18.sp)
 /** Quiet Home tagline under the logo: smaller and regular weight. */
 val HomeTaglineQuietStyle = HomeTaglineStyle.copy(fontSize = 16.sp, fontWeight = FontWeight.Normal, lineHeight = 22.sp)
 val VoiceGreetingStyle = HomeTaglineStyle.copy(fontSize = 26.sp, lineHeight = 34.sp)

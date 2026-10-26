@@ -42,7 +42,7 @@ All sizes and proportional sizing helpers live in `ui/theme/Type.kt`. Android fo
 
 | Previous inline size / line height | New token |
 | --- | --- |
-| Home tagline `20sp / 28sp`, compact `18sp / 28sp`, InterFont Medium | `HomeTaglineStyle`, `HomeTaglineCompactStyle` (exact original sizing) |
+| Home tagline `20sp / 28sp`, InterFont Medium | `HomeTaglineStyle` (exact original sizing) |
 | Voice greeting `26sp / 34sp`, InterFont Medium | `VoiceGreetingStyle` (exact original sizing) |
 | Voice user transcript `16sp / 22sp` | Theme `voiceTranscriptStyle` (`16sp / 22sp`), derived from the selected M3 body family |
 | Voice reply/Thinking caption `24sp / 33sp`, normal weight | Theme `VoiceReplyCaptionStyle` (`24sp / 33sp`, original default family/normal weight) |
