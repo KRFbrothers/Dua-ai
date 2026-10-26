@@ -42,6 +42,7 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import com.dua.ai.ui.components.AccountAvatar
 import com.dua.ai.ui.components.ReferenceIcons
+import com.dua.ai.ui.components.SettingsCard
 import com.dua.ai.ui.components.settingsValueFitsInline
 import com.dua.ai.BuildConfig
 import com.dua.ai.ui.navigation.DuaDestination
@@ -209,10 +210,7 @@ internal fun CircleButton(icon: ImageVector, label: String, onClick: () -> Unit)
 }
 
 @Composable
-fun SettingsCardBox(content: @Composable ColumnScope.() -> Unit) {
-    val c = SettingsTheme.colors
-    Column(Modifier.fillMaxWidth().clip(SettingsShapes.card).background(c.card).border(SettingsSizes.border, c.cardBorder, SettingsShapes.card), content = content)
-}
+fun SettingsCardBox(content: @Composable ColumnScope.() -> Unit) = SettingsCard(content = content)
 
 /** Reference row: icon, label, optional right-hand value and chevron. Full-width 48 dp+ touch target. */
 @Composable

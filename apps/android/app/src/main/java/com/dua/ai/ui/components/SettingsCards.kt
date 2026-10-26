@@ -53,9 +53,16 @@ fun SettingsGroup(title: String?, modifier: Modifier = Modifier, content: @Compo
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(SettingsSizes.accentGap)) {
         if (title != null) Text(title, style = SettingsSectionStyle, color = c.value,
             modifier = Modifier.padding(start = SettingsSizes.rowPadding).semantics { heading() })
-        Column(modifier.fillMaxWidth().clip(SettingsShapes.card).background(c.card).border(SettingsSizes.border, c.cardBorder, SettingsShapes.card),
-            content = content)
+        SettingsCard(modifier, content)
     }
+}
+
+/** Shared card container only; callers retain their headings, rows and semantics. */
+@Composable
+internal fun SettingsCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+    val c = SettingsTheme.colors
+    Column(modifier.fillMaxWidth().clip(SettingsShapes.card).background(c.card).border(SettingsSizes.border, c.cardBorder, SettingsShapes.card),
+        content = content)
 }
 
 @Composable
