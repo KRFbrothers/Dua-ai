@@ -27,7 +27,6 @@ import com.dua.ai.ui.theme.ChatMessageStyle
 import com.dua.ai.ui.theme.ChatShapes
 import com.dua.ai.ui.theme.ChatSizes
 import com.dua.ai.ui.theme.ChatTheme
-import com.dua.ai.ui.theme.DuaTheme
 import com.dua.ai.ui.theme.Sizes
 import com.dua.ai.ui.theme.Spacing
 
