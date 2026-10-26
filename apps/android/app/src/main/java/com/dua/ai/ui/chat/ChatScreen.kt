@@ -117,6 +117,8 @@ fun ChatScreen(
     topBar: (@Composable () -> Unit)? = null,
     requestComposerFocus: String? = null,
     dismissOverlaysRequest: String? = null,
+    /** Archived supplied reference only; production Home uses the original Dua shell. */
+    useSuppliedChatUi: Boolean = false,
 ) {
     val drawerState = rememberDrawerState(initialDrawerValue)
     var lastDrawerValue by remember { mutableStateOf(drawerState.currentValue) }
@@ -371,11 +373,21 @@ fun ChatScreen(
                 Column(Modifier.fillMaxSize().background(com.dua.ai.ui.theme.ChatTheme.colors.background)
                     .let { if (feature == null) it.windowInsetsPadding(
                         WindowInsets.ime.union(WindowInsets.navigationBars).only(WindowInsetsSides.Bottom)) else it }
+                    .then(if (feature == null && state.homeTab != HomeTab.Work) Modifier.homeBackdrop(taskHome && home, home,
+                        generating = state.typing || visibleState.messages.lastOrNull()?.streaming == true) else Modifier)
                     .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
                     .agentEdgeGlow(agentWorking(state), agentGlowColors())) {
                     if (topBar != null) topBar()
                     else if (feature != null) FeatureTopBar(feature.title, actions.onExitFeature, actions.onNewFeatureSession,
                         newSessionEnabled = !state.typing && (feature != ChatFeature.Agent || state.agentAvailable))
+                    else ChatTopBar(
+                        onMenu = { dismissInput(); if (wideHistory) historyPanelVisible = !historyPanelVisible else scope.launch { drawerState.open() } },
+                        task = taskHome, modelName = homeModelName(state),
+                        profileName = state.profileName, profilePhotoUrl = state.profilePhotoUrl,
+                        onModel = { sheet = ChatSheet.Model }, onProfile = { sheet = ChatSheet.Profile },
+                        onNewChat = actions.onNewChat, newChatEnabled = !state.typing,
+                        onFindInChat = if (state.messages.isEmpty() || state.homeTab == HomeTab.Work) null else ({ followTail = false; searchOpen = true }),
+                    )
                     if (searchOpen) ConversationSearchBar(searchQuery,
                         onQuery = { searchQuery = it; selectedSearchId = null; lastSearchJump = null },
                         searching = needle.isNotEmpty() && searchResults?.takeIf { it.messages == state.messages && it.query == needle } == null,
@@ -386,7 +398,9 @@ fun ChatScreen(
                     Box(Modifier.weight(1f).fillMaxWidth().let { canvas ->
                         if (home && feature == null) canvas.pointerInput(Unit) { detectTapGestures { dismissInput() } } else canvas
                     }) {
-                        if (home && feature == ChatFeature.Agent) {
+                        if (feature == null && state.homeTab == HomeTab.Work) {
+                            Text("Coming soon", Modifier.align(Alignment.Center), style = MaterialTheme.typography.bodyLarge)
+                        } else if (home && feature == ChatFeature.Agent) {
                             AgentContent(state.agentAvailable, busy = state.typing, onBack = actions.onExitFeature,
                                 onNewTask = actions.onNewFeatureSession, onRefresh = actions.onRefreshAgent,
                                 onTask = actions.onAgentTask, onSend = {}, showChrome = false,
@@ -394,6 +408,10 @@ fun ChatScreen(
                         } else if (home && feature != null) {
                             Text(if (feature == ChatFeature.Projects) state.projects.firstOrNull { it.id == state.projectId }?.name ?: "Projects" else "Create an image with Dua",
                                 Modifier.align(Alignment.Center).padding(Spacing.lg), style = MaterialTheme.typography.titleLarge)
+                        } else if (home) {
+                            ChatContent(task = taskHome,
+                                composing = state.draft.isNotBlank() || state.attachments.isNotEmpty() || state.uploads.isNotEmpty(),
+                                onTask = { prompt -> actions.onDraftChange(prompt); inputFocus.requestFocus(); keyboard?.show() })
                         } else {
                             key(conversationKey) {
                                 androidx.compose.runtime.CompositionLocalProvider(LocalCodeExecutionUi provides CodeExecutionUi(
@@ -409,10 +427,15 @@ fun ChatScreen(
                                 onClick = { scope.launch { followTail = true; goToLatest() } },
                                 modifier = Modifier.align(Alignment.BottomEnd).padding(end = Spacing.md, bottom = Spacing.md +
                                     if (feature == null) Sizes.touchTarget + Spacing.md else 0.dp))
-
+                            // In a conversation the Chat/Task toggle floats transparently over the messages.
+                            if (feature == null) Box(Modifier.align(Alignment.BottomCenter).padding(bottom = Spacing.sm)) {
+                                HomeModeSwitcher(if (taskHome) HomeMode.Task else HomeMode.Chat,
+                                    onSelect = { mode -> if (!state.typing) { tap(); taskHome = mode == HomeMode.Task; actions.onAgent(taskHome) } },
+                                    enabled = !state.typing, floating = true)
+                            }
                         }
                     }
-                    Column(Modifier.fillMaxWidth()
+                    if (feature != null || state.homeTab != HomeTab.Work) Column(Modifier.fillMaxWidth()
                         .let { if (feature != null) it.imePadding().navigationBarsPadding() else it }, horizontalAlignment = Alignment.CenterHorizontally) {
                         Column(Modifier.widthIn(max = if (feature == null) HomeSizes.composerMaxWidth else Sizes.contentMaxWidth).fillMaxWidth()
                             .onGloballyPositioned { bottomCoordinates = it }
@@ -475,8 +498,15 @@ fun ChatScreen(
                                 onRemoveAttachmentBackground = if (state.removeBackground) actions.onRemoveAttachmentBackground else null,
                                 writingTools = { task -> actions.onWriting(state.draft, true, task) },
                                 onRemoveUpload = actions.onCancelUpload,
-                                aboveInput = if (feature != null || replyTo == null) null else { {
+                                aboveInput = if (feature != null || (!home && replyTo == null)) null else { {
+                                    androidx.compose.foundation.layout.Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                     replyTo?.let { quote -> ReplyPreview(quote, onCancel = { replyTo = null }) }
+                                    // Home only: in a conversation the toggle floats over the message list instead.
+                                    if (home) HomeModeSwitcher(if (taskHome) HomeMode.Task else HomeMode.Chat,
+                                        onSelect = { mode ->
+                                            if (!state.typing) { tap(); taskHome = mode == HomeMode.Task; actions.onAgent(taskHome) }
+                                        }, enabled = !state.typing)
+                                    }
                                 } },
                                 attachmentPopup = {
                                     if (feature == ChatFeature.Projects) com.dua.ai.ui.projects.ProjectAttachmentMenu(sheet == ChatSheet.Attach, { sheet = null },
@@ -488,7 +518,7 @@ fun ChatScreen(
                 }
             }
             val chatPane: @Composable () -> Unit = {
-                if (feature == null && topBar == null) {
+                if (useSuppliedChatUi && feature == null && topBar == null) {
                     val dictation = if (actions.inlineDictation) rememberChatDictation(actions.dictationLanguage, actions.dictationAutoSend,
                         draft = rememberUpdatedState(state.draft).let { d -> remember { { d.value } } },
                         onDraft = actions.onDraftChange, onSend = sendFromComposer, onNotice = actions.onDictationNotice,

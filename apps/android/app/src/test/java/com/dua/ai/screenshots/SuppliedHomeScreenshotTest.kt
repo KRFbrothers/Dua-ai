@@ -27,7 +27,7 @@ import org.robolectric.ParameterizedRobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
-/** Live Home semantics and captures; historical HomeScreenshotTest keeps the legacy pane. */
+/** Archived supplied design coverage; HomeScreenshotTest renders the restored live Dua Home. */
 @RunWith(ParameterizedRobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [34], qualifiers = RobolectricDeviceQualifiers.Pixel7)
@@ -46,7 +46,7 @@ class SuppliedHomeScreenshotTest(private val dark: Boolean) {
         compose.setContent {
             DuaTheme(LocalPreferences(theme = mode)) {
                 Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-                    ChatScreen(state, ChatActions())
+                    ChatScreen(state, ChatActions(), useSuppliedChatUi = true)
                 }
             }
         }

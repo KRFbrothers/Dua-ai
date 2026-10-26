@@ -58,21 +58,31 @@ class CompactChatUiTest(private val dark: Boolean, private val small: Boolean) {
         show { ChatScreen(ChatUiState(webSearchConfigured = true, codeConfig = CodeExecutionConfig(true, providers = setOf("Dua")),
             suggestions = listOf(com.dua.ai.model.PromptSuggestion("Explain some code", "Explain Kotlin", "Coding"),
                 com.dua.ai.model.PromptSuggestion("Draft a proposal", "Draft a proposal", "Business"))),
-            ChatActions(onDraftChange = { suggested = it }, onNewChat = { newChat++ }, onOpenVoice = { voice++ },
+            ChatActions(onDraftChange = { suggested = it }, onNewChat = { newChat++ }, onOpenVoiceMode = { voice++ },
                 onOpenDestination = { opened = it })) }
-        for (description in listOf("Dua AI, chats and settings", "Add", "Voice")) {
+        for (description in listOf("Open chat history", "Open profile and settings", "Voice mode", "Add photos and files", "Dictate", "Model, Gemini")) {
             compose.onNodeWithContentDescription(description).assertIsDisplayed().assertWidthIsAtLeast(48.dp).assertHeightIsAtLeast(48.dp)
         }
-        compose.onNodeWithTag("supplied-chat").assertIsDisplayed()
-        compose.onNode(hasText("Chat") and isSelectable()).assertIsSelected()
-        compose.onNodeWithContentDescription("New chat").assertDoesNotExist()
-        compose.onNodeWithContentDescription("Voice").performClick()
-        // The supplied Voice control uses onOpenVoice, not the old voice-mode entry.
+        compose.onNode(hasText("Chat") and isSelectable()).assertIsDisplayed().assertIsSelected().assertHeightIsAtLeast(48.dp)
+        compose.onNode(hasText("Task") and isSelectable()).assertIsDisplayed().assertIsNotSelected()
+        compose.onNodeWithText("Ask Dua AI...").assertIsDisplayed()
+        // README-only elements are gone.
+        compose.onAllNodesWithContentDescription("Computer, coming soon").assertCountEquals(0)
+        compose.onAllNodesWithText("Dua always with you ✨").assertCountEquals(0)
+        compose.onAllNodesWithContentDescription("Let the AI run Python code").assertCountEquals(0)
+        val chat = compose.onNode(hasText("Chat") and isSelectable()).fetchSemanticsNode().boundsInRoot
+        val message = compose.onNodeWithContentDescription("Message").fetchSemanticsNode().boundsInRoot
+        assertTrue(chat.bottom <= message.top)
+        compose.onNodeWithContentDescription("New chat").assertIsDisplayed().performClick()
+        compose.runOnIdle { assertEquals(1, newChat) }
+        compose.onNodeWithContentDescription("Voice mode").performClick()
         compose.onNode(hasText("Task") and isSelectable()).performClick()
+        compose.runOnIdle { assertEquals(1, newChat); assertEquals(1, voice) }
         capture("compact-home")
         compose.onNodeWithText(HomeTaskPrompts[1]).performScrollTo().performClick()
-        compose.runOnIdle { assertEquals(HomeTaskPrompts[1], suggested); assertEquals(0, newChat); assertEquals(1, voice) }
-        compose.onNodeWithContentDescription("Add").performClick()
+        compose.runOnIdle { assertEquals(HomeTaskPrompts[1], suggested) }
+        // Mode switches moved from Home buttons into the + sheet.
+        compose.onNodeWithContentDescription("Add photos and files").performClick()
         compose.onNodeWithText("Run code", substring = true).performScrollTo().assertIsDisplayed()
     }
     @Test fun projectsSheetStillOpens() {

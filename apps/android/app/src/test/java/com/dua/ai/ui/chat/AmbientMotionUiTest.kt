@@ -71,7 +71,7 @@ class AmbientMotionUiTest(private val dark: Boolean, private val large: Boolean)
         return requireNotNull(BitmapFactory.decodeFile(file.absolutePath))
     }
     private fun compare(label: String, static: Boolean) {
-        for (tag in listOf("orb-preview", "supplied-shimmer-preview")) {
+        for (tag in listOf("home-gradient", "orb-preview", "supplied-shimmer-preview")) {
             val a = capture(tag, "$label-a")
             compose.mainClock.advanceTimeBy(608)
             val b = capture(tag, "$label-b")
@@ -87,6 +87,7 @@ class AmbientMotionUiTest(private val dark: Boolean, private val large: Boolean)
                 LocalDensity provides Density(LocalDensity.current.density, if (large) 2f else 1f)) {
                 DuaTheme(LocalPreferences(theme = if (dark) "dark" else "light")) {
                     Column(Modifier.requiredSize(360.dp, 800.dp).background(ChatTheme.colors.background)) {
+                        Box(Modifier.fillMaxWidth().height(620.dp).homeBackdrop(task = false, generating = true))
                         Box(Modifier.fillMaxWidth().height(100.dp).testTag("orb-preview")) { TypingIndicator() }
                         Box(Modifier.fillMaxWidth().height(80.dp).testTag("supplied-shimmer-preview")) { GeminiLoadingShimmer() }
                     }
@@ -109,4 +110,24 @@ class AmbientMotionUiTest(private val dark: Boolean, private val large: Boolean)
         compose.onAllNodesWithContentDescription("Dua is thinking").assertCountEquals(2)
     }
 
+    @Test fun endingGenerationRestoresTheConversationBackground() {
+        scale(0f)
+        compose.mainClock.autoAdvance = true
+        val generating = mutableStateOf(false)
+        compose.setContent {
+            DuaTheme(LocalPreferences(theme = if (dark) "dark" else "light")) {
+                Box(Modifier.requiredSize(360.dp, 700.dp).background(ChatTheme.colors.background)
+                    .homeBackdrop(task = false, home = false, generating = generating.value))
+            }
+        }
+        val idle = capture("conversation-ambient", "idle")
+        compose.runOnIdle { generating.value = true }
+        val busy = capture("conversation-ambient", "busy")
+        compose.runOnIdle { generating.value = false }
+        val restored = capture("conversation-ambient", "restored")
+        try {
+            assertFalse("Processing should visibly change the backdrop", idle.sameAs(busy))
+            assertTrue("Stop/completion must restore the quiet conversation wash", idle.sameAs(restored))
+        } finally { idle.recycle(); busy.recycle(); restored.recycle() }
+    }
 }

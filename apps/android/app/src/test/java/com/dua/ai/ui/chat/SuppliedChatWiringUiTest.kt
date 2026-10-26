@@ -44,7 +44,7 @@ class SuppliedChatWiringUiTest(private val large: Boolean) {
         compose.setContent {
             CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, if (large) 2f else 1f)) {
                 DuaTheme(LocalPreferences(theme = "light")) {
-                    ChatScreen(state.value, actions)
+                    ChatScreen(state.value, actions, useSuppliedChatUi = true)
                 }
             }
         }
