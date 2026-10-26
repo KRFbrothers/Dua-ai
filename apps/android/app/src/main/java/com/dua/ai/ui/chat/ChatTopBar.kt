@@ -39,6 +39,9 @@ import com.dua.ai.ui.theme.HomeTheme
 import com.dua.ai.ui.theme.Sizes
 import com.dua.ai.ui.theme.Spacing
 
+/** Home destinations shared by navigation and the chat host. */
+enum class HomeTab(val label: String) { Chat("Chat"), Work("Work") }
+
 @Composable
 fun ChatTopBar(
     onMenu: () -> Unit = {},
