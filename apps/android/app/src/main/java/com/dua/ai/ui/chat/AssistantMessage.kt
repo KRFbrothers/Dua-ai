@@ -13,7 +13,6 @@ import androidx.compose.ui.Modifier
 import com.dua.ai.model.ChatMessage
 import com.dua.ai.model.CodeRuns
 import com.dua.ai.model.ReplySources
-import com.dua.ai.ui.theme.Sizes
 import com.dua.ai.ui.theme.Spacing
 
 /** Assistant turn: full width, no bubble; markdown body, source chips and an action row. */
