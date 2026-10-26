@@ -29,18 +29,6 @@ import com.dua.ai.ui.theme.SheetShapes
 import com.dua.ai.ui.theme.SheetSizes
 import com.dua.ai.ui.theme.SheetTheme
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun ProjectsSheet(projects: List<ChatProject>, selected: String, notice: String, enabled: Boolean,
-    onSelect: (String) -> Unit, onSave: (String?, String, String, Boolean) -> Boolean, onDismiss: () -> Unit,
-    tasksEnabled: Boolean = false, onSaveTask: (String, String?, String, Long?) -> Boolean = { _, _, _, _ -> false },
-    onToggleTask: (String, String) -> Boolean = { _, _ -> false }, onDeleteTask: (String, String) -> Boolean = { _, _ -> false }, dueDatesEnabled: Boolean = false,
-    memoryEnabled: Boolean = false, onSaveMemory: (String, Boolean, List<String>) -> Boolean = { _, _, _ -> false }) {
-    DuaSheet(onDismiss = onDismiss) {
-        ProjectsContent(projects, selected, notice, enabled, onSelect, onSave, tasksEnabled, onSaveTask, onToggleTask, onDeleteTask, dueDatesEnabled, memoryEnabled, onSaveMemory)
-    }
-}
-
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun ProjectsContent(projects: List<ChatProject>, selected: String, notice: String, enabled: Boolean,

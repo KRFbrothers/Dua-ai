@@ -131,6 +131,7 @@ fun ChatScreen(
     val scope = rememberCoroutineScope()
     var sheet by rememberSaveable { mutableStateOf(initialSheet) }
     LaunchedEffect(dismissOverlaysRequest) { if (dismissOverlaysRequest != null) sheet = null }
+    // Restored Projects sheet state delegates to the shared list/editor before chat is composed.
     if (sheet == ChatSheet.Projects) {
         val projectsBack = com.dua.ai.ui.components.rememberPredictiveBack { sheet = null }
         Box(Modifier.fillMaxSize().predictiveBack(projectsBack)) { ProjectsFeaturePage(state, actions, onBack = { sheet = null }) }
@@ -558,10 +559,6 @@ fun ChatScreen(
             onDismiss = { sheet = null },
             onSettings = { sheet = null; actions.onOpenSettings() },
             onDestination = { destination -> sheet = null; actions.onOpenDestination(destination) })
-        ChatSheet.Projects -> ProjectsSheet(state.projects, state.projectId, state.projectNotice, !state.typing,
-            actions.onSelectProject, actions.onSaveProject, onDismiss = { sheet = null }, tasksEnabled = state.projectTasksEnabled,
-            onSaveTask = actions.onSaveTask, onToggleTask = actions.onToggleTask, onDeleteTask = actions.onDeleteTask, dueDatesEnabled = state.taskDueDatesEnabled,
-            memoryEnabled = state.projectMemoryEnabled, onSaveMemory = actions.onSaveProjectMemory)
         ChatSheet.Model -> ModelPickerSheet(
             current = state.model, providers = state.providers,
             freeModels = state.freeModels, currentFree = state.freeModel?.id, onSelectFree = actions.onSelectFreeModel,
@@ -612,7 +609,7 @@ fun ChatScreen(
             onOpenSetup = { sheet = null; actions.onOpenSetup() },
             onDismiss = { sheet = null },
         )
-        null -> Unit
+        ChatSheet.Projects, null -> Unit // Projects is handled by the early return above.
     }
 
     state.writing?.let { session -> WritingToolsSheet(session, actions.writing) }

@@ -85,10 +85,22 @@ class CompactChatUiTest(private val dark: Boolean, private val small: Boolean) {
         compose.onNodeWithContentDescription("Add photos and files").performClick()
         compose.onNodeWithText("Run code", substring = true).performScrollTo().assertIsDisplayed()
     }
-    @Test fun projectsSheetStillOpens() {
-        show { ChatScreen(ChatUiState(), ChatActions(), initialSheet = ChatSheet.Projects) }
+    @Test fun projectsCompatibilityEntryUsesSharedListAndCreateHandler() {
+        var created = ""
+        var legacySaves = 0
+        show { ChatScreen(ChatUiState(), ChatActions(
+            onCreateProject = { name, _, _, _ -> created = name; true },
+            onSaveProject = { _, _, _, _ -> legacySaves++; false }), initialSheet = ChatSheet.Projects) }
         compose.onNode(hasText("Projects") and SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.Heading, Unit)).assertIsDisplayed()
         compose.onNodeWithText("No projects yet").assertIsDisplayed()
+        capture("compat-projects-list")
+        compose.onNodeWithContentDescription("New Project").performClick()
+        compose.onNodeWithContentDescription("Project name").performTextInput("Client")
+        capture("compat-projects-create")
+        compose.onNodeWithText("Create Project").assertIsDisplayed().performClick()
+        compose.onNodeWithText("No projects yet").assertIsDisplayed()
+        assertEquals("Client", created)
+        assertEquals(0, legacySaves)
     }
     @Test fun projectCardsKeepSelectionEditMemoryTasksAndPlannerReachable() {
         var selected = "personal"
