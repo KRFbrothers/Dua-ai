@@ -28,7 +28,6 @@ import com.dua.ai.ui.theme.PageBodyStyle
 import com.dua.ai.ui.theme.PageCardTitleStyle
 import com.dua.ai.ui.theme.PageNoteStyle
 import com.dua.ai.ui.theme.PageSizes
-import com.dua.ai.ui.theme.SettingsShapes
 import com.dua.ai.ui.theme.SettingsSizes
 
 /** Shared full-page parts using PageTheme and Material roles; button/switch helpers retain their SheetParts owner. */
