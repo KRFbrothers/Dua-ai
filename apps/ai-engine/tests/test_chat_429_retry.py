@@ -102,7 +102,7 @@ def test_stream_429_before_first_chunk_is_retried(client, setup, on_call):
     model = setup(first, ["Hi", " there"])
     r = client.post("/api/chat", json={"messages": HISTORY, "stream": True})
     assert events(r) == [{"type": "text", "delta": "Hi"}, {"type": "text", "delta": " there"},
-                         {"type": "done", "truncated": False}]
+                         {"type": "done"}]
     assert model.calls == 2 and len(setup.sleeps) == 1
 
 
@@ -117,5 +117,5 @@ def test_stream_429_after_first_chunk_is_not_retried(client, setup):
     model = setup(["Partial", RateLimited()], ["never"])
     r = client.post("/api/chat", json={"messages": HISTORY, "stream": True})
     got = events(r)
-    assert got[0] == {"type": "text", "delta": "Partial"} and {"type": "done", "truncated": False} not in got
+    assert got[0] == {"type": "text", "delta": "Partial"} and {"type": "done"} not in got
     assert model.calls == 1 and setup.sleeps == []

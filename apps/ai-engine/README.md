@@ -285,6 +285,26 @@ gcloud run services update dua-ai-engine --region us-central1 --project global-h
 New key later: `read -s -p "Paste OpenRouter key: " OR && printf %s "$OR" | gcloud secrets versions add openrouter-key --data-file=- --project global-healer-m6shk; unset OR`
 then run the `--update-secrets` line again. To switch free models off: `gcloud run services update dua-ai-engine --region us-central1 --project global-healer-m6shk --remove-secrets OPENROUTER_API_KEY`.
 
+## Output length and cut-off replies
+
+| Setting | Default | Range / scope |
+| --- | --- | --- |
+| `CHAT_MAX_OUTPUT_TOKENS` | `0` | `0` uses the model default; positive values cap plain chat (streaming and JSON), clamped to 65,536. Negative values become `0`. |
+| `AGENT_ANSWER_TOKENS` | `8192` | Agent direct-answer stream, clamped to 1–65,536. Tool-loop steps and ADK stages retain their separate existing caps. |
+
+Both caps include thinking tokens, so fewer tokens may remain for visible text.
+Blank or invalid integers use the defaults. Raising a cap can increase cost; a
+larger cap does not guarantee a longer answer. The #431 thinking router and its
+rollback flags keep their existing selection rules.
+
+For Gemini `MAX_TOKENS`, JSON replies add `truncated: true` and
+`hint: 'Reply was cut off. Say "continue" to get the rest.'`. Streams send an
+existing-shape `notice` event with `message`, `truncated: true` and `hint` before
+`done` with `truncated: true`. This also covers the Agent direct-answer stream,
+including finish metadata on an empty final chunk. Normal JSON and stream events
+omit `truncated` and `hint`; normal streams end with `{"type":"done"}`.
+The hint does not automatically resume generation or make another paid call.
+
 ## Tests
 ```bash
 pip install -r requirements.txt pytest && python -m pytest -q tests

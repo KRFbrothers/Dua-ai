@@ -53,6 +53,35 @@ cd ~/Dua-ai && git fetch origin && git checkout main && git reset --hard origin/
 
 Plain chat on the engine retries a Vertex `429 RESOURCE_EXHAUSTED` once, only before any reply text reached the app, after `DUA_CHAT_429_RETRY_SECONDS` (default `3`, plus up to 1s jitter; `0` turns the retry off). Agent/ADK paths are unchanged. Logs show `[dua-chat] Vertex rate limited ... retrying once`.
 
+## Engine output-length controls
+
+`CHAT_MAX_OUTPUT_TOKENS` defaults to `0` (model default). Set a positive integer
+to cap plain-chat JSON and streaming replies. It is clamped to 0–65,536.
+`AGENT_ANSWER_TOKENS` defaults to `8192` and controls the Agent direct-answer
+stream, clamped to 1–65,536. Blank/invalid integers use these defaults. Both caps
+include thinking tokens; higher caps may cost more. Tool-loop/ADK stage caps and
+thinking-router selection are unchanged.
+
+An operator can update either knob with `--update-env-vars`, for example:
+
+```bash
+gcloud run services update dua-ai-engine --region us-central1 --project global-healer-m6shk --update-env-vars CHAT_MAX_OUTPUT_TOKENS=16384,AGENT_ANSWER_TOKENS=16384
+```
+
+For a local check, set `CHAT_MAX_OUTPUT_TOKENS=64`, ask for a long essay and inspect
+the JSON/SSE finish. A `MAX_TOKENS` finish adds `truncated: true` and the hint
+`Reply was cut off. Say "continue" to get the rest.` JSON includes both fields;
+SSE emits a `notice` containing `message`, `truncated` and `hint` before
+`done` with `truncated: true`. The Agent direct-answer stream uses the same
+contract. Normal replies/events omit both fields and normal SSE ends with
+`{"type":"done"}`. Unset the local knob and repeat to check model-default output;
+removing the knob does not guarantee the model will never hit its own cap.
+
+To restore the previous explicit Agent direct-answer cap, set
+`AGENT_ANSWER_TOKENS=4096`; remove `CHAT_MAX_OUTPUT_TOKENS` (or set it to `0`) to
+restore model-default plain chat. These instructions do not deploy or change any
+live settings, and the hint does not automatically request more output.
+
 ## Daily backup job (`dua-backup`)
 
 [`backup.py`](../apps/ai-engine/backup.py) runs as Cloud Run job `dua-backup`, built from `apps/ai-engine/`:
