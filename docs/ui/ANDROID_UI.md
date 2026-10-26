@@ -9,7 +9,7 @@ Dua AI keeps its original name and artwork. This is the owner's personal assista
 | Screen | Production code / behavior |
 | --- | --- |
 | Welcome | `ui/account/OnboardingScreen.kt`: full Dua logo, real Google login, Skip for now |
-| Home | `ChatScreen.kt` restores `ChatTopBar.kt`, `ChatContent.kt` and `HomeBackdrop.kt`: Dua calligraphy logo and Chat/Task switcher. Work remains in the drawer. The supplied screen is an opt-in archived reference only; see [shell ownership](LEGACY_CHAT_SHELL.md) |
+| Home | `ChatScreen.kt` restores `ChatTopBar.kt`, `ChatContent.kt` and `HomeBackdrop.kt`: Dua calligraphy logo and Chat/Task switcher. Work remains in the drawer. The parallel supplied screen has been removed; see [shell ownership](LEGACY_CHAT_SHELL.md) |
 | Conversation | Shared `MessageList.kt`, `AssistantMessage.kt`, `MarkdownMessage.kt` and `UserMessage.kt`; original rendering for live Home, features and ProjectChat |
 | Composer | `Composer` in locked `ChatComposer.kt` serves live Home and features unchanged. Shared pickers stay in locked `AttachmentSheet.kt` |
 | History / Aura | `ui/history/HistoryDrawer.kt`: project search, fixed navigation/footer and independently scrolling recent chats |
@@ -74,7 +74,7 @@ Evidence below is pinned to main commit `013fcff784bbccc910c3c1a61cff9cb13a82b31
 The older 454/462-test and earlier render counts below are retained as historical
 validation records. Test coverage changed during the Home cleanup: legacy-only
 header/decorative-entry tests were removed or adapted. See [shell ownership and
-known gaps](LEGACY_CHAT_SHELL.md) for the restored Home controls, archived supplied reference and drawer/Voice
+known gaps](LEGACY_CHAT_SHELL.md) for the restored Home controls, single rendering path and drawer/Voice
 clearance regression.
 
 ## Implemented versus integration-dependent or pending

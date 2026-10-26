@@ -13,8 +13,6 @@ import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
-import androidx.compose.runtime.Immutable
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
@@ -78,19 +76,4 @@ object DuaTheme {
         @Composable @ReadOnlyComposable get() = LocalDuaAccent.current
     val colors: DuaColors
         @Composable @ReadOnlyComposable get() = LocalDuaColors.current
-    /** Short semantic names mapped 1:1 onto the active Material colour scheme (light/dark follow it). */
-    val semantic: DuaSemanticColors
-        @Composable @ReadOnlyComposable get() = MaterialTheme.colorScheme.let { c ->
-            DuaSemanticColors(
-                bg = c.background, surface = c.surface, border = c.outline, primary = c.primary,
-                highlight = c.primaryContainer, text = c.onSurface, muted = c.onSurfaceVariant, danger = c.error,
-            )
-        }
 }
-
-/** Semantic colour layer: bg, surface, border, primary, highlight, text, muted, danger. */
-@Immutable
-data class DuaSemanticColors(
-    val bg: Color, val surface: Color, val border: Color, val primary: Color,
-    val highlight: Color, val text: Color, val muted: Color, val danger: Color,
-)

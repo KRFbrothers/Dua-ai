@@ -63,8 +63,7 @@ fun MessageList(state: ChatUiState, actions: ChatActions, listState: LazyListSta
     onReply: ((com.dua.ai.model.ChatMessage) -> Unit)? = null,
     /** Extra bottom room so the last message can scroll clear of an overlay (floating Chat/Task toggle). */
     bottomOverlay: androidx.compose.ui.unit.Dp = androidx.compose.ui.unit.Dp(0f),
-    suppliedStyle: Boolean = false,
-    emptyContent: (@Composable () -> Unit)? = null) {
+) {
     // Ids present on first show (history) do not animate in; only bubbles that arrive later do.
     val initialIds = remember(state.chatId) { state.messages.map { it.id }.toHashSet() }
     val motion = rememberReplyMotionAllowed()
@@ -83,20 +82,19 @@ fun MessageList(state: ChatUiState, actions: ChatActions, listState: LazyListSta
         state = listState,
         modifier = modifier.fillMaxSize().testTag("chat-messages"),
         contentPadding = PaddingValues(start = ChatSizes.listPaddingH, end = ChatSizes.listPaddingH,
-            top = if (suppliedStyle) 12.dp else ChatSizes.listPaddingTop,
-            bottom = (if (suppliedStyle) 12.dp else ChatSizes.listPaddingBottom) + bottomOverlay),
+            top = ChatSizes.listPaddingTop,
+            bottom = ChatSizes.listPaddingBottom + bottomOverlay),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        if (state.messages.isEmpty() && !state.typing && emptyContent != null) item(key = "welcome", contentType = "welcome") { emptyContent() }
         itemsIndexed(state.messages, key = { _, message -> message.id }, contentType = { _, message -> if (message.isUser) "user" else "assistant" }) { index, message ->
             val selected = message.id == searchMessageId
-            Column(Modifier.padding(top = if (suppliedStyle) 10.dp else MessageGrouping.gapBefore(state.messages, index),
-                    bottom = if (suppliedStyle) 10.dp else 0.dp).widthIn(max = Sizes.contentMaxWidth).fillMaxWidth()
-                .then(if (motion && !suppliedStyle) Modifier.animateItem(
+            Column(Modifier.padding(top = MessageGrouping.gapBefore(state.messages, index),
+                    bottom = 0.dp).widthIn(max = Sizes.contentMaxWidth).fillMaxWidth()
+                .then(if (motion) Modifier.animateItem(
                     fadeInSpec = DuaMotion.gentle(),
                     placementSpec = DuaMotion.bouncy(),
                 ) else Modifier)
-                .bubbleAppear(motion && !suppliedStyle && message.id !in initialIds)
+                .bubbleAppear(motion && message.id !in initialIds)
                 .testTag("message-${message.id}")
                 .then(if (selected) Modifier.border(ChatSizes.searchSelectionBorder, ChatTheme.colors.accent, ChatShapes.searchSelection) else Modifier)
                 .semantics { if (selected) stateDescription = "Selected search result" }) {
@@ -107,11 +105,9 @@ fun MessageList(state: ChatUiState, actions: ChatActions, listState: LazyListSta
                 val replyHere = onReply?.takeIf { !message.streaming && message.text.isNotBlank() }
                 SwipeToReply(enabled = replyHere != null, onReply = { replyHere?.invoke(message) },
                     haptic = { actions.haptic(ChatHaptic.Tap) }) {
-                if (message.isUser && suppliedStyle) SuppliedUserMessage(message, actions.onOpenFile,
-                    modifier = Modifier.messageLongPress(openActions, longPressHaptic))
-                else if (message.isUser) UserMessage(message.text, files = message.files, onOpenFile = actions.onOpenFile,
+                if (message.isUser) UserMessage(message.text, files = message.files, onOpenFile = actions.onOpenFile,
                     onLongPress = openActions, longPressHaptic = longPressHaptic)
-                else AssistantTurn(modifier = Modifier.messageLongPress(openActions, longPressHaptic), suppliedStyle = suppliedStyle) {
+                else AssistantTurn(modifier = Modifier.messageLongPress(openActions, longPressHaptic)) {
                     // Imagine replies own their layout; Agent replies with a created image keep their text (image above it).
                     if (message.isImagine && (message.imagine != null || message.text.isBlank() && !message.streaming)) ImagineReply(message, imagineActions, videoAvailable = state.videoAvailable)
                     else AssistantMessage(
@@ -136,8 +132,7 @@ fun MessageList(state: ChatUiState, actions: ChatActions, listState: LazyListSta
                         onCreatePr = { title -> actions.onCreatePr(message.id, title) },
                         onApproval = { approvalId, approve -> actions.onAgentApproval(message.id, approvalId, approve) },
                         onOpenWorkspaces = { actions.onOpenDestination(com.dua.ai.ui.navigation.DuaDestination.AgentWorkspaces) },
-                        showActions = !suppliedStyle && message.id == lastAssistantId,
-                        suppliedStyle = suppliedStyle,
+                        showActions = message.id == lastAssistantId,
                     )
                 }
                 }
@@ -146,8 +141,8 @@ fun MessageList(state: ChatUiState, actions: ChatActions, listState: LazyListSta
         }
         // Streaming replies render their own progress; the orb covers non-streaming waits.
         if (state.typing && state.messages.none { it.streaming }) item(key = "typing", contentType = "typing") {
-            AssistantTurn(modifier = Modifier.padding(top = if (state.messages.isEmpty()) 0.dp else ChatSizes.messageSpacing).widthIn(max = Sizes.contentMaxWidth), suppliedStyle = suppliedStyle) {
-                if (suppliedStyle) GeminiLoadingShimmer() else TypingIndicator(Modifier.heightIn(min = Sizes.touchTarget))
+            AssistantTurn(modifier = Modifier.padding(top = if (state.messages.isEmpty()) 0.dp else ChatSizes.messageSpacing).widthIn(max = Sizes.contentMaxWidth)) {
+                TypingIndicator(Modifier.heightIn(min = Sizes.touchTarget))
             }
         }
     }
@@ -158,8 +153,7 @@ fun MessageList(state: ChatUiState, actions: ChatActions, listState: LazyListSta
 
 /** Reference assistant turn: no avatar, transparent box with 16/10 dp padding, left aligned. */
 @Composable
-private fun AssistantTurn(modifier: Modifier = Modifier, suppliedStyle: Boolean = false, content: @Composable () -> Unit) {
-    if (suppliedStyle) { SuppliedAssistantTurn(modifier.testTag("assistant-turn"), content); return }
+private fun AssistantTurn(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
     Column(modifier.fillMaxWidth().heightIn(min = Sizes.touchTarget).testTag("assistant-turn")
         .background(ChatTheme.colors.assistantBubble, ChatShapes.bubble)
         .padding(horizontal = ChatSizes.bubblePaddingH, vertical = ChatSizes.bubblePaddingV)) { content() }
