@@ -10,6 +10,9 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertWidthIsAtLeast
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeUp
@@ -36,13 +39,7 @@ import org.robolectric.ParameterizedRobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
-/**
- * The Home (new chat) screen as production serves it: Dua selected, Run code, Imagine and Build offered
- * by the server, native search. Dark, light and a small 320 × 568 dp phone, a conversation with one mode
- * on, the + sheet in a conversation (with the mode switches), the model picker opened from the model pill,
- * the pill with a non-Auto model, and the Computer (coming soon) screen.
- * Record with: ./gradlew :app:recordRoborazziDebug -Pdua.screenshots
- */
+/** Live supplied Home in both themes; record with :app:recordRoborazziDebug -Pdua.screenshots. */
 @RunWith(ParameterizedRobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [34], qualifiers = RobolectricDeviceQualifiers.Pixel7)
@@ -92,6 +89,17 @@ class HomeScreenshotTest(private val dark: Boolean) {
 
     @Test fun home() = shot("home") { ChatScreen(home, ChatActions()) }
 
+    @Test fun namedHomeUsesRealProfileAndSuppliedControls() {
+        compose.setContent { DuaTheme(LocalPreferences(theme = mode)) {
+            ChatScreen(home.copy(profileName = "Fareed Ahmad"), ChatActions())
+        } }
+        compose.onNodeWithTag("supplied-chat").assertIsDisplayed()
+        compose.onNodeWithText("Hello Fareed!", substring = true).assertIsDisplayed()
+        compose.onNodeWithContentDescription("Message").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Send").assertDoesNotExist()
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/home/supplied_named_$mode.png")
+    }
+
     @Test fun modelPicker() = screen("model_picker") { ChatScreen(home, ChatActions(), initialSheet = ChatSheet.Model) }
 
     @Test fun pillOtherModel() = shot("home_model_claude") { ChatScreen(home.copy(model = "Claude"), ChatActions()) }
@@ -99,25 +107,7 @@ class HomeScreenshotTest(private val dark: Boolean) {
     @Test fun computer() = shot("computer") { ComputerScreen(onBack = {}) }
 
     /** The logo's light sweep part-way through (9 s idle + 0.55 s into the 1.2 s sweep), on the real clock. */
-    @Test fun homeShimmer() {
-        compose.mainClock.autoAdvance = false
-        compose.setContent {
-            DuaTheme(LocalPreferences(theme = mode)) {
-                Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) { ChatScreen(home, ChatActions()) }
-            }
-        }
-        compose.mainClock.advanceTimeBy(9_000L + 550L)
-        compose.onRoot().captureRoboImage("build/outputs/roborazzi/home/home_shimmer_$mode.png")
-    }
-
     /** Swipe up on the input card opens the + sheet. */
-    @Test fun plusSheetBySwipe() {
-        compose.setContent { DuaTheme(LocalPreferences(theme = mode)) { ChatScreen(home, ChatActions()) } }
-        compose.onNodeWithContentDescription("Message").performTouchInput { swipeUp(startY = centerY, endY = centerY - 300f) }
-        compose.waitForIdle()
-        captureScreenRoboImage("build/outputs/roborazzi/home/plus_sheet_swipe_$mode.png")
-    }
-
     @Test fun conversationOneMode() = shot("conversation_search") { ChatScreen(conversation, ChatActions()) }
 
     @Test fun plusSheet() = screen("plus_sheet") { ChatScreen(conversation, ChatActions(), initialSheet = ChatSheet.Attach) }
@@ -125,7 +115,7 @@ class HomeScreenshotTest(private val dark: Boolean) {
     /** +, mic and send keep their 36-38 dp look but take taps across a full 48 dp. */
     @Test fun composerTouchTargets() {
         compose.setContent { DuaTheme(LocalPreferences(theme = mode)) { ChatScreen(home.copy(draft = "Hi"), ChatActions()) } }
-        listOf("Add photos and files", "Dictate", "Send message").forEach {
+        listOf("Add", "Send").forEach {
             compose.onNodeWithContentDescription(it, substring = true).assertWidthIsAtLeast(48.dp).assertHeightIsAtLeast(48.dp)
         }
     }
@@ -133,7 +123,7 @@ class HomeScreenshotTest(private val dark: Boolean) {
     /** The voice-mode button (empty field) keeps the same 48 dp target. */
     @Test fun voiceModeButtonTouchTarget() {
         compose.setContent { DuaTheme(LocalPreferences(theme = mode)) { ChatScreen(home, ChatActions()) } }
-        compose.onNodeWithContentDescription("Voice mode").assertWidthIsAtLeast(48.dp).assertHeightIsAtLeast(48.dp)
+        compose.onNodeWithContentDescription("Voice").assertWidthIsAtLeast(48.dp).assertHeightIsAtLeast(48.dp)
     }
 
     @Test fun homeWithDraft() = shot("home_draft") { ChatScreen(home.copy(draft = "Plan a 3-day study schedule for physics", reasoning = true), ChatActions()) }

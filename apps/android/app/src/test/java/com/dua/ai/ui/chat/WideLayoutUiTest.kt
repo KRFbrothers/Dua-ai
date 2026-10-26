@@ -48,9 +48,9 @@ class WideLayoutUiTest {
         compose.onNodeWithText("Trip to Goa plan").assertIsDisplayed().performClick()
         compose.runOnIdle { assertEquals("c1", opened) }
         // The menu button hides and shows the panel.
-        compose.onNodeWithContentDescription("Open chat history").performClick()
+        compose.onNodeWithContentDescription("Dua AI, chats and settings").performClick()
         compose.onNodeWithTag("history-panel").assertDoesNotExist()
-        compose.onNodeWithContentDescription("Open chat history").performClick()
+        compose.onNodeWithContentDescription("Dua AI, chats and settings").performClick()
         compose.onNodeWithTag("history-panel").assertIsDisplayed()
     }
 
@@ -65,7 +65,7 @@ class WideLayoutUiTest {
     @Test fun phoneIsUnchanged() {
         show()
         compose.onNodeWithTag("history-panel").assertDoesNotExist()
-        compose.onNodeWithContentDescription("Open chat history").performClick()
+        compose.onNodeWithContentDescription("Dua AI, chats and settings").performClick()
         compose.onNodeWithText("Trip to Goa plan").assertIsDisplayed()
         compose.onNodeWithTag("history-panel").assertDoesNotExist()
     }

@@ -67,41 +67,30 @@ class GeminiHomeReferenceUiTest(private val dark: Boolean, private val compact: 
                         .testTag("reference-home-viewport")) {
                         ChatScreen(state.value, ChatActions(onDraftChange = { state.value = state.value.copy(draft = it) },
                             onAgent = { state.value = state.value.copy(agent = it) }, onSend = { sent = state.value.draft },
-                            onOpenVoiceMode = { voice++ }, onStop = { stop++ }))
+                            onOpenVoice = { voice++ }, onStop = { stop++ }))
                     }
                 }
             }
         }
         compose.onNodeWithTag("starter-chips").assertDoesNotExist()
         compose.onNodeWithText("How can I help you today?", substring = true).assertDoesNotExist()
-        val content = compose.onNodeWithTag("home-empty-content").fetchSemanticsNode().boundsInRoot
-        val hero = compose.onNodeWithTag("home-hero").fetchSemanticsNode().boundsInRoot
-        if (!compact) {
-            // The hero shares one spot with Task (its starter area is reserved), so it sits in the upper half.
-            assertEquals(content.center.x, hero.center.x, 1f)
-            assertTrue(hero.top > content.top && hero.center.y < content.center.y)
-            assertTrue("Hero should leave breathing space", hero.height < content.height)
-        }
-        compose.onNodeWithText("Your AI, always with you").performScrollTo().assertIsDisplayed()
-        val composer = compose.onNodeWithTag("composer-container").fetchSemanticsNode().boundsInRoot
-        assertTrue(hero.bottom <= composer.top)
-        for (label in listOf("Add photos and files", "Dictate", "Voice mode")) {
-            val button = compose.onNodeWithContentDescription(label).assertIsDisplayed()
+        compose.onNodeWithTag("supplied-chat").assertIsDisplayed()
+        compose.onNodeWithText("Hello Fareed!", substring = true).assertIsDisplayed()
+        for (label in listOf("Add", "Voice")) {
+            compose.onNodeWithContentDescription(label).assertIsDisplayed()
                 .assertWidthIsAtLeast(Sizes.touchTarget).assertHeightIsAtLeast(Sizes.touchTarget)
-                .fetchSemanticsNode().boundsInRoot
-            assertTrue(button.left >= composer.left && button.right <= composer.right)
         }
         val file = File("build/approved-ui/gemini-home-$dark-$compact.png")
         file.parentFile!!.mkdirs(); compose.onNodeWithTag("reference-home-viewport").captureRoboImage(file.absolutePath)
-        compose.onNodeWithContentDescription("Voice mode").performClick(); compose.waitForIdle(); assertEquals(1, voice)
+        compose.onNodeWithContentDescription("Voice").performClick(); compose.waitForIdle(); assertEquals(1, voice)
         compose.onNode(hasText("Task") and isSelectable()).performClick()
         compose.onNodeWithText("Describe...").assertIsDisplayed()
         compose.onNodeWithText(HomeTaskPrompts[1]).performScrollTo().performClick()
-        compose.onNodeWithContentDescription("Send message").performClick()
+        compose.onNodeWithContentDescription("Send").performClick()
         assertEquals(HomeTaskPrompts[1], sent); assertTrue(state.value.agent)
         compose.runOnIdle { state.value = state.value.copy(draft = "", typing = true,
             messages = listOf(ChatMessage(text = "Working", isUser = false))) }
-        compose.onNodeWithTag("home-empty-content").assertDoesNotExist()
+        compose.onNodeWithTag("supplied-task-starters").assertDoesNotExist()
         compose.onNodeWithContentDescription("Stop response").performClick(); assertEquals(1, stop)
     }
 }

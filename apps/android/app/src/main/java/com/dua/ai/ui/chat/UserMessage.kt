@@ -31,14 +31,6 @@ import com.dua.ai.ui.theme.DuaTheme
 import com.dua.ai.ui.theme.Sizes
 import com.dua.ai.ui.theme.Spacing
 
-/** The ViewModel appends "\nFiles: a.pdf, b.png" to a sent prompt; show those names as chips. */
-internal fun splitFileNames(text: String): Pair<String, List<String>> {
-    val at = text.lastIndexOf("\nFiles: ")
-    if (at < 0) return text to emptyList()
-    val names = text.substring(at + "\nFiles: ".length).split(", ").filter { it.isNotBlank() }
-    return text.substring(0, at) to names
-}
-
 /** User turn: reference shell's right-aligned grey 20 dp bubble (16/10 dp padding, 16 sp text). */
 @Composable
 fun UserMessage(text: String, modifier: Modifier = Modifier, files: List<com.dua.ai.files.FileRef> = emptyList(), onOpenFile: (com.dua.ai.files.FileRef) -> Unit = {},

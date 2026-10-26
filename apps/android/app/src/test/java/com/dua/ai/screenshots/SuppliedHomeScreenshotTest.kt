@@ -46,7 +46,7 @@ class SuppliedHomeScreenshotTest(private val dark: Boolean) {
         compose.setContent {
             DuaTheme(LocalPreferences(theme = mode)) {
                 Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-                    ChatScreen(state, ChatActions(), useSuppliedChatUi = true)
+                    ChatScreen(state, ChatActions())
                 }
             }
         }
