@@ -32,6 +32,7 @@ import random
 import re
 import threading
 import time
+from typing import NamedTuple
 
 from flask import Flask, Response, g, jsonify, request, stream_with_context
 import agent_models
@@ -68,6 +69,9 @@ MAX_TURN_CHARS = 100_000
 MAX_MEMORY_CHARS = 8192  # Bounded owner project instructions (4000) plus up to 10 project memories.
 MAX_ATTACHMENTS = 10
 MAX_ATTACHMENT_BYTES = 4 * 1024 * 1024
+LARGE_FILES = os.environ.get("LARGE_FILES", "0")
+LARGE_FILES_BUCKET = os.environ.get("LARGE_FILES_BUCKET", "").strip()
+LARGE_FILE_MAX_BYTES = env_int("LARGE_FILE_MAX_BYTES", 100 * 1024 * 1024)
 HEARTBEAT_SECONDS = 15
 ATTACHMENT_TYPES = ("image/", "application/pdf", "text/", "audio/", "video/")
 # Models the app may name; this engine always answers with Gemini on Vertex AI.
@@ -246,8 +250,15 @@ def get_model(system_text=SYSTEM_PROMPT):
     return model
 
 
+class _GcsUri(NamedTuple):
+    """Internal marker for a URI already checked against the authenticated owner's prefix."""
+    uri: str
+
+
 def make_part(text=None, data=None, mime_type=None):
     from google.genai import types
+    if isinstance(data, _GcsUri):
+        return types.Part.from_uri(file_uri=data.uri, mime_type=mime_type)
     return types.Part.from_text(text=text) if data is None else types.Part.from_bytes(data=data, mime_type=mime_type)
 
 
@@ -299,6 +310,37 @@ def owner_access_error():
     return None
 
 
+def decode_large_file(item):
+    """Accept canonical gs://bucket/owner/object references; never fetch a client-supplied URL."""
+    if LARGE_FILES != "1":
+        raise BadRequest("Large file attachments are disabled.")
+    owner = getattr(g, "owner_id", None)
+    uri = item.get("uri")
+    if (not re.fullmatch(r"[a-z0-9][a-z0-9._-]{1,220}[a-z0-9]", LARGE_FILES_BUCKET)
+            or not isinstance(owner, str) or not re.fullmatch(r"[A-Za-z0-9_-]+", owner)
+            or not isinstance(uri, str) or "data" in item):
+        raise BadRequest("Invalid large file attachment.")
+    prefix = f"gs://{LARGE_FILES_BUCKET}/{owner}/"
+    # No URL decoding or path normalization: escaped separators, traversal and alternate URL forms fail closed.
+    if (not uri.startswith(prefix) or any(c in uri for c in "%\\?#")
+            or any(c.isspace() or ord(c) < 32 or ord(c) == 127 for c in uri)
+            or any(segment in ("", ".", "..") for segment in uri[len(prefix):].split("/"))):
+        raise BadRequest("Invalid large file attachment URI.")
+    mime = item.get("mimeType")
+    if not isinstance(mime, str):
+        raise BadRequest("Invalid large file attachment MIME type.")
+    mime = mime.lower()
+    if (not re.fullmatch(r"[a-z0-9][a-z0-9.+_-]*/[a-z0-9][a-z0-9.+_-]*", mime)
+            or not any(mime.startswith(t) if t.endswith("/") else mime == t for t in ATTACHMENT_TYPES)):
+        raise BadRequest("This file type is not supported by the Dua AI engine.", 415)
+    size = item.get("size")
+    if type(size) is not int or size <= MAX_ATTACHMENT_BYTES:
+        raise BadRequest("Large file size must be an integer greater than 4 MiB.")
+    if size > LARGE_FILE_MAX_BYTES:
+        raise BadRequest("Attachment is too large.", 413)
+    return _GcsUri(uri), mime
+
+
 def decode_attachments(raw):
     if raw is None:
         return []
@@ -308,6 +350,9 @@ def decode_attachments(raw):
     for item in raw:
         if not isinstance(item, dict):
             raise BadRequest("Invalid attachment.")
+        if "uri" in item:
+            result.append(decode_large_file(item))
+            continue
         mime = str(item.get("mimeType", "")).lower()
         if not mime.startswith(ATTACHMENT_TYPES):
             raise BadRequest("This file type is not supported by the Dua AI engine.", 415)
@@ -341,7 +386,7 @@ def file_context(files):
 
 
 def build_contents(messages, attachments):
-    """Preserve inline parts on their original user turns, plus any supplied file-text fallback."""
+    """Preserve inline/URI parts on their original user turns, plus supplied file-text fallback."""
     if not isinstance(messages, list) or not messages or len(messages) > MAX_TURNS:
         raise BadRequest("Invalid message history.")
     turns = []
@@ -1091,9 +1136,13 @@ def api_chat():
     free_model = data.get("openrouter")
     if free_model is not None and (not openrouter.enabled() or not openrouter.allowed(free_model)):
         return jsonify({"error": "This free model is not available. Choose another model."}), 400
+    # build_contents has already validated every user-turn attachment, including URI ownership.
+    has_large_files = any(isinstance(part, _GcsUri) for part, _mime in attachments) or any(
+        "uri" in item for message in data["messages"] if message["role"] == "user"
+        for item in message.get("attachments") or [])
     # Free models answer plain chat only; Agent, web, code and Build stay on Gemini.
     use_free = free_model is not None and data.get("stream") is True and not agent and data.get("mode") in (None, "auto", "reasoning") \
-        and not data.get("web") and not data.get("code")
+        and not data.get("web") and not data.get("code") and not has_large_files
     if agent and data.get("stream") is not True:
         return jsonify({"error": "Agent mode needs streaming. Update the app."}), 400
     chat_config = {}
@@ -1112,6 +1161,9 @@ def api_chat():
         if tools:
             chat_config["tools"] = tools
     include_code = not agent and not use_free and bool(data.get("code")) and CHAT_CODE_EXECUTION == "1"
+    notice = unsupported_notice(data)
+    if has_large_files and free_model is not None:
+        notice = ((notice + " ") if notice else "") + "Large file attachments use Gemini instead of the selected free model."
     if data.get("stream") is not True:
         try:
             try:
@@ -1130,14 +1182,12 @@ def api_chat():
         result = {"text": text + sources_footer(sources)}
         if sources:
             result["sources"] = sources
-        notice = unsupported_notice(data)
         if notice:
             result["notice"] = notice
         if finish_truncated(response):
             result.update(truncated=True, hint=CONTINUE_HINT)
         return jsonify(result)
 
-    notice = unsupported_notice(data)
     if use_free:
         has_files = bool(attachments) or any(isinstance(m, dict) and m.get("attachments") for m in data.get("messages") or [])
         notice = "Free models read text only; attached images and audio were not sent." if has_files else None
@@ -1164,7 +1214,11 @@ def api_chat():
             iterator = None
             try:
                 if agent:
-                    agent_producer(data.get("messages"), attachments, system, owner, cancelled=stopped.is_set)(enqueue)
+                    # The Agent rebuilds historical parts on this worker. Bind the authenticated
+                    # owner explicitly; Flask's request-local g is not inherited by new threads.
+                    with app.app_context():
+                        g.owner_id = owner["id"]
+                        agent_producer(data.get("messages"), attachments, system, owner, cancelled=stopped.is_set)(enqueue)
                     return
                 if use_free:
                     openrouter.stream(free_model, system, data.get("messages"), enqueue, reasoning=data.get("mode") == "reasoning")

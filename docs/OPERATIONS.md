@@ -82,6 +82,74 @@ To restore the previous explicit Agent direct-answer cap, set
 restore model-default plain chat. These instructions do not deploy or change any
 live settings, and the hint does not automatically request more output.
 
+## Large files via GCS (Argon PR5)
+
+This engine-only feature is disabled by default. It adds no bucket, upload endpoint,
+signed URL helper, deployment change or Android/web upload UI. The API's existing
+signing helper is for Supabase Storage, not GCS V4; GCS signed uploads and API
+forwarding remain follow-up work. Send test references directly to the engine's
+existing owner-authenticated `POST /api/chat` route.
+
+| Engine variable | Default | Meaning |
+| --- | --- | --- |
+| `LARGE_FILES` | `0` | Only the exact value `1` enables URI attachments. |
+| `LARGE_FILES_BUCKET` | empty | One private GCS bucket name, without `gs://` or a path; required for URI attachments. |
+| `LARGE_FILE_MAX_BYTES` | `104857600` | Declared per-file maximum (100 MiB). Must exceed 4 MiB to admit any large files; blank/invalid integers use the default. |
+
+URI items use `{"uri":"gs://<bucket>/<owner-id>/<object>","mimeType":"application/pdf","size":20971520}`.
+Only canonical, unescaped `gs://` paths in the configured bucket and authenticated
+`g.owner_id` prefix are accepted. Encoded characters, traversal/empty path segments,
+backslashes, whitespace, query strings and fragments are rejected. MIME types must
+match the engine's attachment allowlist. `size` must be an integer greater than
+4 MiB and at most the configured maximum; the current engine checks this metadata,
+not GCS object metadata. An eventual upload service must enforce the actual size,
+type and immutable owner path too.
+
+Inline decoding remains capped at 4 MiB per attachment, and the existing HTTP and
+API request-body limits remain unchanged. References also work on historical user
+turns. A selected free model is excluded for requests containing these references:
+Gemini receives the URI parts and a notice explains the fallback.
+
+Use a separate private test bucket with uniform bucket-level access and public
+access prevention. Grant the Cloud Run engine service account
+`roles/storage.objectViewer` on that bucket so Vertex can read referenced objects
+with the deployed ADC identity; confirm any additional Vertex service-agent access
+needed for cross-project buckets. Uploads should use a separate authorized operator
+or uploader identity. This change needs no bucket write/admin role for the engine.
+Do not publish the bucket or replace owner authentication with an object URL.
+
+Choose and configure a bucket lifecycle policy before enabling real uploads.
+Objects persist until explicit deletion or that policy applies; GCS soft-delete,
+versions and retention locks can extend retention. Neither chat/account deletion
+nor Supabase file cleanup deletes these GCS objects. The Gemini Files API's 48-hour
+expiry does not apply. An object must still exist and remain readable for a later
+turn to use its URI.
+
+### Manual acceptance check (not a deployment step)
+
+1. Create a private test bucket in the intended project, configure its retention,
+   and grant the reader role above. Upload an actual 20 MiB PDF to
+   `gs://<test-bucket>/<verified owner account ID>/pr5/report.pdf` using an operator
+   identity. Record its actual byte length for the request's `size`.
+2. Locally start the engine with its existing owner-auth/ADC settings plus
+   `LARGE_FILES=1`, `LARGE_FILES_BUCKET=<test-bucket>` and the default size cap.
+   Send an authenticated request to `/api/chat` with a user message asking for a
+   summary and the URI item above; confirm a real Gemini summary. Repeat with the
+   attachment on an earlier user turn and, separately, with a configured free
+   model selected; confirm Gemini fallback plus its notice.
+3. Restart locally with `LARGE_FILES=0`; the same URI request must return HTTP 400
+   before any model call. A small inline PDF/image must still work. Wrong buckets,
+   another owner's prefix, unsupported MIME types and oversize references must fail.
+4. Remove the test object/bucket according to the configured retention policy.
+   Do not change production flags or deploy as part of this acceptance check.
+
+Offline regression checks (no bucket or model access):
+
+```bash
+cd apps/ai-engine
+python -m pytest tests/test_large_files.py tests/test_app.py -q
+```
+
 ## Daily backup job (`dua-backup`)
 
 [`backup.py`](../apps/ai-engine/backup.py) runs as Cloud Run job `dua-backup`, built from `apps/ai-engine/`:
