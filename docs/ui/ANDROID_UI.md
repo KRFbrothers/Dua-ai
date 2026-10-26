@@ -10,10 +10,10 @@ Dua AI keeps its original name and artwork. This is the owner's personal assista
 | --- | --- |
 | Welcome | `ui/account/OnboardingScreen.kt`: full Dua logo, real Google login, Skip for now |
 | Home | `ui/chat/SuppliedChatUi.kt` (`SuppliedChatScreen`) serves Home Chat, Task and Work whenever no feature or custom `topBar` is supplied. `ChatScreen.kt` hosts the drawer/sheets and keeps `legacyChatPane` for features and ProjectChat; see [shell ownership and known gaps](LEGACY_CHAT_SHELL.md) |
-| Conversation | `MessageList.kt`, `UserMessage.kt`, `AssistantMessage.kt`, `MarkdownMessage.kt`: bubbles, streamed replies, Markdown, copyable code blocks, sources, typing and partial-stop states |
-| Composer | `ChatComposer.kt`, `AttachmentSheet.kt`, `StoredFileChips.kt`: multiline input, send/stop, model choice, mic/voice and file tools |
+| Conversation | Shared `MessageList.kt`, `AssistantMessage.kt` and `MarkdownMessage.kt`; Home uses `SuppliedUserMessage` in `SuppliedChatUi.kt`, while feature/ProjectChat routes retain `UserMessage.kt` |
+| Composer | Home uses `GeminiBottomBar` / `SuppliedComposer` in `SuppliedChatUi.kt`; feature/ProjectChat routes retain `Composer` in `ChatComposer.kt`. Shared pickers stay in `AttachmentSheet.kt` |
 | History / Aura | `ui/history/HistoryDrawer.kt`: project search, fixed navigation/footer and independently scrolling recent chats |
-| Projects | `ProjectsSheet.kt` and project task/memory/planner components: selected project, instructions, archive, tasks, memory and planner |
+| Projects | `ui/projects/ProjectsFlow.kt`, list/detail/editor and `ProjectChatRoute.kt` own the dedicated flow; the compatibility Projects entry delegates to the shared list/editor |
 | Profile and settings | `ui/navigation/DuaNavHost.kt`, `ui/settings/`, `ui/account/`: owner account, appearance/accent, fonts, haptics, notifications; Voice contains its input/mode/reply controls, and History and data contains Data controls/privacy/sharing/permissions |
 
 Production follows the existing MVVM structure: `MainActivity → DuaApp → DuaNavHost → ChatRoute → ChatScreen → SuppliedChatScreen (Home chat) or legacy pane`. `ChatViewModel` owns state and operations; `ChatUiState`/`ChatActions` keep the chat components reusable. Account, network, history, settings, projects and voice modules hold their existing responsibilities. The backend lives only in `apps/api/`; provider keys never belong in Android source, resources or build configuration.
@@ -24,10 +24,10 @@ Each adjacent assistant group has one 24dp original Dua logo mark in a 48dp-alig
 
 ## Design system
 
-Actual Compose renders: [Dark preview](compact-preview-dark.png) · [Light preview](compact-preview-light.png). These use synthetic chats/projects, not the owner's conversations.
+Historical compact-chat renders: [Dark preview](compact-preview-dark.png) · [Light preview](compact-preview-light.png). These use synthetic fixtures and predate the supplied Home cleanup. Current build/render evidence is linked under [Current verification](#current-verification-2026-10-26).
 
 - Existing `ui/theme/Color.kt` neutral surfaces, error/code roles and full logo artwork are preserved.
-- `DuaTheme.kt` and `AccentColors.kt` apply Light/Dark plus six accent presets independently. Defaults: Light Purple `#AA4FF6`; Dark Orange `#FF6308`. Accent reset clears only the override.
+- `DuaTheme.kt` and `AccentColors.kt` apply Light/Dark plus seven accent presets independently (including Copper). Defaults: Light Purple `#AA4FF6`; Dark Orange `#FF6308`. Accent reset clears only the override.
 - `Type.kt` supplies the Inter-based text scale: 16sp body, 14sp secondary/buttons, 20sp page titles; Android font scaling stays enabled. The Home tagline uses `InterFont` (bundled `inter_*`), like the rest of the text scale.
 - `Spacing.kt` supplies the 4dp spacing scale. Rounded surfaces use `Shape.kt`. Controls retain 48dp touch targets; menu/footer stay fixed while history scrolls. Code/Think/Search use accessible icon-only controls when their labels cannot fit.
 - The header and project actions are neutral. Accent is used selectively for selection and settings; the logo is never tinted.
@@ -42,7 +42,7 @@ Actual Compose renders: [Dark preview](compact-preview-dark.png) · [Light previ
 
 ## Run the real app
 
-1. Open the repo in Android Studio. Install JDK 17, Android SDK 35 and build-tools 35.0.0.
+1. Open `apps/android/` in Android Studio. Install JDK 17, Android SDK 35 and build-tools 35.0.0.
 2. Build `bash apps/android/gradlew -p apps/android :app:assembleDebug --no-daemon --max-workers=2`. Install `apps/android/app/build/outputs/apk/debug/app-debug.apk` on an emulator for development.
 3. For the owner's phone, use the permanent signed release workflow in [SIGNING.md](../../SIGNING.md). A development/debug certificate differs from the owner release certificate; do not replace an installed release with a debug APK.
 4. The production API defaults to `https://dua-api-228305912525.us-central1.run.app` (dua-api on Cloud Run). For local backend development, install the `apps/api/` dependencies and run `npm start`. Android requires HTTPS in every build: use a trusted HTTPS development endpoint and override it with `-PduaApiBaseUrl=https://YOUR-ENDPOINT`. A raw HTTP emulator URL is rejected. See [README.md](../../README.md) for backend requirements.
@@ -60,6 +60,22 @@ adb shell am start -n com.dua.ai/.preview.UiPreviewActivity
 Use Home, Chat, Error and Welcome plus the Light/Dark switch. A persistent **UI preview · sample data · no backend** banner distinguishes these fixtures. Sending/retrying displays a preview notice; it never generates an AI response or contacts a backend. Real account, voice and picker actions direct you to the normal app. The preview neither loads private chats nor creates an account/ViewModel. It is excluded from release source/manifest; the normal launcher remains unchanged.
 
 The default native UI tests render production components with synthetic fixtures, separately from the preview activity. Run `bash apps/android/gradlew -p apps/android :app:testDebugUnitTest -Pdua.ui-record --no-daemon --max-workers=2` from the repository root and inspect `apps/android/app/build/approved-ui/*.png`. The flag enables PNG recording; without it, the tests still run. Historical screenshot classes are excluded unless `-Pdua.screenshots` is supplied. See [README.md — Android and routine checks](../../README.md#android-and-routine-checks) for both commands, report locations and CI scope. Recorded PNGs are not proof of physical-device or pixel-baseline verification.
+
+## Current verification (2026-10-26)
+
+Evidence below is pinned to main commit `013fcff784bbccc910c3c1a61cff9cb13a82b313`
+(after PR5b), not a permanent test-count promise:
+
+- [Project checks](https://github.com/KRFbrothers/Dua-ai/actions/runs/40314179009): Android, Backend, Website and engine jobs passed.
+- Downloaded [Android report and renders](https://github.com/KRFbrothers/Dua-ai/actions/runs/40314179009/artifacts/12646551712): 1,628 tests, zero failures/errors/skips, and 396 PNG renders.
+- [Personal APK build](https://github.com/KRFbrothers/Dua-ai/actions/runs/40316522243): passed. Installation and phone acceptance are not established by that result.
+- Existing CI runs the default unit/UI suite with `-Pdua.ui-record`. Lint and the opt-in historical screenshot package are not covered by this evidence; physical-device, TalkBack and live-provider checks remain separate.
+
+The older 454/462-test and earlier render counts below are retained as historical
+validation records. Test coverage changed during the Home cleanup: legacy-only
+header/decorative-entry tests were removed or adapted. See [shell ownership and
+known gaps](LEGACY_CHAT_SHELL.md), including the narrow-screen Voice overlap and
+Home controls not provided by the supplied design.
 
 ## Implemented versus integration-dependent or pending
 
@@ -84,7 +100,7 @@ The default native UI tests render production components with synthetic fixtures
 
 Code/build/render verification is not proof of live provider, account, Storage, permission or physical-device behavior. Check these with [RELEASE_CHECKLIST.md](../RELEASE_CHECKLIST.md) and the owner's installed release APK.
 
-## Validation for the compact-chat update
+## Historical validation for the compact-chat update
 
 - Local debug APK build and the default 462-test Android suite passed with zero failures/errors/skips; that count excludes the opt-in historical screenshot classes.
 - After adding the share-chooser regression check and correcting the screenshot fixture background, 33 UI/action tests passed. The new share test checks Android's chooser receives the full reply including executed code.
@@ -104,16 +120,16 @@ For this grouping update, debug APK packaging and 55 focused UI/voice tests pass
 
 Reference: [Dua AI tldraw board](https://www.tldraw.com/f/6aV_i2gXeMVcvKMTbg7NP).
 
-### Owner-requested compact styling
+### Earlier owner-requested compact styling (historical)
 
-After trying the approved-navigation APK on the phone, the owner requested a more compact Home, Sidebar and Projects presentation. The navigation placements and existing actions remain, with these visual adjustments:
+The Home descriptions in this historical section predate the supplied-shell cleanup; use the current screen map and [known gaps](LEGACY_CHAT_SHELL.md) for live Home. After trying the approved-navigation APK on the phone, the owner requested a more compact Home, Sidebar and Projects presentation. The navigation placements and existing actions remain, with these visual adjustments:
 
 - Home uses a single header: history, Dua AI/current-project selector, Computer shortcut and New chat. The orange project row is removed. The full original logo is smaller, with a quieter tagline; its artwork is unchanged.
 - Sidebar/Aura use the existing 16sp body scale and 48dp menu targets. The footer New chat is neutral rather than a large accent block; only recent chats scroll.
 - Projects have left-aligned names in grouped cards, a subtle selected state, neutral Edit/Memory/Tasks actions and a short explanation. Daily planner, project editing/archive, tasks and project memory remain available.
 - The composer model control is neutral and can shrink to fit beside the attachment and voice/send controls at large font sizes. Code/Think/Search modes remain available.
 
-Six accent presets and independent persisted appearance still work; the accent is used selectively for selection and theme controls rather than every navigation action. This owner feedback supersedes the earlier large-label/accent-footer styling, not the approved navigation flow.
+Seven accent presets and independent persisted appearance work; the accent is used selectively for selection and theme controls rather than every navigation action. This owner feedback supersedes the earlier large-label/accent-footer styling, not the approved navigation flow.
 
 The sections above cover the Light/Dark previews, the sample-conversation debug entry point, setup and remaining features.
 
@@ -145,7 +161,7 @@ Current placeholders (from `DuaDestination.comingSoonTitle`): **Search settings*
 ### Preferences and theme preservation
 
 - Appearance (`system`, `light`, `dark`) and optional accent override use separate keys in Preferences DataStore `dua_appearance`. Fresh installs use System default; an existing valid appearance is copied once from the legacy JSON without deleting or modifying its memory/projects.
-- Presets: Purple `#AA4FF6`, Orange `#FF6308`, Blue `#2979FF`, Green `#16A34A`, Pink `#E84393`, Teal `#00897B`.
+- Presets: Purple `#AA4FF6`, Orange `#FF6308`, Blue `#2979FF`, Green `#16A34A`, Pink `#E84393`, Teal `#00897B`, Copper `#DA7757`.
 - An override applies in both themes. **Reset to default** removes only the accent key; it keeps the appearance choice. Without an override Light uses Purple and Dark uses Orange. Device settings reset also resets appearance to System default and clears the override.
 - Exact preset colors are used for swatches and accent previews. Default page text/icons use the theme foreground; foreground colors and Material text roles are adjusted for contrast, while original neutral/error/code/brand tokens in `Color.kt` stay intact. The full original logo assets are untouched; Home uses a smaller placement, and the artwork is never recolored with the accent.
 - These are device appearance preferences, not server history or memory. They are not part of a cloud snapshot. DataStore failures show a storage/retry notice.
@@ -154,9 +170,9 @@ Current placeholders (from `DuaDestination.comingSoonTitle`): **Search settings*
 
 The sidebar is at most 360dp wide; Aura expands to at most 520dp and is constrained by the available window. Both use system/keyboard insets. At short heights, fixed navigation uses two compact columns with at least 48dp targets, leaving the list and footer reachable. Regular heights use the approved single-column arrangement. Fixed menu labels can ellipsize at large font sizes; accessibility retains the complete text. Profile rows grow and scroll instead of overlapping. Accent previews stack when font scaling or narrow width requires it.
 
-### Validation
+### Validation history
 
-Automated tests cover DataStore restart persistence, independent theme/accent writes, migration, reset defaults, all six accents in both themes (text contrast at least 4.5:1), fixed sidebar/Aura controls during list scrolling, real project/account/sync/Imagine routes and logout confirmation. Compose UI checks run in both appearances at 360dp and at 320 × 568dp with 2× font scaling. CI records those UI renders in the Android test-report artifact; they use fixture chats and an example account, never production data.
+Automated tests cover DataStore restart persistence, independent theme/accent writes, migration, reset defaults, all seven accents in both themes (text contrast at least 4.5:1), fixed sidebar/Aura controls during list scrolling, real project/account/sync/Imagine routes and logout confirmation. Compose UI checks run in both appearances at 360dp and at 320 × 568dp with 2× font scaling. CI records those UI renders in the Android test-report artifact; they use fixture chats and an example account, never production data.
 
 Local validation on 2026-10-11: debug APK packaging and 454 Android tests passed, including 20 Compose UI checks and 20 render PNGs. The extra interaction check for the existing delete-account dialog encountered Robolectric idling; its dialog interaction remains a physical-device check.
 
