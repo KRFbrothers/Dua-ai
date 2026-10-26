@@ -247,6 +247,16 @@ fun ChatScreen(
         actions.onAgent(enabled)
         if (enabled) sheet = null
     }
+    val onHomeMode: (HomeMode) -> Unit = { mode ->
+        if (!state.typing) {
+            tap()
+            val task = mode == HomeMode.Task
+            if (task && !state.agent) agentStartAfterId = state.messages.lastOrNull()?.id
+            taskHome = task
+            actions.onAgent(task)
+            if (task) sheet = null
+        }
+    }
     val onXSearch: (Boolean) -> Unit = { tap(); if (it) taskHome = false; actions.onXSearch(it) }
     // Colour splash (Androidify): Voice mode and Imagine from Home grow a circle from the last tap, then switch.
     var lastTap by remember { mutableStateOf(Offset.Unspecified) }
@@ -429,7 +439,7 @@ fun ChatScreen(
                             // In a conversation the Chat/Task toggle floats transparently over the messages.
                             if (feature == null) Box(Modifier.align(Alignment.BottomCenter).padding(bottom = Spacing.sm)) {
                                 HomeModeSwitcher(if (taskHome) HomeMode.Task else HomeMode.Chat,
-                                    onSelect = { mode -> if (!state.typing) { tap(); taskHome = mode == HomeMode.Task; actions.onAgent(taskHome) } },
+                                    onSelect = onHomeMode,
                                     enabled = !state.typing, floating = true)
                             }
                         }
@@ -502,9 +512,7 @@ fun ChatScreen(
                                     replyTo?.let { quote -> ReplyPreview(quote, onCancel = { replyTo = null }) }
                                     // Home only: in a conversation the toggle floats over the message list instead.
                                     if (home) HomeModeSwitcher(if (taskHome) HomeMode.Task else HomeMode.Chat,
-                                        onSelect = { mode ->
-                                            if (!state.typing) { tap(); taskHome = mode == HomeMode.Task; actions.onAgent(taskHome) }
-                                        }, enabled = !state.typing)
+                                        onSelect = onHomeMode, enabled = !state.typing)
                                     }
                                 } },
                                 attachmentPopup = {
