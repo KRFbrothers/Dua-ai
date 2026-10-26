@@ -2,11 +2,11 @@
 agp = "8.8.0"
 kotlin = "2.4.21"
 # 2026.06.00 is the newest Compose BOM whose ui artifact declares minCompileSdk 35 (2026.08.00+ needs 37).
-composeBom = "2026.06.00"
+composeBom = "2026.09.00"
 activityCompose = "1.10.0"
 lifecycleRuntimeKtx = "2.8.7"
 # 2.9.8 is the newest navigation-compose whose AAR metadata declares minCompileSdk 35 (2.10.0+ needs 37).
-navigationCompose = "2.9.8"
+navigationCompose = "2.10.2"
 markdownRenderer = "0.30.0"
 roborazzi = "1.40.1"
 robolectric = "4.17"
@@ -29,8 +29,8 @@ lottie-compose = { group = "com.airbnb.android", name = "lottie-compose", versio
 vosk-android = { group = "com.alphacephei", name = "vosk-android", version = "0.3.75" }
 androidx-profileinstaller = { group = "androidx.profileinstaller", name = "profileinstaller", version = "1.4.1" }
 androidx-datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "datastore" }
-# 1.16.0 is the newest core-ktx whose AAR metadata declares minCompileSdk 35 (1.17.0+ needs 36).
-androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version = "1.16.0" }
+# 1.19.1 is the newest core-ktx whose AAR metadata declares minCompileSdk 35 (1.17.0+ needs 36).
+androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version = "1.19.1" }
 androidx-core-splashscreen = { group = "androidx.core", name = "core-splashscreen", version.ref = "coreSplashscreen" }
 androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycleRuntimeKtx" }
 androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
