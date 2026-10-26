@@ -74,8 +74,8 @@ Evidence below is pinned to main commit `013fcff784bbccc910c3c1a61cff9cb13a82b31
 The older 454/462-test and earlier render counts below are retained as historical
 validation records. Test coverage changed during the Home cleanup: legacy-only
 header/decorative-entry tests were removed or adapted. See [shell ownership and
-known gaps](LEGACY_CHAT_SHELL.md), including the narrow-screen Voice overlap and
-Home controls not provided by the supplied design.
+known gaps](LEGACY_CHAT_SHELL.md) for Home controls not provided by the supplied
+design and the narrow-screen drawer/Voice clearance regression.
 
 ## Implemented versus integration-dependent or pending
 

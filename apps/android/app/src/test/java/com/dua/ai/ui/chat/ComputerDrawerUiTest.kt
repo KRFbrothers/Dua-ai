@@ -52,14 +52,14 @@ class ComputerDrawerUiTest(private val dark: Boolean, private val small: Boolean
         }
     }
 
-    @Test fun openDrawerKeepsDismissScrimAndBoundsTheSuppliedVoiceControl() {
-        show { ChatScreen(ChatUiState(), ChatActions(), initialDrawerValue = DrawerValue.Open) }
+    @Test fun openDrawerLeavesWholeVoiceTargetInScrimThenVoiceStillWorks() {
+        var voiceCalls = 0
+        show { ChatScreen(ChatUiState(), ChatActions(onOpenVoice = { voiceCalls++ }), initialDrawerValue = DrawerValue.Open) }
         val drawer = compose.onNodeWithTag("history-drawer").fetchSemanticsNode().boundsInRoot
         val voice = compose.onNodeWithContentDescription("Voice").fetchSemanticsNode().boundsInRoot
         val root = compose.onRoot().fetchSemanticsNode().boundsInRoot
-        assertEquals(if (small) 253f else 277f, drawer.width, .5f)
-        // Supplied Home has a known 5dp overlap at 320dp/font2. Keep the visible
-        // dismiss scrim and target/root bounds covered without changing the supplied UI.
+        assertEquals(if (small) 248f else 277f, drawer.width, .5f)
+        assertTrue("Drawer overlaps Voice target: $drawer / $voice", drawer.right <= voice.left + .5f)
         assertTrue("Drawer must leave a dismiss scrim", root.right - drawer.right >= 48f)
         for (control in listOf(voice)) {
             assertTrue(control.right <= root.right + .5f)
@@ -67,6 +67,15 @@ class ComputerDrawerUiTest(private val dark: Boolean, private val small: Boolean
             assertTrue(control.width >= 48f && control.height >= 48f)
         }
         capture("computer-drawer-open")
+        // Use a real pointer near the target's left edge: the old drawer covered this
+        // point at 320dp. First tap dismisses the overlay; it must not start Voice.
+        val point = androidx.compose.ui.geometry.Offset(voice.left + 1f - root.left, voice.center.y - root.top)
+        compose.onRoot().performTouchInput { click(point) }
+        compose.onNodeWithTag("history-drawer").assertIsNotDisplayed()
+        assertEquals(0, voiceCalls)
+        compose.onRoot().performTouchInput { click(point) }
+        assertEquals(1, voiceCalls)
+        capture("computer-drawer-voice-after-dismiss")
     }
 
     @Test fun homeProfileAndDrawerComputerKeepTheirExistingActions() {
