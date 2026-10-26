@@ -83,12 +83,6 @@ internal object DuaMatch {
     val LightBackground = Color(0xFFF9F9F9)
     val LightText = Color(0xFF1F1F1F)
     val LightMuted = Color(0xFF444746)
-    // Light composer gradient (top -> bottom) and its suggestion chip.
-    val ComposerGradientTop = Color(0xFFF9F9F9)
-    val ComposerGradientBottom = Color(0xFFC4E3FF)
-    val SuggestionChip = Color(0xFFDBEEFD)
-    // Optional warm copper accent. Dua's own teal stays the default accent.
-    val WarmCopper = Color(0xFFDA7757)
 }
 
 /** Material 3 tonal-spot scheme generated from seed #0B7366 (material-color-utilities 0.3.0). */
@@ -380,16 +374,6 @@ internal fun sheetColors(s: ColorScheme, d: DuaColors) = SheetColors(
  * Same value in light and dark, exactly as before.
  */
 internal object DuaFixedColors {
-    // Fixed dark chat surface used by the alternate chat shell.
-    val SuppliedBg = Color(0xFF131314)
-    val SuppliedSurface = Color(0xFF1E1F20)
-    val SuppliedBubble = Color(0xFF282A2C)
-    val SuppliedText = Color(0xFFE3E3E3)
-    val SuppliedPrimary = Color(0xFFA8C7FA)
-    val SuppliedOnPrimary = Color(0xFF062E6F)
-    val SuppliedGlowBlue = Color(0xFF4285F4)
-    val SuppliedGlowPurple = Color(0xFF9B72CB)
-    val SuppliedGlowRose = Color(0xFFD96570)
     // Swipe-to-delete action.
     val SwipeDanger = Color(0xFFDD4B39)
     // Composer aurora ring.
