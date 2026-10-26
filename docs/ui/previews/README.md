@@ -12,14 +12,20 @@ no external assets or package installation required.
 Both HTML files are preserved byte-for-byte, including their existing preview
 media guard. The descriptive filenames distinguish the two uploaded index files.
 
-These HTML files remain design references rather than the running app. The old
-native Home backdrop was removed during the legacy Home cleanup. Current Home
-Chat, Task and Work use
-[`SuppliedChatUi.kt`](../../../apps/android/app/src/main/java/com/dua/ai/ui/chat/SuppliedChatUi.kt).
-The animated orb remains a legacy reply-indicator fallback in
+These HTML files remain design references rather than the running app. The owner
+restored the original Dua calligraphy Home and Chat/Task switcher after the
+supplied-shell cleanup. Current Home uses
+[`ChatContent.kt`](../../../apps/android/app/src/main/java/com/dua/ai/ui/chat/ChatContent.kt)
+and the native
+[`HomeBackdrop.kt`](../../../apps/android/app/src/main/java/com/dua/ai/ui/chat/HomeBackdrop.kt).
+Work remains a drawer destination showing Coming soon without a composer.
+`SuppliedChatUi.kt` is retained as an explicitly opted-in archived reference.
+The animated orb remains the reply-indicator fallback in
 [`ThinkingOrb.kt`](../../../apps/android/app/src/main/java/com/dua/ai/ui/chat/ThinkingOrb.kt),
-using `AmbientTokens.kt`; this does not mean the preview's backdrop is active on Home.
-See [current shell ownership and known gaps](../LEGACY_CHAT_SHELL.md). The broader
+using `AmbientTokens.kt`. These native implementations do not establish that every
+detail or performance claim in the HTML preview has been implemented or verified.
+See [current shell ownership](../LEGACY_CHAT_SHELL.md) and
+[audit status and remaining checks](../AUDIT_STATUS.md). The broader
 app-wide theme is still a reference; it has not been applied across features or the website.
 
 The originals' claims about matching Kotlin filenames, performance budgets or

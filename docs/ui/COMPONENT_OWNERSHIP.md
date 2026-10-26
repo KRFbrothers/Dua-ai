@@ -1,5 +1,7 @@
 # Android settings cards and loading ownership
 
+Audit completion and remaining validation: [AUDIT_STATUS.md](AUDIT_STATUS.md).
+
 These components were checked after the original Dua logo + Chat/Task Home was
 restored. Similar shapes alone do not establish duplicate or unused behavior.
 
