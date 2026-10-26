@@ -9,14 +9,14 @@ Dua AI keeps its original name and artwork. This is the owner's personal assista
 | Screen | Production code / behavior |
 | --- | --- |
 | Welcome | `ui/account/OnboardingScreen.kt`: full Dua logo, real Google login, Skip for now |
-| Home | `ui/chat/ChatScreen.kt`, `ChatTopBar.kt`: current-project header, Computer shortcut, logo and suggested prompts that fill the draft, without sending |
+| Home | `ui/chat/SuppliedChatUi.kt` (`SuppliedChatScreen`) is the live Home, selected by `ChatRoute` when there is no feature, the Chat tab is active and no `topBar` is supplied. `ChatScreen.kt` hosts the drawer/sheets; `ChatTopBar.kt` / `ChatContent.kt` remain the legacy pane for features and Work/Task home |
 | Conversation | `MessageList.kt`, `UserMessage.kt`, `AssistantMessage.kt`, `MarkdownMessage.kt`: bubbles, streamed replies, Markdown, copyable code blocks, sources, typing and partial-stop states |
-| Composer | `Composer.kt`, `AttachmentSheet.kt`, `StoredFileChips.kt`: multiline input, send/stop, model choice, mic/voice and file tools |
+| Composer | `ChatComposer.kt`, `AttachmentSheet.kt`, `StoredFileChips.kt`: multiline input, send/stop, model choice, mic/voice and file tools |
 | History / Aura | `ui/history/HistoryDrawer.kt`: project search, fixed navigation/footer and independently scrolling recent chats |
 | Projects | `ProjectsSheet.kt` and project task/memory/planner components: selected project, instructions, archive, tasks, memory and planner |
 | Profile and settings | `ui/navigation/DuaNavHost.kt`, `ui/settings/`, `ui/account/`: owner account, appearance/accent, fonts, haptics, notifications; Voice contains its input/mode/reply controls, and History and data contains Data controls/privacy/sharing/permissions |
 
-Production follows the existing MVVM structure: `MainActivity → DuaApp → DuaNavHost → ChatRoute → ChatScreen`. `ChatViewModel` owns state and operations; `ChatUiState`/`ChatActions` keep the chat components reusable. Account, network, history, settings, projects and voice modules hold their existing responsibilities. The backend lives only in `apps/api/`; provider keys never belong in Android source, resources or build configuration.
+Production follows the existing MVVM structure: `MainActivity → DuaApp → DuaNavHost → ChatRoute → ChatScreen → SuppliedChatScreen (Home chat) or legacy pane`. `ChatViewModel` owns state and operations; `ChatUiState`/`ChatActions` keep the chat components reusable. Account, network, history, settings, projects and voice modules hold their existing responsibilities. The backend lives only in `apps/api/`; provider keys never belong in Android source, resources or build configuration.
 
 Chat interactions: only the latest finished assistant reply shows the permanent Copy/Retry/Share/Speak row, and the row stays hidden while a reply is pending/streaming. Long-press a user bubble or assistant turn to open message actions, with the existing preference-aware haptic. Copy/Share preserve the full message payload (including executed code for replies); Speak uses the existing selected-reply voice handler. Retry is visible for assistant turns but enabled only where the existing last-reply handler allows it. User-message editing has no existing handler, so no Edit action is shown. Generated-media actions retain their existing handlers and gallery controls.
 
