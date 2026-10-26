@@ -42,6 +42,11 @@ floating conversation switcher or swipe-to-reply entry wiring. This cleanup does
 add those features. Existing Voice, Add, title-long-press model selection and drawer
 settings/new-chat actions remain the supported entry points.
 
+At 320dp with 2× font scaling, the existing drawer extends 5dp over the left edge of
+the supplied Voice target (drawer right 253dp, target left 248dp). The remaining
+dismiss scrim is 67dp wide. This cleanup records the gap without changing layout;
+check drawer dismissal and Voice access on the owner APK.
+
 Tests tied only to removed Home decorations/header entry points are removed or rewritten;
 this is a coverage change, not proof that the missing controls were ported. Pure search
 and parser tests, reusable component tests, feature tests and ProjectChat routing checks

@@ -67,7 +67,7 @@ class FeatureIsolationUiTest(private val dark: Boolean, private val compact: Boo
             } else compose.onNodeWithTag("home-mode-switcher").assertDoesNotExist()
         }
         compose.onNodeWithContentDescription("Dua AI, chats and settings").performClick()
-        compose.onNodeWithTag("drawer-new-chat").performScrollTo().performClick()
+        compose.onNodeWithTag("drawer-new-chat").assertIsDisplayed().performClick()
         assertEquals(1, newChats)
     }
     @Test fun agentStartersDisappearAfterSendAndCompactPillStaysCentered() {
