@@ -53,27 +53,51 @@ class HomeGestureTest {
 
     private fun sheetShown() = compose.onAllNodesWithText("Add to chat").fetchSemanticsNodes().isNotEmpty()
 
-    @Test fun voiceButtonUsesExistingVoiceHandler() {
+    @Test fun voiceModeButtonOpensVoiceMode() {
         show()
-        compose.onNodeWithContentDescription("Voice").performClick()
+        compose.onNodeWithContentDescription("Voice mode").performClick()
         compose.waitForIdle() // the colour splash covers Home first, then voice mode opens
-        assertEquals(listOf("dictate"), events)
+        assertEquals(listOf("haptic:Tap", "voice-mode"), events)
+    }
+
+    @Test fun emptyFieldShowsVoiceModeButtonWithHaptic() {
+        show()
+        compose.onNodeWithContentDescription("Send message").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Voice mode").performClick()
+        compose.waitForIdle() // the colour splash covers Home first, then voice mode opens
+        assertEquals(listOf("haptic:Tap", "voice-mode"), events)
     }
 
     @Test fun typingTurnsVoiceButtonIntoSend() {
         show(home.copy(draft = "Hello"))
-        compose.onNodeWithContentDescription("Voice").assertDoesNotExist()
-        compose.onNodeWithContentDescription("Send").performClick()
+        compose.onNodeWithContentDescription("Voice mode").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Send message").performClick()
         assertEquals(listOf("send"), events)
     }
 
     @Test fun replyInProgressShowsStop() {
         show(conversation.copy(typing = true))
-        compose.onNodeWithContentDescription("Voice").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Voice mode").assertDoesNotExist()
         compose.onNodeWithContentDescription("Stop response").assertExists()
     }
 
+    @Test fun swipeUpOnInputCardOpensPlusSheet() {
+        show()
+        compose.onNodeWithContentDescription("Message").performTouchInput { swipeUp(startY = centerY, endY = centerY - 300f) }
+        compose.waitForIdle()
+        assertTrue(sheetShown())
+        assertTrue("haptic:Tap" in events)
+    }
+
     /** Home has no mode chips (reference layout); an active mode shows as a chip above the bar in a conversation. */
+    @Test fun swipeUpOnChipsOpensPlusSheet() {
+        show(conversation.copy(reasoning = true))
+        compose.onNodeWithContentDescription("Think before answering").performTouchInput { swipeUp(startY = centerY, endY = centerY - 300f) }
+        compose.waitForIdle()
+        assertTrue(sheetShown())
+        assertTrue(events.none { it.startsWith("reasoning:") })
+    }
+
     @Test fun swipeUpInsideFocusedTextFieldDoesNothing() {
         show()
         val field = compose.onNodeWithContentDescription("Message")
@@ -91,6 +115,12 @@ class HomeGestureTest {
         field.performTouchInput { swipeDown() }
         compose.waitForIdle()
         compose.onAllNodesWithText("Add to chat").assertCountEquals(0)
+    }
+
+    @Test fun chipToggleGivesLightHaptic() {
+        show(conversation.copy(reasoning = true))
+        compose.onNodeWithContentDescription("Think before answering").performClick()
+        assertEquals(listOf("haptic:Tap", "reasoning:false"), events)
     }
 
     @Test fun plusSheetSwitchGivesLightHaptic() {

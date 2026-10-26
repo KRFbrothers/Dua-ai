@@ -54,9 +54,9 @@ class ComputerDrawerUiTest(private val dark: Boolean, private val small: Boolean
 
     @Test fun openDrawerLeavesWholeVoiceTargetInScrimThenVoiceStillWorks() {
         var voiceCalls = 0
-        show { ChatScreen(ChatUiState(), ChatActions(onOpenVoice = { voiceCalls++ }), initialDrawerValue = DrawerValue.Open) }
+        show { ChatScreen(ChatUiState(), ChatActions(onOpenVoiceMode = { voiceCalls++ }), initialDrawerValue = DrawerValue.Open) }
         val drawer = compose.onNodeWithTag("history-drawer").fetchSemanticsNode().boundsInRoot
-        val voice = compose.onNodeWithContentDescription("Voice").fetchSemanticsNode().boundsInRoot
+        val voice = compose.onNodeWithContentDescription("Voice mode").fetchSemanticsNode().boundsInRoot
         val root = compose.onRoot().fetchSemanticsNode().boundsInRoot
         assertEquals(if (small) 248f else 277f, drawer.width, .5f)
         assertTrue("Drawer overlaps Voice target: $drawer / $voice", drawer.right <= voice.left + .5f)
@@ -81,10 +81,10 @@ class ComputerDrawerUiTest(private val dark: Boolean, private val small: Boolean
     @Test fun homeProfileAndDrawerComputerKeepTheirExistingActions() {
         val opened = mutableListOf<DuaDestination>(); var newChats = 0; var settings = 0
         show { ChatScreen(ChatUiState(), ChatActions(onOpenDestination = { opened += it }, onNewChat = { newChats++ }, onOpenSettings = { settings++ })) }
-        compose.onNodeWithContentDescription("Dua AI, chats and settings").performClick()
+        compose.onNodeWithContentDescription("Open chat history").performClick()
         compose.onNodeWithContentDescription("Open drawer profile and settings").assertIsDisplayed().performClick()
         compose.onNodeWithTag("history-drawer").assertIsNotDisplayed()
-        compose.onNodeWithContentDescription("Dua AI, chats and settings").performClick()
+        compose.onNodeWithContentDescription("Open chat history").performClick()
         compose.onNodeWithText("Computer").performScrollTo().performClick()
         compose.runOnIdle { assertEquals(listOf(DuaDestination.Computer), opened); assertEquals(0, newChats); assertEquals(1, settings) }
     }
@@ -107,10 +107,10 @@ class ComputerDrawerUiTest(private val dark: Boolean, private val small: Boolean
         var newChats = 0
         val state = ChatUiState(messages = listOf(ChatMessage(text = "Hello", isUser = true)))
         show { ChatScreen(state, ChatActions(onNewChat = { newChats++ })) }
-        compose.onNodeWithTag("supplied-chat").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Open profile and settings").assertIsDisplayed()
         compose.onNodeWithContentDescription("Find in chat").assertDoesNotExist()
-        compose.onNodeWithContentDescription("New chat").assertDoesNotExist()
-        compose.onNodeWithContentDescription("Dua AI, chats and settings").performClick()
+        compose.onNodeWithContentDescription("New chat").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Open chat history").performClick()
         compose.onNodeWithTag("drawer-new-chat").assertIsDisplayed().performClick()
         compose.runOnIdle { assertEquals(1, newChats) }
     }

@@ -9,14 +9,14 @@ Dua AI keeps its original name and artwork. This is the owner's personal assista
 | Screen | Production code / behavior |
 | --- | --- |
 | Welcome | `ui/account/OnboardingScreen.kt`: full Dua logo, real Google login, Skip for now |
-| Home | `ui/chat/SuppliedChatUi.kt` (`SuppliedChatScreen`) serves Home Chat, Task and Work whenever no feature or custom `topBar` is supplied. `ChatScreen.kt` hosts the drawer/sheets and keeps `legacyChatPane` for features and ProjectChat; see [shell ownership and known gaps](LEGACY_CHAT_SHELL.md) |
-| Conversation | Shared `MessageList.kt`, `AssistantMessage.kt` and `MarkdownMessage.kt`; Home uses `SuppliedUserMessage` in `SuppliedChatUi.kt`, while feature/ProjectChat routes retain `UserMessage.kt` |
-| Composer | Home uses `GeminiBottomBar` / `SuppliedComposer` in `SuppliedChatUi.kt`; feature/ProjectChat routes retain `Composer` in `ChatComposer.kt`. Shared pickers stay in `AttachmentSheet.kt` |
+| Home | `ChatScreen.kt` restores `ChatTopBar.kt`, `ChatContent.kt` and `HomeBackdrop.kt`: Dua calligraphy logo and Chat/Task switcher. Work remains in the drawer. The supplied screen is an opt-in archived reference only; see [shell ownership](LEGACY_CHAT_SHELL.md) |
+| Conversation | Shared `MessageList.kt`, `AssistantMessage.kt`, `MarkdownMessage.kt` and `UserMessage.kt`; original rendering for live Home, features and ProjectChat |
+| Composer | `Composer` in locked `ChatComposer.kt` serves live Home and features unchanged. Shared pickers stay in locked `AttachmentSheet.kt` |
 | History / Aura | `ui/history/HistoryDrawer.kt`: project search, fixed navigation/footer and independently scrolling recent chats |
 | Projects | `ui/projects/ProjectsFlow.kt`, list/detail/editor and `ProjectChatRoute.kt` own the dedicated flow; the compatibility Projects entry delegates to the shared list/editor |
 | Profile and settings | `ui/navigation/DuaNavHost.kt`, `ui/settings/`, `ui/account/`: owner account, appearance/accent, fonts, haptics, notifications; Voice contains its input/mode/reply controls, and History and data contains Data controls/privacy/sharing/permissions |
 
-Production follows the existing MVVM structure: `MainActivity → DuaApp → DuaNavHost → ChatRoute → ChatScreen → SuppliedChatScreen (Home chat) or legacy pane`. `ChatViewModel` owns state and operations; `ChatUiState`/`ChatActions` keep the chat components reusable. Account, network, history, settings, projects and voice modules hold their existing responsibilities. The backend lives only in `apps/api/`; provider keys never belong in Android source, resources or build configuration.
+Production follows the existing MVVM structure: `MainActivity → DuaApp → DuaNavHost → ChatRoute → ChatScreen → original Dua Home or feature/custom-header pane`. `ChatViewModel` owns state and operations; `ChatUiState`/`ChatActions` keep the chat components reusable. Account, network, history, settings, projects and voice modules hold their existing responsibilities. The backend lives only in `apps/api/`; provider keys never belong in Android source, resources or build configuration.
 
 Chat interactions: only the latest finished assistant reply shows the permanent Copy/Retry/Share/Speak row, and the row stays hidden while a reply is pending/streaming. Long-press a user bubble or assistant turn to open message actions, with the existing preference-aware haptic. Copy/Share preserve the full message payload (including executed code for replies); Speak uses the existing selected-reply voice handler. Retry is visible for assistant turns but enabled only where the existing last-reply handler allows it. User-message editing has no existing handler, so no Edit action is shown. Generated-media actions retain their existing handlers and gallery controls.
 
@@ -74,8 +74,8 @@ Evidence below is pinned to main commit `013fcff784bbccc910c3c1a61cff9cb13a82b31
 The older 454/462-test and earlier render counts below are retained as historical
 validation records. Test coverage changed during the Home cleanup: legacy-only
 header/decorative-entry tests were removed or adapted. See [shell ownership and
-known gaps](LEGACY_CHAT_SHELL.md) for Home controls not provided by the supplied
-design and the narrow-screen drawer/Voice clearance regression.
+known gaps](LEGACY_CHAT_SHELL.md) for the restored Home controls, archived supplied reference and drawer/Voice
+clearance regression.
 
 ## Implemented versus integration-dependent or pending
 

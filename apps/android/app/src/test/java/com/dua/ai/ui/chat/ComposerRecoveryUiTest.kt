@@ -92,7 +92,7 @@ class ComposerRecoveryUiTest(private val dark: Boolean, private val large: Boole
         show { ChatScreen(state.value, actions) }
         compose.onNodeWithContentDescription("Cancel upload").assertIsEnabled()
             .assertWidthIsAtLeast(48.dp).assertHeightIsAtLeast(48.dp)
-        compose.onNodeWithContentDescription("Send").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Send message").assertDoesNotExist()
         compose.onNodeWithContentDescription("Message").performClick().performImeAction()
         assertEquals(0, sends)
         assertEquals("Explain my files", state.value.draft)
@@ -106,7 +106,7 @@ class ComposerRecoveryUiTest(private val dark: Boolean, private val large: Boole
         assertEquals(listOf(ready), state.value.uploads)
         assertEquals("Explain my files", state.value.draft)
         assertEquals(0, sends)
-        compose.onNodeWithContentDescription("Send").assertIsEnabled()
+        compose.onNodeWithContentDescription("Send message").assertIsEnabled()
     }
 
     @Test fun stopOverridesUploadCancellationAndStandaloneDraftStillClearsAfterSend() {

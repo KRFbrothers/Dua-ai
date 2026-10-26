@@ -104,7 +104,7 @@ class AgentRouteTest {
             .get(model) as MutableStateFlow<List<ChatAttachment>>
         selectedFiles.value = listOf(file)
         show(home = true)
-        compose.onNodeWithContentDescription("Add").performClick()
+        compose.onNodeWithContentDescription("Add photos and files").performClick()
         compose.onNodeWithText("Agent", substring = false).performScrollTo().performClick()
         assertTrue("Agent available=${model.agentAvailable.value}, typing=${model.isTyping.value}", model.agent.value)
         assertEquals(previous.id, model.activeChatId.value)
@@ -127,8 +127,8 @@ class AgentRouteTest {
         compose.onNodeWithContentDescription("Back").assertIsEnabled()
             .performSemanticsAction(SemanticsActions.OnClick) { assertTrue(it()) }
         assertFalse(model.agent.value)
-        compose.onNodeWithTag("supplied-chat").assertIsDisplayed()
-        compose.onNodeWithContentDescription("Dua AI, chats and settings").performClick()
+        compose.onNodeWithTag("home-mode-switcher").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Open chat history").performClick()
         compose.onNodeWithContentDescription("Open drawer profile and settings").assertIsDisplayed()
         assertEquals(previous.messages, model.savedChats.value.single { it.id == previous.id }.messages)
         assertEquals("Unsent agent prompt", model.savedChats.value.single { it.id == previous.id }.draft)
@@ -150,9 +150,9 @@ class AgentRouteTest {
         }
     }
 
-    @Test fun suppliedChatEntersAgentAndRestoresThePreviousConversationFromHistory() {
+    @Test fun homeChatEntersAgentAndRestoresThePreviousConversationFromHistory() {
         show(home = true)
-        compose.onNodeWithContentDescription("Add").performClick()
+        compose.onNodeWithContentDescription("Add photos and files").performClick()
         compose.onNodeWithText("Agent", substring = false).performScrollTo().performClick()
         assertTrue(model.agent.value)
         assertEquals(previous.id, model.activeChatId.value)
@@ -164,8 +164,8 @@ class AgentRouteTest {
             .performSemanticsAction(SemanticsActions.OnClick) { assertTrue(it()) }
         assertFalse(model.agent.value)
         // The existing feature exit starts a fresh chat; the preceding conversation remains restorable.
-        compose.onNodeWithTag("supplied-chat").assertIsDisplayed()
-        compose.onNodeWithContentDescription("Dua AI, chats and settings").performClick()
+        compose.onNodeWithTag("home-mode-switcher").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Open chat history").performClick()
         compose.onNodeWithText(previous.title).performScrollTo().performClick()
         compose.onNodeWithTag("message-previous").assertIsDisplayed()
         assertEquals(previous.id, model.activeChatId.value)
