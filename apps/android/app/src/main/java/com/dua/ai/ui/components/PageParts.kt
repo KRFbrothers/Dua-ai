@@ -31,9 +31,9 @@ import com.dua.ai.ui.theme.PageSizes
 import com.dua.ai.ui.theme.SettingsShapes
 import com.dua.ai.ui.theme.SettingsSizes
 
-/** Shared full-page parts in the Settings (Dabba) look. Buttons and switches reuse SheetParts (purple filled / gray / text / switch). */
+/** Shared full-page parts using PageTheme and Material roles; button/switch helpers retain their SheetParts owner. */
 
-/** White (gray-900 dark) card with an E5E7EB border and 24 dp corners, like the Settings cards. */
+/** Elevated Material surface with DuaShape.card, a translucent outline and PageTheme content color. */
 @Composable
 fun PageCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
     val p = PageTheme.colors
