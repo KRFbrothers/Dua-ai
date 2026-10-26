@@ -2,6 +2,31 @@
 
 Dua and Gemini retain the existing Gemini setup and attachment support. ChatGPT, Claude, Grok and Kimi have server adapters for conversations, attachments, history, retry and optional memory context. Their setup remains inactive until provider credentials and a model ID are configured. This change does not provision keys or create subscriptions.
 
+## Cloud Run engine: plain-chat tools
+
+For `dua-ai-engine` (`apps/ai-engine/`), a non-Agent `POST /api/chat` request with
+`"web": true` enables the existing Gemini Google Search grounding tool when
+`CHAT_WEB_SEARCH` is not `0` (default `1`). `"code": true` enables Gemini's hosted
+code-execution tool only with `CHAT_CODE_EXECUTION=1` (default `0`). Both work for
+streaming and JSON replies. Flags alone do not request a tool; the model decides
+whether to use an offered tool, and live availability/pricing depend on the model.
+
+Streamed grounding uses the Agent `sources` event shape:
+`{"type":"sources","sources":[{"id","title","url","domain"}]}`, followed by a
+`Sources:` text footer. HTTPS links are deduplicated across chunks and capped at
+`AGENT_MAX_SOURCES` (12). JSON includes `sources` when present and the same footer.
+Code and execution-result parts appear as Markdown code/output blocks in existing
+`text` events or JSON `text`; private thought parts are omitted. There is no new UI
+or dedicated engine `code` event. Unsupported tool requests receive a notice;
+`xSearch` remains unsupported on this engine.
+
+Free OpenRouter requests with `web` or `code` stay on Gemini, including when code
+execution is disabled. Agent tool-loop behavior and its 3-search / 2-code-run
+limits are unchanged. Existing maintenance/owner checks run before tool setup;
+there is no separate engine web/tools kill switch. These two `CHAT_*` flags are
+engine settings, separate from the Node API's `GEMINI_*`/`DUA_*` settings below.
+No deployment or live grounding/code-execution verification is implied.
+
 ## Build mode: read-only repository chat (Phase 5B)
 
 For repository/path examples, missing setup, GitHub credentials, rate limits and safe PR retry steps, see [GitHub connector and Build recovery](GITHUB_TROUBLESHOOTING.md).

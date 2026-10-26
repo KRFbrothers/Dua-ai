@@ -66,6 +66,16 @@ Foreground automatic cloud sync requires explicit device/account consent and use
 
 ## Providers, web sources and integrations
 
+The separate Cloud Run engine (`dua-ai-engine`) also supports plain-chat
+`web:true` via Gemini Google Search grounding (`CHAT_WEB_SEARCH=1` by default;
+`0` disables it). Plain-chat `code:true` requires `CHAT_CODE_EXECUTION=1`, off by
+default. JSON/SSE replies carry grounded sources (HTTPS, deduplicated, at most 12)
+and a Sources footer; code/results are text/code blocks using existing reply
+rendering. Free OpenRouter requests asking for web/code stay on Gemini. Agent
+limits and UI are unchanged. This is source/offline verification, not proof of
+live tool availability; see [engine tool behavior](../PROVIDERS.md#cloud-run-engine-plain-chat-tools).
+
+
 Gemini (Dua/Gemini), ChatGPT, Claude, Grok and Kimi are routed by the backend. All accept validated UTF-8 TXT attachments; explicit server MIME settings enable model-supported images and, for ChatGPT/Claude, PDFs. The app checks the published formats before sending and keeps unsupported selections and drafts. See [PROVIDERS.md](../PROVIDERS.md).
 
 Chat has session-only Web: Off/Search/Read link modes, Off by default. Search uses the provider's native search for Gemini, ChatGPT and Grok (Google Search grounding, OpenAI and xAI `web_search`) with structured citations shown as source chips (favicon, title, domain); Claude and Kimi, the `DUA_SEARCH_PREFER_BRAVE` flag and the fallback run one Brave query and supply bounded result snippets. Grok adds an X toggle (`x_search`, off by default, about $5 per 1,000 posts). Long chats are no longer cut at 39 messages: each provider has a context budget, older turns are summarised by the current provider, the summary is cached with the chat and extended incrementally, and the chat shows an "Earlier messages summarised" divider; Read link reads one public HTTPS text page with DNS pinning, redirect checks and size/time limits. Replies carry a Sources footer with safe clickable HTTPS links that persists through copy, history, sharing and cloud snapshots.

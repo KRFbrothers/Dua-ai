@@ -83,6 +83,8 @@ GENERIC_ERROR = "The Dua AI engine could not answer right now. Please try again.
 CHAT_MAX_OUTPUT_TOKENS = min(65536, max(0, env_int("CHAT_MAX_OUTPUT_TOKENS", 0)))
 AGENT_ANSWER_TOKENS = min(65536, max(1, env_int("AGENT_ANSWER_TOKENS", 8192)))
 CONTINUE_HINT = 'Reply was cut off. Say "continue" to get the rest.'
+CHAT_WEB_SEARCH = os.environ.get("CHAT_WEB_SEARCH", "1")
+CHAT_CODE_EXECUTION = os.environ.get("CHAT_CODE_EXECUTION", "0")
 AGENT_MAX_SOURCES = 12
 
 SSE_HEADERS = {
@@ -249,6 +251,17 @@ def make_part(text=None, data=None, mime_type=None):
     return types.Part.from_text(text=text) if data is None else types.Part.from_bytes(data=data, mime_type=mime_type)
 
 
+def plain_chat_tools(data):
+    """Only explicit plain-chat requests get hosted tools; code is opt-in twice."""
+    tools = []
+    if data.get("web") and CHAT_WEB_SEARCH != "0":
+        tools.append(google_search_tool())
+    if data.get("code") and CHAT_CODE_EXECUTION == "1":
+        from google.genai import types
+        tools.append(types.Tool(code_execution=types.ToolCodeExecution()))
+    return tools
+
+
 def google_search_tool():
     """Google Search grounding (`google_search` tool) for Gemini 2.x / 3.x on Vertex AI."""
     from google.genai import types
@@ -397,9 +410,11 @@ def unsupported_notice(data):
     model = data.get("model")
     if model not in (None, "Dua", "Gemini"):
         notes.append(f"{model} is not available on the Google Cloud engine; Gemini answered instead.")
-    if data.get("web") or data.get("xSearch"):
+    if data.get("web") and CHAT_WEB_SEARCH == "0":
         notes.append("Web search is not available on the Google Cloud engine.")
-    if data.get("code"):
+    if data.get("xSearch"):
+        notes.append("X search is not available on the Google Cloud engine.")
+    if data.get("code") and CHAT_CODE_EXECUTION != "1":
         notes.append("Run code is not available on the Google Cloud engine.")
     if data.get("mode") == "build":
         notes.append("Build mode is not available on the Google Cloud engine.")
@@ -853,6 +868,49 @@ def finish_truncated(response_or_chunk):
 is_truncated = finish_truncated
 
 
+def chat_chunk_text(chunk, include_code=False):
+    """Preserve plain-chat part order, rendering hosted code/results as Markdown."""
+    try:
+        parts = chunk.candidates[0].content.parts or []
+    except (AttributeError, IndexError, TypeError):
+        parts = []
+    if not include_code or not any(getattr(p, "executable_code", None) is not None or
+                                   getattr(p, "code_execution_result", None) is not None for p in parts):
+        return chunk_text(chunk)
+    rendered = []
+    def block(text, language):
+        # Tool output can contain backticks; keep the whole payload inside its fence.
+        fence = "`" * max(3, max((len(m.group()) + 1 for m in re.finditer(r"`+", text)), default=3))
+        return "\n\n" + fence + language + "\n" + text + "\n" + fence + "\n\n"
+    for part in parts:
+        if getattr(part, "thought", False):
+            continue
+        code = getattr(part, "executable_code", None)
+        result = getattr(part, "code_execution_result", None)
+        if code is not None:
+            language = getattr(code, "language", None)
+            language = re.sub(r"[^a-z0-9]", "", str(getattr(language, "name", language) or "python").lower())[:20]
+            rendered.append(block(str(getattr(code, "code", "") or ""), language))
+        elif result is not None:
+            outcome = getattr(result, "outcome", None)
+            rendered.append("\n\nCode result (" + str(getattr(outcome, "name", outcome) or "unknown") + "):" +
+                            block(str(getattr(result, "output", "") or ""), "text"))
+        else:
+            rendered.append(getattr(part, "text", None) or "")
+    return "".join(rendered)
+
+
+def merge_chat_sources(sources, response):
+    """Use the Agent parser and a request-wide HTTPS URL deduplication/cap."""
+    seen = {source["url"] for source in sources}
+    for source in grounding_sources(response):
+        if len(sources) >= AGENT_MAX_SOURCES:
+            break
+        if source["url"] not in seen:
+            seen.add(source["url"])
+            sources.append({**source, "id": len(sources) + 1})
+
+
 def chunk_text(chunk):
     try:
         return chunk.text or ""
@@ -1046,6 +1104,14 @@ def api_chat():
             chat_config["generation_config"] = {"thinking_level": level}
         if CHAT_MAX_OUTPUT_TOKENS > 0:
             chat_config.setdefault("generation_config", {})["max_output_tokens"] = CHAT_MAX_OUTPUT_TOKENS
+        try:
+            tools = plain_chat_tools(data)
+        except Exception:
+            app.logger.warning("plain chat tool configuration unavailable")
+            return jsonify({"error": GENERIC_ERROR}), 502
+        if tools:
+            chat_config["tools"] = tools
+    include_code = not agent and not use_free and bool(data.get("code")) and CHAT_CODE_EXECUTION == "1"
     if data.get("stream") is not True:
         try:
             try:
@@ -1054,13 +1120,19 @@ def api_chat():
                 if not wait_for_chat_retry(error):
                     raise
                 response = get_model(system).generate_content(contents, **chat_config)
-            text = chunk_text(response)
+            text = chat_chunk_text(response, include_code)
+            sources = grounding_sources(response)
         except Exception:
             app.logger.exception("api chat failed")
             return jsonify({"error": GENERIC_ERROR}), 502
         if not text.strip() and not finish_truncated(response):
             return jsonify({"error": GENERIC_ERROR}), 502
-        result = {"text": text}
+        result = {"text": text + sources_footer(sources)}
+        if sources:
+            result["sources"] = sources
+        notice = unsupported_notice(data)
+        if notice:
+            result["notice"] = notice
         if finish_truncated(response):
             result.update(truncated=True, hint=CONTINUE_HINT)
         return jsonify(result)
@@ -1132,6 +1204,7 @@ def api_chat():
         threading.Thread(target=vertex_stream, name="dua-vertex-stream", daemon=True).start()
         truncated = False
         sent = False
+        plain_sources = []
         try:
             # Flush headers promptly; the worker also covers delays obtaining the iterator itself.
             yield ": heartbeat\n\n"
@@ -1158,7 +1231,9 @@ def api_chat():
                     yield sse(chunk)
                     continue
                 truncated = truncated or finish_truncated(chunk)
-                text = chunk_text(chunk)
+                if not agent and not use_free:
+                    merge_chat_sources(plain_sources, chunk)
+                text = chat_chunk_text(chunk, include_code) if not agent and not use_free else chunk_text(chunk)
                 if text:
                     sent = True
                     yield sse({"type": "text", "delta": text})
@@ -1168,6 +1243,9 @@ def api_chat():
             if not sent and not truncated:
                 yield sse({"type": "error", "message": GENERIC_ERROR, "status": 502})
                 return
+            if plain_sources:
+                yield sse({"type": "sources", "sources": plain_sources})
+                yield sse({"type": "text", "delta": sources_footer(plain_sources)})
             if truncated:
                 yield sse({"type": "notice", "message": CONTINUE_HINT,
                            "truncated": True, "hint": CONTINUE_HINT})
