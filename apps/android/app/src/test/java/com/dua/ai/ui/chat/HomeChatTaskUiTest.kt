@@ -132,6 +132,26 @@ class HomeChatTaskUiTest(private val dark: Boolean, private val compact: Boolean
         assertEquals(1, sends)
     }
 
+    @Test fun workKeepsOriginalHeaderWithoutComposerAndReturningChatPreservesDraft() {
+        val state = mutableStateOf(initial.copy(homeTab = HomeTab.Work, draft = "Keep my draft"))
+        show { ChatScreen(state.value, ChatActions()) }
+        compose.onNodeWithText("Coming soon").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Open chat history").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Open profile and settings").assertIsDisplayed()
+        compose.onNodeWithTag("supplied-chat").assertDoesNotExist()
+        compose.onNodeWithTag("home-mode-switcher").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Message").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Add photos and files").assertDoesNotExist()
+        capture("restored-work")
+        compose.runOnIdle { state.value = state.value.copy(homeTab = HomeTab.Chat) }
+        compose.onNodeWithContentDescription("Message").assertTextContains("Keep my draft")
+        compose.onNode(hasText("Chat") and isSelectable()).assertIsSelected()
+        compose.onNodeWithTag("supplied-chat").assertDoesNotExist()
+        compose.runOnIdle { state.value = state.value.copy(draft = "") }
+        compose.onNodeWithContentDescription("Dua AI").assertExists()
+        compose.onNodeWithTag("home-hero").assertExists()
+    }
+
     @Test fun freeAndUnknownModelNamesComeFromCurrentState() {
         assertEquals("Friendly free model", homeModelName(initial.copy(freeModel = FreeModel("vendor/id", "Friendly free model"))))
         assertEquals("Flash Lite", homeModelName(initial.copy(providers = listOf(ProviderCapability("Dua", true, "gemini-new-flash-lite", true)))))
