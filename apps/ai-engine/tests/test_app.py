@@ -16,7 +16,7 @@ class FakeModel:
     def __init__(self, chunks=("Hello", " there"), fail=False):
         self.chunks, self.fail, self.calls = chunks, fail, []
 
-    def generate_content(self, contents, stream=False, generation_config=None):
+    def generate_content(self, contents, stream=False, generation_config=None, tools=None):
         self.calls.append((contents, stream))
         if self.fail:
             raise RuntimeError("secret internal detail")
@@ -33,6 +33,7 @@ def fake(monkeypatch):
     monkeypatch.setattr(engine, "make_part", lambda text=None, data=None, mime_type=None: ("text", text) if data is None else ("data", mime_type, data))
     monkeypatch.setattr(engine, "make_content", lambda role, parts: {"role": role, "parts": parts})
     monkeypatch.delenv("DUA_APP_TOKEN", raising=False)
+    monkeypatch.setattr(engine, "google_search_tool", lambda: "GOOGLE_SEARCH")
     model.systems = systems
     return model
 

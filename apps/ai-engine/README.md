@@ -46,14 +46,14 @@ and [kill-switch ownership](#kill-switch-ownership) for the live paths.
 ## Endpoints
 - `GET /` – health check.
 - `POST /api/chat` – same format as the Node API's chat:
-  `{"model","messages":[{"role":"user|model","text","attachmentText?"}],"attachments":[{"name","mimeType","data(base64)"}],"memory","stream":true,"mode","context?"}`.
+  `{"model","messages":[{"role":"user|model","text","attachmentText?"}],"attachments":[{"name","mimeType","data(base64)"}],"memory","stream":true,"mode","web?","code?","context?"}`.
   With `"stream": true` it replies with Server-Sent Events (`event: text` / `data: {"type":"text","delta":"..."}`,
   then `done`, or `error`), exactly like `apps/api/src/core/sse.mjs`. Without it: `{"text": "..."}`.
   The whole conversation is sent to Gemini, so it remembers earlier messages.
   Earlier user turns can also carry inline `attachments`; `attachmentText` and supplied `files` metadata text/transcripts are included as context. Storage paths are never fetched by Cloud Run.
   Streaming flushes an initial SSE heartbeat and sends another every 15 seconds while the Vertex worker is waiting. Cancelling the stream stops queueing results.
   Not supported here (a short notice is shown instead): other models (ChatGPT/Claude/Grok/Kimi – Gemini answers),
-  web search, Run code, Build mode, server-side reply saving.
+  X search, Build mode, server-side reply saving. Plain-chat web/code support is described below.
 - **Dua Agent**: `POST /api/chat` with `"mode": "agent"` and `"stream": true`. Real tasks run one tool-calling
   loop (web search, page reading, code, calculator/time, images, memory suggestions, GitHub); see
   [Dua Agent tools](#dua-agent-tools-general-tool-loop) for tools, caps and progress chips. Web results end with a
@@ -67,6 +67,23 @@ and [kill-switch ownership](#kill-switch-ownership) for the live paths.
   the Agent asked for; see [Agent safety](#agent-safety-approvals-and-untrusted-content).
 - `POST /chat` – old single message endpoint `{"message"}` -> `{"reply"}` (still works).
 
+## Plain-chat Google Search and code execution
+
+For non-Agent `/api/chat`, `web:true` offers Gemini the existing Google Search
+grounding tool when `CHAT_WEB_SEARCH` is not `0` (default `1`). `code:true` offers
+hosted Gemini code execution only with `CHAT_CODE_EXECUTION=1` (default `0`).
+Both request fields are opt-in and supported for JSON and streaming; offering a
+tool does not guarantee that the model uses it. Existing model/region support and
+provider pricing still apply. No code executes in the engine or on the device.
+
+Streams emit the existing Agent `sources` event and a Sources footer; JSON adds
+`sources` when present and the same footer. Links are HTTPS-only, deduplicated
+across chunks, capped at `AGENT_MAX_SOURCES` (12). Executable code and result parts
+render as Markdown blocks in existing text output, without thought parts. Disabled
+web/code requests get a notice; X search remains unsupported. Free OpenRouter
+requests with web/code stay on Gemini. Agent loop limits (3 searches / 2 code runs)
+are unchanged. Owner verification and maintenance checks still run before tools.
+
 ## Settings (environment variables only, no secrets in code)
 | Name | Meaning |
 | --- | --- |
@@ -74,6 +91,8 @@ and [kill-switch ownership](#kill-switch-ownership) for the live paths.
 | `VERTEX_LOCATION` | Vertex AI location, default `global` (needed for Gemini 3.x; endpoint `aiplatform.googleapis.com`). Not the Cloud Run region. |
 | `VERTEX_MODEL` | default `gemini-3.8-flash` |
 | `VERTEX_THINKING_LEVEL` | Gemini 3 only: `low` (default), `medium` or `high` (`minimal` is not supported by 3.8 Flash) |
+| `CHAT_WEB_SEARCH` | default `1`; `0` disables Google Search grounding requested by plain-chat `web:true` |
+| `CHAT_CODE_EXECUTION` | default `0`; only `1` enables hosted code execution requested by plain-chat `code:true` |
 | `SUPABASE_URL` | required; the same Supabase Auth project URL used by dua-api, HTTPS only |
 | `SUPABASE_PUBLISHABLE_KEY` / `SUPABASE_ANON_KEY` | required; publishable key preferred, existing anon key supported. Used only by the engine to verify the account; no service-role key is needed |
 | `DUA_ALLOWED_EMAIL` | required; the same owner email used by dua-api, compared case-insensitively against the Auth-verified account |

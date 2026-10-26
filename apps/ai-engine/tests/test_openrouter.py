@@ -112,6 +112,7 @@ def test_no_key_means_no_free_models(monkeypatch, owner):
 
 
 def test_agent_and_web_stay_on_gemini(monkeypatch, owner):
+    monkeypatch.setattr(engine, "google_search_tool", lambda: "GOOGLE_SEARCH")
     monkeypatch.setattr(openrouter.urllib.request, "urlopen", lambda *a, **k: pytest.fail("OpenRouter must not be called"))
 
     class Model:
