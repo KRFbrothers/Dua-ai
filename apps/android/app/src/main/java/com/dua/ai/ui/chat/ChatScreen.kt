@@ -337,7 +337,11 @@ fun ChatScreen(
             // Keep the entire right-hand Home touch target in the scrim, including on narrow windows.
             val endInset = WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal).asPaddingValues()
                 .calculateEndPadding(LocalLayoutDirection.current)
-            val controlInset = maxOf(HomeSizes.topBarPaddingH, HomeSizes.composerHorizontalMargin(maxWidth) + HomeSizes.barPaddingH)
+            // SuppliedComposer has 16dp outer + 8dp inner end padding before its 48dp action.
+            // Keep legacy spacing for custom headers/features and the larger existing inset at 360dp+.
+            val suppliedControlInset = if (feature == null && topBar == null) Spacing.lg + Spacing.sm else 0.dp
+            val controlInset = maxOf(HomeSizes.topBarPaddingH,
+                HomeSizes.composerHorizontalMargin(maxWidth) + HomeSizes.barPaddingH, suppliedControlInset)
             val drawerWidth = minOf(DrawerSizes.width, (maxWidth - endInset - controlInset - Sizes.touchTarget).coerceAtLeast(0.dp))
             // Expanded windows (>= 840dp): history stays open on the left, chat on the right (Reply/Now in Android pattern).
             val wideHistory = WideLayout.permanentHistory(maxWidth, featureOpen = feature != null)

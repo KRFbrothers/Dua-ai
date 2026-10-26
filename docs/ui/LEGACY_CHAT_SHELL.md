@@ -42,10 +42,13 @@ floating conversation switcher or swipe-to-reply entry wiring. This cleanup does
 add those features. Existing Voice, Add, title-long-press model selection and drawer
 settings/new-chat actions remain the supported entry points.
 
-At 320dp with 2× font scaling, the existing drawer extends 5dp over the left edge of
-the supplied Voice target (drawer right 253dp, target left 248dp). The remaining
-dismiss scrim is 67dp wide. This cleanup records the gap without changing layout;
-check drawer dismissal and Voice access on the owner APK.
+The modal drawer reserves the supplied composer's 16dp outer plus 8dp inner end
+padding before the 48dp Voice target. At 320dp this caps the drawer at 248dp and
+leaves a 72dp dismiss scrim, clearing the Voice target's left edge. The previous
+5dp overlap is covered by a geometry and pointer regression in both themes at
+normal and 2× font scaling: a first tap dismisses the drawer, and a second opens
+Voice. The wider/custom-header/feature sizing and supplied composer are unchanged.
+Check the same interaction on the owner APK.
 
 Tests tied only to removed Home decorations/header entry points are removed or rewritten;
 this is a coverage change, not proof that the missing controls were ported. Pure search
