@@ -74,6 +74,7 @@ class ComputerDrawerUiTest(private val dark: Boolean, private val small: Boolean
         compose.onNodeWithTag("history-drawer").assertIsNotDisplayed()
         assertEquals(0, voiceCalls)
         compose.onRoot().performTouchInput { click(point) }
+        compose.waitForIdle() // Original Home opens live voice after its colour-splash transition.
         assertEquals(1, voiceCalls)
         capture("computer-drawer-voice-after-dismiss")
     }
