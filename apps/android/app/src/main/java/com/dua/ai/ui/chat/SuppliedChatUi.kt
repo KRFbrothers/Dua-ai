@@ -39,6 +39,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
@@ -72,6 +73,10 @@ internal fun SuppliedChatScreen(
     showLatest: Boolean,
     newReplies: Int,
     onLatest: () -> Unit,
+    homeTab: HomeTab = HomeTab.Chat,
+    task: Boolean = false,
+    onTaskMode: (HomeMode) -> Unit = {},
+    onTaskStarter: (String) -> Unit = {},
 ) {
         Scaffold(
             modifier = Modifier.testTag("supplied-chat"),
@@ -94,7 +99,7 @@ internal fun SuppliedChatScreen(
                 )
             },
             bottomBar = {
-                Column {
+                if (homeTab != HomeTab.Work) Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     ChatNotices(state, actions)
                     if (state.editingId != null) EditingBanner(actions.onCancelEdit)
                     if (state.attachments.isNotEmpty() || state.uploads.isNotEmpty()) {
@@ -107,14 +112,28 @@ internal fun SuppliedChatScreen(
                             DictationBar(dictation.level, dictation.cancel, dictation.confirm)
                         }
                     }
-                    GeminiBottomBar(state, actions, onAttach, { dictation?.start?.invoke() ?: actions.onOpenVoice() }, focusRequester)
+                    if (state.messages.isEmpty() && !state.typing) {
+                        HomeModeSwitcher(if (task) HomeMode.Task else HomeMode.Chat,
+                            onSelect = onTaskMode, enabled = !state.typing)
+                    }
+                    GeminiBottomBar(state, actions, onAttach, { dictation?.start?.invoke() ?: actions.onOpenVoice() }, focusRequester,
+                        placeholder = if (task) "Describe..." else "Ask Dua AI...",
+                        sendEnabled = state.canSend && (!task || (state.agent && state.agentAvailable)))
                 }
             },
         ) { innerPadding ->
             Box(Modifier.fillMaxSize().padding(innerPadding).consumeWindowInsets(innerPadding)) {
+              if (homeTab == HomeTab.Work) {
+                  Text("Coming soon", Modifier.align(Alignment.Center), style = MaterialTheme.typography.bodyLarge)
+              } else {
               CompositionLocalProvider(LocalCodeExecutionUi provides CodeExecutionUi(state.codeSnippetUnavailableReason, actions.onRunCodeSnippet)) {
                 MessageList(state, actions, listState, imagineActions = imagineActions, suppliedStyle = true,
                     emptyContent = {
+                        if (task) {
+                            if (state.draft.isBlank() && state.attachments.isEmpty() && state.uploads.isEmpty()) {
+                                SuppliedTaskStarters(onTaskStarter)
+                            }
+                        } else {
                         val name = state.profileName.trim().substringBefore(" ").takeIf { it.isNotBlank() }
                         SuppliedAssistantTurn(Modifier.padding(vertical = 10.dp)) {
                             Text(
@@ -123,12 +142,29 @@ internal fun SuppliedChatScreen(
                                 color = DuaTheme.semantic.text, style = ChatWelcomeStyle,
                             )
                         }
+                        }
                     })
               }
                 JumpToLatest(showLatest, newReplies = newReplies, onClick = onLatest,
                     modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp))
+              }
             }
         }
+}
+
+@Composable
+private fun SuppliedTaskStarters(onTaskStarter: (String) -> Unit) {
+    val haptic = LocalChatHaptic.current
+    Column(Modifier.fillMaxWidth().testTag("supplied-task-starters"),
+        verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+        HomeTaskPromptIds.forEach { id ->
+            val prompt = stringResource(id)
+            OutlinedButton(onClick = { haptic(ChatHaptic.Tap); onTaskStarter(prompt) },
+                modifier = Modifier.fillMaxWidth().heightIn(min = Sizes.touchTarget)) {
+                Text(prompt, style = com.dua.ai.ui.theme.HomeTaskPromptStyle)
+            }
+        }
+    }
 }
 
 @Composable
@@ -169,16 +205,18 @@ internal fun GeminiBottomBar(
     onAttach: () -> Unit,
     onVoice: () -> Unit,
     focusRequester: FocusRequester,
+    placeholder: String = "Ask Dua AI...",
+    sendEnabled: Boolean = state.canSend,
 ) {
     val currentUploads by rememberUpdatedState(state.uploads)
     val cancelUploads = remember(actions.onCancelUpload) {
         { currentUploads.filter { it.uploading }.forEach { actions.onCancelUpload(it.id) } }
     }
     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-        SuppliedComposer(state.draft, state.typing, state.readingFiles, state.canSend,
+        SuppliedComposer(state.draft, state.typing, state.readingFiles, sendEnabled,
             state.attachments.isNotEmpty() || state.uploads.any { it.ref != null },
             state.uploads.any { it.uploading }, actions.onDraftChange, actions.onSend,
-            actions.onStop, cancelUploads, onAttach, onVoice, focusRequester)
+            actions.onStop, cancelUploads, onAttach, onVoice, focusRequester, placeholder)
     }
 }
 
@@ -189,6 +227,7 @@ private fun SuppliedComposer(
     hasAttachments: Boolean, uploading: Boolean, onDraftChange: (String) -> Unit,
     onSend: () -> Unit, onStop: () -> Unit, onCancelUploads: () -> Unit,
     onAttach: () -> Unit, onVoice: () -> Unit, focusRequester: FocusRequester,
+    placeholder: String = "Ask Dua AI...",
 ) {
     val surfaceColor = DuaTheme.colors.composer
     val textColor = MaterialTheme.colorScheme.onSurface
@@ -216,7 +255,7 @@ private fun SuppliedComposer(
             Icon(Icons.Default.Add, "Add", tint = textColor)
         }
         Box(Modifier.weight(1f).padding(vertical = 12.dp, horizontal = 4.dp), contentAlignment = Alignment.CenterStart) {
-            if (text.isEmpty()) Text("Ask Dua AI...", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyLarge)
+            if (text.isEmpty()) Text(placeholder, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyLarge)
             BasicTextField(
                 value = text, onValueChange = onDraftChange,
                 textStyle = MaterialTheme.typography.bodyLarge.copy(color = textColor),

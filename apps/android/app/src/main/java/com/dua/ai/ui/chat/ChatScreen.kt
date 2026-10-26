@@ -514,12 +514,18 @@ fun ChatScreen(
                 }
             }
             val chatPane: @Composable () -> Unit = {
-                if (useSuppliedChatUi && feature == null && state.homeTab == HomeTab.Chat) {
+                if (useSuppliedChatUi && feature == null && topBar == null &&
+                    (state.homeTab == HomeTab.Chat || state.homeTab == HomeTab.Work)) {
                     val dictation = if (actions.inlineDictation) rememberChatDictation(actions.dictationLanguage, actions.dictationAutoSend,
                         draft = rememberUpdatedState(state.draft).let { d -> remember { { d.value } } },
                         onDraft = actions.onDraftChange, onSend = sendFromComposer, onNotice = actions.onDictationNotice,
                         offlineModel = actions.dictationOfflineModel) else null
                     SuppliedChatScreen(visibleState, actions, listState, inputFocus, dictation,
+                        homeTab = state.homeTab, task = taskHome,
+                        onTaskMode = { mode ->
+                            if (!state.typing) { tap(); taskHome = mode == HomeMode.Task; actions.onAgent(taskHome) }
+                        },
+                        onTaskStarter = { prompt -> actions.onDraftChange(prompt); inputFocus.requestFocus(); keyboard?.show() },
                         onMenu = { dismissInput(); if (wideHistory) historyPanelVisible = !historyPanelVisible else scope.launch { drawerState.open() } },
                         onModel = { sheet = ChatSheet.Model }, onAttach = { sheet = ChatSheet.Attach },
                         imagineActions = mediaActions,
