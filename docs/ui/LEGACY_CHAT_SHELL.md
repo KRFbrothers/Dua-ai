@@ -50,3 +50,15 @@ live voice. The locked composer and attachment-sheet files are unchanged.
 Before accepting the APK, check Home Chat, Task prompts, Work from the drawer,
 model/profile, dictation/live voice, Images and Project chat. Keep the installed
 working APK until the restored version is accepted. No backend deployment is needed.
+
+## Projects compatibility entry
+
+`ChatSheet.Projects` is a compatibility entry for restored sheet state. `ChatScreen`
+handles it before composing chat and delegates to `ProjectsFeaturePage`, which uses
+the shared Projects list and new-project editor. The later modal call and its
+otherwise unused `ProjectsSheet` wrapper have been removed.
+
+`ProjectsContent` stays in `ProjectsSheet.kt`: the dedicated Projects flow still
+uses it for Tasks/Memory tools, and component tests exercise its planner, editing
+and selection actions. Its implementation is unchanged. This cleanup does not
+change the restored Dua Home, Project chat, project persistence or the locked UI.
