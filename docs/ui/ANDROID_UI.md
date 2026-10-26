@@ -9,7 +9,7 @@ Dua AI keeps its original name and artwork. This is the owner's personal assista
 | Screen | Production code / behavior |
 | --- | --- |
 | Welcome | `ui/account/OnboardingScreen.kt`: full Dua logo, real Google login, Skip for now |
-| Home | `ui/chat/SuppliedChatUi.kt` (`SuppliedChatScreen`) is the live Home, selected by `ChatRoute` when there is no feature, the Chat tab is active and no `topBar` is supplied. `ChatScreen.kt` hosts the drawer/sheets; `ChatTopBar.kt` / `ChatContent.kt` remain the legacy pane for features and Work/Task home |
+| Home | `ui/chat/SuppliedChatUi.kt` (`SuppliedChatScreen`) serves Home Chat, Task and Work whenever no feature or custom `topBar` is supplied. `ChatScreen.kt` hosts the drawer/sheets and keeps `legacyChatPane` for features and ProjectChat; see [shell ownership and known gaps](LEGACY_CHAT_SHELL.md) |
 | Conversation | `MessageList.kt`, `UserMessage.kt`, `AssistantMessage.kt`, `MarkdownMessage.kt`: bubbles, streamed replies, Markdown, copyable code blocks, sources, typing and partial-stop states |
 | Composer | `ChatComposer.kt`, `AttachmentSheet.kt`, `StoredFileChips.kt`: multiline input, send/stop, model choice, mic/voice and file tools |
 | History / Aura | `ui/history/HistoryDrawer.kt`: project search, fixed navigation/footer and independently scrolling recent chats |

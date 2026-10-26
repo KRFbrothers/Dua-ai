@@ -1,80 +1,60 @@
-# Android legacy chat shell ownership
+# Android chat shell ownership after the Home cleanup
 
-Source inventory checked against `main` at `665cbc8c21390e3dc03c6ae8c152f0932a89c269`.
-This is an ownership map, not a deletion or migration plan. Legacy-only means outside
-the live Home rendering path; these symbols still have callers and must stay for now.
-
-## Live Home and legacy routing
-
-The live Home chat is `SuppliedChatScreen` in
-[SuppliedChatUi.kt](../../apps/android/app/src/main/java/com/dua/ai/ui/chat/SuppliedChatUi.kt).
-[ChatRoute.kt](../../apps/android/app/src/main/java/com/dua/ai/ui/chat/ChatRoute.kt)
-sets `useSuppliedChatUi = feature == null && homeTab == HomeTab.Chat && topBar == null`.
-[ChatScreen.kt](../../apps/android/app/src/main/java/com/dua/ai/ui/chat/ChatScreen.kt)
-keeps hosting the drawer, sheets and existing state/actions. Its `chatPane` selects
-`SuppliedChatScreen` when the flag is true, no feature is selected and the tab is Chat;
-otherwise it invokes `legacyChatPane`.
+Home uses `SuppliedChatScreen` whenever the resolved feature and custom top bar are
+both absent. This selection lives in `ChatScreen`; callers no longer choose a shell.
+`ChatRoute` only passes state/actions and any feature-specific top bar.
 
 ```text
-ChatRoute → ChatScreen (drawer/sheets host)
-                     → SuppliedChatScreen: Home chat, including its conversation
-                     → legacyChatPane: features, Work/Task home, custom topBar
+ChatRoute → ChatScreen (drawer, sheets, task state, media and scroll host)
+                     → SuppliedChatScreen: Home Chat, Task and Work
+                     → legacyChatPane: feature or custom top bar
 ```
 
-Task-home controls remain within the legacy pane. A direct `ChatScreen` caller that
-omits `useSuppliedChatUi` also gets the legacy pane because the flag defaults to false.
-The legacy pane remains live for these routes; it is not unused code.
+`ProjectChatRoute` supplies both the Projects feature and its own header, so it stays
+on the legacy pane. Images and Agent also keep their feature header, message rendering
+and composer. Their source files and production styling are unchanged by this cleanup.
+The old Home header, empty-state hero and backdrop files have been removed.
 
-## Legacy-only UI symbols and branches — keep for now
+## Shared ownership — keep
 
-Paths below are relative to `apps/android/app/src/main/java/com/dua/ai/`.
+Paths are relative to `apps/android/app/src/main/java/com/dua/ai/`.
 
-| Symbol / branch | Owner file | Current call path |
-| --- | --- | --- |
-| `ChatTopBar` | `ui/chat/ChatTopBar.kt` | Called inside `ChatScreen.legacyChatPane` when neither a custom topBar nor a feature top bar is supplied. |
-| `ChatContent`, private `HomeHero`, private `TaskStarters` | `ui/chat/ChatContent.kt` | `legacyChatPane` calls `ChatContent` for its empty Home; `HomeHero` and `TaskStarters` are private helpers within it. |
-| `Modifier.homeBackdrop` | `ui/chat/HomeBackdrop.kt` | Applied inside `legacyChatPane` for non-feature, non-Work chat surfaces. |
-| `UserMessage` | `ui/chat/UserMessage.kt` | `MessageList` selects it for user turns when `suppliedStyle` is false; live Home selects `SuppliedUserMessage` instead. The file also contains the shared `splitFileNames` helper: keep the file. |
-| `ChatSizes.legacyFileChipNameMax` | `ui/theme/ChatTokens.kt` | Still used by `UserMessage` for fallback filename chips. Keep this token and its owner file. |
-| `!suppliedStyle` and equivalent false-style branches | `ui/chat/MessageList.kt`, `ui/chat/AssistantMessage.kt` | Legacy message animation, spacing/wrapping, user-bubble selection, action-row gating, reply placeholder and streaming cursor/fade behavior. Only these branches belong to the legacy style; both files remain shared. |
-| `HomeModeSwitcher` | `ui/chat/ChatComposer.kt` | Called from the legacy pane's Home/composer and floating conversation controls. The owner file is locked: document only; do not edit or remove it. |
-
-## Shared symbols — keep
-
-| Symbol | Evidence / reason |
+| Symbol | Owner / callers |
 | --- | --- |
-| `splitFileNames` | Defined in `UserMessage.kt`; also called by `SuppliedUserMessage` in `SuppliedChatUi.kt` and `ReplyQuote.of` in `ChatSwipeReply.kt`. Its owner file cannot be removed with the legacy bubble. |
-| `DuaCalligraphyLogo` | Defined in `ui/components/DuaBrandLogos.kt`; used by legacy `HomeHero` and `ui/AppPausedScreen.kt`. It remains shared brand artwork even though live Home does not call that hero. |
-| `TypingIndicator` | Defined in `MessageList.kt`; used by the legacy waiting turn and by `ReplyPlaceholder` in `StreamingPolish.kt`. Keep the reusable indicator and its owner file; live supplied-style waits select `GeminiLoadingShimmer`. |
-| `MessageList` | Both `legacyChatPane` and `SuppliedChatScreen` call it. Live Home passes `suppliedStyle = true`; legacy callers use the false default. |
-| `AssistantMessage` | Called by the shared `MessageList`, which forwards `suppliedStyle`. Markdown, sources, code results and other reply rendering remain shared; false-style branches do not make the entire component legacy-only. |
+| `HomeTab` | `ui/chat/SuppliedChatUi.kt`; shared Chat/Work destination enum. |
+| `HomeTaskPromptIds` | `ui/chat/SuppliedChatUi.kt`; unchanged resource list consumed by the supplied Task prompts and test fixtures. |
+| `splitFileNames` | `ui/chat/ChatFileNames.kt`; unchanged parser used by both user-bubble renderers and reply quotes. |
+| `UserMessage`, `ChatSizes.legacyFileChipNameMax` | Legacy feature/ProjectChat user bubble and fallback filename-chip width. Both remain. |
+| `DuaCalligraphyLogo` | `ui/components/DuaBrandLogos.kt`; shared brand artwork, including the paused screen. |
+| `TypingIndicator` | `ui/chat/MessageList.kt`; retained for legacy waits and the shared reply-placeholder component. |
+| `MessageList`, `AssistantMessage` | Shared by supplied and legacy panes. False-style branches still belong to feature/ProjectChat rendering. |
+| `HomeModeSwitcher` | Locked `ui/chat/ChatComposer.kt`; reused as-is by empty supplied Home. Do not edit its owner. |
 
-## Test coverage boundaries
+`taskHome` remains owned by `ChatScreen`. Task selection calls the existing Agent
+handler; a starter only fills the draft, focuses the input and requests the keyboard.
+Work shows Coming soon without a composer. No backend or ViewModel behavior is added.
 
-The historical chat-shell screenshot fixtures under
-[app/src/test/java/com/dua/ai/screenshots](../../apps/android/app/src/test/java/com/dua/ai/screenshots)
-(such as `HomeScreenshotTest` and `DuaScreenshotTest`) call `ChatScreen` without
-`useSuppliedChatUi = true`. Those chat-shell captures still exercise the legacy pane,
-not live Home. Other screenshots in that directory cover their respective screens or
-sheets; they are not evidence of live Home wiring. The historical screenshot suite is
-opt-in with `-Pdua.screenshots`.
+## Known Home parity gaps
 
-[SuppliedChatWiringUiTest](../../apps/android/app/src/test/java/com/dua/ai/ui/chat/SuppliedChatWiringUiTest.kt)
-explicitly passes `useSuppliedChatUi = true` and exercises the live Home path, including
-existing send/stream/stop handlers, drawer restoration, attachments, keyboard and errors.
-It records `supplied-wired-*` renders. Legacy component tests remain valid for their own
-callers; do not delete or relabel them as live Home coverage.
+The supplied design does not expose the old direct profile button, separate voice-mode
+button, conversation-search header entry, active-mode chips/swipe-up sheet gesture,
+floating conversation switcher or swipe-to-reply entry wiring. This cleanup does not
+add those features. Existing Voice, Add, title-long-press model selection and drawer
+settings/new-chat actions remain the supported entry points.
 
-## Re-check commands
+Tests tied only to removed Home decorations/header entry points are removed or rewritten;
+this is a coverage change, not proof that the missing controls were ported. Pure search
+and parser tests, reusable component tests, feature tests and ProjectChat routing checks
+remain. The locked composer and attachment sheet still serve legacy feature routes.
 
-Run from the repository root before any future cleanup:
+## Screenshot and release checks
 
-```sh
-cd apps/android/app/src
-rg -n 'ChatTopBar\(|ChatContent\(|homeBackdrop\(|HomeModeSwitcher\(|UserMessage\(|DuaCalligraphyLogo\(|splitFileNames|TypingIndicator\(|legacyFileChipNameMax' -g '*.kt'
-rg -n 'useSuppliedChatUi' -g '*.kt'
-```
+`HomeScreenshotTest` now records supplied Home. `SuppliedChatWiringUiTest` uses the
+normal host selection and covers live Home, Task, Work plus explicit Images/custom
+ProjectChat-header routing. Existing default UI recording captures are under
+`app/build/approved-ui/`; the historical screenshot package still requires
+`-Pdua.screenshots`. Do not label an excluded suite as executed.
 
-Compare declarations, production callers and test fixtures separately. A shared helper
-can live beside a legacy-only composable; filename placement is not proof that it can
-be deleted. This documentation changes no Kotlin, tests, resources or build behavior.
+Keep the PR4 APK until the 5b APK passes owner review on the phone: Home Chat, Task,
+Work, Images and Project chat. Confirm feature renders are unchanged, inspect new Home
+renders and check the parity gaps above. Do not merge before review.
