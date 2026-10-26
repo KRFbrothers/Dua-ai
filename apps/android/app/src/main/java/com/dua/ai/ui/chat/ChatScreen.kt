@@ -117,6 +117,8 @@ fun ChatScreen(
     topBar: (@Composable () -> Unit)? = null,
     requestComposerFocus: String? = null,
     dismissOverlaysRequest: String? = null,
+    /** Archived supplied reference only; production Home uses the original Dua shell. */
+    useSuppliedChatUi: Boolean = false,
 ) {
     val drawerState = rememberDrawerState(initialDrawerValue)
     var lastDrawerValue by remember { mutableStateOf(drawerState.currentValue) }
@@ -338,11 +340,11 @@ fun ChatScreen(
             // Keep the entire right-hand Home touch target in the scrim, including on narrow windows.
             val endInset = WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal).asPaddingValues()
                 .calculateEndPadding(LocalLayoutDirection.current)
-            // Preserve the proven Home drawer clearance and its 48dp right-hand touch target.
-            // Custom headers/features retain their existing spacing.
-            val homeControlInset = if (feature == null && topBar == null) Spacing.lg + Spacing.sm else 0.dp
+            // SuppliedComposer has 16dp outer + 8dp inner end padding before its 48dp action.
+            // Keep legacy spacing for custom headers/features and the larger existing inset at 360dp+.
+            val suppliedControlInset = if (feature == null && topBar == null) Spacing.lg + Spacing.sm else 0.dp
             val controlInset = maxOf(HomeSizes.topBarPaddingH,
-                HomeSizes.composerHorizontalMargin(maxWidth) + HomeSizes.barPaddingH, homeControlInset)
+                HomeSizes.composerHorizontalMargin(maxWidth) + HomeSizes.barPaddingH, suppliedControlInset)
             val drawerWidth = minOf(DrawerSizes.width, (maxWidth - endInset - controlInset - Sizes.touchTarget).coerceAtLeast(0.dp))
             // Expanded windows (>= 840dp): history stays open on the left, chat on the right (Reply/Now in Android pattern).
             val wideHistory = WideLayout.permanentHistory(maxWidth, featureOpen = feature != null)
@@ -368,7 +370,7 @@ fun ChatScreen(
                         modifier = Modifier.width(if (permanent) DrawerSizes.width else drawerWidth),
                     )
             }
-            val chatPane: @Composable () -> Unit = {
+            val legacyChatPane: @Composable () -> Unit = {
                 Column(Modifier.fillMaxSize().background(com.dua.ai.ui.theme.ChatTheme.colors.background)
                     .let { if (feature == null) it.windowInsetsPadding(
                         WindowInsets.ime.union(WindowInsets.navigationBars).only(WindowInsetsSides.Bottom)) else it }
@@ -515,6 +517,26 @@ fun ChatScreen(
                         }
                     }
                 }
+            }
+            val chatPane: @Composable () -> Unit = {
+                if (useSuppliedChatUi && feature == null && topBar == null) {
+                    val dictation = if (actions.inlineDictation) rememberChatDictation(actions.dictationLanguage, actions.dictationAutoSend,
+                        draft = rememberUpdatedState(state.draft).let { d -> remember { { d.value } } },
+                        onDraft = actions.onDraftChange, onSend = sendFromComposer, onNotice = actions.onDictationNotice,
+                        offlineModel = actions.dictationOfflineModel) else null
+                    SuppliedChatScreen(visibleState, actions, listState, inputFocus, dictation,
+                        homeTab = state.homeTab, task = taskHome,
+                        onTaskMode = { mode ->
+                            if (!state.typing) { tap(); taskHome = mode == HomeMode.Task; actions.onAgent(taskHome) }
+                        },
+                        onTaskStarter = { prompt -> actions.onDraftChange(prompt); inputFocus.requestFocus(); keyboard?.show() },
+                        onMenu = { dismissInput(); if (wideHistory) historyPanelVisible = !historyPanelVisible else scope.launch { drawerState.open() } },
+                        onModel = { sheet = ChatSheet.Model }, onAttach = { sheet = ChatSheet.Attach },
+                        imagineActions = mediaActions,
+                        showLatest = !followTail && listState.canScrollForward,
+                        newReplies = MessageGrouping.newReplies(state.messages, seenMessages),
+                        onLatest = { scope.launch { followTail = true; goToLatest() } })
+                } else legacyChatPane()
             }
             if (wideHistory && historyPanelVisible) Row(Modifier.fillMaxSize()) {
                 historyPanel(true)

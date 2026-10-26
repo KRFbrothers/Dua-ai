@@ -10,9 +10,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.sp
 import com.dua.ai.model.ChatMessage
 import com.dua.ai.model.CodeRuns
 import com.dua.ai.model.ReplySources
+import com.dua.ai.ui.theme.DuaTheme
 import com.dua.ai.ui.theme.Sizes
 import com.dua.ai.ui.theme.Spacing
 
@@ -42,6 +44,7 @@ fun AssistantMessage(
     showActions: Boolean = isLast,
     onOpenMedia: (Int) -> Unit = {},
     onOpenCanvas: ((List<com.dua.ai.model.ChatArtifact>) -> Unit)? = null,
+    suppliedStyle: Boolean = false,
     onOpenWorkspaces: () -> Unit = {},
 ) {
     val parts = remember(message.text) { ReplySources.split(message.text) }
@@ -70,16 +73,20 @@ fun AssistantMessage(
         val images = message.media.filter { !it.isVideo }
         if (images.isNotEmpty()) Box(Modifier.padding(bottom = Spacing.sm)) { ImageGrid(images, null, onOpen = onOpenMedia) }
         if (streaming && message.text.isEmpty() && message.thinking == null && !showProgress && message.codeRuns.isEmpty() && message.build == null && images.isEmpty() && message.coding == null) {
-            ReplyPlaceholder()
+            if (suppliedStyle) GeminiLoadingShimmer() else ReplyPlaceholder()
         }
         if (parts.body.isNotEmpty()) {
             // New replies fade in once; restored/finished replies render immediately.
             val body: @Composable () -> Unit = {
-                MarkdownMessage(parts.body)
+                MarkdownMessage(parts.body,
+                    bodyStyle = if (suppliedStyle) androidx.compose.ui.text.TextStyle(
+                        fontFamily = androidx.compose.ui.text.font.FontFamily.SansSerif,
+                        fontSize = 16.sp, lineHeight = 24.sp) else null,
+                    textColor = if (suppliedStyle) DuaTheme.semantic.text else null)
             }
-            if (streaming) FadeInOnce { body() } else body()
+            if (streaming && !suppliedStyle) FadeInOnce { body() } else body()
         }
-        if (streaming && parts.body.isNotEmpty()) StreamingCursor()
+        if (streaming && parts.body.isNotEmpty() && !suppliedStyle) StreamingCursor()
         MessageArtifactCanvas(message, onOpenCanvas)
         if (parts.sources.isNotEmpty() && !streaming) SourceChips(parts.sources, Modifier.padding(top = Spacing.md))
         // Build mode (Phase 5C): the proposed pull request, for review. Only its confirmed Create PR button writes to GitHub.

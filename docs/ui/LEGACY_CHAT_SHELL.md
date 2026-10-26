@@ -3,8 +3,8 @@
 Related: [settings-card and loading ownership](COMPONENT_OWNERSHIP.md).
 
 The owner restored the original Dua calligraphy Home with the Chat/Task switcher.
-`ChatScreen` has one chat pane for Home, conversations and feature/custom headers.
-The archived supplied screen and its opt-in/style flags have been removed. Work remains in the drawer and
+`ChatScreen` defaults to the original pane for Home and conversations; `ChatRoute`
+does not opt into the supplied reference screen. Work remains in the drawer and
 shows Coming soon without a composer.
 
 ```text
@@ -22,7 +22,7 @@ ChatRoute → ChatScreen (drawer, sheets, task state, media and scroll host)
 | `ChatContent`, `HomeHero`, `TaskStarters` | `ui/chat/ChatContent.kt`; original calligraphy logo, tagline and Task starters. |
 | `homeBackdrop` | `ui/chat/HomeBackdrop.kt`; Home/conversation decoration, excluded from features. |
 | `HomeModeSwitcher` | Locked `ui/chat/ChatComposer.kt`; reused unchanged in empty Home and conversations. |
-| `HomeTab`, `HomeTaskPromptIds` | `ui/chat/ChatTopBar.kt` owns the destination enum; `ui/chat/ChatContent.kt` owns the unchanged prompt resource list. |
+| `HomeTab`, `HomeTaskPromptIds` | Shared declarations remain in `ui/chat/SuppliedChatUi.kt`; one enum and one resource list. |
 | `splitFileNames` | `ui/chat/ChatFileNames.kt`; shared parser, unchanged. |
 | `UserMessage`, `MessageList`, `AssistantMessage`, `TypingIndicator` | Original conversation and feature rendering. |
 | `DuaCalligraphyLogo` | `ui/components/DuaBrandLogos.kt`; original artwork, unchanged. |
@@ -32,21 +32,18 @@ a starter fills the draft and focuses the input without sending. Header profile,
 model picker, separate dictation/live voice, conversation search, active-mode chips,
 swipe-up attachment gesture and swipe-to-reply use their original handlers.
 
-The parallel title/emoji shell, composer, user/assistant wrappers and loading shimmer
-are deleted. MessageList and AssistantMessage retain only the original live rendering.
-The now-unused semantic-colour adapter and alternate welcome style are also removed;
-Material/theme values, appearance defaults and live typography stay unchanged.
+The supplied reference implementation and its tests remain archived, explicitly
+opted in with `useSuppliedChatUi = true`. There is no production caller selecting
+it, no user-facing switch, and no screenshot-style title/emoji Home in the live path.
+Keeping this reference avoids deleting its regression coverage during restoration.
 
 ## Verification and release
 
 Original Home header, profile, search, gesture, ambient-motion and Chat/Task tests
-remain. The old supplied wiring/screenshot test files are renamed to
-`ChatWiringUiTest` and `RestoredHomeScreenshotTest`, keeping their test cases and
-adapting assertions to the live Home. Ambient motion now exercises the shared media
-shimmer instead of the deleted alternate shimmer. No tests are deleted.
-`HomeScreenshotTest` and `RestoredHomeScreenshotTest` render the same live Home.
-Default captures use `app/build/approved-ui/`; the opt-in screenshot package still
-requires `-Pdua.screenshots`. Do not claim excluded suites or phone checks passed.
+are restored alongside the existing supplied reference tests. `HomeScreenshotTest`
+renders live Dua Home; `SuppliedHomeScreenshotTest` records only the archived design.
+Default captures use `app/build/approved-ui/`; opt-in screenshot tests require
+`-Pdua.screenshots`. Do not claim excluded suites or physical-device checks passed.
 
 The conservative drawer clearance from PR441 remains. Its pointer regression now
 checks the restored Voice mode control: one tap dismisses the drawer, the next opens

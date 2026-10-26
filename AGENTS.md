@@ -10,7 +10,7 @@ These rules apply throughout the repository. Preserve unrelated work. Paths are 
 
 | Layer / Directory | Tech Stack | Key Entry Points & Files | Responsibility |
 | :--- | :--- | :--- | :--- |
-| Android App (`apps/android/app/`) | Kotlin + Jetpack Compose + Material 3 | `MainActivity.kt`, `ui/navigation/DuaNavHost.kt`, `ui/chat/ChatScreen.kt`, `ui/chat/ChatContent.kt`, `ui/chat/ChatTopBar.kt`, `ui/chat/ChatComposer.kt`, `viewmodel/ChatViewModel.kt`, `network/DuaApiClient.kt` | Native Android client, 4-state composer, Live Voice, Artifacts Canvas, Projects, Settings, Home AppWidget (`DuaToolbarWidgetReceiver`) |
+| Android App (`apps/android/app/`) | Kotlin + Jetpack Compose + Material 3 | `MainActivity.kt`, `ui/navigation/DuaNavHost.kt`, `ui/chat/ChatScreen.kt`, `ui/chat/SuppliedChatUi.kt`, `ui/chat/ChatComposer.kt`, `viewmodel/ChatViewModel.kt`, `network/DuaApiClient.kt` | Native Android client, 4-state composer, Live Voice, Artifacts Canvas, Projects, Settings, Home AppWidget (`DuaToolbarWidgetReceiver`) |
 | Android Theme (`apps/android/app/.../ui/theme/`) | Compose Design Tokens (`@Immutable`) | `Color.kt`, `DuaTheme.kt`, `Type.kt`, `Motion.kt`, `Spacing.kt`, `HomeTokens.kt`, `ChatTokens.kt`, `DrawerTokens.kt` | Single source of truth for colors, typography, shapes, spacing, and motion springs |
 | Cloud Run AI Engine (`apps/ai-engine/`) | Python 3.12 container + Flask + Vertex AI (`google-genai`) + Google ADK (`google-adk==2.12.0`) | `app.py`, `owner_auth.py`, `agent_tools.py`, `agent_adk.py`, `coding_agent.py`, `coding_workspace.py`, `coding_runner_server.py`, `kill_switches.py`, `backup.py` | Owner-verified Gemini streaming chat, single-loop and ADK multi-agent tools, grounded search, coding PR agent, Imagine, backups |
 | Node API & Proxy (`apps/api/`) | Node.js 24+; native HTTP server | `src/server/server.mjs`, `src/server/service-handler.mjs`, `src/core/access-policy.mjs`, `src/core/account.mjs`, `src/core/providers.mjs`, `src/core/kill-switches.mjs` | Same-origin web host, HttpOnly cookie sessions, daily request quota, cloud snapshot sync, `/api/web/chat` SSE proxy |
@@ -75,7 +75,7 @@ Always use `MaterialTheme.typography`, `CodeTextStyle`, or named `TextStyle` tok
 ### 3.3 Accessibility & UI Test Compatibility
 
 - Every interactive button, chip, or row must have at least a `48.dp` touch target (`Sizes.touchTarget`) and a meaningful TalkBack label through `contentDescription` or semantics.
-- Never rename or remove existing `Modifier.testTag` identifiers relied upon by tests, including `home-mode-switcher`, `composer-container`, `open-canvas`, `drawer-search-field`, and `code-preview`.
+- Never rename or remove existing `Modifier.testTag` identifiers relied upon by tests, including `supplied-chat`, `supplied-composer`, `open-canvas`, `drawer-search-field`, and `code-preview`.
 
 ## 4. GenAI Backends (`apps/ai-engine/` & `apps/api/`) — Security, Streaming & Cost Rules
 

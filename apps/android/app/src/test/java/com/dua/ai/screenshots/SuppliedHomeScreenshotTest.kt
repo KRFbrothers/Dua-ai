@@ -27,11 +27,11 @@ import org.robolectric.ParameterizedRobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
-/** Live original Dua Home semantics and captures in both themes and at small widths. */
+/** Archived supplied design coverage; HomeScreenshotTest renders the restored live Dua Home. */
 @RunWith(ParameterizedRobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [34], qualifiers = RobolectricDeviceQualifiers.Pixel7)
-class RestoredHomeScreenshotTest(private val dark: Boolean) {
+class SuppliedHomeScreenshotTest(private val dark: Boolean) {
     companion object {
         @JvmStatic
         @ParameterizedRobolectricTestRunner.Parameters(name = "dark={0}")
@@ -46,32 +46,32 @@ class RestoredHomeScreenshotTest(private val dark: Boolean) {
         compose.setContent {
             DuaTheme(LocalPreferences(theme = mode)) {
                 Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-                    ChatScreen(state, ChatActions())
+                    ChatScreen(state, ChatActions(), useSuppliedChatUi = true)
                 }
             }
         }
-        compose.onNodeWithTag("home-mode-switcher").assertIsDisplayed()
+        compose.onNodeWithTag("supplied-chat").assertIsDisplayed()
     }
 
     private fun capture(name: String) {
-        val file = File("build/outputs/roborazzi/restored_home/${name}_$mode.png")
+        val file = File("build/outputs/roborazzi/supplied_home/${name}_$mode.png")
         file.parentFile!!.mkdirs()
         compose.onRoot().captureRoboImage(file.absolutePath)
     }
 
     @Test fun emptyHome() {
         show()
-        compose.onNodeWithContentDescription("Dua AI").assertExists()
+        compose.onNodeWithText("Hello Fareed!", substring = true).assertIsDisplayed()
         compose.onNodeWithContentDescription("Message").assertIsDisplayed()
-        compose.onNodeWithContentDescription("Add photos and files").assertIsDisplayed()
-        compose.onNodeWithContentDescription("Voice mode").assertIsDisplayed()
-        compose.onNodeWithContentDescription("Send message").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Add").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Voice").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Send").assertDoesNotExist()
         capture("empty_home")
     }
 
     @Test fun emptyHomeNoName() {
         show(home.copy(profileName = ""))
-        compose.onNodeWithContentDescription("Dua AI").assertExists()
+        compose.onNodeWithText("Hello! Main Dua AI hoon", substring = true).assertIsDisplayed()
         capture("empty_home_no_name")
     }
 
@@ -79,15 +79,15 @@ class RestoredHomeScreenshotTest(private val dark: Boolean) {
         val draft = "Plan a 3-day study schedule for physics"
         show(home.copy(draft = draft))
         compose.onNodeWithContentDescription("Message").assertTextContains(draft)
-        compose.onNodeWithContentDescription("Send message").assertIsDisplayed()
-        compose.onNodeWithContentDescription("Voice mode").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Send").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Voice").assertDoesNotExist()
         capture("home_with_draft")
     }
 
     @Config(qualifiers = "w320dp-h568dp-xhdpi")
     @Test fun homeSmall() {
         show()
-        compose.onNodeWithTag("composer-container").assertIsDisplayed()
+        compose.onNodeWithTag("supplied-composer").assertIsDisplayed()
         capture("home_small")
     }
 }

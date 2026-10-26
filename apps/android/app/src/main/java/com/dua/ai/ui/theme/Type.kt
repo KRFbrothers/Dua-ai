@@ -140,6 +140,9 @@ internal val ProjectTabSelectedStyle = TextStyle(fontSize = 15.sp, lineHeight = 
 internal val ProjectInputStyle = TextStyle(fontSize = 18.sp, lineHeight = 26.sp, fontWeight = FontWeight.Normal)
 internal val ProjectEmptyTitleStyle = TextStyle(fontSize = 17.sp, lineHeight = 24.sp, fontWeight = FontWeight.Medium)
 
+/** Alternate chat uses the same accessible type scale as the primary conversation. */
+val ChatWelcomeStyle = TextStyle(fontFamily = InterFont, fontSize = 16.sp, lineHeight = 26.sp)
+
 val DrawerTitleStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Medium, fontSize = 22.sp)
 val DrawerMenuStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Normal, fontSize = 17.sp)
 val DrawerChatStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Normal, fontSize = 16.sp)

@@ -71,7 +71,7 @@ class AmbientMotionUiTest(private val dark: Boolean, private val large: Boolean)
         return requireNotNull(BitmapFactory.decodeFile(file.absolutePath))
     }
     private fun compare(label: String, static: Boolean) {
-        for (tag in listOf("home-gradient", "orb-preview", "media-shimmer-preview")) {
+        for (tag in listOf("home-gradient", "orb-preview", "supplied-shimmer-preview")) {
             val a = capture(tag, "$label-a")
             compose.mainClock.advanceTimeBy(608)
             val b = capture(tag, "$label-b")
@@ -89,13 +89,13 @@ class AmbientMotionUiTest(private val dark: Boolean, private val large: Boolean)
                     Column(Modifier.requiredSize(360.dp, 800.dp).background(ChatTheme.colors.background)) {
                         Box(Modifier.fillMaxWidth().height(620.dp).homeBackdrop(task = false, generating = true))
                         Box(Modifier.fillMaxWidth().height(100.dp).testTag("orb-preview")) { TypingIndicator() }
-                        Box(Modifier.fillMaxWidth().height(80.dp).testTag("media-shimmer-preview")) { com.dua.ai.ui.components.ShimmerBox(Modifier.fillMaxSize()) }
+                        Box(Modifier.fillMaxWidth().height(80.dp).testTag("supplied-shimmer-preview")) { GeminiLoadingShimmer() }
                     }
                 }
             }
         }
         compose.mainClock.advanceTimeBy(416)
-        compose.onAllNodesWithContentDescription("Dua is thinking").assertCountEquals(1)
+        compose.onAllNodesWithContentDescription("Dua is thinking").assertCountEquals(2)
         compare("active", static = false)
         scale(0f)
         compose.mainClock.advanceTimeBy(608)
@@ -107,7 +107,7 @@ class AmbientMotionUiTest(private val dark: Boolean, private val large: Boolean)
         compose.runOnUiThread { owner.registry.currentState = Lifecycle.State.RESUMED }
         compose.mainClock.advanceTimeBy(416)
         compare("resumed", static = false)
-        compose.onAllNodesWithContentDescription("Dua is thinking").assertCountEquals(1)
+        compose.onAllNodesWithContentDescription("Dua is thinking").assertCountEquals(2)
     }
 
     @Test fun endingGenerationRestoresTheConversationBackground() {

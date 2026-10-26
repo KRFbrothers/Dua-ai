@@ -19,7 +19,7 @@ supplied-shell cleanup. Current Home uses
 and the native
 [`HomeBackdrop.kt`](../../../apps/android/app/src/main/java/com/dua/ai/ui/chat/HomeBackdrop.kt).
 Work remains a drawer destination showing Coming soon without a composer.
-The unused parallel supplied screen has been deleted; Home has one implementation.
+`SuppliedChatUi.kt` is retained as an explicitly opted-in archived reference.
 The animated orb remains the reply-indicator fallback in
 [`ThinkingOrb.kt`](../../../apps/android/app/src/main/java/com/dua/ai/ui/chat/ThinkingOrb.kt),
 using `AmbientTokens.kt`. These native implementations do not establish that every

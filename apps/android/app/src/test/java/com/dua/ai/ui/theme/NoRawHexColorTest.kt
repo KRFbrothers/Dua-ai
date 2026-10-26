@@ -6,7 +6,7 @@ import org.junit.Test
 
 /**
  * Raw `Color(0x...)` literals belong only in the theme package (`ui/theme`). Screens must read
- * colours from MaterialTheme.colorScheme, DuaTheme.colors or DuaFixedColors.
+ * colours from MaterialTheme.colorScheme, DuaTheme.semantic, DuaTheme.colors or DuaFixedColors.
  */
 class NoRawHexColorTest {
     private val sources = File("src/main/java")

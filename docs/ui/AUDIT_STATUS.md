@@ -1,8 +1,7 @@
 # Android UI audit status
 
 Checked on 2026-10-26 against main
-`f32cd8a1e36bcbc72c0661444fb16f9c0ec27995` (through PR446), followed by the
-owner-requested removal of the archived parallel shell documented below.
+`4039ce2f4055030d07e9c10787cf9f080a5bf23b` (through PR445).
 This is the follow-up to the owner's `Dua_AI_Android_Design_UI_Audit.md`.
 The confirmed-safe cleanup and ownership review are complete. Lint, the opt-in
 screenshot package and owner phone acceptance remain unverified; this is not a
@@ -12,12 +11,12 @@ claim that every feature is complete.
 
 | Original finding | Current result |
 | --- | --- |
-| Duplicate 1: two Home shells | Original Dua logo + Chat/Task Home remains live. The archived SuppliedChatUi implementation, opt-in/style flags, parallel bubbles/composer and shimmer are now deleted. Wiring/screenshot tests are renamed and adapted; no test cases deleted. |
-| Duplicate 2: colour classes | Keep live semantic/component token contracts. The unused DuaSemanticColors adapter was removed after its alternate-shell callers were deleted; no live palette/default changes. |
+| Duplicate 1: two Home shells | Owner chose the original Dua logo + Chat/Task Home after phone review. PR442 restored it; production callers do not opt into the archived supplied design. PR443 fixed only its Voice-transition test synchronization. |
+| Duplicate 2: colour classes | Keep semantic/component token contracts; class count alone did not prove redundant logic. |
 | Duplicate 3: Projects flows | PR444 removed the unreachable modal call and unused wrapper. Shared list/editor compatibility and live Tasks/Memory/planner content remain. |
 | Duplicate 4: Voice screens | Dictation review, hands-free and realtime Live Voice serve different modes. Keep. |
 | Duplicate 5: settings/page/backup cards | PR445 shared the identical settings-card container. Page surfaces and backup rows/scaffolding keep their distinct contracts. |
-| Duplicate 6: loading variants | Removed only the unused alternate-shell shimmer. ReplyPlaceholder still delegates to TypingIndicator; orb fallback, progress/thinking and shared media shimmer remain live. |
+| Duplicate 6: loading variants | ReplyPlaceholder already delegates to TypingIndicator; orb fallback, progress/thinking and media shimmer remain live. No safe deletion found. |
 | Duplicate 7: logo formats | Keep artwork for its distinct onboarding, voice, drawer and theme placements. |
 | Duplicate 8: XML asset sets | Different fills, dimensions/viewports or shapes prevent treating complete resources as duplicates. Keep. |
 | Duplicate 9: camera/wave pairs | Different geometry/bar counts and roles. Keep widget/composer/locked-sheet resources. |
@@ -45,8 +44,7 @@ The four locked sheet/composer files were not edited by these follow-ups.
 - Main [personal APK build](https://github.com/KRFbrothers/Dua-ai/actions/runs/40335353824): passed. This does not establish installation, sign-in or phone acceptance.
 - PR445 [verification](https://github.com/KRFbrothers/Dua-ai/actions/runs/40332641111): all 28 settings/account/appearance/backup/personality/accent captures were byte-identical to the previous green artifact. Of 528 total captures, one untouched Retry-icon animation frame differed within 6×6 pixels.
 
-The evidence above describes the pre-removal source snapshot; it does not claim
-verification of this removal. Default CI runs the unit/UI suite
+These counts describe this source snapshot. Default CI runs the unit/UI suite
 with `-Pdua.ui-record`; it excludes `screenshots/**` and does not run lint.
 Recorded fixture PNGs do not establish pixel-baseline, phone or live-service acceptance.
 

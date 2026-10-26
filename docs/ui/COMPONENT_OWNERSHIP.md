@@ -30,12 +30,11 @@ existing owners. No token or locked sheet/composer changes are needed.
 | Indicator artwork | `TypingIndicator` → `RiveOrFallback` → `ThinkingOrb`. | Keep the orb fallback; it is not an unused second status component. |
 | Thinking and Agent steps | `ThinkingBlock.kt`, `AgentProgressView.kt`; reuse `rememberShimmerAlpha`. | Keep expandable/progress behavior and their shared pulse helper. |
 | Loading/generated media | `ImagineMedia.kt`, `ImagineReply.kt` → `ShimmerBox` in `ui/components/Shimmer.kt`. | Keep media geometry and the shared pulse/sweep. |
-| Removed parallel design | Alternate chat/composer/bubbles/shimmer and supplied-style branches have been deleted. | Tests now exercise the single live Dua Home instead of retaining an archived runtime implementation. |
+| Archived supplied design | `GeminiLoadingShimmer` in `SuppliedChatUi.kt`, selected by the supplied-style branches and exercised by reference tests. | Leave archived coverage intact; production Home does not opt into this shell. |
 
 Motion follows the existing reduced-motion/foreground guards. Combining these
 drawings or replacing loading artwork would be a visual change, so this cleanup
-does not do that to live indicators. Only the unused alternate-shell shimmer is
-removed; shared media shimmer and live reply/progress behavior are unchanged.
+does not do that. No loading implementation is deleted or rewritten.
 
 ## Verification
 

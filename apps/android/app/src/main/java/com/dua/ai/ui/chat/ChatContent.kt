@@ -45,9 +45,6 @@ import com.dua.ai.ui.theme.Sizes
 import com.dua.ai.ui.theme.Spacing
 import com.dua.ai.ui.theme.rememberMotionAllowed
 
-/** Task starter labels shared with the Home test fixtures. */
-internal val HomeTaskPromptIds = listOf(R.string.home_task_prompt_backup, R.string.home_task_prompt_react, R.string.home_task_prompt_compare)
-
 /** A quiet, centered Home canvas. Task starters keep the existing draft/focus handler. */
 @Composable
 internal fun ChatContent(
