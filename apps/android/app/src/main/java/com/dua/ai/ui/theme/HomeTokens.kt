@@ -69,7 +69,6 @@ object HomeSizes {
     val composerRoomyWidth = 360.dp
     val composerIdlePaddingV = 16.dp
     val composerKeyboardPaddingV = 8.dp
-    val pillPaddingH = 4.dp
     val pillIdlePaddingV = 12.dp
     val pillElevation = 3.dp
     val composerElevation = 6.dp

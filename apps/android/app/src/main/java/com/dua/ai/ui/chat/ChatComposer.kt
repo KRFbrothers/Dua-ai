@@ -205,8 +205,7 @@ fun Composer(
             .let { if (glass) ComposerGlass.MarginH else it }
         // Large text gets its own input row before the placeholder loses space to the controls.
         // Keep the field in the same Layout slot so resizing never discards focus or the draft.
-        val paddingH = if (homePill) HomeSizes.pillPaddingH else HomeSizes.barPaddingH
-        val inlineTextWidth = maxWidth - margin * 2 - paddingH * 2 - Sizes.touchTarget * (if (onImage != null) 4 else 3) - Spacing.sm * 2
+        val inlineTextWidth = maxWidth - margin * 2 - HomeSizes.barPaddingH * 2 - Sizes.touchTarget * (if (onImage != null) 4 else 3) - Spacing.sm * 2
         val stacked = expanded || (homeLayout && maxOf(
             minimumInputWidth,
             textMeasurer.measure(AnnotatedString(placeholder), style = inputStyle, softWrap = false, maxLines = 1).size.width,
@@ -248,7 +247,7 @@ fun Composer(
                 Modifier.fillMaxWidth().testTag("composer-container").composerFocusPop(inputFocused, glass)) {
                 Column(Modifier.fillMaxWidth()
                     .animateContentSize(animationSpec = if (motion) DuaMotion.gentle() else snap())
-                    .padding(horizontal = paddingH, vertical = when {
+                    .padding(horizontal = HomeSizes.barPaddingH, vertical = when {
                         homePill && !stacked && !keyboardOpen -> HomeSizes.pillIdlePaddingV
                         glass -> ComposerGlass.PaddingV
                         homeLayout && !stacked && !keyboardOpen -> HomeSizes.composerIdlePaddingV
