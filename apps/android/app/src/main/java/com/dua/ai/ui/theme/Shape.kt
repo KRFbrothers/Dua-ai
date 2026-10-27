@@ -15,7 +15,7 @@ val DuaShapes = Shapes(
 /** Named shapes for chat surfaces. */
 object DuaShape {
     val userBubble = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp, bottomEnd = 6.dp, bottomStart = 20.dp)
-    val composer = RoundedCornerShape(24.dp)
+    val composer = RoundedCornerShape(28.dp)
     val codeBlock = RoundedCornerShape(12.dp)
     val chip = RoundedCornerShape(50)
     val card = RoundedCornerShape(16.dp)
