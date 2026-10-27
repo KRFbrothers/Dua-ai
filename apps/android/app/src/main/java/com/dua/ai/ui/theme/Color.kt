@@ -21,16 +21,12 @@ internal val AgentTaskSurfaceDark = Color(0xFF1A1B1F)
  */
 internal object DuaPalette {
     // Neutrals (cool grey), dark → light.
-    val Neutral0 = Color(0xFF09090B)
     val Neutral4 = Color(0xFF0E0F11)
     val Neutral8 = Color(0xFF151619)
     val Neutral10 = Color(0xFF1A1B1F)
     val Neutral13 = Color(0xFF212226)
-    val Neutral16 = Color(0xFF292A2F)
     val Neutral22 = Color(0xFF36383E)
-    val Neutral30 = Color(0xFF4A4D54)
     val Neutral45 = Color(0xFF6E717A)
-    val Neutral62 = Color(0xFF9EA1A9)
     val Neutral72 = Color(0xFFB4B7BE)
     val Neutral88 = Color(0xFFDDDEE2)
     val Neutral90 = Color(0xFFE3E4E8)
@@ -39,28 +35,11 @@ internal object DuaPalette {
     val Neutral97 = Color(0xFFF6F6F7)
     val Neutral100 = Color(0xFFFFFFFF)
     val Ink = Color(0xFF111214)
-    val InkMuted = Color(0xFF575A61)
 
     // Gold: the Home tagline sparkle and the icon of a selected mode chip.
     val Gold80 = Color(0xFFE8C46A)
     val Gold40 = Color(0xFFA67C1E)
     val Gold35 = Color(0xFF8A6514)
-
-    // Accent: one restrained teal, used for links, focus, selection and switches only.
-    val Teal80 = Color(0xFF79D4C3)
-    val Teal20 = Color(0xFF00382F)
-    val Teal30 = Color(0xFF15463E)
-    val Teal90 = Color(0xFFC4F1E7)
-    val Teal40 = Color(0xFF0B7366)
-    val Teal95 = Color(0xFFDDF5EF)
-    val Teal10 = Color(0xFF00201B)
-
-    val Red80 = Color(0xFFFFB4AB)
-    val Red20 = Color(0xFF690005)
-    val Red30 = Color(0xFF3D1716)
-    val Red90 = Color(0xFFFFDAD6)
-    val Red40 = Color(0xFFBA1A1A)
-    val Red10 = Color(0xFF410002)
 }
 
 /**
