@@ -8,12 +8,10 @@ import java.util.UUID
 import android.net.Uri
 import com.dua.ai.attachments.ChatAttachment
 import com.dua.ai.attachments.AttachmentReader
-import com.dua.ai.attachments.PhotoPolicy
 import com.dua.ai.attachments.PhotoAttachmentReader
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
-import com.dua.ai.attachments.CameraCaptureStore
 import androidx.lifecycle.viewModelScope
 import com.dua.ai.model.ChatMessage
 import com.dua.ai.model.PromptSuggestion
@@ -43,7 +41,6 @@ import com.dua.ai.files.AudioRecorder
 import com.dua.ai.files.FileRef
 import com.dua.ai.files.PendingFileDeletes
 import com.dua.ai.files.PendingUpload
-import com.dua.ai.files.SignedUpload
 import com.dua.ai.files.StorageUsage
 import com.dua.ai.files.StoredFileClient
 import com.dua.ai.files.StoredFileTypes
