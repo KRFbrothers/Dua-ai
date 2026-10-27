@@ -120,17 +120,6 @@ For this grouping update, debug APK packaging and 55 focused UI/voice tests pass
 
 Reference: [Dua AI tldraw board](https://www.tldraw.com/f/6aV_i2gXeMVcvKMTbg7NP).
 
-### Earlier owner-requested compact styling (historical)
-
-The Home descriptions in this historical section predate the supplied-shell cleanup; use the current screen map and [known gaps](LEGACY_CHAT_SHELL.md) for live Home. After trying the approved-navigation APK on the phone, the owner requested a more compact Home, Sidebar and Projects presentation. The navigation placements and existing actions remain, with these visual adjustments:
-
-- Home uses a single header: history, Dua AI/current-project selector, Computer shortcut and New chat. The orange project row is removed. The full original logo is smaller, with a quieter tagline; its artwork is unchanged.
-- Sidebar/Aura use the existing 16sp body scale and 48dp menu targets. The footer New chat is neutral rather than a large accent block; only recent chats scroll.
-- Projects have left-aligned names in grouped cards, a subtle selected state, neutral Edit/Memory/Tasks actions and a short explanation. Daily planner, project editing/archive, tasks and project memory remain available.
-- The composer model control is neutral and can shrink to fit beside the attachment and voice/send controls at large font sizes. Code/Think/Search modes remain available.
-
-Seven accent presets and independent persisted appearance work; the accent is used selectively for selection and theme controls rather than every navigation action. This owner feedback supersedes the earlier large-label/accent-footer styling, not the approved navigation flow.
-
 The sections above cover the Light/Dark previews, the sample-conversation debug entry point, setup and remaining features.
 
 Read Page 1, **Dua AI — Navigation Flow**, and **Dua AI — Complete UI Map** before implementation. The approved Sidebar, expanded Aura, Profile & Settings, accent and appearance mockups define the layout. The additive GitHub source gallery describes the earlier source inventory (304014a); it is not the target design. The latest source also has planner, history search and editable project memory, which remain available. No `Dua_AI_UI_Placement_List.md` was present in this checkout.
