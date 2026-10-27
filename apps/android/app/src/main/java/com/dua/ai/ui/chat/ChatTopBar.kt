@@ -54,13 +54,15 @@ fun ChatTopBar(
     onNewChat: () -> Unit = {},
     newChatEnabled: Boolean = true,
     onFindInChat: (() -> Unit)? = null,
+    quietHeader: Boolean = false,
 ) {
     val shortName = shortModelLabel(modelName)
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
     val brandWidth = with(density) { measurer.measure(AnnotatedString("Dua AI"), HomeHeaderStyle).size.width.toDp() }
     val modelWidth = with(density) { measurer.measure(AnnotatedString(shortName), HomeHeaderModelStyle).size.width.toDp() }
-    val pairWidth = brandWidth + Spacing.sm * 2 + HomeSizes.headerDividerWidth +
+    val labelGap = if (quietHeader) Spacing.xs else Spacing.sm
+    val pairWidth = brandWidth + (if (quietHeader) labelGap else labelGap * 2 + HomeSizes.headerDividerWidth) +
         maxOf(Sizes.touchTarget, modelWidth + Sizes.iconTiny + Spacing.xs + HomeSizes.modelPillPaddingH * 2)
     BoxWithConstraints(Modifier.fillMaxWidth().statusBarsPadding()
         .padding(horizontal = HomeSizes.topBarPaddingH, vertical = HomeSizes.topBarPaddingV)) {
@@ -70,7 +72,7 @@ fun ChatTopBar(
         Column {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 HeaderButton(Icons.Outlined.DragHandle, "Open chat history", onMenu, onLongPress = onFindInChat)
-                if (inline) HeaderLabels(shortName, onModel, Modifier.weight(1f).padding(horizontal = Spacing.xs))
+                if (inline) HeaderLabels(shortName, onModel, Modifier.weight(1f).padding(horizontal = Spacing.xs), quietHeader)
                 else Spacer(Modifier.weight(1f))
                 if (!task) HeaderButton(ReferenceIcons.TemporaryChat, "New chat", onNewChat, enabled = newChatEnabled, iconSize = 22.dp)
                 IconButton(onClick = onProfile, modifier = Modifier.size(Sizes.touchTarget)
@@ -82,18 +84,18 @@ fun ChatTopBar(
                 }
             }
             // Reflow the pair together when large text cannot fit between the 48 dp controls.
-            if (!inline) HeaderLabels(shortName, onModel, Modifier.fillMaxWidth().padding(horizontal = Spacing.xs))
+            if (!inline) HeaderLabels(shortName, onModel, Modifier.fillMaxWidth().padding(horizontal = Spacing.xs), quietHeader)
         }
     }
 }
 
 @Composable
-private fun HeaderLabels(name: String, onModel: () -> Unit, modifier: Modifier = Modifier) {
+private fun HeaderLabels(name: String, onModel: () -> Unit, modifier: Modifier = Modifier, quiet: Boolean = false) {
     Row(modifier.horizontalScroll(rememberScrollState()).testTag("home-header-labels"),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(if (quiet) Spacing.xs else Spacing.sm)) {
         Text("Dua AI", style = HomeHeaderStyle, color = ChatTheme.colors.text,
             maxLines = 1, modifier = Modifier.width(IntrinsicSize.Max))
-        Box(Modifier.size(HomeSizes.headerDividerWidth, HomeSizes.headerDividerHeight)
+        if (!quiet) Box(Modifier.size(HomeSizes.headerDividerWidth, HomeSizes.headerDividerHeight)
             .background(HomeTheme.colors.barBorder).testTag("home-header-divider"))
         ModelSelector(name, onModel)
     }

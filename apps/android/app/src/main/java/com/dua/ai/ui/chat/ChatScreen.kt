@@ -86,6 +86,8 @@ import com.dua.ai.ui.history.HistoryDrawer
 import com.dua.ai.ui.theme.Sizes
 import com.dua.ai.ui.theme.Spacing
 import com.dua.ai.ui.theme.DrawerSizes
+import com.dua.ai.ui.theme.HomeChrome
+import androidx.compose.ui.platform.testTag
 import com.dua.ai.ui.theme.HomeSizes
 import com.dua.ai.ui.navigation.DuaDestination
 import kotlinx.coroutines.launch
@@ -379,10 +381,15 @@ fun ChatScreen(
                     )
             }
             val chatPane: @Composable () -> Unit = {
+                val polishedHome = home && feature == null && topBar == null && state.homeTab == HomeTab.Chat
+                HomeChrome(enabled = polishedHome) {
                 Column(Modifier.fillMaxSize().background(com.dua.ai.ui.theme.ChatTheme.colors.background)
                     .let { if (feature == null) it.windowInsetsPadding(
                         WindowInsets.ime.union(WindowInsets.navigationBars).only(WindowInsetsSides.Bottom)) else it }
-                    .then(if (feature == null && state.homeTab != HomeTab.Work) Modifier.homeBackdrop(taskHome && home, home,
+                    .then(if (polishedHome) Modifier.background(MaterialTheme.colorScheme.surface)
+                        // Preserve the existing tag used by inset/focus tests. Home is now flat.
+                        .testTag("home-gradient")
+                    else if (feature == null && state.homeTab != HomeTab.Work) Modifier.homeBackdrop(taskHome && home, home,
                         generating = state.typing || visibleState.messages.lastOrNull()?.streaming == true) else Modifier)
                     .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
                     .agentEdgeGlow(agentWorking(state), agentGlowColors())) {
@@ -391,7 +398,7 @@ fun ChatScreen(
                         newSessionEnabled = !state.typing && (feature != ChatFeature.Agent || state.agentAvailable))
                     else ChatTopBar(
                         onMenu = { dismissInput(); if (wideHistory) historyPanelVisible = !historyPanelVisible else scope.launch { drawerState.open() } },
-                        task = taskHome, modelName = homeModelName(state),
+                        task = taskHome, modelName = homeModelName(state), quietHeader = polishedHome,
                         profileName = state.profileName, profilePhotoUrl = state.profilePhotoUrl,
                         onModel = { sheet = ChatSheet.Model }, onProfile = { sheet = ChatSheet.Profile },
                         onNewChat = actions.onNewChat, newChatEnabled = !state.typing,
@@ -522,6 +529,7 @@ fun ChatScreen(
                             )
                         }
                     }
+                }
                 }
             }
             if (wideHistory && historyPanelVisible) Row(Modifier.fillMaxSize()) {

@@ -4,6 +4,9 @@ import android.graphics.BitmapFactory
 import android.provider.Settings
 import android.view.ViewGroup
 import androidx.activity.ComponentActivity
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.LocalDensity
@@ -39,11 +42,14 @@ class HomeGradientUiTest(private val dark: Boolean, private val large: Boolean) 
     }
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
 
+    private var surface = Color.Unspecified
+
     private fun show(state: androidx.compose.runtime.State<ChatUiState>, actions: ChatActions = ChatActions()) {
         WindowCompat.setDecorFitsSystemWindows(compose.activity.window, false)
         compose.setContent {
             CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, if (large) 2f else 1f)) {
                 DuaTheme(LocalPreferences(theme = if (dark) "dark" else "light")) {
+                    surface = MaterialTheme.colorScheme.surface
                     ChatScreen(state.value, actions)
                 }
             }
@@ -81,7 +87,8 @@ class HomeGradientUiTest(private val dark: Boolean, private val large: Boolean) 
         val pixels = if (imageFile.length() > 0) BitmapFactory.decodeFile(imageFile.absolutePath) else null
         if (pixels != null) {
             try {
-                assertNotEquals("Home must draw the wash below its clear header", pixels.getPixel(2, 2), pixels.getPixel(2, pixels.height - 2))
+                assertEquals(surface.toArgb(), pixels.getPixel(2, 2))
+                assertEquals("Home must use a flat surface below its clear header", pixels.getPixel(2, 2), pixels.getPixel(2, pixels.height - 2))
             } finally { pixels.recycle() }
         }
         compose.runOnIdle { state.value = state.value.copy(profileName = "Amina Khan") }
@@ -137,7 +144,7 @@ class HomeGradientUiTest(private val dark: Boolean, private val large: Boolean) 
         dispatchKeyboard(280)
         val surface = compose.onNodeWithTag("home-gradient").fetchSemanticsNode().boundsInRoot
         val bar = compose.onNodeWithTag("composer-container").fetchSemanticsNode().boundsInRoot
-        assertEquals("The gradient must end at the keyboard", closedSurface.bottom - 280f, surface.bottom, 2f)
+        assertEquals("The Home surface must end at the keyboard", closedSurface.bottom - 280f, surface.bottom, 2f)
         assertEquals("IME inset must be applied once", closedBar.bottom - 280f, bar.bottom, 2f)
         assertTrue(bar.bottom <= surface.bottom)
         assertTrue("The keyboard opens more horizontal writing room", bar.width > closedBar.width)
@@ -210,7 +217,7 @@ class HomeGradientUiTest(private val dark: Boolean, private val large: Boolean) 
                 val y = (chatPixels.height * .95f).toInt()
                 // mdpi: just inside the chat pane, right of the permanent history panel and its 1 dp divider.
                 val x = com.dua.ai.ui.theme.DrawerSizes.width.value.toInt() + 3
-                assertNotEquals("Task must switch the blue wash to violet with motion disabled",
+                assertEquals("Chat and Task must keep the same flat Home surface",
                     chatPixels.getPixel(x, y), taskPixels.getPixel(x, y))
             } finally { chatPixels.recycle(); taskPixels.recycle() }
         } finally { Settings.Global.putFloat(resolver, Settings.Global.ANIMATOR_DURATION_SCALE, previous) }
