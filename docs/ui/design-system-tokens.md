@@ -25,9 +25,9 @@ Tokens below are relative to `DuaTheme.colors`, unless marked M3. D/L means dark
 | Status pill D/L white at 6% / Ink `#111214` at 5% | `voice.statusSurface` |
 | Orb rim D/L white at 10% / black at 12% | `voice.orbRim` |
 | Speaking status dot D/L Neutral88 `#DDDEE2` / Ink `#111214`; idle dot Neutral45 `#6E717A` | M3 `onSurface`; M3 `onSurfaceVariant` |
-| Snackbar D/L Neutral16 `#292A2F` / Ink `#111214`; text Neutral93 `#ECECEF` | M3 `surfaceContainerHighest` / `inverseSurface`; `onSurface` / `inverseOnSurface` |
+| Snackbar D/L `#292A2F` / Ink `#111214`; text Neutral93 `#ECECEF` | M3 `surfaceContainerHighest` / `inverseSurface`; `onSurface` / `inverseOnSurface` |
 | Voice controls D/L Neutral13 `#212226` / Neutral100 white; light border Neutral90 `#E3E4E8` | M3 `surfaceContainerHigh` / `surface`; `outlineVariant` |
-| Permission icon background D/L Neutral16 `#292A2F` / Neutral93 `#ECECEF` | M3 `secondaryContainer` |
+| Permission icon background D/L `#292A2F` / Neutral93 `#ECECEF` | M3 `secondaryContainer` |
 | Media canvas black; play/duration overlays black at 55%; viewer icons/labels white | `mediaBackground`; `mediaOverlay`; `onMedia` |
 | Home logo sweep white; Google badge white | `logoHighlight`; `brandBadgeBackground` (artwork colors stay fixed) |
 | Cube highlight RGB `(0.88, 0.88, 0.90)`; computed grayscale face shade | `voiceCubeHighlight`; theme helper `voiceCubeFaceColor` |
