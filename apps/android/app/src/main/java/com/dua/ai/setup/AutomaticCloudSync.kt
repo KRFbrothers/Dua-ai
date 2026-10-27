@@ -205,8 +205,6 @@ class AutomaticCloudSync(
         if (!restored) return restoreAttempt()
         return requestSync()
     }
-    /** Immediate foreground check without clearing the finite failure budget. */
-    fun syncNow(): Job? = requestSync()
     private fun requestSync(): Job? {
         if (!restored || !ready(generation)) return null
         scheduled?.cancel(); scheduled = null
