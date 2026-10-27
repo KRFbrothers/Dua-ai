@@ -42,7 +42,6 @@ data class ChatBackup(val chats: List<SavedChat>, val projects: List<com.dua.ai.
 object ChatHistoryCodec {
     const val MAX_IMPORT_BYTES = 4 * 1024 * 1024
 
-    fun readImport(input: InputStream): List<SavedChat> = readBackup(input).chats
 
     fun readBackup(input: InputStream): ChatBackup {
         val output = ByteArrayOutputStream()

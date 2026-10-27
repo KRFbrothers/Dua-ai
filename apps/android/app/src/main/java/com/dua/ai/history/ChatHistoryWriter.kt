@@ -1,5 +1,6 @@
 package com.dua.ai.history
 
+import androidx.annotation.VisibleForTesting
 import android.content.SharedPreferences
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -40,7 +41,7 @@ class ChatHistoryWriter(
     }
 
     /** True while a save has not reached SharedPreferences yet. */
-    val hasPendingWrite: Boolean get() = synchronized(lock) { latest?.let { written < it.version } == true }
+    @VisibleForTesting val hasPendingWrite: Boolean get() = synchronized(lock) { latest?.let { written < it.version } == true }
 
     private fun drain() {
         try {
