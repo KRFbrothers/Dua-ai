@@ -88,9 +88,9 @@ class HomeGradientUiTest(private val dark: Boolean, private val large: Boolean) 
         if (pixels != null) {
             try {
                 assertEquals(surface.toArgb(), pixels.getPixel(2, 2))
-                // Sample the canvas, away from the composer's intentional soft shadow.
+                // Stay inside the canvas, away from drawer and composer shadows at its edges.
                 for (y in listOf(pixels.height / 4, pixels.height / 2, pixels.height * 3 / 4)) {
-                    assertEquals("Home canvas must stay flat below its header", surface.toArgb(), pixels.getPixel(2, y))
+                    assertEquals("Home canvas must stay flat below its header", surface.toArgb(), pixels.getPixel(16, y))
                 }
             } finally { pixels.recycle() }
         }
