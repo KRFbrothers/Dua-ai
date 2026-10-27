@@ -45,7 +45,7 @@ internal fun HomeChrome(enabled: Boolean, content: @Composable () -> Unit) {
     // The locked composer draws this overlay after its base; keep Home opaque and tonal.
     CompositionLocalProvider(
         LocalHomeColors provides colors,
-        LocalDuaColors provides colors?.let { extra.copy(floatingSurface = it.bar) } ?: extra,
+        LocalDuaColors provides (colors?.let { extra.copy(floatingSurface = it.bar) } ?: extra),
         content = content,
     )
 }
