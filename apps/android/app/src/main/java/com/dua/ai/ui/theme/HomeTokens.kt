@@ -42,7 +42,7 @@ internal fun HomeChrome(enabled: Boolean, content: @Composable () -> Unit) {
         bar = if (extra.isDark) extra.composer else scheme.surfaceContainerLowest,
         barBorder = scheme.outlineVariant.copy(alpha = .35f),
     ) else null
-    // The locked composer draws this overlay after its base; keep Home opaque and tonal.
+    // Keep the Home surface opaque; other composers retain their existing floating overlay.
     CompositionLocalProvider(
         LocalHomeColors provides colors,
         LocalDuaColors provides (colors?.let { extra.copy(floatingSurface = it.bar) } ?: extra),
@@ -69,6 +69,9 @@ object HomeSizes {
     val composerRoomyWidth = 360.dp
     val composerIdlePaddingV = 16.dp
     val composerKeyboardPaddingV = 8.dp
+    val pillPaddingH = 4.dp
+    val pillIdlePaddingV = 12.dp
+    val pillElevation = 3.dp
     val composerElevation = 6.dp
     val noElevation = 0.dp
     fun composerHorizontalMargin(availableWidth: Dp): Dp =
@@ -107,6 +110,7 @@ object HomeShapes {
     val segmentTab = RoundedCornerShape(20.dp)
     val bar = DuaShape.composer
     val homeBar = DuaShape.composer
+    val homePill = RoundedCornerShape(28.dp)
     /** Task starter rows on Home. */
     val promptRow = RoundedCornerShape(16.dp)
     val round = CircleShape

@@ -46,7 +46,7 @@ class HomeComposerPolishUiTest(private val dark: Boolean, private val largeText:
             CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, if (largeText) 2f else 1f)) {
                 DuaTheme(LocalPreferences(theme = if (dark) "dark" else "light")) {
                     Box(Modifier.requiredSize(320.dp, 650.dp).background(ChatTheme.colors.background), contentAlignment = Alignment.BottomCenter) {
-                        Composer(homeLayout = true, controlled = true, showModelSelector = false,
+                        Composer(homeLayout = true, homePill = true, controlled = true, showModelSelector = false,
                             placeholder = placeholder.value, onAttach = { attachments++ },
                             onMic = { mic++ }, onVoiceMode = { live++ })
                     }
@@ -84,6 +84,39 @@ class HomeComposerPolishUiTest(private val dark: Boolean, private val largeText:
         file.parentFile!!.mkdirs(); compose.onRoot().captureRoboImage(file.absolutePath)
     }
 
+    @Test fun pillKeepsWhitespaceOnVoiceAndRetainsRejectedDraftUntilOwnerClearsIt() {
+        val draft = mutableStateOf("")
+        var live = 0
+        val sent = mutableListOf<String>()
+        compose.setContent {
+            CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, if (largeText) 2f else 1f)) {
+                DuaTheme(LocalPreferences(theme = if (dark) "dark" else "light")) {
+                    Box(Modifier.requiredSize(320.dp, 650.dp), contentAlignment = Alignment.BottomCenter) {
+                        Composer(homeLayout = true, homePill = true, controlled = true,
+                            value = draft.value, onDraftChange = { draft.value = it },
+                            onSend = { sent += it }, onVoiceMode = { live++ })
+                    }
+                }
+            }
+        }
+        // The header owns model selection, even if a caller leaves the composer's default on.
+        compose.onNodeWithContentDescription("Model, Auto").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Message").performClick().performTextInput("   ")
+        compose.onNodeWithContentDescription("Send message").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Voice mode").assertWidthIsEqualTo(48.dp)
+            .assertHeightIsEqualTo(48.dp).performClick()
+        assertEquals(1, live)
+        compose.onNodeWithContentDescription("Message").performTextClearance()
+        compose.onNodeWithContentDescription("Message").performTextInput("Keep this request")
+        compose.onNodeWithContentDescription("Send message").assertWidthIsEqualTo(48.dp)
+            .assertHeightIsEqualTo(48.dp).performClick()
+        compose.onNodeWithContentDescription("Message").assertIsFocused().assertTextContains("Keep this request")
+        assertEquals(listOf("Keep this request"), sent)
+        compose.runOnIdle { draft.value = "" }
+        compose.onNodeWithContentDescription("Voice mode").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Send message").assertDoesNotExist()
+    }
+
     @Test fun windowResizeAndIdleTypingTransitionsPreserveFocusAndDraft() {
         val width = mutableStateOf(600.dp)
         val draft = mutableStateOf("")
@@ -92,7 +125,7 @@ class HomeComposerPolishUiTest(private val dark: Boolean, private val largeText:
             CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, if (largeText) 2f else 1f)) {
                 DuaTheme(LocalPreferences(theme = if (dark) "dark" else "light")) {
                     Box(Modifier.requiredSize(width.value, 650.dp).background(ChatTheme.colors.background), contentAlignment = Alignment.BottomCenter) {
-                        Composer(homeLayout = true, controlled = true, showModelSelector = false,
+                        Composer(homeLayout = true, homePill = true, controlled = true, showModelSelector = false,
                             value = draft.value, onDraftChange = { draft.value = it }, onSend = { sent = it; draft.value = "" })
                     }
                 }
@@ -103,6 +136,7 @@ class HomeComposerPolishUiTest(private val dark: Boolean, private val largeText:
         compose.onNodeWithContentDescription("Message").performTextInput("Hi")
         compose.onNodeWithContentDescription("Message").assertIsFocused().assertTextContains("Hi")
         compose.onNodeWithContentDescription("Send message").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Voice mode").assertDoesNotExist()
         val shortHeight = compose.onNodeWithTag("composer-container").fetchSemanticsNode().boundsInRoot.height
         assertEquals("A short Home draft keeps the inline pill", idleHeight, shortHeight, 1f)
         val file = File("build/approved-ui/home-polish-short-draft-$dark-$largeText.png")
@@ -133,7 +167,7 @@ class HomeComposerPolishUiTest(private val dark: Boolean, private val largeText:
             CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, if (largeText) 2f else 1f)) {
                 DuaTheme(LocalPreferences(theme = if (dark) "dark" else "light")) {
                     Box(Modifier.requiredSize(width.value, 650.dp), contentAlignment = Alignment.BottomCenter) {
-                        Composer(homeLayout = true, controlled = true, showModelSelector = false,
+                        Composer(homeLayout = true, homePill = true, controlled = true, showModelSelector = false,
                             value = draft.value, onDraftChange = { draft.value = it })
                     }
                 }

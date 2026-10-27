@@ -479,6 +479,7 @@ fun ChatScreen(
                                 offlineModel = actions.dictationOfflineModel) else null
                             Composer(
                                 homeLayout = feature == null,
+                                homePill = polishedHome,
                                 glass = feature == null && !home,
                                 suggestions = if (feature == null && !home && !taskHome) ConversationSuggestions else emptyList(),
                                 onSuggestion = { prompt -> actions.onDraftChange(prompt); runCatching { inputFocus.requestFocus() } },
