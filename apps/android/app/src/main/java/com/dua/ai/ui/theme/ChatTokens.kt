@@ -5,6 +5,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -14,7 +15,7 @@ data class ChatColors(
     val background: Color,
     val userBubble: Color, val onUserBubble: Color,
     val assistantBubble: Color, val assistantText: Color,
-    /** Chip, card and media roles derived from the shared light/dark schemes in Color.kt. */
+    /** Chat-area chips, cards and media (Gemini Light #F0F4F9/#E1E6EF & Claude Warm Dark #21201E/#393834). */
     val chipFill: Color, val chipBorder: Color, val chipText: Color, val chipIcon: Color,
     val text: Color, val mutedText: Color,
     val cardFill: Color, val divider: Color,

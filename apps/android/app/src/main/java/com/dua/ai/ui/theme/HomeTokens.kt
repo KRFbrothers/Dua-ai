@@ -6,8 +6,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.sp
 
 /** Home chrome uses the shared semantic palette in Color.kt. */
 @Immutable
@@ -39,12 +42,12 @@ object HomeSizes {
     /** assistant_robin_chat_input_max_width from the supplied Google App resource table. */
     val composerMaxWidth = 696.dp
     val referenceIcon = 28.dp
-    val composerMarginH = 32.dp
-    val composerCompactMarginH = 16.dp
+    val composerMarginH = 20.dp
+    val composerCompactMarginH = 14.dp
     val composerRoomyWidth = 360.dp
-    val composerIdlePaddingV = 16.dp
-    val composerKeyboardPaddingV = 8.dp
-    val composerElevation = 6.dp
+    val composerIdlePaddingV = 10.dp
+    val composerKeyboardPaddingV = 6.dp
+    val composerElevation = 1.dp
     val noElevation = 0.dp
     fun composerHorizontalMargin(availableWidth: Dp): Dp =
         if (availableWidth >= composerRoomyWidth) composerMarginH else composerCompactMarginH

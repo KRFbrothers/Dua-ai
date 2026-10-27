@@ -41,7 +41,7 @@ fun pageColorScheme(base: ColorScheme, p: PageColors): ColorScheme = base.copy(
     outline = p.outline, outlineVariant = p.divider, error = p.danger,
 )
 
-/** Wrap a full page so Material defaults use the Dabba page palette (light + dark). Typography stays Inter via DuaTheme. */
+/** Wrap a full page so Material defaults use the Gemini Light & Claude Warm Dark page palette. Typography stays Inter via DuaTheme. */
 @Composable
 fun DuaPageTheme(content: @Composable () -> Unit) {
     val p = PageTheme.colors
