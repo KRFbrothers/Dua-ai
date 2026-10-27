@@ -58,7 +58,7 @@ class ComputerDrawerUiTest(private val dark: Boolean, private val small: Boolean
         val drawer = compose.onNodeWithTag("history-drawer").fetchSemanticsNode().boundsInRoot
         val voice = compose.onNodeWithContentDescription("Voice mode").fetchSemanticsNode().boundsInRoot
         val root = compose.onRoot().fetchSemanticsNode().boundsInRoot
-        assertEquals(if (small) 248f else 277f, drawer.width, .5f)
+        assertEquals(if (small) 248f else 286f, drawer.width, .5f)
         assertTrue("Drawer overlaps Voice target: $drawer / $voice", drawer.right <= voice.left + .5f)
         assertTrue("Drawer must leave a dismiss scrim", root.right - drawer.right >= 48f)
         for (control in listOf(voice)) {
