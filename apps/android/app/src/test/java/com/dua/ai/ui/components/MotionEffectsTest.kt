@@ -26,7 +26,6 @@ import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.unit.dp
 import com.dua.ai.settings.LocalPreferences
 import com.dua.ai.ui.theme.DuaTheme
-import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Rule

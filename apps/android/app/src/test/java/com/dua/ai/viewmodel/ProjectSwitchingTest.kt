@@ -5,7 +5,6 @@ import androidx.lifecycle.ViewModelStore
 import com.dua.ai.account.CloudSnapshot
 import com.dua.ai.history.ChatHistoryCodec
 import com.dua.ai.history.SavedChat
-import com.dua.ai.projects.ProjectCodec
 import com.dua.ai.setup.IntegrationState
 import kotlinx.coroutines.flow.MutableStateFlow
 import com.dua.ai.settings.DevicePreferences

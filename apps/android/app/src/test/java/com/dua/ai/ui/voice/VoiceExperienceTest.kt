@@ -11,7 +11,6 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
 import com.dua.ai.settings.LocalPreferences
 import com.dua.ai.ui.theme.DuaTheme
-import com.dua.ai.voice.VoicePhase
 import com.dua.ai.voice.live.LivePhase
 import com.dua.ai.voice.live.LiveState
 import org.junit.Assert.*

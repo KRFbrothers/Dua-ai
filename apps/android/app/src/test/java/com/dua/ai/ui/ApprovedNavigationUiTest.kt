@@ -11,11 +11,8 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
-import com.dua.ai.history.SavedChat
-import com.dua.ai.model.ChatMessage
 import com.dua.ai.settings.AppearancePreferences
 import com.dua.ai.settings.LocalPreferences
-import com.dua.ai.ui.history.HistoryDrawer
 import com.dua.ai.ui.navigation.DuaDestination
 import com.dua.ai.ui.settings.*
 import com.dua.ai.ui.theme.DuaTheme

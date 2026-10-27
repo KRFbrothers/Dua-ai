@@ -2,7 +2,6 @@ package com.dua.ai.tasks
 
 import com.dua.ai.projects.ChatProject
 import com.dua.ai.projects.ProjectTask
-import com.dua.ai.projects.ProjectCodec
 import org.junit.Assert.*
 import org.junit.Test
 import java.time.Instant
