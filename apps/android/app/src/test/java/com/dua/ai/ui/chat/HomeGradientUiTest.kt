@@ -88,7 +88,10 @@ class HomeGradientUiTest(private val dark: Boolean, private val large: Boolean) 
         if (pixels != null) {
             try {
                 assertEquals(surface.toArgb(), pixels.getPixel(2, 2))
-                assertEquals("Home must use a flat surface below its clear header", pixels.getPixel(2, 2), pixels.getPixel(2, pixels.height - 2))
+                // Sample the canvas, away from the composer's intentional soft shadow.
+                for (y in listOf(pixels.height / 4, pixels.height / 2, pixels.height * 3 / 4)) {
+                    assertEquals("Home canvas must stay flat below its header", surface.toArgb(), pixels.getPixel(2, y))
+                }
             } finally { pixels.recycle() }
         }
         compose.runOnIdle { state.value = state.value.copy(profileName = "Amina Khan") }
