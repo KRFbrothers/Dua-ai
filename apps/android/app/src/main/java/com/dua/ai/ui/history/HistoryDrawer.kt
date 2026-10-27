@@ -211,10 +211,10 @@ fun HistoryDrawer(
                         IconButton(onClick = { filterMenu = true }, modifier = Modifier.size(DrawerSizes.touch)) {
                             Icon(Icons.Outlined.FilterAlt, "Filter chats", tint = colors.subText)
                         }
-                        DropdownMenu(expanded = filterMenu, onDismissRequest = { filterMenu = false },
+                        com.dua.ai.ui.chat.DuaDropdownMenu(expanded = filterMenu, onDismissRequest = { filterMenu = false },
                             containerColor = colors.container) {
-                            DropdownMenuItem(text = { Text("All chats") }, onClick = { pinnedOnly = false; filterMenu = false })
-                            DropdownMenuItem(text = { Text("Pinned chats") }, onClick = { pinnedOnly = true; filterMenu = false })
+                            com.dua.ai.ui.chat.DuaDropdownItem("All chats", onClick = { pinnedOnly = false; filterMenu = false }, selected = !pinnedOnly)
+                            com.dua.ai.ui.chat.DuaDropdownItem("Pinned chats", onClick = { pinnedOnly = true; filterMenu = false }, selected = pinnedOnly)
                         }
                     }
                 }

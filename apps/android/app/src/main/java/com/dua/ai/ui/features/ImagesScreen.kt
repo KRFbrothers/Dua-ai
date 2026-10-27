@@ -32,9 +32,9 @@ fun ImagesContent(items: List<LibraryItem>, draft: String, aspect: String, aspec
         FeatureTopBar("Images", onBack, {}, trailing = {
             Box {
                 TextButton(onClick = { menu = true }, enabled = !busy, modifier = Modifier.heightIn(min = Sizes.touchTarget)) { Text(aspect) }
-                DropdownMenu(menu, { menu = false }) {
-                    aspects.forEach { value -> DropdownMenuItem(text = { Text(value) }, onClick = { onAspect(value); menu = false }, modifier = Modifier.heightIn(min = Sizes.touchTarget)) }
-                    DropdownMenuItem(text = { Text("Refresh images") }, onClick = { onRefresh(); menu = false }, modifier = Modifier.heightIn(min = Sizes.touchTarget))
+                com.dua.ai.ui.chat.DuaDropdownMenu(menu, { menu = false }) {
+                    aspects.forEach { value -> com.dua.ai.ui.chat.DuaDropdownItem(value, onClick = { onAspect(value); menu = false }, selected = value == aspect, modifier = Modifier.heightIn(min = Sizes.touchTarget)) }
+                    com.dua.ai.ui.chat.DuaDropdownItem("Refresh images", onClick = { onRefresh(); menu = false }, modifier = Modifier.heightIn(min = Sizes.touchTarget))
                 }
             }
         })

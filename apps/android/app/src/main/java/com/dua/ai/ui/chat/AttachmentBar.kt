@@ -106,10 +106,10 @@ private fun RemoveBackgroundChip(name: String, enabled: Boolean, onRemoveBackgro
                 Text("On-device", style = MaterialTheme.typography.labelSmall, color = c.modelLabel, maxLines = 1, overflow = TextOverflow.Clip)
             }
         }
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            DropdownMenuItem(text = { Text("Remove background") }, onClick = { open = false; onRemoveBackground() },
-                leadingIcon = { Icon(Icons.Outlined.ContentCut, null) },
-                trailingIcon = { Text("On-device", style = MaterialTheme.typography.labelSmall, color = c.modelLabel) },
+        DuaDropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            DuaDropdownItem("Remove background", onClick = { open = false; onRemoveBackground() },
+                icon = Icons.Outlined.ContentCut,
+                trailing = { Text("On-device", style = MaterialTheme.typography.labelSmall, color = c.modelLabel) },
                 modifier = Modifier.semantics { contentDescription = "Remove background from $name, on this phone" })
         }
     }
