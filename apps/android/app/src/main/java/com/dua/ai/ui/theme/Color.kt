@@ -71,6 +71,10 @@ internal object DuaPalette {
  * Values only: no third-party logo, wordmark or brand font is referenced here. Dua's own logo
  * and heading assets stay the sole brand identity.
  */
+/** Voice orb surface is the same in light and dark themes. */
+private val OrbSurfaceTop = Color(0xFF141518)
+private val OrbSurfaceBottom = Color(0xFF0B0B0D)
+
 internal object DuaMatch {
     // Dark surfaces.
     val DarkComposer = Color(0xFF20201E)
@@ -256,7 +260,7 @@ internal val DuaDarkColors = DuaColors(
         background = Color(0xFF050506),
         glowSilver = DuaPalette.Neutral88, highlight = DuaPalette.Neutral100,
         statusSurface = DuaPalette.Neutral100.copy(alpha = .06f), speakingGlow = Color(0xFF8B7CF6),
-        orbSurfaceTop = Color(0xFF141518), orbSurfaceBottom = Color(0xFF0B0B0D),
+        orbSurfaceTop = OrbSurfaceTop, orbSurfaceBottom = OrbSurfaceBottom,
         orbSilverLow = DuaPalette.Neutral72, orbSilverHigh = DuaPalette.Neutral88,
         orbGold = DuaPalette.Gold80, orbCream = Color(0xFFF3E3B8), orbRim = Color.White.copy(alpha = .10f),
     ),
@@ -291,7 +295,7 @@ internal val DuaLightColors = DuaColors(
         background = DuaPalette.Neutral97,
         glowSilver = DuaPalette.Neutral72, highlight = DuaPalette.Neutral100,
         statusSurface = DuaPalette.Ink.copy(alpha = .05f), speakingGlow = Color(0xFF8B7CF6),
-        orbSurfaceTop = Color(0xFF141518), orbSurfaceBottom = Color(0xFF0B0B0D),
+        orbSurfaceTop = OrbSurfaceTop, orbSurfaceBottom = OrbSurfaceBottom,
         orbSilverLow = DuaPalette.Neutral72, orbSilverHigh = DuaPalette.Neutral88,
         orbGold = DuaPalette.Gold80, orbCream = Color(0xFFF3E3B8), orbRim = Color.Black.copy(alpha = .12f),
     ),
