@@ -15,8 +15,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.FileProvider
 import com.dua.ai.attachments.CameraCaptureStore
 import com.dua.ai.files.FileRef
-import com.dua.ai.projects.ChatProject
-import com.dua.ai.projects.ProjectCodec
 import com.dua.ai.ui.chat.ProjectsContent
 import com.dua.ai.ui.theme.*
 import com.dua.ai.viewmodel.ChatViewModel
