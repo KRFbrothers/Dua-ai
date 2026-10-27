@@ -1,5 +1,7 @@
 package com.dua.ai.network
 
+import androidx.annotation.VisibleForTesting
+
 /**
  * Remembers at most one chat message that could not be sent because the phone was offline, and
  * hands it back exactly once when the connection returns. A message is retried automatically only
@@ -11,7 +13,7 @@ class OfflineRetry {
     private var lastAutoRetried: Pending? = null
     private var wasOnline = true
 
-    val hasPending: Boolean get() = pending != null
+    @VisibleForTesting val hasPending: Boolean get() = pending != null
 
     /** A send failed before any reply text arrived. Returns true when it will be retried on reconnect. */
     fun sendFailed(chatId: String, text: String, offline: Boolean): Boolean {

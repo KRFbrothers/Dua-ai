@@ -20,7 +20,7 @@ class CompleteChatBackupTest {
     @Test fun fullBackupRestoresAllServerMetadataWithoutMemoryOrFileBytes() {
         val chat = fixture()
         val raw = ChatHistoryCodec.exportBackup(listOf(chat), 456)
-        val restored = ChatHistoryCodec.readImport(ByteArrayInputStream(raw.toByteArray())).single()
+        val restored = ChatHistoryCodec.readBackup(ByteArrayInputStream(raw.toByteArray())).chats.single()
         assertEquals(chat, restored)
         val json = JSONObject(raw)
         assertEquals("dua-chat-export", json.getString("format"))
@@ -56,7 +56,7 @@ class CompleteChatBackupTest {
 
     @Test fun oldTextOnlyExportsAndExplicitRedactedExportsRemainReadable() {
         val raw = ChatHistoryCodec.export(listOf(fixture()), includeServerFields = false)
-        val restored = ChatHistoryCodec.readImport(ByteArrayInputStream(raw.toByteArray())).single()
+        val restored = ChatHistoryCodec.readBackup(ByteArrayInputStream(raw.toByteArray())).chats.single()
         assertNull(restored.summary); assertNull(restored.buildRepository)
         assertTrue(restored.messages.first().files.isEmpty())
         assertTrue(restored.messages[1].codeRuns.isEmpty())

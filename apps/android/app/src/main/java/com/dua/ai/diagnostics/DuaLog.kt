@@ -5,6 +5,7 @@
  */
 package com.dua.ai.diagnostics
 
+import androidx.annotation.VisibleForTesting
 import com.dua.ai.BuildConfig
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.coroutines.cancellation.CancellationException
@@ -79,7 +80,7 @@ object DuaLog {
     private fun offline(failure: Throwable) = generateSequence(failure) { it.cause.takeIf { next -> next !== it } }.take(5)
         .any { it is java.net.UnknownHostException || it is java.net.ConnectException || it is java.net.NoRouteToHostException }
 
-    internal fun resetForTest() = counts.clear()
+    @VisibleForTesting internal fun resetForTest() = counts.clear()
 
     private fun crashlytics(area: SoftErrorArea, error: SoftError) {
         val crashlytics = com.google.firebase.crashlytics.FirebaseCrashlytics.getInstance()

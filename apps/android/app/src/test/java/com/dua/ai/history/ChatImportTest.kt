@@ -17,7 +17,7 @@ class ChatImportTest {
 
     @Test fun importRestoresWebFormatRolesDraftsUnicodeAndStoppedState() {
         val raw = """{"format":"dua-chat-export","version":1,"exportedAt":456,"chats":[{"id":"web","model":"Dua","draft":"Draft 😀","updatedAt":123,"messages":[{"role":"user","text":"नमस्ते","state":"complete"},{"role":"model","text":"Response stopped","state":"stopped"}]}]}"""
-        val parsed = ChatHistoryCodec.readImport(ByteArrayInputStream(("\uFEFF" + raw).toByteArray()))
+        val parsed = ChatHistoryCodec.readBackup(ByteArrayInputStream(("\uFEFF" + raw).toByteArray())).chats
         assertEquals("Draft 😀", parsed[0].draft); assertEquals("नमस्ते", parsed[0].messages[0].text)
         assertTrue(parsed[0].messages[0].isUser); assertFalse(parsed[0].messages[1].isUser)
         assertEquals("stopped", parsed[0].messages[1].state)
@@ -70,7 +70,7 @@ class ChatImportTest {
 
     @Test fun inputIsBoundedAndInvalidUtf8RejectedBeforeParsing() {
         for (bytes in listOf(byteArrayOf(0xff.toByte()), ByteArray(ChatHistoryCodec.MAX_IMPORT_BYTES + 1) { 32 })) {
-            try { ChatHistoryCodec.readImport(ByteArrayInputStream(bytes)); fail("Invalid input accepted") }
+            try { ChatHistoryCodec.readBackup(ByteArrayInputStream(bytes)); fail("Invalid input accepted") }
             catch (_: IllegalArgumentException) { }
             catch (_: IllegalStateException) { }
         }
