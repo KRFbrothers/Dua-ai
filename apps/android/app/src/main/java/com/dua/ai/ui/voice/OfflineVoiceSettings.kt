@@ -1,8 +1,6 @@
 package com.dua.ai.ui.voice
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.LinearProgressIndicator
@@ -12,7 +10,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -22,8 +19,6 @@ import com.dua.ai.ui.components.SettingsChoiceRow
 import com.dua.ai.ui.components.SettingsGroup
 import com.dua.ai.ui.components.SettingsRowDivider
 import com.dua.ai.ui.components.SettingsToggleRow
-import com.dua.ai.ui.theme.SettingsRowStyle
-import com.dua.ai.ui.theme.SettingsTheme
 import com.dua.ai.ui.theme.Spacing
 import com.dua.ai.viewmodel.ChatViewModel
 import com.dua.ai.voice.offline.ModelStatus
