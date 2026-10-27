@@ -2,6 +2,9 @@ package com.dua.ai.ui.theme
 
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.ReadOnlyComposable
@@ -25,9 +28,31 @@ val HomeLightColors = homeColors(DuaLightColorScheme, DuaLightColors)
 
 val HomeDarkColors = homeColors(DuaDarkColorScheme, DuaDarkColors)
 
+private val LocalHomeColors = staticCompositionLocalOf<HomeColors?> { null }
+
+/** Home-only roles; feature/project composers and open sheets retain their existing palette. */
+@Composable
+internal fun HomeChrome(enabled: Boolean, content: @Composable () -> Unit) {
+    val extra = DuaTheme.colors
+    val scheme = MaterialTheme.colorScheme
+    val colors = if (enabled) homeColors(scheme, extra).copy(
+        segmentSelected = scheme.primaryContainer,
+        segmentSelectedText = scheme.onPrimaryContainer,
+        tagline = scheme.onSurfaceVariant,
+        bar = if (extra.isDark) extra.composer else scheme.surfaceContainerLowest,
+        barBorder = scheme.outlineVariant.copy(alpha = .35f),
+    ) else null
+    // Keep the Home surface opaque; other composers retain their existing floating overlay.
+    CompositionLocalProvider(
+        LocalHomeColors provides colors,
+        LocalDuaColors provides (colors?.let { extra.copy(floatingSurface = it.bar) } ?: extra),
+        content = content,
+    )
+}
+
 object HomeTheme {
     val colors: HomeColors
-        @Composable @ReadOnlyComposable get() = if (DuaTheme.colors.isDark) HomeDarkColors else HomeLightColors
+        @Composable @ReadOnlyComposable get() = LocalHomeColors.current ?: if (DuaTheme.colors.isDark) HomeDarkColors else HomeLightColors
 }
 
 /** Reference sizes. Visuals keep the reference sizes; each control sits in a 48 dp touch slot. */
@@ -44,6 +69,8 @@ object HomeSizes {
     val composerRoomyWidth = 360.dp
     val composerIdlePaddingV = 16.dp
     val composerKeyboardPaddingV = 8.dp
+    val pillIdlePaddingV = 12.dp
+    val pillElevation = 3.dp
     val composerElevation = 6.dp
     val noElevation = 0.dp
     fun composerHorizontalMargin(availableWidth: Dp): Dp =
@@ -82,6 +109,7 @@ object HomeShapes {
     val segmentTab = RoundedCornerShape(20.dp)
     val bar = DuaShape.composer
     val homeBar = DuaShape.composer
+    val homePill = RoundedCornerShape(28.dp)
     /** Task starter rows on Home. */
     val promptRow = RoundedCornerShape(16.dp)
     val round = CircleShape

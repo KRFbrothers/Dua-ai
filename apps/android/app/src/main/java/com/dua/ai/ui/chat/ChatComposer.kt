@@ -13,6 +13,7 @@ import androidx.compose.animation.core.snap
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import com.dua.ai.ui.components.pressFeedback
 import com.dua.ai.ui.theme.DuaTheme
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -27,6 +28,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.outlined.GraphicEq
 import androidx.compose.material.icons.outlined.MicNone
 import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.rounded.Stop
@@ -43,6 +45,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.vectorResource
 import com.dua.ai.R
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.boundsInRoot
@@ -149,6 +152,8 @@ fun Composer(
     uploading: Boolean = uploads.any { it.uploading },
     /** Spacious reference layout is limited to Home, preserving feature and project composers. */
     homeLayout: Boolean = false,
+    /** Empty Home only; keeps feature and conversation composers on their existing surface. */
+    homePill: Boolean = false,
     /** Conversation look: translucent glass bar, faint animated gradient behind it, focus pop (ComposerGlass.kt). */
     glass: Boolean = false,
     /** Prompt chips shown above an empty glass composer; tapping one calls [onSuggestion]. */
@@ -164,7 +169,7 @@ fun Composer(
 
     val c = HomeTheme.colors
     val motion = rememberMotionAllowed()
-    val border by animateColorAsState(if (inputFocused) MaterialTheme.colorScheme.primary.copy(alpha = .65f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = .35f),
+    val border by animateColorAsState(if (inputFocused) MaterialTheme.colorScheme.primary.copy(alpha = .65f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = if (homePill) .45f else .35f),
         if (motion) DuaMotion.fast() else snap(), label = "Home input focus")
     val hasAttachments = attachments.isNotEmpty() || uploads.isNotEmpty()
     val inputStyle = if (homeLayout) HomeComposerInputStyle else ComposerInputStyle
@@ -218,7 +223,7 @@ fun Composer(
                 if (suggestions.isNotEmpty()) Spacer(Modifier.height(Spacing.xs))
             }
             // Standalone composers can retain this row; Home opens the model sheet from its header.
-            if (showModelSelector) Row(
+            if (showModelSelector && !homePill) Row(
                 Modifier.align(Alignment.End)
                     .heightIn(min = Sizes.touchTarget).widthIn(min = Sizes.touchTarget)
                     .clip(HomeShapes.segmentTab)
@@ -235,17 +240,15 @@ fun Composer(
                 Box(Modifier.align(Alignment.CenterHorizontally)) { aboveInput() }
                 Spacer(Modifier.height(Spacing.md))
             }
-            val shape = if (homeLayout && !stacked) HomeShapes.homeBar else if (glass) ComposerGlass.Shape else if (stacked) ComposerSizes.expandedShape else HomeShapes.bar
+            val shape = if (homePill) HomeShapes.homePill else if (homeLayout && !stacked) HomeShapes.homeBar else if (glass) ComposerGlass.Shape else if (stacked) ComposerSizes.expandedShape else HomeShapes.bar
             // Keep the rounded surface/shadow outside animateContentSize's rectangular clip.
             // Only the inner layout resizes, so its shadow can feather beyond all four edges.
-            Box(Modifier.fillMaxWidth()
-                .testTag("composer-container")
-                .composerFocusPop(inputFocused, glass)
-                .shadow(if (glass) ComposerGlass.Elevation else if (homeLayout) HomeSizes.composerElevation else HomeSizes.noElevation, shape, clip = false)
-                .clip(shape).background(c.bar).background(DuaTheme.colors.floatingSurface).composerAurora(glass).border(HomeSizes.barBorder, border, shape)) {
+            ComposerSurface(homePill, glass, homeLayout, shape, border,
+                Modifier.fillMaxWidth().testTag("composer-container").composerFocusPop(inputFocused, glass)) {
                 Column(Modifier.fillMaxWidth()
                     .animateContentSize(animationSpec = if (motion) DuaMotion.gentle() else snap())
                     .padding(horizontal = HomeSizes.barPaddingH, vertical = when {
+                        homePill && !stacked && !keyboardOpen -> HomeSizes.pillIdlePaddingV
                         glass -> ComposerGlass.PaddingV
                         homeLayout && !stacked && !keyboardOpen -> HomeSizes.composerIdlePaddingV
                         homeLayout && !stacked -> HomeSizes.composerKeyboardPaddingV
@@ -301,7 +304,7 @@ fun Composer(
                         attach = {
                             Box {
                                 IconButton(onClick = onAttach, modifier = Modifier.size(Sizes.touchTarget)) {
-                                    Icon(if (homeLayout) ImageVector.vectorResource(R.drawable.home_add) else Icons.Default.Add,
+                                    Icon(if (homePill) Icons.Default.Add else if (homeLayout) ImageVector.vectorResource(R.drawable.home_add) else Icons.Default.Add,
                                         "Add photos and files", tint = c.barIcon,
                                         modifier = Modifier.size(if (homeLayout) HomeSizes.referenceIcon else HomeSizes.plusIcon))
                                 }
@@ -315,16 +318,24 @@ fun Composer(
                                         tint = if (imageSelected) c.voice else c.barIcon, modifier = Modifier.size(HomeSizes.micIcon))
                                 }
                                 IconButton(onClick = { dictation?.start?.invoke() ?: onMic() }, modifier = Modifier.size(Sizes.touchTarget)) {
-                                    Icon(if (homeLayout) ImageVector.vectorResource(R.drawable.ls_microphone_outline) else Icons.Outlined.MicNone,
+                                    Icon(if (homePill) Icons.Outlined.MicNone else if (homeLayout) ImageVector.vectorResource(R.drawable.ls_microphone_outline) else Icons.Outlined.MicNone,
                                         "Dictate", tint = c.barIcon, modifier = Modifier.size(if (homeLayout) HomeSizes.referenceIcon else HomeSizes.micIcon))
                                 }
                                 val (icon, label, action) = when {
                                     typing -> Triple(Icons.Rounded.Stop, "Stop response", { onStop() })
                                     uploading -> Triple(Icons.Default.Close, "Cancel upload", { onCancelUpload() })
                                     hasContent -> Triple(Icons.Default.ArrowUpward, "Send message", { submit() })
-                                    else -> Triple(ImageVector.vectorResource(R.drawable.ls_live_wave), "Voice mode", { onVoiceMode() })
+                                    else -> Triple(if (homePill) Icons.Outlined.GraphicEq else ImageVector.vectorResource(R.drawable.ls_live_wave), "Voice mode", { onVoiceMode() })
                                 }
-                                ComposerAction(icon, label, enabled = typing || uploading || !hasContent || canSubmit, onClick = action,
+                                if (homePill) FilledIconButton(onClick = action,
+                                    enabled = typing || uploading || !hasContent || canSubmit,
+                                    modifier = Modifier.size(Sizes.touchTarget).semantics { contentDescription = label },
+                                    colors = IconButtonDefaults.filledIconButtonColors(
+                                        containerColor = MaterialTheme.colorScheme.primary,
+                                        contentColor = MaterialTheme.colorScheme.onPrimary,
+                                    )) {
+                                    Icon(icon, null, modifier = Modifier.size(Sizes.icon))
+                                } else ComposerAction(icon, label, enabled = typing || uploading || !hasContent || canSubmit, onClick = action,
                                     iconSize = if (homeLayout && !typing && !hasContent) HomeSizes.referenceIcon else HomeSizes.voiceIcon)
                             }
                         })
@@ -332,6 +343,20 @@ fun Composer(
             }
         }
     }
+}
+
+/** Shared fields/callbacks; only empty Home opts into the Material pill surface. */
+@Composable
+private fun ComposerSurface(homePill: Boolean, glass: Boolean, homeLayout: Boolean, shape: Shape,
+    border: Color, modifier: Modifier, content: @Composable () -> Unit) {
+    val c = HomeTheme.colors
+    if (homePill) Surface(modifier = modifier, shape = shape, color = c.bar,
+        border = BorderStroke(HomeSizes.barBorder, border), shadowElevation = HomeSizes.pillElevation,
+        tonalElevation = HomeSizes.noElevation, content = content)
+    else Box(modifier
+        .shadow(if (glass) ComposerGlass.Elevation else if (homeLayout) HomeSizes.composerElevation else HomeSizes.noElevation, shape, clip = false)
+        .clip(shape).background(c.bar).background(DuaTheme.colors.floatingSurface).composerAurora(glass)
+        .border(HomeSizes.barBorder, border, shape)) { content() }
 }
 
 @Composable

@@ -100,7 +100,7 @@ internal fun ChatContent(
 private fun HomeHero(task: Boolean, small: Boolean) {
     val duration = if (rememberMotionAllowed()) HomeMotion.resize else 0
     val padding by animateDpAsState(if (small) Spacing.sm else Spacing.xxl, tween(duration), label = "Home hero padding")
-    val gap by animateDpAsState(if (small) Spacing.sm else Spacing.lg, tween(duration), label = "Home hero gap")
+    val gap by animateDpAsState(if (small) Spacing.md else Spacing.xl, tween(duration), label = "Home hero gap")
     val logoWidth by animateDpAsState(if (small) HomeSizes.heroCompactLogo else HomeSizes.heroLogo, tween(duration), label = "Home logo width")
     Column(Modifier.fillMaxWidth().padding(vertical = padding).testTag("home-hero"),
         horizontalAlignment = Alignment.CenterHorizontally,

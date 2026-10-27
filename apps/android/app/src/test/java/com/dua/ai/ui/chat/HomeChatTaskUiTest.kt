@@ -1,5 +1,7 @@
 package com.dua.ai.ui.chat
 
+import androidx.compose.material3.MaterialTheme
+import com.dua.ai.ui.theme.HomeChrome
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.runtime.CompositionLocalProvider
@@ -85,6 +87,38 @@ class HomeChatTaskUiTest(private val dark: Boolean, private val compact: Boolean
         compose.runOnIdle { state.value = state.value.copy(providers = listOf(ProviderCapability("Dua", true, "gemini-next-pro-preview", true))) }
         compose.onNodeWithContentDescription("Model, Pro").assertIsDisplayed()
         capture("chat")
+    }
+
+    @Test fun materialHomeRolesAreScopedAndVoiceKeepsAnAccessibleTarget() {
+        show {
+            val original = DuaTheme.colors
+            val originalHome = HomeTheme.colors
+            val scheme = MaterialTheme.colorScheme
+            HomeChrome(enabled = true) {
+                assertEquals(scheme.primaryContainer, HomeTheme.colors.segmentSelected)
+                assertEquals(scheme.onPrimaryContainer, HomeTheme.colors.segmentSelectedText)
+                assertEquals(scheme.onSurfaceVariant, HomeTheme.colors.segmentText)
+                assertEquals(scheme.onSurfaceVariant, HomeTheme.colors.tagline)
+                assertEquals(if (dark) original.composer else scheme.surfaceContainerLowest, HomeTheme.colors.bar)
+                assertEquals(HomeTheme.colors.bar, DuaTheme.colors.floatingSurface)
+                assertEquals(scheme.primary, HomeTheme.colors.voice)
+                assertEquals(scheme.onPrimary, HomeTheme.colors.onVoice)
+            }
+            assertEquals(original, DuaTheme.colors)
+            assertEquals(originalHome, HomeTheme.colors)
+            HomeChrome(enabled = false) {
+                assertEquals(originalHome, HomeTheme.colors)
+                assertEquals(original, DuaTheme.colors)
+            }
+            ChatScreen(initial, ChatActions())
+        }
+        compose.onNodeWithTag("home-header-divider", useUnmergedTree = true).assertDoesNotExist()
+        compose.onNodeWithTag("home-model-pill", useUnmergedTree = true).assertIsDisplayed()
+        for (label in listOf("Add photos and files", "Dictate", "Voice mode")) {
+            compose.onNodeWithContentDescription(label).assertIsDisplayed()
+                .assertWidthIsAtLeast(48.dp).assertHeightIsAtLeast(48.dp)
+        }
+        capture("material-home")
     }
 
     @Test fun taskSuggestionsFillDraftAndSendThroughExistingAgentHandlerWithoutFeatureChrome() {
