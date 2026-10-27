@@ -59,7 +59,6 @@ import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.sqrt
