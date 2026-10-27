@@ -1,7 +1,6 @@
 package com.dua.ai.backup.drive
 
 import android.app.Application
-import java.io.File
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.runBlocking
 import okhttp3.OkHttpClient

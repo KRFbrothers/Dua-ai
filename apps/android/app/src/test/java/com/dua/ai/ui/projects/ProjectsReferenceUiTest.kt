@@ -10,7 +10,6 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
-import com.dua.ai.files.FileRef
 import com.dua.ai.history.SavedChat
 import com.dua.ai.model.ChatMessage
 import com.dua.ai.projects.*

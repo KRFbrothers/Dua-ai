@@ -5,7 +5,6 @@ import android.app.AlarmManager
 import android.app.Application
 import android.app.NotificationManager
 import android.content.Intent
-import com.dua.ai.projects.ProjectCodec
 import com.dua.ai.projects.ProjectTask
 import com.dua.ai.settings.DevicePreferences
 import com.dua.ai.settings.LocalPreferences

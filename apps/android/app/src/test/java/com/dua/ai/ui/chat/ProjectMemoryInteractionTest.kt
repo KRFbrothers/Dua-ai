@@ -3,7 +3,6 @@ package com.dua.ai.ui.chat
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
-import com.dua.ai.projects.ProjectCodec
 import com.dua.ai.projects.ProjectMemory
 import com.dua.ai.settings.LocalPreferences
 import com.dua.ai.ui.theme.DuaTheme

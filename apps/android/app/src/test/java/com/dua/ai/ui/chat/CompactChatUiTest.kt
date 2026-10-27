@@ -10,7 +10,6 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
-import com.dua.ai.projects.ProjectCodec
 import com.dua.ai.settings.LocalPreferences
 import com.dua.ai.setup.CodeExecutionConfig
 import com.dua.ai.ui.theme.DuaTheme
