@@ -187,14 +187,6 @@ class RetryResponseTest {
             "scope=${model.viewModelScope}, appearanceNotice=${model.appearanceNotice.value}, error=${model.error.value}, messages=${model.messages.value.map { "${it.text}/${it.state}" }}", condition())
     }
 
-    /** Bounded idle for "nothing should have happened" assertions. */
-    private fun settle(milliseconds: Long) {
-        val until = System.nanoTime() + milliseconds * 1_000_000L
-        while (System.nanoTime() < until) {
-            shadowOf(Looper.getMainLooper()).idleFor(20, TimeUnit.MILLISECONDS)
-            Thread.sleep(2)
-        }
-    }
 
     private fun finished() = await("retry finished") { !model.isTyping.value && model.messages.value.lastOrNull()?.streaming != true }
 

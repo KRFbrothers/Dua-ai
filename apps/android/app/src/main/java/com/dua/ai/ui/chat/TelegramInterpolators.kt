@@ -56,11 +56,7 @@ class TelegramCubicBezier(startX: Float, private val startY: Float, endX: Float,
     }
 
     companion object {
-        val DEFAULT = TelegramCubicBezier(0.25f, 0.1f, 0.25f, 1f)
         val EASE_OUT = TelegramCubicBezier(0f, 0f, .58f, 1f)
-        val EASE_OUT_QUINT = TelegramCubicBezier(.23f, 1f, .32f, 1f)
-        val EASE_IN = TelegramCubicBezier(.42f, 0f, 1f, 1f)
-        val EASE_BOTH = TelegramCubicBezier(.42f, 0f, .58f, 1f)
     }
 }
 
