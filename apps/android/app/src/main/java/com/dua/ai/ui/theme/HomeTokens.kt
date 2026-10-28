@@ -58,26 +58,24 @@ object HomeTheme {
 /** Reference sizes. Visuals keep the reference sizes; each control sits in a 48 dp touch slot. */
 object HomeSizes {
     /** Compact original Dua lockup, scaled down as a single asset. */
-    val heroLogo = 80.dp
-    val heroCompactLogo = 48.dp
+    val heroLogo = 64.dp
+    val heroCompactLogo = 40.dp
     val heroCompactHeight = 320.dp
     /** assistant_robin_chat_input_max_width from the supplied Google App resource table. */
     val composerMaxWidth = 696.dp
     val referenceIcon = 28.dp
-    val composerMarginH = 32.dp
+    val composerMarginH = 16.dp
     val composerCompactMarginH = 16.dp
     val composerRoomyWidth = 360.dp
-    val composerIdlePaddingV = 16.dp
-    val composerKeyboardPaddingV = 8.dp
-    val pillIdlePaddingV = 12.dp
-    val pillElevation = 3.dp
+    val composerIdlePaddingV = 4.dp
+    val composerKeyboardPaddingV = 4.dp
     val composerElevation = 6.dp
     val noElevation = 0.dp
     fun composerHorizontalMargin(availableWidth: Dp): Dp =
         if (availableWidth >= composerRoomyWidth) composerMarginH else composerCompactMarginH
     val roundButton = 44.dp
-    val segmentTab = 36.dp
-    val segmentTabPaddingH = 20.dp
+    val segmentTab = 28.dp
+    val segmentTabPaddingH = 14.dp
     val voiceButton = 40.dp
     val plusIcon = 24.dp
     val micIcon = 22.dp
@@ -109,7 +107,6 @@ object HomeShapes {
     val segmentTab = RoundedCornerShape(20.dp)
     val bar = DuaShape.composer
     val homeBar = DuaShape.composer
-    val homePill = RoundedCornerShape(28.dp)
     /** Task starter rows on Home. */
     val promptRow = RoundedCornerShape(16.dp)
     val round = CircleShape

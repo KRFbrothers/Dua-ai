@@ -23,9 +23,9 @@ class SettingsScreenTest {
     private fun show(theme: String = "light", s: SettingsUiState = state, onOpen: (DuaDestination) -> Unit = {}) =
         compose.setContent { DuaTheme(LocalPreferences(theme = theme)) { SettingsContent(s, {}, onOpen) } }
 
-    @Test fun referenceThreeCardStructureWithDuaBranding() {
+    @Test fun groupedStructureWithDuaBranding() {
         show()
-        for (t in listOf("Fareed", "F", "Account", "fareed@example.com", "Workspace", "Upgrade to Dua AI Pro",
+        for (t in listOf("Settings", "Fareed", "Account", "fareed@example.com", "Workspace",
             "Personalization", "Memory", "Plugins", "Accent color", "General", "Usage and limits", "Notifications", "Voice",
             "Safety", "Security and login", "Storage", "History and data"))
             compose.onNodeWithText(t, substring = false, useUnmergedTree = true).assertExists()
@@ -33,14 +33,14 @@ class SettingsScreenTest {
         compose.onNodeWithText("ChatGPT", substring = true, ignoreCase = true).assertDoesNotExist()
         compose.onNodeWithContentDescription("Back").assertExists()
         compose.onNodeWithContentDescription("About Dua AI").assertExists()
-        compose.onNodeWithContentDescription("Edit profile photo").assertExists()
+        compose.onNodeWithText("Edit profile photo").assertExists()
     }
 
     @Test fun everyExistingDestinationIsReachable() {
         var dest: DuaDestination? = null
         show(onOpen = { dest = it })
         val expected = mapOf("Account" to DuaDestination.Account, "Workspace" to DuaDestination.Work,
-            "Upgrade to Dua AI Pro" to DuaDestination.UsageLimits, "Personalization" to DuaDestination.Appearance, "Memory" to DuaDestination.Memory,
+            "Personalization" to DuaDestination.Appearance, "Memory" to DuaDestination.Memory,
             "Plugins" to DuaDestination.Plugins, "Imagine" to DuaDestination.Imagine, "Accent color" to DuaDestination.Accent,
             "General" to DuaDestination.General, "Feature setup" to DuaDestination.FeatureSetup, "Usage and limits" to DuaDestination.UsageLimits,
             "Notifications" to DuaDestination.Notifications, "Voice" to DuaDestination.VoiceSettings, "Safety" to DuaDestination.Safety,
@@ -50,7 +50,7 @@ class SettingsScreenTest {
             compose.onNodeWithText(label, substring = false).performScrollTo().performClick()
             compose.runOnIdle { assertEquals(label, d, dest) }
         }
-        compose.onNodeWithContentDescription("Edit profile photo").performScrollTo().performClick()
+        compose.onNodeWithText("Edit profile photo").performScrollTo().performClick()
         compose.runOnIdle { assertEquals(DuaDestination.AvatarEdit, dest) }
         compose.onNodeWithContentDescription("About Dua AI").performScrollTo().performClick()
         compose.onNodeWithText("About Dua AI").assertIsDisplayed()

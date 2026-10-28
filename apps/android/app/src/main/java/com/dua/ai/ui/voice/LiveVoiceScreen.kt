@@ -43,6 +43,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -115,13 +116,6 @@ private fun LiveVoiceContentBody(state: LiveState, starting: Boolean, error: Str
                 }
             }
             Spacer(Modifier.height(Spacing.xl))
-            Box(Modifier.size(VoiceSizes.liveOrb).clickable(enabled = state.phase == LivePhase.SPEAKING, onClick = onInterrupt)
-                .semantics { contentDescription = if (state.phase == LivePhase.SPEAKING) "Speaking. Tap to interrupt" else "Live voice waveform" }) {
-                LiveVoiceWaveformOrb(state.phase, state.level, state.muted, Modifier.fillMaxSize())
-                if (state.phase == LivePhase.SPEAKING) Icon(painterResource(R.drawable.ls_gemini_live_wght320_vd_theme_28), "Dua is speaking",
-                    tint = v.text, modifier = Modifier.align(Alignment.Center).size(Spacing.xxl))
-            }
-            Spacer(Modifier.height(Spacing.lg))
             Text(statusLabel(state, starting, error), style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center,
                 color = if (error.isNotBlank() || state.phase == LivePhase.FAILED) v.error else v.text,
                 modifier = Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite })
@@ -130,12 +124,18 @@ private fun LiveVoiceContentBody(state: LiveState, starting: Boolean, error: Str
                 FilledTonalIconButton(onClick = onMute, modifier = Modifier.size(VoiceSizes.liveMute)) {
                     Icon(if (state.muted) Icons.Outlined.MicOff else Icons.Outlined.Mic, contentDescription = if (state.muted) "Unmute microphone" else "Mute microphone", modifier = Modifier.size(VoiceSizes.liveMuteIcon))
                 }
+                Box(Modifier.weight(1f).padding(horizontal = Spacing.sm).height(VoiceSizes.liveMute)
+                    .clip(VoiceShapes.pill).clickable(enabled = state.phase == LivePhase.SPEAKING, onClick = onInterrupt)
+                    .semantics { contentDescription = if (state.phase == LivePhase.SPEAKING) "Speaking. Tap to interrupt" else "Live voice waveform" }) {
+                    LiveVoiceWaveformOrb(state.phase, state.level, state.muted, Modifier.fillMaxSize())
+                }
                 FilledIconButton(onClick = onEnd, modifier = Modifier.size(VoiceSizes.liveEnd),
                     colors = IconButtonDefaults.filledIconButtonColors(containerColor = DuaTheme.colors.danger,
                         contentColor = DuaTheme.colors.onDanger)) {
                     Icon(Icons.Filled.CallEnd, contentDescription = "End live voice", modifier = Modifier.size(VoiceSizes.liveEndIcon))
                 }
             } else Column(Modifier.fillMaxWidth().padding(vertical = Spacing.lg), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+                LiveVoiceWaveformOrb(state.phase, state.level, state.muted, Modifier.fillMaxWidth().height(VoiceSizes.liveMute))
                 Button(onClick = onStart, enabled = !starting && !(fallback && error.isNotBlank() && usage?.leftSeconds == 0),
                     modifier = Modifier.fillMaxWidth().widthIn(max = VoiceSizes.contentMaxWidth).height(VoiceSizes.startButtonHeight), shape = VoiceShapes.startButton,
                     colors = ButtonDefaults.buttonColors(containerColor = v.accent, contentColor = v.onAccent)) {
@@ -171,7 +171,7 @@ private fun Captions(captions: List<LiveCaption>, modifier: Modifier) {
     val shown = captions.filter { it.text.isNotBlank() }.takeLast(40)
     LaunchedEffect(shown.size, shown.lastOrNull()?.text?.length) { if (shown.isNotEmpty()) list.animateScrollToItem(shown.size - 1) }
     LazyColumn(modifier, state = list, verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
-        items(shown, key = { it.id }) { caption ->
+        items(shown, key = { it.id }, contentType = { if (it.user) "user" else "assistant" }) { caption ->
             Column(Modifier.fillMaxWidth(), horizontalAlignment = if (caption.user) Alignment.End else Alignment.Start) {
                 Text(if (caption.user) "You" else "Dua", style = MaterialTheme.typography.labelSmall, color = VoiceTheme.colors.subText)
                 Text(caption.text + if (caption.interrupted) " —" else "", textAlign = if (caption.user) TextAlign.End else TextAlign.Start,

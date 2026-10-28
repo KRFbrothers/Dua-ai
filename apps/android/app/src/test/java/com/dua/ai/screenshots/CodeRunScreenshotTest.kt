@@ -9,7 +9,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onRoot
-import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.assertIsDisplayed
 import com.dua.ai.model.ChatMessage
 import com.dua.ai.model.CodeRun
 import com.dua.ai.settings.LocalPreferences
@@ -41,15 +41,15 @@ class CodeRunScreenshotTest(private val dark: Boolean) {
     @get:Rule val compose = createComposeRule()
     private val mode get() = if (dark) "dark" else "light"
 
-    private fun shot(name: String, scrollTo: String? = null, content: @Composable () -> Unit) {
+    private fun shot(name: String, actionDescription: String? = null, content: @Composable () -> Unit) {
         compose.setContent {
             DuaTheme(LocalPreferences(theme = mode)) {
                 Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) { content() }
             }
         }
         compose.waitForIdle()
-        // Bring a mode chip into view in the horizontally scrolling chip row.
-        scrollTo?.let { compose.onNodeWithContentDescription(it, substring = true).performScrollTo(); compose.waitForIdle() }
+        // Active conversation modes sit above the composer, clear of the message list.
+        actionDescription?.let { compose.onNodeWithContentDescription(it, substring = true).assertIsDisplayed() }
         compose.onRoot().captureRoboImage("build/outputs/roborazzi/${name}_$mode.png")
     }
 
@@ -57,7 +57,7 @@ class CodeRunScreenshotTest(private val dark: Boolean) {
 
     @Test fun ranCodeExpanded() = shot("41_ran_code_expanded") { ChatScreen(CodeRunData.chat.copy(expandedCode = setOf("m1")), ChatActions()) }
 
-    @Test fun runCodeComposer() = shot("42_run_code_composer", scrollTo = "Run code on") { ChatScreen(CodeRunData.composer, ChatActions()) }
+    @Test fun runCodeComposer() = shot("42_run_code_composer", actionDescription = "Let the AI run Python code") { ChatScreen(CodeRunData.composer, ChatActions()) }
 }
 
 internal object CodeRunData {
@@ -79,5 +79,5 @@ internal object CodeRunData {
             isUser = false, model = "Dua", codeRuns = listOf(CodeRun("python", code, output, "ok"))),
     ))
 
-    val composer = base.copy(runCode = true, draft = "Plot my monthly sales and find the trend")
+    val composer = chat.copy(runCode = true, draft = "Plot my monthly sales and find the trend")
 }

@@ -61,8 +61,10 @@ class FeatureIsolationUiTest(private val dark: Boolean, private val compact: Boo
         for (messages in listOf(emptyList(), listOf(ChatMessage("u", "Question", true)),
             listOf(ChatMessage("a", "Answer", false, state = ChatMessage.STREAMING)), listOf(ChatMessage("a", "Answer", false)))) {
             compose.runOnIdle { state.value = state.value.copy(messages = messages, typing = messages.any { it.streaming }) }
-            compose.onNode(hasText("Chat") and isSelectable()).assertIsDisplayed()
-            compose.onNode(hasText("Task") and isSelectable()).assertIsDisplayed()
+            if (messages.isEmpty()) {
+                compose.onNode(hasText("Chat") and isSelectable()).assertIsDisplayed()
+                compose.onNode(hasText("Task") and isSelectable()).assertIsDisplayed()
+            } else compose.onNodeWithTag("home-mode-switcher").assertDoesNotExist()
             compose.onNodeWithContentDescription("Open profile and settings").assertIsDisplayed()
             compose.onNodeWithContentDescription("Find in chat").assertDoesNotExist()
             compose.onNodeWithContentDescription("New chat").assertIsDisplayed()

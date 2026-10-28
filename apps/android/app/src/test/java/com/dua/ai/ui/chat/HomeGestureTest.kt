@@ -10,6 +10,8 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeDown
 import androidx.compose.ui.test.swipeLeft
@@ -126,6 +128,7 @@ class HomeGestureTest {
     @Test fun plusSheetSwitchGivesLightHaptic() {
         show(conversation, ChatSheet.Attach)
         compose.waitForIdle()
+        compose.onNodeWithText("Tools").performScrollTo().performClick()
         // Semantics click: the sheet's window doesn't take injected touches reliably under Robolectric.
         compose.onNode(isToggleable() and hasText("Think")).performSemanticsAction(SemanticsActions.OnClick)
         assertEquals(listOf("haptic:Tap", "reasoning:true"), events)

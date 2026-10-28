@@ -110,9 +110,9 @@ private fun AssetFeatureRoute(vm: ChatViewModel, images: Boolean, onBack: () -> 
             { draft = it.take(ImagineCodec.MAX_PROMPT) }, { chosenAspect = it },
             { vm.generateImageFromHub(draft, aspect) }, ::open, onSetup,
             generating = typing && messages.lastOrNull()?.imagine?.pending == true, onStop = vm::stopReply, onRefresh = vm::loadLibraryFiles)
-        else LibraryContent(items, busy, listOf(notice, fileError, cloud.notice, if (cloud.loading) "Loading cloud files…" else "").filter { it.isNotBlank() }.joinToString("\n"), onBack,
+        else LibraryContent(items, busy, listOf(notice, fileError, cloud.notice).filter { it.isNotBlank() }.joinToString("\n"), onBack,
             onUpload = { runCatching { picker.launch(AttachmentReader.types + StoredFileTypes.PICKER_EXTRA) }.onFailure { notice = "A file picker is unavailable on this device." } }, onOpen = ::open,
-            onRefresh = vm::loadLibraryFiles)
+            onRefresh = vm::loadLibraryFiles, loading = cloud.loading, loadFailed = cloud.failed)
         preview?.let { item -> MediaViewer(listOf(item.media!!), 0, ImagineActions(
             onShare = { it.firstOrNull()?.let { media -> export(media, false) } },
             onSave = { list -> list.firstOrNull()?.let { media -> if (MediaExport.needsPermission()) { pendingSave = media; permission.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE) } else export(media, true) } }),

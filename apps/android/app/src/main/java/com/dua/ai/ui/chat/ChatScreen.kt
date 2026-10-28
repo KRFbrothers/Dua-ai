@@ -16,18 +16,23 @@ import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.ArrowDownward
 import androidx.compose.material.icons.outlined.Lightbulb
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Tag
 import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material.icons.outlined.TravelExplore
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.Icon
 import androidx.compose.runtime.key
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.semantics.contentDescription
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.rememberScrollState
@@ -54,10 +59,12 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -75,12 +82,12 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.testTag
 import com.dua.ai.ui.history.HistoryDrawer
 import com.dua.ai.ui.theme.Sizes
 import com.dua.ai.ui.theme.Spacing
 import com.dua.ai.ui.theme.DrawerSizes
 import com.dua.ai.ui.theme.HomeChrome
-import androidx.compose.ui.platform.testTag
 import com.dua.ai.ui.theme.HomeSizes
 import com.dua.ai.ui.navigation.DuaDestination
 import kotlinx.coroutines.launch
@@ -139,6 +146,7 @@ fun ChatScreen(
     val visibleState = if (state.agent && !taskHome && boundaryIndex >= 0) state.copy(messages = state.messages.drop(boundaryIndex + 1)) else state
     /** Empty conversations show Home's Chat/Task hero or their dedicated feature starters. */
     val home = visibleState.messages.isEmpty() && !state.typing
+    var renamingId by rememberSaveable { mutableStateOf<String?>(null) }
     var deletingId by rememberSaveable { mutableStateOf<String?>(null) }
     var deletingServerId by rememberSaveable { mutableStateOf<String?>(null) }
     LaunchedEffect(state.chatDeletion.id, state.chatDeletion.completed) {
@@ -221,7 +229,7 @@ fun ChatScreen(
     }
     val inputFocus = remember { FocusRequester() }
     LaunchedEffect(dismissOverlaysRequest) {
-        if (dismissOverlaysRequest != null) { searchOpen = false; viewer = null; drawerState.close() }
+        if (dismissOverlaysRequest != null) { searchOpen = false; viewer = null; renamingId = null; drawerState.close() }
     }
     LaunchedEffect(requestComposerFocus) {
         if (requestComposerFocus != null) {
@@ -330,7 +338,7 @@ fun ChatScreen(
     var dropHover by remember { mutableStateOf(false) }
     val dropMotion = com.dua.ai.ui.theme.rememberMotionAllowed()
     key(conversationKey) {
-        BoxWithConstraints(Modifier.fillMaxSize().pointerInput(Unit) {
+        BoxWithConstraints(Modifier.fillMaxSize().testTag("chat-screen").pointerInput(Unit) {
             // Remember where the last press started (never consumed) as the splash origin.
             awaitPointerEventScope {
                 while (true) {
@@ -343,8 +351,8 @@ fun ChatScreen(
             // Keep the entire right-hand Home touch target in the scrim, including on narrow windows.
             val endInset = WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal).asPaddingValues()
                 .calculateEndPadding(LocalLayoutDirection.current)
-            // Preserve the proven Home drawer clearance and its 48dp right-hand touch target.
-            // Custom headers/features retain their existing spacing.
+            // Keep the visible composer action clear of the modal drawer scrim.
+            // Preserve clearance for custom headers and feature routes.
             val homeControlInset = if (feature == null && topBar == null) Spacing.lg + Spacing.sm else 0.dp
             val controlInset = maxOf(HomeSizes.topBarPaddingH,
                 HomeSizes.composerHorizontalMargin(maxWidth) + HomeSizes.barPaddingH, homeControlInset)
@@ -374,158 +382,150 @@ fun ChatScreen(
                     )
             }
             val chatPane: @Composable () -> Unit = {
-                val polishedHome = home && feature == null && topBar == null && state.homeTab == HomeTab.Chat
-                HomeChrome(enabled = polishedHome) {
-                Column(Modifier.fillMaxSize().background(com.dua.ai.ui.theme.ChatTheme.colors.background)
-                    .let { if (feature == null) it.windowInsetsPadding(
-                        WindowInsets.ime.union(WindowInsets.navigationBars).only(WindowInsetsSides.Bottom)) else it }
-                    .then(if (polishedHome) Modifier.background(MaterialTheme.colorScheme.surface)
-                        // Preserve the existing tag used by inset/focus tests. Home is now flat.
-                        .testTag("home-gradient")
-                    else if (feature == null && state.homeTab != HomeTab.Work) Modifier.homeBackdrop(taskHome && home, home,
-                        generating = state.typing || visibleState.messages.lastOrNull()?.streaming == true) else Modifier)
-                    .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
-                    .agentEdgeGlow(agentWorking(state), agentGlowColors())) {
-                    if (topBar != null) topBar()
-                    else if (feature != null) FeatureTopBar(feature.title, actions.onExitFeature, actions.onNewFeatureSession,
-                        newSessionEnabled = !state.typing && (feature != ChatFeature.Agent || state.agentAvailable))
-                    else ChatTopBar(
-                        onMenu = { dismissInput(); if (wideHistory) historyPanelVisible = !historyPanelVisible else scope.launch { drawerState.open() } },
-                        task = taskHome, modelName = homeModelName(state), quietHeader = polishedHome,
-                        profileName = state.profileName, profilePhotoUrl = state.profilePhotoUrl,
-                        onModel = { sheet = ChatSheet.Model }, onProfile = { sheet = ChatSheet.Profile },
-                        onNewChat = actions.onNewChat, newChatEnabled = !state.typing,
-                        onFindInChat = if (state.messages.isEmpty() || state.homeTab == HomeTab.Work) null else ({ followTail = false; searchOpen = true }),
-                    )
-                    if (searchOpen) ConversationSearchBar(searchQuery,
-                        onQuery = { searchQuery = it; selectedSearchId = null; lastSearchJump = null },
-                        searching = needle.isNotEmpty() && searchResults?.takeIf { it.messages == state.messages && it.query == needle } == null,
-                        matches = matches, currentIndex = matchIndex,
-                        onPrevious = { if (matches.isNotEmpty()) selectedSearchId = matches[(matchIndex - 1 + matches.size) % matches.size].messageId },
-                        onNext = { if (matches.isNotEmpty()) selectedSearchId = matches[(matchIndex + 1) % matches.size].messageId },
-                        onClose = { closeSearch() })
-                    Box(Modifier.weight(1f).fillMaxWidth().let { canvas ->
-                        if (home && feature == null) canvas.pointerInput(Unit) { detectTapGestures { dismissInput() } } else canvas
-                    }) {
-                        if (feature == null && state.homeTab == HomeTab.Work) {
-                            Text("Coming soon", Modifier.align(Alignment.Center), style = MaterialTheme.typography.bodyLarge)
-                        } else if (home && feature == ChatFeature.Agent) {
-                            AgentContent(state.agentAvailable, busy = state.typing, onBack = actions.onExitFeature,
-                                onNewTask = actions.onNewFeatureSession, onRefresh = actions.onRefreshAgent,
-                                onTask = actions.onAgentTask, onSend = {}, showChrome = false,
-                                onOpenWorkspaces = { actions.onOpenDestination(DuaDestination.AgentWorkspaces) })
-                        } else if (home && feature != null) {
-                            Text(if (feature == ChatFeature.Projects) state.projects.firstOrNull { it.id == state.projectId }?.name ?: "Projects" else "Create an image with Dua",
-                                Modifier.align(Alignment.Center).padding(Spacing.lg), style = MaterialTheme.typography.titleLarge)
-                        } else if (home) {
-                            ChatContent(task = taskHome,
-                                composing = state.draft.isNotBlank() || state.attachments.isNotEmpty() || state.uploads.isNotEmpty(),
-                                onTask = { prompt -> actions.onDraftChange(prompt); inputFocus.requestFocus(); keyboard?.show() })
-                        } else {
-                            key(conversationKey) {
-                                androidx.compose.runtime.CompositionLocalProvider(LocalCodeExecutionUi provides CodeExecutionUi(
-                                    state.codeSnippetUnavailableReason, actions.onRunCodeSnippet)) {
-                                    MessageList(state = visibleState, actions = actions, listState = listState, imagineActions = mediaActions,
-                                        onReply = if (feature != null) null else { m -> replyTo = ReplyQuote.of(m.id, m.text, m.isUser); runCatching { inputFocus.requestFocus() } },
-                                        searchMessageId = selectedMatch?.messageId,
-                                        bottomOverlay = if (feature == null) Sizes.touchTarget + Spacing.md else 0.dp)
-                                }
-                            }
-                            JumpToLatest(visible = !searchOpen && !followTail && listState.canScrollForward,
-                                newReplies = MessageGrouping.newReplies(state.messages, seenMessages),
-                                onClick = { scope.launch { followTail = true; goToLatest() } },
-                                modifier = Modifier.align(Alignment.BottomEnd).padding(end = Spacing.md, bottom = Spacing.md +
-                                    if (feature == null) Sizes.touchTarget + Spacing.md else 0.dp))
-                            // In a conversation the Chat/Task toggle floats transparently over the messages.
-                            if (feature == null) Box(Modifier.align(Alignment.BottomCenter).padding(bottom = Spacing.sm)) {
-                                HomeModeSwitcher(if (taskHome) HomeMode.Task else HomeMode.Chat,
-                                    onSelect = onHomeMode,
-                                    enabled = !state.typing, floating = true)
-                            }
-                        }
-                    }
-                    if (feature != null || state.homeTab != HomeTab.Work) Column(Modifier.fillMaxWidth()
-                        .let { if (feature != null) it.imePadding().navigationBarsPadding() else it }, horizontalAlignment = Alignment.CenterHorizontally) {
-                        Column(Modifier.widthIn(max = if (feature == null) HomeSizes.composerMaxWidth else Sizes.contentMaxWidth).fillMaxWidth()
-                            .onGloballyPositioned { bottomCoordinates = it }
-                            .swipeUpToOpen(enabled = sheet == null && !state.typing,
-                                isExcluded = { local -> inputFocused && bottomCoordinates?.let { inputBounds.contains(it.localToRoot(local)) } == true },
-                                onSwipeUp = { tap(); sheet = ChatSheet.Attach })
-                            .semantics { customActions = listOf(CustomAccessibilityAction("Open add to chat") { sheet = ChatSheet.Attach; true }) }) {
-                            ChatNotices(state = state, actions = actions)
-                            if (state.editingId != null) EditingBanner(onCancel = actions.onCancelEdit)
-                            val visibleModes = modeToggles(state, onWebMode, onReasoning, onXSearch, onRunCode, onAgent)
-                                .filter { feature == null && !home && it.on && !(taskHome && it.label == "Agent") }
-                            if (feature == ChatFeature.Agent) Box(Modifier.fillMaxWidth().padding(vertical = Spacing.xs), contentAlignment = Alignment.Center) { AgentModePill() }
-                            if (visibleModes.isNotEmpty()) {
-                                Row(
-                                    Modifier.fillMaxWidth().let { if (visibleModes.size > 3) it.horizontalScroll(rememberScrollState()) else it }
-                                        .padding(horizontal = Spacing.md, vertical = Spacing.xs),
-                                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
-                                ) {
-                                    val fill = visibleModes.size <= 3
-                                    visibleModes.forEach { toggle -> HomeActionButton(toggle, if (fill) Modifier.weight(1f) else Modifier) }
-                                }
-                            }
-                            val dictation = if (actions.inlineDictation) rememberChatDictation(actions.dictationLanguage, actions.dictationAutoSend,
-                                draft = rememberUpdatedState(state.draft).let { d -> remember { { d.value } } }, onDraft = actions.onDraftChange, onSend = sendFromComposer, onNotice = actions.onDictationNotice,
-                                offlineModel = actions.dictationOfflineModel) else null
-                            Composer(
-                                homeLayout = feature == null,
-                                homePill = polishedHome,
-                                glass = feature == null && !home,
-                                suggestions = if (feature == null && !home && !taskHome) ConversationSuggestions else emptyList(),
-                                onSuggestion = { prompt -> actions.onDraftChange(prompt); runCatching { inputFocus.requestFocus() } },
-                                onImage = if (feature == null && !home) ({ onImagine(!state.imagine) }) else null,
-                                imageSelected = state.imagine,
-                                dictation = dictation,
-                                // Only what the composer needs, so streamed tokens do not recompose it.
-                                controlled = true,
-                                typing = state.typing,
-                                uploading = state.uploads.any { it.uploading },
-                                focusRequester = inputFocus,
-                                onDraftChange = actions.onDraftChange,
-                                onAttach = { sheet = ChatSheet.Attach },
-                                onClearAttachments = actions.onClearAttachments,
-                                onMic = actions.onOpenVoice,
-                                onVoiceClick = openVoiceMode,
-                                onVoiceMode = openVoiceMode,
-                                onTextFieldFocus = { inputFocused = it },
-                                onTextFieldBounds = { inputBounds = it },
-                                value = state.draft,
-                                onSend = { sendFromComposer() },
-                                onStop = actions.onStop,
-                                onModelClick = { sheet = ChatSheet.Model },
-                                currentModel = state.modelLabel,
-                                onCancelUpload = rememberUpdatedState(state.uploads).let { uploads -> remember(actions) { { uploads.value.filter { it.uploading }.forEach { actions.onCancelUpload(it.id) } } } },
-                                onImagineOptions = { sheet = ChatSheet.Imagine },
-                                showModelSelector = false,
-                                placeholder = if (feature == null && taskHome) "Describe..." else "Ask Dua AI...",
-                                sendEnabled = taskReady && state.canSend,
-                                attachments = state.attachments,
-                                uploads = state.uploads,
-                                onRemoveAttachment = actions.onRemoveAttachment,
-                                onRemoveAttachmentBackground = if (state.removeBackground) actions.onRemoveAttachmentBackground else null,
-                                writingTools = { task -> actions.onWriting(state.draft, true, task) },
-                                onRemoveUpload = actions.onCancelUpload,
-                                aboveInput = if (feature != null || (!home && replyTo == null)) null else { {
-                                    androidx.compose.foundation.layout.Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    replyTo?.let { quote -> ReplyPreview(quote, onCancel = { replyTo = null }) }
-                                    // Home only: in a conversation the toggle floats over the message list instead.
-                                    if (home) HomeModeSwitcher(if (taskHome) HomeMode.Task else HomeMode.Chat,
-                                        onSelect = onHomeMode, enabled = !state.typing)
+                HomeChrome(enabled = home && feature == null && topBar == null && state.homeTab == HomeTab.Chat) {
+                Box(Modifier.fillMaxSize().then(if (feature == null && topBar == null) Modifier.testTag("supplied-chat") else Modifier)) {
+                    Column(Modifier.fillMaxSize()
+                        .background(com.dua.ai.ui.theme.ChatTheme.colors.background)
+                        .let { if (feature == null) it.windowInsetsPadding(
+                            WindowInsets.ime.union(WindowInsets.navigationBars).only(WindowInsetsSides.Bottom)) else it }
+                        .then(if (feature == null && state.homeTab != HomeTab.Work) Modifier.homeBackdrop(taskHome && home, home,
+                            generating = state.typing || visibleState.messages.lastOrNull()?.streaming == true) else Modifier)
+                        .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
+                        .agentEdgeGlow(agentWorking(state), agentGlowColors())) {
+                        if (topBar != null) topBar()
+                        else if (feature != null) FeatureTopBar(feature.title, actions.onExitFeature, actions.onNewFeatureSession,
+                            newSessionEnabled = !state.typing && (feature != ChatFeature.Agent || state.agentAvailable))
+                        else ChatTopBar(
+                            onMenu = { dismissInput(); if (wideHistory) historyPanelVisible = !historyPanelVisible else scope.launch { drawerState.open() } },
+                            task = taskHome, modelName = homeModelName(state),
+                            profileName = state.profileName, profilePhotoUrl = state.profilePhotoUrl,
+                            onModel = { sheet = ChatSheet.Model }, onProfile = { sheet = ChatSheet.Profile },
+                            onNewChat = actions.onNewChat, newChatEnabled = !state.typing,
+                            onFindInChat = if (state.messages.isEmpty() || state.homeTab == HomeTab.Work) null else ({ followTail = false; searchOpen = true }),
+                            conversationOptions = state.savedChats.firstOrNull { it.id == state.chatId }?.takeIf { !home && state.homeTab != HomeTab.Work }?.let { chat -> {
+                                com.dua.ai.ui.history.ChatOptionsButton(chat, state.chatPinEnabled, state.serverChatDeletionEnabled,
+                                    onRename = { renamingId = chat.id }, onPinChat = actions.onPinChat,
+                                    onDelete = { if (state.serverChatDeletionEnabled) { actions.onDismissChatDeletion(); deletingServerId = chat.id } else deletingId = chat.id })
+                            } },
+                        )
+                        if (searchOpen) ConversationSearchBar(searchQuery,
+                            onQuery = { searchQuery = it; selectedSearchId = null; lastSearchJump = null },
+                            searching = needle.isNotEmpty() && searchResults?.takeIf { it.messages == state.messages && it.query == needle } == null,
+                            matches = matches, currentIndex = matchIndex,
+                            onPrevious = { if (matches.isNotEmpty()) selectedSearchId = matches[(matchIndex - 1 + matches.size) % matches.size].messageId },
+                            onNext = { if (matches.isNotEmpty()) selectedSearchId = matches[(matchIndex + 1) % matches.size].messageId },
+                            onClose = { closeSearch() })
+                        Box(Modifier.weight(1f).fillMaxWidth().let { canvas ->
+                            if (home && feature == null) canvas.pointerInput(Unit) { detectTapGestures { dismissInput() } } else canvas
+                        }) {
+                            if (feature == null && state.homeTab == HomeTab.Work) {
+                                Text("Coming soon", Modifier.align(Alignment.Center), style = MaterialTheme.typography.bodyLarge)
+                            } else if (home && feature == ChatFeature.Agent) {
+                                AgentContent(state.agentAvailable, busy = state.typing, onBack = actions.onExitFeature,
+                                    onNewTask = actions.onNewFeatureSession, onRefresh = actions.onRefreshAgent,
+                                    onTask = actions.onAgentTask, onSend = {}, showChrome = false,
+                                    onOpenWorkspaces = { actions.onOpenDestination(DuaDestination.AgentWorkspaces) })
+                            } else if (home && feature != null) {
+                                Text(if (feature == ChatFeature.Projects) state.projects.firstOrNull { it.id == state.projectId }?.name ?: "Projects" else "Create an image with Dua",
+                                    Modifier.align(Alignment.Center).padding(Spacing.lg), style = MaterialTheme.typography.titleLarge)
+                            } else if (home) {
+                                ChatContent(task = taskHome, profileName = state.profileName,
+                                    composing = state.draft.isNotBlank() || state.attachments.isNotEmpty() || state.uploads.isNotEmpty(),
+                                    onTask = { prompt -> actions.onDraftChange(prompt); inputFocus.requestFocus(); keyboard?.show() })
+                            } else {
+                                key(conversationKey) {
+                                    androidx.compose.runtime.CompositionLocalProvider(LocalCodeExecutionUi provides CodeExecutionUi(
+                                        state.codeSnippetUnavailableReason, actions.onRunCodeSnippet)) {
+                                        MessageList(state = visibleState, actions = actions, listState = listState, imagineActions = mediaActions,
+                                            onReply = if (feature != null) null else { m -> replyTo = ReplyQuote.of(m.id, m.text, m.isUser); runCatching { inputFocus.requestFocus() } },
+                                            searchMessageId = selectedMatch?.messageId)
                                     }
-                                } },
-                                attachmentPopup = {
-                                    if (feature == ChatFeature.Projects) com.dua.ai.ui.projects.ProjectAttachmentMenu(sheet == ChatSheet.Attach, { sheet = null },
-                                        { actions.onPickCamera() }, { actions.onPickPhotos() }, { actions.onPickFiles() }, { actions.onOpenDestination(DuaDestination.Plugins) })
-                                },
-                            )
+                                }
+                                JumpToLatest(visible = !searchOpen && !followTail && listState.canScrollForward,
+                                    newReplies = MessageGrouping.newReplies(state.messages, seenMessages),
+                                    onClick = { scope.launch { followTail = true; goToLatest() } },
+                                    modifier = Modifier.align(Alignment.BottomEnd).padding(Spacing.md))
+
+                            }
+                        }
+                        if (feature != null || state.homeTab != HomeTab.Work) Column(Modifier.fillMaxWidth()
+                            .let { if (feature != null) it.imePadding().navigationBarsPadding() else it }, horizontalAlignment = Alignment.CenterHorizontally) {
+                            Column(Modifier.widthIn(max = if (feature == null) HomeSizes.composerMaxWidth else Sizes.contentMaxWidth).fillMaxWidth()
+                                .onGloballyPositioned { bottomCoordinates = it }
+                                .swipeUpToOpen(enabled = sheet == null && !state.typing,
+                                    isExcluded = { local -> inputFocused && bottomCoordinates?.let { inputBounds.contains(it.localToRoot(local)) } == true },
+                                    onSwipeUp = { tap(); sheet = ChatSheet.Attach })
+                                .semantics { customActions = listOf(CustomAccessibilityAction("Open add to chat") { sheet = ChatSheet.Attach; true }) }) {
+                                ChatNotices(state = state, actions = actions)
+                                if (state.editingId != null) EditingBanner(onCancel = actions.onCancelEdit)
+                                val visibleModes = modeToggles(state, onWebMode, onReasoning, onXSearch, onRunCode, onAgent)
+                                    .filter { feature == null && !home && it.on && !(taskHome && it.label == "Agent") }
+                                if (feature == ChatFeature.Agent) Box(Modifier.fillMaxWidth().padding(vertical = Spacing.xs), contentAlignment = Alignment.Center) { AgentModePill() }
+                                if (visibleModes.isNotEmpty()) {
+                                    Row(
+                                        Modifier.fillMaxWidth().let { if (visibleModes.size > 3) it.horizontalScroll(rememberScrollState()) else it }
+                                            .padding(horizontal = Spacing.md, vertical = Spacing.xs),
+                                        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                                    ) {
+                                        val fill = visibleModes.size <= 3
+                                        visibleModes.forEach { toggle -> HomeActionButton(toggle, if (fill) Modifier.weight(1f) else Modifier) }
+                                    }
+                                }
+                                val dictation = if (actions.inlineDictation) rememberChatDictation(actions.dictationLanguage, actions.dictationAutoSend,
+                                    draft = rememberUpdatedState(state.draft).let { d -> remember { { d.value } } }, onDraft = actions.onDraftChange, onSend = sendFromComposer, onNotice = actions.onDictationNotice,
+                                    offlineModel = actions.dictationOfflineModel) else null
+                                Composer(
+                                    homeLayout = feature == null,
+                                    dictation = dictation,
+                                    // Only what the composer needs, so streamed tokens do not recompose it.
+                                    controlled = true,
+                                    typing = state.typing,
+                                    readingFiles = state.readingFiles,
+                                    uploading = state.uploads.any { it.uploading },
+                                    focusRequester = inputFocus,
+                                    onDraftChange = actions.onDraftChange,
+                                    onAttach = { sheet = ChatSheet.Attach },
+                                    onClearAttachments = actions.onClearAttachments,
+                                    onMic = actions.onOpenVoice,
+                                    onVoiceClick = openVoiceMode,
+                                    onVoiceMode = openVoiceMode,
+                                    onTextFieldFocus = { inputFocused = it },
+                                    onTextFieldBounds = { inputBounds = it },
+                                    value = state.draft,
+                                    onSend = { sendFromComposer() },
+                                    onStop = actions.onStop,
+                                    onModelClick = { sheet = ChatSheet.Model },
+                                    currentModel = state.modelLabel,
+                                    onCancelUpload = rememberUpdatedState(state.uploads).let { uploads -> remember(actions) { { uploads.value.filter { it.uploading }.forEach { actions.onCancelUpload(it.id) } } } },
+                                    onImagineOptions = { sheet = ChatSheet.Imagine },
+                                    showModelSelector = false,
+                                    placeholder = if (feature == null && taskHome) "Describe..." else "Ask Dua AI...",
+                                    sendEnabled = taskReady && state.canSend,
+                                    attachments = state.attachments,
+                                    uploads = state.uploads,
+                                    onRemoveAttachment = actions.onRemoveAttachment,
+                                    onRemoveAttachmentBackground = if (state.removeBackground) actions.onRemoveAttachmentBackground else null,
+                                    writingTools = { task -> actions.onWriting(state.draft, true, task) },
+                                    onRemoveUpload = actions.onCancelUpload,
+                                    aboveInput = if (feature != null || (!home && replyTo == null)) null else { {
+                                        androidx.compose.foundation.layout.Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        replyTo?.let { quote -> ReplyPreview(quote, onCancel = { replyTo = null }) }
+                                        // Mode selection belongs to empty Home; conversations keep their request context.
+                                        if (home) HomeModeSwitcher(if (taskHome) HomeMode.Task else HomeMode.Chat,
+                                            onSelect = onHomeMode, enabled = !state.typing)
+                                        }
+                                    } },
+                                    attachmentPopup = {
+                                        if (feature == ChatFeature.Projects) com.dua.ai.ui.projects.ProjectAttachmentMenu(sheet == ChatSheet.Attach, { sheet = null },
+                                            { actions.onPickCamera() }, { actions.onPickPhotos() }, { actions.onPickFiles() }, { actions.onOpenDestination(DuaDestination.Plugins) })
+                                    },
+                                )
+                            }
                         }
                     }
-                }
                 }
             }
+                }
             if (wideHistory && historyPanelVisible) Row(Modifier.fillMaxSize()) {
                 historyPanel(true)
                 androidx.compose.material3.VerticalDivider(color = com.dua.ai.ui.theme.DrawerTheme.colors.divider)
@@ -556,6 +556,8 @@ fun ChatScreen(
         ChatSheet.Attach -> if (feature != ChatFeature.Projects) AttachmentSheet(
             webMode = state.webMode, pageReadingAvailable = state.pageReadingAvailable,
             showModeControls = feature == null,
+            compact = !home || taskHome || feature != null,
+            onComputer = if (feature == null) ({ sheet = null; actions.onOpenDestination(DuaDestination.Computer) }) else null,
             enabled = !state.typing && !state.readingFiles,
             onCamera = { sheet = null; actions.onPickCamera() },
             onPhotos = { sheet = null; actions.onPickPhotos() },
@@ -604,6 +606,13 @@ fun ChatScreen(
     viewer?.let { (id, index) ->
         val media = state.messages.firstOrNull { it.id == id }?.media.orEmpty()
         if (media.isNotEmpty()) MediaViewer(media, index, mediaActions, state.videoAvailable, onDismiss = { viewer = null })
+    }
+
+    // Dialog state belongs to the screen, outside the header's constraint subcomposition.
+    renamingId?.let { id ->
+        state.savedChats.firstOrNull { it.id == id }?.let { chat ->
+            com.dua.ai.ui.history.RenameChatDialog(chat, actions.onRenameChat, onDismiss = { renamingId = null })
+        }
     }
 
     deletingId?.let { id ->

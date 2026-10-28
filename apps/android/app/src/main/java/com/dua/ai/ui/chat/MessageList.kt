@@ -58,8 +58,6 @@ import com.dua.ai.ui.theme.Spacing
 fun MessageList(state: ChatUiState, actions: ChatActions, listState: LazyListState, modifier: Modifier = Modifier,
     imagineActions: ImagineActions = actions.imagine, searchMessageId: String? = null,
     onReply: ((com.dua.ai.model.ChatMessage) -> Unit)? = null,
-    /** Extra bottom room so the last message can scroll clear of an overlay (floating Chat/Task toggle). */
-    bottomOverlay: androidx.compose.ui.unit.Dp = androidx.compose.ui.unit.Dp(0f),
 ) {
     // Ids present on first show (history) do not animate in; only bubbles that arrive later do.
     val initialIds = remember(state.chatId) { state.messages.map { it.id }.toHashSet() }
@@ -80,13 +78,12 @@ fun MessageList(state: ChatUiState, actions: ChatActions, listState: LazyListSta
         modifier = modifier.fillMaxSize().testTag("chat-messages"),
         contentPadding = PaddingValues(start = ChatSizes.listPaddingH, end = ChatSizes.listPaddingH,
             top = ChatSizes.listPaddingTop,
-            bottom = ChatSizes.listPaddingBottom + bottomOverlay),
+            bottom = ChatSizes.listPaddingBottom),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         itemsIndexed(state.messages, key = { _, message -> message.id }, contentType = { _, message -> if (message.isUser) "user" else "assistant" }) { index, message ->
             val selected = message.id == searchMessageId
-            Column(Modifier.padding(top = MessageGrouping.gapBefore(state.messages, index),
-                    bottom = 0.dp).widthIn(max = Sizes.contentMaxWidth).fillMaxWidth()
+            Column(Modifier.padding(top = MessageGrouping.gapBefore(state.messages, index)).widthIn(max = Sizes.contentMaxWidth).fillMaxWidth()
                 .then(if (motion) Modifier.animateItem(
                     fadeInSpec = DuaMotion.gentle(),
                     placementSpec = DuaMotion.bouncy(),
@@ -130,6 +127,7 @@ fun MessageList(state: ChatUiState, actions: ChatActions, listState: LazyListSta
                         onApproval = { approvalId, approve -> actions.onAgentApproval(message.id, approvalId, approve) },
                         onOpenWorkspaces = { actions.onOpenDestination(com.dua.ai.ui.navigation.DuaDestination.AgentWorkspaces) },
                         showActions = message.id == lastAssistantId,
+                        onMoreActions = { actionsId = message.id },
                     )
                 }
                 }

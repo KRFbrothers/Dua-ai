@@ -46,8 +46,8 @@ class ChatPolish2Test {
                 }
             }
         }
-        compose.onNodeWithText("Copy").performClick()
-        compose.onNodeWithText("Retry").performClick()
+        compose.onNodeWithContentDescription("Copy response").performClick()
+        compose.onNodeWithContentDescription("Retry").performClick()
         compose.runOnIdle { assertEquals(listOf(ChatHaptic.Tap, ChatHaptic.Tap), haptics); assertEquals(1, retries) }
     }
 }

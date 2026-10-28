@@ -75,10 +75,10 @@ class VoiceTokensTest {
                     onUpload = { events += "upload" }, onMute = { events += "mute" }, onClose = { events += "close" }), level = { 0f }, motion = false)
             }
         }
-        listOf("Camera, coming soon", "Share screen or upload, coming soon", "Microphone", "Close voice mode").forEach {
+        listOf("Take a photo", "Microphone", "Close voice mode").forEach {
             compose.onNodeWithContentDescription(it).assert(isButton).assertWidthIsAtLeast(48.dp).assertHeightIsAtLeast(48.dp).performClick()
         }
-        assertEquals(listOf("camera", "upload", "mute", "close"), events)
+        assertEquals(listOf("camera", "mute", "close"), events)
     }
     @Test fun voiceModeControlCirclesAreLabelledButtonsLight() = voiceModeTalkBack("light")
     @Test fun voiceModeControlCirclesAreLabelledButtonsDark() = voiceModeTalkBack("dark")
@@ -124,9 +124,9 @@ class VoiceTokensTest {
     @Test fun liveVoiceActiveActionsRemainLight() = live("light", true)
     @Test fun liveVoiceActiveActionsRemainDark() = live("dark", true)
 
-    @Test fun settingsUpgradeRowHasClickLabel() {
+    @Test fun settingsUsageRowHasClickLabel() {
         compose.setContent { DuaTheme(LocalPreferences(theme = "dark")) { SettingsContent(SettingsUiState(email = "a@b.c"), {}, {}) } }
-        compose.onNode(hasClickLabel("Open plans and usage limits")).assert(isButton).assertHeightIsAtLeast(48.dp)
+        compose.onNode(hasClickLabel("Usage and limits")).assert(isButton).assertHeightIsAtLeast(48.dp)
     }
 
     @Test fun computerBackIsALabelledButton() {

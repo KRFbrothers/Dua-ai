@@ -46,7 +46,7 @@ class HomeComposerPolishUiTest(private val dark: Boolean, private val largeText:
             CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, if (largeText) 2f else 1f)) {
                 DuaTheme(LocalPreferences(theme = if (dark) "dark" else "light")) {
                     Box(Modifier.requiredSize(320.dp, 650.dp).background(ChatTheme.colors.background), contentAlignment = Alignment.BottomCenter) {
-                        Composer(homeLayout = true, homePill = true, controlled = true, showModelSelector = false,
+                        Composer(homeLayout = true, controlled = true, showModelSelector = false,
                             placeholder = placeholder.value, onAttach = { attachments++ },
                             onMic = { mic++ }, onVoiceMode = { live++ })
                     }
@@ -84,7 +84,7 @@ class HomeComposerPolishUiTest(private val dark: Boolean, private val largeText:
         file.parentFile!!.mkdirs(); compose.onRoot().captureRoboImage(file.absolutePath)
     }
 
-    @Test fun pillKeepsWhitespaceOnVoiceAndRetainsRejectedDraftUntilOwnerClearsIt() {
+    @Test fun composerKeepsWhitespaceOnVoiceAndRetainsRejectedDraftUntilOwnerClearsIt() {
         val draft = mutableStateOf("")
         var live = 0
         val sent = mutableListOf<String>()
@@ -92,7 +92,7 @@ class HomeComposerPolishUiTest(private val dark: Boolean, private val largeText:
             CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, if (largeText) 2f else 1f)) {
                 DuaTheme(LocalPreferences(theme = if (dark) "dark" else "light")) {
                     Box(Modifier.requiredSize(320.dp, 650.dp), contentAlignment = Alignment.BottomCenter) {
-                        Composer(homeLayout = true, homePill = true, controlled = true,
+                        Composer(homeLayout = true, controlled = true,
                             value = draft.value, onDraftChange = { draft.value = it },
                             onSend = { sent += it }, onVoiceMode = { live++ })
                     }
@@ -125,7 +125,7 @@ class HomeComposerPolishUiTest(private val dark: Boolean, private val largeText:
             CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, if (largeText) 2f else 1f)) {
                 DuaTheme(LocalPreferences(theme = if (dark) "dark" else "light")) {
                     Box(Modifier.requiredSize(width.value, 650.dp).background(ChatTheme.colors.background), contentAlignment = Alignment.BottomCenter) {
-                        Composer(homeLayout = true, homePill = true, controlled = true, showModelSelector = false,
+                        Composer(homeLayout = true, controlled = true, showModelSelector = false,
                             value = draft.value, onDraftChange = { draft.value = it }, onSend = { sent = it; draft.value = "" })
                     }
                 }
@@ -167,7 +167,7 @@ class HomeComposerPolishUiTest(private val dark: Boolean, private val largeText:
             CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, if (largeText) 2f else 1f)) {
                 DuaTheme(LocalPreferences(theme = if (dark) "dark" else "light")) {
                     Box(Modifier.requiredSize(width.value, 650.dp), contentAlignment = Alignment.BottomCenter) {
-                        Composer(homeLayout = true, homePill = true, controlled = true, showModelSelector = false,
+                        Composer(homeLayout = true, controlled = true, showModelSelector = false,
                             value = draft.value, onDraftChange = { draft.value = it })
                     }
                 }

@@ -1,5 +1,6 @@
 package com.dua.ai.ui.voice
 
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertWidthIsAtLeast
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -25,7 +26,7 @@ class VoiceModeContentTest {
     private val callbacks = VoiceModeCallbacks(
         onOrb = { events += "orb" }, onMute = { events += "mute" }, onClose = { events += "close" },
         onCaptions = { events += "captions:$it" }, onCamera = { events += "camera" }, onUpload = { events += "upload" },
-        onFeedback = { events += "feedback:$it" }, onCopy = { events += "copy" }, onShare = { events += "share" },
+        onPhotos = { events += "photos" }, onFeedback = { events += "feedback:$it" }, onCopy = { events += "copy" }, onShare = { events += "share" },
         onAllowMic = { events += "allow" }, onOpenSettings = { events += "settings" },
     )
 
@@ -43,13 +44,21 @@ class VoiceModeContentTest {
     @Test fun controlsCallBackAndKeepTouchTargets() {
         show(VoiceModeUi(phase = VoicePhase.Listening, firstName = "Fareed"))
         compose.onNodeWithText("Hi Fareed, what's on your mind?").assertExists()
-        listOf("Camera, coming soon" to "camera", "Share screen or upload, coming soon" to "upload", "Listening. Tap to pause" to "orb",
+        listOf("Take a photo" to "camera", "Listening. Tap to pause" to "orb",
             "Microphone" to "mute", "Close voice mode" to "close").forEach { (label, event) ->
             compose.onNodeWithContentDescription(label).assertWidthIsAtLeast(48.dp).assertHeightIsAtLeast(48.dp).performClick()
             assertEquals(event, events.last())
         }
         compose.onNodeWithContentDescription("Captions").performClick()
         assertEquals("captions:false", events.last())
+    }
+
+    @Test fun attachmentMenuUsesPhotosAndShowsScreenSharingAsUnavailable() {
+        show(VoiceModeUi())
+        compose.onNodeWithContentDescription("Add to voice conversation").performClick()
+        compose.onNodeWithText("Share screen").assertIsNotEnabled()
+        compose.onNodeWithText("Photos").performClick()
+        assertEquals(listOf("photos"), events)
     }
 
     @Test fun captionsShowReplyAndActions() {

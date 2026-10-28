@@ -26,6 +26,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import kotlinx.coroutines.launch
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.*
@@ -123,10 +124,11 @@ fun HistoryDrawer(
     permanent: Boolean = false,
 ) {
     val colors = DrawerTheme.colors
+    val scope = rememberCoroutineScope()
     val motionAllowed = rememberMotionAllowed()
     val focusManager = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
-    var auraExpanded by rememberSaveable { mutableStateOf(false) }
+    var moreExpanded by rememberSaveable { mutableStateOf(false) }
     var searching by rememberSaveable { mutableStateOf(false) }
     var query by rememberSaveable { mutableStateOf("") }
     var pinnedOnly by rememberSaveable { mutableStateOf(false) }
@@ -166,6 +168,9 @@ fun HistoryDrawer(
                     Icon(if (searching) Icons.Outlined.Close else ReferenceIcons.Search,
                         contentDescription = if (searching) "Close chat search" else "Search chats", tint = colors.searchIcon)
                 }
+                if (!permanent) IconButton(onClick = { scope.launch { drawerState.close() } }, modifier = Modifier.size(DrawerSizes.touch)) {
+                    Icon(Icons.Outlined.Close, "Close chat history", tint = colors.searchIcon)
+                }
             }
             AnimatedVisibility(searching,
                 enter = expandVertically(animationSpec = if (motionAllowed) DuaMotion.gentle() else snap()) + fadeIn(animationSpec = if (motionAllowed) DuaMotion.gentle() else snap()),
@@ -177,27 +182,30 @@ fun HistoryDrawer(
             Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(if (searching) searchScroll else browseScroll).testTag("drawer-body")) {
                 if (!searching) {
                     Spacer(Modifier.height(DrawerSizes.menuPaddingV))
+                    DrawerMenuRow(ReferenceIcons.Chat, "New chat", enabled = newChatEnabled,
+                        selected = currentChatId.isNullOrBlank(), modifier = Modifier.testTag("drawer-new-chat")
+                            .semantics { contentDescription = "Start a new chat" }, onClick = onNewChat)
                     DrawerMenuRow(Icons.Outlined.GridView, "Library") { onDestination(DuaDestination.Library) }
-                    DrawerMenuRow(Icons.Outlined.DesktopWindows, "Computer") { onDestination(DuaDestination.Computer) }
-                    DrawerMenuRow(ReferenceIcons.Plugins, "Plugins") { onDestination(DuaDestination.Plugins) }
-                    DrawerMenuRow(Icons.Outlined.SmartToy, "AI Agent") { onDestination(DuaDestination.Agent) }
                     DrawerMenuRow(ReferenceIcons.Images, "Images") { onDestination(DuaDestination.Images) }
-                    DrawerMenuRow(ReferenceIcons.Projects, "Projects", onProjects)
+                    DrawerMenuRow(ReferenceIcons.Projects, "Projects", onClick = onProjects)
                     Row(Modifier.fillMaxWidth().heightIn(min = DrawerSizes.touch).clip(DrawerShapes.row)
-                        .clickable(role = Role.Button, onClickLabel = if (auraExpanded) "Collapse Aura" else "Expand Aura") { auraExpanded = !auraExpanded }
-                        .semantics { stateDescription = if (auraExpanded) "Expanded" else "Collapsed" }
+                        .clickable(role = Role.Button, onClickLabel = if (moreExpanded) "Collapse More" else "Expand More") { moreExpanded = !moreExpanded }
+                        .semantics { stateDescription = if (moreExpanded) "Expanded" else "Collapsed" }
                         .padding(horizontal = DrawerSizes.actionPaddingH, vertical = DrawerSizes.menuPaddingV),
                         verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Outlined.PhotoCamera, null, tint = colors.menuText, modifier = Modifier.size(DrawerSizes.menuIcon))
+                        Icon(Icons.Outlined.MoreHoriz, null, tint = colors.menuText, modifier = Modifier.size(DrawerSizes.menuIcon))
                         Spacer(Modifier.width(DrawerSizes.menuGap))
-                        Text("Aura", style = DrawerMenuStyle, color = colors.menuText, modifier = Modifier.weight(1f))
-                        Icon(if (auraExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown, null,
+                        Text("More", style = DrawerMenuStyle, color = colors.menuText, modifier = Modifier.weight(1f))
+                        Icon(if (moreExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown, null,
                             tint = colors.chevron, modifier = Modifier.size(DrawerSizes.chevron))
                     }
-                    AnimatedVisibility(auraExpanded,
+                    AnimatedVisibility(moreExpanded,
                         enter = expandVertically(animationSpec = if (motionAllowed) DuaMotion.gentle() else snap()) + fadeIn(animationSpec = if (motionAllowed) DuaMotion.gentle() else snap()),
                         exit = shrinkVertically(animationSpec = if (motionAllowed) DuaMotion.gentle() else snap()) + fadeOut(animationSpec = if (motionAllowed) DuaMotion.gentle() else snap())) {
                         Column(Modifier.fillMaxWidth().padding(start = DrawerSizes.subIndent)) {
+                            DrawerSubRow(Icons.Outlined.DesktopWindows, "Computer") { onDestination(DuaDestination.Computer) }
+                            DrawerSubRow(ReferenceIcons.Plugins, "Plugins") { onDestination(DuaDestination.Plugins) }
+                            DrawerSubRow(Icons.Outlined.SmartToy, "AI Agent") { onDestination(DuaDestination.Agent) }
                             DrawerSubRow(ReferenceIcons.Work, "Work") { onDestination(DuaDestination.Work) }
                         }
                     }
@@ -250,45 +258,29 @@ fun HistoryDrawer(
                 notice?.let { Text(it, style = DrawerChatStyle, color = colors.subText, modifier = Modifier.padding(vertical = DrawerSizes.chatPaddingV)) }
             }
             Row(Modifier.fillMaxWidth().padding(top = DrawerSizes.dockTop).testTag("drawer-bottom-actions"),
-                horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onNewChat, enabled = newChatEnabled,
-                    modifier = Modifier.size(DrawerSizes.touch).testTag("drawer-new-chat")) {
-                    Icon(ReferenceIcons.Chat, "Start a new chat", tint = colors.menuText, modifier = Modifier.size(DrawerSizes.menuIcon))
-                }
-                IconButton(onClick = onOpenSettings, modifier = Modifier.size(DrawerSizes.touch).testTag("drawer-profile")
-                    .semantics { contentDescription = "Open drawer profile and settings" }) {
+                verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.weight(1f).heightIn(min = DrawerSizes.touch).testTag("drawer-profile")
+                    .clickable(role = Role.Button, onClick = onOpenSettings)
+                    .semantics(mergeDescendants = true) { contentDescription = "Open drawer profile and settings" },
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(DrawerSizes.menuGap)) {
                     val density = LocalDensity.current
                     CompositionLocalProvider(LocalDensity provides Density(density.density, 1f)) {
                         AccountAvatar(email = null, displayName = profileName, avatarUrl = profilePhotoUrl,
                             size = DrawerSizes.avatar, tag = "drawer-account-avatar")
                     }
+                    Text(profileName.ifBlank { "Your account" }, style = DrawerChatStyle, color = colors.chatText,
+                        maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                }
+                IconButton(onClick = onOpenSettings, modifier = Modifier.size(DrawerSizes.touch)) {
+                    Icon(Icons.Outlined.Settings, "Open settings", tint = colors.menuText)
                 }
             }
         }
     }
 
-    renaming?.let { chat ->
-        var title by remember(chat.id) { mutableStateOf(chat.title) }
-        var error by remember(chat.id) { mutableStateOf<String?>(null) }
-        DuaDialog(
-            onDismissRequest = { renaming = null },
-            title = "Rename chat",
-            text = {
-                OutlinedTextField(title, { title = it; error = null }, singleLine = true, label = { Text("Title") }, shape = SheetShapes.badge,
-                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = SheetTheme.colors.accent, focusedLabelColor = SheetTheme.colors.accent,
-                        cursorColor = SheetTheme.colors.accent, unfocusedBorderColor = SheetTheme.colors.divider,
-                        focusedTextColor = SheetTheme.colors.text, unfocusedTextColor = SheetTheme.colors.text),
-                    isError = error != null, supportingText = error?.let { { Text(it) } }, modifier = Modifier.testTag("rename-field"))
-            },
-            confirmButton = {
-                SheetTextButton("Save", {
-                    val result = onRenameChat(chat.id, title.trim())
-                    if (result == null) renaming = null else error = result
-                }, enabled = title.isNotBlank())
-            },
-            dismissButton = { SheetTextButton("Cancel", { renaming = null }) },
-        )
-    }
+    renaming?.let { chat -> RenameChatDialog(chat, onRenameChat, onDismiss = { renaming = null }) }
+
 }
 
 @Composable
@@ -323,11 +315,14 @@ private fun ChatRow(chat: SavedChat, current: Boolean, serverDeletion: Boolean, 
 }
 
 @Composable
-private fun DrawerMenuRow(icon: ImageVector, label: String, onClick: () -> Unit) {
+private fun DrawerMenuRow(icon: ImageVector, label: String, modifier: Modifier = Modifier,
+    selected: Boolean = false, enabled: Boolean = true, onClick: () -> Unit) {
     val colors = DrawerTheme.colors
     Row(
-        Modifier.fillMaxWidth().heightIn(min = DrawerSizes.touch).clip(DrawerShapes.row)
-            .clickable(role = Role.Button, onClick = onClick).padding(horizontal = DrawerSizes.actionPaddingH, vertical = DrawerSizes.menuPaddingV),
+        modifier.fillMaxWidth().heightIn(min = DrawerSizes.touch).clip(DrawerShapes.row)
+            .background(if (selected) ChatTheme.colors.userBubble else androidx.compose.ui.graphics.Color.Transparent)
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .padding(horizontal = DrawerSizes.actionPaddingH, vertical = DrawerSizes.menuPaddingV),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(DrawerSizes.menuGap),
     ) {
         Icon(icon, null, tint = colors.menuText, modifier = Modifier.size(DrawerSizes.menuIcon))
@@ -436,4 +431,58 @@ private fun HistorySheet(permanent: Boolean, drawerState: DrawerState, container
         androidx.compose.material3.PermanentDrawerSheet(modifier = panel, drawerShape = shape, drawerContainerColor = container, content = content)
     }
     else ModalDrawerSheet(drawerState = drawerState, drawerShape = shape, drawerContainerColor = container, modifier = panel, content = content)
+}
+
+/** Shared rename dialog: the active chat identity and validation stay with the caller. */
+@Composable
+internal fun RenameChatDialog(chat: SavedChat, onRenameChat: (String, String) -> String?, onDismiss: () -> Unit) {
+        var title by remember(chat.id) { mutableStateOf(chat.title) }
+        var error by remember(chat.id) { mutableStateOf<String?>(null) }
+        DuaDialog(
+            onDismissRequest = { onDismiss() },
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
+            modifier = Modifier.padding(horizontal = Spacing.lg).widthIn(max = SheetSizes.dialogMaxWidth).fillMaxWidth(),
+            title = "Rename chat",
+            text = {
+                OutlinedTextField(title, { title = it; error = null }, singleLine = true, label = { Text("Title") }, shape = SheetShapes.badge,
+                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = SheetTheme.colors.accent, focusedLabelColor = SheetTheme.colors.accent,
+                        cursorColor = SheetTheme.colors.accent, unfocusedBorderColor = SheetTheme.colors.divider,
+                        focusedTextColor = SheetTheme.colors.text, unfocusedTextColor = SheetTheme.colors.text),
+                    isError = error != null, supportingText = error?.let { { Text(it) } }, modifier = Modifier.fillMaxWidth().testTag("rename-field")
+                        .semantics { contentDescription = "Chat title" })
+
+            },
+            confirmButton = {
+                SheetTextButton("Save", {
+                    val result = onRenameChat(chat.id, title.trim())
+                    if (result == null) onDismiss() else error = result
+                }, enabled = title.isNotBlank())
+            },
+            dismissButton = { SheetTextButton("Cancel", { onDismiss() }) },
+        )
+}
+
+/** Header options reuse the same chat actions and rename dialog as the history list. */
+@Composable
+internal fun ChatOptionsButton(chat: SavedChat, pinEnabled: Boolean, serverDeletion: Boolean,
+    onRename: () -> Unit, onPinChat: (String, Boolean) -> String?, onDelete: () -> Unit) {
+    var expanded by remember(chat.id) { mutableStateOf(false) }
+    var notice by remember(chat.id) { mutableStateOf<String?>(null) }
+    Box {
+        IconButton(onClick = { expanded = true }, modifier = Modifier.size(DrawerSizes.touch)) {
+            Icon(Icons.Outlined.MoreHoriz, "Chat options", tint = ChatTheme.colors.text)
+        }
+        // Dispose the popup before opening a dialog, so two focus-owning windows
+        // cannot coexist during the menu's exit transition.
+        if (expanded) com.dua.ai.ui.chat.DuaDropdownMenu(true, onDismissRequest = { expanded = false }) {
+            if (pinEnabled) com.dua.ai.ui.chat.DuaDropdownItem(if (chat.pinned) "Unpin" else "Pin",
+                icon = Icons.Outlined.PushPin, onClick = { expanded = false; notice = onPinChat(chat.id, !chat.pinned) })
+            com.dua.ai.ui.chat.DuaDropdownItem("Rename", icon = Icons.Outlined.Edit,
+                onClick = { expanded = false; onRename() })
+            com.dua.ai.ui.chat.DuaDropdownItem(if (serverDeletion) "Delete chat" else "Remove cached chat",
+                icon = Icons.Outlined.Delete, onClick = { expanded = false; onDelete() })
+        }
+    }
+    notice?.let { message -> DuaDialog(onDismissRequest = { notice = null }, title = "Chat options",
+        text = { Text(message) }, confirmButton = { SheetTextButton("Close", { notice = null }) }) }
 }

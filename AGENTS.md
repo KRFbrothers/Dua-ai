@@ -41,7 +41,7 @@ Do not edit, delete, or move these paths unless explicitly instructed by the own
 ### 2.3 Strict Brand Ownership (`KRFbrothers / Dua AI`)
 
 - Never introduce third-party competitor logos, brand names, or proprietary font files as Dua AI branding. All UI branding, components, and user-facing copy must maintain the KRFbrothers / Dua AI identity.
-- Preserve Dua's original calligraphy artwork (`DuaCalligraphyLogo` in `ui/components/DuaBrandLogos.kt`) and existing `DuaTheme` color scheme unless explicitly asked to change them. Home shell ownership is documented in `docs/ui/LEGACY_CHAT_SHELL.md`.
+- Preserve Dua's original calligraphy artwork (`DuaCalligraphyLogo` in `ui/components/DuaBrandLogos.kt`) and existing `DuaTheme` color scheme unless explicitly asked to change them. The single chat shell ownership is documented in `docs/ui/LEGACY_CHAT_SHELL.md`.
 
 ### 2.4 Evidence-Only Reporting (Zero Guessing / Zero Hallucinated Fixes)
 
@@ -114,6 +114,6 @@ Run checks appropriate to the changed code using declared dependencies and suppo
 
 - Node.js API: `cd apps/api && npm test`
 - Python engine: `cd apps/ai-engine && python -m pytest -q tests`
-- Android, from the repository root: `bash apps/android/gradlew -p apps/android :app:testDebugUnitTest`
+- Android, from the repository root: `bash apps/android/gradlew -p apps/android :app:testDebugUnitTest -Pdua.ui-record`
 
 Report only commands actually executed and their observed results. Explain any checks that could not run; never present blocked or unexecuted checks as passing.

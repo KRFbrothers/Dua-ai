@@ -8,6 +8,9 @@ import com.dua.ai.model.PromptSuggestion
 import com.dua.ai.setup.IntegrationCapabilities
 import com.dua.ai.setup.ProviderCapability
 
+/** Home destinations used by the single production chat screen. */
+enum class HomeTab(val label: String) { Chat("Chat"), Work("Work") }
+
 enum class ChatFeature(val title: String) {
     Agent("AI Agent"), Computer("Computer"), Images("Images"), Library("Library"), Projects("Projects"), Plugins("Plugins")
 }

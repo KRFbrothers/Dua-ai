@@ -1,5 +1,9 @@
 # Android UI audit status
 
+Historical audit below. The owner-approved 2026-10-28 UI replacement supersedes
+the archived-Home decision; see [current shell ownership](LEGACY_CHAT_SHELL.md).
+Current replacement validation is recorded in `tasks/todo.md`.
+
 Checked on 2026-10-26 against main
 `9514a1863906f0cb8abc957c860811db647371ba` (through PR453). Since PR446 the
 following were merged: PR447 (owner-requested removal of the archived parallel

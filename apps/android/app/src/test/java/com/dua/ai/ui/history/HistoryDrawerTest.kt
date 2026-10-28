@@ -27,7 +27,7 @@ class HistoryDrawerTest {
 
     @Test fun showsReferenceStructureWithRealChatsAndNoSamples() {
         compose.setContent { DuaTheme(LocalPreferences()) { HistoryDrawer(chats = chats) } }
-        for (t in listOf("Dua AI", "Images", "Library", "Projects", "Computer", "AI Agent", "Aura", "Alpha roadmap", "Beta plugin", "Pinned note"))
+        for (t in listOf("Dua AI", "Images", "Library", "Projects", "More", "Alpha roadmap", "Beta plugin", "Pinned note"))
             compose.onNodeWithText(t).assertExists()
         compose.onNodeWithContentDescription("Start a new chat").assertExists()
         compose.onNodeWithText("Replace Dua").assertDoesNotExist()
@@ -38,20 +38,20 @@ class HistoryDrawerTest {
         }
     }
 
-    @Test fun everyDestinationIsReachableAndAuraExpands() {
+    @Test fun everyDestinationIsReachableAndMoreExpands() {
         val opened = mutableListOf<DuaDestination>(); var projects = 0
         compose.setContent { DuaTheme(LocalPreferences(theme = "dark")) { HistoryDrawer(onDestination = { opened += it }, onProjects = { projects++ }) } }
-        compose.onNodeWithText("Plugins").assertExists() // Direct destination in the reference drawer.
+        compose.onNodeWithText("Plugins").assertDoesNotExist()
         compose.onNodeWithText("Work").assertDoesNotExist()
-        compose.onNodeWithText("Aura").performClick()
+        compose.onNodeWithText("More").performScrollTo().performClick()
         for (t in listOf("Images", "Library", "Computer", "AI Agent", "Plugins", "Work")) compose.onNodeWithText(t).performScrollTo().performClick()
-        compose.onNodeWithText("Projects").performClick()
+        compose.onNodeWithText("Projects").performScrollTo().performClick()
         compose.runOnIdle {
             assertEquals(listOf(DuaDestination.Images, DuaDestination.Library, DuaDestination.Computer, DuaDestination.Agent, DuaDestination.Plugins, DuaDestination.Work), opened)
             assertEquals(1, projects)
         }
-        compose.onNodeWithText("Aura").performClick()
-        compose.onNodeWithText("Plugins").assertExists()
+        compose.onNodeWithText("More").performScrollTo().performClick()
+        compose.onNodeWithText("Plugins").assertDoesNotExist()
         compose.onNodeWithText("Work").assertDoesNotExist()
     }
 
@@ -60,8 +60,8 @@ class HistoryDrawerTest {
         compose.setContent { DuaTheme(LocalPreferences()) {
             HistoryDrawer(chats = chats, onSelectChat = { selected = it }, onNewChat = { newChats++ })
         } }
-        compose.onNodeWithText("Beta plugin").performClick()
-        compose.onNodeWithTag("drawer-new-chat").performClick()
+        compose.onNodeWithText("Beta plugin").performScrollTo().performClick()
+        compose.onNodeWithTag("drawer-new-chat").performScrollTo().performClick()
         compose.onNodeWithContentDescription("Profile & Settings").assertDoesNotExist()
         compose.onNodeWithContentDescription("Voice").assertDoesNotExist()
         compose.onNodeWithContentDescription("Voice mode").assertDoesNotExist()
@@ -105,10 +105,11 @@ class HistoryDrawerTest {
         compose.runOnIdle { assertEquals("c", deleted) }
     }
 
-    @Test fun longPressOffersRename() {
+    @Test fun longPressRenamesTheSelectedChat() {
         longPress("Beta plugin")
-        // The rename dialog's text field never reports idle under Robolectric, so only the entry point is checked here.
-        compose.onNodeWithText("Rename", useUnmergedTree = true).assertExists()
-        assertNull(renamed)
+        compose.onNodeWithText("Rename", useUnmergedTree = true).performClick()
+        compose.onNodeWithTag("rename-field").performTextReplacement("Updated beta")
+        compose.onNodeWithText("Save").performClick()
+        assertEquals("b" to "Updated beta", renamed)
     }
 }

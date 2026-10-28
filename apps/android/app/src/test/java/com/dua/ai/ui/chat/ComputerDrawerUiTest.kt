@@ -58,7 +58,7 @@ class ComputerDrawerUiTest(private val dark: Boolean, private val small: Boolean
         val drawer = compose.onNodeWithTag("history-drawer").fetchSemanticsNode().boundsInRoot
         val voice = compose.onNodeWithContentDescription("Voice mode").fetchSemanticsNode().boundsInRoot
         val root = compose.onRoot().fetchSemanticsNode().boundsInRoot
-        assertEquals(if (small) 248f else 277f, drawer.width, .5f)
+        assertEquals(root.width - 24f - 48f, drawer.width, .5f)
         assertTrue("Drawer overlaps Voice target: $drawer / $voice", drawer.right <= voice.left + .5f)
         assertTrue("Drawer must leave a dismiss scrim", root.right - drawer.right >= 48f)
         for (control in listOf(voice)) {
@@ -86,14 +86,15 @@ class ComputerDrawerUiTest(private val dark: Boolean, private val small: Boolean
         compose.onNodeWithContentDescription("Open drawer profile and settings").assertIsDisplayed().performClick()
         compose.onNodeWithTag("history-drawer").assertIsNotDisplayed()
         compose.onNodeWithContentDescription("Open chat history").performClick()
+        compose.onNodeWithText("More").performScrollTo().performClick()
         compose.onNodeWithText("Computer").performScrollTo().performClick()
         compose.runOnIdle { assertEquals(listOf(DuaDestination.Computer), opened); assertEquals(0, newChats); assertEquals(1, settings) }
     }
 
-    @Test fun expandedAuraUsesTheSameTextStyleAndColorAsMainRows() {
+    @Test fun expandedMoreUsesTheSameTextStyleAndColorAsMainRows() {
         show { ChatScreen(ChatUiState(), ChatActions(), initialDrawerValue = DrawerValue.Open) }
         val main = textLayout("Images").layoutInput.style
-        compose.onNodeWithText("Aura").performScrollTo().performClick()
+        compose.onNodeWithText("More").performScrollTo().performClick()
         for (label in listOf("Plugins", "Work")) {
             compose.onNode(hasText(label) and hasAnyAncestor(hasTestTag("history-drawer"))).performScrollTo()
             val style = textLayout(label, inDrawer = true).layoutInput.style
@@ -101,7 +102,7 @@ class ComputerDrawerUiTest(private val dark: Boolean, private val small: Boolean
             assertEquals(main.fontWeight, style.fontWeight)
             assertEquals(main.color, style.color)
         }
-        capture("computer-drawer-aura")
+        capture("computer-drawer-more")
     }
 
     @Test fun conversationsKeepFindAndTheExistingNewChatAction() {

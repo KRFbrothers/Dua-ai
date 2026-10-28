@@ -4,9 +4,6 @@ import android.graphics.BitmapFactory
 import android.provider.Settings
 import android.view.ViewGroup
 import androidx.activity.ComponentActivity
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.LocalDensity
@@ -42,14 +39,11 @@ class HomeGradientUiTest(private val dark: Boolean, private val large: Boolean) 
     }
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
 
-    private var surface = Color.Unspecified
-
     private fun show(state: androidx.compose.runtime.State<ChatUiState>, actions: ChatActions = ChatActions()) {
         WindowCompat.setDecorFitsSystemWindows(compose.activity.window, false)
         compose.setContent {
             CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, if (large) 2f else 1f)) {
                 DuaTheme(LocalPreferences(theme = if (dark) "dark" else "light")) {
-                    surface = MaterialTheme.colorScheme.surface
                     ChatScreen(state.value, actions)
                 }
             }
@@ -80,18 +74,14 @@ class HomeGradientUiTest(private val dark: Boolean, private val large: Boolean) 
         val state = mutableStateOf(ChatUiState(profileName = "Fareed Ansari"))
         show(state)
         compose.onNodeWithTag("home-hero").assertExists(); compose.onNodeWithContentDescription("Dua AI").assertExists()
-        compose.onNodeWithText("Your AI, always with you").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Hi Fareed, what's on your mind?").performScrollTo().assertIsDisplayed()
         compose.onNodeWithContentDescription("Dua AI").assertExists()
         compose.onNodeWithTag("home-gradient").assertExists()
         val imageFile = capture("chat")
         val pixels = if (imageFile.length() > 0) BitmapFactory.decodeFile(imageFile.absolutePath) else null
         if (pixels != null) {
             try {
-                assertEquals(surface.toArgb(), pixels.getPixel(2, 2))
-                // Stay inside the canvas, away from drawer and composer shadows at its edges.
-                for (y in listOf(pixels.height / 4, pixels.height / 2, pixels.height * 3 / 4)) {
-                    assertEquals("Home canvas must stay flat below its header", surface.toArgb(), pixels.getPixel(16, y))
-                }
+                assertNotEquals("Home must draw the wash below its clear header", pixels.getPixel(2, 2), pixels.getPixel(2, pixels.height - 2))
             } finally { pixels.recycle() }
         }
         compose.runOnIdle { state.value = state.value.copy(profileName = "Amina Khan") }
@@ -147,12 +137,12 @@ class HomeGradientUiTest(private val dark: Boolean, private val large: Boolean) 
         dispatchKeyboard(280)
         val surface = compose.onNodeWithTag("home-gradient").fetchSemanticsNode().boundsInRoot
         val bar = compose.onNodeWithTag("composer-container").fetchSemanticsNode().boundsInRoot
-        assertEquals("The Home surface must end at the keyboard", closedSurface.bottom - 280f, surface.bottom, 2f)
+        assertEquals("The gradient must end at the keyboard", closedSurface.bottom - 280f, surface.bottom, 2f)
         assertEquals("IME inset must be applied once", closedBar.bottom - 280f, bar.bottom, 2f)
         assertTrue(bar.bottom <= surface.bottom)
-        assertTrue("The keyboard opens more horizontal writing room", bar.width > closedBar.width)
+        assertEquals("Composer keeps its horizontal margins", closedBar.width, bar.width, 1f)
         assertEquals("The wider composer remains centered", closedBar.center.x, bar.center.x, 1f)
-        if (!large) assertTrue("The inline keyboard composer leaves more room for content", bar.height < closedBar.height)
+        if (!large) assertEquals("Composer keeps its stable control height", closedBar.height, bar.height, 1f)
         assertEquals("Keyboard changes must not recreate the input", inputId, compose.onNodeWithContentDescription("Message").fetchSemanticsNode().id)
         compose.onNodeWithContentDescription("Dua AI").assertWidthIsEqualTo(HomeSizes.heroCompactLogo)
         val tabs = compose.onNode(hasText("Chat") and isSelectable()).assertIsDisplayed().fetchSemanticsNode().boundsInRoot
@@ -220,7 +210,7 @@ class HomeGradientUiTest(private val dark: Boolean, private val large: Boolean) 
                 val y = (chatPixels.height * .95f).toInt()
                 // mdpi: just inside the chat pane, right of the permanent history panel and its 1 dp divider.
                 val x = com.dua.ai.ui.theme.DrawerSizes.width.value.toInt() + 3
-                assertEquals("Chat and Task must keep the same flat Home surface",
+                assertNotEquals("Task must switch the blue wash to violet with motion disabled",
                     chatPixels.getPixel(x, y), taskPixels.getPixel(x, y))
             } finally { chatPixels.recycle(); taskPixels.recycle() }
         } finally { Settings.Global.putFloat(resolver, Settings.Global.ANIMATOR_DURATION_SCALE, previous) }
@@ -285,14 +275,13 @@ class HomeGradientUiTest(private val dark: Boolean, private val large: Boolean) 
         assertEquals(listOf(ChatHaptic.Tap, ChatHaptic.Tap), haptics)
     }
 
-    @Test fun logoStaysAtTheSameSpotWhenTogglingChatAndTask() {
+    @Test fun chatAndTaskKeepTheSameLogoArtworkAndSize() {
         show(mutableStateOf(ChatUiState(profileName = "Fareed", agentAvailable = true)))
         val chatLogo = compose.onNodeWithContentDescription("Dua AI").fetchSemanticsNode().boundsInRoot
         compose.onNode(hasText("Task") and isSelectable()).performClick().assertIsSelected()
         compose.waitForIdle()
         val taskLogo = compose.onNodeWithContentDescription("Dua AI").fetchSemanticsNode().boundsInRoot
-        // At 2x font the top bar and composer themselves grow differently per mode, so allow a small drift there.
-        assertEquals("logo must not jump: $chatLogo vs $taskLogo", chatLogo.top, taskLogo.top, if (large) 12f else 1f)
+        compose.onNodeWithText("What can I tackle for you?").assertExists()
         assertEquals(chatLogo.left, taskLogo.left, 1f)
         assertEquals(chatLogo.width, taskLogo.width, 0.5f)
         compose.onNode(hasText("Chat") and isSelectable()).performClick()
@@ -322,20 +311,12 @@ class HomeGradientUiTest(private val dark: Boolean, private val large: Boolean) 
         capture("landscape-task")
     }
 
-    @Test fun conversationToggleFloatsTransparentlyOverMessagesAndStillSwitches() {
+    @Test fun conversationKeepsMessagesClearOfHomeModeControls() {
         val messages = (1..30).map { ChatMessage(text = "Message number $it with some longer text to fill the row", isUser = it % 2 == 0) }
-        val state = mutableStateOf(ChatUiState(profileName = "Fareed", agentAvailable = true, messages = messages))
-        show(state)
-        val list = compose.onNodeWithTag("chat-messages").fetchSemanticsNode().boundsInRoot
-        val toggle = compose.onNodeWithTag("home-mode-switcher").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
-        assertTrue("toggle $toggle must sit over the message list $list", toggle.top >= list.top && toggle.bottom <= list.bottom + 1f)
-        val composer = compose.onNodeWithTag("composer-container").fetchSemanticsNode().boundsInRoot
-        assertTrue(toggle.bottom <= composer.top + 1f)
-        for (tab in listOf("Chat", "Task")) compose.onNode(hasText(tab) and isSelectable())
-            .assertWidthIsAtLeast(48.dp).assertHeightIsAtLeast(48.dp)
-        capture("conversation-toggle")
-        compose.onNode(hasText("Task") and isSelectable()).performClick().assertIsSelected()
-        val colors = if (dark) com.dua.ai.ui.theme.HomeDarkColors else com.dua.ai.ui.theme.HomeLightColors
-        assertTrue("floating pill must be translucent", colors.segmentFloatSelected.alpha < 1f)
+        show(mutableStateOf(ChatUiState(agentAvailable = true, messages = messages)))
+        compose.onNodeWithTag("chat-messages").assertIsDisplayed()
+        compose.onNodeWithTag("home-mode-switcher").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Message").assertIsDisplayed()
+        capture("conversation")
     }
 }

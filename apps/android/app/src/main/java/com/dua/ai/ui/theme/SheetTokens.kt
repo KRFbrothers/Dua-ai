@@ -38,8 +38,8 @@ object SheetSizes {
     val rowPaddingH = 16.dp
     val rowPaddingV = 12.dp
     val rowMin = 56.dp
-    val tileMin = 88.dp
-    val attachmentTileWidth = 100.dp
+    val tileMin = 96.dp
+    val attachmentTileWidth = 112.dp
     val tileIcon = 24.dp
     val tileGap = 10.dp
     val badge = 40.dp

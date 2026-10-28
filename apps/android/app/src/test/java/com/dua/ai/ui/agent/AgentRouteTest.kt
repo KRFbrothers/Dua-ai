@@ -105,6 +105,7 @@ class AgentRouteTest {
         selectedFiles.value = listOf(file)
         show(home = true)
         compose.onNodeWithContentDescription("Add photos and files").performClick()
+        compose.onNodeWithText("Tools").performScrollTo().performClick()
         compose.onNodeWithText("Agent", substring = false).performScrollTo().performClick()
         assertTrue("Agent available=${model.agentAvailable.value}, typing=${model.isTyping.value}", model.agent.value)
         assertEquals(previous.id, model.activeChatId.value)
@@ -153,6 +154,7 @@ class AgentRouteTest {
     @Test fun homeChatEntersAgentAndRestoresThePreviousConversationFromHistory() {
         show(home = true)
         compose.onNodeWithContentDescription("Add photos and files").performClick()
+        compose.onNodeWithText("Tools").performScrollTo().performClick()
         compose.onNodeWithText("Agent", substring = false).performScrollTo().performClick()
         assertTrue(model.agent.value)
         assertEquals(previous.id, model.activeChatId.value)

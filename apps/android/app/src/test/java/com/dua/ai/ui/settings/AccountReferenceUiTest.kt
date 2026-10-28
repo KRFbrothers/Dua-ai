@@ -84,12 +84,12 @@ class AccountReferenceUiTest(private val dark: Boolean, private val small: Boole
         compose.onNodeWithText("Close").performClick()
         compose.onNodeWithText("Set email password").assertIsNotEnabled()
     }
-    @Test fun settingsKeepsThreeAccountRowsAndShowsRealProfileInitial() {
+    @Test fun settingsKeepsAccountNavigationAndRealDisplayName() {
         var destination: DuaDestination? = null
         show { SettingsContent(SettingsUiState(email = "fareed@example.com", displayName = "Fareed Ahmad", sync = "On"), {}, { destination = it }) }
         capture("settings-reference")
         compose.onNodeWithText("Fareed Ahmad").assertExists()
-        compose.onNodeWithText("F", substring = false).assertExists()
+        compose.onNodeWithText("Edit profile photo").assertExists()
         compose.onNodeWithText("Personal", substring = false).assertExists()
         compose.onNodeWithText("Sync", substring = false).assertDoesNotExist()
         compose.onNodeWithText("Log out", substring = false).assertDoesNotExist()
@@ -147,9 +147,9 @@ class AccountReferenceUiTest(private val dark: Boolean, private val small: Boole
         compose.onNodeWithText("Continue with this account").assertDoesNotExist()
         compose.onNodeWithText("Continue with Google").assertExists()
     }
-    @Test fun signedOutSettingsUsesAnonymousAvatarAndNeverInventsAnInitial() {
+    @Test fun signedOutSettingsNeverInventsAnIdentity() {
         show { SettingsContent(SettingsUiState(), {}, {}) }
-        compose.onNodeWithContentDescription("Anonymous profile").assertExists()
+        compose.onNodeWithText("Settings", substring = false).assertExists()
         compose.onNodeWithText("F", substring = false).assertDoesNotExist()
         compose.onNodeWithText("Not signed in", substring = false).assertExists()
     }

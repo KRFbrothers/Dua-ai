@@ -29,6 +29,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ThumbDown
 import androidx.compose.material.icons.filled.ThumbUp
+import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Folder
+import androidx.compose.material.icons.outlined.PhotoLibrary
+import androidx.compose.material.icons.automirrored.outlined.ScreenShare
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.ClosedCaption
 import androidx.compose.material.icons.outlined.ClosedCaptionDisabled
@@ -40,7 +44,6 @@ import androidx.compose.material.icons.outlined.PhotoCamera
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.ThumbDown
 import androidx.compose.material.icons.outlined.ThumbUp
-import androidx.compose.ui.res.vectorResource
 import com.dua.ai.R
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material3.Icon
@@ -133,6 +136,7 @@ class VoiceModeCallbacks(
     val onOpenChat: () -> Unit = {},
     val onAllowMic: () -> Unit = {},
     val onOpenSettings: () -> Unit = {},
+    val onPhotos: () -> Unit = {},
 )
 
 /** Greeting with the Google first name, or a neutral one. */
@@ -153,7 +157,7 @@ private fun phaseLabel(phase: VoicePhase, muted: Boolean) = when {
 
 /**
  * Stateless voice-mode screen: near-black (or soft white) canvas with a silver-gold glow rising from the bottom,
- * the DUA greeting or live captions, and the control row (camera · share · orb · mic · close).
+ * the DUA greeting or live captions, and the control row (attachments · camera · orb · mic · close).
  *
  * [level] is the microphone level 0..1, read only while drawing. With [motion] the glow and orb animate on frames
  * while the screen is resumed; without it (Remove animations, screenshots) they draw one static frame at [staticTime].
@@ -237,6 +241,9 @@ private fun TopRow(ui: VoiceModeUi, callbacks: VoiceModeCallbacks) {
     Row(Modifier.fillMaxWidth().height(Sizes.topBarHeight).padding(horizontal = Spacing.lg), verticalAlignment = Alignment.CenterVertically) {
         StatusPill(ui.phase, ui.muted, ui.permission == MicPermission.Granted)
         Spacer(Modifier.weight(1f))
+        IconButton(onClick = callbacks.onOpenChat, modifier = Modifier.size(Sizes.touchTarget)) {
+            Icon(Icons.AutoMirrored.Outlined.OpenInNew, "Open in chat", tint = VoiceTheme.colors.text)
+        }
         IconToggleButton(
             checked = ui.captions,
             onCheckedChange = callbacks.onCaptions,
@@ -301,9 +308,11 @@ private fun Captions(ui: VoiceModeUi, callbacks: VoiceModeCallbacks, modifier: M
     LaunchedEffect(ui.replyText) { scroll.scrollTo(0) }
     Column(modifier.verticalScroll(scroll).padding(top = Spacing.sm, bottom = Spacing.lg)) {
         if (ui.userText.isNotBlank()) {
-            Text(ui.userText, style = voiceTranscriptStyle(MaterialTheme.typography),
-                color = VoiceTheme.colors.subText, maxLines = 4, overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.semantics { contentDescription = "You said: ${ui.userText}" })
+            Surface(shape = com.dua.ai.ui.theme.DuaShape.userBubble, color = com.dua.ai.ui.theme.ChatTheme.colors.userBubble,
+                modifier = Modifier.align(Alignment.End).widthIn(max = VoiceSizes.contentMaxWidth)) {
+                Text(ui.userText, style = voiceTranscriptStyle(MaterialTheme.typography), color = VoiceTheme.colors.text,
+                    modifier = Modifier.padding(Spacing.md).semantics { contentDescription = "You said: ${ui.userText}" })
+            }
             Spacer(Modifier.height(Spacing.lg))
         }
         when {
@@ -354,21 +363,33 @@ private fun BottomStatus(ui: VoiceModeUi) {
     }
 }
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 private fun Controls(ui: VoiceModeUi, callbacks: VoiceModeCallbacks, energy: VoiceLevel, time: androidx.compose.runtime.FloatState, modifier: Modifier) {
+    var attachments by remember { mutableStateOf(false) }
     BoxWithConstraints(modifier.fillMaxWidth()) {
         val width = maxWidth
         val circle = min(VoiceSizes.controlMax, width / 6.6f).coerceAtLeast(Sizes.touchTarget)
         val orbWidth = min(circle * 2.5f, width - circle * 4 - VoiceSizes.controlGap * 4)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            ControlCircle(ImageVector.vectorResource(R.drawable.gs_video_camera), if (ui.cameraAttached) "Camera, photo attached" else "Camera, coming soon", circle, selected = ui.cameraAttached, onClick = callbacks.onCamera)
-            ControlCircle(ImageVector.vectorResource(R.drawable.gs_screenshare), "Share screen or upload, coming soon", circle, onClick = callbacks.onUpload)
+            ControlCircle(Icons.Outlined.Add, "Add to voice conversation", circle, onClick = { attachments = true })
+            ControlCircle(Icons.Outlined.PhotoCamera, if (ui.cameraAttached) "Camera, photo attached" else "Take a photo", circle, selected = ui.cameraAttached, onClick = callbacks.onCamera)
             VoiceOrb(ui.phase, ui.muted, energy, time, Modifier.width(orbWidth).height(circle * 1.2f), callbacks.onOrb)
             ControlCircle(if (ui.muted) Icons.Outlined.MicOff else Icons.Outlined.Mic, "Microphone", circle, selected = ui.muted,
                 state = if (ui.muted) "Muted" else "On", onClick = callbacks.onMute)
             ControlCircle(Icons.Outlined.Close, "Close voice mode", circle, onClick = callbacks.onClose)
         }
     }
+    if (attachments) com.dua.ai.ui.chat.DuaSheet(onDismiss = { attachments = false }) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = Spacing.lg, vertical = Spacing.md)) {
+            com.dua.ai.ui.chat.SheetTitle("Add to voice conversation")
+            com.dua.ai.ui.chat.SheetActionRow("Photos", Icons.Outlined.PhotoLibrary, { attachments = false; callbacks.onPhotos() })
+            com.dua.ai.ui.chat.SheetActionRow("Camera", Icons.Outlined.PhotoCamera, { attachments = false; callbacks.onCamera() })
+            com.dua.ai.ui.chat.SheetActionRow("Files", Icons.Outlined.Folder, { attachments = false; callbacks.onOpenChat() }, detail = "Attach documents in chat")
+            com.dua.ai.ui.chat.SheetActionRow("Share screen", Icons.AutoMirrored.Outlined.ScreenShare, {}, enabled = false, detail = "Screen sharing is not available in this voice mode")
+        }
+    }
+
 }
 
 @Composable
