@@ -21,28 +21,31 @@ import org.robolectric.annotation.GraphicsMode
 class HomeModeTaskSetupUiTest {
     @get:Rule val compose = createComposeRule()
 
-    @Test fun selectingTaskInConversationRunsAgentSetupAndClosesSheet() {
+    @Test fun enablingAgentInConversationRunsSetupAndClosesSheetWithoutLosingHistory() {
         val old = ChatMessage(id = "old", text = "Earlier answer", isUser = false)
         val state = mutableStateOf(ChatUiState(profileName = "Dua Owner", agentAvailable = true, messages = listOf(old),
             providers = listOf(ProviderCapability("Dua", true, "gemini-current-flash", true))))
         val agentCalls = mutableListOf<Boolean>()
         compose.setContent {
             DuaTheme(LocalPreferences(theme = "light")) {
-                ChatScreen(state.value, ChatActions(onAgent = { on -> agentCalls += on; state.value = state.value.copy(agent = on) }),
+                ChatScreen(state.value, ChatActions(onAgent = { on -> agentCalls += on; state.value = state.value.copy(agent = on) },
+                    onExitFeature = { state.value = state.value.copy(agent = false) }),
                     initialSheet = ChatSheet.Attach)
             }
         }
         compose.onNodeWithTag("attachment-sheet").assertExists()
-        compose.onNode(hasText("Task") and isSelectable()).performClick()
+        compose.onNodeWithText("Tools").performScrollTo().performClick()
+        compose.onNodeWithText("Agent").performScrollTo().performClick()
         compose.waitForIdle()
         assertEquals(listOf(true), agentCalls)
         compose.onNodeWithTag("attachment-sheet").assertDoesNotExist()
-        compose.onNode(hasText("Task") and isSelectable()).assertIsSelected()
-        // Task mode keeps the whole thread visible; the agent boundary only trims in chat-with-agent view.
-        compose.onNodeWithText("Earlier answer").assertExists()
-        compose.onNode(hasText("Chat") and isSelectable()).performClick()
+        compose.onNodeWithTag("home-mode-switcher").assertDoesNotExist()
+        // Agent view trims prior turns visually, while retaining the original history.
+        compose.onNodeWithText("Earlier answer").assertDoesNotExist()
+        assertEquals(listOf(old), state.value.messages)
+        compose.onNodeWithContentDescription("Back").performClick()
         compose.waitForIdle()
-        assertEquals(listOf(true, false), agentCalls)
+        assertEquals(listOf(true), agentCalls)
         compose.onNodeWithText("Earlier answer").assertExists()
     }
 }

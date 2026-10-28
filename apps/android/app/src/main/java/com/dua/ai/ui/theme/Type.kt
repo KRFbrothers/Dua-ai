@@ -91,20 +91,21 @@ fun duaTypography(family: FontFamily = InterFont): Typography {
 val CodeTextStyle = TextStyle(fontFamily = LegacyCodeFont, fontSize = 13.5.sp)
 val HomeTaglineStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Medium, fontSize = 20.sp)
 /** Quiet Home tagline under the logo: smaller and regular weight. */
+val HomeGreetingStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Normal, fontSize = 28.sp, lineHeight = 36.sp)
 val HomeTaglineQuietStyle = HomeTaglineStyle.copy(fontSize = 16.sp, fontWeight = FontWeight.Normal, lineHeight = 22.sp)
 val VoiceGreetingStyle = HomeTaglineStyle.copy(fontSize = 26.sp, lineHeight = 34.sp)
 
 fun voiceTranscriptStyle(type: Typography): TextStyle = type.bodyLarge.copy(lineHeight = 22.sp)
-val VoiceReplyCaptionStyle = TextStyle(fontSize = 24.sp, lineHeight = 33.sp, fontWeight = FontWeight.Normal)
+val VoiceReplyCaptionStyle = TextStyle(fontFamily = InterFont, fontSize = 16.sp, lineHeight = 26.sp, fontWeight = FontWeight.Normal)
 val VoicePermissionHeadingStyle = VoiceGreetingStyle.copy(fontSize = 22.sp, lineHeight = 28.sp)
 
 // Home screen + composer styles, taken from the "Dua AI Dabba" reference shell (Inter, standard chat sizes).
 /** Quick prompt rows on Home ("Create an image…"), Dabba bodyLarge. */
 val HomePromptStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Normal, fontSize = 16.sp)
 /** Primary brand in the Home header. */
-val HomeHeaderStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.SemiBold, fontSize = 20.sp, lineHeight = 28.sp)
+val HomeHeaderStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Medium, fontSize = 18.sp, lineHeight = 26.sp)
 /** Smaller model choice, visually separate from the Dua AI brand. */
-val HomeHeaderModelStyle = HomeHeaderStyle.copy(fontSize = 14.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium)
+val HomeHeaderModelStyle = HomeHeaderStyle.copy(fontWeight = FontWeight.Normal)
 /** Home prompt rows share the Inter hierarchy used by the composer. */
 val HomeTaskPromptStyle = HomePromptStyle.copy(lineHeight = 24.sp)
 /** Composer input and its "Ask Dua AI" placeholder. */
@@ -113,7 +114,7 @@ val ComposerTextStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeigh
 val ComposerInputStyle = ComposerTextStyle.copy(fontSize = 18.sp, lineHeight = 26.sp)
 /** Home input remains readable with the shared Inter body scale. */
 val HomeComposerInputStyle = ComposerTextStyle.copy(lineHeight = 24.sp)
-val ComposerModeStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Medium, fontSize = 14.sp)
+val ComposerModeStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Medium, fontSize = 12.sp)
 /** Labels on the three Home action buttons. */
 val HomeActionLabelStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Medium, fontSize = 14.sp)
 

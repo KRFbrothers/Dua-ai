@@ -32,10 +32,10 @@ object DrawerTheme {
 
 /** Existing modal width and 48 dp targets, with spacing for the selected drawer reference. */
 object DrawerSizes {
-    val width = 286.dp
+    val width = 360.dp
     val paddingH = 16.dp
     val paddingV = 16.dp
-    val headerBottom = 20.dp
+    val headerBottom = 12.dp
     val searchCircle = 46.dp
     val searchIcon = 24.dp
     val brandIcon = 32.dp

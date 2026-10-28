@@ -25,6 +25,7 @@ import androidx.compose.material.icons.automirrored.outlined.VolumeUp
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.TextFields
@@ -232,30 +233,30 @@ fun MessageActions(
     speakDescription: String,
     onRetry: () -> Unit,
     onSpeak: () -> Unit,
+    onMore: (() -> Unit)? = null,
 ) {
     val actions = rememberTextMessageActions(copyText)
     val haptic = LocalChatHaptic.current
     val tint = MaterialTheme.colorScheme.onSurface.copy(alpha = .86f)
     val copyTint = if (copyText.isNotBlank()) tint else tint.copy(alpha = .38f)
-    FlowRow(Modifier.fillMaxWidth().padding(top = Spacing.xs),
-        horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
-        verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-        TextButton(onClick = actions.copy, enabled = copyText.isNotBlank(), modifier = Modifier.heightIn(min = Sizes.touchTarget)) {
-            Icon(if (actions.copied) Icons.Outlined.Check else Icons.Outlined.ContentCopy, if (actions.copied) "Response copied" else "Copy response",
-                tint = copyTint, modifier = Modifier.size(Sizes.iconSmall))
-            Box(Modifier.padding(start = Spacing.xs)) {
-                // Measure the longer confirmation with the actual button font/text scale.
-                // Layout-only text is excluded from accessibility and never drawn.
-                Text("Copied", modifier = Modifier.alpha(0f).clearAndSetSemantics { })
-                Text(if (actions.copied) "Copied" else "Copy", color = copyTint)
+    Row(Modifier.fillMaxWidth().padding(top = Spacing.xs), verticalAlignment = Alignment.CenterVertically) {
+        FlowRow(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
+            verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+            if (showRetry) IconButton(onClick = { haptic(ChatHaptic.Tap); onRetry() }, enabled = retryEnabled,
+                modifier = Modifier.size(Sizes.touchTarget)) {
+                Icon(Icons.Outlined.Refresh, retryDescription, tint = if (retryEnabled) tint else tint.copy(alpha = .38f),
+                    modifier = Modifier.size(Sizes.iconSmall))
             }
-        }
-        if (showRetry) TextButton(onClick = { haptic(ChatHaptic.Tap); onRetry() }, enabled = retryEnabled, modifier = Modifier.heightIn(min = Sizes.touchTarget)) {
-            Icon(Icons.Outlined.Refresh, retryDescription, tint = if (retryEnabled) tint else tint.copy(alpha = .38f), modifier = Modifier.size(Sizes.iconSmall))
-            Text("Retry", modifier = Modifier.padding(start = Spacing.xs))
-        }
-        IconButton(onClick = { actions.share() }, enabled = copyText.isNotBlank(), modifier = Modifier.size(Sizes.touchTarget)) {
-            Icon(Icons.Outlined.Share, "Share response", tint = copyTint, modifier = Modifier.size(Sizes.iconSmall))
+            IconButton(onClick = { actions.share() }, enabled = copyText.isNotBlank(), modifier = Modifier.size(Sizes.touchTarget)) {
+                Icon(Icons.Outlined.Share, "Share response", tint = copyTint, modifier = Modifier.size(Sizes.iconSmall))
+            }
+            IconButton(onClick = actions.copy, enabled = copyText.isNotBlank(), modifier = Modifier.size(Sizes.touchTarget)) {
+                Icon(if (actions.copied) Icons.Outlined.Check else Icons.Outlined.ContentCopy,
+                    if (actions.copied) "Response copied" else "Copy response", tint = copyTint, modifier = Modifier.size(Sizes.iconSmall))
+            }
+            if (onMore != null) IconButton(onClick = onMore, modifier = Modifier.size(Sizes.touchTarget)) {
+                Icon(Icons.Outlined.MoreHoriz, "More response actions", tint = tint, modifier = Modifier.size(Sizes.iconSmall))
+            }
         }
         IconButton(onClick = onSpeak, enabled = speakEnabled, modifier = Modifier.size(Sizes.touchTarget)) {
             Icon(if (speaking) Icons.Outlined.StopCircle else Icons.AutoMirrored.Outlined.VolumeUp, speakDescription,

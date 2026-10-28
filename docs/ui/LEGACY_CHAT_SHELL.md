@@ -1,69 +1,49 @@
-# Android chat shell ownership — restored Dua Home
+# Android chat shell ownership
 
-Related: [settings-card and loading ownership](COMPONENT_OWNERSHIP.md).
-
-The owner restored the original Dua calligraphy Home with the Chat/Task switcher.
-`ChatScreen` has one chat pane for Home, conversations and feature/custom headers.
-The archived supplied screen and its opt-in/style flags have been removed. Work remains in the drawer and
-shows Coming soon without a composer.
+The owner approved the supplied recording spec and requested one in-place UI
+replacement. This document keeps its original path so existing links remain valid.
+The current implementation has one `ChatScreen`, composer and message-rendering
+path. The archived supplied screen and its opt-in/style flags have been removed.
 
 ```text
-ChatRoute → ChatScreen (drawer, sheets, task state, media and scroll host)
-                     → ChatTopBar + ChatContent (empty Home Chat / Task)
-                     → MessageList (conversation)
-                     → existing feature / ProjectChat pane and custom header
+DuaNavHost → ChatRoute → ChatScreen
+                       → ChatTopBar + ChatContent (empty Chat / Task)
+                       → MessageList → UserMessage / AssistantMessage
+                       → Composer
+                       → existing feature / ProjectChat header and state
 ```
 
-## Ownership
-
-| Symbol | Owner / use |
+| Component | Single owner and behavior |
 | --- | --- |
-| `ChatTopBar` | `ui/chat/ChatTopBar.kt`; original history, model, profile and New chat header. |
-| `ChatContent`, `HomeHero`, `TaskStarters` | `ui/chat/ChatContent.kt`; original calligraphy logo, tagline and Task starters. |
-| `homeBackdrop` | `ui/chat/HomeBackdrop.kt`; Home/conversation decoration, excluded from features. |
-| `HomeModeSwitcher` | Locked `ui/chat/ChatComposer.kt`; reused unchanged in empty Home and conversations. |
-| `HomeTab`, `HomeTaskPromptIds` | `ui/chat/ChatTopBar.kt` owns the destination enum; `ui/chat/ChatContent.kt` owns the unchanged prompt resource list. |
-| `splitFileNames` | `ui/chat/ChatFileNames.kt`; shared parser, unchanged. |
-| `UserMessage`, `MessageList`, `AssistantMessage`, `TypingIndicator` | Original conversation and feature rendering. |
-| `DuaCalligraphyLogo` | `ui/components/DuaBrandLogos.kt`; original artwork, unchanged. |
+| Home | `ChatContent.kt`: original Dua calligraphy, account-based greeting, distinct Task welcome and real starter handlers. |
+| Home modes | `HomeTab` in `ChatUiState.kt`; task prompt IDs in `ChatContent.kt`; `HomeModeSwitcher` in `ChatComposer.kt`, on empty Home only. |
+| Header | `ChatTopBar.kt`: history, configured model, new chat, account or active-chat options. |
+| Chat options | `HistoryDrawer.kt`: shared `ChatOptionsButton` and `RenameChatDialog`; existing pin/rename actions and ChatScreen deletion confirmations. |
+| Composer | `ChatComposer.kt`: stable input/focus, attachment progress, dictation, send/cancel/stop and keyboard insets. |
+| Messages | `MessageList.kt`, `AssistantMessage.kt`, `MessageActions.kt`: canonical markdown, progress and actual retry/share/copy/more/speech actions. |
+| Attachments | `AttachmentSheet.kt`: one renderer and picker callbacks. Chat Home expands tools; Task, conversation and feature contexts start compact. Tools remain discoverable when applicable. File limits expand on request. |
+| History | `HistoryDrawer.kt`: top New chat, primary destinations, expandable More, real pinned/all filters, search and fixed account/settings footer. |
+| Profile/settings | Existing `HomeProfileDialog.kt` and `SettingsScreen.kt`; real account fields and existing preference destinations. |
+| Library | `LibraryScreen.kt`: existing inventory as documents and three-column media; explicit loading, empty, search and failure/retry states. Uses the shared media loader. |
+| Voice | Existing `VoiceModeScreen.kt` / `VoiceModeContent.kt`: attachment menu, photo picker, actual camera, mic, orb and close. Files return to chat. Screen sharing is explicitly unavailable. Live voice retains its separate realtime controller and puts its waveform with bottom controls. |
 
-`taskHome` stays owned by `ChatScreen`. Task toggles the existing Agent handler;
-a starter fills the draft and focuses the input without sending. Header profile,
-model picker, separate dictation/live voice, conversation search, active-mode chips,
-swipe-up attachment gesture and swipe-to-reply use their original handlers.
+Feature/project routes keep their state and custom headers while sharing the same
+composer and message owners. They are not alternate copies of the Home UI. Work
+remains the existing Coming soon destination.
 
-The parallel title/emoji shell, composer, user/assistant wrappers and loading shimmer
-are deleted. MessageList and AssistantMessage retain only the original live rendering.
-The now-unused semantic-colour adapter and alternate welcome style are also removed;
-Material/theme values, appearance defaults and live typography stay unchanged.
+The `supplied-chat` and `supplied-composer` tags are compatibility identifiers on
+the canonical nodes, not another screen. Archived tests were migrated to
+`ChatWiringUiTest` and `RestoredHomeScreenshotTest`.
 
-## Verification and release
+Reference observations and unseen behavior are listed in
+[GEMINI_ANDROID_OBSERVATIONS.md](GEMINI_ANDROID_OBSERVATIONS.md). Dua branding,
+authentication, backend contracts and data ownership remain unchanged. There is
+no copied reference account content or seeded library inventory.
 
-Original Home header, profile, search, gesture, ambient-motion and Chat/Task tests
-remain. The old supplied wiring/screenshot test files are renamed to
-`ChatWiringUiTest` and `RestoredHomeScreenshotTest`, keeping their test cases and
-adapting assertions to the live Home. Ambient motion now exercises the shared media
-shimmer instead of the deleted alternate shimmer. No tests are deleted.
-`HomeScreenshotTest` and `RestoredHomeScreenshotTest` render the same live Home.
-Default captures use `app/build/approved-ui/`; the opt-in screenshot package still
-requires `-Pdua.screenshots`. Do not claim excluded suites or phone checks passed.
+## Validation
 
-The conservative drawer clearance from PR441 remains. Its pointer regression now
-checks the restored Voice mode control: one tap dismisses the drawer, the next opens
-live voice. The locked composer and attachment-sheet files are unchanged.
-
-Before accepting the APK, check Home Chat, Task prompts, Work from the drawer,
-model/profile, dictation/live voice, Images and Project chat. Keep the installed
-working APK until the restored version is accepted. No backend deployment is needed.
-
-## Projects compatibility entry
-
-`ChatSheet.Projects` is a compatibility entry for restored sheet state. `ChatScreen`
-handles it before composing chat and delegates to `ProjectsFeaturePage`, which uses
-the shared Projects list and new-project editor. The later modal call and its
-otherwise unused `ProjectsSheet` wrapper have been removed.
-
-`ProjectsContent` stays in `ProjectsSheet.kt`: the dedicated Projects flow still
-uses it for Tasks/Memory tools, and component tests exercise its planner, editing
-and selection actions. Its implementation is unchanged. This cleanup does not
-change the restored Dua Home, Project chat, project persistence or the locked UI.
+Use the Android commands in `SPEC-gemini-android-ui.md`. Actual results and local
+environment constraints are recorded in `tasks/todo.md`. Opt-in screenshot tests
+require `-Pdua.screenshots`; their fixtures render the same production screen.
+Phone acceptance is still needed for IME/Back, Android pickers, permissions,
+microphone/speech and TalkBack. No backend deployment is needed for this UI.

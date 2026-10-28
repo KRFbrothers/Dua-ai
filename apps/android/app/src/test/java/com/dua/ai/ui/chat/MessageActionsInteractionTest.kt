@@ -96,9 +96,9 @@ class MessageActionsInteractionTest {
             }
         }
         compose.onNodeWithText("Stopped").assertExists()
-        compose.onNodeWithText("Copy").assertIsNotEnabled()
+        compose.onNodeWithContentDescription("Copy response").assertIsNotEnabled()
         compose.onNodeWithContentDescription("Speak response with device voice").assertIsNotEnabled()
-        compose.onNodeWithText("Retry").assertIsEnabled().performClick()
+        compose.onNodeWithContentDescription("Retry response with web off").assertIsEnabled().performClick()
         compose.runOnIdle { assertEquals(listOf(prompt), plan?.context) }
     }
 
@@ -111,8 +111,8 @@ class MessageActionsInteractionTest {
                     retryWebMode = null, onRetry = { retried = true }, onSpeak = {})
             }
         }
-        compose.onNodeWithText("Retry").assertDoesNotExist()
-        compose.onNodeWithText("Copy").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Retry response with web off").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Copy response").assertDoesNotExist()
         compose.runOnIdle { assertTrue(!retried) }
     }
 
@@ -138,7 +138,7 @@ class MessageActionsInteractionTest {
         capture("ready")
         val before = descriptions.associateWith { compose.onNodeWithContentDescription(it).fetchSemanticsNode().boundsInRoot }
         compose.onNodeWithContentDescription("Copy response").performClick()
-        compose.onNodeWithText("Copied").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Response copied").assertIsDisplayed()
         capture("copied")
         descriptions.forEach { description ->
             val after = compose.onNodeWithContentDescription(description).assertIsDisplayed().fetchSemanticsNode().boundsInRoot
@@ -175,10 +175,11 @@ class MessageActionsInteractionTest {
             node.performClick()
         }
         compose.runOnIdle { assertEquals(listOf("retry", "speak"), events) }
-        compose.onNodeWithText("Copied").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Response copied").assertIsDisplayed()
         val copy = compose.onNodeWithContentDescription("Response copied").fetchSemanticsNode().boundsInRoot
         val retry = compose.onNodeWithContentDescription("Retry response").fetchSemanticsNode().boundsInRoot
         val speak = compose.onNodeWithContentDescription("Speak response").fetchSemanticsNode().boundsInRoot
-        assertTrue("Large actions should wrap: copy=$copy, retry=$retry, speak=$speak", retry.top > copy.top || speak.top > copy.top)
+        assertTrue("Copy and retry must not overlap", copy.left >= retry.right || copy.top >= retry.bottom)
+        assertTrue("Copy and speech must not overlap", speak.left >= copy.right || speak.top >= copy.bottom)
     }
 }

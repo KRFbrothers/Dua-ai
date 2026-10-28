@@ -19,6 +19,10 @@ import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Brush
 import androidx.compose.material.icons.outlined.Build
 import androidx.compose.material.icons.outlined.Link
+import androidx.compose.material.icons.outlined.DesktopWindows
+import androidx.compose.material.icons.outlined.ExpandMore
+import androidx.compose.material.icons.outlined.ExpandLess
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.ToggleOff
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -28,7 +32,8 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -71,10 +76,12 @@ fun AttachmentSheet(
     onTurnOffModes: (() -> Unit)? = null,
     inlineChatFiles: Boolean = false,
     showModeControls: Boolean = true,
+    compact: Boolean = false,
+    onComputer: (() -> Unit)? = null,
 ) {
     DuaSheet(onDismiss = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         AttachmentSheetContent(webMode, pageReadingAvailable, enabled, onCamera, onPhotos, onFiles, onReadLink, onAudio, storedFiles, storedFilesHint, storedFilesMaxBytes,
-            modes, onImagine, onBuild, onTurnOffModes, inlineChatFiles, showModeControls)
+            modes, onImagine, onBuild, onTurnOffModes, inlineChatFiles, showModeControls, compact, onComputer)
     }
 }
 
@@ -97,8 +104,12 @@ fun AttachmentSheetContent(
     onTurnOffModes: (() -> Unit)? = null,
     inlineChatFiles: Boolean = false,
     showModeControls: Boolean = true,
+    compact: Boolean = false,
+    onComputer: (() -> Unit)? = null,
 ) {
     val c = SheetTheme.colors
+    var toolsExpanded by rememberSaveable { mutableStateOf(false) }
+    var limitsExpanded by rememberSaveable { mutableStateOf(false) }
     Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = SheetSizes.paddingH).padding(bottom = SheetSizes.paddingBottom)
         .testTag("attachment-sheet"), verticalArrangement = Arrangement.spacedBy(SheetSizes.sectionGap)) {
         SheetTitle("Add to chat", Modifier.padding(bottom = 0.dp))
@@ -109,19 +120,14 @@ fun AttachmentSheetContent(
             SheetTile("Files", ImageVector.vectorResource(R.drawable.og_upload), enabled, onFiles, Modifier.width(SheetSizes.attachmentTileWidth))
             SheetTile("Audio", ImageVector.vectorResource(R.drawable.og_graphic_eq), enabled, onAudio, Modifier.width(SheetSizes.attachmentTileWidth))
         }
-        if (inlineChatFiles) Text("Up to 3 files / 2 MB total — images, PDFs, CSV/text and audio — go directly with chat. Photos over the limit are resized. XLSX/ODS need conversion to CSV. Media stays available for follow-ups in this session; reselect it after restoring a chat.",
-            style = SheetNoteStyle, color = c.subText)
-        else if (storedFiles) Text("Photos and files up to ${com.dua.ai.files.StoredFileTypes.sizeLabel(storedFilesMaxBytes.takeIf { it > 0 } ?: 52428800L)} each — images, PDFs, spreadsheets (XLSX, XLS, ODS, CSV), text and audio — upload to your private storage and remain available for follow-ups. Deleting a cached chat keeps stored files; remove them explicitly in Data controls. Camera photos and code files go with the message directly.",
-            style = SheetNoteStyle, color = c.subText)
-        else {
-            Text("Up to 3 files, 2 MB in total: JPEG, PNG, WebP, PDF or text and code files like TXT, CSV, MD, JSON (256 KB each). Photos and PDFs go with your next message only; extracted text is saved with the chat for follow-ups and cloud sync. Large photos are resized to JPEG; originals stay unchanged.",
-                style = SheetNoteStyle, color = c.subText)
-            if (storedFilesHint.isNotBlank()) Text(storedFilesHint, style = SheetNoteStyle, color = c.accent)
-        }
-        // Read a link, the mode switches (Run code, Think, Search, X), Imagine and Build share one gray group.
-        if (showModeControls) SheetGroup {
+        onComputer?.let { open -> SheetActionRow("Computer", Icons.Outlined.DesktopWindows, open, enabled = enabled,
+            detail = "Computer is coming soon") }
+        if (compact && showModeControls) SheetActionRow("Tools", if (toolsExpanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
+            { toolsExpanded = !toolsExpanded }, trailing = { Text(if (toolsExpanded) "Hide" else "Show", style = SheetSubStyle, color = c.subText) })
+        // One tool list; compact contexts disclose it without duplicating the sheet.
+        if (showModeControls && (!compact || toolsExpanded)) Column {
             SwitchRow("Read a link", if (pageReadingAvailable) "Reads the first HTTPS link in your message" else "Unavailable until setup is refreshed",
-                Icons.Outlined.Link, webMode == "page", enabled, onReadLink)
+                Icons.Outlined.Link, webMode == "page", enabled && pageReadingAvailable, onReadLink)
             modes?.toggles.orEmpty().forEach { toggle ->
                 SheetDivider()
                 SwitchRow(toggle.label, toggle.detail, toggle.icon, toggle.on, enabled, toggle.onChange)
@@ -140,12 +146,26 @@ fun AttachmentSheetContent(
             }
         }
         // Shown only while a mode is on: one tap back to a plain reply (what the old "Auto" pill used to do).
-        if (showModeControls && onTurnOffModes != null) TextButton(onClick = onTurnOffModes, enabled = enabled, shape = SheetShapes.button,
+        if (showModeControls && (!compact || toolsExpanded) && onTurnOffModes != null) TextButton(onClick = onTurnOffModes, enabled = enabled, shape = SheetShapes.button,
             modifier = Modifier.align(Alignment.CenterHorizontally).heightIn(min = SheetSizes.touch),
             colors = ButtonDefaults.textButtonColors(contentColor = c.text)) {
             Icon(Icons.Outlined.ToggleOff, contentDescription = null, modifier = Modifier.size(SheetSizes.rowIcon))
             Text("Turn off all modes", style = SheetButtonStyle, modifier = Modifier.padding(start = SheetSizes.tileGap))
         }
+        SheetActionRow("File limits", Icons.Outlined.Info, { limitsExpanded = !limitsExpanded },
+            trailing = { Icon(if (limitsExpanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore, null, tint = c.subText) })
+        if (limitsExpanded) {
+            if (inlineChatFiles) Text("Up to 3 files / 2 MB total — images, PDFs, CSV/text and audio — go directly with chat. Photos over the limit are resized. XLSX/ODS need conversion to CSV. Media stays available for follow-ups in this session; reselect it after restoring a chat.",
+                style = SheetNoteStyle, color = c.subText)
+            else if (storedFiles) Text("Photos and files up to ${com.dua.ai.files.StoredFileTypes.sizeLabel(storedFilesMaxBytes.takeIf { it > 0 } ?: 52428800L)} each — images, PDFs, spreadsheets (XLSX, XLS, ODS, CSV), text and audio — upload to your private storage and remain available for follow-ups. Deleting a cached chat keeps stored files; remove them explicitly in Data controls. Camera photos and code files go with the message directly.",
+                style = SheetNoteStyle, color = c.subText)
+            else {
+                Text("Up to 3 files, 2 MB in total: JPEG, PNG, WebP, PDF or text and code files like TXT, CSV, MD, JSON (256 KB each). Photos and PDFs go with your next message only; extracted text is saved with the chat for follow-ups and cloud sync. Large photos are resized to JPEG; originals stay unchanged.",
+                    style = SheetNoteStyle, color = c.subText)
+                if (storedFilesHint.isNotBlank()) Text(storedFilesHint, style = SheetNoteStyle, color = c.accent)
+            }
+        }
+
     }
 }
 

@@ -28,7 +28,7 @@ import org.robolectric.ParameterizedRobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
-/** Covers the conversation's four-button glass composer, which empty-Home tests omit. */
+/** Covers the canonical conversation composer, which empty-Home tests omit. */
 @RunWith(ParameterizedRobolectricTestRunner::class)
 @Config(sdk = [34], qualifiers = "w393dp-h866dp-mdpi")
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -45,18 +45,18 @@ class ConversationComposerSurfaceUiTest(private val dark: Boolean, private val l
         compose.onRoot().captureRoboImage(it.absolutePath)
     }
 
-    @Test fun chatTaskAndGeneratingKeepTheSameIdleLayoutAndAllFourActions() {
+    @Test fun chatTaskAndGeneratingKeepTheSameIdleLayoutAndActions() {
         val placeholder = mutableStateOf("Ask Dua AI...")
         val generating = mutableStateOf(false)
         val draft = mutableStateOf("")
-        var image = 0; var attach = 0; var mic = 0; var stop = 0
+        var attach = 0; var mic = 0; var stop = 0
         compose.setContent {
             CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, if (large) 2f else 1f)) {
                 DuaTheme(LocalPreferences(theme = if (dark) "dark" else "light")) {
                     Box(Modifier.fillMaxSize().background(background), contentAlignment = Alignment.Center) {
-                        Composer(homeLayout = true, glass = true, controlled = true, showModelSelector = false,
+                        Composer(homeLayout = true, controlled = true, showModelSelector = false,
                             value = draft.value, onDraftChange = { draft.value = it },
-                            placeholder = placeholder.value, typing = generating.value, onImage = { image++ },
+                            placeholder = placeholder.value, typing = generating.value,
                             onAttach = { attach++ }, onMic = { mic++ }, onStop = { stop++ })
                     }
                 }
@@ -66,8 +66,7 @@ class ConversationComposerSurfaceUiTest(private val dark: Boolean, private val l
         val inputId = input.fetchSemanticsNode().id
         val field = input.fetchSemanticsNode().boundsInRoot
         val plus = compose.onNodeWithContentDescription("Add photos and files").fetchSemanticsNode().boundsInRoot
-        if (large) assertTrue("Large text gets its own row", field.bottom <= plus.top)
-        else assertTrue("An empty Chat with the image shortcut must remain inline", field.top < plus.bottom && plus.top < field.bottom)
+        assertTrue("Input and attachment target must not overlap", field.left >= plus.right || field.bottom <= plus.top)
         val height = compose.onNodeWithTag("composer-container").fetchSemanticsNode().boundsInRoot.height
         capture("chat")
         compose.runOnIdle { generating.value = true }
@@ -79,12 +78,12 @@ class ConversationComposerSurfaceUiTest(private val dark: Boolean, private val l
         assertEquals("Changing the idle mode must not resize the composer", height,
             compose.onNodeWithTag("composer-container").fetchSemanticsNode().boundsInRoot.height, 1f)
         assertEquals(inputId, input.fetchSemanticsNode().id)
-        for (description in listOf("Add photos and files", "Create image", "Dictate", "Voice mode")) {
+        for (description in listOf("Add photos and files", "Dictate", "Voice mode")) {
             val button = compose.onNodeWithContentDescription(description).assertIsDisplayed()
                 .assertWidthIsAtLeast(48.dp).assertHeightIsAtLeast(48.dp)
             if (description != "Voice mode") button.performClick()
         }
-        assertEquals(listOf(1, 1, 1, 1), listOf(image, attach, mic, stop))
+        assertEquals(listOf(1, 1, 1), listOf(attach, mic, stop))
         capture("task")
         input.performClick().performTextInput("First line\nSecond line")
         input.assertIsFocused()
@@ -101,7 +100,7 @@ class ConversationComposerSurfaceUiTest(private val dark: Boolean, private val l
         compose.setContent {
             DuaTheme(LocalPreferences(theme = if (dark) "dark" else "light")) {
                 Box(Modifier.fillMaxSize().background(background), contentAlignment = Alignment.Center) {
-                    Composer(homeLayout = true, glass = true, controlled = true, showModelSelector = false, onImage = {})
+                    Composer(homeLayout = true, controlled = true, showModelSelector = false)
                 }
             }
         }
@@ -120,7 +119,7 @@ class ConversationComposerSurfaceUiTest(private val dark: Boolean, private val l
                 Column(Modifier.fillMaxSize()) {
                     for (backdrop in listOf(Color(0xFFBFD5FF), Color(0xFFFFD3C4))) {
                         Box(Modifier.weight(1f).fillMaxSize().background(backdrop), contentAlignment = Alignment.Center) {
-                            Composer(homeLayout = true, glass = true, controlled = true, showModelSelector = false, onImage = {})
+                            Composer(homeLayout = true, controlled = true, showModelSelector = false)
                         }
                     }
                 }

@@ -2,8 +2,9 @@
 
 Audit completion and remaining validation: [AUDIT_STATUS.md](AUDIT_STATUS.md).
 
-These components were checked after the original Dua logo + Chat/Task Home was
-restored. Similar shapes alone do not establish duplicate or unused behavior.
+The current chat shell replaces the previous layout in place; see
+[chat shell ownership](LEGACY_CHAT_SHELL.md). Similar shapes alone do not establish
+duplicate or unused behavior.
 
 ## Settings and page containers
 
@@ -19,7 +20,7 @@ restored. Similar shapes alone do not establish duplicate or unused behavior.
 Only the identical settings container is shared. Its modifier order and content
 remain the same; no extra layout wrapper is added. Headings, selectable-group
 modifiers, row semantics, callbacks, typography and theme tokens stay with their
-existing owners. No token or locked sheet/composer changes are needed.
+existing owners. The owner-approved UI replacement updates sheet/composer layouts in their existing owners.
 
 ## Reply and media loading
 
@@ -30,12 +31,10 @@ existing owners. No token or locked sheet/composer changes are needed.
 | Indicator artwork | `TypingIndicator` → `RiveOrFallback` → `ThinkingOrb`. | Keep the orb fallback; it is not an unused second status component. |
 | Thinking and Agent steps | `ThinkingBlock.kt`, `AgentProgressView.kt`; reuse `rememberShimmerAlpha`. | Keep expandable/progress behavior and their shared pulse helper. |
 | Loading/generated media | `ImagineMedia.kt`, `ImagineReply.kt` → `ShimmerBox` in `ui/components/Shimmer.kt`. | Keep media geometry and the shared pulse/sweep. |
-| Removed parallel design | Alternate chat/composer/bubbles/shimmer and supplied-style branches have been deleted. | Tests now exercise the single live Dua Home instead of retaining an archived runtime implementation. |
+| Home and conversation wait | The same `MessageList` / `AssistantMessage` path above. | Archived supplied renderer and style switches removed; regression tests migrated to the canonical screen. |
 
-Motion follows the existing reduced-motion/foreground guards. Combining these
-drawings or replacing loading artwork would be a visual change, so this cleanup
-does not do that to live indicators. Only the unused alternate-shell shimmer is
-removed; shared media shimmer and live reply/progress behavior are unchanged.
+Motion follows the existing reduced-motion/foreground guards. Library also reuses
+`ShimmerBox`; its inventory and the shared media loader remain the data owners.
 
 ## Verification
 

@@ -18,16 +18,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.dua.ai.ui.components.AccountAvatar
 import com.dua.ai.ui.navigation.DuaDestination
-import com.dua.ai.ui.theme.HomeFontFamily
 import com.dua.ai.ui.theme.SheetShapes
 import com.dua.ai.ui.theme.SheetSizes
 import com.dua.ai.ui.theme.SheetSubStyle
@@ -41,14 +39,13 @@ internal fun HomeProfileDialog(state: ChatUiState, onDismiss: () -> Unit,
     onSettings: () -> Unit, onDestination: (DuaDestination) -> Unit) {
     val colors = SheetTheme.colors
     val density = LocalDensity.current
-    val maxHeight = LocalConfiguration.current.screenHeightDp.dp * 0.85f
-    Dialog(onDismissRequest = onDismiss) {
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
         CompositionLocalProvider(LocalDensity provides density) {
-            Surface(Modifier.widthIn(max = SheetSizes.dialogMaxWidth).fillMaxWidth().heightIn(max = maxHeight)
+            Surface(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(Spacing.sm)
                 .testTag("home-profile-dialog"), shape = SheetShapes.dialog, color = colors.container) {
                 Column(Modifier.padding(Spacing.md)) {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Text("Dua AI", style = SheetTitleStyle.copy(fontFamily = HomeFontFamily), color = colors.title,
+                        Text("Dua AI", style = SheetTitleStyle, color = colors.title,
                             modifier = Modifier.weight(1f).semantics { heading() })
                         IconButton(onClick = onDismiss, modifier = Modifier.size(SheetSizes.touch)) {
                             Icon(Icons.Outlined.Close, "Close profile", tint = colors.icon)
@@ -57,13 +54,15 @@ internal fun HomeProfileDialog(state: ChatUiState, onDismiss: () -> Unit,
                     Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()),
                         verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
                         SheetGroup {
-                            Column(Modifier.fillMaxWidth().padding(Spacing.md), verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-                                AccountAvatar(state.profileEmail, state.profileName, state.profilePhotoUrl, 48.dp,
+                            Row(Modifier.fillMaxWidth().padding(Spacing.md), verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
+                                AccountAvatar(state.profileEmail, state.profileName, state.profilePhotoUrl, SheetSizes.touch,
                                     tag = "home-profile-avatar")
-                                Text(state.profileName.ifBlank { state.profileEmail.orEmpty().ifBlank { "Guest" } },
-                                    style = SheetTitleStyle.copy(fontFamily = HomeFontFamily), color = colors.title)
-                                state.profileEmail?.takeIf { it.isNotBlank() && it != state.profileName }?.let {
-                                    Text(it, style = SheetSubStyle.copy(fontFamily = HomeFontFamily), color = colors.subText)
+                                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+                                    Text(state.profileName.ifBlank { if (state.profileEmail.isNullOrBlank()) "Guest" else "Your account" }, style = SheetTitleStyle, color = colors.title)
+                                    state.profileEmail?.takeIf { it.isNotBlank() }?.let {
+                                        Text(it, style = SheetSubStyle, color = colors.subText)
+                                    }
                                 }
                             }
                             SheetActionRow(if (state.profileEmail.isNullOrBlank()) "Sign in" else "Manage account",

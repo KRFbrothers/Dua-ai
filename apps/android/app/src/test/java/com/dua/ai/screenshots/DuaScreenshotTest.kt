@@ -23,6 +23,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performScrollTo
@@ -188,8 +190,8 @@ class DuaScreenshotTest(private val dark: Boolean) {
         ChatScreen(ScreenshotData.sources, ChatActions())
     }
 
-    @Test fun xSearchToggle() = shot("17_x_toggle", before = { compose.onNodeWithText("X").performScrollTo() }) {
-        ChatScreen(ScreenshotData.emptyState.copy(model = "Grok", draft = "What are people saying about the Pixel 11 launch?", webMode = "search", xSearchAvailable = true, xSearch = true), ChatActions())
+    @Test fun xSearchToggle() = shot("17_x_toggle", before = { compose.onNodeWithContentDescription("Search posts on X with Grok").assertIsDisplayed() }) {
+        ChatScreen(ScreenshotData.sources.copy(draft = "What are people saying about the Pixel 11 launch?"), ChatActions())
     }
 
     @Test fun earlierMessagesSummarised() = shot("18_summarised") {

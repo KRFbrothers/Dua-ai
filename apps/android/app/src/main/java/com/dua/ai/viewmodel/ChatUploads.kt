@@ -87,7 +87,7 @@ internal class ChatUploads(host: UploadsHost) : UploadsHost by host {
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (_: Exception) {
                 if (account.state.value.user?.id == owner) _cloudLibrary.value = com.dua.ai.library.CloudLibraryState(owner,
-                    notice = "Cloud inventory could not be loaded. Refresh after updating the backend; chat and project files remain available.")
+                    notice = "Cloud inventory could not be loaded. Refresh after updating the backend; chat and project files remain available.", failed = true)
             }
         }
     }

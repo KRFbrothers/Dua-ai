@@ -63,7 +63,6 @@ internal fun ModelSelector(name: String, onClick: () -> Unit, modifier: Modifier
         .semantics(mergeDescendants = true) { contentDescription = "Model, $name" },
         contentAlignment = Alignment.Center) {
         Row(Modifier.heightIn(min = HomeSizes.modelPillMinHeight)
-            .background(c.roundButton, HomeShapes.round)
             .testTag("home-model-pill")
             .padding(horizontal = HomeSizes.modelPillPaddingH, vertical = Spacing.xs), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {

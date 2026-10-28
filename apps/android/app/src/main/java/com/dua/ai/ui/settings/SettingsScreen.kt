@@ -14,7 +14,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.automirrored.outlined.TrendingUp
 import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.HorizontalDivider
@@ -40,8 +39,8 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
-import com.dua.ai.ui.components.AccountAvatar
 import com.dua.ai.ui.components.ReferenceIcons
+import com.dua.ai.ui.components.SettingsGroup
 import com.dua.ai.ui.components.SettingsCard
 import com.dua.ai.ui.components.settingsValueFitsInline
 import com.dua.ai.BuildConfig
@@ -109,46 +108,37 @@ fun SettingsScreen(viewModel: ChatViewModel, onBack: () -> Unit, onOpen: (DuaDes
 }
 
 /**
- * Reference Settings layout with three cards; existing feature destinations remain reachable.
+ * Grouped Settings with a compact header; existing feature destinations remain reachable.
  */
 @Composable
 fun SettingsContent(state: SettingsUiState, onBack: () -> Unit, onOpen: (DuaDestination) -> Unit) {
     var about by rememberSaveable { mutableStateOf(false) }
     val c = SettingsTheme.colors
-    val name = state.displayName.ifBlank { if (state.email == null) "Profile & Settings" else "Google account" }
     Column(Modifier.fillMaxSize().background(c.background).statusBarsPadding().navigationBarsPadding()
         .padding(SettingsSizes.screenPadding).verticalScroll(rememberScrollState()).testTag("settings-screen")) {
-        Row(Modifier.fillMaxWidth().padding(bottom = SettingsSizes.headerBottom), horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically) {
-            CircleButton(Icons.AutoMirrored.Filled.ArrowBack, "Back", onBack)
-            Column(Modifier.weight(1f).padding(horizontal = Spacing.sm), horizontalAlignment = Alignment.CenterHorizontally) {
-                Box(Modifier.size(SettingsSizes.avatar).clickable(role = Role.Button, onClickLabel = "Edit profile photo") { onOpen(DuaDestination.AvatarEdit) }
-                    .semantics { contentDescription = "Edit profile photo" }, contentAlignment = Alignment.BottomEnd) {
-                    AccountAvatar(state.email, state.displayName, state.avatarUrl, SettingsSizes.avatar)
-                    Box(Modifier.size(SettingsSizes.editBadge).clip(SettingsShapes.circle).background(c.editBadge)
-                        .border(SettingsSizes.border, c.circleBorder, SettingsShapes.circle), contentAlignment = Alignment.Center) {
-                        Icon(Icons.Filled.Edit, null, Modifier.size(SettingsSizes.editIcon), tint = c.editIcon)
-                    }
-                }
-                Spacer(Modifier.height(SettingsSizes.nameTop))
-                Text(name, style = SettingsNameStyle, color = c.name, maxLines = 2, textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.semantics { heading() })
+        Row(Modifier.fillMaxWidth().padding(bottom = SettingsSizes.headerBottom), verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onBack, modifier = Modifier.size(SettingsSizes.touch)) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = c.rowText)
             }
-            CircleButton(ReferenceIcons.Info, "About Dua AI") { about = true }
+            Text("Settings", style = HomeHeaderStyle, color = c.name, textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                modifier = Modifier.weight(1f).semantics { heading() })
+            IconButton(onClick = { about = true }, modifier = Modifier.size(SettingsSizes.touch)) {
+                Icon(ReferenceIcons.Info, "About Dua AI", tint = c.rowText)
+            }
         }
         Spacer(Modifier.height(SettingsSizes.cardsTop))
-
-        // CARD 1: Account
-        SettingsCardBox {
+        SettingsGroup("Your account") {
             SettingsItemRow(ReferenceIcons.Account, "Account", state.email ?: "Not signed in") { onOpen(DuaDestination.Account) }
-            SettingsItemRow(ReferenceIcons.Work, "Workspace", state.workspace) { onOpen(DuaDestination.Work) }
-            SettingsItemRow(ReferenceIcons.Sparkle, "Upgrade to Dua AI Pro", tint = c.upgrade, showDivider = false, onClickLabel = "Open plans and usage limits") { onOpen(DuaDestination.UsageLimits) }
+            SettingsItemRow(Icons.Outlined.AccountCircle, "Edit profile photo", state.displayName.takeIf { it.isNotBlank() },
+                onClickLabel = "Edit profile photo") { onOpen(DuaDestination.AvatarEdit) }
+            SettingsItemRow(ReferenceIcons.Work, "Workspace", state.workspace, showDivider = false) { onOpen(DuaDestination.Work) }
         }
         if (state.accountNotice.isNotBlank()) Text(state.accountNotice, style = SettingsValueStyle, color = c.value,
             modifier = Modifier.padding(top = SettingsSizes.rowGap).semantics { liveRegion = LiveRegionMode.Polite })
         Spacer(Modifier.height(SettingsSizes.cardGap))
 
-        // CARD 2: Personalization
-        SettingsCardBox {
+        // Preferences share the existing settings owners and persistence.
+        SettingsGroup("Preferences") {
             SettingsItemRow(Icons.Outlined.SentimentSatisfied, "Personalization", listOfNotNull("${themeLabel(state.theme)} · ${fontLabel(state.font)}", state.personality).joinToString(" · ")) { onOpen(DuaDestination.Appearance) }
             SettingsItemRow(Icons.AutoMirrored.Outlined.MenuBook, "Memory", if (state.memoryEnabled) "On" else "Off") { onOpen(DuaDestination.Memory) }
             SettingsItemRow(Icons.Outlined.Extension, "Plugins") { onOpen(DuaDestination.Plugins) }
@@ -169,8 +159,7 @@ fun SettingsContent(state: SettingsUiState, onBack: () -> Unit, onOpen: (DuaDest
         }
         Spacer(Modifier.height(SettingsSizes.cardGap))
 
-        // CARD 3: General
-        SettingsCardBox {
+        SettingsGroup("General and privacy") {
             SettingsItemRow(Icons.Outlined.Settings, "General") { onOpen(DuaDestination.General) }
             SettingsItemRow(Icons.Outlined.Tune, "Feature setup", "Providers & connectors") { onOpen(DuaDestination.FeatureSetup) }
             SettingsItemRow(Icons.AutoMirrored.Outlined.TrendingUp, "Usage and limits") { onOpen(DuaDestination.UsageLimits) }
@@ -215,7 +204,7 @@ fun SettingsCardBox(content: @Composable ColumnScope.() -> Unit) = SettingsCard(
 /** Reference row: icon, label, optional right-hand value and chevron. Full-width 48 dp+ touch target. */
 @Composable
 fun SettingsItemRow(icon: ImageVector, label: String, value: String? = null, showDivider: Boolean = true, tint: Color = Color.Unspecified,
-    chevron: Boolean = false, enabled: Boolean = true, onClickLabel: String = label, onClick: () -> Unit) {
+    chevron: Boolean = true, enabled: Boolean = true, onClickLabel: String = label, onClick: () -> Unit) {
     val c = SettingsTheme.colors
     val color = if (tint == Color.Unspecified) c.rowText else tint
     BoxWithConstraints {

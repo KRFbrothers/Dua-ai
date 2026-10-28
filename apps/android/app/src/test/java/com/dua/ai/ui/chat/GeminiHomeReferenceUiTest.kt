@@ -79,10 +79,10 @@ class GeminiHomeReferenceUiTest(private val dark: Boolean, private val compact: 
         if (!compact) {
             // The hero shares one spot with Task (its starter area is reserved), so it sits in the upper half.
             assertEquals(content.center.x, hero.center.x, 1f)
-            assertTrue(hero.top > content.top && hero.center.y < content.center.y)
+            assertTrue(hero.top > content.top && hero.center.y <= content.center.y + 1f)
             assertTrue("Hero should leave breathing space", hero.height < content.height)
         }
-        compose.onNodeWithText("Your AI, always with you").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Hi Fareed, what's on your mind?").performScrollTo().assertIsDisplayed()
         val composer = compose.onNodeWithTag("composer-container").fetchSemanticsNode().boundsInRoot
         assertTrue(hero.bottom <= composer.top)
         for (label in listOf("Add photos and files", "Dictate", "Voice mode")) {

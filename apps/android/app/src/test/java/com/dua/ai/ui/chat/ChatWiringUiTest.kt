@@ -78,8 +78,8 @@ class ChatWiringUiTest(private val large: Boolean) {
         }, onStop = { state.value = state.value.copy(typing = false,
             messages = state.value.messages.map { if (it.streaming) it.copy(state = "stopped") else it }) })
         show(state, actions)
-        compose.onNodeWithTag("home-hero").assertExists()
-        compose.onNodeWithContentDescription("Dua AI").assertExists()
+        compose.onNodeWithText("Hi Amina,", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("Hi Another,", substring = true).assertDoesNotExist()
         capture("welcome")
         val field = compose.onNodeWithContentDescription("Message")
         field.performClick().performTextInput("Explain this")
@@ -105,7 +105,7 @@ class ChatWiringUiTest(private val large: Boolean) {
         compose.onNodeWithText("Stopped · partial reply").assertIsDisplayed()
         compose.onNodeWithText("Server token one and token two").assertIsDisplayed()
         compose.onNodeWithText("Bilkul makkhan UI!", substring = true).assertDoesNotExist()
-        compose.onNodeWithContentDescription("Voice mode").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Dictate").assertIsDisplayed()
     }
 
     @Test fun attachmentPickersAndVoiceUseTheExistingHandlers() {
@@ -139,7 +139,7 @@ class ChatWiringUiTest(private val large: Boolean) {
         title.performClick()
         compose.onNodeWithContentDescription("Open drawer profile and settings").performClick()
         assertEquals(1, settings)
-        compose.onNodeWithContentDescription("Model,", substring = true).performClick()
+        compose.onNode(hasContentDescription("Model,", substring = true)).performClick()
         compose.onNodeWithText("Choose a model").assertIsDisplayed()
     }
 
@@ -166,7 +166,7 @@ class ChatWiringUiTest(private val large: Boolean) {
     @Test fun keyboardInsetsAreAppliedOnceAndMultilineDraftKeepsFocus() {
         val state = mutableStateOf(ChatUiState())
         show(state, ChatActions(onDraftChange = { state.value = state.value.copy(draft = it) }))
-        val card = compose.onNodeWithTag("composer-container")
+        val card = compose.onNodeWithTag("supplied-composer")
         val closed = card.fetchSemanticsNode().boundsInRoot
         val input = compose.onNodeWithContentDescription("Message")
         input.performClick().assertIsFocused()
@@ -207,33 +207,33 @@ class ChatWiringUiTest(private val large: Boolean) {
     @Test fun workShowsComingSoonWithoutComposerOrChatControls() {
         show(mutableStateOf(ChatUiState(homeTab = HomeTab.Work, draft = "Keep work draft",
             messages = listOf(ChatMessage(text = "Hidden chat", isUser = true)))))
-        compose.onNodeWithContentDescription("Open chat history").assertIsDisplayed()
+        compose.onNodeWithTag("supplied-chat").assertIsDisplayed()
         compose.onNodeWithText("Coming soon").assertIsDisplayed()
-        compose.onNodeWithTag("composer-container").assertDoesNotExist()
+        compose.onNodeWithTag("supplied-composer").assertDoesNotExist()
         compose.onNodeWithTag("home-mode-switcher").assertDoesNotExist()
-        for (description in listOf("Message", "Add photos and files", "Voice mode", "Send message")) {
+        for (description in listOf("Message", "Add photos and files", "Dictate", "Send message")) {
             compose.onNodeWithContentDescription(description).assertDoesNotExist()
         }
         compose.onNodeWithText("Hidden chat").assertDoesNotExist()
         capture("pr4-after-work")
     }
 
-    @Test fun taskSwitcherUsesAgentAndExistingStartersThenRestoresChatLogo() {
+    @Test fun taskSwitcherUsesAgentAndExistingStartersThenRestoresChatGreeting() {
         val state = mutableStateOf(ChatUiState(profileName = "Amina Khan", agentAvailable = true))
         val modes = mutableListOf<Boolean>()
         var sends = 0
         show(state, ChatActions(onAgent = {
             modes += it; state.value = state.value.copy(agent = it)
         }, onDraftChange = { state.value = state.value.copy(draft = it) }, onSend = { sends++ }))
-        compose.onNodeWithTag("home-hero").assertExists()
+        compose.onNodeWithText("Hi Amina,", substring = true).assertIsDisplayed()
         compose.onNodeWithText("Ask Dua AI...").assertIsDisplayed()
         compose.onNodeWithTag("home-mode-switcher").assertIsDisplayed()
         capture("pr4-after-chat")
         compose.onNode(hasText("Task") and isSelectable()).performClick().assertIsSelected()
         assertEquals(listOf(true), modes)
-        compose.onNodeWithContentDescription("Open chat history").assertIsDisplayed()
-        compose.onNodeWithTag("home-hero").assertExists()
-        compose.onNodeWithText("Hello Amina!", substring = true).assertDoesNotExist()
+        compose.onNodeWithTag("supplied-chat").assertIsDisplayed()
+        compose.onNodeWithTag("supplied-task-starters").assertIsDisplayed()
+        compose.onNodeWithText("Hi Amina,", substring = true).assertDoesNotExist()
         compose.onNodeWithText("Describe...").assertIsDisplayed()
         val prompts = HomeTaskPromptIds.map { compose.activity.getString(it) }
         for (prompt in prompts) compose.onNodeWithText(prompt).performScrollTo().assertIsDisplayed()
@@ -246,28 +246,25 @@ class ChatWiringUiTest(private val large: Boolean) {
         keyboard(0)
         compose.onNode(hasText("Chat") and isSelectable()).performClick().assertIsSelected()
         assertEquals(listOf(true, false), modes)
-        compose.onNodeWithTag("home-hero").assertExists()
+        compose.onNodeWithText("Hi Amina,", substring = true).assertIsDisplayed()
         compose.onNodeWithText("Ask Dua AI...").assertIsDisplayed()
-        compose.onNodeWithContentDescription("Dua AI").assertExists()
-        compose.onNodeWithText(prompts.first()).assertDoesNotExist()
+        compose.onNodeWithTag("supplied-task-starters").assertDoesNotExist()
         assertEquals(0, sends)
     }
 
-    @Test fun conversationSwitcherStaysVisibleAndDisabledWhileReplyIsPending() {
+    @Test fun homeSwitcherStaysHiddenForMessagesAndPendingReply() {
         val state = mutableStateOf(ChatUiState(agentAvailable = true))
         show(state, ChatActions(onAgent = { state.value = state.value.copy(agent = it) }))
         compose.onNode(hasText("Task") and isSelectable()).performClick()
         compose.runOnIdle { state.value = state.value.copy(typing = true,
             messages = listOf(ChatMessage(text = "Real question", isUser = true))) }
-        compose.onNodeWithTag("home-mode-switcher").assertIsDisplayed()
-        compose.onNodeWithTag("home-hero").assertDoesNotExist()
-        compose.onNode(hasText("Task") and isSelectable()).assertIsNotEnabled()
+        compose.onNodeWithTag("home-mode-switcher").assertDoesNotExist()
+        compose.onNodeWithTag("supplied-task-starters").assertDoesNotExist()
         compose.runOnIdle { state.value = state.value.copy(typing = false, messages = state.value.messages +
             ChatMessage(text = "Real answer", isUser = false)) }
         compose.onNodeWithText("Real answer").assertIsDisplayed()
-        compose.onNode(hasText("Task") and isSelectable()).assertIsEnabled()
-        compose.onNodeWithTag("home-mode-switcher").assertIsDisplayed()
-        compose.onNodeWithTag("home-hero").assertDoesNotExist()
+        compose.onNodeWithTag("home-mode-switcher").assertDoesNotExist()
+        compose.onNodeWithTag("supplied-task-starters").assertDoesNotExist()
     }
 
     @Test fun unavailableTaskKeepsDraftAndCannotSendPlainChat() {
@@ -282,12 +279,13 @@ class ChatWiringUiTest(private val large: Boolean) {
     }
 
 
-    @Test fun projectCustomHeaderKeepsLegacyPaneAndComposer() {
+    @Test fun projectCustomHeaderUsesCanonicalPaneAndComposer() {
         compose.setContent { DuaTheme(LocalPreferences(theme = "light")) {
             ChatScreen(ChatUiState(feature = ChatFeature.Projects,
                 messages = listOf(ChatMessage(text = "Project reply", isUser = false))), ChatActions(),
                 topBar = { androidx.compose.material3.Text("Project chat header") })
         } }
+        compose.onNodeWithTag("supplied-chat").assertDoesNotExist()
         compose.onNodeWithText("Project chat header").assertIsDisplayed()
         compose.onNodeWithText("Project reply").assertIsDisplayed()
         compose.onNodeWithContentDescription("Add photos and files").assertIsDisplayed()
@@ -295,8 +293,9 @@ class ChatWiringUiTest(private val large: Boolean) {
         capture("pr5b-project-chat")
     }
 
-    @Test fun imagesFeatureKeepsLegacyPaneAndFeatureHeader() {
+    @Test fun imagesFeatureUsesCanonicalPaneAndFeatureHeader() {
         show(mutableStateOf(ChatUiState(feature = ChatFeature.Images)))
+        compose.onNodeWithTag("supplied-chat").assertDoesNotExist()
         compose.onNodeWithText("Images").assertIsDisplayed()
         compose.onNodeWithContentDescription("Add photos and files").assertIsDisplayed()
         compose.onNodeWithTag("home-mode-switcher").assertDoesNotExist()

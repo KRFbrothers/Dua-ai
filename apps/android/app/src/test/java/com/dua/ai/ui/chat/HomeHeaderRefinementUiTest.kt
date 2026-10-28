@@ -70,10 +70,10 @@ class HomeHeaderRefinementUiTest(private val dark: Boolean, private val large: B
         }
         val brand = compose.onNodeWithText("Dua AI", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
         val label = compose.onNodeWithText("Gemini", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
-        val divider = compose.onNodeWithTag("home-header-divider", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        compose.onNodeWithTag("home-header-divider", useUnmergedTree = true).assertDoesNotExist()
         val pill = compose.onNodeWithTag("home-model-pill", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
         assertEquals(brand.center.y, pill.center.y, 1f)
-        assertTrue(brand.right < divider.left && divider.right < pill.left)
+        assertTrue(brand.right < pill.left)
         assertTrue(pill.left < label.left && label.right < pill.right)
         compose.onNodeWithContentDescription("Model, Gemini").assertWidthIsAtLeast(48.dp).assertHeightIsAtLeast(48.dp)
         if (!large) compose.onNodeWithTag("home-model-pill", useUnmergedTree = true).assertHeightIsEqualTo(32.dp)
@@ -118,13 +118,12 @@ class HomeHeaderRefinementUiTest(private val dark: Boolean, private val large: B
         var chosen = ""
         show { ChatContent(task.value, onTask = { chosen = it }) }
         compose.onNodeWithContentDescription("Dua AI").assertWidthIsEqualTo(HomeSizes.heroLogo)
-        compose.onNodeWithText("Your AI, always with you").assertIsDisplayed()
-        if (!large) assertEquals(1, layout("Your AI, always with you").lineCount)
+        compose.onNodeWithText("Hi, what's on your mind?").assertIsDisplayed()
         compose.onNodeWithText("What can I take off\nyour plate?").assertDoesNotExist()
         capture("chat-hero")
         compose.runOnIdle { task.value = true }
         compose.onNodeWithContentDescription("Dua AI").assertExists()
-        compose.onNodeWithText("Your AI, always with you").assertDoesNotExist()
+        compose.onNodeWithText("Hi, what's on your mind?").assertDoesNotExist()
         compose.onNodeWithTag("home-hero").assertExists(); compose.onNodeWithContentDescription("Dua AI").assertExists()
         for (prompt in HomeTaskPrompts) {
             compose.onNodeWithText(prompt).performScrollTo().performClick()

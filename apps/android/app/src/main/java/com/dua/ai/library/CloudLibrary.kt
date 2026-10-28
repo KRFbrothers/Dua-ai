@@ -4,7 +4,7 @@ import com.dua.ai.files.FileRef
 import com.dua.ai.files.StoredFileTypes
 import org.json.JSONObject
 
-data class CloudLibraryState(val ownerId: String? = null, val files: List<FileRef> = emptyList(), val loading: Boolean = false, val notice: String = "")
+data class CloudLibraryState(val ownerId: String? = null, val files: List<FileRef> = emptyList(), val loading: Boolean = false, val notice: String = "", val failed: Boolean = false)
 
 /** Ephemeral, owner-scoped server inventory; never serialized into snapshots or sent as chat attachments. */
 object CloudLibrary {

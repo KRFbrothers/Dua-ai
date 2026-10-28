@@ -82,6 +82,7 @@ class CompactChatUiTest(private val dark: Boolean, private val small: Boolean) {
         compose.runOnIdle { assertEquals(HomeTaskPrompts[1], suggested) }
         // Mode switches moved from Home buttons into the + sheet.
         compose.onNodeWithContentDescription("Add photos and files").performClick()
+        compose.onNodeWithText("Tools").performScrollTo().performClick()
         compose.onNodeWithText("Run code", substring = true).performScrollTo().assertIsDisplayed()
     }
     @Test fun projectsCompatibilityEntryUsesSharedListAndCreateHandler() {

@@ -93,7 +93,7 @@ class DrawerSearchUiTest(private val dark: Boolean, private val large: Boolean) 
         val footer = compose.onNodeWithTag("drawer-bottom-actions").fetchSemanticsNode().boundsInRoot
         assertTrue(result.top >= body.top && result.bottom <= footer.top)
         assertTrue("Footer must clear IME and use max(IME, navigation)", footer.bottom <= 650f - 240f)
-        compose.onNodeWithTag("drawer-new-chat").assertIsDisplayed().assertHeightIsAtLeast(48.dp)
+        compose.onNodeWithTag("drawer-new-chat").assertDoesNotExist()
         compose.onNodeWithTag("drawer-profile").assertIsDisplayed().assertWidthIsAtLeast(48.dp)
         capture("keyboard")
         compose.onNodeWithContentDescription("Clear chat search").performClick()
@@ -133,7 +133,7 @@ class DrawerSearchUiTest(private val dark: Boolean, private val large: Boolean) 
             val after = compose.onNodeWithText("Conversation 1").fetchSemanticsNode().boundsInRoot
             assertEquals(before.top, after.top, 1f)
             assertEquals(before.bottom, after.bottom, 1f)
-            compose.onNodeWithText("Aura").performScrollTo().performClick()
+            compose.onNodeWithText("More").performScrollTo().performClick()
             compose.onNodeWithText("Work").assertExists()
             compose.onNodeWithTag("drawer-profile").assertIsDisplayed()
         } finally {

@@ -140,7 +140,8 @@ internal class VoiceModeController(
         val blocked = when {
             !viewModel.online.value -> "You're offline. Reconnect, then tap the orb."
             viewModel.imagine.value -> "Imagine is on. Turn it off in the chat to talk with Dua."
-            viewModel.isTyping.value || viewModel.readingFiles.value -> "Dua is still answering in the chat. Wait a moment, then tap the orb."
+            viewModel.isTyping.value -> "Dua is still answering in the chat. Wait a moment, then tap the orb."
+            viewModel.readingFiles.value || viewModel.preparingFiles.value -> "Your photo is still being prepared. Wait a moment, then tap the orb."
             viewModel.uploads.value.isNotEmpty() -> "Send or remove the uploads in the chat first."
             viewModel.attachments.value.any { !it.mimeType.startsWith("image/") } -> "Non-image files cannot be analyzed in voice mode. Open chat to send them."
             else -> null
@@ -278,6 +279,9 @@ fun VoiceModeScreen(viewModel: ChatViewModel, voice: ReplyVoice, onClose: () -> 
 
     val state = controller.state
     val attachments by viewModel.attachments.collectAsState()
+    val readingPhoto by viewModel.readingFiles.collectAsState()
+    val preparingPhoto by viewModel.preparingFiles.collectAsState()
+    val photoError by viewModel.attachmentError.collectAsState()
     val cameraPhoto = attachments.firstOrNull { it.mimeType.startsWith("image/") }
 
     val captures = remember(context) { CameraCaptureStore(context.cacheDir) }
@@ -296,11 +300,27 @@ fun VoiceModeScreen(viewModel: ChatViewModel, voice: ReplyVoice, onClose: () -> 
         }
     }
 
+    val photosLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+        if (uris.isNotEmpty()) viewModel.selectAttachments(uris)
+    }
+    fun pickPhotos() {
+        if (viewModel.readingFiles.value || viewModel.preparingFiles.value || viewModel.isTyping.value) {
+            say("Wait for the current response or photo preparation, then choose photos.")
+            return
+        }
+        controller.session.pause()
+        try { photosLauncher.launch(arrayOf("image/jpeg", "image/png", "image/webp")) }
+        catch (_: ActivityNotFoundException) { say("No photo picker is available. Open chat to attach a photo.") }
+        catch (_: SecurityException) { say("Photo access is unavailable. Open chat to try again.") }
+    }
+
     val ui = VoiceModeUi(
         phase = state.phase, muted = state.muted, captions = captions,
         firstName = firstNameOf(account.user?.displayName),
         heard = if (state.phase == VoicePhase.Listening) input.partial else "",
-        userText = controller.userText, replyText = controller.replyText, notice = state.notice,
+        userText = controller.userText, replyText = controller.replyText,
+        notice = listOf(state.notice, if (readingPhoto || preparingPhoto) "Preparing photos…" else photoError)
+            .filter { it.isNotBlank() }.joinToString("\n"),
         permission = permission, feedback = controller.feedback,
         cameraAttached = cameraPhoto != null,
         cameraAttachmentName = cameraPhoto?.name.orEmpty(),
@@ -339,7 +359,7 @@ fun VoiceModeScreen(viewModel: ChatViewModel, voice: ReplyVoice, onClose: () -> 
                 viewModel.clearAttachments()
                 say("Photo removed.")
             },
-            onUpload = { say("Sharing your screen or a file is coming soon.") },
+            onPhotos = ::pickPhotos,
             onFeedback = {
                 controller.feedback = it
                 if (it != 0) say(if (it > 0) "Thanks! Glad that helped." else "Thanks for the feedback.")

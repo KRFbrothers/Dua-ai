@@ -307,8 +307,9 @@ fun DuaNavHost(viewModel: ChatViewModel, voice: ReplyVoice, notificationRoute: P
             val settings by viewModel.localSettings.collectAsStateWithLifecycle()
             val integrations by viewModel.integrations.collectAsStateWithLifecycle()
             val account by viewModel.account.state.collectAsStateWithLifecycle()
+            val activeProject by viewModel.projectId.collectAsStateWithLifecycle()
             // Same condition as viewModel.liveVoiceAvailable(), so the label matches where the button goes.
-            val live = integrations.voice?.live?.enabled == true && account.user != null && viewModel.projectId.value == com.dua.ai.projects.ProjectCodec.PERSONAL
+            val live = integrations.voice?.live?.enabled == true && account.user != null && activeProject == com.dua.ai.projects.ProjectCodec.PERSONAL
             VoiceScreen(draft = draft, onBack = navigator::back, onHandsFree = { navigator.open(if (viewModel.projectId.value == com.dua.ai.projects.ProjectCodec.PERSONAL && viewModel.liveVoiceAvailable()) DuaDestination.LiveVoice else DuaDestination.HandsFree) },
                 onUse = { text -> viewModel.updateDraft(text)
                     if (nav.previousBackStackEntry?.destination?.route in setOf(DuaDestination.Projects.route, DuaDestination.ProjectChat.route)) navigator.back() else navigator.toChat()

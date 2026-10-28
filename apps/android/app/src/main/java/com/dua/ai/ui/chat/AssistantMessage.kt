@@ -40,6 +40,7 @@ fun AssistantMessage(
     showActions: Boolean = isLast,
     onOpenMedia: (Int) -> Unit = {},
     onOpenCanvas: ((List<com.dua.ai.model.ChatArtifact>) -> Unit)? = null,
+    onMoreActions: (() -> Unit)? = null,
     onOpenWorkspaces: () -> Unit = {},
 ) {
     val parts = remember(message.text) { ReplySources.split(message.text) }
@@ -105,6 +106,7 @@ fun AssistantMessage(
             speakDescription = replySpeakDescription(speaking, generatedVoice),
             onRetry = onRetry,
             onSpeak = onSpeak,
+            onMore = onMoreActions,
         )
     }
 }
