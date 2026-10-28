@@ -58,7 +58,7 @@ class AutomaticCloudSyncTest {
 
     @Test fun `sync is off by default and sign-in alone never uploads`() = runBlocking {
         val p = Fixture(initialLocal = snapshot(listOf(chat()))); val sync = p.controller()
-        sync.restore()?.join(); sync.localChanged(); sync.syncNow()?.join()
+        sync.restore()?.join(); sync.localChanged(); sync.retry()?.join()
         assertFalse(sync.state.value.enabled); assertEquals(0, p.loadCalls); assertEquals(0, p.uploadCalls)
         p.close(sync)
     }
@@ -66,7 +66,7 @@ class AutomaticCloudSyncTest {
     @Test fun `explicit enable binds owner and unchanged snapshots never upload twice`() = runBlocking {
         val p = Fixture(initialLocal = snapshot(listOf(chat()))); val sync = p.controller(); sync.enable()?.join()
         assertEquals(1, p.uploadCalls); assertEquals(ownerA, p.stored?.accountId); assertEquals("synced", sync.state.value.phase)
-        sync.syncNow()?.join(); assertEquals(1, p.uploadCalls); assertEquals(30_000L, p.waits.last())
+        sync.retry()?.join(); assertEquals(1, p.uploadCalls); assertEquals(30_000L, p.waits.last())
         p.close(sync)
     }
 
@@ -109,7 +109,7 @@ class AutomaticCloudSyncTest {
 
     @Test fun `local deletion while cloud read waits pauses before merge and upload`() = runBlocking {
         val original = snapshot(listOf(chat()), listOf("Prefer Hindi")); val p = Fixture(initialLocal = original); val sync = p.controller(); sync.enable()?.join()
-        val gate = CompletableDeferred<Unit>(); p.cloudHook = { gate.await() }; val job = sync.syncNow(); p.here = snapshot(); gate.complete(Unit); job?.join()
+        val gate = CompletableDeferred<Unit>(); p.cloudHook = { gate.await() }; val job = sync.retry(); p.here = snapshot(); gate.complete(Unit); job?.join()
         assertTrue(sync.state.value.reviewRequired); assertEquals(1, p.uploadCalls); assertEquals(0, p.commits); assertTrue(p.here.chats.isEmpty())
         p.close(sync)
     }
@@ -132,7 +132,7 @@ class AutomaticCloudSyncTest {
             assertEquals(listOf("Server note"), p.here.memory)
             assertEquals(1, p.uploadCalls)
             assertEquals(p.here, p.remote)
-            sync.syncNow()?.join()
+            sync.retry()?.join()
             assertEquals(1, p.uploadCalls); assertEquals(2, p.here.chats.size)
             p.close(sync)
         }
@@ -234,7 +234,7 @@ class AutomaticCloudSyncTest {
     @Test fun `CAS 409 merges safe additions then requires review without automatic retries`() = runBlocking {
         val p = Fixture(initialLocal = snapshot(listOf(chat()))); val sync = p.controller(); sync.enable()?.join(); p.here = snapshot(listOf(chat(), chat("local", "New local")))
         p.uploadHook = { p.remote = snapshot(listOf(chat(), chat("other", "Other device"))); p.revision++; throw AccountException(409, "Conflict") }
-        sync.syncNow()?.join(); assertTrue(sync.state.value.reviewRequired); assertEquals(3, p.here.chats.size); val count = p.uploadCalls
+        sync.retry()?.join(); assertTrue(sync.state.value.reviewRequired); assertEquals(3, p.here.chats.size); val count = p.uploadCalls
         sync.localChanged(); sync.retry()?.join(); assertEquals(count, p.uploadCalls)
         p.close(sync)
     }
@@ -242,8 +242,9 @@ class AutomaticCloudSyncTest {
     @Test fun `confirmed conflict with merge failure pauses even when original upload timed out`() = runBlocking {
         val p = Fixture(initialLocal = snapshot(listOf(chat()))); val sync = p.controller(); sync.enable()?.join(); p.here = snapshot(listOf(chat(), chat("local", "New local")))
         p.uploadHook = { p.remote = snapshot(listOf(chat(), chat("other", "Remote edit"))); p.revision++; p.commitFails = true; error("Connection lost") }
-        sync.syncNow()?.join(); assertTrue(sync.state.value.reviewRequired); assertEquals(2, p.here.chats.size); val count = p.uploadCalls
-        sync.syncNow()?.join(); assertEquals(count, p.uploadCalls)
+        sync.retry()?.join(); assertTrue(sync.state.value.reviewRequired); assertEquals(2, p.here.chats.size); val count = p.uploadCalls
+        // Drive the internal sync request (not retry(), which returns before it) to prove the stored review gate blocks it.
+        sync.localChanged(); sync.setForeground(false); sync.setForeground(true); assertEquals(count, p.uploadCalls)
         p.close(sync)
     }
 
@@ -255,8 +256,9 @@ class AutomaticCloudSyncTest {
 
     @Test fun `five network failures persist finite budget until explicit retry`() = runBlocking {
         val p = Fixture(); val sync = p.controller(); sync.enable()?.join(); p.cloudHook = { error("Offline") }
-        repeat(5) { sync.syncNow()?.join() }; assertEquals("error", sync.state.value.phase); assertEquals(5, p.stored?.failureCount); val count = p.cloudCalls
-        sync.localChanged(); sync.syncNow()?.join(); assertEquals(count, p.cloudCalls)
+        // Fire scheduled timers (poll, then retry backoffs) so the failure budget accumulates without retry() resetting it.
+        repeat(5) { p.fireTimer() }; assertEquals("error", sync.state.value.phase); assertEquals(5, p.stored?.failureCount); val count = p.cloudCalls
+        sync.localChanged(); sync.setForeground(false); sync.setForeground(true); assertEquals(count, p.cloudCalls)
         p.cloudHook = {}; sync.retry()?.join(); assertEquals("synced", sync.state.value.phase); assertEquals(0, p.stored?.failureCount)
         p.close(sync)
     }

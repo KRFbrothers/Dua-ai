@@ -125,7 +125,7 @@ class AutomaticSyncCacheTest {
                 .get(model) as MutableStateFlow<List<ChatMessage>>
             visible.value = messages
             model.updateDraft(""); model.flushHistory()
-            sync.setBusy(false); sync.syncNow()?.join()
+            sync.setBusy(false); sync.retry()?.join()
 
             val copy = model.savedChats.value.single { it.id.startsWith("unsynced-") }
             assertEquals(messages, copy.messages)
@@ -137,7 +137,7 @@ class AutomaticSyncCacheTest {
             assertEquals(serverChat, cloud.chats.single { it.id == serverChat.id })
             assertEquals(1, uploads)
 
-            sync.syncNow()?.join()
+            sync.retry()?.join()
             assertEquals(1, uploads)
             assertEquals(2, persisted().size)
             model.updateDraft("Follow-up draft"); model.flushHistory()
@@ -189,7 +189,7 @@ class AutomaticSyncCacheTest {
             assertEquals(copy.draft, model.draft.value)
             assertEquals(1, uploads)
             model.flushHistory()
-            sync.syncNow()?.join()
+            sync.retry()?.join()
             assertEquals(1, uploads)
             assertEquals(2, persisted().size)
             assertEquals(copy, persisted().single { it.id == copy.id })
@@ -239,7 +239,7 @@ class AutomaticSyncCacheTest {
             assertEquals(copy.messages, model.messages.value)
             assertEquals(copy.draft, model.draft.value)
             assertEquals(listOf("Server note"), model.localSettings.value.memory)
-            model.flushHistory(); sync.syncNow()?.join()
+            model.flushHistory(); sync.retry()?.join()
             assertEquals(1, uploads); assertEquals(2, persisted().size)
         } finally { sync.close(); scope.cancel() }
     }
