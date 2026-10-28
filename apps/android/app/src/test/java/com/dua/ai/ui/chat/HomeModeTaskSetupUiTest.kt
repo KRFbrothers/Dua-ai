@@ -2,6 +2,7 @@ package com.dua.ai.ui.chat
 
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.*
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.junit4.createComposeRule
 import com.dua.ai.model.ChatMessage
 import com.dua.ai.settings.LocalPreferences
@@ -43,7 +44,8 @@ class HomeModeTaskSetupUiTest {
         // Agent view trims prior turns visually, while retaining the original history.
         compose.onNodeWithText("Earlier answer").assertDoesNotExist()
         assertEquals(listOf(old), state.value.messages)
-        compose.onNodeWithContentDescription("Back").performClick()
+        // Exercise the accessible navigation action after closing the modal window.
+        compose.onNodeWithContentDescription("Back").performSemanticsAction(SemanticsActions.OnClick) { it() }
         compose.waitForIdle()
         assertEquals(listOf(true), agentCalls)
         compose.onNodeWithText("Earlier answer").assertExists()

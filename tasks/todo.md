@@ -23,7 +23,7 @@ Owner approved implementation and removal of duplicate/archived UI.
   inspect production-route renders; check no alternate supplied screen or style
   switch remains; update ownership/spec status and report device-only blockers.
 
-## Verified local results
+## Original implementation validation (before latest main integration)
 
 - Full Android unit/Compose suite, including opt-in screenshot cases:
   **1,884 tests; zero failures, errors or skips**. Command:
@@ -45,6 +45,23 @@ Owner approved implementation and removal of duplicate/archived UI.
   the draft preserved and the originating popup dismissed first.
 - Build tools, SDK, proxy and writable caches were configured outside source;
   dependency versions and protected CI/deploy/database paths were not changed.
+
+## Integrated main validation
+
+- Integrated main through `e701db2`, retaining its cleanup changes, scoped Home
+  palette and Agent boundary handling. Kept main's canonical wiring/capture test
+  filenames; the obsolete HTML previews remain removed.
+- The integrated opt-in run executed **1,893 cases: 1,889 passed, 4 failed**.
+  Three failures were bounded account/socket timeouts; both unchanged account
+  classes passed their subsequent 31-case serial rerun.
+- Adapted the conversation Agent test to use the Tools entry, preserve original
+  history and exercise Back through its accessible action after modal dismissal.
+  The final combined Agent/header/drawer/account rerun passed **37 tests**, with
+  zero failures, errors or skips. Physical touch dispatch is still device-only
+  acceptance; the accessible action test does not establish it.
+- Review the latest [PR #483 checks](https://github.com/KRFbrothers/Dua-ai/pull/483)
+  for full CI results. The first integrated CI attempt exposed the same Agent
+  navigation test failure; the corrected test is included in the follow-up.
 
 ## Remaining acceptance and delivery
 
