@@ -1,11 +1,9 @@
 package com.dua.ai.ui.chat
 
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -58,13 +56,10 @@ internal fun ChatContent(task: Boolean, composing: Boolean = false, profileName:
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(Spacing.lg)) {
                         DuaCalligraphyLogo(Modifier.width(if (compact || keyboardOpen) HomeSizes.heroCompactLogo else HomeSizes.heroLogo))
-                        AnimatedContent(task, transitionSpec = {
-                            fadeIn(tween(enter)) togetherWith fadeOut(tween(exit))
-                        }, label = "Home welcome") { selectedTask ->
-                            Text(if (selectedTask) "What can I tackle for you?" else voiceGreeting(firstNameOf(profileName)),
-                                style = HomeGreetingStyle, color = HomeTheme.colors.promptText,
-                                textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
-                        }
+                        // Keep one greeting: cross-fading two text layers makes mode changes unreadable.
+                        Text(if (task) "What can I tackle for you?" else voiceGreeting(firstNameOf(profileName)),
+                            style = HomeGreetingStyle, color = HomeTheme.colors.promptText,
+                            textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
                     }
                 }
                 if (task) TaskStarters(onTask, if (scrollTogether) Modifier else

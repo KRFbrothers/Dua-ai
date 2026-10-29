@@ -9,6 +9,10 @@ architecture remain the design contract.
 
 - Home greeting: balance wrapped heading lines so short final words do not sit
   alone. Keep the existing type scale, font scaling and scrollable compact hero.
+  Switching Chat/Task updates one greeting immediately; do not cross-fade the
+  outgoing and incoming headings over each other. The current mode and account
+  name must remain correct during rapid reversals, including with system motion
+  disabled.
 - Task starters: use the existing soft surface and rounded-row tokens, with
   consistent spacing and touch feedback. On compact/large-text screens, greeting
   and starter rows scroll together so the fixed starter area cannot clip the
