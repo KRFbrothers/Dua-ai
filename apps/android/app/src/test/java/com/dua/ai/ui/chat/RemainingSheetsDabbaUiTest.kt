@@ -2,6 +2,7 @@ package com.dua.ai.ui.chat
 
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -37,14 +38,16 @@ class RemainingSheetsDabbaUiTest(private val dark: Boolean) {
         val hits = mutableListOf<String>()
         val since = androidx.compose.runtime.mutableStateOf<Long?>(null)
         var accent = Color.Unspecified
+        var expectedAccent = Color.Unspecified
         compose.setContent {
             DuaTheme(prefs) {
+                expectedAccent = MaterialTheme.colorScheme.primary
                 accent = SheetTheme.colors.accent
                 AudioSheetContent(since.value, true, "", onRecord = { hits += "record"; since.value = 0L }, onStop = { hits += "stop" },
                     onCancel = { hits += "discard" }, onPick = { hits += "pick" }, now = { 0L })
             }
         }
-        assertEquals(expected.accent, accent)
+        assertEquals(expectedAccent, accent)
         compose.onNodeWithText("Audio").assert(SemanticsMatcher.keyIsDefined(androidx.compose.ui.semantics.SemanticsProperties.Heading))
         compose.onNodeWithText("Choose file").assertHeightIsAtLeast(SheetSizes.touch).performClick()
         compose.onNodeWithText("Record").assertHeightIsAtLeast(SheetSizes.touch).performClick()

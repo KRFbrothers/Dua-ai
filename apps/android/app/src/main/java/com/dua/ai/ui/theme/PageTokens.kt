@@ -27,7 +27,7 @@ val PageDarkColors = pageColors(DuaDarkColorScheme, DuaDarkColors)
 
 object PageTheme {
     val colors: PageColors
-        @Composable @ReadOnlyComposable get() = if (DuaTheme.colors.isDark) PageDarkColors else PageLightColors
+        @Composable @ReadOnlyComposable get() = pageColors(MaterialTheme.colorScheme, DuaTheme.colors)
 }
 
 /** Maps page tokens onto a Material scheme (pure, so it is unit-testable). */

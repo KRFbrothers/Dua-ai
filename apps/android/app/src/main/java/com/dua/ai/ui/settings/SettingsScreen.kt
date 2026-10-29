@@ -115,7 +115,7 @@ fun SettingsContent(state: SettingsUiState, onBack: () -> Unit, onOpen: (DuaDest
     var about by rememberSaveable { mutableStateOf(false) }
     val c = SettingsTheme.colors
     Column(Modifier.fillMaxSize().background(c.background).statusBarsPadding().navigationBarsPadding()
-        .padding(SettingsSizes.screenPadding).verticalScroll(rememberScrollState()).testTag("settings-screen")) {
+        .padding(SettingsSizes.screenPadding).testTag("settings-screen")) {
         Row(Modifier.fillMaxWidth().padding(bottom = SettingsSizes.headerBottom), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack, modifier = Modifier.size(SettingsSizes.touch)) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = c.rowText)
@@ -126,50 +126,52 @@ fun SettingsContent(state: SettingsUiState, onBack: () -> Unit, onOpen: (DuaDest
                 Icon(ReferenceIcons.Info, "About Dua AI", tint = c.rowText)
             }
         }
-        Spacer(Modifier.height(SettingsSizes.cardsTop))
-        SettingsGroup("Your account") {
-            SettingsItemRow(ReferenceIcons.Account, "Account", state.email ?: "Not signed in") { onOpen(DuaDestination.Account) }
-            SettingsItemRow(Icons.Outlined.AccountCircle, "Edit profile photo", state.displayName.takeIf { it.isNotBlank() },
-                onClickLabel = "Edit profile photo") { onOpen(DuaDestination.AvatarEdit) }
-            SettingsItemRow(ReferenceIcons.Work, "Workspace", state.workspace, showDivider = false) { onOpen(DuaDestination.Work) }
-        }
-        if (state.accountNotice.isNotBlank()) Text(state.accountNotice, style = SettingsValueStyle, color = c.value,
-            modifier = Modifier.padding(top = SettingsSizes.rowGap).semantics { liveRegion = LiveRegionMode.Polite })
-        Spacer(Modifier.height(SettingsSizes.cardGap))
+        Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).testTag("settings-body")) {
+            Spacer(Modifier.height(SettingsSizes.cardsTop))
+            SettingsGroup("Your account") {
+                SettingsItemRow(ReferenceIcons.Account, "Account", state.email ?: "Not signed in") { onOpen(DuaDestination.Account) }
+                SettingsItemRow(Icons.Outlined.AccountCircle, "Edit profile photo", state.displayName.takeIf { it.isNotBlank() },
+                    onClickLabel = "Edit profile photo") { onOpen(DuaDestination.AvatarEdit) }
+                SettingsItemRow(ReferenceIcons.Work, "Workspace", state.workspace, showDivider = false) { onOpen(DuaDestination.Work) }
+            }
+            if (state.accountNotice.isNotBlank()) Text(state.accountNotice, style = SettingsValueStyle, color = c.value,
+                modifier = Modifier.padding(top = SettingsSizes.rowGap).semantics { liveRegion = LiveRegionMode.Polite })
+            Spacer(Modifier.height(SettingsSizes.cardGap))
 
-        // Preferences share the existing settings owners and persistence.
-        SettingsGroup("Preferences") {
-            SettingsItemRow(Icons.Outlined.SentimentSatisfied, "Personalization", listOfNotNull("${themeLabel(state.theme)} · ${fontLabel(state.font)}", state.personality).joinToString(" · ")) { onOpen(DuaDestination.Appearance) }
-            SettingsItemRow(Icons.AutoMirrored.Outlined.MenuBook, "Memory", if (state.memoryEnabled) "On" else "Off") { onOpen(DuaDestination.Memory) }
-            SettingsItemRow(Icons.Outlined.Extension, "Plugins") { onOpen(DuaDestination.Plugins) }
-            if (state.imagine != null) SettingsItemRow(Icons.Outlined.Brush, "Imagine", state.imagine) { onOpen(DuaDestination.Imagine) }
-            BoxWithConstraints(Modifier.fillMaxWidth()) {
-                val inline = settingsValueFitsInline(maxWidth - SettingsSizes.accentDot - SettingsSizes.accentGap, "Accent color", state.accent, icon = true, chevron = true)
-                Row(Modifier.fillMaxWidth().heightIn(min = SettingsSizes.touch)
-                    .clickable(role = Role.Button, onClickLabel = "Change accent color") { onOpen(DuaDestination.Accent) }
-                    .padding(SettingsSizes.rowPadding), horizontalArrangement = Arrangement.spacedBy(SettingsSizes.rowGap), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Outlined.Palette, null, tint = c.rowIcon, modifier = Modifier.size(SettingsSizes.rowIcon))
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-                        Text("Accent color", style = SettingsRowStyle, color = c.rowText)
-                        if (!inline) AccentValue(state.accent)
+            // Preferences share the existing settings owners and persistence.
+            SettingsGroup("Preferences") {
+                SettingsItemRow(Icons.Outlined.SentimentSatisfied, "Personalization", listOfNotNull("${themeLabel(state.theme)} · ${fontLabel(state.font)}", state.personality).joinToString(" · ")) { onOpen(DuaDestination.Appearance) }
+                SettingsItemRow(Icons.AutoMirrored.Outlined.MenuBook, "Memory", if (state.memoryEnabled) "On" else "Off") { onOpen(DuaDestination.Memory) }
+                SettingsItemRow(Icons.Outlined.Extension, "Plugins") { onOpen(DuaDestination.Plugins) }
+                if (state.imagine != null) SettingsItemRow(Icons.Outlined.Brush, "Imagine", state.imagine) { onOpen(DuaDestination.Imagine) }
+                BoxWithConstraints(Modifier.fillMaxWidth()) {
+                    val inline = settingsValueFitsInline(maxWidth - SettingsSizes.accentDot - SettingsSizes.accentGap, "Accent color", state.accent, icon = true, chevron = true)
+                    Row(Modifier.fillMaxWidth().heightIn(min = SettingsSizes.touch)
+                        .clickable(role = Role.Button, onClickLabel = "Change accent color") { onOpen(DuaDestination.Accent) }
+                        .padding(SettingsSizes.rowPadding), horizontalArrangement = Arrangement.spacedBy(SettingsSizes.rowGap), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Outlined.Palette, null, tint = c.rowIcon, modifier = Modifier.size(SettingsSizes.rowIcon))
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+                            Text("Accent color", style = SettingsRowStyle, color = c.rowText)
+                            if (!inline) AccentValue(state.accent)
+                        }
+                        if (inline) AccentValue(state.accent)
                     }
-                    if (inline) AccentValue(state.accent)
                 }
             }
-        }
-        Spacer(Modifier.height(SettingsSizes.cardGap))
+            Spacer(Modifier.height(SettingsSizes.cardGap))
 
-        SettingsGroup("General and privacy") {
-            SettingsItemRow(Icons.Outlined.Settings, "General") { onOpen(DuaDestination.General) }
-            SettingsItemRow(Icons.Outlined.Tune, "Feature setup", "Providers & connectors") { onOpen(DuaDestination.FeatureSetup) }
-            SettingsItemRow(Icons.AutoMirrored.Outlined.TrendingUp, "Usage and limits") { onOpen(DuaDestination.UsageLimits) }
-            SettingsItemRow(Icons.Outlined.Notifications, "Notifications", state.notificationStatus ?: if (state.notifications) "On" else "Off") { onOpen(DuaDestination.Notifications) }
-            SettingsItemRow(Icons.Outlined.GraphicEq, "Voice", state.voice) { onOpen(DuaDestination.VoiceSettings) }
-            SettingsItemRow(Icons.Outlined.Shield, "Safety") { onOpen(DuaDestination.Safety) }
-            SettingsItemRow(Icons.Outlined.Lock, "Security and login") { onOpen(DuaDestination.SecurityLogin) }
-            SettingsItemRow(Icons.Outlined.Storage, "Storage") { onOpen(DuaDestination.Storage) }
-            SettingsItemRow(Icons.Outlined.Search, "Search settings") { onOpen(DuaDestination.SettingsSearch) }
-            SettingsItemRow(Icons.Outlined.Archive, "History and data", showDivider = false) { onOpen(DuaDestination.HistoryData) }
+            SettingsGroup("General and privacy") {
+                SettingsItemRow(Icons.Outlined.Settings, "General") { onOpen(DuaDestination.General) }
+                SettingsItemRow(Icons.Outlined.Tune, "Feature setup", "Providers & connectors") { onOpen(DuaDestination.FeatureSetup) }
+                SettingsItemRow(Icons.AutoMirrored.Outlined.TrendingUp, "Usage and limits") { onOpen(DuaDestination.UsageLimits) }
+                SettingsItemRow(Icons.Outlined.Notifications, "Notifications", state.notificationStatus ?: if (state.notifications) "On" else "Off") { onOpen(DuaDestination.Notifications) }
+                SettingsItemRow(Icons.Outlined.GraphicEq, "Voice", state.voice) { onOpen(DuaDestination.VoiceSettings) }
+                SettingsItemRow(Icons.Outlined.Shield, "Safety") { onOpen(DuaDestination.Safety) }
+                SettingsItemRow(Icons.Outlined.Lock, "Security and login") { onOpen(DuaDestination.SecurityLogin) }
+                SettingsItemRow(Icons.Outlined.Storage, "Storage") { onOpen(DuaDestination.Storage) }
+                SettingsItemRow(Icons.Outlined.Search, "Search settings") { onOpen(DuaDestination.SettingsSearch) }
+                SettingsItemRow(Icons.Outlined.Archive, "History and data", showDivider = false) { onOpen(DuaDestination.HistoryData) }
+            }
         }
     }
     if (about) DuaDialog(onDismissRequest = { about = false }, title = "About Dua AI",

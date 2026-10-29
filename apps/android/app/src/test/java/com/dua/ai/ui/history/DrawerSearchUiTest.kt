@@ -140,4 +140,23 @@ class DrawerSearchUiTest(private val dark: Boolean, private val large: Boolean) 
             Settings.Global.putFloat(resolver, Settings.Global.ANIMATOR_DURATION_SCALE, previous)
         }
     }
+
+    @Test fun backAfterKeyboardDismissalClosesSearchBeforeTheDrawer() {
+        show(listOf(chat("a", "Alpha plan"), chat("b", "Beta question")))
+        compose.onNodeWithContentDescription("Search chats").performClick()
+        compose.onNodeWithTag("drawer-search-field").performTextInput("Alpha")
+        keyboard(240)
+        compose.onNodeWithTag("drawer-search-field").assertTextContains("Alpha")
+        // Insets simulate the platform's first Back hiding the IME. The next dispatcher
+        // event must close search while retaining the drawer and its real navigation.
+        keyboard(0)
+        compose.runOnUiThread { compose.activity.onBackPressedDispatcher.onBackPressed() }
+        compose.onNodeWithTag("drawer-search-field").assertDoesNotExist()
+        compose.onNodeWithTag("history-drawer").assertIsDisplayed()
+        compose.onNodeWithText("Library").assertIsDisplayed()
+        capture("back-to-browse")
+        compose.onNodeWithContentDescription("Search chats").performClick()
+        compose.onNodeWithTag("drawer-search-field").assertIsFocused().assertTextContains("")
+        compose.onNodeWithText("Beta question").performScrollTo().assertIsDisplayed()
+    }
 }

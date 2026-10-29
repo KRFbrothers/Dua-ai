@@ -1,6 +1,7 @@
 package com.dua.ai.ui.theme
 
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.ReadOnlyComposable
@@ -29,7 +30,7 @@ val ChatDarkColors = chatColors(DuaDarkColorScheme, DuaDarkColors)
 
 object ChatTheme {
     val colors: ChatColors
-        @Composable @ReadOnlyComposable get() = if (DuaTheme.colors.isDark) ChatDarkColors else ChatLightColors
+        @Composable @ReadOnlyComposable get() = chatColors(MaterialTheme.colorScheme, DuaTheme.colors)
 }
 
 /** Reference sizes: list padding 16 dp (+8 dp outer column top), 12 dp list padding, 14 dp between messages. */

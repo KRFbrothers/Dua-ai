@@ -49,8 +49,14 @@ class HomeChatTaskUiTest(private val dark: Boolean, private val compact: Boolean
     private fun show(content: @androidx.compose.runtime.Composable () -> Unit) = compose.setContent {
         CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, if (compact) 2f else 1f)) {
             DuaTheme(LocalPreferences(theme = if (dark) "dark" else "light")) {
-                assertEquals(if (dark) HomeDarkColors else HomeLightColors, HomeTheme.colors)
-                assertEquals(if (dark) ChatDarkColors else ChatLightColors, ChatTheme.colors)
+                val scheme = MaterialTheme.colorScheme
+                assertEquals((if (dark) HomeDarkColors else HomeLightColors).copy(
+                    voice = scheme.primary, onVoice = scheme.onPrimary,
+                ), HomeTheme.colors)
+                assertEquals((if (dark) ChatDarkColors else ChatLightColors).copy(
+                    accent = scheme.primary, accentSoft = scheme.primaryContainer,
+                    onAccentSoft = scheme.onPrimaryContainer,
+                ), ChatTheme.colors)
                 Box(Modifier.requiredSize(if (compact) 320.dp else 360.dp, if (compact) 568.dp else 752.dp)) { content() }
             }
         }

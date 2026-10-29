@@ -62,6 +62,7 @@ import com.dua.ai.ui.components.ReferenceIcons
 import com.dua.ai.ui.components.AccountAvatar
 import com.dua.ai.ui.theme.*
 import android.graphics.BitmapFactory
+import androidx.activity.compose.BackHandler
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
 
@@ -135,6 +136,12 @@ fun HistoryDrawer(
     var filterMenu by remember { mutableStateOf(false) }
     var renaming by remember { mutableStateOf<SavedChat?>(null) }
     var notice by remember { mutableStateOf<String?>(null) }
+    fun closeHistorySearch() {
+        searching = false
+        query = ""
+        focusManager.clearFocus()
+        keyboard?.hide()
+    }
     val browseScroll = rememberScrollState()
     val searchScroll = rememberScrollState()
     LaunchedEffect(query, pinnedOnly) { searchScroll.scrollTo(0) }
@@ -160,8 +167,7 @@ fun HistoryDrawer(
                 Text("Dua AI", style = DrawerTitleStyle, color = colors.title,
                     modifier = Modifier.weight(1f).padding(start = DrawerSizes.menuGap).semantics { heading() })
                 IconButton(onClick = {
-                    searching = !searching
-                    if (!searching) { query = ""; focusManager.clearFocus(); keyboard?.hide() }
+                    if (searching) closeHistorySearch() else searching = true
                     onSearch()
                 },
                     modifier = Modifier.size(DrawerSizes.touch)) {
@@ -281,6 +287,12 @@ fun HistoryDrawer(
         }
     }
 
+    // Register after the drawer sheet so search owns the next Back after the IME.
+    // The platform consumes IME Back first; do not intercept it or add another inset owner.
+    val keyboardOpen = WindowInsets.ime.getBottom(LocalDensity.current) > 0
+    BackHandler(enabled = searching && (permanent || drawerState.isOpen) && !keyboardOpen && !filterMenu && renaming == null) {
+        closeHistorySearch()
+    }
     renaming?.let { chat -> RenameChatDialog(chat, onRenameChat, onDismiss = { renaming = null }) }
 
 }

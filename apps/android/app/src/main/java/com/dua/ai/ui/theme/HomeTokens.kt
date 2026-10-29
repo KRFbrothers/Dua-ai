@@ -52,7 +52,7 @@ internal fun HomeChrome(enabled: Boolean, content: @Composable () -> Unit) {
 
 object HomeTheme {
     val colors: HomeColors
-        @Composable @ReadOnlyComposable get() = LocalHomeColors.current ?: if (DuaTheme.colors.isDark) HomeDarkColors else HomeLightColors
+        @Composable @ReadOnlyComposable get() = LocalHomeColors.current ?: homeColors(MaterialTheme.colorScheme, DuaTheme.colors)
 }
 
 /** Reference sizes. Visuals keep the reference sizes; each control sits in a 48 dp touch slot. */

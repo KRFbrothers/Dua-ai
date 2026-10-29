@@ -41,7 +41,7 @@ class HomeHeaderRefinementUiTest(private val dark: Boolean, private val large: B
         CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, if (large) 2f else 1f)) {
             DuaTheme(LocalPreferences(theme = if (dark) "dark" else "light")) {
                 background = ChatTheme.colors.background
-                assertEquals(if (dark) HomeDarkColors else HomeLightColors, HomeTheme.colors)
+                assertEquals(androidx.compose.material3.MaterialTheme.colorScheme.primary, HomeTheme.colors.voice)
                 Box(Modifier.requiredSize(if (large) 320.dp else 360.dp, if (large) 568.dp else 752.dp)
                     .background(background)) { content() }
             }

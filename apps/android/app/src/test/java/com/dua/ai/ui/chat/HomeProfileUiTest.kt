@@ -6,6 +6,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.dp
 import androidx.activity.ComponentActivity
 import com.dua.ai.settings.LocalPreferences
 import com.dua.ai.ui.navigation.DuaDestination
@@ -39,6 +40,15 @@ class HomeProfileUiTest(private val dark: Boolean, private val large: Boolean) {
     private fun open() {
         compose.onNodeWithContentDescription("Open profile and settings").performClick()
         compose.onNodeWithTag("home-profile-dialog").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Close profile").assertIsDisplayed()
+            .assertWidthIsAtLeast(com.dua.ai.ui.theme.Sizes.touchTarget)
+            .assertHeightIsAtLeast(com.dua.ai.ui.theme.Sizes.touchTarget)
+        compose.runOnIdle {
+            val window = org.robolectric.shadows.ShadowDialog.getLatestDialog().window!!
+            val bars = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
+            assertEquals(!dark, bars.isAppearanceLightStatusBars)
+            assertEquals(!dark, bars.isAppearanceLightNavigationBars)
+        }
     }
     private fun capture(label: String) {
         val file = File("build/approved-ui/home-profile-$label-$dark-$large.png")
@@ -96,6 +106,9 @@ class HomeProfileUiTest(private val dark: Boolean, private val large: Boolean) {
         show(mutableStateOf(ChatUiState()), ChatActions(onOpenDestination = { destination = it }))
         open()
         compose.onNodeWithText("Guest").assertIsDisplayed()
+        val card = compose.onNodeWithTag("home-profile-dialog").getUnclippedBoundsInRoot()
+        assertTrue("Profile card stays bounded", card.right - card.left <= com.dua.ai.ui.theme.SheetSizes.dialogMaxWidth)
+        if (!large) assertTrue("Short profiles wrap their content instead of filling the screen", card.bottom - card.top < 700.dp)
         compose.onNodeWithText("PRO").assertDoesNotExist()
         compose.onNodeWithText("Fareed Ahmad").assertDoesNotExist()
         capture("guest")

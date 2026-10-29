@@ -1,6 +1,7 @@
 package com.dua.ai.ui.theme
 
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
@@ -27,7 +28,7 @@ val DrawerDarkColors = drawerColors(DuaDarkColorScheme, DuaDarkColors)
 
 object DrawerTheme {
     val colors: DrawerColors
-        @Composable @ReadOnlyComposable get() = if (DuaTheme.colors.isDark) DrawerDarkColors else DrawerLightColors
+        @Composable @ReadOnlyComposable get() = drawerColors(MaterialTheme.colorScheme, DuaTheme.colors)
 }
 
 /** Existing modal width and 48 dp targets, with spacing for the selected drawer reference. */

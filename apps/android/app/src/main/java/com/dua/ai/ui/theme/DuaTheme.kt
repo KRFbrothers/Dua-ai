@@ -16,6 +16,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
+import androidx.compose.ui.window.DialogWindowProvider
 import com.dua.ai.settings.LocalPreferences
 import com.dua.ai.settings.AccentPreset
 
@@ -76,4 +77,19 @@ object DuaTheme {
         @Composable @ReadOnlyComposable get() = LocalDuaAccent.current
     val colors: DuaColors
         @Composable @ReadOnlyComposable get() = LocalDuaColors.current
+}
+
+/** Dialogs own a separate Window; the activity's bar-icon flags do not theme it. */
+@Composable
+internal fun DuaDialogSystemBars() {
+    val view = LocalView.current
+    val dark = DuaTheme.colors.isDark
+    SideEffect {
+        (view.parent as? DialogWindowProvider)?.window?.let { window ->
+            WindowCompat.getInsetsController(window, view).apply {
+                isAppearanceLightStatusBars = !dark
+                isAppearanceLightNavigationBars = !dark
+            }
+        }
+    }
 }

@@ -37,7 +37,7 @@ class DynamicComposerUiTest(private val dark: Boolean, private val largeFont: Bo
     private fun show(content: @Composable () -> Unit) = compose.setContent {
         CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, if (largeFont) 2f else 1f)) {
             DuaTheme(LocalPreferences(theme = if (dark) "dark" else "light")) {
-                assertEquals(if (dark) HomeDarkColors else HomeLightColors, HomeTheme.colors)
+                assertEquals(androidx.compose.material3.MaterialTheme.colorScheme.primary, HomeTheme.colors.voice)
                 Box(Modifier.requiredSize(if (largeFont) 320.dp else 360.dp, 700.dp), contentAlignment = androidx.compose.ui.Alignment.BottomCenter) { content() }
             }
         }

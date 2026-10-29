@@ -53,6 +53,9 @@ class ModelPickerMotionUiTest(private val dark: Boolean, private val motion: Boo
                 }
             }
             compose.onNodeWithTag("model-row-Dua").assertIsSelected()
+            compose.onNodeWithTag("model-picker-sheet").assert(SemanticsMatcher.keyIsDefined(
+                androidx.compose.ui.semantics.SemanticsProperties.SelectableGroup))
+            compose.onNodeWithTag("model-row-Dua").assertHeightIsAtLeast(com.dua.ai.ui.theme.Sizes.touchTarget)
             compose.onNodeWithTag("model-row-ChatGPT").assertIsNotEnabled().performClick()
             assertEquals(emptyList<String>(), selected)
             compose.onNodeWithTag("model-row-Gemini").performScrollTo().performClick().assertIsSelected()

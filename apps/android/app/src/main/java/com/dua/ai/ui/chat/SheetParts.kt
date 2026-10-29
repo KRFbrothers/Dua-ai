@@ -35,6 +35,7 @@ import com.dua.ai.ui.theme.SheetShapes
 import com.dua.ai.ui.theme.SheetSizes
 import com.dua.ai.ui.theme.SheetTheme
 import com.dua.ai.ui.theme.SheetTitleStyle
+import com.dua.ai.ui.theme.DuaDialogSystemBars
 
 /** Dabba-style modal sheet: white (gray-900 dark) surface, 28 dp top corners, slim gray handle. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -46,7 +47,10 @@ fun DuaSheet(onDismiss: () -> Unit, sheetState: SheetState = rememberModalBottom
         tonalElevation = 6.dp, shape = SheetShapes.sheet, scrimColor = colors.scrim, dragHandle = {
             Box(Modifier.padding(vertical = SheetSizes.handlePadding).size(SheetSizes.handleWidth, SheetSizes.handleHeight)
                 .background(colors.handle, SheetShapes.handle))
-        }) { com.dua.ai.ui.theme.DuaPageTheme { Column(content = content) } }
+        }) {
+            DuaDialogSystemBars()
+            com.dua.ai.ui.theme.DuaPageTheme { Column(content = content) }
+        }
 }
 
 @Composable
@@ -98,7 +102,7 @@ fun DuaDialog(
 ) {
     val c = SheetTheme.colors
     AlertDialog(onDismissRequest = onDismissRequest, confirmButton = confirmButton, dismissButton = dismissButton, modifier = modifier,
-        properties = properties, title = { Text(title, style = SheetTitleStyle) }, text = text?.let { t -> { com.dua.ai.ui.theme.DuaPageTheme(t) } }, shape = SheetShapes.dialog,
+        properties = properties, title = { DuaDialogSystemBars(); Text(title, style = SheetTitleStyle) }, text = text?.let { t -> { com.dua.ai.ui.theme.DuaPageTheme(t) } }, shape = SheetShapes.dialog,
         containerColor = c.container, titleContentColor = c.title, textContentColor = c.subText, tonalElevation = 0.dp)
 }
 
