@@ -80,5 +80,10 @@ class ThemeConsistencyUiTest(private val systemDark: Boolean, private val large:
         compose.onNodeWithContentDescription("Stop response").assertIsEnabled()
         compose.runOnIdle { state.value = state.value.copy(typing = false) }
         compose.onNodeWithContentDescription("Message").assertTextContains("A retained draft")
+        compose.runOnIdle { state.value = state.value.copy(draft = "") }
+        compose.onNodeWithContentDescription("Voice mode").assertIsDisplayed()
+        val idle = File("build/approved-ui/consistency-home-idle-$systemDark-$large.png")
+        idle.parentFile!!.mkdirs()
+        compose.onRoot().captureRoboImage(idle.absolutePath)
     }
 }

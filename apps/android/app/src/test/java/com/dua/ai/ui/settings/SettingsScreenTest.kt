@@ -52,7 +52,7 @@ class SettingsScreenTest {
         }
         compose.onNodeWithText("Edit profile photo").performScrollTo().performClick()
         compose.runOnIdle { assertEquals(DuaDestination.AvatarEdit, dest) }
-        compose.onNodeWithContentDescription("About Dua AI").performScrollTo().performClick()
+        compose.onNodeWithContentDescription("About Dua AI").assertIsDisplayed().performClick()
         compose.onNodeWithText("About Dua AI").assertIsDisplayed()
     }
 
