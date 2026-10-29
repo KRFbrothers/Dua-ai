@@ -56,6 +56,8 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.onLongClick
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
@@ -237,7 +239,7 @@ fun MessageActions(
 ) {
     val actions = rememberTextMessageActions(copyText)
     val haptic = LocalChatHaptic.current
-    val tint = MaterialTheme.colorScheme.onSurface.copy(alpha = .86f)
+    val tint = MaterialTheme.colorScheme.onSurfaceVariant
     val copyTint = if (copyText.isNotBlank()) tint else tint.copy(alpha = .38f)
     Row(Modifier.fillMaxWidth().padding(top = Spacing.xs), verticalAlignment = Alignment.CenterVertically) {
         FlowRow(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
@@ -250,7 +252,8 @@ fun MessageActions(
             IconButton(onClick = { actions.share() }, enabled = copyText.isNotBlank(), modifier = Modifier.size(Sizes.touchTarget)) {
                 Icon(Icons.Outlined.Share, "Share response", tint = copyTint, modifier = Modifier.size(Sizes.iconSmall))
             }
-            IconButton(onClick = actions.copy, enabled = copyText.isNotBlank(), modifier = Modifier.size(Sizes.touchTarget)) {
+            IconButton(onClick = actions.copy, enabled = copyText.isNotBlank(), modifier = Modifier.size(Sizes.touchTarget)
+                .semantics { liveRegion = LiveRegionMode.Polite }) {
                 Icon(if (actions.copied) Icons.Outlined.Check else Icons.Outlined.ContentCopy,
                     if (actions.copied) "Response copied" else "Copy response", tint = copyTint, modifier = Modifier.size(Sizes.iconSmall))
             }

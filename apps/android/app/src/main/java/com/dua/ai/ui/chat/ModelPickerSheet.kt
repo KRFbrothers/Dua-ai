@@ -9,6 +9,10 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.background
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -37,6 +41,7 @@ import com.dua.ai.ui.theme.SheetRowStyle
 import com.dua.ai.ui.theme.SheetSizes
 import com.dua.ai.ui.theme.SheetSubStyle
 import com.dua.ai.ui.theme.SheetTheme
+import com.dua.ai.ui.theme.SheetShapes
 import com.dua.ai.ui.theme.DuaMotion
 import com.dua.ai.ui.theme.rememberMotionAllowed
 
@@ -52,7 +57,7 @@ fun ModelPickerSheet(current: String, providers: List<ProviderCapability>, onSel
     val motion = rememberMotionAllowed()
     DuaSheet(onDismiss = onDismiss) {
         Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = SheetSizes.paddingH).padding(bottom = SheetSizes.paddingBottom)
-            .testTag("model-picker-sheet")) {
+            .testTag("model-picker-sheet").selectableGroup()) {
             SheetTitle("Choose a model")
             Text("Pick who responds in this chat", style = SheetSubStyle, color = c.subText, modifier = Modifier.padding(bottom = SheetSizes.sectionGap))
             SheetGroup {
@@ -64,6 +69,7 @@ fun ModelPickerSheet(current: String, providers: List<ProviderCapability>, onSel
                     val selected = current == name && currentFree == null
                     val alpha = if (available) 1f else SheetDisabledAlpha
                     Row(Modifier.fillMaxWidth().heightIn(min = SheetSizes.rowMin).testTag("model-row-$name")
+                        .clip(SheetShapes.badge).background(if (selected) c.selectedFill else Color.Transparent)
                         .selectable(selected = selected, enabled = available, role = Role.RadioButton) {
                             haptic(ChatHaptic.Tap)
                             onSelect(name)
@@ -90,6 +96,7 @@ fun ModelPickerSheet(current: String, providers: List<ProviderCapability>, onSel
                         if (index > 0) SheetDivider()
                         val selected = currentFree == model.id
                         Row(Modifier.fillMaxWidth().heightIn(min = SheetSizes.rowMin).testTag("free-model-${model.id}")
+                            .clip(SheetShapes.badge).background(if (selected) c.selectedFill else Color.Transparent)
                             .selectable(selected = selected, role = Role.RadioButton) {
                                 haptic(ChatHaptic.Tap)
                                 onSelectFree(model.id)
