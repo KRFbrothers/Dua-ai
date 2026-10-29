@@ -15,7 +15,7 @@ import agent_safety
 import agent_tools
 from automation_companion import Companion, create_app
 from automation_drivers import Android, point, public_url
-from automation_terminal import Session, Terminals
+from automation_terminal import MAX_SESSIONS, Session, Terminals
 
 OWNER = "11111111-1111-4111-8111-111111111111"
 OTHER = "22222222-2222-4222-8222-222222222222"
@@ -222,6 +222,56 @@ def test_terminal_owner_and_expiry():
     with pytest.raises(ValueError):
         terminals.get(OWNER, "s1")
     assert session.close.called
+
+
+@pytest.fixture
+def terminal_registry():
+    counter = 0
+
+    def factory(owner, profile, image):
+        nonlocal counter
+        counter += 1
+        session = SimpleNamespace(id=f"session-{counter}", owner=owner, profile=profile,
+                                  closed=False, expired=lambda: False)
+        session.close = lambda: setattr(session, "closed", True)
+        return session
+
+    return Terminals({"python": "unused"}, factory=factory)
+
+
+def test_closed_terminals_release_capacity_with_bounded_output_history(terminal_registry):
+    terminals = terminal_registry
+    first_id = None
+    for _ in range(MAX_SESSIONS * 3):
+        result = terminals.open(OWNER, "python")
+        first_id = first_id or result["session_id"]
+        session = terminals.get(OWNER, result["session_id"])
+        session.close()
+        assert terminals.get(OWNER, session.id) is session, "closed output remains readable until eviction"
+        assert len(terminals.sessions) <= MAX_SESSIONS
+    with pytest.raises(ValueError, match="not found"):
+        terminals.get(OWNER, first_id)
+
+
+def test_owner_terminal_limit_still_counts_two_active_sessions(terminal_registry):
+    terminals = terminal_registry
+    first = terminals.open(OWNER, "python")
+    terminals.open(OWNER, "python")
+    with pytest.raises(ValueError, match="limit reached"):
+        terminals.open(OWNER, "python")
+    terminals.get(OWNER, first["session_id"]).close()
+    assert terminals.open(OWNER, "python")["opened"]
+
+
+def test_global_limit_does_not_evict_active_terminals(terminal_registry):
+    terminals = terminal_registry
+    opened = [terminals.open(f"owner-{i}", "python") for i in range(MAX_SESSIONS)]
+    with pytest.raises(ValueError, match="limit reached"):
+        terminals.open("another-owner", "python")
+    for i, result in enumerate(opened):
+        assert not terminals.get(f"owner-{i}", result["session_id"]).closed
+    terminals.get("owner-0", opened[0]["session_id"]).close()
+    assert terminals.open("another-owner", "python")["opened"]
 
 
 def test_terminal_profile_requires_digest():
