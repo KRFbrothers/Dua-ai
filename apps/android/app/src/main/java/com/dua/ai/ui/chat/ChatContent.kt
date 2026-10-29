@@ -34,10 +34,12 @@ internal val HomeTaskPromptIds = listOf(R.string.home_task_prompt_backup,
 
 /** Home's decoration changes independently of the stable composer and its draft/focus. */
 @Composable
-internal fun ChatContent(task: Boolean, composing: Boolean = false, profileName: String = "", onTask: (String) -> Unit) {
+internal fun ChatContent(task: Boolean, composing: Boolean = false, profileName: String = "",
+    keyboardInsets: WindowInsets = WindowInsets.ime, onTask: (String) -> Unit) {
     BoxWithConstraints(Modifier.fillMaxSize().padding(horizontal = Spacing.lg).testTag("home-empty-content")) {
         val density = LocalDensity.current
-        val keyboardOpen = WindowInsets.ime.getBottom(density) > 0
+        val keyboardOpen = keyboardInsets.getBottom(density) > 0
+        val showHero = !task || !keyboardOpen
         val compact = maxHeight < HomeSizes.heroCompactHeight
         val promptMaxHeight = maxHeight * .55f
         val motion = rememberMotionAllowed()
@@ -47,23 +49,29 @@ internal fun ChatContent(task: Boolean, composing: Boolean = false, profileName:
             enter = fadeIn(tween(enter)), exit = fadeOut(tween(exit))) {
             // At large text/small heights, fixed starter rows would clip the
             // greeting. Let the complete Task body scroll as one document.
-            val scrollTogether = task && maxHeight < (HomeSizes.heroCompactHeight + Sizes.touchTarget) * density.fontScale
+            val scrollTogether = task && showHero && maxHeight < (HomeSizes.heroCompactHeight + Sizes.touchTarget) * density.fontScale
             Column(Modifier.fillMaxSize().then(if (scrollTogether) Modifier.verticalScroll(rememberScrollState()) else Modifier)) {
-                val hero = if (scrollTogether) Modifier else Modifier.weight(1f).verticalScroll(rememberScrollState())
-                Box(hero.fillMaxWidth(),
-                    contentAlignment = Alignment.Center) {
-                    Column(Modifier.fillMaxWidth().padding(vertical = Spacing.lg).testTag("home-hero"),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(Spacing.lg)) {
-                        DuaCalligraphyLogo(Modifier.width(if (compact || keyboardOpen) HomeSizes.heroCompactLogo else HomeSizes.heroLogo))
-                        // Keep one greeting: cross-fading two text layers makes mode changes unreadable.
-                        Text(if (task) "What can I tackle for you?" else voiceGreeting(firstNameOf(profileName)),
-                            style = HomeGreetingStyle, color = HomeTheme.colors.promptText,
-                            textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                if (showHero) {
+                    val hero = if (scrollTogether) Modifier else Modifier.weight(1f).verticalScroll(rememberScrollState())
+                    Box(hero.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        Column(Modifier.fillMaxWidth().padding(vertical = Spacing.lg).testTag("home-hero"),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(Spacing.lg)) {
+                            DuaCalligraphyLogo(Modifier.width(if (compact || keyboardOpen) HomeSizes.heroCompactLogo else HomeSizes.heroLogo))
+                            // Keep one greeting: cross-fading two text layers makes mode changes unreadable.
+                            Text(if (task) "What can I tackle for you?" else voiceGreeting(firstNameOf(profileName)),
+                                style = HomeGreetingStyle, color = HomeTheme.colors.promptText,
+                                textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                        }
                     }
                 }
-                if (task) TaskStarters(onTask, if (scrollTogether) Modifier else
-                    Modifier.heightIn(max = promptMaxHeight).verticalScroll(rememberScrollState()))
+                // Empty Task keeps starters reachable above the IME. Chat retains its greeting.
+                // Insets are only observed here; ChatScreen remains their sole layout owner.
+                if (task) TaskStarters(onTask, when {
+                    !showHero -> Modifier.weight(1f).verticalScroll(rememberScrollState())
+                    scrollTogether -> Modifier
+                    else -> Modifier.heightIn(max = promptMaxHeight).verticalScroll(rememberScrollState())
+                })
             }
         }
     }
