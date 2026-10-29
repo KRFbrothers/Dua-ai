@@ -98,14 +98,15 @@ export async function signDownload(config, token, path, expiresIn, { fetcher, si
   return url.href;
 }
 
-/** Lists the owner's folder (flat layout), up to 10,000 objects. */
-export async function listOwnerFiles(config, token, userId, { fetcher, signal } = {}) {
+/** Lists up to 10,000 objects; exact-usage callers must reject a larger inventory. */
+export async function listOwnerFiles(config, token, userId, { fetcher, signal, requireComplete = false } = {}) {
   const files = [];
-  for (let page = 0; page < 10; page++) {
+  for (let page = 0; page < (requireComplete ? 11 : 10); page++) {
     const data = await call(config, token, `/object/list/${encodeURIComponent(config.bucket)}`, {
-      body: { prefix: userId + '/', limit: 1000, offset: page * 1000, sortBy: { column: 'name', order: 'asc' } }, fetcher, signal, maxBytes: 8 * 1024 * 1024
+      body: { prefix: userId + '/', limit: page === 10 ? 1 : 1000, offset: page * 1000, sortBy: { column: 'name', order: 'asc' } }, fetcher, signal, maxBytes: 8 * 1024 * 1024
     });
     if (!Array.isArray(data)) throw new StorageError('File storage returned an invalid list. Retry.', 502);
+    if (page === 10 && data.length) throw new StorageError('File inventory is too large to calculate exact storage usage. Retry after deleting files.', 409);
     for (const item of data) {
       if (typeof item?.name !== 'string' || !item.id) continue; // folders have no id
       files.push({ path: `${userId}/${item.name}`, size: Number.isSafeInteger(item.metadata?.size) ? item.metadata.size : 0, createdAt: typeof item.created_at === 'string' ? item.created_at : null });
@@ -123,6 +124,25 @@ export async function removeFiles(config, token, paths, { fetcher, signal } = {}
     removed += Array.isArray(data) ? data.length : 0;
   }
   return removed;
+}
+
+/** Drain bounded inventories from offset zero; only report success after an empty read.
+ * A request removes at most 100,000 files within 20 seconds. Retrying an incomplete
+ * operation continues with the remaining objects, without offsets into deleted rows.
+ */
+export async function removeOwnerFiles(config, token, userId, { fetcher, signal } = {}) {
+  const deadline = AbortSignal.any([signal || new AbortController().signal, AbortSignal.timeout(20000)]);
+  let removed = 0;
+  for (let batch = 0; batch <= 10; batch++) {
+    deadline.throwIfAborted();
+    const files = await listOwnerFiles(config, token, userId, { fetcher, signal: deadline });
+    if (!files.length) return removed;
+    if (batch === 10) break;
+    const deleted = await removeFiles(config, token, files.map(file => file.path), { fetcher, signal: deadline });
+    if (deleted < files.length) break;
+    removed += deleted;
+  }
+  throw new StorageError('File deletion is incomplete. Retry Delete all to finish.', 409);
 }
 
 /** Downloads a signed URL with a byte cap. */

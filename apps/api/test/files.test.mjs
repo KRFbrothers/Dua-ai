@@ -135,11 +135,15 @@ test('preview URLs and deletes only touch the caller\'s own folder', async () =>
 });
 
 test('usage and delete-all list the owner folder', async () => {
-  const items = [{ id: '1', name: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee.pdf', metadata: { size: 1000 } }, { id: '2', name: 'bbbbbbbb-bbbb-4ccc-8ddd-eeeeeeeeeeee.m4a', metadata: { size: 500 } }, { id: null, name: 'folder' }];
+  let items = [{ id: '1', name: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee.pdf', metadata: { size: 1000 } }, { id: '2', name: 'bbbbbbbb-bbbb-4ccc-8ddd-eeeeeeeeeeee.m4a', metadata: { size: 500 } }, { id: null, name: 'folder' }];
   let removed;
   const fetcher = router([
     [SUPA + '/storage/v1/object/list/dua-files', () => Response.json(items)],
-    [SUPA + '/storage/v1/object/dua-files', (url, init) => { removed = JSON.parse(init.body).prefixes; return Response.json(removed.map(name => ({ name }))); }]
+    [SUPA + '/storage/v1/object/dua-files', (url, init) => {
+      removed = JSON.parse(init.body).prefixes;
+      items = items.filter(item => !removed.includes(UID + '/' + item.name));
+      return Response.json(removed.map(name => ({ name })));
+    }]
   ]);
   const usage = await (await handleFiles(filesRequest('usage', null, { method: 'GET' }), { env: filesEnv, fetcher })).json();
   assert.deepEqual(usage, { files: 2, bytes: 1500, maxBytes: 50 * MB, bucket: 'dua-files' });

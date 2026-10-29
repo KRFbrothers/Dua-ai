@@ -40,6 +40,21 @@ test('mixed cleanup deletes only unreferenced paths, deduplicated and under the 
   assert.equal(fetcher.find(storageUrl)[0].headers.get('authorization'), 'Bearer user-token');
 });
 
+test('cleanup retains project-only sources in active and archived projects while deleting orphans', async () => {
+  for (const archived of [false, true]) {
+    const payload = { format: 'dua-cloud-snapshot', version: 1, memory: [], chats: [], projects: [
+      { id: 'personal', name: 'Personal', instructions: '', archived: false },
+      { id: 'research', name: 'Research', instructions: '', archived,
+        sources: [{ path: upload, name: 'source.pdf', mimeType: 'application/pdf', size: 10 }] }
+    ] };
+    const fetcher = router([[cloudUrl, () => Response.json([{ revision: 1, payload }])], deleteRoute]);
+    const response = await handleFiles(filesRequest('delete', { paths: [upload, orphan, upload] }), { env: filesEnv, fetcher });
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), { deleted: 1, retained: 1 });
+    assert.deepEqual(fetcher.find(storageUrl)[0].json.prefixes, [orphan]);
+  }
+});
+
 test('cleanup permits unreferenced uploads when no snapshot row exists or when the server snapshot is cleared', async () => {
   for (const rows of [[], [{ revision: 2, payload: { format: 'dua-cloud-snapshot', version: 1, chats: [], memory: [] } }]]) {
     const fetcher = router([[cloudUrl, () => Response.json(rows)], deleteRoute]);
@@ -65,9 +80,10 @@ test('unavailable or corrupt cloud state fails closed before any Storage delete'
 });
 
 test('the reviewed delete-all action still permanently deletes referenced files', async () => {
+  let remaining = [{ id: 'file', name: upload.split('/')[1], metadata: { size: 10 } }];
   const fetcher = router([
-    [SUPA + '/storage/v1/object/list/dua-files', () => Response.json([{ id: 'file', name: upload.split('/')[1], metadata: { size: 10 } }])],
-    deleteRoute
+    [SUPA + '/storage/v1/object/list/dua-files', () => Response.json(remaining)],
+    [storageUrl, (_, init) => { remaining = []; return Response.json(JSON.parse(init.body).prefixes.map(name => ({ name }))); }]
   ]);
   const response = await handleFiles(filesRequest('delete-all', {}), { env: filesEnv, fetcher });
   assert.equal(response.status, 200);

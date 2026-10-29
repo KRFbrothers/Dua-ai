@@ -136,8 +136,16 @@ class Terminals:
         with self.lock:
             if profile not in self.profiles:
                 raise ValueError("Terminal profile is not configured")
-            if len(self.sessions) >= MAX_SESSIONS or sum(s.owner == owner and not s.closed for s in self.sessions.values()) >= 2:
+            active = [s for s in self.sessions.values() if not s.closed]
+            if len(active) >= MAX_SESSIONS or sum(s.owner == owner for s in active) >= 2:
                 raise ValueError("Terminal session limit reached")
+            # Keep final output readable, but evict oldest closed records when a
+            # new session needs capacity. Active sessions are never evicted.
+            for key, session in list(self.sessions.items()):
+                if len(self.sessions) < MAX_SESSIONS:
+                    break
+                if session.closed:
+                    del self.sessions[key]
             session = self.factory(owner, profile, self.profiles[profile])
             self.sessions[session.id] = session
             return {"session_id": session.id, "profile": profile, "opened": True,
