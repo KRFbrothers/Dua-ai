@@ -80,9 +80,10 @@ test('unavailable or corrupt cloud state fails closed before any Storage delete'
 });
 
 test('the reviewed delete-all action still permanently deletes referenced files', async () => {
+  let remaining = [{ id: 'file', name: upload.split('/')[1], metadata: { size: 10 } }];
   const fetcher = router([
-    [SUPA + '/storage/v1/object/list/dua-files', () => Response.json([{ id: 'file', name: upload.split('/')[1], metadata: { size: 10 } }])],
-    deleteRoute
+    [SUPA + '/storage/v1/object/list/dua-files', () => Response.json(remaining)],
+    [storageUrl, (_, init) => { remaining = []; return Response.json(JSON.parse(init.body).prefixes.map(name => ({ name }))); }]
   ]);
   const response = await handleFiles(filesRequest('delete-all', {}), { env: filesEnv, fetcher });
   assert.equal(response.status, 200);

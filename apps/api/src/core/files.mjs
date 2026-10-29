@@ -10,7 +10,7 @@ import { randomUUID } from 'node:crypto';
 import { handleCloudRead } from './account.mjs';
 import { readJsonLimited } from './limited-json.mjs';
 import { storedType, fileKind, ownsPath, STORED_TYPES, STORED_MIME_TYPES } from './file-types.mjs';
-import { storageConfig, resolveOwner, signUpload, signDownload, listOwnerFiles, removeFiles, StorageError } from './storage.mjs';
+import { storageConfig, resolveOwner, signUpload, signDownload, listOwnerFiles, removeFiles, removeOwnerFiles, StorageError } from './storage.mjs';
 
 const json = (data, status = 200, headers = {}) => Response.json(data, { status, headers: { 'Cache-Control': 'no-store', ...headers } });
 export const PREVIEW_URL_SECONDS = 600;
@@ -89,13 +89,13 @@ export async function handleFiles(request, { env = process.env, fetcher = fetch 
       const deleted = removable.length ? await removeFiles(config, token, removable, { fetcher, signal }) : 0;
       return json({ deleted, ...(retained ? { retained } : {}) });
     }
-    const files = await listOwnerFiles(config, token, user.id.toLowerCase(), { fetcher, signal });
+    if (action === 'delete-all') return json({ deleted: await removeOwnerFiles(config, token, user.id.toLowerCase(), { fetcher, signal }) });
+    const files = await listOwnerFiles(config, token, user.id.toLowerCase(), { fetcher, signal, requireComplete: action === 'usage' });
     if (action === 'list') return json({ files: files.filter(file => ownsPath(file.path, user.id)).map(file => {
       const name = file.path.slice(file.path.lastIndexOf('/') + 1);
       return { path: file.path, name, mimeType: storedType('application/octet-stream', name) || 'application/octet-stream', size: Math.max(0, file.size) };
     }), truncated: files.length >= 10000 });
-    if (action === 'usage') return json({ files: files.length, bytes: files.reduce((sum, file) => sum + file.size, 0), maxBytes: config.maxBytes, bucket: config.bucket });
-    return json({ deleted: files.length ? await removeFiles(config, token, files.map(file => file.path), { fetcher, signal }) : 0 });
+    return json({ files: files.length, bytes: files.reduce((sum, file) => sum + file.size, 0), maxBytes: config.maxBytes, bucket: config.bucket });
   } catch (error) {
     if (error instanceof StorageError) return json({ error: error.message }, error.status);
     if (error?.name === 'TimeoutError' || error?.name === 'AbortError' || request.signal.aborted) return json({ error: 'File storage request timed out. Retry.' }, 504);
