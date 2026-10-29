@@ -49,6 +49,7 @@ import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.Dp
@@ -285,9 +286,10 @@ fun Composer(
                         },
                         attach = {
                             Box {
-                                IconButton(onClick = onAttach, enabled = !typing && !readingFiles, modifier = Modifier.size(Sizes.touchTarget)) {
+                                IconButton(onClick = onAttach, enabled = !typing && !readingFiles,
+                                    colors = IconButtonDefaults.iconButtonColors(contentColor = c.barIcon), modifier = Modifier.size(Sizes.touchTarget)) {
                                     Icon(if (homeLayout) ImageVector.vectorResource(R.drawable.home_add) else Icons.Default.Add,
-                                        "Add photos and files", tint = c.barIcon,
+                                        "Add photos and files", tint = LocalContentColor.current,
                                         modifier = Modifier.size(if (homeLayout) HomeSizes.referenceIcon else HomeSizes.plusIcon))
                                 }
                                 attachmentPopup()
@@ -295,9 +297,10 @@ fun Composer(
                         },
                         controls = {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                IconButton(onClick = { dictation?.start?.invoke() ?: onMic() }, enabled = !typing && !uploading && !readingFiles, modifier = Modifier.size(Sizes.touchTarget)) {
+                                IconButton(onClick = { dictation?.start?.invoke() ?: onMic() }, enabled = !typing && !uploading && !readingFiles,
+                                    colors = IconButtonDefaults.iconButtonColors(contentColor = c.barIcon), modifier = Modifier.size(Sizes.touchTarget)) {
                                     Icon(if (homeLayout) ImageVector.vectorResource(R.drawable.ls_microphone_outline) else Icons.Outlined.MicNone,
-                                        "Dictate", tint = c.barIcon, modifier = Modifier.size(if (homeLayout) HomeSizes.referenceIcon else HomeSizes.micIcon))
+                                        "Dictate", tint = LocalContentColor.current, modifier = Modifier.size(if (homeLayout) HomeSizes.referenceIcon else HomeSizes.micIcon))
                                 }
                                 val (icon, label, action) = when {
                                     typing -> Triple(Icons.Rounded.Stop, "Stop response", { onStop() })
@@ -305,7 +308,8 @@ fun Composer(
                                     hasContent -> Triple(Icons.Default.ArrowUpward, "Send message", { submit() })
                                     else -> Triple(ImageVector.vectorResource(R.drawable.ls_live_wave), "Voice mode", { onVoiceMode() })
                                 }
-                                ComposerAction(icon, label, enabled = typing || uploading || !hasContent || canSubmit, onClick = action,
+                                ComposerAction(icon, label, enabled = typing || uploading || (!readingFiles && (!hasContent || canSubmit)), onClick = action,
+                                    status = if (readingFiles && !typing && !uploading) "Reading files" else null,
                                     iconSize = if (homeLayout && !typing && !hasContent) HomeSizes.referenceIcon else HomeSizes.voiceIcon)
                             }
                         })
@@ -316,20 +320,26 @@ fun Composer(
 }
 
 @Composable
-private fun ComposerAction(icon: ImageVector, label: String, enabled: Boolean = true, onClick: () -> Unit, iconSize: Dp = HomeSizes.voiceIcon) {
+private fun ComposerAction(icon: ImageVector, label: String, enabled: Boolean = true, onClick: () -> Unit,
+    iconSize: Dp = HomeSizes.voiceIcon, status: String? = null) {
     val c = HomeTheme.colors
     val motion = com.dua.ai.ui.theme.rememberMotionAllowed()
     val interaction = remember { MutableInteractionSource() }
+    val colors = IconButtonDefaults.filledIconButtonColors(containerColor = c.voice, contentColor = c.onVoice)
+    val fill by animateColorAsState(if (enabled) colors.containerColor else colors.disabledContainerColor,
+        if (motion) DuaMotion.fast() else snap(), label = "Composer action fill")
+    val ink by animateColorAsState(if (enabled) colors.contentColor else colors.disabledContentColor,
+        if (motion) DuaMotion.fast() else snap(), label = "Composer action ink")
     Box(Modifier.size(Sizes.touchTarget).clip(HomeShapes.round).clickable(interactionSource = interaction, indication = androidx.compose.foundation.LocalIndication.current, enabled = enabled, role = Role.Button, onClick = onClick)
-        .semantics(mergeDescendants = true) { contentDescription = label }, contentAlignment = Alignment.Center) {
-        Box(Modifier.size(ComposerSizes.actionButton).pressFeedback(interaction).clip(HomeShapes.round).background(c.voice), contentAlignment = Alignment.Center) {
+        .semantics(mergeDescendants = true) { contentDescription = label; if (status != null) stateDescription = status }, contentAlignment = Alignment.Center) {
+        Box(Modifier.size(ComposerSizes.actionButton).pressFeedback(interaction).clip(HomeShapes.round).background(fill), contentAlignment = Alignment.Center) {
             if (motion) AnimatedContent(icon, contentAlignment = Alignment.Center,
                 transitionSpec = {
                     (fadeIn(tween(150)) + scaleIn(tween(150), initialScale = 0.85f)) togetherWith
                         (fadeOut(tween(100)) + scaleOut(tween(100), targetScale = 0.85f))
                 }, label = "Composer action") { target ->
-                Icon(target, null, tint = c.onVoice, modifier = Modifier.size(iconSize))
-            } else Icon(icon, null, tint = c.onVoice, modifier = Modifier.size(iconSize))
+                Icon(target, null, tint = ink, modifier = Modifier.size(iconSize))
+            } else Icon(icon, null, tint = ink, modifier = Modifier.size(iconSize))
         }
     }
 }
