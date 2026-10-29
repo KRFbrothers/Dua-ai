@@ -4,6 +4,19 @@
 export type User = { id: string; email: string; displayName: string; avatarUrl: string };
 export type Session = { configured: boolean; user: User | null };
 
+export type CloudChat = { id: string; model: string; title: string; pinned: boolean; updatedAt: number; messages: { role: 'user' | 'model'; text: string }[] };
+export type WebConnection = {
+  getSession(): Promise<Session>;
+  login(email: string, password: string): Promise<Session>;
+  logout(): Promise<unknown>;
+  chat(request: { model: string; mode: ChatMode; messages: ChatTurn[] }, onEvent: (event: StreamEvent) => void, signal: AbortSignal): Promise<void>;
+  cloud(): Promise<unknown>;
+};
+let connection: WebConnection | null = null;
+export function installConnection(value: WebConnection) { connection = value; }
+export const supportsAgent = () => !connection;
+export const requiresSignInAfterReload = () => Boolean(connection);
+
 export class ApiError extends Error {
   constructor(message: string, readonly status: number) { super(message); }
 }
@@ -25,6 +38,7 @@ async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 export async function getSession(): Promise<Session> {
+  if (connection) return connection.getSession();
   try { return await call<Session>('/api/account/session'); }
   catch (error) {
     // An expired access cookie: try the refresh cookie once.
@@ -37,9 +51,28 @@ export async function getSession(): Promise<Session> {
 }
 
 export const emailLogin = (email: string, password: string) =>
-  call<Session>('/api/account/email-login', { method: 'POST', body: JSON.stringify({ email, password }) });
+  connection ? connection.login(email, password) : call<Session>('/api/account/email-login', { method: 'POST', body: JSON.stringify({ email, password }) });
 
-export const logout = () => call('/api/account/logout', { method: 'POST', body: '{}' });
+export const logout = () => connection ? connection.logout() : call('/api/account/logout', { method: 'POST', body: '{}' });
+
+export async function getCloudHistory(ownerId: string): Promise<CloudChat[]> {
+  const raw = (connection ? await connection.cloud() : await call<unknown>('/api/cloud')) as {
+    ownerId?: unknown; snapshot?: { format?: unknown; version?: unknown; chats?: unknown };
+  };
+  if (!raw || raw.ownerId !== ownerId || raw.snapshot?.format !== 'dua-cloud-snapshot' || raw.snapshot.version !== 1 || !Array.isArray(raw.snapshot.chats) || raw.snapshot.chats.length > 100)
+    throw new ApiError('Cloud history could not be verified. No data was changed.', 502);
+  return raw.snapshot.chats.slice(0, 100).map((value: unknown) => {
+    const chat = value as Record<string, unknown>;
+    if (!chat || typeof chat.id !== 'string' || typeof chat.model !== 'string' || !Array.isArray(chat.messages)) throw new ApiError('Cloud history needs review.', 502);
+    const messages = chat.messages.map((value: unknown) => {
+      const message = value as Record<string, unknown>;
+      if (!message || !['user', 'model'].includes(String(message.role)) || typeof message.text !== 'string') throw new ApiError('Cloud message could not be verified.', 502);
+      return { role: message.role as 'user' | 'model', text: message.text };
+    });
+    return { id: chat.id, model: chat.model, messages, title: typeof chat.title === 'string' ? chat.title : messages.find(m => m.role === 'user')?.text.slice(0, 70) || 'Untitled chat',
+      pinned: chat.pinned === true, updatedAt: typeof chat.updatedAt === 'number' ? chat.updatedAt : 0 };
+  }).sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.updatedAt - a.updatedAt);
+}
 
 // Website chat: dua-api POST /api/web/chat forwards the cookie session to dua-ai-engine /api/chat
 // and streams its SSE events back (see apps/api/src/core/sse.mjs for the event shapes).
@@ -65,6 +98,7 @@ export async function streamChat(
   onEvent: (event: StreamEvent) => void,
   signal: AbortSignal
 ): Promise<void> {
+  if (connection) return connection.chat(request, onEvent, signal);
   const body = JSON.stringify(request);
   let response = await postChat(body, signal);
   if (response.status === 401) {
@@ -130,6 +164,7 @@ export function approvalFromEvent(event: StreamEvent): Approval | null {
 }
 
 export async function decideAction(id: string, decision: 'approve' | 'reject'): Promise<ActionResult> {
+  if (connection) throw new ApiError('Agent actions are available in the Android app.', 503);
   // A decision is never automatically retried, even for a 401 or a lost response.
   let response: Response;
   try { response = await fetch('/api/web/agent/action', {

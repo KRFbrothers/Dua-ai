@@ -1,2 +1,6 @@
 node_modules/
 public/dua-logo.webp
+public/dua-light.svg
+public/dua-dark.svg
+public/inter-regular.ttf
+public/Inter-OFL.txt
