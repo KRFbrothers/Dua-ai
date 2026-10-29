@@ -1,4 +1,4 @@
-import { FormEvent, ReactNode, useEffect, useRef, useState } from 'react';
+import { FormEvent, ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { approvalFromEvent, getCloudHistory, streamChat, supportsAgent, type Approval, type ChatMode, type ChatTurn, type CloudChat, type User } from './api';
 import ApprovalCard from './ApprovalCard';
 import Icon from './Icon';
@@ -7,6 +7,14 @@ type ChatRequest = { model: string; mode: ChatMode; messages: ChatTurn[] };
 type Message = { id: number; role: 'user' | 'assistant'; text: string; status?: string; error?: string; streaming?: boolean; notice?: string; approvals?: Approval[]; request?: ChatRequest };
 
 const MODELS = ['Dua', 'Gemini'] as const;
+
+function resizeComposer(field: HTMLTextAreaElement) {
+  // Measure without a scrollbar; CSS owns the existing min/max height and overflow cap.
+  field.style.overflowY = 'hidden';
+  field.style.height = 'auto';
+  field.style.height = `${field.scrollHeight}px`;
+  field.style.overflowY = 'auto';
+}
 
 // Minimal, safe markdown: ``` fenced code blocks, `inline code` and **bold**. Built as React nodes (no HTML injection).
 function inline(text: string, key: string): ReactNode[] {
@@ -52,10 +60,28 @@ export default function ChatShell({ user, onLogout }: { user: User; onLogout: ()
   const abort = useRef<AbortController | null>(null);
   const running = useRef(false);
   const bottom = useRef<HTMLDivElement | null>(null);
+  const composer = useRef<HTMLTextAreaElement | null>(null);
   const name = user.displayName || user.email.split('@')[0] || 'Owner';
   const firstName = user.displayName.trim().split(/\s+/)[0];
   const agentAvailable = supportsAgent();
   const settings = useRef<HTMLDialogElement | null>(null);
+
+  useLayoutEffect(() => { if (composer.current) resizeComposer(composer.current); }, [draft]);
+  useLayoutEffect(() => {
+    const field = composer.current;
+    if (!field) return;
+    let width = -1;
+    let active = true;
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry.contentRect.width !== width) {
+        width = entry.contentRect.width;
+        resizeComposer(field);
+      }
+    });
+    observer.observe(field);
+    document.fonts.ready.then(() => { if (active) resizeComposer(field); });
+    return () => { active = false; observer.disconnect(); };
+  }, []);
 
   useEffect(() => {
     const media = matchMedia('(prefers-color-scheme: dark)');
@@ -200,7 +226,7 @@ export default function ChatShell({ user, onLogout }: { user: User; onLogout: ()
           <div className="col">
             {messages.length === 0 ? (
               <div className="empty"><img className="hero-logo logo-light" src="/dua-light.svg" alt="Dua AI" /><img className="hero-logo logo-dark" src="/dua-dark.svg" alt="Dua AI" /><h2>{mode === 'agent' ? 'What can I tackle for you?' : `Hi${firstName ? ' ' + firstName : ''}, what’s on your mind?`}</h2>
-                {mode === 'agent' && <div className="task-starters">{['Nudge me to back up my photos', 'Learn React by building an app', 'Compare views on a topic I follow'].map(prompt => <button key={prompt} onClick={() => setDraft(prompt)}>{prompt}</button>)}</div>}
+                {mode === 'agent' && <div className="task-starters">{['Nudge me to back up my photos', 'Learn React by building an app', 'Compare views on a topic I follow'].map(prompt => <button key={prompt} onClick={() => { setDraft(prompt); composer.current?.focus(); }}>{prompt}</button>)}</div>}
               </div>
             ) : messages.map(m => m.role === 'user'
               ? <div key={m.id} className="msg-user"><div>{m.text}</div></div>
@@ -225,7 +251,7 @@ export default function ChatShell({ user, onLogout }: { user: User; onLogout: ()
         <form className="composer" onSubmit={send}>
           <div className="box">
             <button type="button" className="icon-btn" disabled aria-label="Attachments are available in the Android app"><Icon name="plus" /></button>
-            <textarea rows={1} maxLength={8000} disabled={readOnly} placeholder={readOnly ? 'Cloud history is read-only' : mode === 'agent' ? 'Describe…' : 'Ask Dua AI…'} aria-label="Message Dua AI" value={draft}
+            <textarea ref={composer} rows={1} maxLength={8000} disabled={readOnly} placeholder={readOnly ? 'Cloud history is read-only' : mode === 'agent' ? 'Describe…' : 'Ask Dua AI…'} aria-label="Message Dua AI" value={draft}
               onChange={e => setDraft(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(e); } }} />
             <div className="row">

@@ -50,6 +50,14 @@ Python Playwright/Chromium) `python test/connected_browser.py`. The latter uses
 controlled SDK/HTTP fixtures; it does not sign in as the real owner. Real account
 sign-in and an authenticated live reply require the owner to use the published UI.
 
+Composer regression checks can also run against the built same-origin site with
+`node test/composer_browser.mjs` (requires an externally installed `playwright-core`
+and its Chromium). Set `DUA_BROWSER_TEST_URL` for the local site,
+`DUA_BROWSER_CDP_URL` to reuse an isolated debugging browser, and
+`DUA_PLAYWRIGHT_MODULE` to an installed module URL if it is outside this package.
+`DUA_BROWSER_ARTIFACTS` selects the screenshot/JSON report directory. The checks
+use controlled HTTP fixtures and never sign in as the owner or call live AI.
+
 ## Local development
 
 ```bash
