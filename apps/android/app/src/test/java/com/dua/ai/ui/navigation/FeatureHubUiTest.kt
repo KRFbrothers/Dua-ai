@@ -3,6 +3,7 @@ package com.dua.ai.ui.navigation
 import android.graphics.Bitmap
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.requiredSize
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -45,7 +46,12 @@ class FeatureHubUiTest(private val dark: Boolean, private val compact: Boolean) 
     private fun show(block: @Composable () -> Unit) = compose.setContent {
         CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, if (compact) 2f else 1f)) {
             DuaTheme(LocalPreferences(theme = if (dark) "dark" else "light")) {
-                assertEquals(if (dark) PageDarkColors else PageLightColors, PageTheme.colors)
+                // The neutral palette stays fixed; accent roles follow the active appearance.
+                val scheme = MaterialTheme.colorScheme
+                assertEquals((if (dark) PageDarkColors else PageLightColors).copy(
+                    accent = scheme.primary, onAccent = scheme.onPrimary,
+                    accentContainer = scheme.primaryContainer, onAccentContainer = scheme.onPrimaryContainer,
+                ), PageTheme.colors)
                 Box(Modifier.requiredSize(if (compact) 320.dp else 360.dp, if (compact) 568.dp else 752.dp)) { block() }
             }
         }

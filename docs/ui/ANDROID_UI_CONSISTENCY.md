@@ -76,6 +76,24 @@ device DataStore persistence. Full-suite and live backend acceptance are separat
 After the shared modal changes, a final affected-suite run completed 118 cases
 with zero failures/skips and a successful debug build.
 
+### Full-suite palette compatibility
+
+The first CI full-suite run reported 50 failures: 24 Home cases, 24 feature-hub
+cases and two audio-sheet cases. Their shared fixtures still expected the static
+seed palette, while `DuaTheme` applies the saved/default accent to the active
+Material scheme. The assertions failed before those interaction checks could run.
+
+`HomeChatTaskUiTest`, `FeatureHubUiTest` and `RemainingSheetsDabbaUiTest` now expect
+accent roles from the active Material scheme. Whole-palette comparisons retain
+the existing neutral-role expectations, and all navigation, input, callback and
+touch-target checks remain. No tests are removed or skipped, and the production
+theme behavior is retained. The affected three classes pass all 60 cases.
+
+The subsequent Linux/JDK 17 run with the committed dependency catalog completed
+all 1,768 Android unit tests with zero failures, errors or skips. The combined
+`:app:testDebugUnitTest :app:assembleDebug -Pdua.ui-record --no-daemon --max-workers=2`
+command completed successfully. This does not establish real-device acceptance.
+
 ## Device acceptance boundary
 
 The inspected installed app uses the permanent owner signing identity. A local
