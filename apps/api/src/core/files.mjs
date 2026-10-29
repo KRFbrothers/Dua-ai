@@ -80,6 +80,9 @@ export async function handleFiles(request, { env = process.env, fetcher = fetch 
       if (review.ownerId !== user.id) throw new StorageError('Cloud account changed. No files were deleted. Retry.', 409);
       const referenced = new Set(review.snapshot.chats.flatMap(chat => chat.messages.flatMap(message =>
         [...(message.files || []), ...(message.media || [])].map(file => file.path))));
+      for (const project of review.snapshot.projects || []) {
+        for (const source of project.sources || []) referenced.add(source.path);
+      }
       const requested = [...new Set(body.paths)];
       const removable = requested.filter(path => !referenced.has(path));
       const retained = requested.length - removable.length;
