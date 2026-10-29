@@ -7,6 +7,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -14,6 +15,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
@@ -36,7 +38,8 @@ internal val HomeTaskPromptIds = listOf(R.string.home_task_prompt_backup,
 @Composable
 internal fun ChatContent(task: Boolean, composing: Boolean = false, profileName: String = "", onTask: (String) -> Unit) {
     BoxWithConstraints(Modifier.fillMaxSize().padding(horizontal = Spacing.lg).testTag("home-empty-content")) {
-        val keyboardOpen = WindowInsets.ime.getBottom(LocalDensity.current) > 0
+        val density = LocalDensity.current
+        val keyboardOpen = WindowInsets.ime.getBottom(density) > 0
         val compact = maxHeight < HomeSizes.heroCompactHeight
         val promptMaxHeight = maxHeight * .55f
         val motion = rememberMotionAllowed()
@@ -44,8 +47,12 @@ internal fun ChatContent(task: Boolean, composing: Boolean = false, profileName:
         val exit = if (motion) HomeMotion.fadeOut else 0
         AnimatedVisibility(!composing, modifier = Modifier.fillMaxSize(),
             enter = fadeIn(tween(enter)), exit = fadeOut(tween(exit))) {
-            Column(Modifier.fillMaxSize()) {
-                Box(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
+            // At large text/small heights, fixed starter rows would clip the
+            // greeting. Let the complete Task body scroll as one document.
+            val scrollTogether = task && maxHeight < (HomeSizes.heroCompactHeight + Sizes.touchTarget) * density.fontScale
+            Column(Modifier.fillMaxSize().then(if (scrollTogether) Modifier.verticalScroll(rememberScrollState()) else Modifier)) {
+                val hero = if (scrollTogether) Modifier else Modifier.weight(1f).verticalScroll(rememberScrollState())
+                Box(hero.fillMaxWidth(),
                     contentAlignment = Alignment.Center) {
                     Column(Modifier.fillMaxWidth().padding(vertical = Spacing.lg).testTag("home-hero"),
                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -60,7 +67,7 @@ internal fun ChatContent(task: Boolean, composing: Boolean = false, profileName:
                         }
                     }
                 }
-                if (task) TaskStarters(onTask,
+                if (task) TaskStarters(onTask, if (scrollTogether) Modifier else
                     Modifier.heightIn(max = promptMaxHeight).verticalScroll(rememberScrollState()))
             }
         }
@@ -73,12 +80,13 @@ private fun TaskStarters(onTask: (String) -> Unit, modifier: Modifier = Modifier
     val haptic = LocalChatHaptic.current
     val icons = listOf(R.drawable.home_task_attach_file, R.drawable.home_task_code, R.drawable.home_task_public)
     Column(modifier.fillMaxWidth().padding(bottom = Spacing.sm).testTag("supplied-task-starters"),
-        verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+        verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
         HomeTaskPromptIds.forEachIndexed { i, id ->
             val prompt = stringResource(id)
             Row(Modifier.fillMaxWidth().heightIn(min = Sizes.touchTarget)
+                .clip(HomeShapes.promptRow).background(colors.promptRow)
                 .clickable(role = Role.Button) { haptic(ChatHaptic.Tap); onTask(prompt) }
-                .padding(horizontal = HomeSizes.promptRowPaddingH, vertical = Spacing.sm),
+                .padding(horizontal = HomeSizes.promptRowPaddingH, vertical = Spacing.md),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(HomeSizes.promptGap)) {
                 Icon(ImageVector.vectorResource(icons[i]), null, tint = colors.promptIcon,

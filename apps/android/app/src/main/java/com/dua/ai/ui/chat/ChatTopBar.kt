@@ -10,6 +10,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.DragHandle
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.Text
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.runtime.remember
@@ -101,10 +102,13 @@ private fun HeaderButton(icon: ImageVector, description: String, onClick: () -> 
     onLongPress: (() -> Unit)? = null, iconSize: Dp = Sizes.icon) {
     val c = HomeTheme.colors
     val interaction = remember { MutableInteractionSource() }
+    val colors = IconButtonDefaults.iconButtonColors(contentColor = c.roundButtonIcon)
     val body: @Composable () -> Unit = {
-        Icon(icon, contentDescription = null, tint = c.roundButtonIcon, modifier = Modifier.size(iconSize).pressFeedback(interaction))
+        Icon(icon, contentDescription = null, tint = if (enabled) colors.contentColor else colors.disabledContentColor,
+            modifier = Modifier.size(iconSize).pressFeedback(interaction))
     }
     if (onLongPress == null) IconButton(onClick = onClick, enabled = enabled, interactionSource = interaction,
+        colors = colors,
         modifier = Modifier.size(Sizes.touchTarget).semantics { contentDescription = description }) { body() }
     else Box(Modifier.size(Sizes.touchTarget)
         .combinedClickable(interactionSource = interaction, indication = androidx.compose.foundation.LocalIndication.current, enabled = enabled, role = Role.Button, onClick = onClick,

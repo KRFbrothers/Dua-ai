@@ -151,8 +151,10 @@ class HomeHeaderRefinementUiTest(private val dark: Boolean, private val large: B
             val taskLogo = compose.onNodeWithContentDescription("Dua AI").assertWidthIsEqualTo(HomeSizes.heroLogo)
                 .fetchSemanticsNode().boundsInRoot
             assertEquals(logo.width, taskLogo.width, 0.5f)
-            val firstPrompt = compose.onNodeWithText(HomeTaskPrompts.first()).fetchSemanticsNode().boundsInRoot
-            assertTrue("logo $taskLogo overlaps prompt $firstPrompt at $height", taskLogo.bottom <= firstPrompt.top + 0.5f)
+            val firstPrompt = compose.onNodeWithText(HomeTaskPrompts.first()).getUnclippedBoundsInRoot()
+            val fullHero = compose.onNodeWithTag("home-hero").getUnclippedBoundsInRoot()
+            assertTrue("The whole greeting must precede the first prompt at $height", fullHero.bottom <= firstPrompt.top)
+            compose.onNodeWithText(HomeTaskPrompts.first()).performScrollTo().assertIsDisplayed()
         }
     }
 }

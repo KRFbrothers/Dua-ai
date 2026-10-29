@@ -227,12 +227,14 @@ fun HistoryDrawer(
                     }
                 }
                 Column(Modifier.fillMaxWidth().testTag("drawer-recent-chats")) {
-                    if (visible.isEmpty()) Text(when {
-                        query.isNotBlank() -> "No matching chats"
-                        pinnedOnly -> "No pinned chats"
-                        else -> "No chats yet"
-                    }, style = DrawerChatStyle, color = colors.subText,
-                        modifier = Modifier.padding(horizontal = DrawerSizes.actionPaddingH, vertical = DrawerSizes.chatPaddingV))
+                    if (visible.isEmpty()) when {
+                        query.isNotBlank() -> DrawerEmptyState("No matching chats", "Try another word.", ReferenceIcons.Search,
+                            DrawerRecovery("Clear search") { query = "" })
+                        pinnedOnly -> DrawerEmptyState("No pinned chats",
+                            if (pinEnabled) "Pin chats to keep them here." else "Switch to All to see your chats.", Icons.Outlined.PushPin,
+                            DrawerRecovery("Show all chats") { pinnedOnly = false })
+                        else -> DrawerEmptyState("No chats yet", "Start a conversation and it will appear here.", ReferenceIcons.Chat)
+                    }
                     visible.forEach { chat ->
                         key(chat.id) {
                             val c = ChatTheme.colors
@@ -318,15 +320,34 @@ private fun ChatRow(chat: SavedChat, current: Boolean, serverDeletion: Boolean, 
 private fun DrawerMenuRow(icon: ImageVector, label: String, modifier: Modifier = Modifier,
     selected: Boolean = false, enabled: Boolean = true, onClick: () -> Unit) {
     val colors = DrawerTheme.colors
+    val buttonColors = ButtonDefaults.textButtonColors(contentColor = colors.menuText)
+    val ink = if (enabled) buttonColors.contentColor else buttonColors.disabledContentColor
     Row(
         modifier.fillMaxWidth().heightIn(min = DrawerSizes.touch).clip(DrawerShapes.row)
             .background(if (selected) ChatTheme.colors.userBubble else androidx.compose.ui.graphics.Color.Transparent)
             .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .semantics { this.selected = selected }
             .padding(horizontal = DrawerSizes.actionPaddingH, vertical = DrawerSizes.menuPaddingV),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(DrawerSizes.menuGap),
     ) {
-        Icon(icon, null, tint = colors.menuText, modifier = Modifier.size(DrawerSizes.menuIcon))
-        Text(label, style = DrawerMenuStyle, color = colors.menuText, modifier = Modifier.weight(1f))
+        Icon(icon, null, tint = ink, modifier = Modifier.size(DrawerSizes.menuIcon))
+        Text(label, style = DrawerMenuStyle, color = ink, modifier = Modifier.weight(1f))
+    }
+}
+
+private data class DrawerRecovery(val label: String, val onClick: () -> Unit)
+
+@Composable
+private fun DrawerEmptyState(title: String, message: String, icon: ImageVector, recovery: DrawerRecovery? = null) {
+    val colors = DrawerTheme.colors
+    Column(Modifier.fillMaxWidth().padding(horizontal = DrawerSizes.actionPaddingH, vertical = Spacing.lg),
+        verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+        Icon(icon, null, tint = colors.subText, modifier = Modifier.size(Sizes.icon))
+        Text(title, style = DrawerChatStyle, color = colors.chatText)
+        Text(message, style = MaterialTheme.typography.bodyMedium, color = colors.subText)
+        if (recovery != null) TextButton(onClick = recovery.onClick, modifier = Modifier.heightIn(min = DrawerSizes.touch)) {
+            Text(recovery.label)
+        }
     }
 }
 

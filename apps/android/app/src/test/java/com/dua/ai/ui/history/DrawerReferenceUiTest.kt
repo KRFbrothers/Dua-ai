@@ -112,6 +112,28 @@ class DrawerReferenceUiTest(private val dark: Boolean, private val large: Boolea
         assertEquals(0, opened)
     }
 
+    @Test fun emptyFiltersAndSearchCanRecoverWithoutOpeningOrReplacingAChat() {
+        var opened = 0; var created = 0
+        show { HistoryDrawer(chats = listOf(chat("a", "Saved alpha"), chat("b", "Saved beta")),
+            currentChatId = "a", onSelectChat = { opened++ }, onNewChat = { created++ }) }
+        compose.onNodeWithTag("drawer-new-chat").assertIsNotSelected()
+        compose.onNodeWithContentDescription("Filter chats").performScrollTo().performClick()
+        compose.onNodeWithText("Pinned chats").performClick()
+        compose.onNodeWithText("No pinned chats").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Show all chats").performScrollTo().assertHeightIsAtLeast(48.dp).performClick()
+        compose.onNodeWithText("Saved alpha").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithContentDescription("Search chats").performClick()
+        compose.onNodeWithTag("drawer-search-field").performTextInput("no-match")
+        compose.onNodeWithText("No matching chats").performScrollTo().assertIsDisplayed()
+        capture("no-matches")
+        compose.onNodeWithText("Clear search").performScrollTo().assertHeightIsAtLeast(48.dp).performClick()
+        compose.onNodeWithTag("drawer-search-field").assertIsDisplayed()
+        compose.onNodeWithText("Saved alpha").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Saved beta").assertExists()
+        compose.onNodeWithTag("drawer-bottom-actions").assertIsDisplayed()
+        assertEquals(0, opened); assertEquals(0, created)
+    }
+
     @Test fun emptyGuestDrawerHasNoInventedChatsOrSubscriptionAndRespectsDisabledNewChat() {
         var created = 0; var settings = 0
         show { HistoryDrawer(newChatEnabled = false, onNewChat = { created++ }, onOpenSettings = { settings++ }) }

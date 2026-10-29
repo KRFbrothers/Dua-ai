@@ -7,6 +7,7 @@ import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.LineBreak
 import androidx.compose.ui.unit.sp
 import com.dua.ai.R
 
@@ -91,7 +92,8 @@ fun duaTypography(family: FontFamily = InterFont): Typography {
 val CodeTextStyle = TextStyle(fontFamily = LegacyCodeFont, fontSize = 13.5.sp)
 val HomeTaglineStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Medium, fontSize = 20.sp)
 /** Quiet Home tagline under the logo: smaller and regular weight. */
-val HomeGreetingStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Normal, fontSize = 28.sp, lineHeight = 36.sp)
+val HomeGreetingStyle = TextStyle(fontFamily = InterFont, fontWeight = FontWeight.Normal,
+    fontSize = 28.sp, lineHeight = 36.sp, lineBreak = LineBreak.Heading)
 val HomeTaglineQuietStyle = HomeTaglineStyle.copy(fontSize = 16.sp, fontWeight = FontWeight.Normal, lineHeight = 22.sp)
 val VoiceGreetingStyle = HomeTaglineStyle.copy(fontSize = 26.sp, lineHeight = 34.sp)
 

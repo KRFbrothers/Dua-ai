@@ -158,6 +158,48 @@ class HomeComposerPolishUiTest(private val dark: Boolean, private val largeText:
         compose.onNodeWithContentDescription("Voice mode").assertIsDisplayed()
     }
 
+    @Test fun filePreparationDisablesVoiceAndSendWithoutBlockingStopOrUploadCancellation() {
+        val reading = mutableStateOf(true)
+        val draft = mutableStateOf("")
+        val typing = mutableStateOf(false)
+        val uploading = mutableStateOf(false)
+        var voice = 0; var sends = 0; var stops = 0; var cancels = 0
+        compose.setContent {
+            CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, if (largeText) 2f else 1f)) {
+                DuaTheme(LocalPreferences(theme = if (dark) "dark" else "light")) {
+                    Box(Modifier.requiredSize(320.dp, 650.dp).background(ChatTheme.colors.background), contentAlignment = Alignment.BottomCenter) {
+                        Composer(homeLayout = true, controlled = true, showModelSelector = false,
+                            value = draft.value, readingFiles = reading.value, typing = typing.value, uploading = uploading.value,
+                            onVoiceMode = { voice++ }, onSend = { sends++ }, onStop = { stops++ }, onCancelUpload = { cancels++ })
+                    }
+                }
+            }
+        }
+        val empty = File("build/approved-ui/home-polish-busy-empty-$dark-$largeText.png")
+        empty.parentFile!!.mkdirs(); compose.onRoot().captureRoboImage(empty.absolutePath)
+        compose.onNodeWithContentDescription("Voice mode").assertIsNotEnabled().performTouchInput { click() }
+        compose.onNodeWithContentDescription("Dictate").assertIsNotEnabled()
+        compose.onNodeWithContentDescription("Add photos and files").assertIsNotEnabled()
+        assertEquals(0, voice)
+        compose.runOnIdle { draft.value = "Keep this file request" }
+        compose.onNodeWithContentDescription("Send message").assertIsNotEnabled()
+        compose.onNodeWithContentDescription("Message").performClick().performImeAction()
+        assertEquals(0, sends)
+        assertEquals("Keep this file request", draft.value)
+        val disabled = File("build/approved-ui/home-polish-busy-draft-$dark-$largeText.png")
+        compose.onRoot().captureRoboImage(disabled.absolutePath)
+        compose.runOnIdle { reading.value = false; draft.value = "" }
+        compose.onNodeWithContentDescription("Voice mode").assertIsEnabled().performClick()
+        assertEquals(1, voice)
+        compose.runOnIdle { reading.value = true; uploading.value = true }
+        compose.onNodeWithContentDescription("Cancel upload").assertIsEnabled().performClick()
+        assertEquals(1, cancels)
+        compose.runOnIdle { typing.value = true }
+        compose.onNodeWithContentDescription("Stop response").assertIsEnabled().performClick()
+        assertEquals(1, stops)
+        assertEquals(0, sends)
+    }
+
     @Test
     @Config(qualifiers = "w1000dp-h800dp-mdpi")
     fun wideComposerWrapsInsideItsActualCardAndKeepsItsInputWhenResized() {

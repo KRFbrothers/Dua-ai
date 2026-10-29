@@ -96,6 +96,18 @@ class GeminiHomeReferenceUiTest(private val dark: Boolean, private val compact: 
         compose.onNodeWithContentDescription("Voice mode").performClick(); compose.waitForIdle(); assertEquals(1, voice)
         compose.onNode(hasText("Task") and isSelectable()).performClick()
         compose.onNodeWithText("Describe...").assertIsDisplayed()
+        val entryFile = File("build/approved-ui/gemini-task-entry-$dark-$compact.png")
+        compose.onNodeWithTag("reference-home-viewport").captureRoboImage(entryFile.absolutePath)
+        if (compact) {
+            val fullHero = compose.onNodeWithTag("home-hero").getUnclippedBoundsInRoot()
+            val firstStarter = compose.onNodeWithText(HomeTaskPrompts[0]).getUnclippedBoundsInRoot()
+            assertTrue("Task prompts must follow the complete greeting instead of clipping it", firstStarter.top >= fullHero.bottom)
+            compose.onNodeWithText(HomeTaskPrompts[1]).performScrollTo().assertIsDisplayed()
+            assertTrue("The greeting and starters scroll together in compact Task",
+                compose.onNodeWithTag("home-hero").getUnclippedBoundsInRoot().top < fullHero.top)
+        }
+        val taskFile = File("build/approved-ui/gemini-task-$dark-$compact.png")
+        compose.onNodeWithTag("reference-home-viewport").captureRoboImage(taskFile.absolutePath)
         compose.onNodeWithText(HomeTaskPrompts[1]).performScrollTo().performClick()
         compose.onNodeWithContentDescription("Send message").performClick()
         assertEquals(HomeTaskPrompts[1], sent); assertTrue(state.value.agent)
