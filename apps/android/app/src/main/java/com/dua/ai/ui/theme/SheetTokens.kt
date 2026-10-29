@@ -1,6 +1,7 @@
 package com.dua.ai.ui.theme
 
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
@@ -25,7 +26,7 @@ val SheetDarkColors = sheetColors(DuaDarkColorScheme, DuaDarkColors)
 
 object SheetTheme {
     val colors: SheetColors
-        @Composable @ReadOnlyComposable get() = if (DuaTheme.colors.isDark) SheetDarkColors else SheetLightColors
+        @Composable @ReadOnlyComposable get() = sheetColors(MaterialTheme.colorScheme, DuaTheme.colors)
 }
 
 object SheetSizes {

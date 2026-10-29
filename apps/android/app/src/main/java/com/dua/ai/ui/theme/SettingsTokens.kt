@@ -1,6 +1,7 @@
 package com.dua.ai.ui.theme
 
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
@@ -23,7 +24,7 @@ val SettingsDarkColors = settingsColors(DuaDarkColorScheme, DuaDarkColors)
 
 object SettingsTheme {
     val colors: SettingsColors
-        @Composable @ReadOnlyComposable get() = if (DuaTheme.colors.isDark) SettingsDarkColors else SettingsLightColors
+        @Composable @ReadOnlyComposable get() = settingsColors(MaterialTheme.colorScheme, DuaTheme.colors)
 }
 
 /** Reference sizes. Visuals keep the reference sizes; each control sits in a 48 dp touch slot. */

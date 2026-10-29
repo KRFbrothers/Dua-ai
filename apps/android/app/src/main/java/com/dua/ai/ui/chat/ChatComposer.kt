@@ -228,6 +228,17 @@ fun Composer(
             // Only the inner layout resizes, so its shadow can feather beyond all four edges.
             Box(Modifier.fillMaxWidth()
                 .testTag("composer-container")
+                .semantics {
+                    stateDescription = when {
+                        typing -> "Responding"
+                        uploading -> "Uploading files"
+                        readingFiles -> "Reading files"
+                        dictation?.listening == true -> "Listening"
+                        hasContent && !sendEnabled -> "Send unavailable"
+                        hasContent -> "Ready to send"
+                        else -> "Ready for voice or text"
+                    }
+                }
                 .shadow(if (homeLayout) HomeSizes.composerElevation else HomeSizes.noElevation, shape, clip = false)
                 .clip(shape).background(c.bar).background(DuaTheme.colors.floatingSurface).border(HomeSizes.barBorder, border, shape)) {
                 Column(Modifier.fillMaxWidth().testTag("supplied-composer")
