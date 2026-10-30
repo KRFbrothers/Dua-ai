@@ -70,12 +70,12 @@ class HomeGradientUiTest(private val dark: Boolean, private val large: Boolean) 
         return file
     }
 
-    @Test fun greetingTracksRealProfileAndConversationWashStaysOutOfFeatures() {
+    @Test fun logoRemainsAcrossProfileChangesAndConversationWashStaysOutOfFeatures() {
         val state = mutableStateOf(ChatUiState(profileName = "Fareed Ansari"))
         show(state)
         compose.onNodeWithTag("home-hero").assertExists(); compose.onNodeWithContentDescription("Dua AI").assertExists()
-        compose.onNodeWithText("Hi Fareed, what's on your mind?").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithContentDescription("Dua AI").assertExists()
+        compose.onNodeWithText("Hi Fareed, what's on your mind?").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Dua AI").performScrollTo().assertIsDisplayed()
         compose.onNodeWithTag("home-gradient").assertExists()
         val imageFile = capture("chat")
         val pixels = if (imageFile.length() > 0) BitmapFactory.decodeFile(imageFile.absolutePath) else null
@@ -283,7 +283,7 @@ class HomeGradientUiTest(private val dark: Boolean, private val large: Boolean) 
         compose.onNode(hasText("Task") and isSelectable()).performClick().assertIsSelected()
         compose.waitForIdle()
         val taskLogo = compose.onNodeWithContentDescription("Dua AI").fetchSemanticsNode().boundsInRoot
-        compose.onNodeWithText("What can I tackle for you?").assertExists()
+        compose.onNodeWithText("What can I tackle for you?").assertDoesNotExist()
         assertEquals(chatLogo.left, taskLogo.left, 1f)
         assertEquals(chatLogo.width, taskLogo.width, 0.5f)
         compose.onNode(hasText("Chat") and isSelectable()).performClick()

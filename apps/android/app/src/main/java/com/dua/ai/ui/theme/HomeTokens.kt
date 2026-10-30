@@ -57,9 +57,9 @@ object HomeTheme {
 
 /** Reference sizes. Visuals keep the reference sizes; each control sits in a 48 dp touch slot. */
 object HomeSizes {
-    /** Calligraphy lockup at the measured 36.6 dp sparkle height (610:1024 asset). */
-    val heroLogo = 22.dp
-    val heroCompactLogo = 16.dp
+    /** Original 610:1024 lockup fills the former logo-and-greeting area without stretching. */
+    val heroLogo = 80.dp
+    val heroCompactLogo = 64.dp
     val heroCompactHeight = 320.dp
     /** assistant_robin_chat_input_max_width from the supplied Google App resource table. */
     val composerMaxWidth = 696.dp

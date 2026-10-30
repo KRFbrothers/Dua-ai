@@ -78,7 +78,8 @@ class ChatWiringUiTest(private val large: Boolean) {
         }, onStop = { state.value = state.value.copy(typing = false,
             messages = state.value.messages.map { if (it.streaming) it.copy(state = "stopped") else it }) })
         show(state, actions)
-        compose.onNodeWithText("Hi Amina,", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("Hi Amina,", substring = true).assertDoesNotExist()
+        compose.onNodeWithContentDescription("Dua AI").assertIsDisplayed()
         compose.onNodeWithText("Hi Another,", substring = true).assertDoesNotExist()
         capture("welcome")
         val field = compose.onNodeWithContentDescription("Message")
@@ -218,14 +219,15 @@ class ChatWiringUiTest(private val large: Boolean) {
         capture("pr4-after-work")
     }
 
-    @Test fun taskSwitcherUsesAgentAndExistingStartersThenRestoresChatGreeting() {
+    @Test fun taskSwitcherUsesAgentAndExistingStartersThenRestoresChatLogo() {
         val state = mutableStateOf(ChatUiState(profileName = "Amina Khan", agentAvailable = true))
         val modes = mutableListOf<Boolean>()
         var sends = 0
         show(state, ChatActions(onAgent = {
             modes += it; state.value = state.value.copy(agent = it)
         }, onDraftChange = { state.value = state.value.copy(draft = it) }, onSend = { sends++ }))
-        compose.onNodeWithText("Hi Amina,", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("Hi Amina,", substring = true).assertDoesNotExist()
+        compose.onNodeWithContentDescription("Dua AI").assertIsDisplayed()
         compose.onNodeWithText("Ask Dua AI...").assertIsDisplayed()
         compose.onNodeWithTag("home-mode-switcher").assertIsDisplayed()
         capture("pr4-after-chat")
@@ -246,7 +248,8 @@ class ChatWiringUiTest(private val large: Boolean) {
         keyboard(0)
         compose.onNode(hasText("Chat") and isSelectable()).performClick().assertIsSelected()
         assertEquals(listOf(true, false), modes)
-        compose.onNodeWithText("Hi Amina,", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("Hi Amina,", substring = true).assertDoesNotExist()
+        compose.onNodeWithContentDescription("Dua AI").assertIsDisplayed()
         compose.onNodeWithText("Ask Dua AI...").assertIsDisplayed()
         compose.onNodeWithTag("supplied-task-starters").assertDoesNotExist()
         assertEquals(0, sends)

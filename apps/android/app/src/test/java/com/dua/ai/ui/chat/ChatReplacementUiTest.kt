@@ -22,17 +22,20 @@ import org.robolectric.annotation.GraphicsMode
 class ChatReplacementUiTest {
     @get:Rule val compose = createComposeRule()
 
-    @Test fun homeGreetingUsesTheCurrentAccountAndTaskHasItsOwnWelcome() {
+    @Test fun chatAndTaskShowOnlyTheLogoInPlaceOfTheirGreetings() {
         val state = mutableStateOf(ChatUiState(profileName = "Amina Khan", agentAvailable = true))
         compose.setContent { DuaTheme(LocalPreferences(theme = "light")) {
             ChatScreen(state.value, ChatActions(onAgent = { state.value = state.value.copy(agent = it) }))
         } }
-        compose.onNodeWithText("Hi Amina, what's on your mind?").assertIsDisplayed()
+        compose.onNodeWithText("Hi Amina, what's on your mind?").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Dua AI").assertIsDisplayed()
         compose.onNode(hasText("Task") and isSelectable()).performClick()
-        compose.onNodeWithText("What can I tackle for you?").assertIsDisplayed()
+        compose.onNodeWithText("What can I tackle for you?").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Dua AI").assertIsDisplayed()
         compose.onNodeWithText("Hi Amina, what's on your mind?").assertDoesNotExist()
         compose.onNode(hasText("Chat") and isSelectable()).performClick()
-        compose.onNodeWithText("Hi Amina, what's on your mind?").assertIsDisplayed()
+        compose.onNodeWithText("Hi Amina, what's on your mind?").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Dua AI").assertIsDisplayed()
     }
 
     @Test fun conversationOptionsRenameTheActiveChatAndKeepItsDraft() {

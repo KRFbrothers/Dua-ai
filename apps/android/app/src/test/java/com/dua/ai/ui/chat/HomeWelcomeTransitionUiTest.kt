@@ -12,6 +12,7 @@ import androidx.compose.ui.unit.dp
 import com.dua.ai.settings.LocalPreferences
 import com.dua.ai.ui.theme.DuaTheme
 import com.dua.ai.ui.theme.ChatTheme
+import com.dua.ai.ui.theme.HomeSizes
 import com.github.takahirom.roborazzi.captureRoboImage
 import java.io.File
 import org.junit.Rule
@@ -31,7 +32,7 @@ class HomeWelcomeTransitionUiTest(private val dark: Boolean, private val motion:
     }
     @get:Rule val compose = createComposeRule()
 
-    @Test fun welcomeNeverLayersTwoHeadingsDuringModeSwitchesOrRapidReversals() {
+    @Test fun homeKeepsOneLogoWithoutHeadingsDuringModeSwitchesOrRapidReversals() {
         val resolver = org.robolectric.RuntimeEnvironment.getApplication().contentResolver
         val previous = Settings.Global.getFloat(resolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f)
         val task = mutableStateOf(false)
@@ -47,12 +48,13 @@ class HomeWelcomeTransitionUiTest(private val dark: Boolean, private val motion:
                 compose.waitForIdle()
             }
         }
-        fun assertHeading(expected: String, stage: String) {
+        fun assertLogo(stage: String) {
             // Draw the Android host at this clock time before checking visibility.
             val frame = File("build/approved-ui/home-welcome-$stage-$dark-$motion.png")
             frame.parentFile!!.mkdirs(); compose.onRoot().captureRoboImage(frame.absolutePath)
-            compose.onAllNodes(anyHeading, useUnmergedTree = true).assertCountEquals(1)
-            compose.onNodeWithText(expected).assertIsDisplayed()
+            compose.onAllNodes(anyHeading, useUnmergedTree = true).assertCountEquals(0)
+            compose.onAllNodesWithContentDescription("Dua AI", useUnmergedTree = true).assertCountEquals(1)
+            compose.onNodeWithContentDescription("Dua AI").assertIsDisplayed().assertWidthIsEqualTo(HomeSizes.heroLogo)
         }
         try {
             Settings.Global.putFloat(resolver, Settings.Global.ANIMATOR_DURATION_SCALE, if (motion) 1f else 0f)
@@ -65,24 +67,24 @@ class HomeWelcomeTransitionUiTest(private val dark: Boolean, private val motion:
                 }
             }
             compose.mainClock.advanceTimeBy(1_000)
-            assertHeading(chatHeading, "initial")
+            assertLogo("initial")
             compose.runOnIdle { task.value = true }
             compose.mainClock.advanceTimeByFrame()
             compose.waitForIdle()
             compose.mainClock.advanceTimeBy(80)
-            assertHeading(taskHeading, "transition")
+            assertLogo("transition")
             // Reverse before the old fade would finish, then change the signed-in name.
             compose.runOnIdle { task.value = false }
             advanceSwitchFrames()
-            assertHeading(chatHeading, "reverse")
+            assertLogo("reverse")
             compose.runOnIdle { task.value = true }
             advanceSwitchFrames()
-            assertHeading(taskHeading, "task-again")
+            assertLogo("task-again")
             compose.runOnIdle { task.value = false; name.value = "Tester" }
             advanceSwitchFrames()
-            assertHeading(changedHeading, "account-change")
+            assertLogo("account-change")
             compose.mainClock.advanceTimeBy(1_000)
-            assertHeading(changedHeading, "settled")
+            assertLogo("settled")
         } finally {
             compose.mainClock.autoAdvance = true
             Settings.Global.putFloat(resolver, Settings.Global.ANIMATOR_DURATION_SCALE, previous)
