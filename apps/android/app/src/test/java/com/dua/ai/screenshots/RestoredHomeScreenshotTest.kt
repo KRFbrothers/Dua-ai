@@ -61,7 +61,8 @@ class RestoredHomeScreenshotTest(private val dark: Boolean) {
 
     @Test fun emptyHome() {
         show()
-        compose.onNodeWithText("Hi Dua,", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("Hi Dua,", substring = true).assertDoesNotExist()
+        compose.onNodeWithContentDescription("Dua AI").assertIsDisplayed()
         compose.onNodeWithContentDescription("Message").assertIsDisplayed()
         compose.onNodeWithContentDescription("Add photos and files").assertIsDisplayed()
         compose.onNodeWithContentDescription("Voice mode").assertIsDisplayed()
@@ -71,7 +72,8 @@ class RestoredHomeScreenshotTest(private val dark: Boolean) {
 
     @Test fun emptyHomeNoName() {
         show(home.copy(profileName = ""))
-        compose.onNodeWithText("Hi, what's on your mind?", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("Hi, what's on your mind?", substring = true).assertDoesNotExist()
+        compose.onNodeWithContentDescription("Dua AI").assertIsDisplayed()
         capture("empty_home_no_name")
     }
 

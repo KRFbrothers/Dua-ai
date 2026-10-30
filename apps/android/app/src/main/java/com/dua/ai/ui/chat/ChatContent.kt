@@ -21,12 +21,9 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.text.style.TextAlign
 import com.dua.ai.R
 import com.dua.ai.ui.components.DuaCalligraphyLogo
 import com.dua.ai.ui.theme.*
-import com.dua.ai.ui.voice.firstNameOf
-import com.dua.ai.ui.voice.voiceGreeting
 
 /** Shared task resources have one owner, alongside the production Home. */
 internal val HomeTaskPromptIds = listOf(R.string.home_task_prompt_backup,
@@ -47,8 +44,7 @@ internal fun ChatContent(task: Boolean, composing: Boolean = false, profileName:
         val exit = if (motion) HomeMotion.fadeOut else 0
         AnimatedVisibility(!composing, modifier = Modifier.fillMaxSize(),
             enter = fadeIn(tween(enter)), exit = fadeOut(tween(exit))) {
-            // At large text/small heights, fixed starter rows would clip the
-            // greeting. Let the complete Task body scroll as one document.
+            // At large text/small heights, let the logo and Task starters scroll together.
             val scrollTogether = task && showHero && maxHeight < (HomeSizes.heroCompactHeight + Sizes.touchTarget) * density.fontScale
             Column(Modifier.fillMaxSize().then(if (scrollTogether) Modifier.verticalScroll(rememberScrollState()) else Modifier)) {
                 if (showHero) {
@@ -58,14 +54,10 @@ internal fun ChatContent(task: Boolean, composing: Boolean = false, profileName:
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
                             DuaCalligraphyLogo(Modifier.width(if (compact) HomeSizes.heroCompactLogo else HomeSizes.heroLogo))
-                            // Keep one greeting: cross-fading two text layers makes mode changes unreadable.
-                            Text(if (task) "What can I tackle for you?" else voiceGreeting(firstNameOf(profileName)),
-                                style = HomeGreetingStyle, color = HomeTheme.colors.promptText,
-                                textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
                         }
                     }
                 }
-                // Empty Task keeps starters reachable above the IME. Chat retains its greeting.
+                // Empty Task keeps starters reachable above the IME. Chat retains its logo.
                 // Insets are only observed here; ChatScreen remains their sole layout owner.
                 if (task) TaskStarters(onTask, when {
                     !showHero -> Modifier.weight(1f).verticalScroll(rememberScrollState())
