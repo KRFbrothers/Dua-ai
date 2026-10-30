@@ -107,6 +107,7 @@ def test_api_rollback_keeps_old_level_and_omits_override(monkeypatch, stream):
         reply = SimpleNamespace(text='answer', candidates=[])
         return iter([reply]) if stream else reply
     monkeypatch.setattr(engine, 'THINKING_ROUTER', '0')
+    monkeypatch.setattr(engine, 'CHAT_THINKING_EVENTS', '0')
     monkeypatch.setattr(engine, 'THINKING_MAX_LEVEL', 'low')
     monkeypatch.setattr(engine, 'verify_owner', lambda _: 'owner')
     monkeypatch.delenv('DUA_APP_TOKEN', raising=False)

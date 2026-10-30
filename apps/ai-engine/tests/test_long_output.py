@@ -70,7 +70,8 @@ def test_plain_chat_cap_preserves_thinking_and_omits_default(model, monkeypatch,
     response = post(stream, mode='reasoning')
     assert response.status_code == 200
     response.get_data()
-    assert model.calls == [{'thinking_level': 'high', **({'max_output_tokens': cap} if cap else {})}]
+    assert model.calls == [{'thinking_level': 'high', **({'include_thoughts': True} if stream else {}),
+                            **({'max_output_tokens': cap} if cap else {})}]
     if stream:
         assert events(response)[-1] == {'type': 'done'}
         assert all('truncated' not in event and 'hint' not in event for event in events(response))
@@ -115,7 +116,7 @@ def test_output_cap_independent_of_thinking_router_rollback(model, monkeypatch, 
     monkeypatch.setattr(engine, 'CHAT_MAX_OUTPUT_TOKENS', 64)
     response = post(stream)
     response.get_data()
-    assert model.calls == [{'max_output_tokens': 64}]
+    assert model.calls == [{**({'include_thoughts': True} if stream else {}), 'max_output_tokens': 64}]
 
 
 @pytest.mark.parametrize('stream', [False, True])
