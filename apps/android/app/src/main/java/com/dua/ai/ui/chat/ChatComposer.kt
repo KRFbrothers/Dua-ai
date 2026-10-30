@@ -55,7 +55,6 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.Dp
 import com.dua.ai.attachments.ChatAttachment
 import com.dua.ai.files.PendingUpload
-import com.dua.ai.ui.theme.ChatSizes
 import com.dua.ai.ui.theme.ComposerInputStyle
 import com.dua.ai.ui.theme.HomeComposerInputStyle
 import com.dua.ai.ui.theme.ComposerModeStyle
@@ -151,11 +150,6 @@ fun Composer(
     uploading: Boolean = uploads.any { it.uploading },
     /** Spacious reference layout is limited to Home, preserving feature and project composers. */
     homeLayout: Boolean = false,
-    /** Status line inside the card. Null keeps the idle pill used by feature composers. */
-    usage: ComposerUsage? = null,
-    onUsage: () -> Unit = {},
-    quickTools: List<ComposerTool> = emptyList(),
-    labs: ComposerLabs? = null,
 
 ) {
     var localText by remember { mutableStateOf(value) }
@@ -206,9 +200,6 @@ fun Composer(
             (activeText.isNotEmpty() && measured(activeText) > inlineLimit) ||
                 (density.fontScale > 1f && measured(placeholder) > inlineLimit)
             ))
-        // A real usage line joins the card. Tool chips stay outside it so this measured height
-        // stays put when the keyboard opens.
-        val cardStacked = stacked || usage != null
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -234,12 +225,7 @@ fun Composer(
                 Box(Modifier.align(Alignment.CenterHorizontally)) { aboveInput() }
                 Spacer(Modifier.height(Spacing.md))
             }
-            if (!keyboardOpen && (quickTools.isNotEmpty() || labs != null)) {
-                if (quickTools.isNotEmpty()) ComposerToolRail(quickTools)
-                if (labs != null) ComposerLabsSwitch(labs)
-                Spacer(Modifier.height(Spacing.sm))
-            }
-            val shape = if (homeLayout && !cardStacked) HomeShapes.homeBar else if (cardStacked) ComposerSizes.expandedShape else HomeShapes.bar
+            val shape = if (homeLayout && !stacked) HomeShapes.homeBar else if (stacked) ComposerSizes.expandedShape else HomeShapes.bar
             // Keep the rounded surface/shadow outside animateContentSize's rectangular clip.
             // Only the inner layout resizes, so its shadow can feather beyond all four edges.
             Box(Modifier.fillMaxWidth()
@@ -260,21 +246,17 @@ fun Composer(
                 Column(Modifier.fillMaxWidth().testTag("supplied-composer")
                     .animateContentSize(animationSpec = if (motion) DuaMotion.gentle() else snap())
                     .padding(horizontal = innerPad, vertical = when {
-                        homeLayout && !cardStacked && !keyboardOpen -> HomeSizes.composerIdlePaddingV
-                        homeLayout && !cardStacked -> HomeSizes.composerKeyboardPaddingV
+                        homeLayout && !stacked && !keyboardOpen -> HomeSizes.composerIdlePaddingV
+                        homeLayout && !stacked -> HomeSizes.composerKeyboardPaddingV
                         else -> Spacing.sm
                     })) {
-                    if (usage != null) {
-                        ComposerUsageBanner(usage, onUsage)
-                        HorizontalDivider(thickness = ChatSizes.divider, color = c.barBorder)
-                    }
                     if (hasAttachments) AttachmentBar(attachments, uploads, !typing, onRemoveAttachment, onRemoveUpload, onRemoveAttachmentBackground)
                     if (dictation?.listening == true) {
                         Row(Modifier.fillMaxWidth().heightIn(min = Sizes.touchTarget), verticalAlignment = Alignment.CenterVertically) {
                             DictationBar(dictation.level, dictation.cancel, dictation.confirm)
                             if (typing) ComposerAction(Icons.Rounded.Stop, "Stop response", onClick = onStop)
                         }
-                    } else ComposerFields(expanded = cardStacked,
+                    } else ComposerFields(expanded = stacked,
                         input = {
                             val view = androidx.compose.ui.platform.LocalView.current
                             val currentText by rememberUpdatedState(activeText)
@@ -300,7 +282,7 @@ fun Composer(
                                     .semantics { contentDescription = "Message" },
                                 textStyle = inputStyle.copy(color = c.input),
                                 cursorBrush = SolidColor(c.input),
-                                singleLine = !cardStacked,
+                                singleLine = !stacked,
                                 maxLines = 6,
                                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                                 keyboardActions = KeyboardActions(onSend = { submit() }),
@@ -308,8 +290,8 @@ fun Composer(
                                     Box(Modifier.heightIn(min = Sizes.touchTarget), contentAlignment = Alignment.CenterStart) {
                                         if (activeText.isEmpty()) Text(placeholder, style = inputStyle, color = c.placeholder,
                                             modifier = if (homeLayout) Modifier.fillMaxWidth() else Modifier,
-                                            maxLines = if (cardStacked) 2 else 1,
-                                            overflow = if (cardStacked) TextOverflow.Clip else TextOverflow.Ellipsis)
+                                            maxLines = if (stacked) 2 else 1,
+                                            overflow = if (stacked) TextOverflow.Clip else TextOverflow.Ellipsis)
                                         innerTextField()
                                     }
                                 }
