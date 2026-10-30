@@ -140,11 +140,13 @@ class HomeGradientUiTest(private val dark: Boolean, private val large: Boolean) 
         assertEquals("The gradient must end at the keyboard", closedSurface.bottom - 280f, surface.bottom, 2f)
         assertEquals("IME inset must be applied once", closedBar.bottom - 280f, bar.bottom, 2f)
         assertTrue(bar.bottom <= surface.bottom)
-        assertEquals("Composer keeps its horizontal margins", closedBar.width, bar.width, 1f)
+        val openedBy = (HomeSizes.composerMarginH - HomeSizes.composerCompactMarginH).value * 2f
+        assertEquals("Keyboard opens the composer to the 20 dp margin", closedBar.width + openedBy, bar.width, 2f)
         assertEquals("The wider composer remains centered", closedBar.center.x, bar.center.x, 1f)
         if (!large) assertEquals("Composer keeps its stable control height", closedBar.height, bar.height, 1f)
         assertEquals("Keyboard changes must not recreate the input", inputId, compose.onNodeWithContentDescription("Message").fetchSemanticsNode().id)
-        compose.onNodeWithContentDescription("Dua AI").assertWidthIsEqualTo(HomeSizes.heroCompactLogo)
+        // Default text keeps the measured logo. Large text plus the keyboard drops the hero under the compact height.
+        compose.onNodeWithContentDescription("Dua AI").assertWidthIsEqualTo(if (large) HomeSizes.heroCompactLogo else HomeSizes.heroLogo)
         val tabs = compose.onNode(hasText("Chat") and isSelectable()).assertIsDisplayed().fetchSemanticsNode().boundsInRoot
         assertTrue(tabs.bottom <= bar.top)
         compose.onNodeWithContentDescription("Voice mode").assertIsDisplayed()
@@ -205,12 +207,12 @@ class HomeGradientUiTest(private val dark: Boolean, private val large: Boolean) 
             val chatPixels = requireNotNull(BitmapFactory.decodeFile(chatCapture.absolutePath))
             val taskPixels = requireNotNull(BitmapFactory.decodeFile(taskCapture.absolutePath))
             try {
-                // The chat pane's outer edge contains only the backdrop (at 1000dp the history panel sits to its left), so text/layout changes cannot
-                // make this assertion pass. Exercise the real tab action with motion off.
+                // The chat pane's outer edge contains only the backdrop (at 1000dp the history panel sits to its left).
+                // Empty Home uses one static wash, so Task does not recolor it.
                 val y = (chatPixels.height * .95f).toInt()
                 // mdpi: just inside the chat pane, right of the permanent history panel and its 1 dp divider.
                 val x = com.dua.ai.ui.theme.DrawerSizes.width.value.toInt() + 3
-                assertNotEquals("Task must switch the blue wash to violet with motion disabled",
+                assertEquals("Empty Home keeps the same wash in Chat and Task",
                     chatPixels.getPixel(x, y), taskPixels.getPixel(x, y))
             } finally { chatPixels.recycle(); taskPixels.recycle() }
         } finally { Settings.Global.putFloat(resolver, Settings.Global.ANIMATOR_DURATION_SCALE, previous) }

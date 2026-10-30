@@ -352,10 +352,12 @@ fun ChatScreen(
             val endInset = WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal).asPaddingValues()
                 .calculateEndPadding(LocalLayoutDirection.current)
             // Keep the visible composer action clear of the modal drawer scrim.
-            // Preserve clearance for custom headers and feature routes.
+            // Home's pill inset is its side margin plus the inner pad around the 48 dp voice target.
             val homeControlInset = if (feature == null && topBar == null) Spacing.lg + Spacing.sm else 0.dp
-            val controlInset = maxOf(HomeSizes.topBarPaddingH,
-                HomeSizes.composerHorizontalMargin(maxWidth) + HomeSizes.barPaddingH, homeControlInset)
+            val composerEdge = if (feature == null) {
+                HomeSizes.composerHorizontalMargin(maxWidth) + HomeSizes.composerInnerPaddingH
+            } else HomeSizes.barPaddingH
+            val controlInset = maxOf(HomeSizes.topBarPaddingH, composerEdge, homeControlInset)
             val drawerWidth = minOf(DrawerSizes.width, (maxWidth - endInset - controlInset - Sizes.touchTarget).coerceAtLeast(0.dp))
             // Expanded windows (>= 840dp): history stays open on the left, chat on the right (Reply/Now in Android pattern).
             val wideHistory = WideLayout.permanentHistory(maxWidth, featureOpen = feature != null)

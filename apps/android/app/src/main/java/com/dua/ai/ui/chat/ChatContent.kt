@@ -56,8 +56,8 @@ internal fun ChatContent(task: Boolean, composing: Boolean = false, profileName:
                     Box(hero.fillMaxWidth(), contentAlignment = Alignment.Center) {
                         Column(Modifier.fillMaxWidth().padding(vertical = Spacing.lg).testTag("home-hero"),
                             horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(Spacing.lg)) {
-                            DuaCalligraphyLogo(Modifier.width(if (compact || keyboardOpen) HomeSizes.heroCompactLogo else HomeSizes.heroLogo))
+                            verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
+                            DuaCalligraphyLogo(Modifier.width(if (compact) HomeSizes.heroCompactLogo else HomeSizes.heroLogo))
                             // Keep one greeting: cross-fading two text layers makes mode changes unreadable.
                             Text(if (task) "What can I tackle for you?" else voiceGreeting(firstNameOf(profileName)),
                                 style = HomeGreetingStyle, color = HomeTheme.colors.promptText,

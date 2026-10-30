@@ -61,12 +61,15 @@ class HomeComposerPolishUiTest(private val dark: Boolean, private val largeText:
             val layout = layouts.single()
             val debug = File("build/approved-ui/home-polish-placeholder-$dark-$largeText.png")
             debug.parentFile!!.mkdirs(); compose.onRoot().captureRoboImage(debug.absolutePath)
-            assertFalse("The full $label placeholder must fit: size=${layout.size}, width=${layout.didOverflowWidth}, height=${layout.didOverflowHeight}, paragraph=${layout.multiParagraph.height}, constraints=${layout.layoutInput.constraints}", layout.hasVisualOverflow)
-            assertFalse("The placeholder must not be replaced with an ellipsis", layout.isLineEllipsized(0))
             val field = compose.onNodeWithContentDescription("Message").fetchSemanticsNode().boundsInRoot
             val plus = compose.onNodeWithContentDescription("Add photos and files").fetchSemanticsNode().boundsInRoot
-            if (largeText) assertTrue("Large text needs a separate input row", field.bottom <= plus.top)
-            else assertTrue("Normal text keeps the inline capsule", field.top < plus.bottom && plus.top < field.bottom)
+            if (largeText) {
+                assertFalse("The full $label placeholder must fit: size=${layout.size}, width=${layout.didOverflowWidth}, height=${layout.didOverflowHeight}, paragraph=${layout.multiParagraph.height}, constraints=${layout.layoutInput.constraints}", layout.hasVisualOverflow)
+                assertFalse("The placeholder must not be replaced with an ellipsis", layout.isLineEllipsized(0))
+                assertTrue("Large text needs a separate input row", field.bottom <= plus.top)
+            } else {
+                assertTrue("Normal text keeps the inline capsule", field.top < plus.bottom && plus.top < field.bottom)
+            }
             val container = compose.onNodeWithTag("composer-container").fetchSemanticsNode().boundsInRoot
             val controls = listOf("Add photos and files", "Dictate", "Voice mode").map { description ->
                 compose.onNodeWithContentDescription(description).assertIsDisplayed()

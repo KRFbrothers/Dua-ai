@@ -36,10 +36,10 @@ internal fun HomeChrome(enabled: Boolean, content: @Composable () -> Unit) {
     val extra = DuaTheme.colors
     val scheme = MaterialTheme.colorScheme
     val colors = if (enabled) homeColors(scheme, extra).copy(
-        segmentSelected = scheme.primaryContainer,
-        segmentSelectedText = scheme.onPrimaryContainer,
+        segmentSelected = if (extra.isDark) DuaMatch.HomeDarkBar else scheme.surfaceContainerHigh,
+        segmentSelectedText = scheme.onSurface,
         tagline = scheme.onSurfaceVariant,
-        bar = if (extra.isDark) extra.composer else scheme.surfaceContainerLowest,
+        bar = if (extra.isDark) DuaMatch.HomeDarkBar else scheme.surfaceContainerLowest,
         barBorder = scheme.outlineVariant.copy(alpha = .35f),
     ) else null
     // Keep the Home surface opaque; other composers retain their existing floating overlay.
@@ -57,18 +57,20 @@ object HomeTheme {
 
 /** Reference sizes. Visuals keep the reference sizes; each control sits in a 48 dp touch slot. */
 object HomeSizes {
-    /** Compact original Dua lockup, scaled down as a single asset. */
-    val heroLogo = 64.dp
-    val heroCompactLogo = 40.dp
+    /** Calligraphy lockup at the measured 36.6 dp sparkle height (610:1024 asset). */
+    val heroLogo = 22.dp
+    val heroCompactLogo = 16.dp
     val heroCompactHeight = 320.dp
     /** assistant_robin_chat_input_max_width from the supplied Google App resource table. */
     val composerMaxWidth = 696.dp
     val referenceIcon = 28.dp
-    val composerMarginH = 16.dp
-    val composerCompactMarginH = 16.dp
+    /** Idle Home inset is 40 dp; the keyboard state opens to 20 dp. Both pills are 80 dp tall. */
+    val composerMarginH = 40.dp
+    val composerCompactMarginH = 20.dp
     val composerRoomyWidth = 360.dp
-    val composerIdlePaddingV = 4.dp
-    val composerKeyboardPaddingV = 4.dp
+    val composerInnerPaddingH = 16.dp
+    val composerIdlePaddingV = 16.dp
+    val composerKeyboardPaddingV = 16.dp
     val composerElevation = 6.dp
     val noElevation = 0.dp
     fun composerHorizontalMargin(availableWidth: Dp): Dp =
@@ -106,7 +108,8 @@ object HomeShapes {
     val segmentTrack = RoundedCornerShape(24.dp)
     val segmentTab = RoundedCornerShape(20.dp)
     val bar = DuaShape.composer
-    val homeBar = DuaShape.composer
+    /** 40 dp on the 80 dp Home pill is a capsule. */
+    val homeBar = RoundedCornerShape(40.dp)
     /** Task starter rows on Home. */
     val promptRow = RoundedCornerShape(16.dp)
     val round = CircleShape

@@ -39,7 +39,7 @@ internal fun Modifier.homeBackdrop(task: Boolean, home: Boolean = true, generati
     val generationBackdrop = remember(palette) {
         OgGenerationBackdrop(listOf(palette.blue, palette.purple, palette.magenta, palette.orange))
     }
-    val transition = if (motion) rememberInfiniteTransition(label = "ambient-backdrop") else null
+    val transition = if (motion && !home) rememberInfiniteTransition(label = "ambient-backdrop") else null
     val drift = transition?.animateFloat(0f, (2 * PI).toFloat(),
         infiniteRepeatable(tween(AmbientTokens.driftMs, easing = LinearEasing)), label = "ambient-drift")
     val breathe = transition?.animateFloat(0.78f, 1.18f,
@@ -62,6 +62,13 @@ internal fun Modifier.homeBackdrop(task: Boolean, home: Boolean = true, generati
         val w = size.width
         val h = size.height
         val longest = maxOf(w, h)
+        val homeWash = Brush.verticalGradient(
+            0f to palette.homeTop,
+            0.62f to palette.homeTop,
+            0.72f to palette.homeMid,
+            0.84f to palette.homeRise,
+            1f to palette.homeBottom,
+        )
         val baseWash = Brush.verticalGradient(0f to base, 0.55f to base, 1f to palette.baseEnd)
         val skyWash = Brush.verticalGradient(listOf(Color.Transparent, palette.sky.copy(alpha = if (dark) 187 / 255f else 221 / 255f)),
             startY = h * 0.45f, endY = h)
@@ -82,6 +89,14 @@ internal fun Modifier.homeBackdrop(task: Boolean, home: Boolean = true, generati
         }
         onDrawBehind {
             // Infinite states are read only while drawing; the message list/composer do not recompose per frame.
+            if (home) {
+                drawRect(homeWash)
+                if (generationAlpha.value > 0f) drawIntoCanvas { canvas ->
+                    generationBackdrop.draw(canvas.nativeCanvas, w, h, 0f,
+                        generationAlpha.value * if (dark) .42f else .34f, motion)
+                }
+                return@onDrawBehind
+            }
             val angle = drift?.value ?: 0f
             val gain = (breathe?.value ?: .78f) * (if (dark) 1f else .72f) * intensity.value
             clipRect {
