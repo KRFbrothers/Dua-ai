@@ -59,6 +59,8 @@ if AGENT_THINKING_LEVEL not in ("low", "medium", "high"):
     # Argon at medium can spend minutes per tool step; low keeps the Agent responsive (set the env var to change).
     AGENT_THINKING_LEVEL = "low" if AGENT_MODEL != MODEL_NAME else THINKING_LEVEL
 THINKING_ROUTER = os.environ.get("THINKING_ROUTER", "1").strip()
+# Plain (non-agent) streaming chat sends Gemini thought summaries as "thinking" SSE events. Rollback: "0".
+CHAT_THINKING_EVENTS = os.environ.get("CHAT_THINKING_EVENTS", "1").strip()
 THINKING_MAX_LEVEL = os.environ.get("THINKING_MAX_LEVEL", "high").strip().lower()
 if THINKING_MAX_LEVEL not in ("low", "medium", "high"):
     THINKING_MAX_LEVEL = "high"
@@ -194,6 +196,7 @@ class GenaiModel:
         from google.genai import types
         options = {"system_instruction": self.system, **(generation_config or {})}
         level = options.pop("thinking_level", None)
+        include_thoughts = options.pop("include_thoughts", False)
         timeout = options.pop("timeout_seconds", None)
         if timeout:
             options["http_options"] = types.HttpOptions(timeout=int(timeout * 1000))
@@ -202,6 +205,8 @@ class GenaiModel:
         thinking = thinking_config(self.model_name, self.thinking_level)
         if thinking is not None and level:
             thinking = types.ThinkingConfig(thinking_level=str(level).upper())
+        if thinking is not None and include_thoughts:
+            thinking = types.ThinkingConfig(thinking_level=thinking.thinking_level, include_thoughts=True)
         if thinking is not None:
             options["thinking_config"] = thinking
         return types.GenerateContentConfig(**options)
@@ -921,6 +926,15 @@ def merge_chat_sources(sources, response):
             sources.append({**source, "id": len(sources) + 1})
 
 
+def chunk_thoughts(chunk):
+    """Thought-summary text from a Gemini stream chunk (parts with thought=True); never part of the answer."""
+    try:
+        parts = chunk.candidates[0].content.parts or []
+    except (AttributeError, IndexError, TypeError):
+        return ""
+    return "".join(p.text for p in parts if getattr(p, "thought", False) is True and isinstance(getattr(p, "text", None), str))
+
+
 def chunk_text(chunk):
     try:
         return chunk.text or ""
@@ -1112,6 +1126,8 @@ def api_chat():
         app.logger.info("thinking level: %s", level)
         if THINKING_ROUTER != "0":
             chat_config["generation_config"] = {"thinking_level": level}
+        if data.get("stream") is True and CHAT_THINKING_EVENTS != "0":
+            chat_config.setdefault("generation_config", {})["include_thoughts"] = True
         if CHAT_MAX_OUTPUT_TOKENS > 0:
             chat_config.setdefault("generation_config", {})["max_output_tokens"] = CHAT_MAX_OUTPUT_TOKENS
         try:
@@ -1243,6 +1259,9 @@ def api_chat():
                 truncated = truncated or finish_truncated(chunk)
                 if not agent and not use_free:
                     merge_chat_sources(plain_sources, chunk)
+                    thought = chunk_thoughts(chunk) if CHAT_THINKING_EVENTS != "0" else ""
+                    if thought:
+                        yield sse({"type": "thinking", "delta": thought})
                 text = chat_chunk_text(chunk, include_code) if not agent and not use_free else chunk_text(chunk)
                 if text:
                     sent = True

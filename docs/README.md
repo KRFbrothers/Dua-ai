@@ -58,6 +58,7 @@ Values live in Secret Manager or the Cloud Run service settings — never in cod
 | both | `PORT` | Set by Cloud Run |
 | engine | `GOOGLE_CLOUD_PROJECT`, `VERTEX_LOCATION`, `VERTEX_MODEL`, `VERTEX_THINKING_LEVEL`, `TITLE_TOKENS` | Vertex Gemini chat model, location, thinking level, title length |
 | engine | `THINKING_ROUTER`, `THINKING_MAX_LEVEL` | Request thinking router (default `1`; rollback `0` restores env levels); cost ceiling `low`/`medium`/`high` (default `high`) |
+| engine | `CHAT_THINKING_EVENTS` | Plain streaming chat sends Gemini thought summaries as `thinking` SSE events (default `1`; rollback `0`) |
 | engine | `GEMINI_AUTH` (`adc` default / `apikey`), `GOOGLE_API_KEY` (Secret Manager) | Gemini auth: ADC, or Vertex AI express mode with an API key — details in [AGENT.md](AGENT.md#settings-verified-from-code) |
 | engine | `AGENT_*` (`AGENT_MODEL`, `AGENT_ENGINE`, `AGENT_VERIFY`, `AGENT_TEST_CODE`, `AGENT_NOTES`, …) | Agent behaviour and limits — full list in [AGENT.md](AGENT.md#settings-verified-from-code) |
 | engine | `CODING_MAX_STEPS`, `CODING_MAX_SECONDS`, `CODING_STEP_TOKENS`, `GITHUB_TOKEN`, `DUA_REPO` | Optional coding agent limits, token and target repository |
