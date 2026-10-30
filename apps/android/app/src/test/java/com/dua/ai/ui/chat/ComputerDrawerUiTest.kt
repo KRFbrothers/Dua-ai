@@ -17,6 +17,8 @@ import com.dua.ai.model.ChatMessage
 import com.dua.ai.settings.LocalPreferences
 import com.dua.ai.ui.navigation.DuaDestination
 import com.dua.ai.ui.theme.DuaTheme
+import com.dua.ai.ui.theme.HomeSizes
+import com.dua.ai.ui.theme.Sizes
 import com.github.takahirom.roborazzi.captureRoboImage
 import java.io.File
 import org.junit.Assert.*
@@ -58,7 +60,9 @@ class ComputerDrawerUiTest(private val dark: Boolean, private val small: Boolean
         val drawer = compose.onNodeWithTag("history-drawer").fetchSemanticsNode().boundsInRoot
         val voice = compose.onNodeWithContentDescription("Voice mode").fetchSemanticsNode().boundsInRoot
         val root = compose.onRoot().fetchSemanticsNode().boundsInRoot
-        assertEquals(root.width - 24f - 48f, drawer.width, .5f)
+        val margin = if (small) HomeSizes.composerCompactMarginH else HomeSizes.composerMarginH
+        val clearance = margin + HomeSizes.composerInnerPaddingH
+        assertEquals(root.width - clearance.value - Sizes.touchTarget.value, drawer.width, .5f)
         assertTrue("Drawer overlaps Voice target: $drawer / $voice", drawer.right <= voice.left + .5f)
         assertTrue("Drawer must leave a dismiss scrim", root.right - drawer.right >= 48f)
         for (control in listOf(voice)) {

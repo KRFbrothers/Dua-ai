@@ -96,7 +96,6 @@ internal fun HomeModeSwitcher(mode: HomeMode, onSelect: (HomeMode) -> Unit, enab
                 contentAlignment = Alignment.Center) {
                 Box(Modifier.heightIn(min = HomeSizes.segmentTab).clip(ComposerSizes.tabShape)
                     .background(fill)
-                    .then(if (selected) Modifier.border(HomeSizes.barBorder, c.barBorder, ComposerSizes.tabShape) else Modifier)
                     .padding(horizontal = HomeSizes.segmentTabPaddingH), contentAlignment = Alignment.Center) {
                     Text(tab.name, style = ComposerModeStyle,
                         color = text, maxLines = 1)
@@ -165,11 +164,6 @@ fun Composer(
     val inputStyle = if (homeLayout) HomeComposerInputStyle else ComposerInputStyle
     val textMeasurer = rememberTextMeasurer()
     val density = LocalDensity.current
-    // Keep idle Chat/Task geometry stable even when their hints have different lengths.
-    val minimumInputWidth = remember(textMeasurer, inputStyle, density) {
-        textMeasurer.measure(AnnotatedString("Ask Dua AI..."), style = inputStyle,
-            softWrap = false, maxLines = 1).size.width
-    }
     val hasContent = activeText.isNotBlank() || hasAttachments
     val expanded = (!homeLayout && hasContent) || hasAttachments || '\n' in activeText
     val canSubmit = hasContent && sendEnabled && !typing && !uploading && !readingFiles
@@ -189,15 +183,23 @@ fun Composer(
     // Keep the input spacious on regular phones and leave room for controls on narrow windows.
     BoxWithConstraints(modifier.widthIn(max = HomeSizes.composerMaxWidth).fillMaxWidth()) {
         val keyboardOpen = homeLayout && WindowInsets.ime.getBottom(LocalDensity.current) > 0
-        val margin = (if (homeLayout && !keyboardOpen) HomeSizes.composerHorizontalMargin(maxWidth) else HomeSizes.composerCompactMarginH)
+        val margin = when {
+            !homeLayout -> Spacing.lg
+            keyboardOpen -> HomeSizes.composerCompactMarginH
+            else -> HomeSizes.composerHorizontalMargin(maxWidth)
+        }
+        val innerPad = if (homeLayout) HomeSizes.composerInnerPaddingH else HomeSizes.barPaddingH
         // Large text gets its own input row before the placeholder loses space to the controls.
-        // Keep the field in the same Layout slot so resizing never discards focus or the draft.
-        val inlineTextWidth = maxWidth - margin * 2 - HomeSizes.barPaddingH * 2 - Sizes.touchTarget * 3 - Spacing.sm * 2
-        val stacked = expanded || (homeLayout && maxOf(
-            minimumInputWidth,
-            textMeasurer.measure(AnnotatedString(placeholder), style = inputStyle, softWrap = false, maxLines = 1).size.width,
-            textMeasurer.measure(AnnotatedString(activeText), style = inputStyle, softWrap = false, maxLines = 1).size.width,
-        ) > with(LocalDensity.current) { inlineTextWidth.roundToPx() })
+        // An empty Home pill stays one row at the default font scale and ellipsizes a long hint.
+        val inlineTextWidth = maxWidth - margin * 2 - innerPad * 2 - Sizes.touchTarget * 3 - Spacing.sm * 2
+        val inlineLimit = with(density) { inlineTextWidth.roundToPx() }
+        val measured = { text: String ->
+            textMeasurer.measure(AnnotatedString(text), style = inputStyle, softWrap = false, maxLines = 1).size.width
+        }
+        val stacked = expanded || (homeLayout && (
+            (activeText.isNotEmpty() && measured(activeText) > inlineLimit) ||
+                (density.fontScale > 1f && measured(placeholder) > inlineLimit)
+            ))
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -243,7 +245,7 @@ fun Composer(
                 .clip(shape).background(c.bar).background(DuaTheme.colors.floatingSurface).border(HomeSizes.barBorder, border, shape)) {
                 Column(Modifier.fillMaxWidth().testTag("supplied-composer")
                     .animateContentSize(animationSpec = if (motion) DuaMotion.gentle() else snap())
-                    .padding(horizontal = HomeSizes.barPaddingH, vertical = when {
+                    .padding(horizontal = innerPad, vertical = when {
                         homeLayout && !stacked && !keyboardOpen -> HomeSizes.composerIdlePaddingV
                         homeLayout && !stacked -> HomeSizes.composerKeyboardPaddingV
                         else -> Spacing.sm
@@ -288,7 +290,8 @@ fun Composer(
                                     Box(Modifier.heightIn(min = Sizes.touchTarget), contentAlignment = Alignment.CenterStart) {
                                         if (activeText.isEmpty()) Text(placeholder, style = inputStyle, color = c.placeholder,
                                             modifier = if (homeLayout) Modifier.fillMaxWidth() else Modifier,
-                                            maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                            maxLines = if (stacked) 2 else 1,
+                                            overflow = if (stacked) TextOverflow.Clip else TextOverflow.Ellipsis)
                                         innerTextField()
                                     }
                                 }

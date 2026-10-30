@@ -57,13 +57,25 @@ private val OrbSurfaceBottom = Color(0xFF0B0B0D)
 internal object DuaMatch {
     // Dark surfaces.
     val DarkComposer = Color(0xFF20201E)
+    /** Empty Home pill sampled on the connected phone, 30 Oct 2026. Other composers keep DarkComposer. */
+    val HomeDarkBar = Color(0xFF1C1C1C)
     val DarkBackground = Color(0xFF151515)
+    /** Idle Home wash sampled from the connected phone, 30 Oct 2026. */
+    val HomeDarkTop = Color(0xFF000000)
+    val HomeDarkMid = Color(0xFF050917)
+    val HomeDarkRise = Color(0xFF09112E)
+    val HomeDarkBottom = Color(0xFF142766)
     val DarkBubble = Color(0xFF313131)
     val DarkText = Color(0xFFFAFAF8)
     val DarkMuted = Color(0xFFB4B4B4)
     // Light surfaces.
     val LightComposer = Color(0xFFFFFFFF)
     val LightBackground = Color(0xFFF9F9F9)
+    /** Same bottom-weighted wash as dark Home. Exact light stops still need a light-mode capture. */
+    val HomeLightTop = LightBackground
+    val HomeLightMid = Color(0xFFF4F7FB)
+    val HomeLightRise = Color(0xFFE6EEF8)
+    val HomeLightBottom = Color(0xFFD3E4F8)
     val LightText = Color(0xFF1F1F1F)
     val LightMuted = Color(0xFF444746)
 }

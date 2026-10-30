@@ -20,10 +20,9 @@ import com.dua.ai.ui.theme.ChatTheme
 import com.dua.ai.ui.theme.DuaTheme
 import com.dua.ai.ui.theme.HomeSizes
 import com.dua.ai.ui.theme.HomeTheme
-import com.dua.ai.ui.theme.HomeDarkColors
-import com.dua.ai.ui.theme.HomeLightColors
-import com.dua.ai.ui.theme.ChatDarkColors
-import com.dua.ai.ui.theme.ChatLightColors
+import com.dua.ai.ui.theme.DuaMatch
+import com.dua.ai.ui.theme.chatColors
+import com.dua.ai.ui.theme.homeColors
 import com.github.takahirom.roborazzi.captureRoboImage
 import java.io.File
 import org.junit.Assert.*
@@ -49,14 +48,9 @@ class HomeChatTaskUiTest(private val dark: Boolean, private val compact: Boolean
     private fun show(content: @androidx.compose.runtime.Composable () -> Unit) = compose.setContent {
         CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, if (compact) 2f else 1f)) {
             DuaTheme(LocalPreferences(theme = if (dark) "dark" else "light")) {
-                val scheme = MaterialTheme.colorScheme
-                assertEquals((if (dark) HomeDarkColors else HomeLightColors).copy(
-                    voice = scheme.primary, onVoice = scheme.onPrimary,
-                ), HomeTheme.colors)
-                assertEquals((if (dark) ChatDarkColors else ChatLightColors).copy(
-                    accent = scheme.primary, accentSoft = scheme.primaryContainer,
-                    onAccentSoft = scheme.onPrimaryContainer,
-                ), ChatTheme.colors)
+                // DuaTheme accents primary. Home and chat roles follow that scheme, not the unaccented constants.
+                assertEquals(homeColors(MaterialTheme.colorScheme, DuaTheme.colors), HomeTheme.colors)
+                assertEquals(chatColors(MaterialTheme.colorScheme, DuaTheme.colors), ChatTheme.colors)
                 Box(Modifier.requiredSize(if (compact) 320.dp else 360.dp, if (compact) 568.dp else 752.dp)) { content() }
             }
         }
@@ -101,11 +95,11 @@ class HomeChatTaskUiTest(private val dark: Boolean, private val compact: Boolean
             val originalHome = HomeTheme.colors
             val scheme = MaterialTheme.colorScheme
             HomeChrome(enabled = true) {
-                assertEquals(scheme.primaryContainer, HomeTheme.colors.segmentSelected)
-                assertEquals(scheme.onPrimaryContainer, HomeTheme.colors.segmentSelectedText)
+                assertEquals(if (dark) DuaMatch.HomeDarkBar else scheme.surfaceContainerHigh, HomeTheme.colors.segmentSelected)
+                assertEquals(scheme.onSurface, HomeTheme.colors.segmentSelectedText)
                 assertEquals(scheme.onSurfaceVariant, HomeTheme.colors.segmentText)
                 assertEquals(scheme.onSurfaceVariant, HomeTheme.colors.tagline)
-                assertEquals(if (dark) original.composer else scheme.surfaceContainerLowest, HomeTheme.colors.bar)
+                assertEquals(if (dark) DuaMatch.HomeDarkBar else scheme.surfaceContainerLowest, HomeTheme.colors.bar)
                 assertEquals(HomeTheme.colors.bar, DuaTheme.colors.floatingSurface)
                 assertEquals(scheme.primary, HomeTheme.colors.voice)
                 assertEquals(scheme.onPrimary, HomeTheme.colors.onVoice)
