@@ -261,3 +261,18 @@ def test_invalid_personality_is_rejected_before_provider_calls(client, fake, val
 
 def test_personality_support_is_advertised(client):
     assert client.get('/').get_json()['personalization'] == {'personality': True}
+
+
+def test_top_level_system_instruction_reaches_system_config(client, fake):
+    response = client.post('/api/chat', json={'messages': HISTORY, 'systemInstruction': 'Reply as Orhan.'})
+    assert response.status_code == 200
+    system = fake.systems[-1]
+    assert system.startswith(engine.SYSTEM_PROMPT) and 'Reply as Orhan.' in system
+    assert fake.calls[0][0][-1]['parts'] == [('text', 'My name?')]
+
+
+@pytest.mark.parametrize('value', [42, {}, 'x' * 20001])
+def test_invalid_system_instruction_is_rejected(client, fake, value):
+    response = client.post('/api/chat', json={'messages': HISTORY, 'systemInstruction': value})
+    assert response.status_code == 400
+    assert not fake.calls
