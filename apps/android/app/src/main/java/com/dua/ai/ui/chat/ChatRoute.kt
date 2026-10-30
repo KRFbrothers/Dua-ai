@@ -400,7 +400,12 @@ fun ChatRoute(viewModel: ChatViewModel, voice: ReplyVoice, onOpenSettings: () ->
         }
     }
     androidx.compose.runtime.CompositionLocalProvider(LocalMediaLoader provides viewModel.mediaCache, LocalChatHaptic provides actions.haptic) {
-        ChatScreen(state, actions, topBar = topBar, requestComposerFocus = entryFocus, dismissOverlaysRequest = entryUiKey)
+        ChatScreen(state, actions, topBar = topBar, requestComposerFocus = entryFocus, dismissOverlaysRequest = entryUiKey,
+            personalMemory = preferences.memoryEnabled,
+            onPersonalMemory = { enabled ->
+                if (!viewModel.dataBusy.value && !viewModel.account.state.value.busy)
+                    viewModel.updateSettings(viewModel.localSettings.value.copy(memoryEnabled = enabled))
+            })
     }
 }
 

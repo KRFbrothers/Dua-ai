@@ -61,6 +61,8 @@ object HomeSizes {
     val heroLogo = 80.dp
     val heroCompactLogo = 64.dp
     val heroCompactHeight = 320.dp
+    /** Empty-home tool rail needs the gap under the greeting. Shorter panes keep that gap for the hero. */
+    val composerToolkitMinHeight = 700.dp
     /** assistant_robin_chat_input_max_width from the supplied Google App resource table. */
     val composerMaxWidth = 696.dp
     val referenceIcon = 28.dp

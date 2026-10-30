@@ -79,6 +79,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -119,6 +120,9 @@ fun ChatScreen(
     topBar: (@Composable () -> Unit)? = null,
     requestComposerFocus: String? = null,
     dismissOverlaysRequest: String? = null,
+    /** Null hides the labs switch. The route passes the persisted Personal memory setting. */
+    personalMemory: Boolean? = null,
+    onPersonalMemory: ((Boolean) -> Unit)? = null,
 ) {
     val drawerState = rememberDrawerState(initialDrawerValue)
     var lastDrawerValue by remember { mutableStateOf(drawerState.currentValue) }
@@ -383,6 +387,9 @@ fun ChatScreen(
                         modifier = Modifier.width(if (permanent) DrawerSizes.width else drawerWidth),
                     )
             }
+            // BoxWithConstraints values cannot be read inside the pane lambda.
+            val paneWidth = maxWidth
+            val paneHeight = maxHeight
             val chatPane: @Composable () -> Unit = {
                 HomeChrome(enabled = home && feature == null && topBar == null && state.homeTab == HomeTab.Chat) {
                 Box(Modifier.fillMaxSize().then(if (feature == null && topBar == null) Modifier.testTag("supplied-chat") else Modifier)) {
@@ -449,6 +456,40 @@ fun ChatScreen(
                                     modifier = Modifier.align(Alignment.BottomEnd).padding(Spacing.md))
 
                             }
+                            // Drawn over the empty gap under the greeting. It reports no extra
+                            // height, so the input card and the hero keep their measured positions.
+                            val showToolkit = home && !taskHome && feature == null && sheet == null
+                                && paneHeight >= HomeSizes.composerToolkitMinHeight
+                                && WindowInsets.ime.getBottom(LocalDensity.current) == 0
+                            if (showToolkit) Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+                                .padding(horizontal = HomeSizes.composerHorizontalMargin(paneWidth))
+                                .padding(bottom = Spacing.sm).testTag("composer-toolkit")) {
+                                ComposerToolRail(homeComposerTools(
+                                    busy = state.readingFiles,
+                                    imagesEnabled = state.imagineConfig?.imageEnabled == true,
+                                    imageUnavailable = state.imagineConfig?.imageReason?.ifBlank { null } ?: "Image creation is not configured",
+                                    videosEnabled = state.videoAvailable,
+                                    videoUnavailable = state.imagineConfig?.videoReason?.ifBlank { null } ?: "Video creation is not configured",
+                                    onPhotos = actions.onPickPhotos,
+                                    onCamera = actions.onPickCamera,
+                                    onAvatar = { actions.onOpenDestination(DuaDestination.AvatarEdit) },
+                                    onImages = {
+                                        onImagine(true)
+                                        actions.onImagineOptions(state.imagineOptions.copy(kind = com.dua.ai.imagine.ImagineInfo.IMAGE))
+                                        sheet = ChatSheet.Imagine
+                                    },
+                                    onVideos = {
+                                        onImagine(true)
+                                        actions.onImagineOptions(state.imagineOptions.copy(kind = com.dua.ai.imagine.ImagineInfo.VIDEO))
+                                        sheet = ChatSheet.Imagine
+                                    },
+                                ))
+                                if (personalMemory != null && onPersonalMemory != null) ComposerLabsSwitch(ComposerLabs(
+                                    checked = personalMemory,
+                                    enabled = !state.readingFiles,
+                                    onCheckedChange = onPersonalMemory,
+                                ))
+                            }
                         }
                         if (feature != null || state.homeTab != HomeTab.Work) Column(Modifier.fillMaxWidth()
                             .let { if (feature != null) it.imePadding().navigationBarsPadding() else it }, horizontalAlignment = Alignment.CenterHorizontally) {
@@ -458,7 +499,8 @@ fun ChatScreen(
                                     isExcluded = { local -> inputFocused && bottomCoordinates?.let { inputBounds.contains(it.localToRoot(local)) } == true },
                                     onSwipeUp = { tap(); sheet = ChatSheet.Attach })
                                 .semantics { customActions = listOf(CustomAccessibilityAction("Open add to chat") { sheet = ChatSheet.Attach; true }) }) {
-                                ChatNotices(state = state, actions = actions)
+                                val usageNotice = composerUsage(state.error, state.imagineUsage, state.videoAvailable)
+                                ChatNotices(state = if (usageNotice?.message == state.error) state.copy(error = null) else state, actions = actions)
                                 if (state.editingId != null) EditingBanner(onCancel = actions.onCancelEdit)
                                 val visibleModes = modeToggles(state, onWebMode, onReasoning, onXSearch, onRunCode, onAgent)
                                     .filter { feature == null && !home && it.on && !(taskHome && it.label == "Agent") }
@@ -509,6 +551,8 @@ fun ChatScreen(
                                     onRemoveAttachmentBackground = if (state.removeBackground) actions.onRemoveAttachmentBackground else null,
                                     writingTools = { task -> actions.onWriting(state.draft, true, task) },
                                     onRemoveUpload = actions.onCancelUpload,
+                                    usage = usageNotice,
+                                    onUsage = { actions.onOpenDestination(DuaDestination.UsageLimits) },
                                     aboveInput = if (feature != null || (!home && replyTo == null)) null else { {
                                         androidx.compose.foundation.layout.Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                         replyTo?.let { quote -> ReplyPreview(quote, onCancel = { replyTo = null }) }

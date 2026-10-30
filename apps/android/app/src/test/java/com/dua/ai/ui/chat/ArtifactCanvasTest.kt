@@ -231,7 +231,8 @@ class ArtifactCanvasTest(private val dark: Boolean) {
     @Test fun sheetControlsRemainAccessibleAtLargeFontScale() {
         show(fontScale = 1.5f); open()
         val layouts = mutableListOf<TextLayoutResult>()
-        compose.onNodeWithText("Canvas").performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
+        compose.onNode(hasText("Canvas") and hasAnyAncestor(hasTestTag("artifact-canvas-sheet")))
+            .performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
         assertEquals(1.5f, layouts.single().layoutInput.density.fontScale, .01f)
         compose.onNodeWithContentDescription("Close canvas").assertIsDisplayed().assertWidthIsAtLeast(48.dp)
         compose.onNodeWithContentDescription("Copy artifact source").assertIsDisplayed().assertHeightIsAtLeast(48.dp)
