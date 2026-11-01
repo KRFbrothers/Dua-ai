@@ -3,12 +3,15 @@
 Enable with ADK_TOOL_MODULES=dua_engine.agent.agent_mcp and a server-side
 ADK_MCP_SERVERS JSON object, for example:
   {"files": {"command": ["npx", "-y", "@modelcontextprotocol/server-filesystem", "/data"],
-             "allow": ["read_file"], "env": {"KEY": "value"}}}
+             "allow": ["read_file"], "write": ["write_file"], "env": {"KEY": "value"}}}
 Only stdio servers started by the operator are supported. Every exposed tool must be
-named in that server's "allow" list, so nothing is exposed by default and no HTTP
-request can add servers, commands or credentials. Tools run through the normal
-research-tool limits, argument validation and response-size cap.
+named in that server's "allow" (read-only, runs immediately) or "write" list (never
+runs in the agent loop; stored for owner approval and executed only after the owner
+approves in the app). Nothing is exposed by default and no HTTP request can add
+servers, commands or credentials. A write approval is bound to a fingerprint of the
+server command, tool name and input schema, so changing any of them voids it.
 """
+import hashlib
 import inspect
 import json
 import os
@@ -101,8 +104,13 @@ def parse_servers(raw):
         allow = server.get('allow') if isinstance(server, dict) else None
         if not isinstance(command, list) or not command or not all(isinstance(c, str) and c for c in command):
             raise ValueError('MCP server command must be a non-empty list of strings')
+        write = server.get('write', [])
         if not isinstance(allow, list) or not all(isinstance(a, str) for a in allow):
             raise ValueError('MCP server needs an explicit allow list of tool names')
+        if not isinstance(write, list) or not all(isinstance(a, str) for a in write):
+            raise ValueError('MCP server write list must contain tool names')
+        if set(allow) & set(write):
+            raise ValueError('A tool cannot be both read-only and write')
         if not isinstance(server.get('env', {}), dict):
             raise ValueError('MCP server env must be an object')
     return config
@@ -112,7 +120,7 @@ def local_name(server, tool):
     return re.sub(r'[^a-z0-9_]', '_', ('mcp_' + server + '_' + tool).lower())[:64]
 
 
-def build_tool(server, config, spec, timeout=TIMEOUT_SECONDS):
+def build_tool(server, config, spec, timeout=TIMEOUT_SECONDS, write=False):
     remote = spec['name']
     schema = spec.get('inputSchema') or {}
     required = set(schema.get('required', []))
@@ -137,7 +145,8 @@ def build_tool(server, config, spec, timeout=TIMEOUT_SECONDS):
     call.__name__ = local_name(server, remote)
     call.__doc__ = (spec.get('description') or remote)[:500]
     call.__signature__ = inspect.Signature(sorted(parameters, key=lambda p: p.default is not inspect.Parameter.empty))
-    return Tool(call, kind='research', limit=5, revision='mcp-' + server)
+    fingerprint = hashlib.sha256(json.dumps([config['command'], remote, schema], sort_keys=True).encode()).hexdigest()
+    return Tool(call, kind='research', write=write, limit=2 if write else 5, revision='mcp-' + fingerprint[:32])
 
 
 def discover(servers, timeout=TIMEOUT_SECONDS):
@@ -146,10 +155,12 @@ def discover(servers, timeout=TIMEOUT_SECONDS):
         with StdioClient(config['command'], config.get('env'), timeout) as client:
             listed = client.request('tools/list').get('tools', [])
         found = {spec.get('name'): spec for spec in listed if isinstance(spec, dict)}
-        missing = set(config['allow']) - set(found)
+        names = list(config['allow']) + list(config.get('write', []))
+        missing = set(names) - set(found)
         if missing:
             raise ValueError('MCP server %s does not provide allowed tools: %s' % (server, ', '.join(sorted(missing))))
-        tools.extend(build_tool(server, config, found[name], timeout) for name in config['allow'])
+        tools.extend(build_tool(server, config, found[name], timeout, write=name in config.get('write', []))
+                     for name in names)
     return tools
 
 

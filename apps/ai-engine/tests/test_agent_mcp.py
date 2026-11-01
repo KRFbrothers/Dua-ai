@@ -81,3 +81,22 @@ def test_dead_server_reports_error():
     with pytest.raises(agent_mcp.McpError):
         with agent_mcp.StdioClient([sys.executable, '-c', 'pass'], timeout=5):
             pass
+
+
+def test_write_tools_are_flagged_and_fingerprinted(servers):
+    servers['fake']['write'] = ['delete_all']
+    tools = {t.name: t for t in agent_mcp.discover(servers, timeout=10)}
+    assert tools['mcp_fake_echo'].write is False
+    assert tools['mcp_fake_delete_all'].write is True
+    assert tools['mcp_fake_delete_all'].limit == 2
+    before = tools['mcp_fake_delete_all'].identity
+    servers['fake']['command'] = servers['fake']['command'] + ['--other']
+    changed = {t.name: t for t in agent_mcp.discover(servers, timeout=10)}
+    assert changed['mcp_fake_delete_all'].identity != before
+
+
+def test_write_config_validation():
+    with pytest.raises(ValueError):
+        agent_mcp.parse_servers(json.dumps({'a': {'command': ['x'], 'allow': ['t'], 'write': ['t']}}))
+    with pytest.raises(ValueError):
+        agent_mcp.parse_servers(json.dumps({'a': {'command': ['x'], 'allow': [], 'write': 'x'}}))
