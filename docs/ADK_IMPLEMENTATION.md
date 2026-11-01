@@ -253,6 +253,11 @@ LiteLLM's extra retry layer is disabled. Read tools retry classified transient
 failures at most once, respecting timeouts, cancellation and usage limits.
 Write tools, ambiguous timeouts and unknown failures are not blindly replayed.
 
+MCP is opt-in: set `ADK_TOOL_MODULES=dua_engine.agent.agent_mcp` and a server-side
+`ADK_MCP_SERVERS` JSON object of stdio servers (`command` list, explicit `allow` tool
+list, optional `env`). Only allow-listed tools are exposed, as read-only research tools
+named `mcp_<server>_<tool>`; servers get a minimal environment and a 30 s timeout.
+
 Custom tools use `agent_toolkit.Tool`/`Registry` and official ADK typed function
 tools. Enable only installed, reviewed modules with `ADK_TOOL_MODULES`; the actual
 example is `adk_examples.text_tools`. Modules cannot replace reserved built-ins.
