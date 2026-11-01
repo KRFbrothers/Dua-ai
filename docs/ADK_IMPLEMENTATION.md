@@ -255,8 +255,11 @@ Write tools, ambiguous timeouts and unknown failures are not blindly replayed.
 
 MCP is opt-in: set `ADK_TOOL_MODULES=dua_engine.agent.agent_mcp` and a server-side
 `ADK_MCP_SERVERS` JSON object of stdio servers (`command` list, explicit `allow` tool
-list, optional `env`). Only allow-listed tools are exposed, as read-only research tools
-named `mcp_<server>_<tool>`; servers get a minimal environment and a 30 s timeout.
+list, optional `write` list, optional `env`). Only listed tools are exposed, named
+`mcp_<server>_<tool>`; `allow` tools are read-only and run immediately, `write` tools are
+never executed in the agent loop and run only after owner approval, bound to a
+fingerprint of the server command, tool name and input schema. Servers get a minimal
+environment and a 30 s timeout.
 
 Custom tools use `agent_toolkit.Tool`/`Registry` and official ADK typed function
 tools. Enable only installed, reviewed modules with `ADK_TOOL_MODULES`; the actual
