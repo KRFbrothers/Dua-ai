@@ -40,7 +40,8 @@ EXTRACT_PROMPT = (
     "From the task below, extract 0 to 3 DURABLE lessons: user preferences, approaches that worked or failed, "
     "facts about the user's repository/project. Skip anything one-off, obvious, already in the existing notes, "
     "or sensitive (never secrets, tokens, keys, passwords, emails, phone numbers). Each note max 200 characters.\n"
-    'Reply with JSON only: {{"lessons": [{{"note": "...", "kind": "preference|worked|failed|repo|fact"}}]}}\n\n'
+    "If a new lesson contradicts or updates an existing note, set \"replaces\" to that note's id so the old one is removed.\n"
+    'Reply with JSON only: {{"lessons": [{{"note": "...", "kind": "preference|worked|failed|repo|fact", "replaces": "optional existing id"}}]}}\n\n'
     "Existing notes:\n{existing}\n\nUser request:\n{request}\n\nAgent steps:\n{steps}\n\nFinal answer:\n{answer}"
 )
 
@@ -150,18 +151,22 @@ class NotesStore:
                 semantic_status.update(semanticIndexed=False, note="Note saved; semantic indexing failed. Lexical retrieval remains available.")
         return {"saved": True, "id": row.get("id"), **semantic_status}
 
-    def search(self, query):
+    def recall(self, query, limit=10, max_chars=4000):
+        """Semantic matches first (when configured), then lexical ones; falls back to lexical alone."""
         notes = self.list()
-        found = relevant(notes, query, limit=10, max_chars=4000)
-        if self.semantic is not None:
+        found = relevant(notes, query, limit=limit, max_chars=max_chars)
+        if self.semantic is not None and query.strip():
             try:
-                ids = [m["id"] for m in self.semantic.search(query, kind="note", limit=10)]
+                ids = [m["id"] for m in self.semantic.search(query, kind="note", limit=limit)]
                 live = {n.get("id"): n for n in notes}
                 semantic = [live[i] for i in ids if i in live]
-                found = semantic + [n for n in found if n.get("id") not in ids]
-                found = found[:10]
+                found = (semantic + [n for n in found if n.get("id") not in ids])[:limit]
             except Exception:
                 pass
+        return found
+
+    def search(self, query):
+        found = self.recall(query)
         return [{"id": n.get("id"), "note": n["note"], "kind": n.get("kind"), "created_at": n.get("created_at")}
                 for n in found]
 
@@ -241,6 +246,8 @@ def load_prompt(store, query, log=print):
     if store is None:
         return OFF_NOTE if os.environ.get("AGENT_NOTES", "1").strip() == "0" else ""
     try:
+        if hasattr(store, "recall"):
+            return prompt_block(store.recall(query, PROMPT_NOTES, PROMPT_CHARS))
         return prompt_block(relevant(store.list(), query))
     except Exception as error:
         reason = failure_reason(error)
@@ -256,7 +263,7 @@ def learn(store, model, request_text, steps, answer, log=print):
     if store is None or store_unavailable(store) or not (request_text or "").strip():
         return 0
     try:
-        existing = "\n".join("- " + n["note"] for n in store.list()[:40]) or "(none)"
+        existing = "\n".join(f"- [{n.get('id')}] {n['note']}" for n in store.list()[:40]) or "(none)"
         prompt = EXTRACT_PROMPT.format(existing=existing, request=request_text[:3000], steps=(steps or "")[:3000],
                                        answer=(answer or "")[:3000])
         response = model.generate_content(prompt, generation_config={
@@ -266,8 +273,14 @@ def learn(store, model, request_text, steps, answer, log=print):
         lessons = data.get("lessons") if isinstance(data, dict) else None
         saved = 0
         for lesson in (lessons if isinstance(lessons, list) else [])[:MAX_LESSONS]:
-            if isinstance(lesson, dict) and store.add(lesson.get("note"), lesson.get("kind"), "auto").get("saved"):
+            if not isinstance(lesson, dict):
+                continue
+            old_id = lesson.get("replaces")
+            known = {n.get("id") for n in store.list()}
+            if store.add(lesson.get("note"), lesson.get("kind"), "auto").get("saved"):
                 saved += 1
+                if isinstance(old_id, str) and old_id in known:
+                    store.delete(old_id)
         return saved
     except Exception as error:  # learning is best-effort; never surface details
         log(f"[dua-agent-notes] learning skipped ({type(error).__name__})")

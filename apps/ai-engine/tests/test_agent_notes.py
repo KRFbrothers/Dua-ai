@@ -261,3 +261,34 @@ def test_notes_status_is_owner_only(monkeypatch):
     r = engine.app.test_client().get("/api/agent/notes/status")
     assert r.get_json() == {"enabled": False, "ready": False, "reason": "missing_table"}
     assert r.headers["Cache-Control"] == "no-store"
+
+
+def test_learn_replaces_contradicted_note(monkeypatch):
+    old_id, keep_id = str(uuid.uuid4()), str(uuid.uuid4())
+    s, fake = store(monkeypatch, [{"id": old_id, "note": "User prefers Hindi replies", "kind": "preference"},
+                                  {"id": keep_id, "note": "Repo uses Flask", "kind": "repo"}])
+    lessons = [{"note": "User now prefers English replies", "kind": "preference", "replaces": old_id},
+               {"note": "Another lesson about gradle builds", "kind": "repo", "replaces": str(uuid.uuid4())}]
+    assert agent_notes.learn(s, Flash(json.dumps({"lessons": lessons})), "q", "", "a") == 2
+    texts = {r["note"] for r in fake.rows}
+    assert "User prefers Hindi replies" not in texts
+    assert {"User now prefers English replies", "Repo uses Flask", "Another lesson about gradle builds"} <= texts
+
+
+def test_prompt_uses_semantic_recall_when_configured(monkeypatch):
+    a, b = str(uuid.uuid4()), str(uuid.uuid4())
+    s, _ = store(monkeypatch, [{"id": a, "note": "Deploys go through Cloud Run", "kind": "repo"},
+                               {"id": b, "note": "Likes short answers", "kind": "preference"}])
+
+    class Semantic:
+        def search(self, query, kind=None, limit=10):
+            return [{"id": a}]
+    s.semantic = Semantic()
+    block = agent_notes.load_prompt(s, "zzz unrelated words")
+    assert block.index("Cloud Run") < block.index("short answers")
+
+    class Down:
+        def search(self, *args, **kwargs):
+            raise OSError("down")
+    s.semantic = Down()
+    assert "short answers" in agent_notes.load_prompt(s, "zzz unrelated words")
