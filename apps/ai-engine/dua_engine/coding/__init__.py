@@ -1,8 +1,6 @@
-"""Coding implementation modules, grouped without changing their public APIs.
+"""Coding implementation modules grouped under the canonical package namespace.
 
-New callers can use ``from dua_engine.coding import coding_agent`` (or another
-module). The former top-level filenames alias these same module objects so
-existing imports, private helpers, shared state, monkeypatches and reloads keep
-working. Internal imports still use those compatibility names in this first
-slice. Keep this initializer lazy; importing the package alone starts no service.
+Import modules from ``dua_engine.coding``. The engine-root
+``coding_runner_server.py`` remains as the systemd entrypoint; importing this
+package alone starts no service.
 """

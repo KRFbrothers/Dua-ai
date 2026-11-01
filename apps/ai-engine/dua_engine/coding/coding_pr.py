@@ -5,7 +5,7 @@ head as parent, then fast-forward that branch without ever rebasing or forcing.
 """
 import re
 
-import coding_agent as coding
+import dua_engine.coding.coding_agent as coding
 
 SHA = re.compile(r"[0-9a-f]{40}")
 
@@ -72,7 +72,7 @@ def apply_fix(github, args):
     if github.repo != args["repository"]:
         raise coding.CodingError("Configured repository changed. Request a new approval.")
     current_target(github, target["number"], expected=target)
-    from coding_workspace import Workspace
+    from dua_engine.coding.coding_workspace import Workspace
     workspace = Workspace(github)
     workspace.start(target["head_sha"])
     tree_sha = workspace.tree_sha

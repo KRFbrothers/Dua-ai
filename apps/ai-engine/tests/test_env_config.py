@@ -22,8 +22,8 @@ def test_bad_values_do_not_break_engine_imports(monkeypatch):
     for name in ("AGENT_MAX_STEPS", "AGENT_STEP_TOKENS", "CODING_MAX_STEPS", "AGENT_ANSWER_TOKENS", "CHAT_MAX_OUTPUT_TOKENS", "TITLE_TOKENS"):
         monkeypatch.setenv(name, "oops")
     monkeypatch.setenv("AGENT_MODEL", "")
-    import agent_tools
-    import coding_agent
+    import dua_engine.agent.agent_tools as agent_tools
+    import dua_engine.coding.coding_agent as coding_agent
     try:
         tools = importlib.reload(agent_tools)
         coding = importlib.reload(coding_agent)
@@ -37,7 +37,7 @@ def test_bad_values_do_not_break_engine_imports(monkeypatch):
 
 def test_daily_limits_fall_back_to_zero(monkeypatch):
     import app
-    import coding_agent
+    import dua_engine.coding.coding_agent as coding_agent
     monkeypatch.setenv("AGENT_DAILY_TOKEN_LIMIT", "x")
     assert app.daily_token_limit() == 0
     monkeypatch.setenv("AGENT_DAILY_TOKEN_LIMIT", "-5")
@@ -47,7 +47,7 @@ def test_daily_limits_fall_back_to_zero(monkeypatch):
 def test_bad_values_do_not_break_agent_adk_import(monkeypatch):
     monkeypatch.setenv("AGENT_SUB_STEPS", "oops")
     monkeypatch.setenv("AGENT_ADK_SECONDS", "")
-    import agent_adk
+    import dua_engine.agent.agent_adk as agent_adk
     try:
         adk = importlib.reload(agent_adk)
         assert adk.SUB_STEPS == 5 and adk.TOTAL_SECONDS == 300

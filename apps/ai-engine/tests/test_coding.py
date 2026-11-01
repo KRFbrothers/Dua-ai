@@ -9,7 +9,7 @@ import pytest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import app as engine  # noqa: E402
 from dua_engine.coding import coding_agent as ca  # noqa: E402
-import agent_tools  # noqa: E402
+import dua_engine.agent.agent_tools as agent_tools  # noqa: E402
 
 REPO = "KRFbrothers/Dua-ai"
 
@@ -425,24 +425,27 @@ CODING_MODULES = (
 
 
 @pytest.mark.parametrize("name", CODING_MODULES)
-def test_legacy_and_packaged_coding_imports_share_module_state(name):
+def test_coding_modules_import_from_package_and_reload(name):
     import importlib
-    legacy = importlib.import_module(name)
-    packaged = importlib.import_module("dua_engine.coding." + name)
-    assert legacy is packaged
-    assert sys.modules[name] is packaged
+
+    module = importlib.import_module("dua_engine.coding." + name)
+    assert importlib.reload(module) is module
 
 
-def test_legacy_monkeypatch_changes_packaged_function_globals(monkeypatch):
-    import coding_agent
-    monkeypatch.setattr(coding_agent, "MAX_FILES_CHANGED", 0)
-    with pytest.raises(ca.CodingError, match="Too many files changed"):
-        ca.validate_changes([{"path": "safe.py", "content": "pass"}])
+def test_runner_root_entrypoint_uses_packaged_server():
+    from pathlib import Path
+    import coding_runner_server
+    from dua_engine.coding import coding_runner_server as packaged
+
+    assert coding_runner_server.JOBS is packaged.JOBS
+    assert coding_runner_server.app.import_name == "coding_runner_server"
+    assert Path(coding_runner_server.app.root_path) == Path(__file__).resolve().parents[1]
+    assert coding_runner_server.app.test_client().get("/healthz").get_json() == {
+        "service": "dua-coding-runner", "liveVerified": False}
 
 
-@pytest.mark.parametrize("first", ("coding_agent", "coding_runner_server", "coding_workspace", "pr_flow"))
-@pytest.mark.parametrize("legacy_first", (True, False))
-def test_fresh_runtime_import_orders_reload_and_entrypoints(tmp_path, first, legacy_first):
+@pytest.mark.parametrize("name", ("coding_agent", "coding_runner_server", "coding_workspace", "pr_flow"))
+def test_fresh_runtime_imports_and_entrypoints(tmp_path, name):
     """Exercise shipped Python files without the checkout/tests on the import path."""
     from pathlib import Path
     import shutil
@@ -465,37 +468,32 @@ def test_fresh_runtime_import_orders_reload_and_entrypoints(tmp_path, first, leg
 
         runtime = Path(sys.argv[1])
         sys.path.insert(0, str(runtime))
-        first, legacy_first = sys.argv[2], sys.argv[3] == "True"
-        importlib.import_module(first if legacy_first else "dua_engine.coding." + first)
-        for path in (runtime / "dua_engine/coding").glob("*.py"):
-            if path.stem == "__init__":
-                continue
-            assert importlib.import_module(path.stem) is importlib.import_module("dua_engine.coding." + path.stem)
-
-        import coding_agent
+        name = sys.argv[2]
+        module = importlib.import_module('dua_engine.coding.' + name)
+        for path in (runtime / 'dua_engine/coding').glob('*.py'):
+            if path.stem != '__init__':
+                assert importlib.import_module('dua_engine.coding.' + path.stem)
         import coding_runner_server
         from dua_engine.coding import coding_runner_server as packaged_runner
         assert coding_runner_server.JOBS is packaged_runner.JOBS
-        assert coding_runner_server.app.import_name == "coding_runner_server"
+        assert coding_runner_server.app.import_name == 'coding_runner_server'
         assert Path(coding_runner_server.app.root_path) == runtime
-        assert coding_runner_server.app.test_client().get("/healthz").get_json() == {
-            "service": "dua-coding-runner", "liveVerified": False}
-
+        assert coding_runner_server.app.test_client().get('/healthz').get_json() == {
+            'service': 'dua-coding-runner', 'liveVerified': False}
         import wsgi
         import adk_server
-        assert wsgi.app.test_client().get("/").status_code == 200
+        assert wsgi.app.test_client().get('/').status_code == 200
         launched = []
         os.execvp = lambda executable, argv: launched.append((executable, argv))
         adk_server.main()
-        assert len(launched) == 1 and launched[0][0] == "gunicorn"
-        assert launched[0][1][-1] == "wsgi:app"
-
-        assert importlib.reload(coding_agent) is coding_agent
-        assert importlib.import_module("coding_agent") is coding_agent
-        assert importlib.import_module("dua_engine.coding.coding_agent") is coding_agent
+        assert len(launched) == 1 and launched[0][0] == 'gunicorn'
+        assert launched[0][1][-1] == 'wsgi:app'
+        assert importlib.reload(module) is module
+        assert importlib.import_module('dua_engine.coding.' + name) is module
+        assert not (runtime / (name + '.py')).exists() or name == 'coding_runner_server'
     """)
     result = subprocess.run(
-        [sys.executable, "-I", "-c", probe, str(runtime), first, str(legacy_first)],
+        [sys.executable, "-I", "-c", probe, str(runtime), name],
         cwd=runtime, env={"PATH": os.defpath, "PYTHONDONTWRITEBYTECODE": "1"},
         capture_output=True, text=True, timeout=30,
     )

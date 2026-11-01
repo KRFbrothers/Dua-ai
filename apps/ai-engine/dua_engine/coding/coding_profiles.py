@@ -2,7 +2,7 @@
 import json
 import re
 
-import coding_agent as coding
+import dua_engine.coding.coding_agent as coding
 
 IMAGE = re.compile(r"[a-z0-9][a-z0-9._/:\-]*@sha256:[0-9a-f]{64}")
 DIGEST = re.compile(r"sha256:[0-9a-f]{64}")

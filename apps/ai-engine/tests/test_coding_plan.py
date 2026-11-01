@@ -7,10 +7,10 @@ from types import SimpleNamespace
 import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import agent_adk
-import agent_tools
-import coding_agent
-import coding_plan
+import dua_engine.agent.agent_adk as agent_adk
+import dua_engine.agent.agent_tools as agent_tools
+import dua_engine.coding.coding_agent as coding_agent
+import dua_engine.coding.coding_plan as coding_plan
 
 
 def args(status="in_progress"):

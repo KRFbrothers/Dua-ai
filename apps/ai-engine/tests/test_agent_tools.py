@@ -8,7 +8,7 @@ from types import SimpleNamespace
 import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import agent_tools as at  # noqa: E402
+import dua_engine.agent.agent_tools as at  # noqa: E402
 import app as engine  # noqa: E402
 
 
@@ -57,7 +57,7 @@ def run(model, **extra):
 
 def tool_results(model):
     """Tool results the model saw, with untrusted-data fences removed (agent_safety.fence is tested separately)."""
-    import agent_safety
+    import dua_engine.agent.agent_safety as agent_safety
     return [[(name, agent_safety.unfence(name, result)) for name, result in c["contents"][-1][1]]
             for c in model.calls if c["tools"] == ["TOOLS"] and c["contents"][-1][0] == "tool"]
 
@@ -271,7 +271,7 @@ class FakeGitHub:
 
 
 def test_github_read_tools_and_propose_changes_open_pr():
-    import agent_safety
+    import dua_engine.agent.agent_safety as agent_safety
     gh = FakeGitHub()
     store = agent_safety.PendingStore()
     model = Script([call("list_files", {"prefix": "app/"}), call("read_file", {"path": "app/Main.kt"}), call("search_code", {"query": "main"}),
@@ -339,7 +339,7 @@ def test_agent_image_streams_media_event_with_owner_identity(monkeypatch):
     monkeypatch.setattr(im, "enabled", lambda: True)
     monkeypatch.setattr(im, "handle", lambda body, token, user_id, client: seen.update(token=token, user=user_id) or {"images": [{"path": "p.png", "url": "https://s"}], "model": "m"})
     monkeypatch.setattr(at, "default_tools", lambda github, issues=False: ["TOOLS"])
-    import coding_agent
+    import dua_engine.coding.coding_agent as coding_agent
     monkeypatch.setattr(coding_agent, "default_tool_response", lambda results: ("tool", results))
     model = Script([call("generate_image", {"prompt": "sunset"}), final("Here is your image.")])
     monkeypatch.setattr(engine, "get_model", lambda system=engine.SYSTEM_PROMPT: model)
@@ -400,7 +400,7 @@ def test_hanging_tool_returns_error_quickly(monkeypatch):
 
 
 def test_hanging_notes_http_uses_short_timeout(monkeypatch):
-    import agent_notes
+    import dua_engine.agent.agent_notes as agent_notes
     monkeypatch.setenv("SUPABASE_URL", "https://p.supabase.co")
     monkeypatch.setenv("SUPABASE_ANON_KEY", "anon")
     monkeypatch.setenv("AGENT_NOTES", "1")

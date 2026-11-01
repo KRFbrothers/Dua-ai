@@ -120,7 +120,7 @@ def test_api_rollback_keeps_old_level_and_omits_override(monkeypatch, stream):
 
 
 def test_agent_tool_loop_wires_routed_level_to_factory(monkeypatch):
-    import agent_adk, agent_documents, agent_notes, agent_tools
+    import dua_engine.agent.agent_adk as agent_adk, dua_engine.agent.agent_documents as agent_documents, dua_engine.agent.agent_notes as agent_notes, dua_engine.agent.agent_tools as agent_tools
     captured = []
     monkeypatch.delenv('GITHUB_TOKEN', raising=False)
     monkeypatch.delenv('ADK_SESSION_DB_URL', raising=False)
@@ -160,7 +160,7 @@ def test_routed_agent_fallback_retains_cost_ceiling(monkeypatch):
 
 @pytest.mark.parametrize('enabled', ['0', '1'])
 def test_self_check_revision_stays_low_with_routing(monkeypatch, enabled):
-    import agent_verify
+    import dua_engine.agent.agent_verify as agent_verify
     seen = []
     def revise(prompt, generation_config):
         seen.append(generation_config)

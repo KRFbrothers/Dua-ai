@@ -12,8 +12,8 @@ from types import SimpleNamespace
 import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import agent_adk  # noqa: E402
-import agent_tools  # noqa: E402
+import dua_engine.agent.agent_adk as agent_adk  # noqa: E402
+import dua_engine.agent.agent_tools as agent_tools  # noqa: E402
 
 PLAN = {"split": True, "subtasks": [{"kind": "research", "task": "find gemini news"},
                                     {"kind": "notes", "task": "check reply preference"},
@@ -153,8 +153,8 @@ def test_total_deadline_stops_run(monkeypatch):
 
 
 def test_code_helper_only_requests_approval_and_approve_opens_one_pr(monkeypatch):
-    import agent_safety
-    import coding_agent
+    import dua_engine.agent.agent_safety as agent_safety
+    import dua_engine.coding.coding_agent as coding_agent
     calls = []
     monkeypatch.setattr(coding_agent, "finish", lambda gh, emit, args, req, **kw: calls.append(args) or
                         "Pull request ready: **#9** \u2014 https://github.com/o/r/pull/9")
@@ -237,7 +237,7 @@ def test_tools_run_concurrently(monkeypatch):
 
 def test_tool_loop_uses_adk_when_flag_on(monkeypatch):
     import app as engine
-    import agent_notes
+    import dua_engine.agent.agent_notes as agent_notes
     monkeypatch.setenv("AGENT_ENGINE", "adk")
     monkeypatch.delenv("GITHUB_TOKEN", raising=False)
     monkeypatch.setattr(agent_notes, "for_owner", lambda owner, opener=None: None)
@@ -256,7 +256,7 @@ def test_tool_loop_uses_adk_when_flag_on(monkeypatch):
 
 def test_tool_loop_falls_back_to_old_loop(monkeypatch):
     import app as engine
-    import agent_notes
+    import dua_engine.agent.agent_notes as agent_notes
     monkeypatch.setenv("AGENT_ENGINE", "adk")
     monkeypatch.delenv("GITHUB_TOKEN", raising=False)
     monkeypatch.setattr(agent_notes, "for_owner", lambda owner, opener=None: None)
@@ -338,7 +338,7 @@ def test_merge_prompt_includes_artifact_guidance():
 
 def test_real_adk_write_tool_waits_for_approval_and_disconnect_skips_model_calls():
     pytest.importorskip("google.adk")
-    import agent_safety
+    import dua_engine.agent.agent_safety as agent_safety
     from google.adk.models import BaseLlm, LlmResponse
     from google.genai import types
     model_calls = []
@@ -756,7 +756,7 @@ def test_helper_cancellation_takes_priority_and_does_not_spend_call_budget():
 
 def test_real_adk_repairs_unmatched_file_pairs_before_one_complete_approval():
     pytest.importorskip('google.adk')
-    import agent_safety
+    import dua_engine.agent.agent_safety as agent_safety
     from google.adk.models import BaseLlm, LlmResponse
     from google.genai import types
     plan = {'split': True, 'subtasks': [{'kind': 'code', 'task': 'Propose two text files'},
@@ -801,7 +801,7 @@ def test_real_adk_repairs_unmatched_file_pairs_before_one_complete_approval():
 
 @pytest.mark.parametrize("test_code", ["0", "1"])
 def test_deadline_adds_ci_budget_only_when_pr_flow_is_used(monkeypatch, test_code):
-    import pr_flow
+    import dua_engine.coding.pr_flow as pr_flow
     monkeypatch.setenv("AGENT_TEST_CODE", test_code)
     monkeypatch.setattr(agent_adk, "TOTAL_SECONDS", 300)
     monkeypatch.setattr(pr_flow, "CI_SECONDS", 420)
@@ -842,7 +842,7 @@ def test_call_with_deadline_rereads_a_callable_limit():
 
 
 def test_agent_search_seconds_override(monkeypatch):
-    import agent_tools as at
+    import dua_engine.agent.agent_tools as at
     monkeypatch.delenv("AGENT_SEARCH_SECONDS", raising=False)
     assert at.search_seconds() == 90
     monkeypatch.setenv("AGENT_SEARCH_SECONDS", "30")
@@ -870,7 +870,7 @@ def test_agent_search_seconds_override(monkeypatch):
 
 
 def test_adk_gemini_retry_flag(monkeypatch):
-    import agent_models
+    import dua_engine.agent.agent_models as agent_models
     monkeypatch.delenv("ADK_MODELS_JSON", raising=False)
     monkeypatch.setenv("ADK_GEMINI_RETRY", "0")
     assert agent_models.resolve("helper", "gemini-x") == "gemini-x"
@@ -883,7 +883,7 @@ def test_adk_gemini_retry_flag(monkeypatch):
 def test_gemini_with_retry_options():
     import pytest
     pytest.importorskip("google.adk")
-    import agent_models
+    import dua_engine.agent.agent_models as agent_models
     model = agent_models.gemini_with_retry("gemini-x")
     assert model.model == "gemini-x"
     assert model.retry_options.attempts == 2
@@ -892,7 +892,7 @@ def test_gemini_with_retry_options():
 
 def test_gemini_backoff_on_429_for_default_model():
     pytest.importorskip("google.adk")
-    import agent_models
+    import dua_engine.agent.agent_models as agent_models
     opts = agent_models.gemini_with_retry("gemini-3.8-flash", backoff=True).retry_options
     assert opts.attempts == 4 and opts.initial_delay == 2.0 and opts.max_delay == 8.0
     assert opts.exp_base == 2.0 and opts.jitter > 0 and 429 in opts.http_status_codes
@@ -901,7 +901,7 @@ def test_gemini_backoff_on_429_for_default_model():
 
 
 def test_gemini_backoff_without_sdk_keeps_plain_name(monkeypatch):
-    import agent_models
+    import dua_engine.agent.agent_models as agent_models
     monkeypatch.delenv("ADK_MODELS_JSON", raising=False)
     monkeypatch.delenv("ADK_GEMINI_RETRY", raising=False)
     monkeypatch.setattr(agent_models, "gemini_with_retry",

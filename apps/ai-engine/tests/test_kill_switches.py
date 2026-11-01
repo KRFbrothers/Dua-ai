@@ -108,7 +108,7 @@ def test_title_and_legacy_chat_still_answer_without_maintenance(monkeypatch):
     ("POST", "/api/agent/notes/reindex", {"offset": 0, "limit": 20}),
 ])
 def test_paused_document_operations_do_not_initialize_providers(monkeypatch, switch, method, path, body):
-    import agent_documents
+    import dua_engine.agent.agent_documents as agent_documents
     def forbidden(*args, **kwargs):
         pytest.fail("Paused operation must not initialize storage or providers")
     monkeypatch.setenv(switch, "1")
@@ -124,7 +124,7 @@ def test_paused_document_operations_do_not_initialize_providers(monkeypatch, swi
 
 
 def test_document_get_remains_available_during_maintenance(monkeypatch):
-    import agent_documents
+    import dua_engine.agent.agent_documents as agent_documents
     from types import SimpleNamespace
     monkeypatch.setenv("DUA_MAINTENANCE", "1")
     monkeypatch.setattr(agent_documents, "enabled", lambda: True)
@@ -137,7 +137,7 @@ def test_document_get_remains_available_during_maintenance(monkeypatch):
 
 
 def test_document_provider_failure_is_already_a_safe_503(monkeypatch):
-    import agent_documents
+    import dua_engine.agent.agent_documents as agent_documents
     monkeypatch.setattr(agent_documents, "enabled", lambda: True)
     def unavailable():
         raise RuntimeError("private provider diagnostic")

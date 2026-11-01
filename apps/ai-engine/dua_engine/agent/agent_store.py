@@ -127,7 +127,7 @@ def initialize():
 
 class SqlPendingStore:
     def create(self, owner, name, args, request_text='', request_key=None):
-        import agent_safety
+        import dua_engine.agent.agent_safety as agent_safety
         from sqlalchemy import select, insert, func
         from sqlalchemy.exc import IntegrityError
         if not owner:
@@ -168,7 +168,7 @@ class SqlPendingStore:
             db.dispose()
 
     def take(self, action_id, owner):
-        import agent_safety
+        import dua_engine.agent.agent_safety as agent_safety
         from sqlalchemy import update
         if not owner or not isinstance(action_id, str):
             raise agent_safety.ApprovalError('Approval not found.', 404)
@@ -190,7 +190,7 @@ class SqlPendingStore:
 def approvals():
     if database_url():
         return SqlPendingStore()
-    import agent_safety
+    import dua_engine.agent.agent_safety as agent_safety
     return agent_safety.STORE
 
 

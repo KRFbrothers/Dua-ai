@@ -6,8 +6,8 @@ URLs, waits for CI, reruns a workflow, or edits a branch.
 import re
 import time
 
-import coding_agent as coding
-from agent_policy import Redactor
+import dua_engine.coding.coding_agent as coding
+from dua_engine.agent.agent_policy import Redactor
 
 MAX_SECONDS = 75
 MAX_REQUESTS = 9

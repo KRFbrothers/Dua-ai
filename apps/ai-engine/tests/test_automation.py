@@ -10,12 +10,12 @@ from unittest.mock import Mock
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-import agent_automation as automation
-import agent_safety
-import agent_tools
-from automation_companion import Companion, create_app
-from automation_drivers import Android, point, public_url
-from automation_terminal import MAX_SESSIONS, Session, Terminals
+import dua_engine.automation.agent_automation as automation
+import dua_engine.agent.agent_safety as agent_safety
+import dua_engine.agent.agent_tools as agent_tools
+from dua_engine.automation.automation_companion import Companion, create_app
+from dua_engine.automation.automation_drivers import Android, point, public_url
+from dua_engine.automation.automation_terminal import MAX_SESSIONS, Session, Terminals
 
 OWNER = "11111111-1111-4111-8111-111111111111"
 OTHER = "22222222-2222-4222-8222-222222222222"
@@ -69,7 +69,7 @@ def test_tools_hidden_without_config(monkeypatch):
 
 def test_configured_tools_and_adk_wrappers(configured):
     assert set(automation.NAMES) <= {t["name"] for t in agent_tools.declarations(False)}
-    import agent_adk
+    import dua_engine.agent.agent_adk as agent_adk
     async def call(name, args):
         return {"name": name, "args": args}
     tools = {f.__name__: f for f in agent_adk.make_tools(("current_time",), call)}

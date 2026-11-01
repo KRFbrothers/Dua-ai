@@ -298,7 +298,7 @@ class GitHubClient:
         The token stays in this engine. Neither source bundles nor the runner
         receive it. This binary endpoint is separate from request()'s JSON API.
         """
-        from coding_snapshot import MAX_ARCHIVE_BYTES
+        from dua_engine.coding.coding_snapshot import MAX_ARCHIVE_BYTES
         if not isinstance(sha, str) or not re.fullmatch(r"[0-9a-f]{40}", sha):
             raise CodingError("Invalid source snapshot commit.")
         path = f"/repos/{self.repo}/tarball/{sha}"
@@ -598,11 +598,11 @@ class CodingSession:
         self.workspace = None
         self.cancelled = None
         self.owner_id = None
-        from coding_plan import Plan
+        from dua_engine.coding.coding_plan import Plan
         self.plan = Plan()
 
     def save_checkpoint(self, result, explicit=False):
-        import coding_checkpoints
+        import dua_engine.coding.coding_checkpoints as coding_checkpoints
         if not explicit and not coding_checkpoints.enabled():
             return dict(result, checkpoint={"saved": False, "configured": False})
         try:
@@ -627,7 +627,7 @@ class CodingSession:
             return clean
 
     def prepare_pr_fix(self, args):
-        import coding_pr
+        import dua_engine.coding.coding_pr as coding_pr
         title = args.get("title")
         if not isinstance(title, str) or not title.strip():
             raise CodingError("Provide a commit title for the staged fix.")
@@ -640,7 +640,7 @@ class CodingSession:
                 return result
 
     def preview_proposal(self, proposal):
-        from agent_policy import filter_text
+        from dua_engine.agent.agent_policy import filter_text
         with self.lock:
             workspace = self.workspace
             if workspace is None:
@@ -657,8 +657,8 @@ class CodingSession:
         # Draft/restore transitions are serialized. Long-running commands release
         # the session lock; their fingerprint prevents stale-result imports.
         if name == "search_workspace":
-            import coding_search
-            import coding_workspace
+            import dua_engine.coding.coding_search as coding_search
+            import dua_engine.coding.coding_workspace as coding_workspace
             expires = self.clock() + 75
             try:
                 coding_search.validate(args)  # No GitHub reads for malformed input.
@@ -677,8 +677,8 @@ class CodingSession:
             except CodingError as error:
                 return {"error": str(error)[:300]}
         if name == "run_command":
-            import coding_workspace
-            import coding_terminal
+            import dua_engine.coding.coding_workspace as coding_workspace
+            import dua_engine.coding.coding_terminal as coding_terminal
             with self.lock:
                 if self.workspace is None:
                     self.workspace = coding_workspace.Workspace(self.github)
@@ -700,11 +700,11 @@ class CodingSession:
 
     def _run_tool(self, name, args, deadline=None):
         try:
-            import coding_workspace
+            import dua_engine.coding.coding_workspace as coding_workspace
             if name == "update_plan":
                 return self.plan.update(args)
             if name == "open_pr_workspace":
-                import coding_pr
+                import dua_engine.coding.coding_pr as coding_pr
                 expires = deadline if deadline is not None else self.clock() + 75
                 def check_open():
                     if (self.cancelled and self.cancelled()) or self.clock() >= expires:
@@ -724,10 +724,10 @@ class CodingSession:
                 self.workspace = opened
                 return result
             if name == "list_workspaces":
-                import coding_checkpoints
+                import dua_engine.coding.coding_checkpoints as coding_checkpoints
                 return coding_checkpoints.list_owned(self.owner_id, self.github.repo)
             if name == "restore_workspace":
-                import coding_checkpoints
+                import dua_engine.coding.coding_checkpoints as coding_checkpoints
                 if self.workspace is not None and (self.workspace.staged or self.workspace.command_results or self.workspace.active_commands or self.workspace.active_searches):
                     raise CodingError("Restore into a fresh task; the current draft/command exports must not be discarded.")
                 record = coding_checkpoints.load(self.owner_id, args.get("checkpoint_id"), self.github.repo)

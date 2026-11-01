@@ -8,7 +8,7 @@ import hashlib
 import io
 import tarfile
 
-import coding_agent as coding
+import dua_engine.coding.coding_agent as coding
 
 MAX_ARCHIVE_BYTES = 16 * 1024 * 1024
 MAX_TAR_BYTES = 64 * 1024 * 1024

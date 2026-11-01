@@ -5,9 +5,9 @@ import sys
 from types import SimpleNamespace
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import agent_adk  # noqa: E402
-import agent_tools  # noqa: E402
-import coding_agent  # noqa: E402
+import dua_engine.agent.agent_adk as agent_adk  # noqa: E402
+import dua_engine.agent.agent_tools as agent_tools  # noqa: E402
+import dua_engine.coding.coding_agent as coding_agent  # noqa: E402
 
 
 def usage(total=None, prompt=None, out=None):

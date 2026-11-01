@@ -14,7 +14,7 @@ import sys
 import tempfile
 import time
 
-import coding_agent
+import dua_engine.coding.coding_agent as coding_agent
 
 PRECHECK_SECONDS = 20
 # Total CI waiting per request (both waits together), so a request stays inside Cloud Run's 900 s limit.

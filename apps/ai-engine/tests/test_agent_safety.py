@@ -10,8 +10,8 @@ from types import SimpleNamespace
 import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import agent_safety  # noqa: E402
-import agent_tools as at  # noqa: E402
+import dua_engine.agent.agent_safety as agent_safety  # noqa: E402
+import dua_engine.agent.agent_tools as at  # noqa: E402
 import app as engine  # noqa: E402
 
 
@@ -126,7 +126,7 @@ def test_fence_neutralises_fake_markers_and_keeps_errors_plain():
 
 
 def test_safety_prompt_is_in_the_agent_instructions(monkeypatch):
-    import agent_notes
+    import dua_engine.agent.agent_notes as agent_notes
     systems = []
     monkeypatch.delenv("GITHUB_TOKEN", raising=False)
     monkeypatch.delenv("AGENT_ENGINE", raising=False)
@@ -294,8 +294,8 @@ def test_loop_stops_before_next_step_when_cancelled():
 def test_client_disconnect_stops_the_server_agent_loop(monkeypatch):
     """Closing the SSE response (what the WSGI server does when the phone goes away) sets the cancel flag; the loop
     gives up the hanging model call and never makes another model call, self-check or notes call."""
-    import agent_notes
-    import coding_agent
+    import dua_engine.agent.agent_notes as agent_notes
+    import dua_engine.coding.coding_agent as coding_agent
     monkeypatch.setattr(at, "CANCEL_POLL_SECONDS", 0.05)
     monkeypatch.setattr(engine, "verify_owner", lambda authorization: "owner-1")
     monkeypatch.delenv("DUA_APP_TOKEN", raising=False)

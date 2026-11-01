@@ -17,9 +17,9 @@ import time
 
 from flask import Flask, jsonify, request
 
-import agent_automation
-import automation_drivers
-from automation_terminal import Terminals, cleanup_orphans
+import dua_engine.automation.agent_automation as agent_automation
+import dua_engine.automation.automation_drivers as automation_drivers
+from dua_engine.automation.automation_terminal import Terminals, cleanup_orphans
 
 
 class Companion:

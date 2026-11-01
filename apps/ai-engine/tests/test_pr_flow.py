@@ -4,9 +4,9 @@ import sys
 import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import agent_tools  # noqa: E402
-import coding_agent as ca  # noqa: E402
-import pr_flow  # noqa: E402
+import dua_engine.agent.agent_tools as agent_tools  # noqa: E402
+import dua_engine.coding.coding_agent as ca  # noqa: E402
+import dua_engine.coding.pr_flow as pr_flow  # noqa: E402
 
 SHA = "a" * 40
 REPO = "KRFbrothers/Dua-ai"
@@ -128,7 +128,7 @@ def test_allowlist_permits_only_safe_ci_and_branch_updates():
 def test_old_loop_prechecks_then_waits_for_approval_without_opening_a_pr(monkeypatch):
     """Since the approval guard, the loop never opens the PR itself: a failing pre-check goes back to the model, a
     passing change becomes ONE pending action, and GitHub is untouched until the owner approves."""
-    import agent_safety
+    import dua_engine.agent.agent_safety as agent_safety
     monkeypatch.setenv("AGENT_TEST_CODE", "1")
     gh = FakeGitHub(ci=[OK])
     bad = {"title": "t", "description": "d", "files": [{"path": "a.py", "content": "def broken(:\n"}]}

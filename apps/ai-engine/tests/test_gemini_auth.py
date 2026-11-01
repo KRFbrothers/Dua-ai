@@ -8,7 +8,7 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-import agent_models  # noqa: E402
+import dua_engine.agent.agent_models as agent_models  # noqa: E402
 import app as engine  # noqa: E402
 
 KEY = "test-key-not-real"

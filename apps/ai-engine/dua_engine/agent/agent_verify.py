@@ -51,7 +51,7 @@ def parse_verdict(text):
 
 def check(request, draft, evidence, sources, critic, reviser, chunk_text, progress, log=print):
     """Returns the final text (draft or one revision)."""
-    import agent_tools
+    import dua_engine.agent.agent_tools as agent_tools
     if not (draft or "").strip() or not (request or "").strip():
         return draft
     progress("verify", "Checking answer\u2026")

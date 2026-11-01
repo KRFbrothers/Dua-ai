@@ -6,8 +6,8 @@ from types import SimpleNamespace
 import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import agent_tools as at  # noqa: E402
-import coding_agent as ca  # noqa: E402
+import dua_engine.agent.agent_tools as at  # noqa: E402
+import dua_engine.coding.coding_agent as ca  # noqa: E402
 
 REPO = "KRFbrothers/Dua-ai"
 
@@ -79,7 +79,7 @@ class Script:
 def run(steps, github, approve=True):
     """Runs the loop. Write tools only create pending actions; with [approve] each one is then approved (once) and its
     result is appended to [results] in the place of the pending tool result."""
-    import agent_safety
+    import dua_engine.agent.agent_safety as agent_safety
     model, progress, store = Script(steps), [], agent_safety.PendingStore()
     env = {"model": model, "enqueue": lambda *a: True, "chunk_text": lambda r: r.text or "", "github": github,
            "progress": lambda step, label, state="active": (progress.append(label) if state == "active" and step != "think" else None), "thinking": lambda d: None,

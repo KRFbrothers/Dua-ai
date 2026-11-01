@@ -20,7 +20,7 @@ def test_native_postgres_sessions_approvals_vectors_and_private_schema(monkeypat
     import psycopg
     from psycopg import sql
     from sqlalchemy.engine import make_url
-    import agent_store,agent_documents
+    import dua_engine.agent.agent_store as agent_store,dua_engine.agent.agent_documents as agent_documents
     from test_adk_capabilities import test_official_sql_session_resume_does_not_repeat_completed_tool
     admin=make_url(source)
     assert admin.host in ('localhost','127.0.0.1','::1'), 'Refuse non-local database integration tests'
@@ -102,7 +102,7 @@ def test_private_schema_is_used_when_pooler_overrides_search_path(monkeypatch):
     import psycopg
     from psycopg import sql
     from sqlalchemy.engine import make_url
-    import agent_store,agent_documents
+    import dua_engine.agent.agent_store as agent_store,dua_engine.agent.agent_documents as agent_documents
     admin=make_url(source)
     assert admin.host in ('localhost','127.0.0.1','::1'), 'Refuse non-local database integration tests'
     name='dua_audit_'+uuid.uuid4().hex[:12]

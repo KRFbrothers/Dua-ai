@@ -7,10 +7,10 @@ from types import SimpleNamespace
 import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import agent_tools
-import coding_agent
-import coding_terminal
-import coding_ui
+import dua_engine.agent.agent_tools as agent_tools
+import dua_engine.coding.coding_agent as coding_agent
+import dua_engine.coding.coding_terminal as coding_terminal
+import dua_engine.coding.coding_ui as coding_ui
 
 
 def relay(monkeypatch):

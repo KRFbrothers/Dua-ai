@@ -4,7 +4,7 @@ import shlex
 import threading
 import time
 
-from agent_policy import Redactor, filter_text
+from dua_engine.agent.agent_policy import Redactor, filter_text
 
 TOOLS = frozenset(("update_plan", "workspace_status", "edit_file", "workspace_diff", "run_command",
                    "import_command_changes", "checkpoint_workspace", "restore_workspace", "open_pr_workspace"))
@@ -67,7 +67,7 @@ def completed(agent, name, result, activity):
         return
     event = {"type": "coding"}
     if name == "update_plan" and "error" not in result:
-        import coding_plan
+        import dua_engine.coding.coding_plan as coding_plan
         event["plan"] = coding_plan.preview(result.get("plan"))
     if activity:
         event["terminal"] = {"id": activity, "state": result.get("state", "error"),
