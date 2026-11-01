@@ -84,10 +84,10 @@ class Registry:
 
 
 def configured():
-    import agent_automation
-    import agent_tools
-    import agent_notes
-    import coding_agent
+    import dua_engine.automation.agent_automation as agent_automation
+    import dua_engine.agent.agent_tools as agent_tools
+    import dua_engine.agent.agent_notes as agent_notes
+    import dua_engine.coding.coding_agent as coding_agent
     reserved = {d['name'] for d in agent_tools.BASE_TOOLS + agent_tools.ISSUE_TOOLS + agent_notes.TOOLS + coding_agent.TOOLS}
     reserved |= {'search_documents', 'check_pr_ci'}
     reserved.update(agent_automation.NAMES)

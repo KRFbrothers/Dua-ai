@@ -5,11 +5,11 @@ import sys
 from types import SimpleNamespace
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import agent_adk  # noqa: E402
-import agent_tools  # noqa: E402
+import dua_engine.agent.agent_adk as agent_adk  # noqa: E402
+import dua_engine.agent.agent_tools as agent_tools  # noqa: E402
 import app as engine  # noqa: E402
-import coding_checkpoints  # noqa: E402
-import coding_terminal  # noqa: E402
+import dua_engine.coding.coding_checkpoints as coding_checkpoints  # noqa: E402
+import dua_engine.coding.coding_terminal as coding_terminal  # noqa: E402
 
 RUNNER = set(agent_tools.RUNNER_TOOLS)
 CHECKPOINT = set(agent_tools.CHECKPOINT_TOOLS)

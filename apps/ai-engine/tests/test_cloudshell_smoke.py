@@ -143,7 +143,7 @@ def _adk_env(events):
 
 @pytest.mark.parametrize("split,expect_run_id", [(True, True), (False, False)])
 def test_durable_run_id_only_for_split_agent_plans(monkeypatch, split, expect_run_id):
-    import agent_adk
+    import dua_engine.agent.agent_adk as agent_adk
     from test_agent_adk import PLAN, cfg, fake_adk
     monkeypatch.setenv("ADK_SESSION_DB_URL", "postgresql://runtime@db.invalid/postgres")
     original = agent_adk.run_agent
@@ -162,7 +162,7 @@ def test_durable_run_id_only_for_split_agent_plans(monkeypatch, split, expect_ru
 
 @pytest.mark.parametrize("emit_run_id", [False, True])
 def test_smoke_end_to_end_reports_durable_state_honestly(smoke, monkeypatch, capsys, emit_run_id):
-    import agent_store
+    import dua_engine.agent.agent_store as agent_store
     produced = []
 
     def agent_producer(messages, attachments, system, owner, cancelled=None):
@@ -231,7 +231,7 @@ def test_http_json_tolerates_empty_and_non_json_bodies(smoke, monkeypatch, statu
 
 def test_smoke_resumed_unfinished_run_is_not_a_crash(smoke, monkeypatch, capsys):
     """An unfinished saved run makes /api/chat resume and stream SSE (HTTP 200); this used to raise JSONDecodeError."""
-    import agent_store
+    import dua_engine.agent.agent_store as agent_store
 
     def agent_producer(messages, attachments, system, owner, cancelled=None):
         def run(enqueue):

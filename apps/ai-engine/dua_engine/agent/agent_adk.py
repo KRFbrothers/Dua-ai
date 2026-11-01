@@ -225,7 +225,7 @@ def final_text(events, author, on_thought=None):
         response = "".join(visible)
         if response.strip():
             text = response
-    from agent_policy import filter_text
+    from dua_engine.agent.agent_policy import filter_text
     return filter_text(text.strip())
 
 
@@ -237,13 +237,13 @@ def run_agent(adk, agent, message, max_calls, on_thought=None, cancelled=None,
     while waiting for the next event, then close the async stream and runner on
     the same task/event loop on every exit (including session/model failures).
     """
-    import agent_tools
+    import dua_engine.agent.agent_tools as agent_tools
 
     async def collect():
         database = None
         lease = None
         if session_options:
-            import agent_store
+            import dua_engine.agent.agent_store as agent_store
             from google.adk.apps import App, ResumabilityConfig
             database = agent_store.service()
             runner = adk.Runner(app=App(name="dua-agent", root_agent=agent,
@@ -251,7 +251,7 @@ def run_agent(adk, agent, message, max_calls, on_thought=None, cancelled=None,
         else:
             runner = adk.InMemoryRunner(agent=agent, app_name="dua-agent")
         stream = None
-        from agent_policy import Redactor
+        from dua_engine.agent.agent_policy import Redactor
         redactor = Redactor()
         try:
             if session_options:
@@ -490,17 +490,17 @@ def make_tools(names, call, documents=False):
 
     table = {f.__name__: f for f in (update_plan, import_command_changes, checkpoint_workspace, list_workspaces, restore_workspace, list_runner_profiles, run_command, workspace_status, edit_file, workspace_diff, search_documents, google_search, fetch_url, calculator, current_time, run_python, recall, generate_image, remember, list_files, read_file,
                                      search_code, search_workspace, propose_changes, propose_pr_fix, open_pr_workspace, inspect_pr_ci, check_pr_ci, search_notes, save_note)}
-    import agent_automation
+    import dua_engine.automation.agent_automation as agent_automation
     if agent_automation.status()["configured"] and "current_time" in names:
         device_tools = agent_automation.adk_tools(call)
         table.update({f.__name__: f for f in device_tools})
         names = tuple(names) + tuple(f.__name__ for f in device_tools)
     if documents and "google_search" in names:
         names = tuple(names) + ("search_documents",)
-    import agent_tools
+    import dua_engine.agent.agent_tools as agent_tools
     hidden = agent_tools.hidden_tools() if any(n in names for n in agent_tools.RUNNER_TOOLS + agent_tools.CHECKPOINT_TOOLS) else set()
     names = tuple(n for n in names if n not in hidden)
-    import pr_flow
+    import dua_engine.coding.pr_flow as pr_flow
     if "propose_changes" in names and pr_flow.enabled():
         names = tuple(names) + ("check_pr_ci",)
     return [table[n] for n in names]
@@ -571,7 +571,7 @@ def token_cap_callbacks(adk, budget):
     """(gate, meter) wrappers for the per-run token cap shared by the controller, helpers and merger.
     gate(cb): before_model_callback that answers TOKEN_CAP_NOTE without calling the model once the cap is hit.
     meter(cb): after_model_callback that adds the response's usage (0 when missing), then runs cb."""
-    import coding_agent
+    import dua_engine.coding.coding_agent as coding_agent
 
     def gate(callback):
         if not budget.enabled:
@@ -597,7 +597,7 @@ def token_cap_callbacks(adk, budget):
 
 
 def with_pending(answer, shared):
-    import agent_safety
+    import dua_engine.agent.agent_safety as agent_safety
     pending = agent_safety.pending_text(shared.pending) if shared.pending else ""
     if getattr(shared, "streamed", False):
         # Normal success appends only the approval footer; errors append an explicit
@@ -611,9 +611,9 @@ def with_pending(answer, shared):
 
 def run(env, request_text, flash_model, agent_model, config_for, adk=None, log=print):
     """Returns (text, Result) or None (use the old loop)."""
-    import agent_safety
-    import agent_tools
-    import coding_agent
+    import dua_engine.agent.agent_safety as agent_safety
+    import dua_engine.agent.agent_tools as agent_tools
+    import dua_engine.coding.coding_agent as coding_agent
     try:
         adk = adk or load_adk()
     except ImportError:
@@ -630,7 +630,7 @@ def run(env, request_text, flash_model, agent_model, config_for, adk=None, log=p
         shared.coding = coding_agent.CodingSession(env["github"], lambda d: True, time.monotonic)
     allowed = ["research"] + (["code"] if env.get("github") is not None else []) + \
               (["notes"] if env.get("notes") is not None else [])
-    import agent_models
+    import dua_engine.agent.agent_models as agent_models
     registry = env.get("custom_tools")
     extensions = bool(agent_models.routes()) or env.get("documents") is not None or bool(registry and registry.tools)
     if len(allowed) < 2 and not extensions:
@@ -649,7 +649,7 @@ def run(env, request_text, flash_model, agent_model, config_for, adk=None, log=p
         shared.coding.cancelled = cancelled
         shared.coding.owner_id = env.get("owner_id")
 
-    import agent_context
+    import dua_engine.agent.agent_context as agent_context
     def context(callback):
         base = agent_context.callback(env.get("adk_contents", []), env.get("adk_system", ""),
                                      callback, request_text=request_text, observer=shared.trace)
@@ -680,7 +680,7 @@ def run(env, request_text, flash_model, agent_model, config_for, adk=None, log=p
             if name in agent_safety.WRITE_TOOLS or (custom and custom.write):
                 label = "Waiting for your approval"
             progress(CHIPS[index], f"{title}: {label}\u2026")
-            import agent_automation
+            import dua_engine.automation.agent_automation as agent_automation
             shown = ({"arguments": "private device operation"} if name in agent_automation.NAMES else
                      {k: (v if not isinstance(v, str) else v[:100]) for k, v in args.items() if k not in ("files",)})
             line = f"- {name} {json.dumps(shown, ensure_ascii=False)[:160]}\n"
@@ -698,8 +698,8 @@ def run(env, request_text, flash_model, agent_model, config_for, adk=None, log=p
         return call
 
     def pipeline():
-        import agent_models
-        import agent_store
+        import dua_engine.agent.agent_models as agent_models
+        import dua_engine.agent.agent_store as agent_store
         def model_for(role,default):
             model=agent_models.resolve(role,default)
             return agent_models.observed(model,shared.trace) if shared.trace is not None and hasattr(adk,"Runner") else model
@@ -831,7 +831,7 @@ def run(env, request_text, flash_model, agent_model, config_for, adk=None, log=p
             shared.streamed = True
             return env["stream_text"](delta)
         # A critic must see the full draft before any answer is published.
-        import agent_verify
+        import dua_engine.agent.agent_verify as agent_verify
         live = stream_text if env.get("stream_text") is not None and not agent_verify.enabled() and not review else None
         session_options = None
         if agent_store.database_url() and env.get("owner_id"):
@@ -860,7 +860,7 @@ def run(env, request_text, flash_model, agent_model, config_for, adk=None, log=p
     def deadline_seconds():
         # The CI wait budget is added only once this request really uses the PR flow
         # (shared.prflow is created the first time a PR/CI tool runs), not for every request.
-        import pr_flow
+        import dua_engine.coding.pr_flow as pr_flow
         uses_pr = pr_flow.enabled() and shared.prflow is not None
         return TOTAL_SECONDS + (pr_flow.CI_SECONDS if uses_pr else 0)
 

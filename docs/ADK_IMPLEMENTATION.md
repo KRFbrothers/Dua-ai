@@ -164,7 +164,7 @@ evidence; it does not certify the owner's live database. Keep the candidate at
    ```bash
    python - <<'PY'
    import json
-   import agent_store
+   from dua_engine.agent import agent_store
    from sqlalchemy import inspect, text
    db = None
    try:

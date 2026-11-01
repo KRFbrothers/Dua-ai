@@ -5,8 +5,8 @@ import re
 import secrets
 import time
 
-import agent_store
-import coding_agent as coding
+import dua_engine.agent.agent_store as agent_store
+import dua_engine.coding.coding_agent as coding
 
 MAX_WORKSPACES = 20
 TTL_SECONDS = 7 * 86400
@@ -47,7 +47,7 @@ def save(workspace, owner):
     files = coding.validate_changes([{"path": p, "content": c} for p, c in sorted(workspace.staged.items())])
     target = workspace.pr_target
     if target is not None:
-        import coding_pr
+        import dua_engine.coding.coding_pr as coding_pr
         target = coding_pr.clean_target(target, workspace.base_sha)
     payload = {"version": 2, "files": files, "pr_target": target}
     # JSON escaping can expand source. The file/byte caps are authoritative;
@@ -113,7 +113,7 @@ def load(owner, checkpoint_id, repository):
             raise coding.CodingError("Invalid workspace checkpoint revision.")
         target = payload.get("pr_target") if payload["version"] == 2 else None
         if target is not None:
-            import coding_pr
+            import dua_engine.coding.coding_pr as coding_pr
             target = coding_pr.clean_target(target, row["base_sha"])
         return {"id": row["id"], "revision": row["revision"], "base_sha": row["base_sha"], "files": files, "pr_target": target}
     except coding.CodingError:

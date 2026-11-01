@@ -195,8 +195,8 @@ SEARCH_DOCUMENTS_TOOL = {"name": "search_documents",
 
 def hidden_tools():
     """Runner/checkpoint tools are only offered when their backend is configured."""
-    import coding_checkpoints
-    import coding_terminal
+    import dua_engine.coding.coding_checkpoints as coding_checkpoints
+    import dua_engine.coding.coding_terminal as coding_terminal
     hidden = set()
     try:
         if not coding_terminal.status().get("configured"):
@@ -212,10 +212,10 @@ def hidden_tools():
 
 
 def declarations(github, issues=False, notes=False, documents=False):
-    import agent_automation
-    import agent_notes
-    import coding_agent
-    import pr_flow
+    import dua_engine.automation.agent_automation as agent_automation
+    import dua_engine.agent.agent_notes as agent_notes
+    import dua_engine.coding.coding_agent as coding_agent
+    import dua_engine.coding.pr_flow as pr_flow
     ci = [coding_agent.CHECK_CI_TOOL] if github and pr_flow.enabled() else []
     hidden = hidden_tools() if github else set()
     coding = [t for t in coding_agent.TOOLS if t["name"] not in hidden] if github else []
@@ -457,7 +457,7 @@ class AgentRun:
         self.device_images = {}
 
     def visual_context(self):
-        import agent_automation
+        import dua_engine.automation.agent_automation as agent_automation
         with self.lock:
             return agent_automation.vision_content(list(self.device_images.items())) if self.device_images else None
 
@@ -489,10 +489,10 @@ class AgentRun:
 
     def _request_approval(self, name, args):
         """A write tool call: checked and stored for the user's approval, never executed here."""
-        import agent_safety
-        import coding_agent
+        import dua_engine.agent.agent_safety as agent_safety
+        import dua_engine.coding.coding_agent as coding_agent
         env = self.env
-        import agent_automation
+        import dua_engine.automation.agent_automation as agent_automation
         if name in agent_automation.WRITE_TOOLS:
             try:
                 agent_automation.owner(env.get("owner_id"))
@@ -565,7 +565,7 @@ class AgentRun:
         return ids
 
     def pr_flow_for(self, env):
-        import pr_flow
+        import dua_engine.coding.pr_flow as pr_flow
         if self.prflow is None:
             self.prflow = pr_flow.PrFlow(env["github"], env["thinking"], env["progress"], env["request_text"])
         return self.prflow
@@ -574,7 +574,7 @@ class AgentRun:
         """run_tool with a hard deadline; a slow tool returns an error to the model instead of hanging."""
         seconds = search_seconds() if name == "google_search" else SLOW_TOOL_SECONDS.get(name, TOOL_SECONDS)
         started = time.monotonic()
-        import coding_ui
+        import dua_engine.coding.coding_ui as coding_ui
         activity = coding_ui.started(self, name, args)
         command_progress = coding_ui.CommandProgress(self, activity) if activity else None
         def invoke():
@@ -585,7 +585,7 @@ class AgentRun:
         if trace:
             trace.emit("tool.start", tool=name)
         try:
-            from agent_resilience import retry_read
+            from dua_engine.agent.agent_resilience import retry_read
             result = call_with_deadline(lambda: retry_read(name, invoke,
                                         self.env.get("cancelled"), observer=trace),
                                         seconds, cancel=self.env.get("cancelled"))
@@ -610,7 +610,7 @@ class AgentRun:
         return result
 
     def run_tool(self, name, args, command_progress=None):
-        import agent_automation
+        import dua_engine.automation.agent_automation as agent_automation
         if name in agent_automation.WRITE_TOOLS:
             return {"error": "Device writes require a stored owner approval; no action ran."}
         if name in agent_automation.READ_TOOLS:
@@ -625,7 +625,7 @@ class AgentRun:
                     with self.lock:
                         self.device_images = {label: image}
                 if name == "read_terminal" and isinstance(result.get("output"), str):
-                    from agent_policy import filter_text
+                    from dua_engine.agent.agent_policy import filter_text
                     result["output"] = filter_text(result["output"])
                 return result
             except ValueError as error:
@@ -694,10 +694,10 @@ class AgentRun:
                 self.emit({"type": "memory", "fact": fact})
                 return {"suggested": True, "note": "Suggested to the user's Memory; they confirm it in the app before it is saved."}
             if name == "list_runner_profiles":
-                import coding_terminal
+                import dua_engine.coding.coding_terminal as coding_terminal
                 return coding_terminal.list_profiles()
             if name == "inspect_pr_ci":
-                import coding_ci
+                import dua_engine.coding.coding_ci as coding_ci
                 github = env.get("github")
                 if github is None:
                     return {"error": "GitHub tools are not set up."}
@@ -709,7 +709,7 @@ class AgentRun:
                     return {"error": "No pull request was opened in this request yet."}
                 return self.prflow.ci_status()
             if name in NOTE_TOOLS:
-                import agent_notes
+                import dua_engine.agent.agent_notes as agent_notes
                 return agent_notes.run_tool(env.get("notes"), name, args)
             if name == "recall":
                 memory = env.get("memory") or ""
@@ -741,7 +741,7 @@ class AgentRun:
                                                              "BlockedRequest", "ZeroDivisionError") else "The tool failed."
             if type(error).__name__ == "ImagineError":
                 message = getattr(error, "message", message)
-            from agent_resilience import transient
+            from dua_engine.agent.agent_resilience import transient
             return {"error": message[:300], **({"retryable": True} if transient(error) else {})}
 
 
@@ -814,8 +814,8 @@ STOPPED_TEXT = "Agent stopped: the app disconnected."
 
 def run(env, history, tools, tool_response, clock=time.monotonic):
     """Tool loop. Returns (final_text, run). The caller streams the text and the sources footer."""
-    import agent_safety
-    import coding_agent
+    import dua_engine.agent.agent_safety as agent_safety
+    import dua_engine.coding.coding_agent as coding_agent
     agent = AgentRun(env)
     budget = coding_agent.RunTokenBudget()
     agent.token_budget = budget
@@ -875,7 +875,7 @@ def run(env, history, tools, tool_response, clock=time.monotonic):
                 return STOPPED_TEXT, agent
             if name in PROGRESS and name not in agent_safety.WRITE_TOOLS:
                 progress(*PROGRESS[name])
-            import agent_automation
+            import dua_engine.automation.agent_automation as agent_automation
             shown = ({"arguments": "private device operation"} if name in agent_automation.NAMES else
                      {k: (v if not isinstance(v, str) else v[:100]) for k, v in args.items() if k not in ("content", "files")})
             line = f"- Step {step}: {name} {json.dumps(shown, ensure_ascii=False)[:160]}\n"

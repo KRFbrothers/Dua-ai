@@ -1,6 +1,6 @@
 """Bounded request-local coding checklist; never proof of tool execution."""
-from agent_policy import filter_text
-from coding_agent import CodingError
+from dua_engine.agent.agent_policy import filter_text
+from dua_engine.coding.coding_agent import CodingError
 
 MAX_STEPS = 8
 MAX_UPDATES = 12

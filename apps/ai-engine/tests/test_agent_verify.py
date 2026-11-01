@@ -5,7 +5,7 @@ import time
 from types import SimpleNamespace
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import agent_verify  # noqa: E402
+import dua_engine.agent.agent_verify as agent_verify  # noqa: E402
 
 
 class Model:
@@ -63,8 +63,8 @@ def test_revision_that_drops_pr_link_is_rejected():
 
 
 def test_tool_loop_runs_verify_only_when_enabled(monkeypatch):
-    import agent_notes
-    import agent_tools
+    import dua_engine.agent.agent_notes as agent_notes
+    import dua_engine.agent.agent_tools as agent_tools
     import app as engine
     monkeypatch.delenv("GITHUB_TOKEN", raising=False)
     monkeypatch.setenv("AGENT_ENGINE", "loop")

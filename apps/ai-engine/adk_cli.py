@@ -66,7 +66,7 @@ def main(argv=None):
     args=parser.parse_args(argv)
     try:
         if args.command=='init-db':
-            import agent_store,agent_documents
+            import dua_engine.agent.agent_store as agent_store,dua_engine.agent.agent_documents as agent_documents
             if not agent_store.database_url():raise ValueError('Set server-side ADK_SESSION_DB_URL first')
             agent_store.initialize()
             agent_documents.initialize()
@@ -81,7 +81,7 @@ def main(argv=None):
                 with request_api(args.endpoint,'/api/agent/capabilities') as response:
                     print(response.read(65536).decode())
             else:
-                import agent_store,agent_models,agent_toolkit,agent_documents
+                import dua_engine.agent.agent_store as agent_store,dua_engine.agent.agent_models as agent_models,dua_engine.agent.agent_toolkit as agent_toolkit,dua_engine.agent.agent_documents as agent_documents
                 print(json.dumps({'storage':agent_store.status(),'routes':agent_models.routes(),
                     'customTools':sorted(agent_toolkit.configured().tools),'embeddingConfigured':agent_documents.enabled()}))
         elif args.command=='run':
@@ -118,7 +118,7 @@ def main(argv=None):
             import subprocess
             return subprocess.call([sys.executable,'-m','pytest','-q',str(Path(__file__).with_name('tests'))])
         elif args.command=='evaluate':
-            from agent_evaluation import evaluate,load_responses
+            from dua_engine.agent.agent_evaluation import evaluate,load_responses
             report=evaluate(json.loads(args.cases.read_text()),load_responses(args.responses))
             args.output.write_text(json.dumps(report,indent=2))
             print(json.dumps({k:v for k,v in report.items() if k!='results'}))

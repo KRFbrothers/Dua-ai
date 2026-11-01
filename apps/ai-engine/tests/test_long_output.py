@@ -94,7 +94,7 @@ def test_cut_off_reply_has_continue_hint(model, stream):
 
 @pytest.mark.parametrize('cut_off', [False, True])
 def test_agent_direct_answer_cap_and_finish(model, monkeypatch, cut_off):
-    import agent_notes
+    import dua_engine.agent.agent_notes as agent_notes
     monkeypatch.setattr(engine, 'route_agent', lambda *a, **kw: 'chat')
     monkeypatch.setattr(agent_notes, 'for_owner', lambda *a: None)
     monkeypatch.setattr(engine, 'AGENT_ANSWER_TOKENS', 12345)

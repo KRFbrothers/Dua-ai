@@ -7,9 +7,9 @@ from pathlib import Path
 from types import SimpleNamespace
 import pytest
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
-import agent_adk
-from agent_observability import Trace
-from agent_resilience import retry_read
+import dua_engine.agent.agent_adk as agent_adk
+from dua_engine.agent.agent_observability import Trace
+from dua_engine.agent.agent_resilience import retry_read
 
 
 def test_usage_deduplicates_reports_and_never_invents_unknown_cost():
@@ -43,7 +43,7 @@ def test_retries_only_classified_reads_and_stops_on_cancel():
     calls.clear()
     assert retry_read('propose_changes',invoke,wait=lambda _:None)['error']=='temporary'
     assert len(calls)==1
-    import agent_tools
+    import dua_engine.agent.agent_tools as agent_tools
     with pytest.raises(agent_tools.Cancelled):
         retry_read('read_file',invoke,cancelled=lambda:True)
 
@@ -52,7 +52,7 @@ def test_real_adk_preserves_multimodal_context_and_streams_merger_deltas(monkeyp
     pytest.importorskip('google.adk')
     from google.adk.models import BaseLlm,LlmResponse
     from google.genai import types
-    import agent_models
+    import dua_engine.agent.agent_models as agent_models
     from test_agent_adk import make_env
     observed, emitted, log=[],[],[]
     first='First ' + 'x'*300
@@ -96,7 +96,7 @@ def test_real_adk_preserves_multimodal_context_and_streams_merger_deltas(monkeyp
 @pytest.fixture
 def sql_store(tmp_path,monkeypatch):
     pytest.importorskip('google.adk')
-    import agent_store,agent_documents
+    import dua_engine.agent.agent_store as agent_store,dua_engine.agent.agent_documents as agent_documents
     monkeypatch.setenv('ADK_SESSION_DB_URL','sqlite+aiosqlite:///'+str(tmp_path/'adk.sqlite'))
     agent_store.initialize()
     agent_documents.initialize()
@@ -104,7 +104,7 @@ def sql_store(tmp_path,monkeypatch):
 
 
 def test_durable_approvals_survive_restart_dedupe_and_claim_once(sql_store):
-    import agent_safety
+    import dua_engine.agent.agent_safety as agent_safety
     action=sql_store.SqlPendingStore().create('owner-a','save_note',{'note':'Hello'},request_key='task:note:hash')
     assert sql_store.SqlPendingStore().create('owner-a','save_note',{'note':'Hello'},request_key='task:note:hash')['id']==action['id']
     with pytest.raises(agent_safety.ApprovalError):
@@ -127,7 +127,7 @@ def test_durable_approvals_survive_restart_dedupe_and_claim_once(sql_store):
 
 
 def test_vectors_retrieve_synonyms_isolate_owners_and_delete(sql_store):
-    from agent_documents import Documents
+    from dua_engine.agent.agent_documents import Documents
     class OfflineEmbedding:
         space='offline:semantic:2'
         def __call__(self,texts,query=False):
@@ -155,8 +155,8 @@ def test_vectors_retrieve_synonyms_isolate_owners_and_delete(sql_store):
 
 def test_custom_read_and_write_share_validation_and_approval_boundary():
     pytest.importorskip('google.adk')
-    from agent_toolkit import Tool,Registry
-    import agent_tools,agent_safety
+    from dua_engine.agent.agent_toolkit import Tool,Registry
+    import dua_engine.agent.agent_tools as agent_tools,dua_engine.agent.agent_safety as agent_safety
     executed=[]
     def send_message(text:str)->dict:
         """Send the approved synthetic message."""
@@ -209,7 +209,7 @@ def test_official_sql_session_resume_does_not_repeat_completed_tool(sql_store):
 
 
 def test_secret_filter_handles_keys_split_across_stream_deltas():
-    from agent_policy import Redactor
+    from dua_engine.agent.agent_policy import Redactor
     key='synthetic-sensitive-value-123456789'
     r=Redactor(secrets=[key])
     a=r.feed('A'*300+key[:10])
@@ -221,7 +221,7 @@ def test_secret_filter_handles_keys_split_across_stream_deltas():
 
 
 def test_task_lease_rejects_concurrent_resume_and_releases(sql_store):
-    import agent_store
+    import dua_engine.agent.agent_store as agent_store
     lease=agent_store.acquire('owner-a','a91d5d9b-99d1-409b-b38b-86a09b9c5276')
     with pytest.raises(agent_store.TaskBusy):
         agent_store.acquire('owner-a','a91d5d9b-99d1-409b-b38b-86a09b9c5276')
@@ -232,7 +232,7 @@ def test_task_lease_rejects_concurrent_resume_and_releases(sql_store):
 def test_official_model_adapters_and_fallback_are_wired(monkeypatch):
     pytest.importorskip('google.adk')
     pytest.importorskip('litellm')
-    import agent_models
+    import dua_engine.agent.agent_models as agent_models
     from google.adk.models import FallbackModel,Gemini
     from google.adk.models.lite_llm import LiteLlm
     monkeypatch.setenv('ADK_MODELS_JSON',json.dumps({'controller':['gemini-primary','openai/offline-test'],
@@ -274,7 +274,7 @@ def test_official_fallback_never_splices_after_partial_output():
 
 
 def test_quality_report_penalizes_missing_cases_and_failed_rubrics():
-    from agent_evaluation import evaluate
+    from dua_engine.agent.agent_evaluation import evaluate
     cases={'version':1,'cases':[{'id':'math','rubric':{'number':42,'required_tools':['calculator']}},
                                {'id':'approval','rubric':{'approval_required':True}}]}
     report=evaluate(cases,[{'id':'math','text':'42','tools':['calculator']}])
@@ -301,7 +301,7 @@ def test_cli_scaffolds_real_adk_package_without_overwrite(tmp_path,monkeypatch):
 
 def test_resume_api_uses_only_owned_stored_input(monkeypatch):
     pytest.importorskip('google.adk')
-    import app as engine,agent_store,agent_notes
+    import app as engine,dua_engine.agent.agent_store as agent_store,dua_engine.agent.agent_notes as agent_notes
     monkeypatch.setenv('AGENT_ENGINE','adk')
     monkeypatch.delenv('ADK_EMBEDDING_MODEL',raising=False)
     monkeypatch.delenv('GITHUB_TOKEN',raising=False)
@@ -339,9 +339,9 @@ def test_real_sdk_custom_tool_registration_is_an_actual_runtime_caller(monkeypat
     pytest.importorskip('google.adk')
     from google.adk.models import BaseLlm,LlmResponse
     from google.genai import types
-    from agent_toolkit import configured
+    from dua_engine.agent.agent_toolkit import configured
     from test_agent_adk import make_env
-    import agent_models
+    import dua_engine.agent.agent_models as agent_models
     monkeypatch.setenv('ADK_TOOL_MODULES','adk_examples.text_tools')
     calls=[]
     class Offline(BaseLlm):
@@ -366,7 +366,7 @@ def test_real_sdk_custom_tool_registration_is_an_actual_runtime_caller(monkeypat
 
 def test_observed_fallback_attempts_report_failed_usage_as_unknown():
     pytest.importorskip('google.adk')
-    import agent_models
+    import dua_engine.agent.agent_models as agent_models
     from google.adk.models import BaseLlm,LlmResponse,FallbackModel
     from google.adk.models.llm_request import LlmRequest
     from google.genai import types
@@ -388,7 +388,7 @@ def test_observed_fallback_attempts_report_failed_usage_as_unknown():
 
 
 def test_secret_filter_does_not_buffer_normal_words_until_the_answer_finishes():
-    from agent_policy import Redactor
+    from dua_engine.agent.agent_policy import Redactor
     r=Redactor(secrets=['private-test-value'])
     assert r.feed('Hello! ')=='Hello! '
     assert r.feed('How can I help?')=='How can I help?'
@@ -433,7 +433,7 @@ def test_evaluation_cli_writes_a_report_and_fails_missing_answers(tmp_path):
 
 
 def test_existing_notes_reindex_is_explicit_bounded_and_owner_store_scoped():
-    import agent_notes
+    import dua_engine.agent.agent_notes as agent_notes
     store=object.__new__(agent_notes.NotesStore)
     store._cache=[{'id':str(i),'note':'Owned note '+str(i)} for i in range(30)]
     calls=[]
@@ -446,7 +446,7 @@ def test_existing_notes_reindex_is_explicit_bounded_and_owner_store_scoped():
 
 def test_approved_notes_use_the_same_semantic_index(monkeypatch):
     import app as engine
-    import agent_notes,agent_documents,agent_toolkit
+    import dua_engine.agent.agent_notes as agent_notes,dua_engine.agent.agent_documents as agent_documents,dua_engine.agent.agent_toolkit as agent_toolkit
     notes=SimpleNamespace(semantic=None)
     client=object()
     monkeypatch.setenv('GITHUB_TOKEN','')

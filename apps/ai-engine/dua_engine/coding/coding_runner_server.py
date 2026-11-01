@@ -20,11 +20,11 @@ from types import SimpleNamespace
 
 from flask import Flask, jsonify, request
 
-import coding_agent as coding
-import coding_snapshot
-import coding_artifacts
-import coding_profiles
-from coding_terminal import FINAL_STATES, JOB_ID, MAX_OUTPUT_BYTES, validate_command
+import dua_engine.coding.coding_agent as coding
+import dua_engine.coding.coding_snapshot as coding_snapshot
+import dua_engine.coding.coding_artifacts as coding_artifacts
+import dua_engine.coding.coding_profiles as coding_profiles
+from dua_engine.coding.coding_terminal import FINAL_STATES, JOB_ID, MAX_OUTPUT_BYTES, validate_command
 
 app = Flask("coding_runner_server", root_path=str(Path(__file__).resolve().parents[2]))
 app.config["MAX_CONTENT_LENGTH"] = 24 * 1024 * 1024

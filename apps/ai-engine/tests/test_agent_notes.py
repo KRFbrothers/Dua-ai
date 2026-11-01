@@ -5,8 +5,8 @@ import sys
 import uuid
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-import agent_notes  # noqa: E402
-import agent_tools  # noqa: E402
+import dua_engine.agent.agent_notes as agent_notes  # noqa: E402
+import dua_engine.agent.agent_tools as agent_tools  # noqa: E402
 
 
 class Resp(io.BytesIO):

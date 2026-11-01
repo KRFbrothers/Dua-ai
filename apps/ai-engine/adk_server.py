@@ -4,7 +4,7 @@ import sys
 
 
 def main():
-    import agent_models,agent_store,agent_toolkit
+    import dua_engine.agent.agent_models as agent_models,dua_engine.agent.agent_store as agent_store,dua_engine.agent.agent_toolkit as agent_toolkit
     agent_models.check_adapters()
     agent_toolkit.configured()
     port=int(os.environ.get('PORT','8080'))

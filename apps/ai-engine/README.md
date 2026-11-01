@@ -12,35 +12,24 @@ return 401, non-owner/unconfirmed accounts return 403, and missing setup or unav
 returns 503 **before calling Vertex**. The health check remains public. Owner login cannot be disabled
 with `DUA_REQUIRE_LOGIN=0`; `DUA_APP_TOKEN`, if retained, is an additional gate only.
 
-## Python module ownership: done / leave / optional later
+## Python module ownership
 
-After coding/agent/automation packaging, the root has 43 Python files: 32
-compatibility shims (14 coding, 14 agent and 4 automation) and 11 implementation
-or entrypoint files (the five Leave rows below: 1 + 2 + 2 + 4 + 2).
-Root placement alone does not make a file stale.
+Agent, coding and automation implementations live under [dua_engine/agent/](dua_engine/agent/),
+[dua_engine/coding/](dua_engine/coding/) and [dua_engine/automation/](dua_engine/automation/).
+Internal imports use those canonical package paths; the root compatibility modules
+for those implementations have been removed.
 
-| Status | Root files | Owner / reason |
-| --- | --- | --- |
-| Done (14 shims) | `coding_*.py` (13 files), `pr_flow.py` | Real implementations are the same filenames under [dua_engine/coding/](dua_engine/coding/). |
-| Done (14 shims) | `agent_*.py` except `agent_automation.py` | Real implementations are under [dua_engine/agent/](dua_engine/agent/). |
-| Done (4 shims) | `agent_automation.py`, `automation_companion.py`, `automation_drivers.py`, `automation_terminal.py` | Real implementations are under [dua_engine/automation/](dua_engine/automation/). The companion shim also preserves script/CLI dispatch; the earlier `dua_engine.agent.agent_automation` path remains an alias. |
-| Leave | `app.py` | Flask endpoints, request assembly, streaming and chat/Agent coordination. |
-| Leave | `adk_server.py`, `wsgi.py` | Startup validation/Gunicorn launch and Flask/CORS composition. `wsgi.py` is short but is not an import-compatibility shim. Keep Docker CMD and `wsgi:app`. |
-| Leave | `adk_cli.py`, `backup.py` | Operations CLI and separate backup-job implementation; neither is a second chat server. |
-| Leave | `owner_auth.py`, `kill_switches.py`, `web_cors.py`, `env_config.py` | Live owner authentication, pause policy, browser transport policy and shared integer-setting parser. |
-| Leave | `imagine.py`, `openrouter.py` | Image generation/storage/quota integration and optional free-model streaming/catalog integration. |
-
-The root aliases share the packaged module objects, preserving legacy imports,
-private helpers, monkeypatches and shared state. Keep them for current callers.
-The remaining owners have distinct responsibilities; the scan found no complete
-root implementation duplicated under `dua_engine/`, and no safe module fold was
-identified. Similar-looking provider/HTTP helpers are not enough evidence to
-merge their different authentication, payload, quota and error behavior.
+The engine root retains its service and operations modules, plus two required
+entrypoints: `automation_companion.py` dispatches the documented CLI, and
+`coding_runner_server.py` remains the systemd service's `coding_runner_server:app`
+target. Keep those entrypoints and the Docker `wsgi:app` command. The remaining
+root modules have distinct responsibilities; similar-looking provider/HTTP
+helpers are not enough evidence to merge their different authentication,
+payload, quota and error behavior.
 
 **Optional later:** review smaller responsibilities inside `app.py` if a specific
 maintenance problem justifies extraction into the existing package layout.
-Any such change needs its own caller/behavior review and tests; this inventory
-does not schedule another package or a move. See [ADK entrypoints](#adk-entrypoints-and-ownership)
+Any such change needs its own caller/behavior review and tests. See [ADK entrypoints](#adk-entrypoints-and-ownership)
 and [kill-switch ownership](#kill-switch-ownership) for the live paths.
 
 ## Endpoints
@@ -159,7 +148,7 @@ checkout's roles; it does not assert which revision is serving in Cloud Run.
 | --- | --- | --- |
 | [adk_server.py](adk_server.py) | Container startup validator and Gunicorn launcher. Checks adapters/custom tools, `PORT` and configured production persistence; does not initialize database tables. | Yes: Docker CMD calls it for the same `wsgi:app` server. Keep the wrapper. |
 | [wsgi.py](wsgi.py), [app.py](app.py) | Main HTTP entry and Flask chat/Agent endpoints. | Yes: one server for ordinary chat and ADK. |
-| [dua_engine/agent/agent_adk.py](dua_engine/agent/agent_adk.py) | Real ADK orchestration: planner, helpers, merger, optional review, cancellation and SDK runner lifecycle. | Yes, in process when the existing ADK route is selected. Root [agent_adk.py](agent_adk.py) is a compatibility alias for imports/monkeypatches, not another server. |
+| [dua_engine/agent/agent_adk.py](dua_engine/agent/agent_adk.py) | ADK orchestration: planner, helpers, merger, optional review, cancellation and SDK runner lifecycle. | Yes, in process when the existing ADK route is selected. |
 | [adk_cli.py](adk_cli.py) | Operations CLI: status, explicit database initialization, live requests/indexing, scaffold, offline tests/evaluation. | Optional operator tool, never the HTTP server or deploy command. `run`/indexing can make provider calls. |
 | [adk_examples/](adk_examples/) | Opt-in custom-tool examples, including `text_tools.word_count`; exercised by extension tests. | Only if explicitly configured through `ADK_TOOL_MODULES`. No server and no default activation. CLI-generated scaffold packages and official `adk run` are separate development examples, not the chat deployment. |
 | [deploy-adk.sh](deploy-adk.sh) | Current-checkout rollout controller: `plan`, `deploy` (stage), `promote`, `rollback`. | Yes: the supported ADK deployment path below. |
@@ -225,7 +214,7 @@ no stale engine copy to remove or compatibility shim to add.
 | --- | --- |
 | [kill_switches.py](kill_switches.py) | Live Python owner of emergency pause flags/messages; all switches default off. |
 | [app.py](app.py) | Calls that owner for chat/Agent admission, Agent actions, capabilities, selected document operations, note reindex, Imagine, titles and legacy chat. These route checks are callers, not duplicate flag definitions. |
-| [dua_engine/agent/agent_tools.py](dua_engine/agent/agent_tools.py), [dua_engine/agent/agent_adk.py](dua_engine/agent/agent_adk.py) | Tool-loop and ADK implementations run behind the same Flask chat/Agent guards. Their root aliases preserve imports; neither owns another kill-switch parser. |
+| [dua_engine/agent/agent_tools.py](dua_engine/agent/agent_tools.py), [dua_engine/agent/agent_adk.py](dua_engine/agent/agent_adk.py) | Tool-loop and ADK implementations run behind the same Flask chat/Agent guards; neither owns another kill-switch parser. |
 | [imagine.py](imagine.py) | `DUA_IMAGINE` is feature configuration checked separately from the route's emergency pause guard. Its `enabled()` helper is not a second definition of `DUA_DISABLE_IMAGINE`. |
 | [Shared contract](../../packages/contracts/KILL_SWITCHES.md) | Authoritative names/defaults/messages and per-service ownership. This document is consumed by contract tests, not loaded to resolve runtime switches. |
 
@@ -246,7 +235,7 @@ operator commands. This ownership map changes no flags, live defaults or routes.
 In Agent mode, coding requests ("fix the login bug", "add X to the app", "code likho …") make the Dua Agent
 read the repository, prepare a change, push it to a **new branch `dua-agent/…`** and open a **pull request
 into main**. It never merges, never pushes to main, never force-pushes and never deletes branches; the server
-blocks every other GitHub request (allowlist in `coding_agent.py`). Repository: `DUA_REPO` (default
+blocks every other GitHub request (allowlist in `dua_engine/coding/coding_agent.py`). Repository: `DUA_REPO` (default
 `KRFbrothers/Dua-ai`). Caps: 15 tool steps, 40 files read, 10 files changed, 200 KB per file, 10 minutes.
 Without `GITHUB_TOKEN` it just says coding is not set up yet.
 
@@ -349,7 +338,7 @@ Needs the existing `SUPABASE_URL` / `SUPABASE_ANON_KEY` settings and the Supabas
 ## Dua Agent tools (general tool loop)
 
 Agent mode first runs the cheap router: greetings and simple questions get one direct reply. Real tasks run one
-tool-calling loop on `VERTEX_MODEL` (default `gemini-3.8-flash`) in `agent_tools.py`. The model picks the tools;
+tool-calling loop on `VERTEX_MODEL` (default `gemini-3.8-flash`) in `dua_engine/agent/agent_tools.py`. The model picks the tools;
 each one runs on this server, behind the same owner sign-in as `/api/chat`.
 
 | Tool | What it does | Cap per request |
@@ -401,7 +390,7 @@ result is thrown away and no further calls are made.)
 
 ## Agent safety: approvals and untrusted content
 
-[`agent_safety.py`](agent_safety.py) protects both agent paths (the normal loop and `AGENT_ENGINE=adk`) the same way:
+[`dua_engine/agent/agent_safety.py`](dua_engine/agent/agent_safety.py) protects both agent paths (the normal loop and `AGENT_ENGINE=adk`) the same way:
 
 - **Write tools need your approval.** `propose_changes` (open a PR), `create_issue`, `comment_on_issue`, `save_note`
   and `delete_note` never run inside the agent loop. The engine checks the call (paths, sizes, pre-check), stores it
@@ -439,7 +428,7 @@ result is thrown away and no further calls are made.)
 
 ## Parallel multi-agent mode on Google ADK (optional, `AGENT_ENGINE=adk`)
 
-[`dua_engine/agent/agent_adk.py`](dua_engine/agent/agent_adk.py) (root `agent_adk.py` is its compatibility alias) uses Google Agent Development Kit (`google-adk==2.12.0`, official source: [google/adk-python](https://github.com/google/adk-python/tree/v2.12.0); owner fork: [KRFbrothers/adk-python](https://github.com/KRFbrothers/adk-python)), imported only when the flag is on.
+[`dua_engine/agent/agent_adk.py`](dua_engine/agent/agent_adk.py) uses Google Agent Development Kit (`google-adk==2.12.0`, official source: [google/adk-python](https://github.com/google/adk-python/tree/v2.12.0); owner fork: [KRFbrothers/adk-python](https://github.com/KRFbrothers/adk-python)), imported only when the flag is on.
 1. **Plan:** an ADK controller agent on `AGENT_MODEL` decides whether the request has 2–3 independent parts (research / code / notes). Uses robust JSON plan parsing that handles both raw JSON and markdown codeblock responses.
 2. **Helpers:** an ADK `SequentialAgent` runs the helper stage, then the merger on `AGENT_MODEL`. Helpers on `VERTEX_MODEL` run sequentially by default (`ADK_HELPERS_SEQUENTIAL=1`); `0` selects the existing `ParallelAgent` stage.
    - Helpers call the existing tools through one shared `AgentRun`, so the same per-tool caps, #214 timeouts and global source numbers apply.
@@ -469,7 +458,7 @@ See [ADK SDK checks](../../docs/TESTING.md#agent--adk-sdk-checks) for offline re
 
 ## Self-check (`AGENT_VERIFY=1`)
 
-[`agent_verify.py`](agent_verify.py) runs after both the old loop and the ADK path. Casual replies and coding mode skip it.
+[`dua_engine/agent/agent_verify.py`](dua_engine/agent/agent_verify.py) runs after both the old loop and the ADK path. Casual replies and coding mode skip it.
 - **Critic:** one Flash call (low thinking, 1024 tokens, 45 s limit) compares the draft with the request, the sources and short tool results.
 - **Revision:** only if the critic finds issues, one revision by the Agent model (90 s limit).
 - **Safety:** any failure keeps the draft, and a revision that drops a PR link is rejected.
@@ -479,7 +468,7 @@ See [ADK SDK checks](../../docs/TESTING.md#agent--adk-sdk-checks) for offline re
 
 Since the approval guard, only step 1 runs during the agent request (before the approval card); the PR is opened
 by `POST /api/agent/action` after you approve, without the CI wait / auto-fix below.
-[`pr_flow.py`](pr_flow.py) handles `propose_changes` in both paths:
+[`dua_engine/coding/pr_flow.py`](dua_engine/coding/pr_flow.py) handles `propose_changes` in both paths:
 1. **Pre-check:** Python files are byte-compiled in a temp dir (20 s timeout) and JSON files are parsed. A failure goes back to the model; after 2 failures, no PR is opened.
 2. **CI wait:** after the PR opens, the engine polls GitHub CI (check runs, falling back to Actions runs). The total wait per request is `AGENT_CI_SECONDS` (default 420).
 3. **One fix:** if CI fails, the model gets one fix attempt. The fix is a fast-forward commit on the same `dua-agent/` branch (never force, never main, never merge), and CI is polled again.

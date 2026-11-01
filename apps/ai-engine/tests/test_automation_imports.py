@@ -1,4 +1,4 @@
-"""Import and entrypoint compatibility without host devices or terminal processes."""
+"""Canonical automation imports and the supported companion entrypoint."""
 import importlib
 import os
 from pathlib import Path
@@ -13,56 +13,46 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 MODULES = ("agent_automation", "automation_companion", "automation_drivers", "automation_terminal")
-FIRST_IMPORTS = tuple(path for name in MODULES for path in (name, "dua_engine.automation." + name)) + (
-    "dua_engine.agent.agent_automation",
-)
 
 
 @pytest.mark.parametrize("name", MODULES)
-def test_legacy_and_packaged_imports_share_module(name):
-    legacy = importlib.import_module(name)
-    canonical = importlib.import_module("dua_engine.automation." + name)
-    assert legacy is canonical
-    if name == "agent_automation":
-        assert importlib.import_module("dua_engine.agent.agent_automation") is canonical
+def test_automation_modules_import_from_package_and_reload(name):
+    module = importlib.import_module("dua_engine.automation." + name)
+    assert importlib.reload(module) is module
 
 
-def test_prior_agent_package_monkeypatch_changes_client_globals(monkeypatch):
+def test_prior_agent_package_alias_is_the_canonical_client():
     from dua_engine.agent import agent_automation as previous
     from dua_engine.automation import agent_automation as canonical
 
-    monkeypatch.setattr(previous, "configuration", lambda: ("synthetic", "configuration"))
-    assert canonical.status()["configured"] is True
+    assert previous is canonical
 
 
-def test_legacy_driver_monkeypatch_changes_packaged_validation(monkeypatch):
-    import automation_drivers
-    from dua_engine.automation import automation_drivers as canonical
+def test_driver_monkeypatch_changes_packaged_validation(monkeypatch):
+    from dua_engine.automation import automation_drivers
 
     monkeypatch.setattr(automation_drivers, "KEYS", {"synthetic-key"})
-    assert canonical.valid_key("synthetic-key") == "synthetic-key"
+    assert automation_drivers.valid_key("synthetic-key") == "synthetic-key"
     with pytest.raises(ValueError):
-        canonical.valid_key("enter")
+        automation_drivers.valid_key("enter")
 
 
-def test_legacy_terminal_monkeypatch_changes_packaged_expiry(monkeypatch):
-    import automation_terminal
-    from dua_engine.automation import automation_terminal as canonical
+def test_terminal_monkeypatch_changes_packaged_expiry(monkeypatch):
+    from dua_engine.automation import automation_terminal
 
     monkeypatch.setattr(automation_terminal, "LIFETIME_SECONDS", 0)
-    session = canonical.Session.__new__(canonical.Session)
+    session = automation_terminal.Session.__new__(automation_terminal.Session)
     session.clock = lambda: 1
     session.created = session.touched = 0
     assert session.expired()
 
 
 def test_companion_factory_patch_and_flask_identity_survive_move(monkeypatch):
-    import automation_companion
-    from dua_engine.automation import automation_companion as canonical
+    from dua_engine.automation import automation_companion
 
     control = SimpleNamespace(handle=lambda body: {"synthetic": True})
     monkeypatch.setattr(automation_companion, "Companion", lambda config: control)
-    app = canonical.create_app({}, "x" * 40)
+    app = automation_companion.create_app({}, "x" * 40)
     assert app.extensions["companion"] is control
     assert app.import_name == "automation_companion"
     assert Path(app.root_path) == Path(__file__).resolve().parents[1]
@@ -94,31 +84,28 @@ def run_isolated(runtime, script, *args):
     return result
 
 
-@pytest.mark.parametrize("first", FIRST_IMPORTS)
-def test_fresh_import_orders_reload_and_lazy_host_dependencies(shipped_runtime, first):
+@pytest.mark.parametrize("name", MODULES)
+def test_fresh_runtime_imports_are_canonical_and_lazy(shipped_runtime, name):
     run_isolated(shipped_runtime, """
         import importlib
+        from pathlib import Path
         import sys
 
-        sys.path.insert(0, sys.argv[1])
+        runtime = Path(sys.argv[1])
+        sys.path.insert(0, str(runtime))
         import dua_engine.automation
-        assert not any(key.startswith('automation_') or key.startswith('dua_engine.automation.')
-                       for key in sys.modules)
-        first = sys.argv[2]
-        module = importlib.import_module(first)
-        if first.endswith('agent_automation'):
+        assert not any(key.startswith('dua_engine.automation.') for key in sys.modules)
+        name = sys.argv[2]
+        module = importlib.import_module('dua_engine.automation.' + name)
+        if name == 'agent_automation':
             assert not any(key.endswith(('automation_companion', 'automation_drivers', 'automation_terminal'))
                            for key in sys.modules)
-        for name in ('agent_automation', 'automation_companion', 'automation_drivers', 'automation_terminal'):
-            canonical = importlib.import_module('dua_engine.automation.' + name)
-            assert importlib.import_module(name) is canonical
-            assert getattr(dua_engine.automation, name) is canonical
-        assert importlib.import_module('dua_engine.agent.agent_automation') is importlib.import_module('agent_automation')
         assert importlib.reload(module) is module
-        assert importlib.import_module(first) is module
         assert not any(key.split('.')[0] in ('pyautogui', 'adbutils', 'playwright', 'pexpect')
                        for key in sys.modules)
-    """, first)
+        if name != 'automation_companion':
+            assert not (runtime / (name + '.py')).exists()
+    """, name)
 
 
 @pytest.mark.parametrize("entry", ("script", "legacy-module", "canonical-module"))

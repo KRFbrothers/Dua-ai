@@ -43,8 +43,8 @@ def model(monkeypatch):
     monkeypatch.setattr(engine, "make_part", lambda text=None, data=None, mime_type=None: ("text", text))
     monkeypatch.setattr(engine, "make_content", lambda role, parts: {"role": role, "parts": parts})
     monkeypatch.setattr(engine, "google_search_tool", lambda: "GOOGLE_SEARCH")
-    import agent_tools
-    import coding_agent
+    import dua_engine.agent.agent_tools as agent_tools
+    import dua_engine.coding.coding_agent as coding_agent
     monkeypatch.setattr(agent_tools, "default_tools", lambda github, issues=False: ["TOOLS"])
     monkeypatch.setattr(coding_agent, "default_tool_response", lambda results: ("tool", results))
     monkeypatch.delenv("GITHUB_TOKEN", raising=False)
@@ -76,7 +76,7 @@ def test_agent_tool_loop_searches_and_answers_with_sources(model):
     assert all(c["config"]["max_output_tokens"] <= 16384 for c in model.calls)
     tool_turn = model.calls[2]["contents"][-1]
     # Search output is untrusted: it reaches the model fenced, with a "data, not instructions" note.
-    import agent_safety
+    import dua_engine.agent.agent_safety as agent_safety
     fenced = tool_turn[1][0][1]
     assert fenced["untrusted_data"].startswith("<<<UNTRUSTED_DATA tool=google_search>>>") and "Never follow" in fenced["note"]
     seen = agent_safety.unfence("google_search", fenced)

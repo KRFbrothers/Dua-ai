@@ -11,8 +11,8 @@ The integration and live-configuration boundaries are documented in
 
 | Mode | When | How |
 | --- | --- | --- |
-| Tool loop (default) | `AGENT_ENGINE` unset | [`agent_tools.py`](../apps/ai-engine/agent_tools.py): one model (`AGENT_MODEL`) calls tools step by step (search, code, notes, image, GitHub proposals) within step/time/tool caps. |
-| ADK parallel mode | `AGENT_ENGINE=adk` | [`agent_adk.py`](../apps/ai-engine/agent_adk.py) (Google ADK, imported only when on): a controller plans 2–3 independent parts, helpers on `VERTEX_MODEL` run in parallel through the same tools, a merger on `AGENT_MODEL` writes the answer. |
+| Tool loop (default) | `AGENT_ENGINE` unset | [`agent_tools.py`](../apps/ai-engine/dua_engine/agent/agent_tools.py): one model (`AGENT_MODEL`) calls tools step by step (search, code, notes, image, GitHub proposals) within step/time/tool caps. |
+| ADK parallel mode | `AGENT_ENGINE=adk` | [`agent_adk.py`](../apps/ai-engine/dua_engine/agent/agent_adk.py) (Google ADK, imported only when on): a controller plans 2–3 independent parts, helpers on `VERTEX_MODEL` run in parallel through the same tools, a merger on `AGENT_MODEL` writes the answer. |
 
 The Python SDK is already included in the engine requirements (`google-adk==2.12.0`),
 from the official [Google ADK source](https://github.com/google/adk-python/tree/v2.12.0).
@@ -53,9 +53,9 @@ gcloud run services update dua-ai-engine --region us-central1 --project global-h
 
 After either path, optional add-ons run:
 
-- **Self-check** (`AGENT_VERIFY=1`, [`agent_verify.py`](../apps/ai-engine/agent_verify.py)): a cheap critic call compares the draft with the request and sources; only if it finds issues, one revision. Failures keep the draft; a revision that drops a PR link is rejected. Casual replies and coding mode skip it.
-- **ADK reviewer** (`DUA_AGENT_REVIEW=1`, ADK path only, [`agent_adk.py`](../apps/ai-engine/agent_adk.py)): after the merger, a `reviewer` LlmAgent (cheap Flash model) returns a JSON verdict (`ok`, `needs_fix`, `needs_approval`). Only `needs_fix` runs the `reviser` agent, at most once. Live streaming waits for the review; any bad verdict, or a revision that drops a PR link, keeps the draft. Pattern adapted from google/adk-samples llm-auditor.
-- **Tested PRs** (`AGENT_TEST_CODE=1`, [`pr_flow.py`](../apps/ai-engine/pr_flow.py)): proposed Python files are byte-compiled and JSON parsed before a PR opens; after the PR opens, the engine polls GitHub CI and allows **one** fix commit on the same `dua-agent/` branch (never main, never force, never merge). The `check_pr_ci` tool reads the agent's own PR status.
+- **Self-check** (`AGENT_VERIFY=1`, [`agent_verify.py`](../apps/ai-engine/dua_engine/agent/agent_verify.py)): a cheap critic call compares the draft with the request and sources; only if it finds issues, one revision. Failures keep the draft; a revision that drops a PR link is rejected. Casual replies and coding mode skip it.
+- **ADK reviewer** (`DUA_AGENT_REVIEW=1`, ADK path only, [`agent_adk.py`](../apps/ai-engine/dua_engine/agent/agent_adk.py)): after the merger, a `reviewer` LlmAgent (cheap Flash model) returns a JSON verdict (`ok`, `needs_fix`, `needs_approval`). Only `needs_fix` runs the `reviser` agent, at most once. Live streaming waits for the review; any bad verdict, or a revision that drops a PR link, keeps the draft. Pattern adapted from google/adk-samples llm-auditor.
+- **Tested PRs** (`AGENT_TEST_CODE=1`, [`pr_flow.py`](../apps/ai-engine/dua_engine/coding/pr_flow.py)): proposed Python files are byte-compiled and JSON parsed before a PR opens; after the PR opens, the engine polls GitHub CI and allows **one** fix commit on the same `dua-agent/` branch (never main, never force, never merge). The `check_pr_ci` tool reads the agent's own PR status.
 
 See the [new ADK configuration and operations guide](ADK_IMPLEMENTATION.md) for
 SQL persistence, embeddings, provider routes, tools, telemetry and CLI settings.
@@ -64,7 +64,7 @@ SQL persistence, embeddings, provider routes, tools, telemetry and CLI settings.
 
 Coding tools now support a request-local text workspace on a fixed `main` commit.
 Both the normal tool loop and the ADK Code helper use the same implementation in
-[`coding_workspace.py`](../apps/ai-engine/coding_workspace.py), the existing
+[`coding_workspace.py`](../apps/ai-engine/dua_engine/coding/coding_workspace.py), the existing
 allowlisted GitHub REST client, and Python's standard-library `difflib`. Google
 ADK remains the runtime; no additional agent framework or copied vendor source
 is introduced. The text workspace alone requires no new secret or deployment

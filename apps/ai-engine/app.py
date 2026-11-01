@@ -34,7 +34,7 @@ import threading
 import time
 
 from flask import Flask, Response, g, jsonify, request, stream_with_context
-import agent_models
+import dua_engine.agent.agent_models as agent_models
 from owner_auth import OwnerAuthError, verify_owner
 from env_config import env_int
 
@@ -557,7 +557,7 @@ def route_agent(messages, attachments, system, observer=None):
     try:
         model = get_model(system)
         if observer is not None:
-            from agent_observability import ObservedModel
+            from dua_engine.agent.agent_observability import ObservedModel
             model = ObservedModel(model, observer)
         response = model.generate_content(
             build_contents(with_last_user_suffix(messages[-AGENT_ROUTER_TURNS:], AGENT_ROUTER_PROMPT), attachments),
@@ -603,7 +603,7 @@ NOTES_SYSTEM = "You extract short, durable, non-sensitive lessons for an AI agen
 
 def adk_config(model_name, max_tokens, json_out=False, thinking_level=None):
     """GenerateContentConfig for ADK agents: same thinking levels and #214 per-call HTTP timeout as the old loop."""
-    import agent_tools
+    import dua_engine.agent.agent_tools as agent_tools
     from google.genai import types
     level = AGENT_THINKING_LEVEL if model_name == AGENT_MODEL and AGENT_MODEL != MODEL_NAME else THINKING_LEVEL
     if THINKING_ROUTER != "0" and thinking_level is not None and model_name == AGENT_MODEL:
@@ -618,10 +618,10 @@ def adk_config(model_name, max_tokens, json_out=False, thinking_level=None):
 
 
 def tool_loop(messages, attachments, system, enqueue, owner, coding=False, cancelled=None):
-    import agent_notes
-    import agent_safety
-    import agent_tools
-    import coding_agent
+    import dua_engine.agent.agent_notes as agent_notes
+    import dua_engine.agent.agent_safety as agent_safety
+    import dua_engine.agent.agent_tools as agent_tools
+    import dua_engine.coding.coding_agent as coding_agent
     token = os.environ.get("GITHUB_TOKEN", "").strip()
     if coding and not token:
         enqueue("chunk", _Text(CODING_NOT_SET_UP))
@@ -645,7 +645,7 @@ def tool_loop(messages, attachments, system, enqueue, owner, coding=False, cance
     if notes is not None:
         prompt += agent_tools.NOTES_HINT + notes_context
     prompt += agent_safety.SAFETY_PROMPT
-    import agent_automation
+    import dua_engine.automation.agent_automation as agent_automation
     if agent_automation.status()["configured"]:
         prompt += agent_automation.HINT
     level = pick_thinking_level({"messages": messages}, route="code" if coding else "agent")
@@ -656,7 +656,7 @@ def tool_loop(messages, attachments, system, enqueue, owner, coding=False, cance
         _agent_request_level.reset(level_token)
     if not enqueue("event", progress_event("plan", "Planning\u2026")):
         return
-    import agent_store
+    import dua_engine.agent.agent_store as agent_store
     env = {
         "model": model, "enqueue": enqueue, "chunk_text": chunk_text, "grounding_sources": grounding_sources,
         "search_tool": google_search_tool, "code_tool": agent_tools.code_tool, "fetch": agent_tools.fetch_page,
@@ -673,21 +673,21 @@ def tool_loop(messages, attachments, system, enqueue, owner, coding=False, cance
                       (agent_automation.HINT if agent_automation.status()["configured"] else ""),
     }
     adk_result = None
-    import agent_adk
+    import dua_engine.agent.agent_adk as agent_adk
     if owner.get("token_cap") and owner.get("trace") is not None and not (agent_adk.enabled() and not coding):
         # Only when the daily token cap supplied a trace: count tool-loop model calls too.
-        from agent_observability import ObservedModel
+        from dua_engine.agent.agent_observability import ObservedModel
         env["model"] = ObservedModel(model, owner["trace"])
     if agent_adk.enabled() and not coding:
-        from agent_observability import Trace, ObservedModel
-        import agent_toolkit
+        from dua_engine.agent.agent_observability import Trace, ObservedModel
+        import dua_engine.agent.agent_toolkit as agent_toolkit
         env["custom_tools"] = agent_toolkit.configured()
         env["trace"] = owner.get("trace") or Trace()
         if agent_store.database_url():
             import uuid
             env["adk_run_id"] = env.get("adk_run_id") or str(uuid.uuid4())
         env["model"] = ObservedModel(model, env["trace"])
-        import agent_documents
+        import dua_engine.agent.agent_documents as agent_documents
         if agent_documents.enabled():
             env["documents"] = agent_documents.Documents(owner.get("id"),
                 agent_documents.VertexEmbeddings(get_adc_client(), env["trace"]))
@@ -704,7 +704,7 @@ def tool_loop(messages, attachments, system, enqueue, owner, coding=False, cance
     if adk_result is not None:
         text, run = adk_result
     else:
-        import agent_documents
+        import dua_engine.agent.agent_documents as agent_documents
         if env.get("documents") is None and agent_documents.enabled() and owner.get("id"):
             env["documents"] = agent_documents.Documents(owner.get("id"), agent_documents.VertexEmbeddings(get_adc_client()))
         docs = env.get("documents") is not None
@@ -720,7 +720,7 @@ def tool_loop(messages, attachments, system, enqueue, owner, coding=False, cance
         app.logger.info("agent stopped: client disconnected")
         return
     sources = run.sources if run else []
-    import agent_verify
+    import dua_engine.agent.agent_verify as agent_verify
     if agent_verify.enabled() and not coding and run is not None and not getattr(run, "pending", None):
         text = agent_verify.check(last, text, getattr(run, "evidence", None) or getattr(run, "steps", []), sources,
                                   (ObservedModel(get_model(VERIFY_SYSTEM), env["trace"]) if env.get("trace") else get_model(VERIFY_SYSTEM)),
@@ -814,17 +814,17 @@ def agent_producer(messages, attachments, system, owner=None, cancelled=None):
 
 def _agent_producer(messages, attachments, system, owner=None, cancelled=None, observe=False):
     def produce(enqueue):
-        import agent_adk, agent_models
+        import dua_engine.agent.agent_adk as agent_adk, dua_engine.agent.agent_models as agent_models
         current_owner = dict(owner or {})
         trace = current_owner.get("trace")
         if observe and trace is None:
-            from agent_observability import Trace
+            from dua_engine.agent.agent_observability import Trace
             trace = current_owner["trace"] = Trace()
         if observe:
             current_owner["token_cap"] = True
         produce.trace = trace
         if agent_adk.enabled():
-            from agent_observability import Trace, ObservedModel
+            from dua_engine.agent.agent_observability import Trace, ObservedModel
             trace = trace or Trace()
             current_owner["trace"] = trace
             produce.trace = trace
@@ -839,7 +839,7 @@ def _agent_producer(messages, attachments, system, owner=None, cancelled=None, o
         if route == "chat":
             # Casual message: one streamed reply with full history, no Search/tools. The owner's notes (cheap, capped)
             # are still loaded, and lessons are learned after the reply.
-            import agent_notes
+            import dua_engine.agent.agent_notes as agent_notes
             notes = agent_notes.for_owner(current_owner)
             last = last_user_text(messages)
             block = agent_notes.load_prompt(notes, last)
@@ -961,7 +961,7 @@ def agent_capabilities():
     denied = owner_access_error()
     if denied is not None:
         return denied
-    import agent_adk, agent_store, agent_documents, agent_models, agent_toolkit, coding_terminal, coding_checkpoints, agent_automation, kill_switches
+    import dua_engine.agent.agent_adk as agent_adk, dua_engine.agent.agent_store as agent_store, dua_engine.agent.agent_documents as agent_documents, dua_engine.agent.agent_models as agent_models, dua_engine.agent.agent_toolkit as agent_toolkit, dua_engine.coding.coding_terminal as coding_terminal, dua_engine.coding.coding_checkpoints as coding_checkpoints, dua_engine.automation.agent_automation as agent_automation, kill_switches
     try:
         routes = agent_models.routes()
         agent_models.check_adapters()
@@ -983,7 +983,7 @@ def agent_workspaces_api():
     denied = owner_access_error()
     if denied is not None:
         return denied
-    import coding_checkpoints, coding_agent
+    import dua_engine.coding.coding_checkpoints as coding_checkpoints, dua_engine.coding.coding_agent as coding_agent
     if not coding_checkpoints.enabled():
         return no_store(jsonify({"code": "not_configured", "error": "Workspace checkpoints are not configured."}), 503)
     try:
@@ -1004,7 +1004,7 @@ def agent_documents_api():
             return no_store(jsonify({"error": paused, "maintenance": True}), 503)
         if kill_switches.agent_disabled():
             return no_store(jsonify({"error": kill_switches.AGENT_PAUSED, "paused": "agent"}), 503)
-    import agent_documents
+    import dua_engine.agent.agent_documents as agent_documents
     if not agent_documents.enabled():
         return no_store(jsonify({"error": "ADK document storage/embeddings are not configured."}), 503)
     try:
@@ -1035,7 +1035,7 @@ def agent_notes_reindex():
         return no_store(jsonify({"error": paused, "maintenance": True}), 503)
     if kill_switches.agent_disabled():
         return no_store(jsonify({"error": kill_switches.AGENT_PAUSED, "paused": "agent"}), 503)
-    import agent_notes,agent_documents
+    import dua_engine.agent.agent_notes as agent_notes,dua_engine.agent.agent_documents as agent_documents
     if not agent_documents.enabled():
         return no_store(jsonify({"error":"Semantic memory is not configured."}),503)
     try:
@@ -1057,7 +1057,7 @@ def agent_notes_status():
     denied = owner_access_error()
     if denied:
         return denied
-    import agent_notes
+    import dua_engine.agent.agent_notes as agent_notes
     store = agent_notes.for_owner({"id": getattr(g, "owner_id", None), "token": getattr(g, "owner_token", "")})
     ready, reason = agent_notes.probe(store)
     response = jsonify({"enabled": store is not None, "ready": ready, "reason": reason})
@@ -1075,8 +1075,8 @@ def api_chat():
         return jsonify({"error": "Invalid request."}), 400
     resume_id = data.get("resumeRun")
     if resume_id is not None:
-        import agent_store
-        import agent_adk
+        import dua_engine.agent.agent_store as agent_store
+        import dua_engine.agent.agent_adk as agent_adk
         import asyncio
         if not agent_store.database_url() or not agent_adk.enabled():
             return no_store(jsonify({"error": "Durable ADK sessions are not configured."}), 503)
@@ -1298,8 +1298,8 @@ def no_store(response, status=200):
 
 def approval_env(owner_id, owner_token):
     """GitHub client and notes store for running one approved action (same setup as tool_loop)."""
-    import agent_notes
-    import coding_agent
+    import dua_engine.agent.agent_notes as agent_notes
+    import dua_engine.coding.coding_agent as coding_agent
     github = None
     token = os.environ.get("GITHUB_TOKEN", "").strip()
     if token:
@@ -1307,7 +1307,7 @@ def approval_env(owner_id, owner_token):
             github = coding_agent.GitHubClient(token, coding_agent.repo_name())
         except coding_agent.CodingError:
             github = None
-    import agent_toolkit, agent_documents
+    import dua_engine.agent.agent_toolkit as agent_toolkit, dua_engine.agent.agent_documents as agent_documents
     notes=agent_notes.for_owner({"id":owner_id,"token":owner_token})
     if notes is not None and agent_documents.enabled():
         notes.semantic=agent_documents.Documents(owner_id,agent_documents.VertexEmbeddings(get_adc_client()))
@@ -1318,7 +1318,7 @@ def approval_env(owner_id, owner_token):
 @app.route("/api/agent/action", methods=["POST"])
 def agent_action():
     """Owner approves or rejects ONE pending Agent write action by id. Only the stored args are used."""
-    import agent_safety
+    import dua_engine.agent.agent_safety as agent_safety
     import kill_switches
     denied = owner_access_error()
     if denied is not None:
@@ -1332,7 +1332,7 @@ def agent_action():
     if not isinstance(action_id, str) or not APPROVAL_ID.fullmatch(action_id) or decision not in ("approve", "reject"):
         return no_store(jsonify({"error": "Invalid request."}), 400)
     try:
-        import agent_store
+        import dua_engine.agent.agent_store as agent_store
         action = agent_store.approvals().take(action_id, getattr(g, "owner_id", None))
     except agent_safety.ApprovalError as error:
         return no_store(jsonify({"error": error.message}), error.status)

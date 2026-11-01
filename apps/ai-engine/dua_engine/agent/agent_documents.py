@@ -16,7 +16,7 @@ CHUNK_SIZE, OVERLAP = 1000, 150
 
 
 def enabled():
-    import agent_store
+    import dua_engine.agent.agent_store as agent_store
     return bool(agent_store.database_url() and os.environ.get('ADK_EMBEDDING_MODEL', '').strip())
 
 
@@ -37,7 +37,7 @@ def tables():
 
 
 def initialize():
-    import agent_store
+    import dua_engine.agent.agent_store as agent_store
     metadata, _ = tables()
     db = agent_store.engine()
     try:
@@ -112,7 +112,7 @@ class Documents:
         self.owner, self.embed = owner, embed
 
     def add(self, name, text, document_id=None, kind='document'):
-        import agent_store
+        import dua_engine.agent.agent_store as agent_store
         from sqlalchemy import select, func, insert, update, delete
         document_id = str(uuid.UUID(document_id)) if document_id else str(uuid.uuid4())
         if not isinstance(name, str) or not name.strip() or len(name) > 200 or kind not in ('document', 'note'):
@@ -156,7 +156,7 @@ class Documents:
             db.dispose()
 
     def search(self, query, kind='document', limit=5):
-        import agent_store
+        import dua_engine.agent.agent_store as agent_store
         from sqlalchemy import select
         if not isinstance(query, str) or not query.strip() or len(query)>4000:
             raise ValueError('Provide a short retrieval query')
@@ -189,7 +189,7 @@ class Documents:
         return sorted(matches,key=lambda x:x['score'],reverse=True)[:limit]
 
     def delete(self, document_id):
-        import agent_store
+        import dua_engine.agent.agent_store as agent_store
         from sqlalchemy import delete
         document_id = str(uuid.UUID(document_id))
         metadata, table = tables()
@@ -204,7 +204,7 @@ class Documents:
             db.dispose()
 
     def list(self):
-        import agent_store
+        import dua_engine.agent.agent_store as agent_store
         from sqlalchemy import select
         _,table=tables()
         db=agent_store.engine()

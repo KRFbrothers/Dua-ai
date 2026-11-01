@@ -1,5 +1,5 @@
 """Enable with ADK_TOOL_MODULES=adk_examples.text_tools; no network or secrets."""
-from agent_toolkit import Tool
+from dua_engine.agent.agent_toolkit import Tool
 
 
 def word_count(text: str) -> dict:

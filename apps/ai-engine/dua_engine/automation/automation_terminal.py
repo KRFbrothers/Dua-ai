@@ -35,7 +35,7 @@ class Session:
         self.created = self.touched = clock()
         self.lock = threading.RLock()
         self.buffer, self.start, self.end, self.closed = bytearray(), 0, 0, False
-        from agent_policy import Redactor
+        from dua_engine.agent.agent_policy import Redactor
         self.redactor = Redactor()
         args = ["run", "--pull=never", "--rm", "--init", "-it", "--name", self.name, "--label", LABEL,
                 "--network", "none", "--read-only", "--user", "10001:10001", "--cap-drop", "ALL",

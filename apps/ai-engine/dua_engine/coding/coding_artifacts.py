@@ -6,7 +6,7 @@ host. Its output remains untrusted and is validated again in the chat engine.
 import base64
 import hashlib
 
-import coding_agent as coding
+import dua_engine.coding.coding_agent as coding
 
 MAX_ARTIFACT_OUTPUT = 900_000
 

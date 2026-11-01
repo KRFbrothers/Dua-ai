@@ -11,7 +11,7 @@ import json
 import re
 import threading
 
-import coding_agent as coding
+import dua_engine.coding.coding_agent as coding
 
 TOOLS = ("workspace_status", "edit_file", "workspace_diff")
 MAX_TREE_FILES = 20_000
@@ -67,7 +67,7 @@ class Workspace:
         workspace = cls(github)
         workspace.start(record["base_sha"])
         if record.get("pr_target") is not None:
-            import coding_pr
+            import dua_engine.coding.coding_pr as coding_pr
             workspace.pr_target = coding_pr.clean_target(record["pr_target"], workspace.base_sha)
         for item in record["files"]:
             workspace.check_path(item["path"], write=True)
@@ -131,8 +131,8 @@ class Workspace:
         return result
 
     def status(self, path=""):
-        import coding_terminal
-        import coding_checkpoints
+        import dua_engine.coding.coding_terminal as coding_terminal
+        import dua_engine.coding.coding_checkpoints as coding_checkpoints
         instructions = self.instructions(path)
         self.instructions_seen.update(item["path"] for item in instructions)
         return {"repository": self.github.repo, "base_sha": self.base_sha,

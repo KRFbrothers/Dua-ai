@@ -14,9 +14,9 @@ from urllib.error import HTTPError
 from urllib.parse import urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
-import coding_agent as coding
-import coding_snapshot
-import coding_profiles
+import dua_engine.coding.coding_agent as coding
+import dua_engine.coding.coding_snapshot as coding_snapshot
+import dua_engine.coding.coding_profiles as coding_profiles
 
 MAX_OUTPUT_BYTES = 32_000
 MAX_COMMAND_SECONDS = 120
@@ -107,7 +107,7 @@ def list_profiles():
 
 
 def run(workspace, args, cancelled=None, progress=None):
-    import coding_artifacts
+    import dua_engine.coding.coding_artifacts as coding_artifacts
     argv, cwd, seconds = validate_command(args)
     profile = coding_profiles.name(args.get("profile", "python"))
     exports = coding_artifacts.export_paths(args)
@@ -172,7 +172,7 @@ def run(workspace, args, cancelled=None, progress=None):
                 if state in ("succeeded", "failed") and (isinstance(code, bool) or not isinstance(code, int) or
                         (state == "succeeded") != (code == 0)):
                     raise coding.CodingError("Runner returned an inconsistent command exit status.")
-                from agent_policy import filter_text
+                from dua_engine.agent.agent_policy import filter_text
                 output = result.get("output", "")
                 if not isinstance(output, str):
                     raise coding.CodingError("Invalid runner output.")

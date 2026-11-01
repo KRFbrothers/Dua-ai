@@ -10,12 +10,12 @@ import tarfile
 import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import agent_adk
-import agent_safety
-import coding_agent as coding
-import coding_search
-import coding_snapshot
-import coding_workspace
+import dua_engine.agent.agent_adk as agent_adk
+import dua_engine.agent.agent_safety as agent_safety
+import dua_engine.coding.coding_agent as coding
+import dua_engine.coding.coding_search as coding_search
+import dua_engine.coding.coding_snapshot as coding_snapshot
+import dua_engine.coding.coding_workspace as coding_workspace
 
 BASE = "a" * 40
 

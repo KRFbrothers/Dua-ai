@@ -18,7 +18,7 @@ import re
 import secrets
 import threading
 import time
-import agent_automation
+import dua_engine.automation.agent_automation as agent_automation
 
 APPROVAL_SECONDS = int(os.environ.get("AGENT_APPROVAL_SECONDS", "900"))  # 15 minutes
 MAX_PENDING_PER_REQUEST = 3
@@ -114,7 +114,7 @@ def describe(name, args):
                          for i in range(0, len(rendered), 500))
         return "Approve " + name.replace("_", " "), lines
     if name == "propose_pr_fix":
-        import coding_pr
+        import dua_engine.coding.coding_pr as coding_pr
         target, files, title = coding_pr.validate_proposal(args)
         lines = [f"Branch: {target['branch']}", f"Reviewed head: {target['head_sha']}"]
         lines += [f"{f['path']} ({len(f['content'].encode('utf-8'))} bytes)" for f in files]
@@ -153,8 +153,8 @@ def prepare(name, args):
     if name in ("propose_changes", "propose_pr_fix"):
         args.pop("preview_diff", None)
         args.pop("preview_diff_truncated", None)
-        import coding_agent
-        import pr_flow
+        import dua_engine.coding.coding_agent as coding_agent
+        import dua_engine.coding.pr_flow as pr_flow
         if name == "propose_changes":
             args.pop("pr_target", None)
         files = args.get("files") or []
@@ -178,7 +178,7 @@ def prepare(name, args):
         args["title"] = " ".join(str(args.get("title") or "Dua Agent change").split())[:120]
         args["description"] = str(args.get("description") or "").strip()[:6000]
         if name == "propose_pr_fix":
-            import coding_pr
+            import dua_engine.coding.coding_pr as coding_pr
             coding_pr.validate_proposal(args)
         if "base_sha" in args:
             if (not isinstance(args["base_sha"], str) or not re.fullmatch(r"[0-9a-f]{40}", args["base_sha"]) or
@@ -262,8 +262,8 @@ def pending_text(actions):
 # ---------------------------------------------------------------- run an approved action
 def execute(action, env):
     """Runs one approved action. Returns (ok, text). env: github, notes (same objects the agent loop uses)."""
-    import agent_tools
-    import coding_agent
+    import dua_engine.agent.agent_tools as agent_tools
+    import dua_engine.coding.coding_agent as coding_agent
     name, args = action["tool"], action["args"]
     if name in agent_automation.WRITE_TOOLS:
         try:
@@ -288,7 +288,7 @@ def execute(action, env):
     if name not in WRITE_TOOLS:
         return False, "This approved tool is no longer installed. Nothing was executed."
     if name == "propose_pr_fix":
-        import coding_pr
+        import dua_engine.coding.coding_pr as coding_pr
         github = env.get("github")
         if github is None:
             return False, "GitHub is not set up; the fix was not published."

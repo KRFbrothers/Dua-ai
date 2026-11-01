@@ -2,9 +2,9 @@
 import json
 import re
 
-from agent_policy import filter_text
-import coding_agent as coding
-import coding_snapshot
+from dua_engine.agent.agent_policy import filter_text
+import dua_engine.coding.coding_agent as coding
+import dua_engine.coding.coding_snapshot as coding_snapshot
 
 MAX_QUERY_CHARS = 200
 MAX_TEXT_FILE_BYTES = 1_000_000
